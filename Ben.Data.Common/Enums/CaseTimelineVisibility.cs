@@ -26,4 +26,19 @@ public enum CaseTimelineVisibility
 
     /// <summary>Anyone, including the public case page.</summary>
     Public = 2,
+
+    /// <summary>
+    /// The client alone — history withheld from a NEW organization after a client-proposed move.
+    /// </summary>
+    /// <remarks>
+    /// <para>Breaks the cumulative rule above on purpose, and is the one value an editor never
+    /// offers: it is written only by transfer acceptance, when the client declined to share the
+    /// collected history with the receiving group (item 84). The entries survive and the client
+    /// keeps reading them; the new group starts from the client's own retelling.</para>
+    ///
+    /// <para>Numerically above <see cref="Client"/> so the client-side filter
+    /// (<c>Visibility &gt;= Client</c>) admits it with no query change; the org-side timeline
+    /// excludes it explicitly.</para>
+    /// </remarks>
+    ClientOnly = 3,
 }

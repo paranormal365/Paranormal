@@ -70,7 +70,7 @@ public sealed class ExportSettings
     /// regardless of their original frame rate.
     /// Common values: 15, 24, 25, 30. Default: 30.
     /// </summary>
-    public int Fps { get; set; } = 24;
+    public int Fps { get; set; } = 30;
 
     // ── Chapters ──────────────────────────────────────────────────────────────
 

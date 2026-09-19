@@ -1,5 +1,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Microsoft.JSInterop
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -20,7 +22,11 @@ else if (_editingReport is null)
         <button type="button" class="btn btn-primary" @onclick="NewReport"><BenIcon Name="plus" Class="me-1" />New Report</button>
     </div>
 
-    @if (_reports.Count == 0)
+    @if (_reportsResult.Failed)
+    {
+        <BenListState TItem="CaseReportSummary" Result="@_reportsResult" OnRetry="@LoadAsync" />
+    }
+    else if (_reports.Count == 0)
     {
         <div class="text-secondary text-center py-4 small">No reports yet. Click 'New Report' to start building.</div>
     }
@@ -64,9 +70,17 @@ else
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _editingReport = null)"><BenIcon Name="chevron-left" Class="me-1" />Back</button>
         <span class="fw-semibold flex-grow-1">@(_editingReport.Title)</span>
         <span class="badge @(_editingReport.Status == CaseReportStatus.Published ? "bg-success" : "bg-warning text-dark")">@_editingReport.Status</span>
+        @* W-A14: a published report stayed editable with nothing to publish the edits WITH. The
+           client reads a live PDF, so every later change reached them without a word — and the
+           notice on their case board still described the version they were first sent. *@
         @if (_editingReport.Status == CaseReportStatus.Draft)
         {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="PublishReport" disabled="@(!(!_saving))">Publish</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="report-publish" @onclick="PublishReport" disabled="@(!(!_saving))">Publish</button>
+        }
+        else if (_editingReport.HasUnpublishedChanges)
+        {
+            <span id="report-unpublished-changes" class="badge bg-warning text-dark">Edited since published</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="report-republish" @onclick="PublishReport" disabled="@(!(!_saving))">Re-publish</button>
         }
         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DownloadPdf(_editingReport.Id, _editingReport.Title))"><BenIcon Name="file-text" Class="me-1" />PDF</button>
     </div>
@@ -75,7 +89,8 @@ else
     @if (_publishedTitle is not null)
     {
         <div class="alert alert-success py-2 small mb-3">
-            <strong>Published.</strong> Client has been notified via the case message board: "@_publishedTitle"
+            <strong>@(_wasRepublish ? "Re-published." : "Published.")</strong>
+            Client has been notified via the case message board: "@_publishedTitle"
         </div>
     }
 
@@ -89,7 +104,7 @@ else
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
+                <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_form.ExpectedDeliveryDate" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label small fw-semibold" for="reportbuilder-executive-summary-66bf">Executive Summary</label>
@@ -99,6 +114,57 @@ else
                 <label class="form-label small fw-semibold" for="reportbuilder-conclusion-determination-d0d0">Conclusion / Determination</label>
                 <textarea id="reportbuilder-conclusion-determination-d0d0" class="form-control" rows="4" @bind="@_form.Conclusion"></textarea>
             </div>
+            @* ── W-P3 (site evaluation 2026-09-06) ──────────────────────────
+               A published report used to exist only on the client's own page: the group wrote it,
+               the client read it, and nothing on the group's public site could carry any of it.
+               This is the switch that lets them show their finding. Deliberately beside the two
+               fields it publishes, so nobody has to guess which parts go out. *@
+            <div class="col-12"><hr class="my-1" /></div>
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="report-public-summary"
+                       @bind="@_form.IsPublicSummaryVisible" />
+                <label for="report-public-summary" class="form-label mb-0">
+                    Show this on our public case page
+                    <div class="text-secondary small">
+                        Publishes the <strong>executive summary</strong> and the
+                        <strong>conclusion</strong> above, and nothing else — no sections, no
+                        evidence files, no field sessions. It appears only once the report is
+                        published <em>and</em> the case itself is public, and it can be switched
+                        off again at any time.
+                    </div>
+                </label>
+            </div>
+
+            @if (_form.IsPublicSummaryVisible)
+            {
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="report-leak-check"
+                            @onclick="CheckPublicSummaryAsync" disabled="@(!(!_checkingLeaks))">
+                        <BenIcon Name="alert-triangle" Class="me-1" />
+                        @(_checkingLeaks ? "Checking…" : "Check for the client's details")
+                    </button>
+                    @if (_leakChecked && _leakWarnings.Count == 0)
+                    {
+                        <span class="small text-success ms-2">Nothing found in the summary or conclusion.</span>
+                    }
+                </div>
+                @if (_leakWarnings.Count > 0)
+                {
+                    <div class="col-12">
+                        <div class="alert alert-warning py-2 small mb-0">
+                            @foreach (var warning in _leakWarnings)
+                            {
+                                <div>@warning</div>
+                            }
+                            <div class="mt-1 text-secondary">
+                                You can publish anyway — only you know whether these words mean the
+                                client or the place.
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
             <div class="col-12 text-end">
                 <button type="button" class="btn btn-secondary" @onclick="SaveReport" disabled="@(!(!_saving && !string.IsNullOrWhiteSpace(_form.Title)))">
                     @(_saving ? "Saving…" : "Save")
@@ -119,12 +185,72 @@ else
         <div class="card mb-2">
             <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                    <div class="fw-semibold small">@s.Title <span class="badge bg-secondary ms-1">@s.SectionType</span></div>
+                    <div class="fw-semibold small">@s.Title <span class="badge bg-secondary ms-1">@SectionTypeLabel(s.SectionType)</span></div>
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => RemoveSection(s.Id))"><BenIcon Name="trash-2" /></button>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(s.Body))
                 {
                     <div class="small text-secondary">@((MarkupString)s.Body)</div>
+                }
+                @if (s.SectionType == CaseReportSectionType.FieldSessions)
+                {
+                    <div class="mt-2">
+                        @if (s.FieldSessions.Count == 0)
+                        {
+                            <div class="text-secondary small">No field sessions cited yet.</div>
+                        }
+                        else
+                        {
+                            @foreach (var fs in s.FieldSessions.OrderBy(x => x.SortOrder))
+                            {
+                                <div class="border rounded p-2 mb-1 d-flex justify-content-between align-items-start gap-2" data-testid="report-field-session">
+                                    <div>
+                                        <div class="fw-semibold small">
+                                            @(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "Field session" : fs.LocationLabel)
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @fs.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                            @if (fs.EndedAt.HasValue)
+                                            {
+                                                <text> – @fs.EndedAt.Value.ToViewerLocalTime(UserState).ToDisplayTime()</text>
+                                            }
+                                            else
+                                            {
+                                                @* An interrupted session has no honest end time — say so rather than guess. *@
+                                                <text> — interrupted</text>
+                                            }
+                                            · @fs.ReadingCount.ToString("N0") reading@(fs.ReadingCount == 1 ? "" : "s")
+                                            · @fs.MarkerCount.ToString("N0") mark@(fs.MarkerCount == 1 ? "" : "s")
+                                            · @fs.FileCount recording@(fs.FileCount == 1 ? "" : "s")
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @(string.IsNullOrWhiteSpace(fs.RecordedByName)
+                                                ? "Nobody was signed in on the device"
+                                                : $"Recorded by {fs.RecordedByName}")
+                                        </div>
+                                        @* The paragraph the PDF prints: what the night held. *@
+                                        <div class="small mt-1" data-testid="session-readout">
+                                            @(string.IsNullOrWhiteSpace(fs.Readout)
+                                                ? "The session's readings are not on this server, so no readout can be given."
+                                                : fs.Readout)
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(fs.Caption))
+                                        {
+                                            <div class="small">@fs.Caption</div>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-1 flex-shrink-0">
+                                        <a class="btn btn-secondary btn-sm text-nowrap" href="@($"/field-sessions/{fs.FieldSessionUploadId}")" target="_blank">Play back</a>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => RemoveSectionFieldSession(s.Id, fs.Id))"><BenIcon Name="trash-2" /></button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        <button type="button" class="btn btn-secondary btn-sm mt-1 text-nowrap" data-testid="add-field-session"
+                                @onclick="@(() => OpenFieldSessionPicker(s.Id))">
+                            <BenIcon Name="plus" Class="me-1" />Add field session
+                        </button>
+                    </div>
                 }
                 @if (s.SectionType == CaseReportSectionType.Evidence && s.Files.Count > 0)
                 {
@@ -151,17 +277,74 @@ else
             <div class="col-12">
                 <label class="form-label fw-semibold" for="reportbuilder-title-af64">Title <span class="text-danger">*</span></label>
                 <input id="reportbuilder-title-af64" type="text" class="form-control" placeholder="e.g. BenCo Investigation Report — Park Residence" @bind="@_newTitle" @bind:event="oninput" />
+                @if (_newTitleProblem is not null)
+                {
+                    <div id="report-create-problem" class="form-text text-danger">@_newTitleProblem</div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Expected Delivery Date</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_newDeliveryDate" Width="100%" />
+                <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_newDeliveryDate" Width="100%" />
             </div>
         </div>
     </ChildContent>
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showNewDialog = false)">Cancel</button>
-        <button type="button" class="btn btn-primary" @onclick="CreateReport"
-                disabled="@(_saving || string.IsNullOrWhiteSpace(_newTitle))">Create</button>
+        @* W-A12: gated on _saving only. See CreateReport for why a title that is still empty is
+           refused by the handler rather than by the browser. *@
+        <button type="button" class="btn btn-primary" id="report-create"
+                @onclick="CreateReport" disabled="@_saving">Create</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Field session picker ─────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showFieldSessionDialog" Title="Cite a field session">
+    <ChildContent>
+        @if (_fieldSessionsResult.Failed)
+        {
+            <BenListState TItem="AvailableFieldSessionDto" Result="@_fieldSessionsResult" OnRetry="@LoadFieldSessionsAsync" />
+        }
+        else if (_availableSessions.Count == 0)
+        {
+            <div class="text-secondary small">
+                No field sessions have been uploaded for this case's investigations yet. Sessions
+                recorded in the iPhone or iPad app appear here once somebody sends them up and
+                picks one of this case's investigations.
+            </div>
+        }
+        else
+        {
+            @foreach (var a in _availableSessions)
+            {
+                <div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-start gap-2" data-testid="available-field-session">
+                    <div>
+                        <div class="fw-semibold small">@(string.IsNullOrWhiteSpace(a.LocationLabel) ? "Field session" : a.LocationLabel)</div>
+                        <div class="text-secondary small">
+                            @a.InvestigationTitle · @a.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            · @a.ReadingCount.ToString("N0") reading@(a.ReadingCount == 1 ? "" : "s")
+                            · @a.MarkerCount.ToString("N0") mark@(a.MarkerCount == 1 ? "" : "s")
+                            · @a.FileCount recording@(a.FileCount == 1 ? "" : "s")
+                        </div>
+                        <div class="text-secondary small">
+                            @(string.IsNullOrWhiteSpace(a.RecordedByName) ? "Nobody was signed in on the device" : a.RecordedByName) · @a.DeviceModel
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1 flex-shrink-0">
+                        <a class="btn btn-secondary btn-sm text-nowrap" href="@($"/field-sessions/{a.Id}")" target="_blank">Play back</a>
+                        <button type="button" class="btn btn-primary btn-sm text-nowrap" data-testid="cite-field-session"
+                                disabled="@_saving" @onclick="@(() => CiteFieldSession(a.Id))">Cite</button>
+                    </div>
+                </div>
+            }
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="reportbuilder-fieldsession-caption">What to say about it (optional)</label>
+                <input id="reportbuilder-fieldsession-caption" type="text" class="form-control"
+                       placeholder="e.g. the cellar spike at 01:14" @bind="@_fieldSessionCaption" @bind:event="oninput" />
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showFieldSessionDialog = false)">Close</button>
     </FooterContent>
 </BenModal>
 
@@ -172,6 +355,10 @@ else
             <div class="col-12">
                 <label class="form-label fw-semibold" for="reportbuilder-title-cf7b">Title</label>
                 <input id="reportbuilder-title-cf7b" type="text" class="form-control" @bind="@_sectionTitle" @bind:event="oninput" />
+                @if (_sectionTitleProblem is not null)
+                {
+                    <div id="report-add-section-problem" class="form-text text-danger">@_sectionTitleProblem</div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Type</label>
@@ -185,8 +372,9 @@ else
     </ChildContent>
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showSectionDialog = false)">Cancel</button>
-        <button type="button" class="btn btn-primary" @onclick="SaveSection"
-                disabled="@(_saving || string.IsNullOrWhiteSpace(_sectionTitle))">Add</button>
+        @* W-A12, as above. *@
+        <button type="button" class="btn btn-primary" id="report-add-section"
+                @onclick="SaveSection" disabled="@_saving">Add</button>
     </FooterContent>
 </BenModal>
 
@@ -195,6 +383,7 @@ else
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
     private List<CaseReportSummary> _reports = [];
+    private LoadResult<CaseReportSummary> _reportsResult;
     private CaseReportDetail? _editingReport;
     private bool _loading = true;
     private bool _saving;
@@ -212,25 +401,111 @@ else
     private CaseReportSectionType _sectionType = CaseReportSectionType.Text;
     private string _sectionBody = "";
 
+    // Field session picker
+    private bool _showFieldSessionDialog;
+    private Guid _fieldSessionSectionId;
+    private string _fieldSessionCaption = "";
+    private List<AvailableFieldSessionDto> _availableSessions = [];
+    private LoadResult<AvailableFieldSessionDto> _fieldSessionsResult;
+
     // Editor form
     private ReportForm _form = new();
 
+    // W-P3: the same leak check item 176 gave the case title, aimed at the prose about to be
+    // published. Advisory — a surname is also a place name, and only the group knows which
+    // theirs means.
+    private IReadOnlyList<string> _leakWarnings = [];
+    private bool _leakChecked;
+    private bool _checkingLeaks;
+
+    private async Task CheckPublicSummaryAsync()
+    {
+        if (_editingReport is null) return;
+        _checkingLeaks = true;
+        try
+        {
+            var result = await AdminClient.CheckPublicSummaryForLeaksAsync(OrgId, CaseId, _editingReport.Id);
+            // A refused or failed check must never read as "nothing found" — that is the one
+            // wrong answer here, and it is the reassuring one.
+            if (result.Failed)
+            {
+                _leakChecked  = false;
+                _leakWarnings = [result.Reason ?? "Couldn't run the check. Save and try again."];
+                return;
+            }
+            _leakWarnings = result.Items.ToList();
+            _leakChecked  = true;
+        }
+        catch
+        {
+            _leakChecked  = false;
+            _leakWarnings = ["Couldn't run the check. Save and try again."];
+        }
+        finally { _checkingLeaks = false; }
+    }
+
     private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum
         .GetValues<CaseReportSectionType>()
-        .Select(t => new SectionTypeOption(t, t.ToString()))
+        .Select(t => new SectionTypeOption(t, t == CaseReportSectionType.FieldSessions ? "Field Sessions" : t.ToString()))
         .ToList();
 
     protected override async Task OnInitializedAsync()
     {
-        try { _reports = (await AdminClient.GetCaseReportsAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load reports."; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _reportsResult = await AdminClient.GetCaseReportsAsync(OrgId, CaseId);
+            _reports       = _reportsResult.Items.ToList();
+        }
+        catch { _reportsResult = LoadResult<CaseReportSummary>.Failure(); }
         _loading = false;
     }
 
-    private void NewReport() { _newTitle = ""; _newDeliveryDate = null; _showNewDialog = true; }
+    private void NewReport()
+    {
+        _newTitle = ""; _newDeliveryDate = null; _newTitleProblem = null; _sectionTitleProblem = null;
+        _showNewDialog = true;
+    }
 
+    /// <summary>Why the last Create was refused, or null.</summary>
+    private string? _newTitleProblem;
+
+    /// <summary>Why the last Add was refused, or null.</summary>
+    private string? _sectionTitleProblem;
+
+    /// <summary>
+    /// Creates the report, or says why it did not.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>W-A12 of the 2026-09-06 evaluation.</b> This button used to be
+    /// <c>disabled</c> whenever the title was empty — and the title binds on <c>oninput</c>, so
+    /// "empty" is the server's opinion, one circuit round trip behind the keyboard. Somebody who
+    /// typed the last character and clicked landed inside that window, the browser discarded the
+    /// click on a still-disabled button, and the second identical click worked. The evaluation
+    /// found the same on four other buttons and could not tell whether it was real; a Playwright
+    /// walk that types character by character and clicks once reproduced it, intermittently,
+    /// which is what a race looks like. On localhost the window measured about three
+    /// milliseconds. Over a real connection it is the round trip.</para>
+    ///
+    /// <para>So the button stays live and the refusal moved here, where it can also SAY something
+    /// — a disabled control explains nothing, to anybody, and least of all to a screen reader.
+    /// <c>_saving</c> still disables it, because that flag is set by this handler after the click
+    /// and so is not a state anybody can race.</para>
+    /// </remarks>
     private async Task CreateReport()
     {
+        if (string.IsNullOrWhiteSpace(_newTitle))
+        {
+            _newTitleProblem = "Give the report a title first.";
+            return;
+        }
+
+        _newTitleProblem = null;
         _saving = true;
         try
         {
@@ -252,7 +527,8 @@ else
         _error = null;
         _editingReport = await AdminClient.GetCaseReportAsync(OrgId, CaseId, reportId);
         if (_editingReport is not null)
-            _form = new ReportForm { Title = _editingReport.Title, Summary = _editingReport.Summary, Conclusion = _editingReport.Conclusion, ExpectedDeliveryDate = _editingReport.ExpectedDeliveryDate };
+            _form = new ReportForm { Title = _editingReport.Title, Summary = _editingReport.Summary, Conclusion = _editingReport.Conclusion, ExpectedDeliveryDate = _editingReport.ExpectedDeliveryDate, IsPublicSummaryVisible = _editingReport.IsPublicSummaryVisible };
+            _leakWarnings = [];
     }
 
     private async Task SaveReport()
@@ -261,7 +537,8 @@ else
         _saving = true;
         try
         {
-            var req    = new UpsertCaseReportRequest(_form.Title, _form.Summary, _form.Conclusion, _form.ExpectedDeliveryDate);
+            var req    = new UpsertCaseReportRequest(_form.Title, _form.Summary, _form.Conclusion, _form.ExpectedDeliveryDate,
+                                                    IsPublicSummaryVisible: _form.IsPublicSummaryVisible);
             var result = await AdminClient.UpdateCaseReportAsync(OrgId, CaseId, _editingReport.Id, req);
             if (result is not null) { _editingReport = result; UpdateSummaryList(result); }
         }
@@ -269,10 +546,14 @@ else
         finally { _saving = false; }
     }
 
+    /// <summary>Whether the last publish was a re-issue, so the banner says which it was.</summary>
+    private bool _wasRepublish;
+
     private async Task PublishReport()
     {
         if (_editingReport is null) return;
         _saving = true; _publishedTitle = null;
+        _wasRepublish = _editingReport.Status == CaseReportStatus.Published;
         try
         {
             var result = await AdminClient.PublishCaseReportAsync(OrgId, CaseId, _editingReport.Id);
@@ -287,17 +568,43 @@ else
         finally { _saving = false; }
     }
 
+    // ── Removing things, checked ──────────────────────────────────────────────
+    //
+    // All four of these used to discard the result and rebuild local state regardless
+    // (2026-09-17 audit), so a refused removal showed the section, the cited file or the citation
+    // as gone while the report a client is about to read still carried it. The publish and add
+    // paths in this same file always checked; only the removals did not.
+
     private async Task DeleteReport(Guid reportId)
     {
-        await AdminClient.DeleteCaseReportAsync(OrgId, CaseId, reportId);
+        if (!await AdminClient.DeleteCaseReportAsync(OrgId, CaseId, reportId))
+        {
+            _error = "That report could not be deleted, so it is still here.";
+            return;
+        }
+
         _reports.RemoveAll(r => r.Id == reportId);
     }
 
-    private void AddSection() { _sectionTitle = ""; _sectionBody = ""; _sectionType = CaseReportSectionType.Text; _showSectionDialog = true; }
+    private void AddSection()
+    {
+        _sectionTitle = ""; _sectionBody = ""; _sectionType = CaseReportSectionType.Text;
+        _sectionTitleProblem = null;
+        _showSectionDialog = true;
+    }
 
+    /// <summary>Adds the section, or says why it did not. W-A12 — see CreateReport.</summary>
     private async Task SaveSection()
     {
         if (_editingReport is null) return;
+
+        if (string.IsNullOrWhiteSpace(_sectionTitle))
+        {
+            _sectionTitleProblem = "Give the section a title first.";
+            return;
+        }
+
+        _sectionTitleProblem = null;
         _saving = true;
         try
         {
@@ -316,17 +623,87 @@ else
     private async Task RemoveSection(Guid sectionId)
     {
         if (_editingReport is null) return;
-        await AdminClient.DeleteReportSectionAsync(OrgId, CaseId, _editingReport.Id, sectionId);
+        if (!await AdminClient.DeleteReportSectionAsync(OrgId, CaseId, _editingReport.Id, sectionId))
+        {
+            _error = "That section could not be removed, so it is still in the report.";
+            return;
+        }
+
         _editingReport = _editingReport with { Sections = _editingReport.Sections.Where(s => s.Id != sectionId).ToList() };
     }
 
     private async Task RemoveSectionFile(Guid sectionId, Guid fileId)
     {
         if (_editingReport is null) return;
-        await AdminClient.RemoveReportSectionFileAsync(OrgId, CaseId, _editingReport.Id, sectionId, fileId);
+        if (!await AdminClient.RemoveReportSectionFileAsync(OrgId, CaseId, _editingReport.Id, sectionId, fileId))
+        {
+            _error = "That file could not be removed, so the report still cites it.";
+            return;
+        }
+
         var updatedSections = _editingReport.Sections.Select(s => s.Id != sectionId ? s
             : s with { Files = s.Files.Where(f => f.Id != fileId).ToList() }).ToList();
         _editingReport = _editingReport with { Sections = updatedSections };
+    }
+
+    // ── Field sessions ────────────────────────────────────────────────────────
+    //
+    // A section CITES a session; it never copies it. The readings, the recordings and the
+    // digests stay with the upload, and the report points at them — so what the client is given
+    // and what the instruments recorded cannot drift apart.
+
+    private async Task OpenFieldSessionPicker(Guid sectionId)
+    {
+        _fieldSessionSectionId = sectionId;
+        _fieldSessionCaption = "";
+        _showFieldSessionDialog = true;
+        await LoadFieldSessionsAsync();
+    }
+
+    private async Task LoadFieldSessionsAsync()
+    {
+        try
+        {
+            _fieldSessionsResult = await AdminClient.GetCaseFieldSessionsAsync(OrgId, CaseId);
+            _availableSessions   = _fieldSessionsResult.Items.ToList();
+        }
+        catch { _fieldSessionsResult = LoadResult<AvailableFieldSessionDto>.Failure(); }
+    }
+
+    private async Task CiteFieldSession(Guid fieldSessionUploadId)
+    {
+        if (_editingReport is null) return;
+        _saving = true;
+        try
+        {
+            var result = await AdminClient.AddReportSectionFieldSessionAsync(
+                OrgId, CaseId, _editingReport.Id, _fieldSessionSectionId, fieldSessionUploadId,
+                string.IsNullOrWhiteSpace(_fieldSessionCaption) ? null : _fieldSessionCaption);
+            if (result is null) { _error = "Failed to add that field session."; return; }
+
+            var updated = _editingReport.Sections.Select(s => s.Id != _fieldSessionSectionId ? s
+                : s with { FieldSessions = s.FieldSessions.Where(f => f.Id != result.Id).Append(result).ToList() }).ToList();
+            _editingReport = _editingReport with { Sections = updated };
+            _showFieldSessionDialog = false;
+        }
+        catch { _error = "Failed to add that field session."; }
+        finally { _saving = false; }
+    }
+
+    private async Task RemoveSectionFieldSession(Guid sectionId, Guid linkId)
+    {
+        if (_editingReport is null) return;
+        // Removes the citation. The session itself stays exactly where it was uploaded.
+        if (!await AdminClient.RemoveReportSectionFieldSessionAsync(
+                OrgId, CaseId, _editingReport.Id, sectionId, linkId))
+        {
+            _error = "That citation could not be removed, so the report still points at the session.";
+            return;
+        }
+
+        var updated = _editingReport.Sections.Select(s => s.Id != sectionId ? s
+            : s with { FieldSessions = s.FieldSessions.Where(f => f.Id != linkId).ToList() }).ToList();
+        _editingReport = _editingReport with { Sections = updated };
     }
 
     private void UpdateSummaryList(CaseReportDetail r)
@@ -343,9 +720,16 @@ else
         public string?   Summary             { get; set; }
         public string?   Conclusion          { get; set; }
         public DateTime? ExpectedDeliveryDate { get; set; }
+
+        /// <summary>Show the summary and conclusion on the group's public case page (W-P3).</summary>
+        public bool      IsPublicSummaryVisible { get; set; }
     }
 
     private record SectionTypeOption(CaseReportSectionType Value, string Label);
+
+    /// <summary>The enum's own name reads as "FieldSessions" on the card. Say it in words.</summary>
+    private static string SectionTypeLabel(CaseReportSectionType type)
+        => type == CaseReportSectionType.FieldSessions ? "Field Sessions" : type.ToString();
 
     private async Task DownloadPdf(Guid reportId, string reportTitle)
     {

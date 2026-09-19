@@ -1,5 +1,6 @@
 @page "/organizations/{OrgId:guid}/cases/new"
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit.Places
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -22,12 +23,19 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label fw-semibold" for="casecreatepage-case-title-b1b1">Case Title <span class="text-danger">*</span></label>
-                    <input id="casecreatepage-case-title-b1b1" type="text" class="form-control" placeholder="e.g. Smith, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
-                    <div class="form-text">A brief label identifying this case.</div>
+                    <input id="casecreatepage-case-title-b1b1" type="text" class="form-control" placeholder="e.g. Belmont Boulevard house, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
+                    @* The example was "Smith, Nashville TN" — a client's surname, the very leak the publish check warns about
+                       and the seed data names cases to avoid (UI test pass, 2026-09-14). A case is named for the place. *@
+                    <div class="form-text">A brief label for the place — not the client's name, which can end up on a public page.</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold" for="casecreatepage-description-483a">Description</label>
-                    <textarea id="casecreatepage-description-483a" class="form-control" rows="4" placeholder="Summarise the reported activity or reason for opening the case…" @bind="@_form.Description"></textarea>
+                    @* A formatting editor, the same short toolbar as Edit Case (beta feedback, 2026-09-14): the
+                       description is the case's summary and is shown as formatted text everywhere it appears. *@
+                    <div class="form-label fw-semibold">Description</div>
+                    <div id="casecreatepage-description-483a">
+                        <BenEditor @ref="_descriptionEditor" @bind-Value="@_form.Description" Height="220px" Tools="@CaseEditorTools.Prose" />
+                    </div>
+                    <div class="form-text">Summarise the reported activity or the reason for opening the case.</div>
                 </div>
 
                 <div class="col-12">
@@ -37,11 +45,11 @@
 
                 <div class="col-12">
                     <label class="form-label fw-semibold" for="casecreatepage-street-address-5b76">Street Address <span class="text-danger">*</span></label>
-                    <input id="casecreatepage-street-address-5b76" type="text" class="form-control" placeholder="123 Main St" @bind="@_form.StreetAddress1" @bind:event="oninput" />
+                    <input id="casecreatepage-street-address-5b76" type="text" class="form-control" placeholder="e.g. 123 Main St" @bind="@_form.StreetAddress1" @bind:event="oninput" />
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold" for="casecreatepage-unit-apt-optional-61d0">Unit / Apt (optional)</label>
-                    <input id="casecreatepage-unit-apt-optional-61d0" type="text" class="form-control" placeholder="Apt 4B" @bind="@_form.StreetAddress2" @bind:event="oninput" />
+                    <input id="casecreatepage-unit-apt-optional-61d0" type="text" class="form-control" placeholder="e.g. Apt 4B" @bind="@_form.StreetAddress2" @bind:event="oninput" />
                 </div>
                 <div class="col-md-5">
                     <label class="form-label fw-semibold" for="casecreatepage-city-4662">City <span class="text-danger">*</span></label>
@@ -49,12 +57,136 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold" for="casecreatepage-state-7b45">State <span class="text-danger">*</span></label>
-                    <input id="casecreatepage-state-7b45" type="text" class="form-control" placeholder="TN" @bind="@_form.State" @bind:event="oninput" />
+                    <input id="casecreatepage-state-7b45" type="text" class="form-control" placeholder="e.g. TN" @bind="@_form.State" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold" for="casecreatepage-zip-code-ba79">ZIP Code <span class="text-danger">*</span></label>
                     <input id="casecreatepage-zip-code-ba79" type="text" class="form-control" @bind="@_form.ZipCode" @bind:event="oninput" />
                 </div>
+
+                @* ── Which place is this? (2026-09-17) ───────────────────────────────────
+                   A case now names the shared place it is about, so the place's page can gather
+                   every group's work at one location. Offered, never applied: the candidate list
+                   suggests, and only the person typing knows whether it is really the same
+                   building. *@
+                <div class="col-12">
+                    <hr class="my-1" />
+                    <div class="fw-semibold small text-secondary mb-2">The place</div>
+                </div>
+
+                @if (_chosenPlace is { } chosen)
+                {
+                    <div class="col-12">
+                        <div class="alert alert-success py-2 d-flex justify-content-between align-items-center mb-0"
+                             data-testid="case-place-chosen">
+                            <div>
+                                <div class="fw-semibold">@DescribePlace(chosen)</div>
+                                <div class="small">
+                                    @(chosen.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                        ? "A public location."
+                                        : "A private residence.")
+                                    @if (chosen.InvestigationCount > 0)
+                                    {
+                                        @($" {chosen.InvestigationCount} investigation{(chosen.InvestigationCount == 1 ? "" : "s")} already recorded here.")
+                                    }
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    @onclick="ClearChosenPlace">Change</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12">
+                        <label class="form-label" for="case-place-name">
+                            Name of the place <span class="text-secondary small">(a landmark or building, if it has one)</span>
+                        </label>
+                        <input id="case-place-name" type="text" class="form-control" placeholder="e.g. Cragfont"
+                               @bind="@_form.PlaceName" @bind:event="oninput" />
+                        <div class="form-text">
+                            Leave this blank for an ordinary address. The address above is what the
+                            place is matched on.
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <BenPlaceCandidates Street="@_form.StreetAddress1" City="@_form.City"
+                                            State="@_form.State" Zip="@_form.ZipCode"
+                                            Name="@_form.PlaceName"
+                                            OnChosen="ChoosePlace" />
+                    </div>
+
+                    @* No default on purpose. Every consequence of this answer is heavy — a
+                       residence designates the case private-lane work permanently, a public
+                       location is what makes a free account's case public — and a default would be
+                       one of them chosen by nobody. *@
+                    <div class="col-12">
+                        <div class="form-label fw-semibold">
+                            What kind of place is this? <span class="text-danger">*</span>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="case-place-kind"
+                                   id="case-place-kind-public"
+                                   checked="@(_form.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)"
+                                   @onchange="@(() => ChooseKind(Ben.Data.Common.Enums.PlaceKind.PublicLocation))" />
+                            <label class="form-check-label" for="case-place-kind-public">
+                                <span class="fw-semibold">Public location</span>
+                                <div class="form-text mb-0">
+                                    A landmark, a business, anywhere that is not somebody's home.
+                                    Its page gathers every group's work there, and anyone may add to
+                                    it.@(_publicByDefault ? " On this account your case here is public." : "")
+                                </div>
+                            </label>
+                        </div>
+                        @* The plan is knowable before the click, so it is said beside the control
+                           rather than after the attempt — item 193's rule, and the one the Edit
+                           page has always followed here. *@
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="case-place-kind"
+                                   id="case-place-kind-residence"
+                                   disabled="@(!_planIncludesPrivate)"
+                                   checked="@(_form.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)"
+                                   @onchange="@(() => ChooseKind(Ben.Data.Common.Enums.PlaceKind.PrivateResidence))" />
+                            <label class="form-check-label" for="case-place-kind-residence">
+                                <span class="fw-semibold">Private residence</span>
+                                <div class="form-text mb-0">
+                                    Somebody's home. Findings stay with your group, and this is
+                                    private-engagement work, which needs a plan that covers it.
+                                </div>
+                            </label>
+                            @if (!_planIncludesPrivate)
+                            {
+                                <div class="form-text text-warning" data-testid="new-case-private-needs-plan">
+                                    Your group's plan covers public investigations only.
+                                    <a href="/pricing">See what each plan includes.</a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @* Shown only to somebody who could accept the case anyway: for everybody else it
+                   goes to the group whatever the box says, and a box that changes nothing is worse
+                   than no box (Ben, 2026-09-17). *@
+                @if (_mayAccept)
+                {
+                    <div class="col-12">
+                        <hr class="my-1" />
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="case-put-to-the-group"
+                                   @bind="@_form.PutToTheGroup" />
+                            <label class="form-check-label fw-semibold" for="case-put-to-the-group">
+                                Let the group decide whether to take this on
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Leave this unticked and the case is accepted as you open it, which is
+                            usually what you want for a place your group picked itself. Tick it and
+                            the case waits as <strong>Proposed</strong> until somebody accepts it.
+                        </div>
+                    </div>
+                }
             </div>
         </div>
         <div class="card-footer d-flex gap-2 justify-content-end">
@@ -71,15 +203,112 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>
+    /// A place chosen before arriving — the place page's "Open a case here" button.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "place")] public Guid? PrechosenPlaceId { get; set; }
+
     private readonly CaseForm _form = new();
+    private PlaceCandidate? _chosenPlace;
+    private BenEditor? _descriptionEditor;
     private bool _saving;
     private string? _error;
+    private bool _mayAccept;
+    private bool _publicByDefault;
+
+    /// <summary>
+    /// Whether the group's plan covers private-residence work (item 193).
+    /// </summary>
+    /// <remarks>
+    /// Fails open, as the server does and as the Edit page does. This page offered the residence
+    /// radio with no plan check at all until the 2026-09-17 audit, while Edit Case gated the same
+    /// commitment three times over — so a free-tier group could open a case it could not publish
+    /// and only find out afterwards.
+    /// </remarks>
+    private bool _planIncludesPrivate = true;
 
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
+        {
             NavManager.NavigateTo("/login");
+            return;
+        }
+
+        // Whether this person could accept the case once it exists — the same permission the
+        // server asks before accepting it on the way in — and whether the plan makes work at a
+        // public place public, which the kind choice explains.
+        try
+        {
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _mayAccept = perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                    Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true;
+            _publicByDefault = perms?.PublicByDefault ?? false;
+            _planIncludesPrivate = perms?.PlanIncludes(
+                Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases) ?? true;
+        }
+        catch { _mayAccept = false; }
+
+        // Arrived from a place's own page ("Open a case here"), so the place is already settled and
+        // its address fills the form rather than being retyped into a second copy of it.
+        if (PrechosenPlaceId is { } prechosen) await AdoptPlaceAsync(prechosen);
+    }
+
+    /// <summary>
+    /// Takes a place the caller already named and fills the form from it.
+    /// </summary>
+    /// <remarks>
+    /// Read through the public place endpoint, which needs no membership: somebody may open a case
+    /// at a place their group has never touched, which is the whole point of arriving this way. A
+    /// place that cannot be read is simply not adopted — the form is then the ordinary one, and
+    /// nothing is lost but a shortcut.
+    /// </remarks>
+    private async Task AdoptPlaceAsync(Guid placeId)
+    {
+        try
+        {
+            var place = await AdminClient.GetPlaceAsync(placeId);
+            if (place is null) return;
+
+            _chosenPlace = new PlaceCandidate(
+                place.Id, place.Name, place.StreetAddress1, place.City, place.State,
+                place.Kind, DistanceMiles: null, InvestigationCount: 0);
+
+            _form.PlaceName = place.Name;
+            if (!string.IsNullOrWhiteSpace(place.StreetAddress1)) _form.StreetAddress1 = place.StreetAddress1!;
+            if (!string.IsNullOrWhiteSpace(place.City))  _form.City  = place.City!;
+            if (!string.IsNullOrWhiteSpace(place.State)) _form.State = place.State!;
+            if (!string.IsNullOrWhiteSpace(place.ZipCode)) _form.ZipCode = place.ZipCode!;
+        }
+        catch { /* the shortcut is a convenience, never a precondition */ }
+    }
+
+    private void ChoosePlace(PlaceCandidate candidate)
+    {
+        _chosenPlace = candidate;
+
+        // The place decides what kind of location this is, so the answer follows it rather than
+        // whatever was ticked before the place was known.
+        _form.PlaceKind = candidate.Kind;
+        _form.PlaceName = candidate.Name ?? _form.PlaceName;
+        if (!string.IsNullOrWhiteSpace(candidate.StreetAddress1)) _form.StreetAddress1 = candidate.StreetAddress1!;
+        if (!string.IsNullOrWhiteSpace(candidate.City))  _form.City  = candidate.City!;
+        if (!string.IsNullOrWhiteSpace(candidate.State)) _form.State = candidate.State!;
+    }
+
+    private void ClearChosenPlace() => _chosenPlace = null;
+
+    private void ChooseKind(Ben.Data.Common.Enums.PlaceKind kind) => _form.PlaceKind = kind;
+
+    private static string DescribePlace(PlaceCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Name)) return candidate.Name!;
+
+        var parts = new[] { candidate.StreetAddress1, candidate.City, candidate.State }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var described = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(described) ? "A place with no address on file" : described;
     }
 
     private bool IsValid =>
@@ -87,30 +316,49 @@
         !string.IsNullOrWhiteSpace(_form.StreetAddress1) &&
         !string.IsNullOrWhiteSpace(_form.City)    &&
         !string.IsNullOrWhiteSpace(_form.State)   &&
-        !string.IsNullOrWhiteSpace(_form.ZipCode);
+        !string.IsNullOrWhiteSpace(_form.ZipCode) &&
+        // The kind has no default, so an unanswered question blocks Open Case rather than being
+        // decided by whichever value happened to be first.
+        (_chosenPlace is not null || _form.PlaceKind is not null);
 
     private async Task Submit()
     {
         _saving = true;
         _error  = null;
+        // What the editor holds now, not its last debounced report — see BenEditor.GetCurrentHtmlAsync.
+        if (_descriptionEditor is not null) _form.Description = await _descriptionEditor.GetCurrentHtmlAsync() ?? _form.Description;
         try
         {
             var request = new CreateCaseRequest(
                 _form.Title.Trim(),
-                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                Ben.Data.Common.Text.PlainTextHtml.HasText(_form.Description) ? _form.Description!.Trim() : null,
                 _form.StreetAddress1.Trim(),
                 string.IsNullOrWhiteSpace(_form.StreetAddress2) ? null : _form.StreetAddress2.Trim(),
                 _form.City.Trim(),
                 _form.State.Trim().ToUpperInvariant(),
                 _form.ZipCode.Trim(),
                 "US",
-                null, null);
+                null, null,
+                _form.PutToTheGroup,
+                // One or the other: a place already on file, or the one being described here.
+                PlaceId: _chosenPlace?.Id,
+                NewPlace: _chosenPlace is not null ? null : new NewPlaceRequest(
+                    Name: string.IsNullOrWhiteSpace(_form.PlaceName) ? null : _form.PlaceName!.Trim(),
+                    StreetAddress1: _form.StreetAddress1.Trim(),
+                    StreetAddress2: string.IsNullOrWhiteSpace(_form.StreetAddress2) ? null : _form.StreetAddress2!.Trim(),
+                    City: _form.City.Trim(),
+                    State: _form.State.Trim().ToUpperInvariant(),
+                    ZipCode: _form.ZipCode.Trim(),
+                    Country: "US",
+                    Kind: _form.PlaceKind));
 
-            var result = await AdminClient.CreateOrgCaseAsync(OrgId, request);
+            var (result, error) = await AdminClient.CreateOrgCaseAsync(OrgId, request);
             if (result is not null)
                 NavManager.NavigateTo($"/organizations/{OrgId}/cases/{result.Id}");
             else
-                _error = "Case creation failed. Please try again.";
+                // The server's own sentence when it gave one — the subscription cap names the
+                // plan and what it includes, which "failed, try again" would bury.
+                _error = error ?? "Case creation failed. Please try again.";
         }
         catch (Exception ex)
         {
@@ -128,5 +376,12 @@
         public string  City           { get; set; } = "";
         public string  State          { get; set; } = "";
         public string  ZipCode        { get; set; } = "";
+        public bool    PutToTheGroup  { get; set; }
+
+        /// <summary>A landmark's name, when it has one. Blank for an ordinary address.</summary>
+        public string? PlaceName      { get; set; }
+
+        /// <summary>Null until answered — see IsValid.</summary>
+        public Ben.Data.Common.Enums.PlaceKind? PlaceKind { get; set; }
     }
 }

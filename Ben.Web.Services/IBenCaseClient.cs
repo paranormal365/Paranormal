@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -18,15 +19,32 @@ public interface IBenCaseClient
 {
     // ── Case Transfers ────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseTransferLogRecord?> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
-    Task<CaseTransferLogRecord?> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
+    Task<LoadResult<CaseTransferLogRecord>> GetCaseTransfersAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    // ── Item 84: a client moving their paused case, and the receiving side's inbox ──
+
+    /// <summary>Asks a new organization to take the client's paused case. Null on success.</summary>
+    Task<string?> ReassignMyCaseAsync(Guid caseId, Guid toOrganizationId,
+        bool shareHistory, bool shareInvestigations, string? note, CancellationToken token = default);
+
+    /// <summary>The client's pending move for this case, or null when there is none.</summary>
+    Task<PendingReassignRecord?> GetMyReassignAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Withdraws the client's pending move.</summary>
+    Task<bool> CancelMyReassignAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Transfers waiting on this organization's answer — case not yet theirs.</summary>
+    Task<LoadResult<IncomingTransferRecord>> GetIncomingTransfersAsync(Guid orgId, CancellationToken token = default);
+    /// <summary>Refusal-carrying (item 167): a plan without case transfers answers with a
+    /// sentence worth showing, not a null that renders as "Proposal failed."</summary>
+    Task<(CaseTransferLogRecord? Result, string? Error)> ProposeCaseTransferAsync(Guid orgId, Guid caseId, Guid toOrganizationId, string? reason, CancellationToken token = default);
+    Task<(CaseTransferLogRecord? Result, string? Error)> RespondCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, bool accept, string? rejectionReason, CancellationToken token = default);
     /// <summary>Cancels an outgoing pending transfer proposed by this org. Only the proposing org can cancel.</summary>
     Task<CaseTransferLogRecord?> CancelCaseTransferAsync(Guid orgId, Guid caseId, Guid logId, CancellationToken token = default);
 
     // ── Public Case Discovery ─────────────────────────────────────────────────
 
-    Task<IReadOnlyList<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
+    Task<LoadResult<PublicCaseListItem>> GetPublicCasesAsync(string orgUrlName, CancellationToken token = default);
     /// <summary>Returns a single public case by org URL name and case reference (e.g. "2026-042").</summary>
     Task<PublicCaseDetail?> GetPublicCaseAsync(string orgUrlName, string caseRef, CancellationToken token = default);
 
@@ -36,7 +54,13 @@ public interface IBenCaseClient
     /// Used to drive the home-page investigation map and ranked list.
     /// </summary>
     /// <param name="sort">"votes" (default) sorts by total votes desc; "date" sorts by open date desc.</param>
-    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(int page = 1, int pageSize = 20, string sort = "votes", CancellationToken token = default);
+    /// <summary>
+    /// Public cases for the discovery map and list. With <paramref name="bounds"/>, only those
+    /// inside the view; without, the whole map — which is what a first load wants.
+    /// </summary>
+    Task<PublicCaseDiscoveryPagedResponse?> GetPublicCaseDiscoveryAsync(
+        int page = 1, int pageSize = 20, string sort = "votes",
+        MapBounds? bounds = null, CancellationToken token = default);
 
     // ── Case votes (community rating) ─────────────────────────────────────────
 
@@ -52,14 +76,47 @@ public interface IBenCaseClient
     /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all visible
     /// list-cards without N individual requests. Calls <c>GET api/public/cases/vote-summaries</c>.
     /// </summary>
-    Task<IReadOnlyList<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default);
+    Task<LoadResult<CaseVoteSummary>> GetCaseVoteSummariesAsync(IEnumerable<Guid> caseIds, CancellationToken token = default);
 
     Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
     Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
+    // ── What people said, and what to do about it (item 233, Ben 2026-09-11) ──
+
+    /// <summary>The comments on a published case, oldest first. Anonymous readers may ask.</summary>
+    Task<LoadResult<PublicCaseComment>> GetCaseCommentsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Leaves a comment, or the refusal in the words the server wrote it.</summary>
+    Task<(PublicCaseComment? Saved, string? Error)> PostCaseCommentAsync(
+        Guid caseId, string body, CancellationToken token = default);
+
+    /// <summary>Takes back a comment of your own.</summary>
+    Task<bool> DeleteCaseCommentAsync(Guid caseId, Guid commentId, CancellationToken token = default);
+
+    /// <summary>Puts a link to the case on the feed, as a post by the person asking.</summary>
+    Task<(Guid? PostId, string? Error)> RepostCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Reports a case to the moderators. The answer never varies; see the controller.</summary>
+    Task<bool> ReportCaseAsync(Guid caseId, string? reason, CancellationToken token = default);
+
+    /// <summary>Reports one comment on a case.</summary>
+    Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// What a link in a message points at, when it points at something of ours. Null otherwise —
+    /// nothing fetches anybody else's page; see the controller for why.
+    /// </summary>
+    Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks the server to make (or refresh) the card for another site's link, as a signed-in person about to post it
+    /// (2026-09-14). Null when the page could not be read or the address is not a web address.
+    /// </summary>
+    Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
     Task<CaseRecord?> GetOrgCaseAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>
@@ -68,34 +125,75 @@ public interface IBenCaseClient
     /// diverges from what the client actually wrote.
     /// </summary>
     Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseRecord?> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
-    Task<CaseRecord?> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
-    Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+
+    /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// The table behind this is append-only and was entirely write-only until the 2026-09-17
+    /// audit, so the question its own entity doc names — "who put this footage up" — had no
+    /// answer anywhere. Answered to the GROUP: a client asks their group and the group answers.
+    /// </remarks>
+    Task<WebApi.LoadResult<CaseFeedConsentRecord>> GetCaseFeedConsentsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Advisory warnings when this title or pseudonym would carry the client's name or the street
+    /// address onto the public case page (item 176). The caller decides what a failed check means —
+    /// for an advisory, failure must never block publishing.
+    /// </summary>
+    Task<LoadResult<string>> GetPublishLeakWarningsAsync(Guid orgId, Guid caseId, string title, string? pseudonym, CancellationToken token = default);
+
+    /// <summary>
+    /// Applies this case's privacy protections after the fact (item 182) — for a group that took
+    /// it on a plan without them and has since upgraded. Returns a report of what changed, what
+    /// still needs a person, and whether the case was ever public.
+    /// </summary>
+    Task<(CasePrivacyRetrofitResult? Result, string? Error)> ApplyCasePrivacyAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
+    Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
+    Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
+    /// <remarks>
+    /// Declined only when the server says so: the list used to take a request off the screen whatever the answer, so a member
+    /// without the grant "declined" a request that came back on the next visit (UI test pass 6.15, 2026-09-14).
+    /// </remarks>
+    Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
-    Task<CaseRecord?> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
+
+    /// <summary>The review page's one load: submission, materials, ballot, and my own vote.</summary>
+    Task<RequestReviewDetailItem?> GetRequestReviewAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+
+    /// <summary>Cast or change my vote on taking this request. Null on refusal.</summary>
+    Task<RequestReviewVoteItem?> CastRequestReviewVoteAsync(Guid orgId, Guid clientRequestId, bool inFavor, string? comment, CancellationToken token = default);
+    Task<(CaseRecord? Result, string? Error)> UpdateOrgCaseAsync(Guid orgId, Guid caseId, UpdateCaseRequest request, CancellationToken token = default);
     /// <summary>
     /// The case timeline. Pass <paramref name="investigationId"/> for the binder view — only the
     /// entries recorded during that investigation.
     /// </summary>
-    Task<IReadOnlyList<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default);
-    Task<CaseTimelineEntryRecord?> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
+    Task<LoadResult<CaseTimelineEntryRecord>> GetCaseTimelineAsync(Guid orgId, Guid caseId, Guid? investigationId = null, CancellationToken token = default);
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> AddCaseTimelineEntryAsync(Guid orgId, Guid caseId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<CaseTimelineEntryRecord?> UpdateCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, UpsertTimelineEntryRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseTimelineEntryAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
     /// <summary>Returns published reports the client can view for their case.</summary>
-    Task<IReadOnlyList<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseReportSummary>> GetMyCaseReportsAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Returns a URL to stream the published report PDF for the client.</summary>
     string GetMyCaseReportPdfUrl(Guid caseId, Guid reportId);
 
     // ── Case Report Builder ───────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseReportSummary>> GetCaseReportsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<CaseReportDetail?> GetCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportDetail?> CreateCaseReportAsync(Guid orgId, Guid caseId, UpsertCaseReportRequest request, CancellationToken token = default);
     Task<CaseReportDetail?> UpdateCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, UpsertCaseReportRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Sentences warning that this report's summary would carry the client's name or street onto
+    /// the public page (W-P3). Empty when there is nothing to warn about.
+    /// </summary>
+    Task<LoadResult<string>> CheckPublicSummaryForLeaksAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportDetail?> PublishCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<bool> DeleteCaseReportAsync(Guid orgId, Guid caseId, Guid reportId, CancellationToken token = default);
     Task<CaseReportSectionDto?> AddReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, UpsertSectionRequest request, CancellationToken token = default);
@@ -103,6 +201,11 @@ public interface IBenCaseClient
     Task<bool> DeleteReportSectionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, CancellationToken token = default);
     Task<CaseReportSectionFileDto?> AddReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid uploadFileId, string? caption, CancellationToken token = default);
     Task<bool> RemoveReportSectionFileAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fileId, CancellationToken token = default);
+
+    /// <summary>The field sessions this case's investigations produced, for a report to cite.</summary>
+    Task<LoadResult<AvailableFieldSessionDto>> GetCaseFieldSessionsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<CaseReportSectionFieldSessionDto?> AddReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid fieldSessionUploadId, string? caption, CancellationToken token = default);
+    Task<bool> RemoveReportSectionFieldSessionAsync(Guid orgId, Guid caseId, Guid reportId, Guid sectionId, Guid linkId, CancellationToken token = default);
     /// <summary>Returns a URL to stream the PDF export for in-browser viewing.</summary>
     string GetReportPdfUrl(Guid orgId, Guid caseId, Guid reportId);
 
@@ -114,16 +217,20 @@ public interface IBenCaseClient
 
     // ── Case Research ─────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    /// <summary>
+    /// The case's canvas boards: every published one, plus the caller's own unpublished drafts (item 243).
+    /// </summary>
+    /// <remarks>
+    /// The whole of research, since 2026-09-16. The block-editor research pages that stood here until
+    /// then are gone: two ways to write up a case is one more than anybody needed, and the boards are
+    /// the one Ben kept.
+    /// </remarks>
+    Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
     /// <summary>Returns all files linked to a case's Files/Evidence tab, newest first.</summary>
-    Task<IReadOnlyList<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseFileRecord>> GetCaseFilesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>Uploads a file of any content type and links it to the case's Files/Evidence tab.</summary>
     Task<CaseFileRecord?> UploadCaseFileAsync(Guid orgId, Guid caseId, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
@@ -137,51 +244,95 @@ public interface IBenCaseClient
     /// <summary>Renders the placed clips down to a single mixed audio file and saves it to the case's Files tab.</summary>
     Task<CaseFileRecord?> ExportAudioMixAsync(Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Renders a mix, and on refusal hands back the server's own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The mixer answered every failure with "Export failed. Please try again." — including a 403,
+    /// which will never succeed however many times it is tried, and every bounds refusal added in
+    /// phase 1 (2026-09-06 audio walk, finding K-export).
+    /// </remarks>
+    Task<(CaseFileRecord? Result, string? Error)> ExportAudioMixWithReasonAsync(
+        Guid orgId, Guid caseId, ExportAudioMixRequest request, CancellationToken token = default);
+
     // ── Case Notes ────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseNoteDto?> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default);
+    Task<LoadResult<CaseNoteDto>> GetCaseNotesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<(CaseNoteDto? Result, string? Error)> CreateCaseNoteAsync(Guid orgId, Guid caseId, UpsertCaseNoteDto request, CancellationToken token = default);
+    /// <summary>The refusal from the most recent UploadCaseFileAsync, when it failed.</summary>
+    string? LastCaseFileUploadError { get; }
+
     Task<CaseNoteDto?> UpdateCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, UpsertCaseNoteDto request, CancellationToken token = default);
     Task<bool> DeleteCaseNoteAsync(Guid orgId, Guid caseId, Guid noteId, CancellationToken token = default);
 
     // ── Client Requests ───────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
+    Task<LoadResult<ClientRequestRecord>> GetMyClientRequestsAsync(CancellationToken token = default);
     Task<ClientRequestRecord?> GetClientRequestAsync(Guid id, CancellationToken token = default);
-    Task<IReadOnlyList<ClientRequestOrganizationRecord>> GetClientRequestOrgsAsync(Guid id, CancellationToken token = default);
+    Task<LoadResult<ClientRequestOrganizationRecord>> GetClientRequestOrgsAsync(Guid id, CancellationToken token = default);
     Task<ClientRequestRecord?> CreateClientRequestAsync(UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> UpdateClientRequestAsync(Guid id, UpsertClientRequestRequest request, CancellationToken token = default);
     Task<ClientRequestRecord?> SubmitClientRequestAsync(Guid id, IList<Guid> organizationIds, CancellationToken token = default);
     Task<ClientRequestRecord?> WithdrawClientRequestAsync(Guid id, CancellationToken token = default);
     Task<ClientRequestRecord?> AddOrganizationToRequestAsync(Guid id, Guid organizationId, CancellationToken token = default);
 
+    /// <summary>Deletes a draft the person never sent. Drafts only — see the controller.</summary>
+    Task<bool> DeleteClientRequestDraftAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>
+    /// Submits an investigation request with no account, creating one from the request itself
+    /// (site evaluation 2026-09-06, phase 1). Anonymous — there is no token to send.
+    /// </summary>
+    Task<AnonymousSubmitOutcome> SubmitRequestWithoutAccountAsync(
+        AnonymousClientRequestSubmission request, CancellationToken token = default);
+
+    /// <summary>A request parked for this account holder to claim, or null when the link is not theirs.</summary>
+    Task<PendingClientRequestRecord?> GetPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
+    /// <summary>Claims the parked request as this account's own.</summary>
+    Task<ClientRequestRecord?> AdoptPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
+    /// <summary>"Not mine" — discards the parked request.</summary>
+    Task<bool> DiscardPendingClientRequestAsync(Guid id, string key, CancellationToken token = default);
+
     // ── My Cases (client dashboard) ───────────────────────────────────────────
 
     /// <summary>Returns all cases where the current user is the originating client.</summary>
-    Task<IReadOnlyList<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default);
+    Task<LoadResult<ClientCaseListItem>> GetMyCasesAsync(CancellationToken token = default);
 
     /// <summary>Returns case detail + client-visible occurrences and upcoming investigations.</summary>
     Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
-    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Records what the client says happened, or hands back why it could not be recorded.
+    /// </summary>
+    /// <remarks>
+    /// Returns the reason, not just a null. The transport maps every server refusal to null rather
+    /// than throwing, so the page's <c>catch</c> never saw a 404 or a 400 — and this is the
+    /// client's own account of what is happening in their house, typed once. The 2026-09-17 audit
+    /// found the result discarded entirely: the dialog closed, the list refreshed, and the text
+    /// was gone.
+    /// </remarks>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Updates a previously logged occurrence.</summary>
-    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>Edits one, or hands back why it could not be edited. See above.</summary>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
 
     // ── Co-client access management ───────────────────────────────────────────
 
-    Task<IReadOnlyList<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CoClientItem>> GetCoClientsAsync(Guid caseId, CancellationToken token = default);
     Task<CoClientItem?> AddCoClientAsync(Guid caseId, string email, CancellationToken token = default);
     Task<bool> RemoveCoClientAsync(Guid caseId, Guid accessId, CancellationToken token = default);
 
     // ── Sub-client invites (item #4) — for people with no account yet ───────────
 
     /// <summary>Returns this case's pending (not accepted/revoked/expired) invites.</summary>
-    Task<IReadOnlyList<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseClientInviteRecord>> GetCaseInvitesAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>
     /// Single entry point for adding a secondary user: an existing account is linked immediately
@@ -195,7 +346,7 @@ public interface IBenCaseClient
     // ── Related people (basic-info, no account) ─────────────────────────────────
 
     /// <summary>Returns people referenced on this case who are not platform users.</summary>
-    Task<IReadOnlyList<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseRelatedPersonRecord>> GetRelatedPeopleAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Adds a basic-info reference to someone connected to the case (no account created).</summary>
     Task<CaseRelatedPersonRecord?> AddRelatedPersonAsync(Guid caseId, AddRelatedPersonRequest request, CancellationToken token = default);
@@ -212,10 +363,11 @@ public interface IBenCaseClient
     // ── Case Messages (org side) ───────────────────────────────────────────────
 
     /// <summary>Returns all case messages visible to the org (marks client messages read).</summary>
-    Task<IReadOnlyList<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the org to the client on this case.</summary>
-    Task<CaseMessageRecord?> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the group's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
     Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);

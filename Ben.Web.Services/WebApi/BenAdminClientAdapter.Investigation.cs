@@ -22,20 +22,25 @@ public sealed partial class BenAdminClientAdapter
     private static string InvBase(Guid orgId, Guid caseId)
         => $"/api/organizations/{orgId}/cases/{caseId}/investigations";
 
-    public async Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationRecord>>(InvBase(orgId, caseId), token);
-        return result ?? [];
-    }
+    public Task<LoadResult<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<InvestigationRecord>(InvBase(orgId, caseId), token);
 
     public Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.GetAsync<InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", token);
 
-    public Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default)
-        => _api.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(InvBase(orgId, caseId), request, token);
+    // Reason-carrying (item 184): binding a residence place can refuse with the plan sentence,
+    // and the investigation dialog must render it rather than "Save failed."
+    public Task<(InvestigationRecord? Result, string? Error)> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+               HttpMethod.Post, InvBase(orgId, caseId), request, token);
 
-    public Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertInvestigationRequest, InvestigationRecord>($"{InvBase(orgId, caseId)}/{id}", request, token);
+    public Task<(InvestigationRecord? Result, string? Error)> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+               HttpMethod.Put, $"{InvBase(orgId, caseId)}/{id}", request, token);
+
+    public Task<(bool Deleted, string? Error)> DeleteInvestigationExpectingReasonAsync(
+        Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/cases/{caseId}/investigations/{id}", token);
 
     public Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}", token);
@@ -43,11 +48,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.PostVoidAsync($"{InvBase(orgId, caseId)}/{id}/cancel", new { }, token);
 
-    public async Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationAttendeeRecord>>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
+        => _api.GetListAsync<InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
 
     public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
@@ -65,11 +67,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<EvidenceVoteSummary?> GetEvidenceVoteSummaryAsync(Guid uploadFileId, CancellationToken token = default)
         => _api.GetAnonymousAsync<EvidenceVoteSummary>($"/api/evidence-votes/{uploadFileId}/summary", token);
 
-    public async Task<IReadOnlyList<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<EvidenceVoteRecord>>($"/api/evidence-votes/{uploadFileId}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default)
+        => _api.GetListAsync<EvidenceVoteRecord>($"/api/evidence-votes/{uploadFileId}", token);
 
     public Task<EvidenceVoteSummary?> CastEvidenceVoteAsync(Guid uploadFileId, Ben.Data.Common.Enums.EvidenceVoteType voteType, string? comment, CancellationToken token = default)
         => _api.PostAsync<object, EvidenceVoteSummary>(
@@ -81,16 +80,28 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Org-wide investigations (Area 9) ──────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
+    public Task<LoadResult<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgInvestigationRow>($"/api/organizations/{orgId}/investigations", token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<OrgInvestigationMapPage>> GetOrgInvestigationMapAsync(
+        Guid orgId, MapBounds? bounds = null, CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<OrgInvestigationRow>>($"/api/organizations/{orgId}/investigations", token);
-        return result ?? [];
+        // Invariant culture on every edge: a decimal comma in a query string is two parameters as
+        // far as the server is concerned, and the map would come back empty on a French machine.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? $"/api/organizations/{orgId}/investigations/map"
+            : $"/api/organizations/{orgId}/investigations/map"
+              + $"?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<OrgInvestigationMapPage>(url, token);
     }
 
-    public Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+    public Task<(InvestigationRecord? Result, string? Error)> CreateOrgInvestigationAsync(
         Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default)
-        => _api.PostAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
-            $"/api/organizations/{orgId}/investigations", request, token);
+        => _api.SendExpectingReasonAsync<CreateOrgInvestigationRequest, InvestigationRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/investigations", request, token);
 
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
@@ -98,8 +109,8 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<object, object>($"/api/my-cases/{caseId}/investigations/{investigationId}/cancel", new { }, token)
                .ContinueWith(t => t.Result is not null);
 
-    public async Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<ScheduleProposalDto>>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", token) ?? [];
+    public Task<LoadResult<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<ScheduleProposalDto>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", token);
 
     public Task<ScheduleProposalDto?> CreateScheduleProposalAsync(Guid orgId, Guid caseId, CreateProposalRequest request, CancellationToken token = default)
         => _api.PostAsync<CreateProposalRequest, ScheduleProposalDto>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals", request, token);
@@ -110,8 +121,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<ScheduleProposalDto?> ConvertProposalToInvestigationAsync(Guid orgId, Guid caseId, Guid proposalId, ConvertProposalRequest request, CancellationToken token = default)
         => _api.PostAsync<ConvertProposalRequest, ScheduleProposalDto>($"/api/orgs/{orgId}/cases/{caseId}/schedule-proposals/{proposalId}/convert", request, token);
 
-    public async Task<IReadOnlyList<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<ScheduleProposalDto>>($"/api/my-cases/{caseId}/schedule-proposals", token) ?? [];
+    public Task<LoadResult<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<ScheduleProposalDto>($"/api/my-cases/{caseId}/schedule-proposals", token);
 
     public Task<ScheduleProposalDto?> AcceptScheduleProposalAsync(Guid caseId, Guid proposalId, Guid slotId, CancellationToken token = default)
         => _api.PostAsync<object, ScheduleProposalDto>($"/api/my-cases/{caseId}/schedule-proposals/{proposalId}/accept", new { SlotId = slotId }, token);
@@ -124,18 +135,57 @@ public sealed partial class BenAdminClientAdapter
 
     // ── My Investigations ───────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<MyInvestigationItem>>("/api/my-investigations", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyInvestigationItem>("/api/my-investigations", token);
 
-    public async Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<AttendedInvestigationItem>>("/api/my-investigations/attended", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default)
+        => _api.GetListAsync<AttendedInvestigationItem>("/api/my-investigations/attended", token);
 
     public async Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default)
         => await _api.PutVoidAsync($"/api/my-investigations/{attendeeId}/rsvp", new { Rsvp = rsvp }, token);
+
+    // ── Field sessions recorded on a phone ────────────────────────────────────
+
+    /// <summary>Sessions uploaded for one investigation.</summary>
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
+        Guid investigationId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>(
+            $"/api/field-sessions/for-investigation/{investigationId}", token);
+
+    /// <summary>One session, with its document — the readings as the device wrote them.</summary>
+    public Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}", token);
+
+    // ── Sharing a session by link (item 207) ──────────────────────────────────
+
+    public Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionShareRecord>(
+            $"/api/field-sessions/{sessionId}/shares", token);
+
+    public Task<FieldSessionShareRecord?> CreateFieldSessionShareAsync(
+        Guid sessionId, CreateFieldSessionShareRequest request, CancellationToken token = default)
+        => _api.PostAsync<CreateFieldSessionShareRequest, FieldSessionShareRecord>(
+            $"/api/field-sessions/{sessionId}/shares", request, token);
+
+    public Task<bool> RevokeFieldSessionShareAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/field-sessions/{sessionId}/shares/{shareId}", token);
+
+    public Task<LoadResult<FieldSessionShareViewRecord>> GetFieldSessionShareViewsAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionShareViewRecord>(
+            $"/api/field-sessions/{sessionId}/shares/{shareId}/views", token);
+
+    /// <summary>
+    /// Anonymous, and it must stay that way: the recipient has no account, and sending a bearer
+    /// token that happens to be lying around would make the page behave differently for a signed-in
+    /// visitor than for the person the link was actually for.
+    /// </summary>
+    public Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default)
+        => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
+            $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
+
 }

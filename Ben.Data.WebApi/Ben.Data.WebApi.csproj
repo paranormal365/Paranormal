@@ -6,11 +6,22 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <!-- CS1591: Missing XML comment for publicly visible type — suppressed because
-             boilerplate admin/entity controllers are self-documenting by name. -->
-        <NoWarn>$(NoWarn);1591</NoWarn>
+             boilerplate admin/entity controllers are self-documenting by name.
+
+             CS1573: "some parameters documented, not all". The house style on the request and
+             response records here is to explain the two or three fields that need explaining and
+             leave `Guid Id` alone, which this rule forbids: it wants every parameter documented or
+             none. Writing "<param name="Id">The id.</param>" forty-nine times would satisfy the
+             compiler and tell a reader nothing. Where a whole record needs describing, the prose
+             goes in <remarks> and names the fields there. -->
+        <NoWarn>$(NoWarn);1591;1573</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Sidelined: AzureBlobFileStorageService is written but NOT registered. The reference
+             exists so it compiles and stays honest as the storage interface changes; nothing
+             constructs it until somebody swaps the registration in Program.cs. -->
+        <PackageReference Include="Azure.Storage.Blobs" Version="12.29.2" />
         <PackageReference Include="HtmlSanitizer" Version="9.2.995" />
         <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="MetadataExtractor" Version="2.9.3" />
@@ -23,9 +34,12 @@
         <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="NLayer.NAudioSupport" Version="2.0.1" />
+        <PackageReference Include="QRCoder" Version="1.6.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
         <PackageReference Include="SkiaSharp" Version="4.151.1" />
         <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
+        <PackageReference Include="Stripe.net" Version="52.4.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
@@ -44,5 +58,18 @@
       <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
       <ProjectReference Include="..\Ben.Service.RepositoryService\Ben.Service.RepositoryService.csproj" />
     </ItemGroup>
+
+  <ItemGroup>
+    <!-- Demo footage for the video editor's help documents. Four small generated files (172 KB
+         total) that the development seeder loads into the media library, so the editor has
+         something real to show. Not shipped to production: the seeder they feed is itself gated
+         behind SeedData:DevData:Enabled. -->
+    <Content Include="SeedData\Media\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The NSFW screening model (item 186 F5b) is fetched, not committed - 87 MB; see
+         scripts/get-screener-model.sh (.ps1 for the Windows host). When present it must reach
+         BOTH build output and publish output, or the deployed API silently degrades to
+         manual-only screening. Condition keeps a model-less checkout building clean. -->
+    <Content Include="Models\nsfw\model_quantized.onnx" Condition="Exists('Models\nsfw\model_quantized.onnx')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

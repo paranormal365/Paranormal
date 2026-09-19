@@ -91,31 +91,57 @@ public sealed class WatermarkServiceTests
         Assert.Contains($"overlay={expectedX}:", f);
     }
 
+    /// <summary>
+    /// Right and bottom edges are ffmpeg expressions, not arithmetic done here.
+    /// </summary>
+    /// <remarks>
+    /// The x these used to assert (1920 − 288 − 20) was right, but the matching y was computed
+    /// from a guessed watermark height of half its width, so a square logo hung below the frame.
+    /// The overlay filter knows the scaled size as <c>w</c>/<c>h</c>; letting it do the subtraction
+    /// removes the guess (2026-09-05 audit, export-7).
+    /// </remarks>
     [Theory]
     [InlineData(WatermarkPosition.TopRight)]
     [InlineData(WatermarkPosition.BottomRight)]
     [InlineData(WatermarkPosition.MiddleRight)]
-    public void BuildOverlayFilter_RightPositions_UseRightMargin(WatermarkPosition pos)
+    public void BuildOverlayFilter_RightPositions_MeasureFromTheRightEdge(WatermarkPosition pos)
     {
         var f = BuildFilter(pos, scale: 0.15, videoWidth: 1920, marginX: 20);
-        // wmWidth = 288; right edge = 1920 - 288 - 20 = 1612
-        Assert.Contains("overlay=1612:", f);
+        Assert.Contains("overlay=W-w-20:", f);
+    }
+
+    [Theory]
+    [InlineData(WatermarkPosition.BottomLeft)]
+    [InlineData(WatermarkPosition.BottomCenter)]
+    [InlineData(WatermarkPosition.BottomRight)]
+    public void BuildOverlayFilter_BottomPositions_MeasureFromTheBottomEdge(WatermarkPosition pos)
+    {
+        var f = BuildFilter(pos, marginY: 20);
+        Assert.EndsWith(":H-h-20[out]", f);
     }
 
     [Fact]
     public void BuildOverlayFilter_TopPosition_UsesMarginY()
     {
         var f = BuildFilter(WatermarkPosition.TopCenter, marginY: 20);
-        // y = marginY = 20
-        Assert.Contains(":20", f);
+        Assert.EndsWith(":20[out]", f);
+    }
+
+    [Theory]
+    [InlineData(WatermarkPosition.MiddleLeft)]
+    [InlineData(WatermarkPosition.Center)]
+    [InlineData(WatermarkPosition.MiddleRight)]
+    public void BuildOverlayFilter_MiddlePositions_CentreOnTheRealHeight(WatermarkPosition pos)
+    {
+        var f = BuildFilter(pos, videoHeight: 1080);
+        Assert.EndsWith(":(H-h)/2[out]", f);
     }
 
     [Fact]
-    public void BuildOverlayFilter_CenterPosition_IsApproximatelyMiddle()
+    public void BuildOverlayFilter_CenterPosition_CentresHorizontallyToo()
     {
-        // x ≈ (1920 - 288) / 2 = 816
         var f = BuildFilter(WatermarkPosition.Center, scale: 0.15, videoWidth: 1920, videoHeight: 1080);
-        Assert.Contains("overlay=816:", f);
+        Assert.Contains("overlay=(W-w)/2:", f);
     }
 
     // ── All positions compile and produce a valid filter ──────────────────────
@@ -138,23 +164,54 @@ public sealed class WatermarkServiceTests
         Assert.Contains("scale",   f);
     }
 
-    // ── Overlay filter coordinates are non-negative ───────────────────────────
+    // ── Overlay coordinates keep the watermark inside the frame ───────────────
 
+    /// <summary>
+    /// Each coordinate is either a fixed margin or an expression ffmpeg resolves against the real
+    /// sizes — never arithmetic done here against a guessed watermark height.
+    /// </summary>
+    /// <remarks>
+    /// This replaces a test that parsed both coordinates as integers and asserted they were ≥ 0.
+    /// It passed while the bottom edge was computed from <c>wmWidth / 2</c>, so a square logo was
+    /// positioned as though it were half as tall and hung below the frame (2026-09-05 audit,
+    /// export-7). Integers cannot express "the bottom edge" before the scale filter has run.
+    /// </remarks>
     [Theory]
-    [InlineData(WatermarkPosition.TopLeft,     1920, 1080)]
-    [InlineData(WatermarkPosition.BottomRight, 1280,  720)]
-    [InlineData(WatermarkPosition.Center,       640,  480)]
-    public void BuildOverlayFilter_Coordinates_NonNegative(
+    [InlineData(WatermarkPosition.TopLeft,      1920, 1080)]
+    [InlineData(WatermarkPosition.TopCenter,    1920, 1080)]
+    [InlineData(WatermarkPosition.TopRight,     1920, 1080)]
+    [InlineData(WatermarkPosition.MiddleLeft,   1280,  720)]
+    [InlineData(WatermarkPosition.Center,        640,  480)]
+    [InlineData(WatermarkPosition.MiddleRight,  1280,  720)]
+    [InlineData(WatermarkPosition.BottomLeft,   1280,  720)]
+    [InlineData(WatermarkPosition.BottomCenter,  640,  480)]
+    [InlineData(WatermarkPosition.BottomRight,  1280,  720)]
+    public void BuildOverlayFilter_Coordinates_StayInsideTheFrame(
         WatermarkPosition pos, int vw, int vh)
     {
-        var f = BuildFilter(pos, videoWidth: vw, videoHeight: vh);
+        var f = BuildFilter(pos, videoWidth: vw, videoHeight: vh, marginX: 20, marginY: 20);
 
-        // Extract overlay X Y from "overlay=X:Y"
         var overlayIdx = f.IndexOf("overlay=", StringComparison.Ordinal);
         Assert.True(overlayIdx >= 0);
         var coords = f[(overlayIdx + 8)..].Split('[')[0].Split(':');
-        Assert.True(int.Parse(coords[0]) >= 0, $"X should be ≥ 0 for {pos}");
-        Assert.True(int.Parse(coords[1]) >= 0, $"Y should be ≥ 0 for {pos}");
+
+        Assert.True(IsInsideTheFrame(coords[0], 'W', 'w'), $"X of '{coords[0]}' is wrong for {pos}");
+        Assert.True(IsInsideTheFrame(coords[1], 'H', 'h'), $"Y of '{coords[1]}' is wrong for {pos}");
+    }
+
+    /// <summary>
+    /// A coordinate is a non-negative margin, a centring expression, or a far-edge expression that
+    /// subtracts the overlay's own size — the three shapes that cannot put the logo off-frame.
+    /// </summary>
+    private static bool IsInsideTheFrame(string coordinate, char frame, char overlay)
+    {
+        if (int.TryParse(coordinate, out var fixedPixels)) return fixedPixels >= 0;
+
+        if (coordinate == $"({frame}-{overlay})/2") return true;
+
+        return coordinate.StartsWith($"{frame}-{overlay}-", StringComparison.Ordinal)
+            && int.TryParse(coordinate[$"{frame}-{overlay}-".Length..], out var margin)
+            && margin >= 0;
     }
 
     // ── WatermarkService.EnsureLocalAsync returns null when disabled ──────────

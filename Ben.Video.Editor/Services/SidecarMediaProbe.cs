@@ -25,7 +25,7 @@ public sealed class SidecarMediaProbe(
     IJSRuntime js,
     ErrorLogService errorLog)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
 
     /// <summary>Ownership tag for URLs minted by the sidecar path (phase 144's registry). Distinct
     /// from the wasm path's so a mis-routed revoke shows up as an ownership violation instead of
@@ -44,7 +44,7 @@ public sealed class SidecarMediaProbe(
         blobUrls.Revoking(url, ThumbnailOwner);
         try
         {
-            var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             try { await module.InvokeVoidAsync("revokeBlobUrl", url); }
             finally { await module.DisposeAsync(); }
         }

@@ -31,6 +31,6 @@ internal static class PublicClientName
         => Clean(clientDisplayAlias) ?? Clean(publicPseudonym);
 
     /// <summary>Whitespace is not a choice — treat it as unset rather than publishing blanks.</summary>
-    private static string? Clean(string? value)
+    internal static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

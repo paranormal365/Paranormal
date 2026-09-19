@@ -13,8 +13,14 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 public sealed class AdminAuditLogController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Services.PlatformMessageService _messages;
 
-    public AdminAuditLogController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public AdminAuditLogController(
+        IDbContextFactory<BenDataContext> db, Services.PlatformMessageService messages)
+    {
+        _db       = db;
+        _messages = messages;
+    }
 
     // ── GET /api/admin/audit-logs ─────────────────────────────────────────────
 
@@ -86,70 +92,12 @@ public sealed class AdminAuditLogController : BenControllerBase
         if (request.RecipientUserIds is null || request.RecipientUserIds.Count == 0)
             return BadRequest("At least one recipient is required.");
 
-        var senderId = GetCurrentUserId();
+        // The mechanism lives in PlatformMessageService now — the tier-change notices send the
+        // same kind of message, and two private copies of find-or-create-the-type is how the
+        // type gets duplicated the first time they race.
+        await _messages.SendAsync(
+            request.Subject, request.Body, [.. request.RecipientUserIds], GetCurrentUserId(), ct);
 
-        await using var db = await _db.CreateDbContextAsync(ct);
-
-        // Find or create a "System Notification" message type
-        var msgType = await db.UserMessageTypes
-            .FirstOrDefaultAsync(t => t.Name == "System Notification" && t.IsActive, ct);
-
-        if (msgType is null)
-        {
-            msgType = new UserMessageType
-            {
-                Id                 = Guid.NewGuid(),
-                Name               = "System Notification",
-                Description        = "Automatically generated system messages",
-                IsActive           = true,
-                IsPublic           = false,
-                SortOrder          = 999,
-                DateCreated        = DateTime.UtcNow,
-                CreatedByAppUserId = senderId
-            };
-            db.UserMessageTypes.Add(msgType);
-            try
-            {
-                await db.SaveChangesAsync(ct);
-            }
-            catch (DbUpdateException)
-            {
-                // Lost the race — another request just created the same type. Use theirs.
-                db.Entry(msgType).State = EntityState.Detached;
-                msgType = await db.UserMessageTypes
-                    .FirstAsync(t => t.Name == "System Notification" && t.IsActive, ct);
-            }
-        }
-
-        var message = new UserMessage
-        {
-            Id                 = Guid.NewGuid(),
-            UserMessageTypeId  = msgType.Id,
-            MessageSubject     = request.Subject,
-            MessageBody        = request.Body,
-            DateCreated        = DateTime.UtcNow,
-            CreatedByAppUserId = senderId
-        };
-        db.UserMessages.Add(message);
-
-        var requestedIds = request.RecipientUserIds.Distinct().ToList();
-        var validRecipientIds = await db.AppUsers.AsNoTracking()
-            .Where(u => requestedIds.Contains(u.Id))
-            .Select(u => u.Id)
-            .ToListAsync(ct);
-
-        foreach (var recipientId in validRecipientIds)
-        {
-            db.UserMessageTos.Add(new UserMessageTo
-            {
-                Id           = Guid.NewGuid(),
-                MessageId    = message.Id,
-                ToAppUserId  = recipientId,
-                LastReadCount = 0
-            });
-        }
-
-        await db.SaveChangesAsync(ct);
         return Ok();
     }
 

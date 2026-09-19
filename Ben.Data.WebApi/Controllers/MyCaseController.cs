@@ -31,18 +31,36 @@ public sealed class MyCaseController : BenControllerBase
     private readonly IConfiguration _configuration;
     private readonly ILogger<MyCaseController> _logger;
 
+    /// <summary>For the formatted copy of a client's message (2026-09-14) — see CaseMessageBodies.</summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    /// <summary>Makes the cards for links in a client's message once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     public MyCaseController(IDbContextFactory<BenDataContext> db, IMapper mapper,
         IFileStorageService fileStorage, FileMetadataExtractorService metadataExtractor, IAuditLogService auditLog,
         IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
-        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
+        Services.PlatformMessageService messages,
+        Services.IMediaIngestService mediaIngest,
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
+        _sanitizer = sanitizer;
+        _previews = previews;
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
+        _messages = messages;
+        _mediaIngest = mediaIngest;
     }
+
+    private readonly Services.IMediaIngestService _mediaIngest;
+
+    private readonly Services.PlatformMessageService _messages;
 
     private readonly Ben.Data.Common.SiteIdentity _site;
 
@@ -99,7 +117,8 @@ public sealed class MyCaseController : BenControllerBase
             Status:                  c.Status,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
             DateCaseOpened:          c.DateCaseOpened,
-            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id))));
+            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id),
+            ClientRequestId:         c.ClientRequestId)));
     }
 
     /// <summary>
@@ -199,7 +218,8 @@ public sealed class MyCaseController : BenControllerBase
             Occurrences:             occurrences,
             Investigations:          invItems,
             UnreadMessageCount:      unreadCount,
-            IsPrimaryClient:         c.ClientRequest?.AppUserId == userId));
+            IsPrimaryClient:         c.ClientRequest?.AppUserId == userId,
+            Contacts: await Entities.CaseContactController.ResolveAsync(db, c.OrganizationId, caseId, ct)));
     }
 
     /// <summary>
@@ -405,13 +425,25 @@ public sealed class MyCaseController : BenControllerBase
             .Include(r => r.Sections.OrderBy(s => s.SortOrder))
                 .ThenInclude(s => s.Files.OrderBy(f => f.SortOrder))
                     .ThenInclude(f => f.UploadFile)
+            // The client's copy has to be the SAME document the org sees. Loading the citations
+            // only on the org path would quietly hand the client a report with the field
+            // sessions missing.
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions.OrderBy(f => f.SortOrder))
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.Files)
+            .Include(r => r.Sections)
+                .ThenInclude(s => s.FieldSessions)
+                    .ThenInclude(f => f.FieldSessionUpload)
+                        .ThenInclude(u => u.DocumentUploadFile)
             .FirstOrDefaultAsync(r => r.Id == reportId && r.CaseId == caseId
                 && r.Status == Ben.Data.Common.Enums.CaseReportStatus.Published, ct);
         if (report is null) return NotFound();
 
         // Reuse the static PDF generator from CaseReportController via shared helper
-        var pdfBytes = CaseReportPdfGenerator.Generate(report);
-        return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
+        var readouts = await CaseReportReadouts.ForAsync(report.Sections.SelectMany(x => x.FieldSessions), _fileStorage, ct);
+        var pdfBytes = CaseReportPdfGenerator.Generate(report, readouts);
+        return File(pdfBytes, "application/pdf", CaseReportPdfGenerator.FileName(report.Title));
     }
 
     // ── Investigation scheduling (client responds to proposed dates) ───────────
@@ -549,23 +581,35 @@ public sealed class MyCaseController : BenControllerBase
 
         var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath  = _fileStorage.CaseFilePath(caseId, storedName);
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off in the metadata table.
+        // The ORIGINAL stays untouched; the derivative is what serve paths return (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = EvidenceFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var entryFile = new CaseTimelineEntryFile
         {
@@ -674,7 +718,9 @@ public sealed class MyCaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Message body is required.");
+        // Body, BodyHtml, or both — see CaseMessageBodies for why Body stays plain text.
+        if (Services.CaseMessageBodies.Normalise(request.Body, request.BodyHtml, _sanitizer) is not { } bodies)
+            return BadRequest("Type a message first.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
@@ -684,7 +730,8 @@ public sealed class MyCaseController : BenControllerBase
             Id                = Guid.NewGuid(),
             CaseId            = caseId,
             AuthorAppUserId   = userId,
-            Body              = request.Body.Trim(),
+            Body              = bodies.Body,
+            BodyHtml          = bodies.BodyHtml,
             SenderSide        = CaseMessageSide.Client,
             IsReadByClient    = true,
             IsReadByOrg       = false,
@@ -693,10 +740,154 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseMessages.Add(msg);
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(msg.Body, msg.BodyHtml, userId);
 
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));
     }
+
+    // ── Reassignment of a paused case (item 84) ───────────────────────────────
+
+    public sealed record ReassignCaseRequest(
+        Guid ToOrganizationId, bool ShareHistory, bool ShareInvestigations, string? Note);
+
+    /// <summary>
+    /// Asks a new organization to take this paused case — the client's half of the two keys.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only a PAUSED case, and only its client. The consent flags are the client's alone:
+    /// findings are dual-owned by the original group and the client, which is exactly why the
+    /// original group's permission is not sought — the client sharing their own case's material
+    /// onward is theirs to decide. The receiving organization turns the second key by accepting,
+    /// and only then does anything move.</para>
+    ///
+    /// <para>The case STAYS paused while the proposal is pending — unlike the org-initiated flow,
+    /// which marks Transferred immediately. Paused already says everything true about the case,
+    /// and a rejection should leave no state to clean up.</para>
+    /// </remarks>
+    [HttpPost("{caseId:guid}/reassign")]
+    public async Task<IActionResult> ReassignCase(
+        Guid caseId, [FromBody] ReassignCaseRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
+        if (c is null) return NotFound();
+
+        if (c.Status != CaseStatus.Paused)
+            return BadRequest("Only a paused case can be moved to a new organization.");
+
+        if (c.OrganizationId == request.ToOrganizationId)
+            return BadRequest("That is the organization the case is already with.");
+
+        if (!await db.Organizations.AnyAsync(o => o.Id == request.ToOrganizationId, ct))
+            return BadRequest("That organization does not exist.");
+
+        if (await db.CaseTransferLogs.AnyAsync(l =>
+                l.CaseId == caseId && l.Status == CaseTransferStatus.Pending, ct))
+            return BadRequest("A move is already waiting for an answer. Cancel it first, or wait.");
+
+        // ── Item 167, the RECEIVING end only ─────────────────────────────────────
+        // The case is the client's, so the CURRENT group's plan never blocks their move —
+        // a free plan must not hold a client's case hostage. But the destination is a group
+        // choosing to take on transferred work, and that is exactly what its plan governs.
+        // Told at pick time rather than left to fail at the group's accept.
+        var (receiverMay, receiverTier) = await Ben.Data.Source.Services.TierAreaResolution
+            .HasCapabilityAsync(db, request.ToOrganizationId, Ben.Data.Common.Enums.TierCapability.CaseTransfers, ct);
+        if (!receiverMay)
+            return BadRequest(
+                $"That group's plan{(receiverTier is null ? "" : $" ({receiverTier})")} does not include case "
+                + "transfers, so they cannot take this case on. Pick a different group, or ask them about upgrading.");
+
+        // Item 184, receiver end only, same as the transfer gate above: the client's move is
+        // never blocked by their CURRENT group's plan, but the destination must be a group
+        // whose plan covers private-residence work when this case is private.
+        if (c.IsPrivateEngagement
+            && await Ben.Data.WebApi.Services.PrivateCaseGate.RefusalForOtherAsync(db, request.ToOrganizationId, ct) is { } noPrivate)
+            return BadRequest(noPrivate + " Pick a different group, or ask them about upgrading.");
+
+        db.CaseTransferLogs.Add(new CaseTransferLog
+        {
+            Id                  = Guid.NewGuid(),
+            CaseId              = caseId,
+            FromOrganizationId  = c.OrganizationId,
+            ToOrganizationId    = request.ToOrganizationId,
+            ProposedByAppUserId = userId,
+            ProposedByClient    = true,
+            ShareHistory        = request.ShareHistory,
+            ShareInvestigations = request.ShareInvestigations,
+            Status              = CaseTransferStatus.Pending,
+            TransferReason      = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            DateProposed        = DateTime.UtcNow,
+        });
+
+        await db.SaveChangesAsync(ct);
+
+        // The receiving group's admins hear about it — without this, the request sits in a table
+        // nobody reads, which is the write-only-feature shape this codebase keeps finding.
+        var admins = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == request.ToOrganizationId && m.IsActive
+                     && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator))
+            .Select(m => m.AppUserId)
+            .ToListAsync(ct);
+
+        await _messages.SendAsync(
+            "A client would like to move their case to your group",
+            $"A client has asked your group to take over their case \"{c.Title}\".\n\n"
+          + "Review it under your group's Cases → Incoming, where you can accept or decline. "
+          + "What you will be able to see of the previous group's work depends on what the "
+          + "client chose to share.",
+            admins, userId, ct);
+
+        return NoContent();
+    }
+
+    /// <summary>Withdraws the client's own pending move. The case was never anything but Paused.</summary>
+    [HttpDelete("{caseId:guid}/reassign")]
+    public async Task<IActionResult> CancelReassign(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var pending = await db.CaseTransferLogs.FirstOrDefaultAsync(l =>
+            l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient, ct);
+        if (pending is null) return NotFound("There is no pending move to withdraw.");
+
+        pending.Status        = CaseTransferStatus.Cancelled;
+        pending.DateResponded = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    /// <summary>The client's view of their pending move, if any.</summary>
+    [HttpGet("{caseId:guid}/reassign")]
+    public async Task<ActionResult<PendingReassignRecord?>> GetReassign(Guid caseId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+
+        var pending = await db.CaseTransferLogs.AsNoTracking()
+            .Where(l => l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient)
+            .Select(l => new PendingReassignRecord(
+                l.Id, l.ToOrganization.Name, l.ShareHistory, l.ShareInvestigations, l.DateProposed))
+            .FirstOrDefaultAsync(ct);
+
+        return Ok(pending);
+    }
+
+    public sealed record PendingReassignRecord(
+        Guid LogId, string ToOrganizationName, bool ShareHistory, bool ShareInvestigations, DateTime DateProposed);
 
     private static async Task<bool> IsCaseClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
     {
@@ -1031,6 +1222,7 @@ public sealed class MyCaseController : BenControllerBase
             Relationship       = request.Relationship?.Trim(),
             LivesAtProperty    = request.LivesAtProperty,
             Notes              = request.Notes?.Trim(),
+            PublicLabel        = string.IsNullOrWhiteSpace(request.PublicLabel) ? null : request.PublicLabel.Trim(),
             UploadFileId       = request.UploadFileId,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -1082,6 +1274,7 @@ public sealed class MyCaseController : BenControllerBase
         person.Relationship       = request.Relationship?.Trim();
         person.LivesAtProperty    = request.LivesAtProperty;
         person.Notes              = request.Notes?.Trim();
+        person.PublicLabel        = string.IsNullOrWhiteSpace(request.PublicLabel) ? null : request.PublicLabel.Trim();
         person.UploadFileId       = request.UploadFileId;
         person.DateUpdated        = DateTime.UtcNow;
         person.UpdatedByAppUserId = userId;
@@ -1125,6 +1318,7 @@ public sealed class MyCaseController : BenControllerBase
         Relationship    = p.Relationship,
         LivesAtProperty = p.LivesAtProperty,
         Notes           = p.Notes,
+        PublicLabel     = p.PublicLabel,
         UploadFileId    = p.UploadFileId,
         DateCreated     = p.DateCreated,
     };
@@ -1176,7 +1370,7 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The client has cancelled the investigation scheduled for <strong>{investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}</strong>.",
+            Body = $"The client has cancelled the investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
             IsReadByClient = true, IsReadByOrg = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
@@ -1200,7 +1394,7 @@ public sealed class MyCaseController : BenControllerBase
     private static CaseMessageRecord ToRecord(Ben.Data.Source.Entities.CaseMessage m) => new(
         m.Id, m.CaseId, m.AuthorAppUserId,
         m.AuthorAppUser?.DisplayName ?? "Unknown",
-        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated);
+        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated, m.BodyHtml);
 }
 
 // ── Response records ──────────────────────────────────────────────────────────
@@ -1214,7 +1408,10 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    // The request this case was accepted from, so a request's page can open ITS case rather than the client's first one
+    // (client test pass, 2026-09-14). Additive: older apps ignore it.
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,
@@ -1236,7 +1433,10 @@ public sealed record ClientCaseDetail(
     // list rather than throwing, so every co-client (old AddCoClient flow or a new invite) saw the
     // primary-only admin controls too. Surfaced only once co-clients could reach this page at all
     // (see the GetMyCase/GetMyCases fix above) — previously unreachable, now a real bug.
-    bool      IsPrimaryClient = false);
+    bool      IsPrimaryClient = false,
+    // Item 158: who the client actually talks to. Explicit contacts when the group set them,
+    // otherwise the case manager stands in — never empty while a manager exists.
+    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1276,7 +1476,8 @@ public sealed record LogOccurrenceRequest(
     string?   Body,
     IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
-public sealed record PostCaseMessageRequest(string Body);
+/// <summary>A message to post: plain <c>Body</c> (the app), formatted <c>BodyHtml</c> (the website), or both.</summary>
+public sealed record PostCaseMessageRequest(string? Body = null, string? BodyHtml = null);
 
 public sealed record CaseMessageRecord(
     Guid   Id,
@@ -1287,7 +1488,9 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool   IsReadByClient,
     bool   IsReadByOrg,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // Added 2026-09-14, last and optional so the shipped app's decoder is untouched — see CaseMessageBodies.
+    string? BodyHtml = null);
 
 public sealed record CaseReportSummary(
     Guid                                   Id,

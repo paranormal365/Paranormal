@@ -2,6 +2,8 @@
 
 @inject IBenAdminClient AdminClient
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Event types are what the calendar's "Type" dropdown offers. Until this screen existed they
    could only be created against the API directly, which is why an org could end up with a
@@ -33,7 +35,11 @@
         }
         else
         {
-            @if (_types.Count == 0 && !_showForm)
+            @if (_typesResult.Failed)
+            {
+                <BenListState TItem="OrgCalendarEventTypeRecord" Result="@_typesResult" OnRetry="@LoadAsync" />
+            }
+            else if (_types.Count == 0 && !_showForm)
             {
                 <p class="text-secondary small fst-italic mt-3 mb-0">
                     No event types yet. Events can still be created without one.
@@ -56,10 +62,10 @@
                             }
                             else
                             {
-                                <i class="@type.IconClass @type.ColorClass"></i>
+                                <i class="@type.IconClass @type.ColorClass.ToThemeSafeColorClass()"></i>
                             }
                         }
-                        <span class="fw-semibold @type.ColorClass">@type.Name</span>
+                        <span class="fw-semibold @type.ColorClass.ToThemeSafeColorClass()">@type.Name</span>
                         @if (!type.IsActive)
                         {
                             <span class="badge bg-secondary">Inactive</span>
@@ -94,7 +100,7 @@
                                     <option value="@option.Value" selected="@(option.Value == _formColorClass)">@option.Label</option>
                                 }
                             </select>
-                            <span class="small @_formColorClass">Preview</span>
+                            <span class="small @_formColorClass.ToThemeSafeColorClass()">Preview</span>
                         </div>
                         <div class="col-sm-2">
                             <label class="form-label small mb-1" for="orgcalendareventtypesmanager-order-c57e">Order</label>
@@ -165,10 +171,14 @@
         new("text-warning",  "Amber"),
         new("text-info",     "Teal"),
         new("text-secondary","Grey"),
-        new("text-dark",     "Black"),
+        // Was ("text-dark", "Black"), which vanished into the page in dark mode. Emphasis is
+        // black on light and white on dark — the "plainest, strongest text" this was reaching
+        // for, in whichever theme the reader is using.
+        new("text-body-emphasis", "Contrast"),
     ];
 
     private List<OrgCalendarEventTypeRecord> _types = new();
+    private LoadResult<OrgCalendarEventTypeRecord> _typesResult;
     private bool _loading = true;
     private bool _saving;
     private string? _error;
@@ -195,7 +205,8 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _types = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).ToList();
+        _typesResult = await AdminClient.GetCalendarEventTypesAsync(OrgId);
+        _types       = _typesResult.Items.ToList();
         _loading = false;
     }
 

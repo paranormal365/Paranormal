@@ -3,6 +3,7 @@
 @inject AuthService Auth
 @inject TokenStore Tokens
 @inject NavigationManager Nav
+@inject IConfiguration Config
 
 <PageTitle>Sign in — Video Editor</PageTitle>
 
@@ -23,7 +24,19 @@
         <label for="password">Password</label>
         <InputText id="password" type="password" @bind-Value="Password" autocomplete="current-password" />
 
-        <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+        @* Only once the server has said the password was right and a code is what is missing.
+           Every 401 used to read as "check the address and password", so anyone with two-factor
+           turned on could not sign in here at all and was told their password was wrong while
+           typing it correctly (2026-09-05 audit, F11). *@
+        @if (_needsCode)
+        {
+            <label for="code">Authenticator code</label>
+            <InputText id="code" @bind-Value="TwoFactorCode" autocomplete="one-time-code"
+                       inputmode="numeric" placeholder="000000" />
+            <p class="bwv-login__hint">A recovery code works here too.</p>
+        }
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : _needsCode ? "Verify" : "Sign in")</button>
     </EditForm>
 
     @if (_error is not null)
@@ -31,9 +44,26 @@
         <p class="bwv-login__error" role="alert">@_error</p>
     }
 
-    @if (Tokens.IsAuthenticated)
+    @* Always offered, not only once signed in. Somebody who opened this page by mistake, or who
+       decided to carry on without an account, had no way back — and editing and export work
+       perfectly well signed out (2026-09-05 audit, F11). *@
+    <p class="bwv-login__back">
+        @if (Tokens.IsAuthenticated)
+        {
+            <span class="bwv-login__ok">Signed in.</span>
+        }
+        <a href="@EditorUrl">Back to the editor</a>
+    </p>
+
+    @* Both live on the site, not here: this app has no account pages of its own, and sending
+       somebody to a dead end is worse than sending them off-app. *@
+    @if (SiteUrl is not null)
     {
-        <p class="bwv-login__ok">Signed in. <a href="/">Back to the editor</a></p>
+        <p class="bwv-login__links">
+            <a href="@($"{SiteUrl}/forgot-password")" target="_blank" rel="noopener">Forgotten your password?</a>
+            <span aria-hidden="true"> · </span>
+            <a href="@($"{SiteUrl}/register")" target="_blank" rel="noopener">Create an account</a>
+        </p>
     }
 </div>
 
@@ -41,16 +71,41 @@
     private bool _busy;
     private string? _error;
 
+    private bool _needsCode;
+
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    public string TwoFactorCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// This app's own root.
+    /// </summary>
+    /// <remarks>
+    /// Not "/". In production the editor is served under a sub-path, where "/" is the site's root
+    /// and not this app — so signing in successfully navigated straight out of the editor
+    /// (2026-09-05 audit, wasm-2).
+    /// </remarks>
+    private string EditorUrl => Nav.BaseUri;
+
+    /// <summary>The site the account belongs to, for the pages this app does not have.</summary>
+    private string? SiteUrl => Config["BenVideo:SiteBaseUrl"]?.TrimEnd('/');
 
     private async Task SubmitAsync()
     {
         _busy = true; _error = null;
         try
         {
-            _error = await Auth.LoginAsync(Email, Password);
-            if (_error is null) Nav.NavigateTo("/");
+            var result = await Auth.SignInAsync(Email, Password, _needsCode ? TwoFactorCode : null);
+
+            if (result.RequiresTwoFactor)
+            {
+                _needsCode = true;
+                _error     = null;
+                return;
+            }
+
+            _error = result.Problem;
+            if (_error is null) Nav.NavigateTo(EditorUrl);
         }
         finally
         {

@@ -64,9 +64,25 @@ public class CmsAuthoringTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await WaitUntilLoadedAsync();
 
+        // The editor's tour auto-launches for anybody who has not dismissed it, which on a freshly
+        // seeded database is this seat. Its backdrop covers the toolbar, so every click below was
+        // intercepted and the test failed pointing at the modal that never opened.
+        await SkipAnyTourAsync();
+
         // ── Author it ────────────────────────────────────────────────────────
         var dialog = Page.Locator(".modal.show");
-        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
+
+        // Wait for the button before trying to click it. WaitUntilLoadedAsync returns once the
+        // circuit is up, which is not the same as this page having rendered its toolbar — under a
+        // full-suite load the CMS list can still be arriving, and ClickUntilAsync then spends all
+        // four of its attempts clicking nothing and fails pointing at the MODAL, which was never
+        // the thing missing. Waiting on a signal the page itself produces is the rule this
+        // codebase keeps relearning (flaked exactly once in 401 tests on 2026-08-27, and passed
+        // alone in ten seconds).
+        var newPage = Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First;
+        await Expect(newPage).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await ClickUntilAsync(newPage, dialog);
 
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
         await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
@@ -86,7 +102,11 @@ public class CmsAuthoringTests : BenTestBase
         // ── Publish it ───────────────────────────────────────────────────────
         // "Published" only appears when editing, so this is a second pass over the same dialog.
         var row = Main.Locator("tr", new() { HasTextString = title }).First;
-        await ClickUntilAsync(row.GetByRole(AriaRole.Button).First, dialog);
+        // Edit lives behind the row's More-actions dropdown since the one-line Actions cell
+        // (item 169) — the row's first button is Sections, which NAVIGATES.
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "More actions" }),
+            row.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }));
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }), dialog);
 
         var publishedToggle = dialog.Locator("#pg-published");
         Assert.That(await publishedToggle.CountAsync(), Is.GreaterThan(0),
@@ -140,7 +160,18 @@ public class CmsAuthoringTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         var dialog = Page.Locator(".modal.show");
-        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
+
+        // Wait for the button before trying to click it. WaitUntilLoadedAsync returns once the
+        // circuit is up, which is not the same as this page having rendered its toolbar — under a
+        // full-suite load the CMS list can still be arriving, and ClickUntilAsync then spends all
+        // four of its attempts clicking nothing and fails pointing at the MODAL, which was never
+        // the thing missing. Waiting on a signal the page itself produces is the rule this
+        // codebase keeps relearning (flaked exactly once in 401 tests on 2026-08-27, and passed
+        // alone in ten seconds).
+        var newPage = Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First;
+        await Expect(newPage).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await ClickUntilAsync(newPage, dialog);
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
         await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).First.ClickAsync();
@@ -203,7 +234,10 @@ public class CmsAuthoringTests : BenTestBase
         if (await row.CountAsync() == 0) return;
 
         var confirm = Page.Locator(".modal.show");
-        var deleteButton = row.Locator("button.btn-danger, button.btn-outline-danger").First;
+        // Delete sits in the row's More-actions dropdown since item 169.
+        await ClickUntilAsync(row.GetByRole(AriaRole.Button, new() { Name = "More actions" }),
+            row.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }));
+        var deleteButton = row.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true });
         if (await deleteButton.CountAsync() == 0) return;
 
         await ClickUntilAsync(deleteButton, confirm);

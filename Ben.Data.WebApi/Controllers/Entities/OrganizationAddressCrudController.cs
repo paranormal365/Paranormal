@@ -168,6 +168,23 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
             .FirstOrDefaultAsync(a => a.Id == addressId && a.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
 
+        // A tour starts somewhere, and that key is required and NoAction — so deleting the
+        // address a walk meets at would hand somebody tidying their settings a database error
+        // naming nothing. Refused instead, by the tour's own name, which is the only thing that
+        // tells them what to change (item 233).
+        var heldBy = await db.Tours.AsNoTracking()
+            .Where(t => t.StartOrganizationAddressId == addressId)
+            .Select(t => t.Name)
+            .ToListAsync(ct);
+        if (heldBy.Count > 0)
+        {
+            return BadRequest(heldBy.Count == 1
+                ? $"\"{heldBy[0]}\" meets at this address, so it can't be deleted. Point that tour "
+                  + "at a different address first."
+                : $"{heldBy.Count} of your tours meet at this address ({string.Join(", ", heldBy)}), "
+                  + "so it can't be deleted. Point them at a different address first.");
+        }
+
         db.OrganizationAddresses.Remove(entity);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(OrganizationAddress), addressId, entity, userId.Value, AppSources.WebApi));

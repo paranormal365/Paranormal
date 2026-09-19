@@ -26,7 +26,7 @@ public sealed class OPFSService : IAsyncDisposable
     private readonly ErrorLogService   _errorLog;
     private IJSObjectReference?        _module;
 
-    private const string ModuleUrl = "/_content/Ben.Video.Editor/js/opfsInterop.js";
+    private const string ModuleUrl = "js/opfsInterop.js";
 
     public bool IsAvailable { get; private set; }
 
@@ -42,13 +42,27 @@ public sealed class OPFSService : IAsyncDisposable
     /// Lazy-loads the JS module and checks browser OPFS support.
     /// Safe to call multiple times; only initialises once.
     /// </summary>
-    public async Task EnsureInitAsync()
+    private Task? _init;
+
+    public Task EnsureInitAsync() => _init ??= InitOnceAsync();
+
+    /// <summary>
+    /// Loads the module and asks whether storage is usable, exactly once.
+    /// </summary>
+    /// <remarks>
+    /// The guard used to be <c>if (_module is not null) return;</c>, set before the availability
+    /// answer came back. Two callers arriving together — which is now the ordinary case, since both
+    /// the media panel and the startup storage check ask — meant the second returned immediately
+    /// with <see cref="IsAvailable"/> still false, and the editor announced that this browser
+    /// cannot keep your media on a browser that plainly can. Caching the task rather than the
+    /// module makes the second caller wait for the first's answer instead of racing past it.
+    /// </remarks>
+    private async Task InitOnceAsync()
     {
-        if (_module is not null) return;
         try
         {
-            _module      = await _js.InvokeAsync<IJSObjectReference>("import", ModuleUrl);
-            IsAvailable  = await _module.InvokeAsync<bool>("opfsIsAvailable");
+            _module     = await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModuleUrl);
+            IsAvailable = await _module.InvokeAsync<bool>("opfsIsAvailable");
         }
         catch (Exception ex)
         {
@@ -69,6 +83,41 @@ public sealed class OPFSService : IAsyncDisposable
     }
 
     /// <summary>Write raw bytes (e.g. downloaded from a web API) to OPFS.</summary>
+    /// <summary>
+    /// Streams a URL straight into storage, without the bytes passing through .NET.
+    /// </summary>
+    /// <returns>Bytes written, or -1 when it could not be done — the caller falls back.</returns>
+    /// <remarks>
+    /// The point is what it avoids under Blazor Server: fetching the file into the server's
+    /// memory, copying it again, and shipping it over the circuit (2026-09-05 audit, site-2).
+    /// </remarks>
+    public async Task<long> DownloadToClipAsync(
+        string url, Guid clipId, string ext,
+        DotNetObjectReference<object>? progressTarget = null, string? progressMethod = null)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return -1;
+
+        try
+        {
+            var result = await _module.InvokeAsync<DownloadResult>(
+                "opfsDownloadToClip", url, clipId.ToString(), ext, progressTarget, progressMethod);
+
+            if (result.Error is not null)
+                _errorLog.Log("OPFSService.DownloadToClipAsync", result.Error);
+
+            return result.Bytes;
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("OPFSService.DownloadToClipAsync", ex);
+            return -1;
+        }
+    }
+
+    /// <summary>What the browser's own streaming download reported.</summary>
+    private sealed record DownloadResult(long Bytes, string? Error);
+
     public async Task WriteFromBytesAsync(Guid clipId, string ext, byte[] bytes)
     {
         await EnsureInitAsync();
@@ -89,6 +138,63 @@ public sealed class OPFSService : IAsyncDisposable
         if (!IsAvailable || _module is null) return false;
         try { return await _module.InvokeAsync<bool>("opfsExists", clipId.ToString(), ext); }
         catch (Exception ex) { _errorLog.Log("OPFSService.ExistsAsync", $"OPFS existence check failed for {clipId}{ext}: {ex.Message}", ex.ToString()); return false; }
+    }
+
+    /// <summary>
+    /// The size, and where it is cheap enough a SHA-256, of a clip already in storage.
+    /// </summary>
+    /// <remarks>
+    /// What a portable project records so a re-fetch on another machine can be checked against it
+    /// (2026-09-05 audit, F14). Null when there is no such file, or when storage is unavailable —
+    /// both mean "nothing to record", which is a state the callers already handle. A null hash
+    /// inside a non-null result means the file was above
+    /// <see cref="MediaFingerprint.MaximumHashableBytes"/>, never that it failed to match.
+    /// </remarks>
+    public async Task<(long Size, string? Hash)?> FingerprintAsync(Guid clipId, string ext)
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return null;
+
+        try
+        {
+            var result = await _module.InvokeAsync<OpfsFingerprint?>(
+                "opfsFingerprint", clipId.ToString(), ext, MediaFingerprint.MaximumHashableBytes);
+
+            return result is null ? null : (result.Size, result.Hash);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort by design: without a fingerprint the clip simply cannot be verified on
+            // another machine, which is exactly where it was before this existed.
+            _errorLog.Log("OPFSService.FingerprintAsync",
+                $"Could not fingerprint {clipId}{ext}: {ex.Message}", ex.ToString());
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// How much of the browser's storage this site is using, and how much it may use.
+    /// </summary>
+    /// <remarks>
+    /// Nothing read this. Every import writes a copy of the file into that storage, nothing ever
+    /// freed one, and the first anybody knew about the quota was a save that quietly failed
+    /// (2026-09-05 audit, media-2). Both figures are null where the browser declines to say.
+    /// </remarks>
+    public async Task<(long? Usage, long? Quota)> EstimateAsync()
+    {
+        await EnsureInitAsync();
+        if (!IsAvailable || _module is null) return (null, null);
+
+        try
+        {
+            var estimate = await _module.InvokeAsync<StorageEstimate>("opfsEstimate");
+            return (estimate.Usage, estimate.Quota);
+        }
+        catch (Exception ex)
+        {
+            _errorLog.Log("OPFSService.EstimateAsync", ex);
+            return (null, null);
+        }
     }
 
     /// <summary>
@@ -239,8 +345,18 @@ public sealed record OPFSQuota(long UsedBytes, long TotalBytes)
 }
 
 /// <summary>An entry returned by <see cref="OPFSService.ListClipsAsync"/>.</summary>
+/// <summary>What the browser reports about its own storage. Either figure may be absent.</summary>
+public sealed record StorageEstimate(long? Usage, long? Quota);
+
 public sealed record OpfsClipEntry(string ClipId, string Ext, long SizeBytes)
 {
     /// <summary>The OPFS file name: <c>{ClipId}{Ext}</c>.</summary>
     public string FileName => $"{ClipId}{Ext}";
 }
+
+/// <summary>What <c>opfsFingerprint</c> reports about a stored clip.</summary>
+/// <remarks>
+/// A null <see cref="Hash"/> means the file was too large to hash, not that hashing failed — see
+/// <see cref="MediaFingerprint.MaximumHashableBytes"/>.
+/// </remarks>
+public sealed record OpfsFingerprint(long Size, string? Hash);

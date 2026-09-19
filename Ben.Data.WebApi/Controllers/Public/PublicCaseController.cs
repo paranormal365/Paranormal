@@ -2,6 +2,8 @@ using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
+using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,12 +44,16 @@ public sealed class PublicCaseController : ControllerBase
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
 
+        // Item 184: private-engagement cases substitute real names at display time; a case with
+        // no roster (not private) renders exactly as written.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, cases.Select(c => c.Id).ToList(), ct);
+
         var result = cases.Select(c => new PublicCaseListItem(
             CaseReference:    $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
             // Falls back to the reference for a case published before slugs existed, so a card
             // always has somewhere to point rather than silently linking nowhere.
             UrlName:          c.UrlName ?? $"{c.CaseYear}-{c.OrgCaseNumber:D3}",
-            Title:            c.Title,
+            Title:            CaseProseRedactor.RedactFor(rosters, c.Id, c.Title)!,
             City:             c.City,
             State:            c.State,
             Status:           c.Status,
@@ -90,6 +96,7 @@ public sealed class PublicCaseController : ControllerBase
         var (refYear, refNumber) = ParseCaseReference(caseRef);
 
         var c = await db.Cases.AsNoTracking()
+            .Include(x => x.Place)
             .Include(x => x.TimelineEntries.Where(e => e.Visibility == CaseTimelineVisibility.Public).OrderBy(e => e.EventDateTime ?? e.DateCreated).ThenBy(e => e.DateCreated).ThenBy(e => e.Id))
                 .ThenInclude(e => e.Files)
             .FirstOrDefaultAsync(x => x.OrganizationId == org.Id
@@ -103,31 +110,43 @@ public sealed class PublicCaseController : ControllerBase
         // if neither — the real name is never an outcome here. See PublicClientName.
         var clientName = PublicClientName.For(c);
 
+        // Item 184: on a private engagement, prose is substituted before it leaves the API.
+        var roster = await CaseRedactionRoster.ForCaseAsync(db, c.Id, ct) ?? RedactionRoster.Empty;
+
         var publicTimeline = c.TimelineEntries.Select(e => new PublicTimelineEntry(
             EntryType:      e.EntryType,
             EventDateTime:  e.EventDateTime,
-            Title:          e.Title,
-            Body:           e.Body,
+            Title:          CaseProseRedactor.Redact(e.Title, roster),
+            Body:           CaseProseRedactor.RedactHtml(e.Body, roster),
             EvidenceFileIds: e.EntryType == CaseTimelineEntryType.Evidence
                 ? e.Files.Select(f => f.UploadFileId).ToList()
                 : [])).ToList();
 
+        // W-P3 (site evaluation 2026-09-06): the group's own finding, when they have chosen to
+        // show it. Null for every case whose group has not — which is every case until somebody
+        // switches one on. See CasePublicReport for the three conditions.
+        var publicReport = await CasePublicReport.ForCaseAsync(db, c.Id, roster, ct);
+
         return Ok(new PublicCaseDetail(
             CaseId:         c.Id,
             CaseReference:  $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
-            Title:          c.Title,
+            Title:          CaseProseRedactor.Redact(c.Title, roster)!,
             City:           c.City,
             State:          c.State,
             Country:        c.Country,
             Status:         c.Status,
             IsHaunted:      c.Status == CaseStatus.Haunted,
             ClientName:     clientName,
-            Description:    c.Description,
+            Description:    CaseProseRedactor.RedactHtml(c.Description, roster),
             DateCaseOpened: c.DateCaseOpened,
             DateCaseClosed: c.DateCaseClosed,
             Timeline:       publicTimeline,
             OrgName:        org.Name,
-            OrgUrlName:     org.UrlName));
+            OrgUrlName:     org.UrlName,
+            Report:         publicReport,
+            // A residence is never linked from here — see the record's remarks.
+            PlaceId:        c.Place is { Kind: PlaceKind.PublicLocation } ? c.PlaceId : null,
+            PlaceName:      c.Place is { Kind: PlaceKind.PublicLocation } ? c.Place.Name : null));
     }
 }
 
@@ -145,6 +164,9 @@ public sealed record PublicCaseListItem(
     DateTime? DateCaseClosed,
     bool IsHaunted);
 
+/// <param name="Report">
+/// The group's published finding, when they have switched it on. Null otherwise (W-P3).
+/// </param>
 public sealed record PublicCaseDetail(
     Guid CaseId,
     string CaseReference,
@@ -160,7 +182,23 @@ public sealed record PublicCaseDetail(
     DateTime? DateCaseClosed,
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
-    string OrgUrlName);
+    string OrgUrlName,
+    Ben.Data.WebApi.Services.CasePublicReport.PublicReport? Report = null,
+    /// <summary>
+    /// The place this case is about, when it is somewhere anybody may read about.
+    /// </summary>
+    /// <remarks>
+    /// <para>The traversal a visitor would naturally make — read the Bell Witch Cave case, then
+    /// see every group's work at the cave — was missing in exactly the direction that serves the
+    /// stranger (2026-09-17 audit). Phase 2 put the place on the case and the internal case page
+    /// shows it; the public one had no link at all.</para>
+    ///
+    /// <para><b>Public locations only.</b> A case at somebody's home starts from the client, not
+    /// from a page anyone can read, which is the same rule the place page's own buttons follow.
+    /// Null for a residence, so no public page ever points at one.</para>
+    /// </remarks>
+    Guid? PlaceId = null,
+    string? PlaceName = null);
 
 public sealed record PublicTimelineEntry(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,

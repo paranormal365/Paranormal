@@ -58,7 +58,9 @@ public class MyCaseControllerTests
         var ctrl = new MyCaseController(factory, CreateMapper(), storage.Object, new FileMetadataExtractorService(),
             auditLog ?? new Mock<IAuditLogService>().Object,
             emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()));
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -75,7 +77,9 @@ public class MyCaseControllerTests
         var ctrl = new MyCaseController(factory, CreateMapper(),
             new Mock<IFileStorageService>().Object, new FileMetadataExtractorService(), new Mock<IAuditLogService>().Object,
             CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()));
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -136,6 +140,12 @@ public class MyCaseControllerTests
         var list = Assert.IsAssignableFrom<IEnumerable<ClientCaseListItem>>(ok.Value);
         Assert.Single(list);
         Assert.Equal(caseId, list.First().CaseId);
+
+        // Which request the case came from, so a request's page opens its own case.
+        await using var db = await factory.CreateDbContextAsync();
+        var requestId = db.Cases.Single(c => c.Id == caseId).ClientRequestId;
+        Assert.NotNull(requestId);
+        Assert.Equal(requestId, list.First().ClientRequestId);
     }
 
     [Fact]

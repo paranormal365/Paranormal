@@ -1,0 +1,44 @@
+namespace Ben.Service.Models.Support;
+
+/// <summary>
+/// Which sections of the site are switched on, as the public endpoint reports them.
+/// </summary>
+/// <remarks>
+/// <para>A dictionary rather than a property per feature, deliberately. The website's job here is
+/// to ask "is this key on?" for a key it already names in its own gate; a typed property per
+/// feature would mean editing this record, the controller, the provider and the gate every time a
+/// switch is added, and the compiler cannot check a feature that does not exist yet anyway.</para>
+///
+/// <para>It is still narrow in the way that matters: the controller fills it from the declared
+/// feature list only, so a new NON-feature setting can never leak onto the anonymous endpoint by
+/// being added to the settings table.</para>
+/// </remarks>
+/// <param name="Features">Feature key to on/off, already resolved against each flag's default.</param>
+/// <param name="Announcement">The site-wide announcement, or null when none is set. Named
+/// explicitly rather than smuggled through the dictionary, so the narrow-by-declaration property
+/// above still holds.</param>
+/// <param name="AllowOrganizationSelfRegistration">Whether an ordinary signed-in user may found a
+/// group. Published for the same reason the flags are: the website has to hide the "Start a Group"
+/// button on first render, not discover the answer after drawing it. Defaults to true — that is
+/// how the product has always worked, and the enforcement must not switch it off for a site that
+/// never set it.</param>
+/// <param name="AllowTourBusinessSignUps">
+/// Whether a new ghost walking tour may be started (item 233).
+/// Defaults to true, so an older server — or an unreachable one — leaves the choices where they
+/// have always been. Existing businesses are never affected by this: it closes one door.
+/// </param>
+/// <param name="PlanPurchasesEnabled">
+/// Whether plans and member seats are on sale (2026-09-14). The pricing and billing pages draw their buy buttons
+/// from it. Defaults to true, so an older or unreachable server leaves buying where it has always been; the API
+/// refuses a checkout itself when the switch is off.
+/// </param>
+public sealed record SiteFeaturesInfo(
+    IReadOnlyDictionary<string, bool> Features,
+    string? Announcement = null,
+    bool AllowOrganizationSelfRegistration = true,
+    bool AllowTourBusinessSignUps = true,
+    bool PlanPurchasesEnabled = true)
+{
+    /// <summary>Whether a feature is on. Unknown keys read as off.</summary>
+    public bool IsOn(string key) => Features.TryGetValue(key, out var on) && on;
+}

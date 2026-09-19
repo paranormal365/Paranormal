@@ -6,6 +6,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Everything about one piece of the group's gear: what has happened to it, and its service and
    defect log.
@@ -59,7 +61,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold mb-1">When</label>
-                            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_entryDate" Width="100%" />
+                            <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_entryDate" Width="100%" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold mb-1" for="orgequipmentservicelog-note-3fd9">Note</label>
@@ -88,6 +90,11 @@
         @if (_loading)
         {
             <p class="text-secondary">Loading history…</p>
+        }
+        else if (_entriesResult.Failed)
+        {
+            @* A service history that failed to load is not a device that was never serviced. *@
+            <BenListState TItem="EquipmentServiceLogRecord" Result="@_entriesResult" OnRetry="@LoadAsync" />
         }
         else if (_entries.Count == 0)
         {
@@ -136,6 +143,7 @@
     private DateTime? _entryDate = DateTime.Today;
     private string _notes = string.Empty;
     private bool _loading;
+    private LoadResult<EquipmentServiceLogRecord> _entriesResult;
     private bool _busy;
     private string? _error;
 
@@ -172,7 +180,8 @@
     {
         _loading = true;
         _error = null;
-        _entries = [.. await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, ItemId)];
+        _entriesResult = await AdminClient.GetOrgEquipmentServiceLogAsync(OrgId, ItemId);
+        _entries       = [.. _entriesResult.Items];
         _loading = false;
     }
 

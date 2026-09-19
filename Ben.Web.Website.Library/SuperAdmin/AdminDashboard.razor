@@ -1,0 +1,647 @@
+@page "/admin/dashboard"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState   UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Dashboard</PageTitle>
+
+@*
+    The administrator's overview: the template's dashboard idiom — a row of stat cards over a grid
+    of chart panels.
+
+    Every panel here answers a question an administrator would act on. That is the bar, and it is
+    worth defending: a dashboard grows decoration faster than it grows insight, and the cure is to
+    remove panels nobody reads rather than to add more.
+
+    What is deliberately absent is anonymous traffic — "new versus returning visitors". Nothing in
+    this platform records people who are not signed in, so that question cannot be answered
+    honestly here; answering it would mean building page-view tracking, which is a decision about
+    privacy and retention rather than a chart. The numbers below are all about accounts, which is
+    the half the platform genuinely knows.
+*@
+
+<div class="container-fluid px-3">
+
+    @* Two dashboards behind one tab strip (item 235 phase 17b, Ben 2026-09-13): the site as a whole, and hosted
+       events — venues, organizers and events overall. The range picker drives both. *@
+    <ul class="nav nav-tabs mb-3" role="tablist" id="dashboard-tabs">
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-site" aria-selected="@SiteTab"
+                    class="nav-link @(SiteTab ? "active" : null)" @onclick="@(() => ShowTab(null))">The site</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-events" aria-selected="@EventsTab"
+                    class="nav-link @(EventsTab ? "active" : null)" @onclick="@(() => ShowTab("events"))">Events</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-event-health" aria-selected="@EventHealthTab"
+                    class="nav-link @(EventHealthTab ? "active" : null)" @onclick="@(() => ShowTab("event-health"))">Event health</button>
+        </li>
+    </ul>
+
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            @if (EventsTab)
+            {
+                <h3 class="mb-0">Events<HelpLink Slug="site-administration" Anchor="hosted-events" /></h3>
+                <p class="text-secondary small mb-0">
+                    Hosted events across every group: where they stand, who runs them, where, and how they are booking.
+                </p>
+            }
+            else if (EventHealthTab)
+            {
+                <h3 class="mb-0">Event health<HelpLink Slug="site-administration" Anchor="event-health" /></h3>
+                <p class="text-secondary small mb-0">
+                    Whether hosted events are working: holds, answers, letters, errors, limits and the jobs behind them.
+                </p>
+            }
+            else
+            {
+            <h3 class="mb-0">Dashboard<HelpLink Slug="site-administration" Anchor="the-dashboard" /></h3>
+            <p class="text-secondary small mb-0">
+                How the site is being used. Everything here counts accounts and their activity —
+                visitors who never sign in are not recorded anywhere.
+            </p>
+            }
+        </div>
+        <div class="col-auto">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+                @foreach (var option in RangeOptions)
+                {
+                    <button type="button"
+                            class="btn @(_days == option.Days ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="@(() => ChangeRangeAsync(option.Days))"
+                            disabled="@_loading">
+                        @option.Label
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (EventsTab)
+    {
+        <AdminEventsDashboard Days="@_days" />
+    }
+    else if (EventHealthTab)
+    {
+        <AdminEventHealthDashboard Days="@_days" />
+    }
+    else
+    {
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_summary is not null)
+    {
+        <div class="row g-2 mb-3">
+            @*
+                Each card links to the list behind its number. "Signed in this week" links down
+                the page rather than away from it — the sign-in panels are the list behind that
+                number, and they live here because they are read alongside the rest.
+            *@
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="People" Icon="users" Value="@_summary.People.ToString("N0")"
+                          Href="/admin/users"
+                          Delta="@_summary.NewPeopleThisWeek" DeltaCaption="new this week" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="In a group" Icon="user-check"
+                          Value="@_summary.PeopleInAGroup.ToString("N0")"
+                          Href="/organizations" LinkLabel="Browse all groups"
+                          Caption="@InAGroupCaption" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Cases" Icon="folder" Value="@_summary.Cases.ToString("N0")"
+                          Href="/admin/cases"
+                          Delta="@_summary.NewCasesThisWeek" DeltaCaption="opened this week" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Signed in this week" Icon="log-in"
+                          Value="@_summary.ActivePeopleThisWeek.ToString("N0")"
+                          Href="#sign-ins" LinkLabel="Who, and when"
+                          Caption="@ActiveCaption"
+                          Sparkline="@RecentSignIns" />
+            </div>
+        </div>
+    }
+
+    @if (!_loading && _charts is not null)
+    {
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Sign-ins and registrations</div>
+                    <ApexChart Type="area" Height="280"
+                               Categories="@DayLabels(_charts.SignInsPerDay)"
+                               Series="@ActivitySeries"
+                               NoDataText="Nobody has signed in during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Cases by status</div>
+                    <ApexChart Type="donut" Height="280"
+                               Categories="@Labels(_charts.CasesByStatus)"
+                               Values="@Counts(_charts.CasesByStatus)"
+                               NoDataText="No cases yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Busiest groups</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Cases and investigations started in this period.
+                    </p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(_charts.TopGroupsByActivity)"
+                               Series="@Single("Cases and investigations", _charts.TopGroupsByActivity)"
+                               NoDataText="No group started anything in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Largest groups</div>
+                    <p class="text-secondary" style="font-size:.78rem;">By active membership.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(_charts.TopGroupsByMembers)"
+                               Series="@Single("Members", _charts.TopGroupsByMembers)"
+                               NoDataText="No group has members yet." />
+                </div></div>
+            </div>
+
+            @*
+                Three cuts of the same question — where is this happening — behind one toggle
+                rather than three panels. As three they filled an entire row to show one bar
+                each, and with a single state in the data that is a row of decoration.
+
+                Kept as bars rather than a map: the query behind a choropleth is the same GROUP
+                BY, but the map itself is a build of its own, and bars answer "which states lead"
+                without one. Revisit when the answer stops fitting in eight rows.
+            *@
+            <div class="col-12">
+                <div class="card h-100"><div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div class="small text-secondary">Where this is happening</div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Geographic cut">
+                            @foreach (var cut in StateCuts)
+                            {
+                                <button type="button"
+                                        class="btn @(_stateCut == cut.Key ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="@(() => _stateCut = cut.Key)">
+                                    @cut.Label
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <p class="text-secondary" style="font-size:.78rem;">@ActiveCut.Caption</p>
+
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(ActiveCutSlices)"
+                               Series="@Single(ActiveCut.Label, ActiveCutSlices)"
+                               NoDataText="@ActiveCut.NoData" />
+                </div></div>
+            </div>
+        </div>
+    }
+
+    @*
+        Sign-ins (Ben, 2026-08-31). The only part of this dashboard that names people, and the
+        reason is that "who signed in last" has no useful shape-shaped answer. Kept to accounts,
+        counts and times — nothing here says what anybody did after arriving.
+    *@
+    @if (!_loading && _signIns is not null)
+    {
+        <h5 class="mt-4 mb-2" id="sign-ins">Sign-ins</h5>
+        <p class="text-secondary small">
+            Password and Apple sign-ins over the selected period.
+            @if (!_signIns.CoversAppleSignIns)
+            {
+                <span class="text-warning">
+                    No Apple sign-in has been recorded yet — figures here may be password-only.
+                </span>
+            }
+            Microsoft sign-ins are never counted: they arrive as a token on every request, so
+            there is no single moment to record as the sign-in.
+        </p>
+
+        <div class="row g-3">
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Who has been here</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        The last @SignInInsightsPageSize people to arrive — one row each, however
+                        many times they signed in.
+                    </p>
+                    @if (_signIns.Recent.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">Nobody has signed in yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.Recent)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                        @if (row.Method != "password")
+                                        {
+                                            <span class="badge bg-secondary ms-1">@MethodLabel(row.Method)</span>
+                                        }
+                                    </span>
+                                    @* Both, deliberately. The relative form answers "is this
+                                       fresh?" at a glance, which is what somebody scanning the
+                                       list is actually asking; the absolute one answers "which
+                                       night was that?". Either alone makes the reader do
+                                       arithmetic. Local to the VIEWER and 12-hour, like every
+                                       other time on the site. *@
+                                    <span class="text-secondary small text-nowrap text-end">
+                                        @row.Utc.ToRelativeTime()
+                                        <span class="d-block" style="font-size:.7rem;">
+                                            @row.Utc.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
+                                        </span>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Signing in most</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Successful sign-ins in this period. A high number is a heavy user or a
+                        short-lived session, not a problem.
+                    </p>
+                    @if (_signIns.TopPeople.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">Nobody has signed in during this period.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.TopPeople)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                    </span>
+                                    <span class="text-nowrap"><strong>@row.Count.ToString("N0")</strong></span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Groups whose people show up</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Sign-ins by active members. Somebody in two groups counts for both — the
+                        question is which group's people are turning up, not how a total divides.
+                    </p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(_signIns.TopGroups)"
+                               Series="@Single("Sign-ins", _signIns.TopGroups)"
+                               NoDataText="No group's members signed in during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">When people sign in</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        By hour, in <strong>your</strong> local time (@TimeZoneLabel). The site
+                        records no per-account timezone, so these are when sign-ins happened as
+                        <em>you</em> would have read the clock — not each person's own hour.
+                    </p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@Labels(LocalHours)"
+                               Series="@Single("Sign-ins", LocalHours)"
+                               NoDataText="No sign-ins during this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Failed sign-ins</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Attempts against a real account with the wrong password. An account that
+                        appears here and nowhere above is either locked out or being guessed at.
+                    </p>
+                    @if (_signIns.MostFailures.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">No failed sign-ins during this period.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var row in _signIns.MostFailures)
+                            {
+                                <li class="d-flex justify-content-between align-items-baseline border-bottom py-1">
+                                    <span class="text-truncate me-2">
+                                        <UserNameLink AppUserId="@row.AppUserId" DisplayName="@row.Name" />
+                                    </span>
+                                    <span class="text-nowrap">
+                                        <strong>@row.Count.ToString("N0")</strong>
+                                        <span class="text-secondary small ms-1">@row.LastUtc.ToRelativeTime()</span>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">How people sign in</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        The split between a password and Sign in with Apple.
+                    </p>
+                    <ApexChart Type="donut" Height="260"
+                               Categories="@Labels(_signIns.ByMethod)"
+                               Values="@Counts(_signIns.ByMethod)"
+                               NoDataText="No sign-ins during this period." />
+                </div></div>
+            </div>
+
+            @*
+                The oddities panel is last because it is usually empty, and an empty panel at the
+                top reads as a broken one. Every line here is an observation with its basis
+                attached — never a verdict, because the data cannot support one.
+            *@
+            <div class="col-12">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Worth a look</div>
+                    @if (_signIns.Oddities.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">
+                            Nothing unusual in the sign-in record for this period.
+                        </p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var odd in _signIns.Oddities)
+                            {
+                                <li class="d-flex gap-2 border-bottom py-2">
+                                    <BenIcon Name="@OddityIcon(odd.Kind)" Class="mt-1 flex-shrink-0" />
+                                    <span>
+                                        <strong>@odd.Headline</strong>
+                                        <span class="d-block text-secondary small">@odd.Detail</span>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+        </div>
+    }
+    }
+
+</div>
+
+@code {
+    /// <summary>Which dashboard is showing; <c>?tab=events</c> links straight to the events one.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private bool EventsTab => string.Equals(Tab, "events", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The Event health tab, <c>?tab=event-health</c>: whether events are working, for development.</summary>
+    private bool EventHealthTab => string.Equals(Tab, "event-health", StringComparison.OrdinalIgnoreCase);
+
+    private bool SiteTab => !EventsTab && !EventHealthTab;
+
+    private void ShowTab(string? tab)
+    {
+        Tab = tab;
+        NavManager.NavigateTo(NavManager.GetUriWithQueryParameter("tab", tab), replace: true);
+    }
+
+    private sealed record RangeOption(string Label, int Days);
+
+    private static readonly RangeOption[] RangeOptions =
+    [
+        new("7 days", 7),
+        new("30 days", 30),
+        new("90 days", 90),
+    ];
+
+    /// <summary>One geographic cut: a button, the words under it, and where its numbers live.</summary>
+    private sealed record StateCut(string Key, string Label, string Caption, string NoData);
+
+    private static readonly StateCut[] StateCuts =
+    [
+        // W-SA3 of the 2026-09-06 evaluation: this said "Nobody has recorded an address yet" on a
+        // site where clients had recorded plenty — on their investigation requests. What it counts
+        // is the address on an ACCOUNT PROFILE, which almost nobody fills in, and the sentence
+        // read as a statement about the whole site. It now names what it looked at, and points at
+        // the cut that holds the addresses people actually gave.
+        new("people", "People", "Registered accounts, by the state on their profile address.",
+            "No account has a state on its profile address yet — client addresses given on a "
+            + "request are counted under Cases."),
+        new("cases", "Cases", "Reported cases, by the state of the address in the report.",
+            "No cases with an address yet."),
+        new("investigations", "Investigations", "Investigations, by the state of the place visited.",
+            "No investigations at a recorded place yet."),
+    ];
+
+    private string _stateCut = "people";
+
+    private StateCut ActiveCut => StateCuts.FirstOrDefault(c => c.Key == _stateCut) ?? StateCuts[0];
+
+    private IReadOnlyList<StatSlice> ActiveCutSlices => _stateCut switch
+    {
+        "cases" => _charts!.TopStatesByCase,
+        "investigations" => _charts!.TopStatesByInvestigation,
+        _ => _charts!.TopStatesByUser,
+    };
+
+    private AdminStatsSummary? _summary;
+    private AdminStatsCharts? _charts;
+    private AdminSignInInsights? _signIns;
+
+    /// <summary>Matches the server's own cap, so the caption cannot drift from the list.</summary>
+    private const int SignInInsightsPageSize = 10;
+    private int _days = 30;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
+
+        await LoadAsync();
+    }
+
+    private async Task ChangeRangeAsync(int days)
+    {
+        if (days == _days) return;
+        _days = days;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            // The summary's own week-based numbers do not move with the range picker, so it is
+            // only fetched once; the charts are what the range applies to.
+            _summary ??= await AdminClient.GetAdminStatsSummaryAsync();
+            _charts = await AdminClient.GetAdminStatsChartsAsync(_days);
+
+            // Deliberately NOT part of the null check below. The sign-in panels are an addition
+            // to this page, not a precondition for it: if that one endpoint fails, the dashboard
+            // should still draw everything else rather than replace itself with an error.
+            _signIns = await AdminClient.GetAdminSignInInsightsAsync(_days);
+
+            // Null here is a FAILURE, not "no data" — these endpoints always return an object when
+            // they answer at all. The client swallows the status code and returns null for any
+            // non-2xx, so without this the page simply drew nothing: no figures, no charts, no
+            // error. That is what a SuperAdmin saw on the ishaunted.com deploy (item 126).
+            if (_summary is null || _charts is null)
+            {
+                _error = "Couldn't load the dashboard figures — the server refused the request or "
+                       + "could not be reached. Check the browser's network tab for /api/admin/stats: "
+                       + "404 means the API path is wrong, 401 or 403 means this account was not "
+                       + "accepted as a SuperAdmin.";
+            }
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't load the dashboard figures.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Shaping helpers ───────────────────────────────────────────────────────
+
+    private static List<string> Labels(IReadOnlyList<StatSlice> slices)
+        => slices.Select(s => s.Label).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatSlice> slices)
+        => slices.Select(s => (double)s.Count).ToList();
+
+    private static List<ApexChart.ChartSeries> Single(string name, IReadOnlyList<StatSlice> slices)
+        => [new(name, Counts(slices))];
+
+    /// <summary>
+    /// Short day labels — a 90-day axis cannot carry full dates. Month first, via the shared
+    /// pattern: this read "23 Jul" because the format was written at the call site, which is
+    /// exactly what <see cref="DateTimeViewerExtensions"/> exists to prevent.
+    /// </summary>
+    private static List<string> DayLabels(IReadOnlyList<StatPoint> points)
+        => points.Select(p => p.Day.ToChartDay()).ToList();
+
+    private List<ApexChart.ChartSeries> ActivitySeries =>
+    [
+        new("Sign-ins", _charts!.SignInsPerDay.Select(p => (double)p.Count).ToList()),
+        new("Registrations", _charts!.RegistrationsPerDay.Select(p => (double)p.Count).ToList()),
+    ];
+
+    /// <summary>The last fortnight of sign-ins, for the stat card's sparkline.</summary>
+    private List<double>? RecentSignIns =>
+        _charts?.SignInsPerDay.TakeLast(14).Select(p => (double)p.Count).ToList();
+
+    private string? InAGroupCaption => _summary is { People: > 0 }
+        ? $"of {_summary.People:N0} — {(double)_summary.PeopleInAGroup / _summary.People:P0} joined one"
+        : null;
+
+    private string? ActiveCaption => _summary is not null
+        ? $"{_summary.SignInsThisWeek:N0} sign-in{(_summary.SignInsThisWeek == 1 ? "" : "s")} in total"
+        : null;
+
+    // ── Sign-in panels ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The hour histogram rotated from UTC into the viewer's own hours, and relabelled 12-hour.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rotated here rather than re-bucketed on the server: the counts are per whole hour and
+    /// a timezone shift of whole hours is exactly a rotation, so this costs nothing and keeps one
+    /// cached server answer correct for every viewer.</para>
+    ///
+    /// <para>A negative offset must not produce a negative index — the modulo is written to wrap
+    /// in both directions, which is the arithmetic everybody gets wrong once.</para>
+    /// </remarks>
+    private IReadOnlyList<StatSlice> LocalHours
+    {
+        get
+        {
+            if (_signIns is null) return [];
+
+            var offset = UserState.UtcHourOffset();
+
+            return Enumerable.Range(0, 24)
+                .Select(localHour =>
+                {
+                    var utcHour = ((localHour - offset) % 24 + 24) % 24;
+                    return new StatSlice(HourLabel(localHour), _signIns.ByHourUtc[utcHour].Count);
+                })
+                .ToList();
+        }
+    }
+
+    /// <summary>"3 PM" — 12-hour, like every other time the site shows.</summary>
+    private static string HourLabel(int hour) => hour switch
+    {
+        0  => "12 AM",
+        12 => "12 PM",
+        < 12 => $"{hour} AM",
+        _  => $"{hour - 12} PM",
+    };
+
+    /// <summary>Whose clock the histogram is drawn on, named so nobody has to guess.</summary>
+    private string TimeZoneLabel => UserState.BrowserTimeZone.StandardName;
+
+    /// <summary>The method slug in the words a reader would use.</summary>
+    private static string MethodLabel(string method) => method switch
+    {
+        "password" => "Password",
+        "apple"    => "Apple",
+        _          => method,
+    };
+
+    /// <summary>
+    /// An icon per oddity kind, chosen from the slug rather than by matching on the sentence —
+    /// the prose is written for a person and will be reworded; the slug is the contract.
+    /// </summary>
+    private static string OddityIcon(string kind) => kind switch
+    {
+        "failures" => "alert-triangle",
+        "woke"     => "clock",
+        "hours"    => "clock",
+        "never"    => "user",
+        "surge"    => "trending-up",
+        _          => "help-circle",
+    };
+}

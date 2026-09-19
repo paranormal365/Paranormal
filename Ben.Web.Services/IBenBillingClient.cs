@@ -1,0 +1,196 @@
+﻿using Ben.Service.Models;
+using Ben.Service.Models.Admin;
+using Ben.Web.Services.WebApi;
+
+namespace Ben.Web.Services;
+
+/// <summary>
+/// Subscriptions, the price list, and coupons — the billing slice of the admin client.
+/// </summary>
+/// <remarks>
+/// Everything here except <see cref="QuoteSubscriptionAsync"/> is SuperAdmin-only, enforced by the
+/// WebApi. The quote is the one member-facing call: it backs the coupon line on a group's own
+/// checkout, and is gated on the group's OrganizationSettings permission instead.
+/// </remarks>
+public interface IBenBillingClient
+{
+    // ── the price list ────────────────────────────────────────────────────────
+
+    /// <summary>Every band with its per-cadence prices and caps, in display order.</summary>
+    Task<LoadResult<SubscriptionTierAdminRecord>> GetSubscriptionTiersAsync(CancellationToken token = default);
+    Task<(SubscriptionTierAdminRecord? Result, string? Error)> SetTierPermissionAreasAsync(Guid tierId, IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> areas, CancellationToken token = default);
+    Task<(SubscriptionTierAdminRecord? Result, string? Error)> SetTierCapabilitiesAsync(Guid tierId, IReadOnlyList<Ben.Data.Common.Enums.TierCapability> capabilities, CancellationToken token = default);
+
+    /// <summary>What is wrong with the price list as it stands, or null when it is sound.</summary>
+    Task<TierValidationRecord?> GetTierValidationAsync(CancellationToken token = default);
+
+    /// <summary>Creates a band. The reason string is the server's refusal, when it refused.</summary>
+    Task<(SubscriptionTierAdminRecord? Result, string? Error)> CreateSubscriptionTierAsync(
+        SaveSubscriptionTierRequest request, CancellationToken token = default);
+
+    /// <summary>Saves a band and its whole price list together.</summary>
+    Task<(SubscriptionTierAdminRecord? Result, string? Error)> UpdateSubscriptionTierAsync(
+        Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Saves the whole ladder as one change, judged on where it ends up.
+    /// </summary>
+    /// <remarks>
+    /// For reshapes that have no legal intermediate state — splitting an unbounded top band, or
+    /// retiring the lowest one — which a band-at-a-time save can never express. The list sent is
+    /// the ladder: an active band left out of it is retired.
+    /// </remarks>
+    Task<(IReadOnlyList<SubscriptionTierAdminRecord>? Result, string? Error)> SaveSubscriptionLadderAsync(
+        SaveSubscriptionLadderRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// What saving this edit would do to the groups on the band — computed without saving or
+    /// sending anything. The editor shows it before the save is confirmed.
+    /// </summary>
+    Task<TierImpactRecord?> PreviewTierImpactAsync(
+        Guid id, SaveSubscriptionTierRequest request, CancellationToken token = default);
+
+    // ── coupons ───────────────────────────────────────────────────────────────
+
+    /// <summary>Every campaign, newest first, each carrying its misconfiguration when it has one.</summary>
+    Task<LoadResult<CouponAdminRecord>> GetCouponsAsync(CancellationToken token = default);
+
+    /// <summary>The codes under one campaign, with who each is addressed to.</summary>
+    Task<LoadResult<CouponCodeAdminRecord>> GetCouponCodesAsync(Guid couponId, CancellationToken token = default);
+
+    /// <summary>The referral report: every redemption under a campaign, with the frozen money.</summary>
+    Task<LoadResult<CouponRedemptionAdminRecord>> GetCouponRedemptionsAsync(Guid couponId, CancellationToken token = default);
+
+    Task<(CouponAdminRecord? Result, string? Error)> CreateCouponAsync(
+        SaveCouponRequest request, CancellationToken token = default);
+
+    Task<(CouponAdminRecord? Result, string? Error)> UpdateCouponAsync(
+        Guid id, SaveCouponRequest request, CancellationToken token = default);
+
+    /// <summary>Generates a batch of codes under a campaign, returning the batch itself.</summary>
+    Task<(IReadOnlyList<CouponCodeAdminRecord>? Result, string? Error)> GenerateCouponCodesAsync(
+        Guid couponId, GenerateCouponCodesRequest request, CancellationToken token = default);
+
+    /// <summary>Edits one code — withdrawing it, capping it, or addressing it to somebody.</summary>
+    Task<(CouponCodeAdminRecord? Result, string? Error)> UpdateCouponCodeAsync(
+        Guid couponId, Guid codeId, SaveCouponCodeRequest request, CancellationToken token = default);
+
+    // ── organizations ─────────────────────────────────────────────────────────
+
+    /// <summary>Every organization's standing, including those never set up.</summary>
+    Task<LoadResult<OrganizationSubscriptionAdminRecord>> GetOrganizationSubscriptionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>Sets one organization's subscription by hand — the manual payment provider.</summary>
+    Task<(OrganizationSubscriptionAdminRecord? Result, string? Error)> SetOrganizationSubscriptionAsync(
+        Guid organizationId, SetOrganizationSubscriptionRequest request, CancellationToken token = default);
+
+    // ── public and group-facing ───────────────────────────────────────────────
+
+    /// <summary>The public price list, exactly as the pricing page shows it. Anonymous.</summary>
+    Task<LoadResult<PublicSubscriptionTier>> GetPublicPricingAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Where one of the caller's groups stands. Null when the caller may not see that group's
+    /// billing — the page skips the card rather than guessing.
+    /// </summary>
+    Task<OrgSubscriptionView?> GetMySubscriptionAsync(Guid organizationId, CancellationToken token = default);
+
+    // ── checkout ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The coupon line: what one period would cost this group, with the typed code applied or the
+    /// sentence explaining why it was not. Mutates nothing — typing a code is not redeeming it.
+    /// </summary>
+    Task<(SubscriptionQuoteResponse? Result, string? Error)> QuoteSubscriptionAsync(
+        Guid organizationId, SubscriptionQuoteRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Turns an accepted quote into money: Stripe's hosted page URL to redirect to, or — for a
+    /// 100%-off period — a subscription already opened. The error is the server's own sentence
+    /// (a dead coupon, an unsold cadence), which the screen shows beside the button.
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartCheckoutAsync(
+        Guid organizationId, StartCheckoutRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// The seat-holder pays for their own overflow seat — gated on holding it, never on the
+    /// group's settings keys. Frozen price, no choices; the button is only "yes".
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartSeatCheckoutAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    // ── the money trail (item 168) ────────────────────────────────────────────
+
+    /// <summary>The whole ledger, or one group's slice of it. SuperAdmin.</summary>
+    Task<LoadResult<BillingLedgerEntryRecord>> GetBillingLedgerAsync(Guid? orgId = null, CancellationToken token = default);
+
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordChargeAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordPaymentAsync(
+        Guid orgId, RecordBillingEntryRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordAdjustmentAsync(
+        Guid orgId, RecordAdjustmentRequest request, CancellationToken token = default);
+    Task<(BillingLedgerEntryRecord? Result, string? Error)> RecordReferralPayoutAsync(
+        RecordReferralPayoutRequest request, CancellationToken token = default);
+
+    Task<LoadResult<TaxRateRuleRecord>> GetTaxRatesAsync(CancellationToken token = default);
+    Task<(TaxRateRuleRecord? Result, string? Error)> SaveTaxRateAsync(
+        SaveTaxRateRuleRequest request, CancellationToken token = default);
+    Task<bool> DeleteTaxRateAsync(Guid id, CancellationToken token = default);
+
+    /// <summary>Every referrer's standing: what their coupons brought in vs what has been paid out.</summary>
+    Task<LoadResult<ReferrerSummaryRecord>> GetReferrersAsync(CancellationToken token = default);
+
+    /// <summary>A group's own billing history — charges, payments, adjustments. Org-gated.</summary>
+    Task<LoadResult<OrgBillingHistoryRecord>> GetOrgBillingHistoryAsync(Guid organizationId, CancellationToken token = default);
+
+    // ── Overflow seats (item 144) ─────────────────────────────────────────────
+
+    /// <summary>Every overflow seat — the manual billing worklist. SuperAdmin.</summary>
+    Task<LoadResult<MemberSeatAdminRecord>> GetMemberSeatsAsync(Guid? orgId = null, CancellationToken token = default);
+
+    Task<(MemberSeatAdminRecord? Result, string? Error)> SetMemberSeatAsync(
+        Guid seatId, SetMemberSeatRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// The caller's own seat in one group — empty when they hold none, FAILED when the answer
+    /// could not be had. A bill must never be hidden by a fetch that quietly returned nothing.
+    /// </summary>
+    Task<LoadResult<MyMemberSeatRecord>> GetMySeatAsync(Guid organizationId, CancellationToken token = default);
+
+    /// <summary>A payment row's receipt as bytes, for the downloadFileFromBase64 hand-off.
+    /// Null when the row is not a payment or the caller may not see it.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(Guid organizationId, Guid entryId, CancellationToken token = default);
+
+    // ── Event credits (item 235) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens a Stripe Checkout page for <paramref name="quantity"/> event credits. Org-gated on
+    /// the settings key, because it spends the group's money.
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartEventCreditCheckoutAsync(
+        Guid organizationId, int quantity, CancellationToken token = default);
+
+    /// <summary>
+    /// What a credit costs today and what this group holds, spent credits included. An
+    /// <c>ItemResult</c> so a refusal cannot be drawn as "this group has no credits" — the two
+    /// look identical on a card and only one of them is somebody's money.
+    /// </summary>
+    Task<ItemResult<OrgEventCreditsView>> GetOrgEventCreditsAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    /// <summary>Every credit ever sold. SuperAdmin.</summary>
+    Task<LoadResult<AdminEventCreditRecord>> GetEventCreditsAsync(
+        Guid? orgId = null, CancellationToken token = default);
+
+    /// <summary>
+    /// Hands a group credits nobody paid for — the support remedy, not a sale. SuperAdmin.
+    /// </summary>
+    Task<(IReadOnlyList<AdminEventCreditRecord>? Result, string? Error)> GrantEventCreditsAsync(
+        Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default);
+
+    /// <summary>Refunds an unspent credit so it can never be spent. SuperAdmin.</summary>
+    Task<(AdminEventCreditRecord? Result, string? Error)> RefundEventCreditAsync(
+        Guid creditId, RefundEventCreditRequest request, CancellationToken token = default);
+}

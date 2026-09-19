@@ -1,58 +1,83 @@
 @namespace Ben.Web.Website.Library.Shared
 @using Ben.Data.Common.Enums
+@using Ben.Web.Website.Library.Kit.Maps
 @implements IAsyncDisposable
 
 @inject IBenAdminClient  AdminClient
 @inject IBenUserState    UserState
 @inject IJSRuntime       JS
+@inject NavigationManager NavManager
+@using Ben.Web.Services
+@inject SiteFeaturesProvider Features
 
 @* ── Loading ─────────────────────────────────────────────────────────────── *@
-@if (_loading)
+@* Item 154: the discovery switch — off means this renders nothing at all. *@
+@if (Features.IsOn(SiteFeatures.Discovery))
 {
-    <div class="d-flex justify-content-center py-5">
-        <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
-    </div>
-}
-else
-{
-    @* ── Section header ───────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
-        <div class="d-flex align-items-baseline justify-content-between mb-2">
-            <h4 class="mb-0">Public Investigations</h4>
-            <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+    @* The loader stands in for the section only on the FIRST load, when there is nothing to keep.
+
+       It used to stand in for EVERY load, and that was the jump Ben reported on 2026-09-18: moving
+       the map re-asks for the cases in the new view, which set _loading, which took the whole
+       section — the 420px map with it — out of the page and put a small spinner in its place. The
+       page lost the best part of a thousand pixels, the browser clamped the scroll position because
+       there was no longer that much document, and when the answer arrived a moment later the section
+       came back underneath a reader who had been moved. Recorded: the page scrolled from the map up
+       to the feed, about a second after a zoom.
+
+       So a RELOAD leaves everything where it is and says so quietly instead (_refreshing below). It
+       also stops MapKit being destroyed and rebuilt on every pan, which it was. *@
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
         </div>
-        <p class="text-secondary small mb-3">
-            Click a marker or case below to view details.
-            @if (!UserState.IsAuthenticated)
-            {
-                <a href="/login" class="text-decoration-none">Sign in</a><span> to vote on evidence.</span>
-            }
-        </p>
-    </div>
-
-    @* ── Map ──────────────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
-        <div style="height:420px; border-radius:.5rem; overflow:hidden;">
-            <TelerikMap Center="@_mapCenter"
-                        Zoom="@_mapZoom"
-                        Height="420px">
-                <MapLayers>
-                    <MapLayer Type="@MapLayersType.Tile"
-                              Attribution="© OpenStreetMap contributors"
-                              Subdomains="@(new[] {"a","b","c"})"
-                              UrlTemplate="caseMapTileTemplate" />
-
-                    @if (_markers.Count > 0)
+    }
+    else
+    {
+        @* ── Section header ───────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+            <div class="d-flex align-items-baseline justify-content-between mb-2">
+                <h4 class="mb-0">Public Investigations</h4>
+                <span class="text-muted small">
+                    @if (_refreshing)
                     {
-                        <MapLayer Type="@MapLayersType.Marker"
-                                  Data="@_markers"
-                                  LocationField="@nameof(CaseMapMarker.LatLng)"
-                                  TitleField="@nameof(CaseMapMarker.Title)">
-                            <MapLayerMarkerSettings Template="caseMapMarkerTemplate" />
-                        </MapLayer>
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Updating…</span>
                     }
-                </MapLayers>
-            </TelerikMap>
+                    else
+                    {
+                        @($"{_totalCount} case{(_totalCount == 1 ? "" : "s")} worldwide")
+                    }
+                </span>
+            </div>
+            <p class="text-secondary small mb-3">
+                Click a marker or case below to view details.
+                @if (!UserState.IsAuthenticated)
+                {
+                    <a href="/login" class="text-decoration-none">Sign in</a><span> to vote on evidence.</span>
+                }
+            </p>
+        </div>
+
+        @* ── Map ──────────────────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+            @* The fixed height and the clipping belong to the MAP, not to the note under it.
+
+               They used to wrap both: a 420-pixel box with overflow:hidden holding a 420-pixel map
+               AND the sentence below it, so the sentence began at 427 pixels and was cut off in its
+               entirety. Nobody had ever read it — and it is the line that explains the pins are an
+               approximate area rather than somebody's address, which is a privacy promise the product
+               makes deliberately. Found by crawling the site for visual faults, 2026-09-18. *@
+            <div style="height:420px; border-radius:.5rem; overflow:hidden;">
+                @* A pan or a zoom re-asks for the cases inside the new view, and the list below
+                   follows the same answer. Map and list must never disagree: a reader has no way
+                   to tell which of two pictures is the true one. The view is the caller's here —
+                   it starts on the country, moves to the person when they allow it, and is never
+                   re-framed around the pins, because the pins are an answer about the view. *@
+                <BenMap Pins="@_mapPins" Height="420px" FitToPins="false"
+                        CenterLatitude="@_mapLat" CenterLongitude="@_mapLon" Zoom="@_mapZoom"
+                        OnPinClicked="@OnMarkerClicked" OnViewportChanged="@OnMapViewportChanged" />
+            </div>
 
             @* Said plainly, because a pin on a map reads as an address whether or not it is one.
                These are cell centres several miles across; the property is somewhere nearby. *@
@@ -61,164 +86,217 @@ else
                 published to within a few miles.
             </p>
         </div>
-    </div>
 
-    @* ── Case popup ───────────────────────────────────────────────────────── *@
-    @* Was a non-modal, resizable TelerikWindow floating over the map. As a modal, choosing a
-       different pin means dismissing this one first — worth it for a single dialog primitive that
-       is known to keep its inputs bound (the vote widget below is interactive). *@
-    <BenModal @bind-Visible="@_popupVisible"
-              Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
-              Static="false">
-        <ChildContent>
-            @if (_clusterCases.Count > 1 && _selectedCase is null)
-            {
-                @* City cluster list *@
-                <p class="text-secondary small mb-2">@_clusterCases.Count cases in @_selectedCity</p>
-                <div class="list-group list-group-flush">
-                    @foreach (var c in _clusterCases)
-                    {
-                        <button class="list-group-item list-group-item-action py-2 px-0"
-                                @onclick="@(() => _selectedCase = c)">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="font-monospace small text-muted">@c.CaseReference</span>
-                                    @if (c.IsHaunted) { <span class="ms-1">👻</span> }
-                                    <div class="fw-semibold">@c.Title</div>
-                                </div>
-                                <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Score="@c.Score" Compact="true" />
-                            </div>
-                        </button>
-                    }
-                </div>
-            }
-            else if (_selectedCase is not null)
-            {
-                @* Single case detail *@
-                @if (_clusterCases.Count > 1)
+        @* ── Case popup ───────────────────────────────────────────────────────── *@
+        @* Was a non-modal, resizable TelerikWindow floating over the map. As a modal, choosing a
+           different pin means dismissing this one first — worth it for a single dialog primitive that
+           is known to keep its inputs bound (the vote widget below is interactive). *@
+        <BenModal @bind-Visible="@_popupVisible"
+                  Title="@(_selectedCase != null ? _selectedCase.Title : _selectedCity)"
+                  Static="false">
+            <ChildContent>
+                @if (_clusterCases.Count > 1 && _selectedCase is null)
                 {
-                    <button class="btn btn-sm btn-link ps-0 mb-2 text-decoration-none"
-                            @onclick="@(() => _selectedCase = null)">← All cases in @_selectedCity</button>
-                }
-                <div class="mb-2">
-                    <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
-                    @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
-                </div>
-                <h6 class="mb-1">@_selectedCase.Title</h6>
-                <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
-                @if (_selectedCase.ClientName is not null)
-                {
-                    <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
-                }
-
-                @* Community votes *@
-                <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
-
-                <div class="d-flex gap-2 mt-3 flex-wrap">
-                    <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
-                       class="btn btn-sm btn-outline-primary">View Investigation</a>
-                    <a href="/o/@_selectedCase.OrgUrlName"
-                       class="btn btn-sm btn-outline-secondary">View Group</a>
-                </div>
-            }
-        </ChildContent>
-    </BenModal>
-
-    @* ── Paged list ────────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
-        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-            <span class="fw-semibold">Sort by</span>
-            <div class="btn-group" role="group" aria-label="Sort investigations">
-                <button type="button"
-                        class="btn @(_sort == "votes" ? "btn-primary" : "btn-outline-primary")"
-                        aria-pressed="@((_sort == "votes").ToString().ToLowerInvariant())"
-                        @onclick="@(() => SetSort("votes"))">Most Votes</button>
-                <button type="button"
-                        class="btn @(_sort == "date" ? "btn-primary" : "btn-outline-primary")"
-                        aria-pressed="@((_sort == "date").ToString().ToLowerInvariant())"
-                        @onclick="@(() => SetSort("date"))">Newest</button>
-            </div>
-        </div>
-
-        @if (_pagedItems.Count == 0)
-        {
-            <div class="alert alert-light text-muted text-center">No public investigations yet.</div>
-        }
-        else
-        {
-            <div class="row g-3">
-                @foreach (var item in _pagedItems)
-                {
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card h-100 @(item.IsHaunted ? "border-warning" : "")">
-                            <div class="card-body pb-1">
-                                <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
-                                    @if (item.IsHaunted)
-                                    { <span class="badge bg-warning text-dark">👻 Haunted</span> }
-                                </div>
-                                <h6 class="card-title mb-1">@item.Title</h6>
-                                <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
-                                <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
-                                <CaseVoteBar Confirms="@item.ConfirmsCount"
-                                         Disputes="@item.DisputesCount"
-                                         Inconclusive="@item.InconclusiveCount"
-                                         Total="@item.TotalVotes"
-                                         Score="@item.Score" />
-                                @if (UserState.IsAuthenticated)
-                                {
-                                    <div class="mt-2">
-                                        <CaseVoteWidget CaseId="@item.CaseId"
-                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                    @* City cluster list *@
+                    <p class="text-secondary small mb-2">@_clusterCases.Count cases in @_selectedCity</p>
+                    <div class="list-group list-group-flush">
+                        @foreach (var c in _clusterCases)
+                        {
+                            <button class="list-group-item list-group-item-action py-2 px-0"
+                                    @onclick="@(() => _selectedCase = c)">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="font-monospace small text-muted">@c.CaseReference</span>
+                                        @if (c.IsHaunted) { <span class="ms-1">👻</span> }
+                                        <div class="fw-semibold">@c.Title</div>
                                     </div>
-                                }
-                            </div>
-                            <div class="card-footer bg-transparent d-flex gap-2 pt-2">
-                                <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
-                                   class="btn btn-sm btn-outline-primary">View</a>
-                                <a href="/o/@item.OrgUrlName"
-                                   class="btn btn-sm btn-outline-secondary">Group</a>
-                            </div>
-                        </div>
+                                    <CaseVoteBar Confirms="@c.ConfirmsCount" Disputes="@c.DisputesCount" Inconclusive="@c.InconclusiveCount" Total="@c.TotalVotes" Score="@c.Score" Compact="true" />
+                                </div>
+                            </button>
+                        }
                     </div>
                 }
+                else if (_selectedCase is not null)
+                {
+                    @* Single case detail *@
+                    @if (_clusterCases.Count > 1)
+                    {
+                        <button class="btn btn-sm btn-link ps-0 mb-2 text-decoration-none"
+                                @onclick="@(() => _selectedCase = null)">← All cases in @_selectedCity</button>
+                    }
+                    <div class="mb-2">
+                        <span class="font-monospace small text-muted">@_selectedCase.CaseReference</span>
+                        @if (_selectedCase.IsHaunted) { <span class="ms-1 badge bg-warning text-dark">Haunted 👻</span> }
+                    </div>
+                    <h6 class="mb-1">@_selectedCase.Title</h6>
+                    <p class="text-secondary small mb-2">@_selectedCase.City, @_selectedCase.State · @_selectedCase.OrgName</p>
+                    @if (_selectedCase.ClientName is not null)
+                    {
+                        <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
+                    }
+
+                    @* Community votes — only on a case the public can see (P.3). *@
+                    @if (_selectedCase.IsPublic)
+                    {
+                        <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                    }
+
+                    <div class="d-flex gap-2 mt-3 flex-wrap">
+                        <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
+                           class="btn btn-sm btn-outline-primary">View Investigation</a>
+                        <a href="/o/@_selectedCase.OrgUrlName"
+                           class="btn btn-sm btn-outline-secondary">View Group</a>
+                    </div>
+                }
+            </ChildContent>
+        </BenModal>
+
+        @* ── Paged list ────────────────────────────────────────────────────────── *@
+        <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
+            <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+                <span class="fw-semibold">Sort by</span>
+                <div class="btn-group" role="group" aria-label="Sort investigations">
+                    <button type="button"
+                            class="btn @(_sort == "votes" ? "btn-primary" : "btn-outline-primary")"
+                            aria-pressed="@((_sort == "votes").ToString().ToLowerInvariant())"
+                            @onclick="@(() => SetSort("votes"))">Most Votes</button>
+                    <button type="button"
+                            class="btn @(_sort == "date" ? "btn-primary" : "btn-outline-primary")"
+                            aria-pressed="@((_sort == "date").ToString().ToLowerInvariant())"
+                            @onclick="@(() => SetSort("date"))">Newest</button>
+                </div>
             </div>
 
-            @if (_totalCount > _pageSize)
+            @if (_inView is not null)
             {
-                <div class="mt-3 d-flex justify-content-center">
-                    <BenPager Total="@_totalCount"
-                              PageSize="@_pageSize"
-                              Page="@_page"
-                              PageChanged="@OnPageChanged"
-                              AriaLabel="Investigation pages" />
+                <div class="text-muted small mb-2" data-testid="case-map-in-view">
+                    Showing @_totalCount case@(_totalCount == 1 ? "" : "s") in this view. Zoom out to widen the search.
                 </div>
             }
-        }
-    </div>
-}
 
-@* ── Vote bar helper ──────────────────────────────────────────────────────── *@
-@* Renders inline vote counts for a case *@
+            @if (_pagedItems.Count == 0)
+            {
+                <div class="alert alert-light text-muted text-center" data-testid="case-map-empty-view">
+                    @(_inView is null ? "No public investigations yet." : "No public investigations in this view.")
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var item in _pagedItems)
+                    {
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="card h-100 @(item.IsHaunted ? "border-warning" : "")">
+                                <div class="card-body pb-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
+                                        @* Signed in, the list adds cases this person may already open. Under "Public Investigations"
+                                           a member's private case looked published (UI test pass, 2026-09-14). *@
+                                        @if (!item.IsPublic)
+                                        {
+                                            <span class="badge text-bg-secondary" title="Shown to you because you can open it. Visitors don't see it.">
+                                                <BenIcon Name="eye-off" Class="me-1" />Not public
+                                            </span>
+                                        }
+                                        else if (item.IsHaunted)
+                                        { <span class="badge bg-warning text-dark">👻 Haunted</span> }
+                                    </div>
+                                    <h6 class="card-title mb-1">@item.Title</h6>
+                                    <p class="card-text text-secondary mb-1" style="font-size:.8rem;">@item.City, @item.State</p>
+                                    <p class="card-text text-muted mb-2" style="font-size:.78rem;">@item.OrgName</p>
+                                    @* W-H1: one tally per card. The widget draws the same bar and
+                                       the same three counts as CaseVoteBar and adds the buttons,
+                                       so rendering both put two tallies on one card — and while
+                                       they were reading different tables they disagreed, which is
+                                       how the card came to say "No votes yet" over "3 votes".
+                                       Whoever cannot see the widget still gets the bar. *@
+                                    @* A case shown only because this person can open it is not up for the public's vote:
+                                       its card offered the thumbs anyway (client test pass P.3, 2026-09-14). *@
+                                    @if (!item.IsPublic)
+                                    {
+                                        <p class="small text-secondary mb-0">Only the group and its client can see this case.</p>
+                                    }
+                                    else if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
+                                    {
+                                        <CaseVoteWidget CaseId="@item.CaseId"
+                                                        PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
+                                    }
+                                    else
+                                    {
+                                        <CaseVoteBar Confirms="@item.ConfirmsCount"
+                                                 Disputes="@item.DisputesCount"
+                                                 Inconclusive="@item.InconclusiveCount"
+                                                 Total="@item.TotalVotes"
+                                                 Score="@item.Score" />
+                                    }
+                                </div>
+                                <div class="card-footer bg-transparent d-flex gap-2 pt-2">
+                                    <a href="/o/@item.OrgUrlName/cases/@item.CaseReference.TrimStart('#')"
+                                       class="btn btn-sm btn-outline-primary">View</a>
+                                    <a href="/o/@item.OrgUrlName"
+                                       class="btn btn-sm btn-outline-secondary">Group</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (_totalCount > _pageSize)
+                {
+                    <div class="mt-3 d-flex justify-content-center">
+                        <BenPager Total="@_totalCount"
+                                  PageSize="@_pageSize"
+                                  Page="@_page"
+                                  PageChanged="@OnPageChanged"
+                                  AriaLabel="Investigation pages" />
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @* ── Vote bar helper ──────────────────────────────────────────────────────── *@
+    @* Renders inline vote counts for a case *@
+
+}
 
 @code {
     // ── Map state ────────────────────────────────────────────────────────────
-    private double[] _mapCenter = [39.5, -98.35];   // US center default
-    private int      _mapZoom   = 4;
+    // US centre until the person's own location arrives, or forever if they decline.
+    private double _mapLat  = 39.5;
+    private double _mapLon  = -98.35;
+    private double _mapZoom = 4;
 
     // ── Data ─────────────────────────────────────────────────────────────────
+    /// <summary>The first load, which has nothing on screen worth keeping.</summary>
     private bool   _loading    = true;
+
+    /// <summary>
+    /// A later load, for a view the person just moved to. Never unmounts anything: see the remark on
+    /// the loader above for what happened when it did.
+    /// </summary>
+    private bool   _refreshing;
     private int    _totalCount = 0;
     private int    _page       = 1;
     private int    _pageSize   = 18;
     private string _sort       = "votes";
 
     private List<PublicCaseDiscoveryItem> _pagedItems = [];
-    private List<CaseMapMarker>           _markers    = [];
+    private IReadOnlyList<BenMapPin>      _mapPins    = [];
     private Dictionary<Guid, CaseVoteSummary> _voteSummaries = [];
 
     // Per-marker cluster data (index = marker.Index)
     private List<List<PublicCaseDiscoveryItem>> _clusters = [];
+
+    /// <summary>
+    /// Tour pins, drawn after the case pins (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." They
+    /// sit on the same map as the cases rather than a map of their own, because somebody looking
+    /// at haunted places near them wants to know they can walk one on Saturday.
+    /// </remarks>
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourMapPin> _tourPins = [];
 
     // ── Popup state ──────────────────────────────────────────────────────────
     private bool   _popupVisible  = false;
@@ -229,43 +307,71 @@ else
     // ── JS interop ───────────────────────────────────────────────────────────
     private IJSObjectReference? _module;
     private DotNetObjectReference<PublicCaseDiscovery>? _dotnetRef;
-    private bool _mapResized;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            _module     = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/Shared/PublicCaseDiscovery.razor.js");
-            _dotnetRef  = DotNetObjectReference.Create(this);
-            await _module.InvokeVoidAsync("init", _dotnetRef);
-            await _module.InvokeVoidAsync("tryGetUserLocation", _dotnetRef);
+        if (!firstRender) return;
 
-            await LoadAsync();
-            return;
+        // The module's one remaining job is asking the browser where the person is; the map
+        // itself is BenMap's business now (item 228).
+        _module    = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/Shared/PublicCaseDiscovery.razor.js");
+        _dotnetRef = DotNetObjectReference.Create(this);
+        await _module.InvokeVoidAsync("tryGetUserLocation", _dotnetRef);
+
+        await LoadAsync();
+    }
+
+    /// <summary>The view the last answer described, or null when nothing has been panned yet.</summary>
+    private MapBounds? _inView;
+
+    private CancellationTokenSource? _viewportLoad;
+
+    private Task OnMapViewportChanged(BenMapViewport v) => ReloadForViewAsync([v.North, v.West, v.South, v.East]);
+
+    /// <summary>
+    /// Re-asks for the cases inside the new view, once the gesture has settled.
+    /// </summary>
+    /// <remarks>
+    /// <para>The extent is [north, west, south, east] — the order Telerik's map used, kept so
+    /// nothing below had to change when the map did.</para>
+    ///
+    /// <para>Debounced and cancellable: a pan raises this repeatedly, and an answer arriving after
+    /// the person has moved on describes somewhere the map no longer is. A failure leaves the last
+    /// good answer on screen rather than emptying it — "nothing here" and "we could not ask" look
+    /// identical to a reader, and only one of them is true.</para>
+    /// </remarks>
+    private async Task ReloadForViewAsync(double[]? extent)
+    {
+        if (extent is not { Length: 4 }) return;
+
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            _inView = new MapBounds(North: extent[0], West: extent[1], South: extent[2], East: extent[3]);
+            await LoadAsync(cts.Token);
         }
-
-        // The map is first mounted on the render where _loading flips false — its
-        // container wasn't in the DOM yet during firstRender above, so Kendo would
-        // have measured a stale/zero width if we asked it to redraw any earlier.
-        // Resize once, now that the real container is actually laid out.
-        if (!_loading && !_mapResized && _module is not null)
+        catch (OperationCanceledException)
         {
-            _mapResized = true;
-            await _module.InvokeVoidAsync("resizeMap");
+            // superseded by a later gesture — nothing to draw
         }
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(CancellationToken token = default)
     {
-        _loading = true;
+        // The first load may take the section over; every later one has to leave the page alone.
+        if (_loadedOnce) _refreshing = true; else _loading = true;
         StateHasChanged();
 
-        // Load all cases for the map + first page for the list
-        // We load up to 500 for map coverage; list is sliced client-side
-        var response = await AdminClient.GetPublicCaseDiscoveryAsync(page: 1, pageSize: 500, sort: _sort);
+        // The map and the list are built from ONE answer, so they can never disagree. Bounded once
+        // the person has moved the map; unbounded before that, which is what a first load wants.
+        var response = await AdminClient.GetPublicCaseDiscoveryAsync(
+            page: 1, pageSize: 500, sort: _sort, bounds: _inView, token: token);
         if (response is null)
         {
-            _loading = false;
+            _loading = _refreshing = false;
             StateHasChanged();
             return;
         }
@@ -273,17 +379,25 @@ else
         _totalCount  = response.TotalCount;
         var allItems = response.Items.ToList();
 
+        // Fetched once, alongside the cases, so the map is drawn from one pass rather than
+        // repainting when a second answer arrives.
+        _tourPins = (await AdminClient.GetTourMapPinsAsync(token)).Items;
+
         BuildMarkers(allItems);
+        FrameFirstView();
         SlicePage(allItems);
         await LoadVoteSummariesAsync();
 
-        _loading = false;
+        _loadedOnce = true;
+        _loading = _refreshing = false;
         StateHasChanged();
     }
 
+    private bool _loadedOnce;
+
     private void BuildMarkers(List<PublicCaseDiscoveryItem> all)
     {
-        _markers  = [];
+        var pins  = new List<BenMapPin>();
         _clusters = [];
 
         // The coordinates arriving here are already a grid-cell centre, not a property — the server
@@ -298,21 +412,40 @@ else
 
         foreach (var group in groups)
         {
-            var idx   = _clusters.Count;
             var cases = group.ToList();
             _clusters.Add(cases);
 
             var first = cases[0];
-            _markers.Add(new CaseMapMarker
-            {
-                LatLng    = [group.Key.Lat, group.Key.Lon],
-                Title     = cases.Count == 1 ? first.Title : $"{cases.Count} cases near {first.City}",
-                Count     = cases.Count,
-                Index     = idx,
-                IsHaunted = cases.Any(c => c.IsHaunted),
-                CaseId    = first.CaseId,
-            });
+            // A ghost for one case, the count for several; a case judged haunted is drawn in gold,
+            // and says so in words for anyone the gold does not reach. Groups that overlap at a
+            // low zoom gather further on the map itself, and zooming in separates them again.
+            var haunted = cases.Any(c => c.IsHaunted);
+            pins.Add(new BenMapPin(
+                group.Key.Lat, group.Key.Lon,
+                Title: cases.Count == 1 ? first.Title : $"{cases.Count} cases near {first.City}",
+                Subtitle: haunted ? "Judged haunted" : null,
+                Glyph: cases.Count == 1 ? "👻" : cases.Count.ToString(),
+                Color: haunted ? "#d4a017" : null,
+                Cluster: "cases"));
         }
+
+        // Tours after the cases, so a tour pin's index is its position in _tourPins offset by the
+        // case clusters — which is what the click handler undoes. Their own cluster and colour,
+        // because a walk you can book is a different offer from a case you can read about, and a
+        // pin here is a real meeting point rather than a blurred cell.
+        _tourPinOffset = pins.Count;
+        foreach (var tour in _tourPins)
+            pins.Add(new BenMapPin(
+                (double)tour.Latitude, (double)tour.Longitude,
+                Title: tour.Name,
+                Subtitle: tour.NextDateStartUtc is { } next
+                    ? $"{tour.OrganizationName} · next {next.ToViewerLocalTime(UserState):MM/dd/yyyy}"
+                    : tour.OrganizationName,
+                Glyph: "🚶",
+                Color: "#5b8def",
+                Cluster: "tours"));
+
+        _mapPins = pins;
     }
 
     private void SlicePage(List<PublicCaseDiscoveryItem> all)
@@ -323,23 +456,61 @@ else
             .ToList();
     }
 
+    /// <summary>True once the view has been placed — by the person's own location, or by the pins on the first answer.</summary>
+    private bool _viewPlaced;
+
+    /// <summary>
+    /// Centres the first view on the published cases rather than on the middle of the United States.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass, 2026-09-14: on a phone the fixed centre over Kansas left every pin — all in Tennessee — at the right
+    /// edge of a 375px map. The zoom is kept, so the view still reads as a country and the list below still shows every
+    /// case; only the centre moves, to the middle of the pins. Pins spread over more than a continent keep the default
+    /// centre, where the middle of them would be an ocean. The person's own location, when the browser gives one, wins.
+    /// </remarks>
+    private void FrameFirstView()
+    {
+        if (_viewPlaced || _inView is not null || _mapPins.Count == 0) return;
+        _viewPlaced = true;
+
+        var south = _mapPins.Min(p => p.Latitude);
+        var north = _mapPins.Max(p => p.Latitude);
+        var west = _mapPins.Min(p => p.Longitude);
+        var east = _mapPins.Max(p => p.Longitude);
+        if (north - south > 30 || east - west > 60) return;
+
+        _mapLat = (north + south) / 2;
+        _mapLon = (east + west) / 2;
+    }
+
     [JSInvokable]
     public async Task SetUserLocation(double? lat, double? lon)
     {
         if (lat.HasValue && lon.HasValue)
         {
-            _mapCenter = [lat.Value, lon.Value];
-            _mapZoom   = 9;
+            _viewPlaced = true;
+            // BenMap follows these on its next render: the map is the caller's to drive here.
+            _mapLat  = lat.Value;
+            _mapLon  = lon.Value;
+            _mapZoom = 9;
             await InvokeAsync(StateHasChanged);
-            // Drive Kendo tile reload via its own JS API (Blazor re-render alone is not enough)
-            if (_module is not null)
-                await _module.InvokeVoidAsync("setMapCenter", lat.Value, lon.Value, 9);
         }
     }
 
-    [JSInvokable]
-    public void OnMarkerClicked(int index)
+    /// <summary>Where the tour pins start in the pin list the map was given.</summary>
+    private int _tourPinOffset;
+
+    private void OnMarkerClicked(int index)
     {
+        // A tour pin is a link, not a popup: the tour's own page answers everything the popup
+        // would have to summarise, and it is the page somebody would want to share anyway.
+        if (index >= _tourPinOffset && index - _tourPinOffset < _tourPins.Count)
+        {
+            var tour = _tourPins[index - _tourPinOffset];
+            NavManager.NavigateTo($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}");
+            return;
+        }
+
         if (index < 0 || index >= _clusters.Count) return;
 
         _clusterCases = _clusters[index];
@@ -373,31 +544,30 @@ else
     // Fetches vote summaries for the current page items in a single request.
     private async Task LoadVoteSummariesAsync()
     {
+        // Item #103: this used to read IsAuthenticated straight off the initial load, and auth
+        // resolves asynchronously after the circuit connects — so on a hard navigation a
+        // signed-in user's own votes never appeared until they paged or re-sorted. Wait for the
+        // answer before asking the question. During prerender the wait returns false and we skip;
+        // the interactive circuit re-runs the whole load path and comes through here again.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated || _pagedItems.Count == 0) return;
         var ids = _pagedItems.Select(i => i.CaseId);
+        // A decoration: these only mark which cards the viewer has already voted on. A failed
+        // lookup leaves the marks off, which is what an empty answer already did — no panel.
         var summaries = await AdminClient.GetCaseVoteSummariesAsync(ids);
-        _voteSummaries = summaries.ToDictionary(s => s.CaseId);
+        _voteSummaries = summaries.Items.ToDictionary(s => s.CaseId);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_module is not null)
+        // Same as NearbyDiscovery: a disconnected circuit is the ordinary way off this page.
+        try
         {
-            await _module.InvokeVoidAsync("dispose");
-            await _module.DisposeAsync();
+            if (_module is not null)
+                await _module.DisposeAsync();
         }
+        catch (JSDisconnectedException) { }
         _dotnetRef?.Dispose();
     }
 
-    // ── Marker data model ─────────────────────────────────────────────────────
-
-    private sealed class CaseMapMarker
-    {
-        public double[]? LatLng    { get; set; }
-        public string    Title     { get; set; } = string.Empty;
-        public int       Count     { get; set; } = 1;
-        public int       Index     { get; set; }
-        public bool      IsHaunted { get; set; }
-        public Guid      CaseId    { get; set; }
-    }
 }

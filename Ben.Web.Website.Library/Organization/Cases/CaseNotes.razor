@@ -1,4 +1,6 @@
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 
@@ -11,7 +13,10 @@ else
     @* ── Toolbar ─────────────────────────────────────────────────────────── *@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <span class="fw-semibold">Case Notes <span class="text-secondary small fw-normal">(internal — not visible to clients)</span></span>
-        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
+        @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+        {
+            <button type="button" class="btn btn-primary btn-sm" id="case-notes-new" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
+        }
     </div>
 
     @if (_error is not null)
@@ -19,7 +24,11 @@ else
         <div class="alert alert-danger">@_error</div>
     }
 
-    @if (_notes.Count == 0)
+    @if (_notesResult.Failed)
+    {
+        <BenListState TItem="CaseNoteDto" Result="@_notesResult" OnRetry="@LoadAsync" />
+    }
+    else if (_notes.Count == 0)
     {
         <p class="text-secondary">No notes yet. Add the first note to keep track of internal case details.</p>
     }
@@ -41,7 +50,9 @@ else
                                 {
                                     <strong class="d-block mb-1">@n.Title</strong>
                                 }
-                                <div class="small" style="white-space:pre-wrap;">@n.Body</div>
+                                @* Sanitized HTML from the API — formatted since 2026-09-14, and older plain notes arrive
+                                   already turned into paragraphs (CaseNoteBodies). *@
+                                <div class="small case-note__body" data-testid="case-note-body">@((MarkupString)n.Body)</div>
                                 <div class="text-secondary mt-2" style="font-size:.75rem;">
                                     @(n.AuthorDisplayName ?? "Unknown") · @n.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                     @if (n.DateUpdated.HasValue)
@@ -51,8 +62,14 @@ else
                                 </div>
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEdit(n))"><BenIcon Name="edit-2" /></button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(n))"><BenIcon Name="trash-2" /></button>
+                                @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEdit(n))"><BenIcon Name="edit-2" /></button>
+                                }
+                                @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDelete(n))"><BenIcon Name="trash-2" /></button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -63,7 +80,7 @@ else
 }
 
 @* ── Add / Edit dialog ────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showDialog" Title="@(_editNote is null ? "New Note" : "Edit Note")">
+<BenModal @bind-Visible="@_showDialog" Title="@(_editNote is null ? "New Note" : "Edit Note")" Size="lg">
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
@@ -71,12 +88,17 @@ else
                 <input id="casenotes-title-optional-f955" type="text" class="form-control" placeholder="e.g. Client background check" @bind="@_formTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold" for="casenotes-body-bc4b">Body <span class="text-danger">*</span></label>
-                <textarea id="casenotes-body-bc4b" class="form-control" rows="6" placeholder="Internal note details…" @bind="@_formBody" @bind:event="oninput"></textarea>
+                @* A formatting editor, the case-prose toolbar (beta feedback, 2026-09-14). *@
+                <div class="form-label fw-semibold">Body <span class="text-danger">*</span></div>
+                <div id="casenotes-body-bc4b" data-testid="note-body-editor">
+                    <BenEditor @ref="_bodyEditor" @bind-Value="@_formBody" Height="260px" Tools="@CaseEditorTools.Prose" />
+                </div>
             </div>
-            <div class="col-12 d-flex align-items-center gap-2">
-                <input type="checkbox" class="form-check-input" id="note-pin" @bind="@_formPinned" />
-                <label for="note-pin" class="form-label mb-0">📌 Pin this note</label>
+            <div class="col-12">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="note-pin" @bind="@_formPinned" />
+                    <label for="note-pin" class="form-check-label">📌 Pin this note</label>
+                </div>
             </div>
         </div>
         @if (_dialogError is not null)
@@ -87,7 +109,7 @@ else
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
         <button type="button" class="btn btn-primary" @onclick="SaveNote"
-                disabled="@(_isBusy || string.IsNullOrWhiteSpace(_formBody))">
+                disabled="@_isBusy">
             <BenIcon Name="save" Class="me-1" />@(_isBusy ? "Saving…" : "Save")
         </button>
     </FooterContent>
@@ -116,8 +138,30 @@ else
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
+    /// <summary>
+    /// What the viewer may do in this organization's <c>Cases</c> area, handed down by
+    /// <c>CaseDetail</c> so the tabs and their parent agree without three more round trips.
+    /// </summary>
+    /// <remarks>
+    /// <para>IH-03 step 2. The controller behind this tab used to gate create, update AND delete
+    /// on the <c>Case.Read</c> grant, so anyone who could open the case could empty it. The server
+    /// now checks the matching action for each verb; these buttons exist so a member who cannot
+    /// do the thing is not shown the door to a refusal.</para>
+    ///
+    /// <para><b>Null means no.</b> The parameter is null while the parent is still loading and if
+    /// the permissions call fails, and both of those mean the buttons stay hidden. Hiding a button
+    /// from someone entitled to it is a visible annoyance they can report; showing one to someone
+    /// who is not is the bug this arc exists to close.</para>
+    /// </remarks>
+    [Parameter] public MyOrgPermissionsItem? Permissions { get; set; }
+
+    /// <summary>The server-side gate, asked client-side.</summary>
+    private bool May(Ben.Data.Common.Enums.OrganizationSecurityAction action)
+        => Permissions?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action) == true;
+
 
     private List<CaseNoteDto> _notes = [];
+    private LoadResult<CaseNoteDto> _notesResult;
     private bool _loading = true;
     private string? _error;
 
@@ -127,6 +171,7 @@ else
     private CaseNoteDto? _editNote;
     private string? _formTitle;
     private string  _formBody  = "";
+    private BenEditor? _bodyEditor;
     private bool    _formPinned;
 
     private bool     _showDeleteConfirm;
@@ -136,10 +181,20 @@ else
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        try { _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load notes."; }
-        finally { _loading = false; }
+        await LoadAsync();
         StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _notesResult = await AdminClient.GetCaseNotesAsync(OrgId, CaseId);
+            _notes       = _notesResult.Items.ToList();
+        }
+        catch { _notesResult = LoadResult<CaseNoteDto>.Failure(); }
+        finally { _loading = false; }
     }
 
     private void OpenNew()
@@ -170,22 +225,26 @@ else
 
     private async Task SaveNote()
     {
-        if (string.IsNullOrWhiteSpace(_formBody)) { _dialogError = "Body is required."; return; }
+        // What the editor holds now, not its last debounced report — see BenEditor.GetCurrentHtmlAsync.
+        if (_bodyEditor is not null) _formBody = await _bodyEditor.GetCurrentHtmlAsync() ?? _formBody;
+        // Asked of the words, not the string: an emptied editor still holds <p></p>.
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(_formBody)) { _dialogError = "Write something in the note first."; return; }
         _isBusy = true; _dialogError = null;
         try
         {
             var req = new UpsertCaseNoteDto(_formTitle?.Trim(), _formBody.Trim(), _formPinned);
             CaseNoteDto? result;
+            string? error = null;
             if (_editNote is null)
-                result = await AdminClient.CreateCaseNoteAsync(OrgId, CaseId, req);
+                (result, error) = await AdminClient.CreateCaseNoteAsync(OrgId, CaseId, req);
             else
                 result = await AdminClient.UpdateCaseNoteAsync(OrgId, CaseId, _editNote.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else
             {
                 _showDialog = false;
-                _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList();
+                await LoadAsync();
             }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
@@ -201,7 +260,7 @@ else
             await AdminClient.DeleteCaseNoteAsync(OrgId, CaseId, _deleteNote.Id);
             _showDeleteConfirm = false;
             _deleteNote        = null;
-            _notes = (await AdminClient.GetCaseNotesAsync(OrgId, CaseId)).ToList();
+            await LoadAsync();
         }
         catch { _error = "Delete failed."; }
         finally { _isBusy = false; }

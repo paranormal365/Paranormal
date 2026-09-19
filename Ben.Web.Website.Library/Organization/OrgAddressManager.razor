@@ -4,6 +4,8 @@
 
 @inject IBenAdminClient AdminClient
 @inject IJSRuntime JS
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading)
 {
@@ -77,14 +79,20 @@ else
                             </div>
                         </div>
                     }
-                    <div class="col-sm-6">
+                    <div class="col-12">
                         <label class="form-label">Public display</label>
                         <BenSelect Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
                     </div>
-                    <div class="col-sm-6">
-                        <label class="form-label">Member display</label>
-                        <BenSelect Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
-                    </div>
+                    @* "Member display" was here, offering Full address + map / Map pin only /
+                       Region only / Hidden. The 2026-09-17 audit found MemberDisplayMode has zero
+                       readers, so members always saw everything and the choice was a decision with
+                       no effect — while its sibling PublicDisplayMode IS enforced, which is what
+                       made the asymmetry unambiguous.
+
+                       Withdrawn rather than enforced because there is no member-facing address
+                       surface to enforce it on: this list is the manager's own screen, gated on
+                       OrganizationAddress.Read, and it has to show the full address to edit it.
+                       The column and the API field stay for the day that surface exists. *@
                     <div class="col-12 d-flex align-items-center gap-2">
                         <input type="checkbox" class="form-check-input" id="addr-search" @bind="@_formIsSearchable" />
                         <label for="addr-search">Include in proximity search</label>
@@ -145,8 +153,8 @@ else
                     <Template>
                         @{ var a2 = (OrganizationAddressRecord)context; }
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(async () => await BeginEdit(a2))"><BenIcon Name="edit-2" /></button>
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDeleteAsync(a2.Id))"><BenIcon Name="trash-2" /></button>
+                            <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(async () => await BeginEdit(a2))" />
+                            <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDeleteAsync(a2.Id))" />
                         </div>
                     </Template>
                 </GridColumn>
@@ -155,7 +163,15 @@ else
     }
     else if (!_showForm)
     {
-        <div class="text-muted small fst-italic">No addresses added yet.</div>
+        @if (_addressesResult.Failed)
+        {
+            @* An address list is what a group's area of operation is judged from. *@
+            <BenListState TItem="OrganizationAddressRecord" Result="@_addressesResult" OnRetry="@LoadAddressesAsync" />
+        }
+        else
+        {
+            <div class="text-muted small fst-italic">No addresses added yet.</div>
+        }
     }
 }
 
@@ -165,6 +181,7 @@ else
     // ── State ─────────────────────────────────────────────────────────────────
 
     private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
+    private LoadResult<OrganizationAddressRecord> _addressesResult;
     private IReadOnlyList<AddressTypeOption>         _addressTypes = [];
     private AddressFieldsWithMap?                    _addrFields;
     private AddressFieldsState                       _addrState = new();
@@ -225,11 +242,14 @@ else
     }
 
     private async Task LoadAddressesAsync()
-        => _addresses = await AdminClient.GetOrgAddressesAsync(OrgId);
+    {
+        _addressesResult = await AdminClient.GetOrgAddressesAsync(OrgId);
+        _addresses       = _addressesResult.Items;
+    }
 
     private async Task LoadAddressTypesAsync()
     {
-        var types = await AdminClient.GetOrgAddressTypesAsync();
+        var types = (await AdminClient.GetOrgAddressTypesAsync()).Items;
         _addressTypes = types.Where(t => t.IsActive)
                              .OrderBy(t => t.SortOrder)
                              .Select(t => new AddressTypeOption(t.Id, t.Name))
@@ -241,12 +261,12 @@ else
     private async Task LoadMemberAccessAsync()
     {
         if (_editId is null) { _memberAccessList = []; return; }
-        _memberAccessList = await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value);
+        _memberAccessList = (await AdminClient.GetAddressMemberAccessAsync(OrgId, _editId.Value)).Items;
     }
 
     private async Task LoadOrgMembersAsync()
     {
-        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
         _orgMembers = members.Select(m => new OrgMemberOption(m.MembershipId, $"{m.Role} — {m.AppUserId.ToString()[..8]}…")).ToList();
     }
 
@@ -364,14 +384,15 @@ else
             _addrState.Latitude,
             _addrState.Longitude);
 
-        var saved = _editId.HasValue
+        var (saved, saveError) = _editId.HasValue
             ? await AdminClient.UpdateOrgAddressAsync(OrgId, _editId.Value, request)
             : await AdminClient.CreateOrgAddressAsync(OrgId, request);
 
         _saving = false;
 
         if (saved is not null) { await LoadAddressesAsync(); CancelForm(); }
-        else _errorMessage = "Save failed. You may not have permission to manage addresses.";
+        // The server's reason when it gave one; the guess only when it did not.
+        else _errorMessage = saveError ?? "Save failed. You may not have permission to manage addresses.";
     }
 
     private async Task ConfirmDeleteAsync(Guid addressId)

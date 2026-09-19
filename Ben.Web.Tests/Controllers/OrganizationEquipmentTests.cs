@@ -56,7 +56,7 @@ public class OrganizationEquipmentTests
         var storageMock = storage ?? new Mock<IFileStorageService>();
         return new OrganizationEquipmentController(
             f, security.Object, storageMock.Object,
-            new Mock<IAuditLogService>().Object, BuildIngest(storageMock))
+            new Mock<IAuditLogService>().Object, BuildIngest(storageMock), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -134,6 +134,7 @@ public class OrganizationEquipmentTests
             (storage ?? new Mock<IFileStorageService>()).Object,
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
+            Ben.Web.Tests.TestMedia.Stripper(),
             NullLogger<MediaIngestService>.Instance);
 
     [Fact]

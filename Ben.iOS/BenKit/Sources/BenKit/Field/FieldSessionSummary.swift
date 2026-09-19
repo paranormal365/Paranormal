@@ -1,0 +1,113 @@
+import Foundation
+
+/// A session as a list row sees it — a value type, so the UI never holds a live SwiftData object
+/// across an await and nothing outside this file needs to know the model exists.
+public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
+    public var id: UUID
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var outcome: FieldSessionOutcome
+    public var locationLabel: String?
+    public var investigationId: UUID?
+    public var investigationTitle: String?
+    public var readingCount: Int
+    public var markerCount: Int
+    public var captureCount: Int
+    public var serverSessionId: UUID?
+    public var uploadedAt: Date?
+    /// What the session was set up to record. Carried on the row so the live screen brings the
+    /// same instruments back up, video included, without reopening the model.
+    public var channels: CaptureChannels
+
+    /// When it arrived as a `.ben`, and from which device — nil for a session recorded here.
+    public var importedAt: Date?
+    public var sourceDeviceId: String?
+    public var recordedByAccountId: UUID?
+
+    public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
+                locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
+                readingCount: Int, markerCount: Int, captureCount: Int,
+                serverSessionId: UUID? = nil, uploadedAt: Date? = nil,
+                channels: CaptureChannels = .default,
+                importedAt: Date? = nil, sourceDeviceId: String? = nil,
+                recordedByAccountId: UUID? = nil) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.outcome = outcome
+        self.locationLabel = locationLabel
+        self.investigationId = investigationId
+        self.investigationTitle = investigationTitle
+        self.readingCount = readingCount
+        self.markerCount = markerCount
+        self.captureCount = captureCount
+        self.serverSessionId = serverSessionId
+        self.uploadedAt = uploadedAt
+        self.channels = channels
+        self.importedAt = importedAt
+        self.sourceDeviceId = sourceDeviceId
+        self.recordedByAccountId = recordedByAccountId
+    }
+
+    init(_ session: FieldSession) {
+        self.init(id: session.id,
+                  startedAt: session.startedAt,
+                  endedAt: session.endedAt,
+                  outcome: session.outcome,
+                  locationLabel: session.locationLabel,
+                  investigationId: session.investigationId,
+                  investigationTitle: session.investigationTitle,
+                  readingCount: session.readingCount,
+                  markerCount: session.markerCount,
+                  captureCount: session.captureCount,
+                  serverSessionId: session.serverSessionId,
+                  uploadedAt: session.uploadedAt,
+                  channels: session.channels,
+                  importedAt: session.importedAt,
+                  sourceDeviceId: session.sourceDeviceId,
+                  recordedByAccountId: session.recordedByAccountId)
+    }
+
+    /// Whether this session arrived as a `.ben` rather than being recorded on this device.
+    public var isImported: Bool { importedAt != nil }
+
+    /// Whether the seal says another device recorded it — "shared with you", as opposed to
+    /// your own night pulled back from the server. Unknown seals count as somebody else's.
+    public func wasRecordedElsewhere(thisDeviceId: String?) -> Bool {
+        guard isImported else { return false }
+        guard let sourceDeviceId, let thisDeviceId else { return true }
+        return sourceDeviceId != thisDeviceId
+    }
+
+    /// Whether anybody has given this session a name of its own.
+    ///
+    /// iOS-4 of the 2026-09-06 evaluation: a session with no label printed its start time as the
+    /// title AND as the first thing in the subtitle, so the list read the same timestamp twice on
+    /// every untitled row. The row needs to know which it is looking at, not just what to print.
+    public var isUntitled: Bool {
+        (locationLabel?.isEmpty ?? true) && (investigationTitle?.isEmpty ?? true)
+    }
+
+    /// What to call it in a list. The operator's own label wins; failing that, where it sat in
+    /// the calendar, because "Session 4" tells nobody anything.
+    ///
+    /// The unnamed case says it is unnamed rather than repeating the timestamp the row is about
+    /// to print underneath (iOS-4). Nothing is lost: the date and time are in the subtitle, where
+    /// they sit beside the length and the counts a reader is scanning for anyway.
+    public var title: String {
+        if let locationLabel, !locationLabel.isEmpty { return locationLabel }
+        if let investigationTitle, !investigationTitle.isEmpty { return investigationTitle }
+        return "Untitled session"
+    }
+
+    public var duration: TimeInterval? {
+        endedAt.map { $0.timeIntervalSince(startedAt) }
+    }
+
+    public var isRecording: Bool { outcome == .recording }
+    /// Open on the live screen with nothing logged yet — Start has not been pressed.
+    public var isPending: Bool { outcome == .pending }
+    /// Either of the two states the live screen resumes into.
+    public var isOpen: Bool { isPending || isRecording }
+    public var isUploaded: Bool { uploadedAt != nil }
+}

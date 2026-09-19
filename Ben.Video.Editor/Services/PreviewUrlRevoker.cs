@@ -31,7 +31,7 @@ public enum PreviewUrlOrigin
 /// </summary>
 public sealed class PreviewUrlRevoker(FfmpegService ffmpeg, IJSRuntime js, ErrorLogService errorLog)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
 
     private readonly HashSet<string> _sidecarOrigin = [];
 
@@ -60,7 +60,7 @@ public sealed class PreviewUrlRevoker(FfmpegService ffmpeg, IJSRuntime js, Error
 
         try
         {
-            var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             try { await module.InvokeVoidAsync("revokeBlobUrl", url); }
             finally { await module.DisposeAsync(); }
         }

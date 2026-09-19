@@ -20,6 +20,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/upload-files/{fileId:guid}/votes")]
 [Authorize]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureVoting)]
 public sealed class UploadFileVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;

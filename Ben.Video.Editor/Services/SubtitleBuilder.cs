@@ -15,9 +15,29 @@ namespace Ben.Video.Editor.Services;
 ///
 /// <para>Each <see cref="TextOverlay"/> becomes one cue. Overlays are sorted by
 /// <see cref="TrackItem.TimelinePosition"/> before output.</para>
+///
+/// <para><b>Line endings are CRLF, explicitly.</b> These are file formats, not console output, so
+/// their bytes must not depend on the machine that happened to generate them —
+/// <see cref="StringBuilder.AppendLine()"/> writes <see cref="Environment.NewLine"/>, and this
+/// assembly runs in three places that disagree about what that is: Blazor Server on Windows
+/// (CRLF), Blazor WebAssembly in the browser (LF), and the sidecar on Windows, macOS or Linux.
+/// The same project exported from the in-site editor and from the standalone editor produced
+/// byte-different subtitle files, which is the sort of difference that shows up much later as an
+/// unreproducible bug report. CRLF rather than LF because SubRip specifies it; the other two
+/// formats accept it.</para>
 /// </summary>
 public static class SubtitleBuilder
 {
+    /// <summary>The one line terminator these formats are written with. See the class remarks.</summary>
+    private const string Crlf = "\r\n";
+
+    /// <summary>Appends <paramref name="text"/> followed by a single CRLF.</summary>
+    /// <remarks>
+    /// Deliberately not <c>AppendLine</c>: that writes <see cref="Environment.NewLine"/>, which is
+    /// what these formats must not be at the mercy of.
+    /// </remarks>
+    private static void AppendCrlf(StringBuilder sb, string text = "") => sb.Append(text).Append(Crlf);
+
     // ── SRT ──────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -33,10 +53,12 @@ public static class SubtitleBuilder
             var start = o.TimelinePosition;
             var end   = o.TimelinePosition + o.Duration;
 
-            sb.AppendLine(idx.ToString());
-            sb.AppendLine($"{SrtTime(start)} --> {SrtTime(end)}");
-            sb.AppendLine(o.Text);
-            sb.AppendLine();
+            AppendCrlf(sb, idx.ToString());
+            AppendCrlf(sb, $"{SrtTime(start)} --> {SrtTime(end)}");
+            // The caption's own line breaks are normalised too: pasted text arrives with whatever
+            // endings its source used, and a lone CR inside a cue is neither one format nor the other.
+            AppendCrlf(sb, o.Text.ReplaceLineEndings(Crlf));
+            AppendCrlf(sb);
             idx++;
         }
 
@@ -59,8 +81,8 @@ public static class SubtitleBuilder
     public static string BuildWebVtt(IEnumerable<TextOverlay> overlays)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("WEBVTT");
-        sb.AppendLine();
+        AppendCrlf(sb, "WEBVTT");
+        AppendCrlf(sb);
 
         var idx = 1;
         foreach (var o in overlays.OrderBy(x => x.TimelinePosition))
@@ -75,10 +97,10 @@ public static class SubtitleBuilder
                 _                        => " line:90%",
             };
 
-            sb.AppendLine($"cue-{idx}");
-            sb.AppendLine($"{VttTime(start)} --> {VttTime(end)}{position}");
-            sb.AppendLine(o.Text);
-            sb.AppendLine();
+            AppendCrlf(sb, $"cue-{idx}");
+            AppendCrlf(sb, $"{VttTime(start)} --> {VttTime(end)}{position}");
+            AppendCrlf(sb, o.Text.ReplaceLineEndings(Crlf));
+            AppendCrlf(sb);
             idx++;
         }
 
@@ -109,23 +131,26 @@ public static class SubtitleBuilder
         var fontColor  = HexToAssBgr(first?.FontColor ?? "#FFFFFF");
 
         var sb = new StringBuilder();
-        sb.AppendLine("[Script Info]");
-        sb.AppendLine("ScriptType: v4.00+");
-        sb.AppendLine("Collisions: Normal");
-        sb.AppendLine();
-        sb.AppendLine("[V4+ Styles]");
-        sb.AppendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
-        sb.AppendLine($"Style: Default,{fontName},{fontSize},{fontColor},&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,10,1");
-        sb.AppendLine();
-        sb.AppendLine("[Events]");
-        sb.AppendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
+        AppendCrlf(sb, "[Script Info]");
+        AppendCrlf(sb, "ScriptType: v4.00+");
+        AppendCrlf(sb, "Collisions: Normal");
+        AppendCrlf(sb);
+        AppendCrlf(sb, "[V4+ Styles]");
+        AppendCrlf(sb, "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
+        AppendCrlf(sb, $"Style: Default,{fontName},{fontSize},{fontColor},&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,10,1");
+        AppendCrlf(sb);
+        AppendCrlf(sb, "[Events]");
+        AppendCrlf(sb, "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text");
 
         foreach (var o in list)
         {
             var start = AssTime(o.TimelinePosition);
             var end   = AssTime(o.TimelinePosition + o.Duration);
-            var text  = o.Text.Replace("\n", "\\N");
-            sb.AppendLine($"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}");
+            // A Dialogue entry is one line, so every break inside the text becomes the format's own
+            // \N escape. Normalised to LF first: matching only "\n" left the CR of a pasted CRLF
+            // behind, and a stray CR mid-line splits the entry in some parsers.
+            var text  = o.Text.ReplaceLineEndings("\n").Replace("\n", "\\N");
+            AppendCrlf(sb, $"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}");
         }
 
         return sb.ToString().TrimEnd();

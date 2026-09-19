@@ -35,6 +35,22 @@ namespace Ben.Data.Source.Entities
         public DateTime EndDateTime { get; set; }
         public bool IsAllDay { get; set; }
 
+        /// <summary>
+        /// The zone this event actually happens in, as an IANA id ("America/Chicago").
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Ben, 2026-09-10:</b> "The dates and times may be recorded in UTC, but should
+        /// render at either UTC or at the time of the location where the evidence was collected or
+        /// photo taken." The times above are UTC; this is the clock the people turning up read
+        /// them on. Without it a public listing could only say UTC, which is nobody's evening.</para>
+        ///
+        /// <para>Null for every row written before this existed, and for anything nobody has said
+        /// a zone for. A date that names a tour takes the tour's zone when it is created, so the
+        /// two cannot drift; reading falls back to the tour's for the rows that predate this, and
+        /// to UTC when there is neither.</para>
+        /// </remarks>
+        public string? TimeZoneId { get; set; }
+
         /// <summary>Visible to users outside the organization.</summary>
         /// <remarks>
         /// Written since the calendar was built and read by nothing until 2026-08-17 — an
@@ -67,8 +83,36 @@ namespace Ben.Data.Source.Entities
         /// <summary>How many people may say they are coming, or null for no limit.</summary>
         public int? AttendeeCapacity { get; set; }
 
-        /// <summary>After this, no new attendees. Null means right up to the start.</summary>
+        /// <summary>
+        /// After this, no new attendees. Null means the start plus the late-sign-up grace.
+        /// </summary>
+        /// <remarks>
+        /// An explicit value is the organiser's own decision and is honoured exactly — set it
+        /// before the start to close early, or after to stay open longer. Null takes the default
+        /// in <see cref="LateSignUpGrace"/>.
+        /// </remarks>
         public DateTime? RsvpClosesAt { get; set; }
+
+        /// <summary>
+        /// How long after a public event starts somebody may still sign up (Ben, 2026-08-27).
+        /// </summary>
+        /// <remarks>
+        /// <para>Sign-ups used to stop dead on the start time, which is wrong for the thing this
+        /// mostly describes: a ghost walking tour, where a guest turns up at the meeting point a
+        /// few minutes after the guide set off — sometimes with friends in tow — and is waved in.
+        /// The guide takes their money and the site pretended they were never there, which also
+        /// cost them the ability to submit the photograph they took on the walk, since evidence
+        /// submission is gated on attendance.</para>
+        ///
+        /// <para>Half an hour, not open-ended, because the closing rule is also what stops
+        /// somebody signing up to LAST week's event to reach the evidence submitted to it. A grace
+        /// window keeps that protection while admitting the late arrival who is genuinely stood
+        /// there.</para>
+        /// </remarks>
+        public static readonly TimeSpan LateSignUpGrace = TimeSpan.FromMinutes(30);
+
+        /// <summary>When sign-ups actually close, explicit setting or the grace default.</summary>
+        public DateTime RsvpClosingTime => RsvpClosesAt ?? StartDateTime.Add(LateSignUpGrace);
 
         /// <summary>
         /// iCal RRULE string for recurring events (e.g. "FREQ=MONTHLY;BYDAY=TU;BYSETPOS=1").
@@ -101,6 +145,44 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Where this event is, when it names a shared place.</summary>
         public virtual Place? Place { get; set; }
+
+        /// <summary>
+        /// The tour this date runs (item 233). Required for a public date of a business that runs
+        /// tours; meaningless for anyone else.
+        /// </summary>
+        /// <remarks>
+        /// The tour is what the business pays for; the date is the tour happening. A public date
+        /// with no tour would be a tour the business ran without paying for, so the calendar
+        /// controller refuses it for a tour business, in words.
+        /// </remarks>
+        public Guid? TourId { get; set; }
+
+        /// <summary>The tour this date runs, when it names one.</summary>
+        public virtual Tour? Tour { get; set; }
+
+        /// <summary>Who is leading this date (item 233).</summary>
+        public virtual ICollection<OrgCalendarEventGuide> Guides { get; set; } = new List<OrgCalendarEventGuide>();
+
+        /// <summary>
+        /// The hosted event this row is the umbrella for (item 235). Null for every ordinary date.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>An umbrella row is not edited here.</b> Its title, dates, place, zone, slug and
+        /// public flag are written from the <see cref="HostedEvent"/> by
+        /// <c>HostedEventCalendarSync</c>, and the calendar controller refuses a direct change with
+        /// a sentence naming the event. Two screens that both believe they own the same row is how
+        /// one of them ends up lying.</para>
+        ///
+        /// <para><b>And it exists so nothing else has to change.</b> Every part of the site that
+        /// already understands a public calendar event — the public list, the reminder job, the
+        /// calendar file, evidence submission, the <c>/o/{org}/events/{slug}</c> address, and the
+        /// app already in people's pockets — sees a hosted event as an ordinary one without
+        /// knowing what it is.</para>
+        /// </remarks>
+        public Guid? HostedEventId { get; set; }
+
+        /// <summary>The hosted event this row carries, when it is an umbrella.</summary>
+        public virtual HostedEvent? HostedEvent { get; set; }
 
     }
 }

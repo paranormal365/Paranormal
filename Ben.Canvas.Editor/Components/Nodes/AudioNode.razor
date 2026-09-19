@@ -1,0 +1,89 @@
+@*
+    A recording that plays where it sits.
+
+    Ben, 2026-09-16: "This is a visual board not just a board for notes." A recording listed as a file
+    chip is one you have to take somewhere else to hear, and on an evidence board the sound IS the
+    evidence — so it plays here.
+
+    NO WAVEFORM YET, and that is deliberate rather than forgotten. Ben asked for wavesurfer, and the
+    right way to get it is one pinned copy: the site's own vendored wavesurfer has no version recorded
+    anywhere (Code-Audit-2026-08-16, items A4 and D4 — a working copy inside wwwroot and a floating
+    `@@7` CDN tag), so copying it in here would make two unpinned copies of a library an audit already
+    flagged once. Pinning it properly is worth doing once for both. Until then the browser's own player
+    plays the recording, which is the half that matters; the waveform is presentation.
+*@
+@inherits BlockRendererBase
+@implements IDisposable
+@inject CanvasAssetStore Assets
+@inject ICanvasMediaStore Media
+
+<figure class="bc-audio-wrap">
+    <div class="bc-audio__head">
+        <BcIcon Name="music" />
+        <span class="bc-audio__name" title="@Audio.FileName">@Label</span>
+    </div>
+
+    @if (Shown is not null)
+    {
+        @* preload="metadata" so the block can show a length without fetching whole recordings for
+           every block on a board. *@
+        <audio class="bc-audio__player" src="@Shown" controls preload="metadata"
+               aria-label="@Label"></audio>
+    }
+    else
+    {
+        <div class="bc-audio__problem">This recording isn't on this device or the case.</div>
+    }
+
+    @if (Editing)
+    {
+        <div class="bc-audio__edit">
+            <label class="bc-field" for="@($"bc-acap-{Node.Id:N}")"><span class="bc-field__label">Caption</span>
+                <input @ref="FirstField" id="@($"bc-acap-{Node.Id:N}")" class="form-control form-control-sm"
+                       @bind="Audio.Caption" @bind:event="oninput" />
+            </label>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Audio.Caption))
+    {
+        <figcaption class="bc-audio__caption">@Audio.Caption</figcaption>
+    }
+</figure>
+
+@code {
+    /// <summary>The recording's display address, when a store has one.</summary>
+    [Parameter] public string? Src { get; set; }
+
+    private AudioData Audio => Data as AudioData ?? new AudioData();
+
+    private string? _stored;
+
+    private string? Shown => Src ?? _stored;
+
+    private string Label => string.IsNullOrWhiteSpace(Audio.Caption)
+        ? (string.IsNullOrWhiteSpace(Audio.FileName) ? "Recording" : Audio.FileName)
+        : Audio.Caption!;
+
+    protected override void OnInitialized() => Assets.Ready += OnAssetsReady;
+
+    protected override async Task OnParametersSetAsync() => _stored = await LookUpAsync();
+
+    /// <summary>
+    /// The copy on this device first — no network, and it is there the moment it is dropped —
+    /// otherwise the case's copy. Never a thumbnail: a still cannot be listened to.
+    /// </summary>
+    private async Task<string?> LookUpAsync()
+    {
+        var local = Audio.AssetId is { } id ? await Assets.GetUrlAsync(id, Audio.OpfsExt) : null;
+        if (local is not null || Audio.UploadFileId is not { } uploaded) return local;
+        return await Media.GetDisplayUrlAsync(uploaded, thumbnail: false);
+    }
+
+    private void OnAssetsReady() => _ = InvokeAsync(async () =>
+    {
+        _stored = await LookUpAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Assets.Ready -= OnAssetsReady;
+}

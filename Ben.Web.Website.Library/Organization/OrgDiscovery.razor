@@ -6,12 +6,15 @@
 
 <PageTitle>Find a Group — IsHaunted</PageTitle>
 
-<div class="container-fluid px-3 py-4" style="max-width:860px; margin:auto;">
+<div class="container-fluid px-3 py-4" style="max-width:860px; margin:0 auto;">
 
     <h1 class="mb-1">Find a Paranormal Investigation Group</h1>
     <p class="text-secondary mb-4">
         Enter your location to find groups accepting cases near you, or browse every group below.
     </p>
+
+    @* Item 166 W3: the Featured groups slot — approved, rotating, marked Promoted. *@
+    <Ben.Web.Website.Library.Shared.PromotedGroupsCard />
 
     @* ── Search form ──────────────────────────────────────────────────────── *@
     <div class="row g-2 mb-4 align-items-end">
@@ -62,6 +65,14 @@
                         <MetaLine>
                             <span class="text-success">✓ Within range</span>
                             <span> · @(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
+                            @if (org.TakesPrivateResidenceCases)
+                            {
+                                <span class="badge rounded-pill bg-primary ms-1">Takes private homes</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis ms-1">Public investigations only</span>
+                            }
                         </MetaLine>
                     </OrgCard>
                 </div>
@@ -88,6 +99,14 @@
                         <MetaLine>
                             <span>@(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
                             <span class="text-secondary"> (range: @(org.RadiusMiles.ToString("F0")) mi)</span>
+                            @if (org.TakesPrivateResidenceCases)
+                            {
+                                <span class="badge rounded-pill bg-primary ms-1">Takes private homes</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis ms-1">Public investigations only</span>
+                            }
                         </MetaLine>
                     </OrgCard>
                 </div>
@@ -114,15 +133,43 @@
         }
         else if (_browse.TotalCount == 0)
         {
+            @* An empty FILTER is not an empty site. "No groups have registered yet" is a lie
+               when 21 have and none of them run tours, and it sends the reader away thinking
+               there is nothing here at all. *@
             <div class="alert alert-light text-muted text-center py-4">
-                No groups have registered yet.
+                @if (_toursOnly)
+                {
+                    <text>No groups are listed as running walking tours yet.</text>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                @onclick="@(() => SetToursOnlyAsync(false))">See every group</button>
+                    </div>
+                }
+                else
+                {
+                    <text>No groups have registered yet.</text>
+                }
             </div>
         }
         else
         {
-            <div class="d-flex align-items-baseline gap-2 mb-3">
-                <h5 class="mb-0">All Groups</h5>
+            <div class="d-flex align-items-baseline gap-2 mb-3 flex-wrap">
+                <h5 class="mb-0">@(_toursOnly ? "Walking Tours" : "All Groups")</h5>
                 <span class="badge bg-secondary">@_browse.TotalCount total</span>
+                @* Somebody visiting a strange city wants tours, not a list to sift
+                   (2026-08-24). Matches the CAPABILITY, so an investigation group that also
+                   runs tours is in here too. *@
+                <div class="ms-auto btn-group btn-group-sm" role="group" aria-label="Filter groups">
+                    <button type="button" class="btn @(_toursOnly ? "btn-outline-secondary" : "btn-secondary")"
+                            @onclick="@(() => SetToursOnlyAsync(false))" disabled="@_browsing">
+                        Everyone
+                    </button>
+                    <button type="button" class="btn @(_toursOnly ? "btn-secondary" : "btn-outline-secondary")"
+                            id="find-tours-only"
+                            @onclick="@(() => SetToursOnlyAsync(true))" disabled="@_browsing">
+                        Walking tours
+                    </button>
+                </div>
             </div>
 
             <div class="row g-3">
@@ -134,6 +181,26 @@
                             <MetaLine>
                                 @* Child content has to open with markup — a RenderFragment that
                                    starts with @if confuses the Razor parser into losing the tag. *@
+                                <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1">
+                                    @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(org.Kind)
+                                </span>
+                                @if (org.RunsPublicTours && org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
+                                {
+                                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1">Runs tours</span>
+                                }
+                                @* Item 194, Ben's direction: colour for groups that can take
+                                   private work, plain for the rest — and the plain one says what
+                                   it CAN do. "Public investigations only" is a fact; greyed-and-
+                                   diminished reads as a punishment, and free-tier groups are the
+                                   early adopters. *@
+                                @if (org.TakesPrivateResidenceCases)
+                                {
+                                    <span class="badge rounded-pill bg-primary me-1" title="This group's plan covers investigations at private homes.">Takes private homes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis me-1" title="This group investigates public places — landmarks, businesses, events.">Public investigations only</span>
+                                }
                                 <span class="@(org.IsAcceptingClients ? "text-success" : "text-secondary")">
                                     @(org.IsAcceptingClients ? "✓ Accepting new cases" : "Not currently accepting new cases")
                                 </span>
@@ -180,12 +247,22 @@
 
     protected override async Task OnInitializedAsync() => await LoadBrowseAsync(1);
 
+    /// <summary>Narrowed to groups running public walking tours.</summary>
+    private bool _toursOnly;
+
+    private async Task SetToursOnlyAsync(bool toursOnly)
+    {
+        if (_toursOnly == toursOnly) return;
+        _toursOnly = toursOnly;
+        await LoadBrowseAsync(1);   // a different filter is a different list, from the top
+    }
+
     private async Task LoadBrowseAsync(int page)
     {
         _browsing = true;
         StateHasChanged();
         // Anonymous endpoint — no AuthReady wait needed, and this page is reachable signed out.
-        _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize);
+        _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize, toursOnly: _toursOnly);
         _browsing = false;
     }
 
@@ -206,7 +283,18 @@
             return;
         }
 
-        _results       = await AdminClient.SearchOrganizationsAsync((double)geo.Latitude, (double)geo.Longitude);
+        var search = await AdminClient.SearchOrganizationsAsync((double)geo.Latitude, (double)geo.Longitude);
+
+        // "No groups near you" and "the search could not run" are different answers, and only one
+        // of them should stop somebody looking. Item 120.
+        if (search.Failed)
+        {
+            _geocodeError = search.Reason ?? "The search could not be run just now. Please try again.";
+            _searching    = false;
+            return;
+        }
+
+        _results       = search.Items;
         _withinRange   = _results.Where(r => r.IsWithinRange).ToList();
         _outsideRange  = _results.Where(r => !r.IsWithinRange).ToList();
         _searchedQuery = _query.Trim();

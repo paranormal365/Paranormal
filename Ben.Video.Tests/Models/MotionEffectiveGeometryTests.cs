@@ -60,13 +60,41 @@ public sealed class MotionEffectiveGeometryTests
         Assert.Equal(0.5, effective.Y, precision: 5);
     }
 
-    [Theory]
-    [InlineData(0.3, 0.3)]  // real height set
-    [InlineData(-1, 0.2)]   // -1 sentinel → falls back to Width
-    public void EffectiveClipArtHeight_HonoursPreserveAspectSentinel(double height, double expected)
+    /// <summary>
+    /// A set height is used as given; the sentinel resolves against the canvas.
+    /// </summary>
+    /// <remarks>
+    /// This used to expect the sentinel to fall back to the width as a fraction, which on a 16:9
+    /// frame is a wide rectangle — while the export fell back to the width in pixels, a square. The
+    /// same artwork was drawn, selected and rendered at three different shapes (2026-09-05 audit,
+    /// callouts-10).
+    /// </remarks>
+    [Fact]
+    public void EffectiveClipArtHeight_UsesTheHeightWhenThereIsOne()
     {
-        var clip = new ClipArtClip { Width = 0.2, Height = height };
-        Assert.Equal(expected, MotionEffectiveGeometry.EffectiveClipArtHeight(clip), precision: 5);
+        var clip = new ClipArtClip { Width = 0.2, Height = 0.3 };
+
+        Assert.Equal(0.3, MotionEffectiveGeometry.EffectiveClipArtHeight(clip, 1920, 1080), precision: 5);
+    }
+
+    [Fact]
+    public void EffectiveClipArtHeight_WithNoHeightAndNoAssetSize_IsSquareOnScreen()
+    {
+        var clip = new ClipArtClip { Width = 0.2, Height = -1 };
+
+        // 0.2 of 1920 is 384px; square means 384px tall, which is 0.3555… of 1080.
+        Assert.Equal(384.0 / 1080.0,
+            MotionEffectiveGeometry.EffectiveClipArtHeight(clip, 1920, 1080), precision: 5);
+    }
+
+    [Fact]
+    public void EffectiveClipArtHeight_WithNoHeight_FollowsTheArtworks_OwnProportions()
+    {
+        var clip = new ClipArtClip { Width = 0.2, Height = -1, NativeWidth = 400, NativeHeight = 200 };
+
+        // 384px wide artwork that is half as tall as it is wide: 192px, of 1080.
+        Assert.Equal(192.0 / 1080.0,
+            MotionEffectiveGeometry.EffectiveClipArtHeight(clip, 1920, 1080), precision: 5);
     }
 
     // ── TextOverlay ──────────────────────────────────────────────────────────

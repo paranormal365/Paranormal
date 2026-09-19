@@ -228,32 +228,37 @@ public class WebApiClientTests
 
     // ── 204 No Content handling ───────────────────────────────────────────────
     //
-    // Background: PostAsync/PutAsync always call ReadFromJsonAsync<TResponse> on any
-    // success status, including 204 No Content, which has an empty body. That throws
-    // a JsonException even though the server-side operation succeeded. Found twice in
-    // BenAdminClientAdapter (client-request decline flow, investigation cancel/RSVP) —
-    // the fix is to use PostVoidAsync/PutVoidAsync against endpoints that return 204.
+    // These two tests used to assert the OPPOSITE: that PostAsync and PutAsync throw a
+    // JsonException on a 204, with a comment calling that "the fix is to use
+    // PostVoidAsync/PutVoidAsync against endpoints that return 204". That was a defect written
+    // down as a contract, and it kept working right up until somebody used the ordinary method
+    // against an ordinary void endpoint.
+    //
+    // Which happened. CompleteMyOnboardingAsync posts to a 204, the throw was swallowed by the
+    // page's own catch, and the first-run wizard was never stamped as answered — so every account
+    // created on the live site was asked to set itself up again on every visit, and clicking Skip
+    // could not stop it. Found 2026-09-09 while checking what App Review's demo account would see.
+    //
+    // An empty success is a success with nothing in it, and the client now says so in one place.
 
     [Fact]
-    public async Task PostAsync_On204NoContent_ThrowsJsonException()
+    public async Task PostAsync_On204NoContent_ReturnsDefault()
     {
         var (client, _, handler) = Build(TestToken);
         handler.ResponseStatus = HttpStatusCode.NoContent;
         handler.ResponseJson = "";
 
-        await Assert.ThrowsAsync<System.Text.Json.JsonException>(
-            () => client.PostAsync<object, object>("/api/test", new { }));
+        Assert.Null(await client.PostAsync<object, object>("/api/test", new { }));
     }
 
     [Fact]
-    public async Task PutAsync_On204NoContent_ThrowsJsonException()
+    public async Task PutAsync_On204NoContent_ReturnsDefault()
     {
         var (client, _, handler) = Build(TestToken);
         handler.ResponseStatus = HttpStatusCode.NoContent;
         handler.ResponseJson = "";
 
-        await Assert.ThrowsAsync<System.Text.Json.JsonException>(
-            () => client.PutAsync<object, object>("/api/test", new { }));
+        Assert.Null(await client.PutAsync<object, object>("/api/test", new { }));
     }
 
     [Fact]

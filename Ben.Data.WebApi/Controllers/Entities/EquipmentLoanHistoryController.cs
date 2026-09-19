@@ -33,16 +33,19 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IOrganizationSecurityService _security;
     private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
     private readonly IAuditLogService _auditLog;
 
     public EquipmentLoanHistoryController(
         IDbContextFactory<BenDataContext> db,
         IOrganizationSecurityService security,
         IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
         IAuditLogService auditLog)
     {
         _db          = db;
         _security    = security;
+        _mediaIngest = mediaIngest;
         _fileStorage = fileStorage;
         _auditLog    = auditLog;
     }
@@ -124,24 +127,34 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
 
         var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
-        await using (var stream = file.OpenReadStream())
-            await _fileStorage.WriteAsync(storagePath, stream, ct);
+        // Ben's rule (2026-08-24): strip on ANY upload, keep what came off beside the record.
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id                 = Guid.NewGuid(),
+            Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
             FileName           = file.FileName,
             StoredFileName     = storedName,
-            ContentType        = file.ContentType,
-            FileSize           = file.Length,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
             StoragePath        = storagePath,
             IsPublic           = false,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var photo = new EquipmentCheckoutPhoto
         {
@@ -277,7 +290,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
 
         await NotifyApproversAsync(db, checkout, userId,
             "Request for more time on borrowed equipment",
-            $"A renewal has been asked for on {NotificationText.Safe(checkout.EquipmentItem.DisplayName)}, until {request.RequestedDateDue:d MMM yyyy}.", ct);
+            $"A renewal has been asked for on {NotificationText.Safe(checkout.EquipmentItem.DisplayName)}, until {request.RequestedDateDue:MMM d, yyyy}.", ct);
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(EquipmentCheckoutRenewal), renewal.Id, renewal, userId, Ben.Data.Common.Constants.AppSources.WebApi));
@@ -329,7 +342,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
         NotifyUser(db, checkout.BorrowerAppUserId, userId,
             request.Approve ? "More time granted on borrowed equipment" : "Request for more time declined",
             request.Approve
-                ? $"Your loan now runs until {tracked.RequestedDateDue:d MMM yyyy}."
+                ? $"Your loan now runs until {tracked.RequestedDateDue:MMM d, yyyy}."
                 : $"Your request for more time was declined. Reason given: {NotificationText.Safe(tracked.ReviewNotes)}");
 
         await db.SaveChangesAsync(ct);
@@ -399,7 +412,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
             if (c.DateCheckedOut is DateTime out_)
                 entries.Add(new EquipmentHistoryEntryRecord(
                     out_, EquipmentHistoryKind.Loan,
-                    c.DateDue is null ? $"{borrower} took it out" : $"{borrower} took it out, due back {c.DateDue:d MMM yyyy}",
+                    c.DateDue is null ? $"{borrower} took it out" : $"{borrower} took it out, due back {c.DateDue:MMM d, yyyy}",
                     borrower, c.Id, handoffPhotos));
 
             if (c.DateReturned is DateTime back)
@@ -422,13 +435,13 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
             {
                 entries.Add(new EquipmentHistoryEntryRecord(
                     r.DateCreated, EquipmentHistoryKind.Renewal,
-                    $"{borrower} asked to keep it until {r.RequestedDateDue:d MMM yyyy}", borrower, c.Id, 0));
+                    $"{borrower} asked to keep it until {r.RequestedDateDue:MMM d, yyyy}", borrower, c.Id, 0));
 
                 if (r.DateReviewed is DateTime reviewed)
                     entries.Add(new EquipmentHistoryEntryRecord(
                         reviewed, EquipmentHistoryKind.Renewal,
                         r.Status == EquipmentRenewalStatus.Approved
-                            ? $"More time granted, until {r.RequestedDateDue:d MMM yyyy}"
+                            ? $"More time granted, until {r.RequestedDateDue:MMM d, yyyy}"
                             : $"More time refused — {r.ReviewNotes}",
                         Name(r.ReviewedByAppUserId), c.Id, 0));
             }

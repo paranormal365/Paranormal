@@ -1,0 +1,662 @@
+@page "/organizations/{OrgId:guid}/billing"
+@namespace Ben.Web.Website.Library.Billing
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Shared
+@inject IBenAdminClient AdminClient
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject SiteFeaturesProvider Features
+
+@* The group-facing half of item 168's money trail, and the door Stripe phase 1 opened. Until
+   this page, checkout, history and receipts were all write-only doors: adapter methods and API
+   endpoints with no screen consuming them. A page, not a modal, by the pages-over-windows rule —
+   this is a manage-everything surface with a payment flow in the middle of it. *@
+
+<PageTitle>Billing — @SiteOptions.Value.Name</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:1000px; margin:0 auto;">
+
+    <h1 class="mb-1">Billing</h1>
+    <p class="text-secondary mb-4">Your group's plan, payments and receipts.</p>
+
+    @if (_arrivedNew)
+    {
+        @* Straight from creating the group with a plan chosen on the pricing page (2026-09-14). The hub and its
+           tour are one link away; this page is where the plan is confirmed. *@
+        <div class="alert alert-success" id="billing-welcome-new">
+            <strong>Your group is ready.</strong> Confirm its plan below to finish, or
+            <a href="@($"/organizations/{OrgId}?welcome=1")">go to your group's page</a> and do it later.
+        </div>
+    }
+
+    @if (_checkoutBanner is not null)
+    {
+        <div class="alert @(_checkoutBanner.Value.Css) d-flex justify-content-between align-items-center">
+            <span>@_checkoutBanner.Value.Text</span>
+            <button type="button" class="btn-close" @onclick="() => _checkoutBanner = null"></button>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading billing…" />
+    }
+    else if (_forbidden)
+    {
+        @* The seat card renders even here, FIRST: the ordinary member paying their own seat is
+           exactly the person without settings permission, and hiding their bill behind the
+           group's keys would make the one thing they came for invisible. *@
+        @SeatCard
+        <div class="alert alert-warning">
+            The group's own billing is visible to people who can manage its settings. If you
+            think you should see it, ask the group's owner.
+        </div>
+    }
+    else
+    {
+        @SeatCard
+
+        @* ── The plan as it stands ────────────────────────────────────────── *@
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5 card-title">Current plan</h2>
+                @if (_subscription is null || _subscription.Status == SubscriptionStatus.Free)
+                {
+                    @*  "Free plan" was the wrong noun, and it is the noun the whole confusion
+                        was built on: a group is free by having NO plan, not by holding one that
+                        costs nothing (Ben, 2026-09-05).  *@
+                    <p class="mb-1">This group has <strong>no plan</strong> — public
+                        investigations, no charge.</p>
+                    <p class="text-secondary small mb-0">A plan is what lets a group work with
+                        other people, take private-residence and client work, and keep its own
+                        sessions. Prices are on the <a href="/pricing">pricing page</a>.</p>
+                }
+                else
+                {
+                    <div class="row">
+                        <div class="col-md-3"><div class="text-secondary small">Plan</div>
+                            <strong>@(_subscription.TierName ?? "—")</strong></div>
+                        <div class="col-md-3"><div class="text-secondary small">Price</div>
+                            <strong>@(_subscription.Price is { } p ? $"${p:0.00}" : "—")</strong>
+                            <span class="text-secondary">/@Cadence(_subscription.Interval)</span></div>
+                        <div class="col-md-3"><div class="text-secondary small">
+                            @(_subscription.CancelAtPeriodEnd ? "Ends" : "Renews")</div>
+                            <strong>@(_subscription.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "—")</strong></div>
+                        <div class="col-md-3"><div class="text-secondary small">Status</div>
+                            <span class="badge @StatusBadge(_subscription.Status)">@StatusText(_subscription.Status)</span></div>
+                    </div>
+                    @if (_subscription.AnyTermsHeldByContract)
+                    {
+                        <p class="text-secondary small mt-2 mb-0">
+                            Some of your terms are held by your current contract — what you bought
+                            stands until @(_subscription.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "renewal"),
+                            whatever the pricing page says today.
+                        </p>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ── Subscribe / renew ────────────────────────────────────────────── *@
+        @*  A group is never free (Ben, 2026-09-05): "an individual can be free... a group cannot."
+            When the band that prices this group costs nothing there is nothing to sell, and
+            offering a $0 Subscribe button was worse than useless — pressing it wrote a real
+            subscription with no card, which every paid feature then read as paid. The server
+            refuses it now; this is the door, closed on the same rule.  *@
+        @if (_quote is not null && _quote.ListPrice <= 0m)
+        {
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Nothing to subscribe to</h2>
+                    <p class="mb-1">
+                        The price list has no charge for a group your size, so there is no plan to
+                        buy here. A group is free by not having a plan at all.
+                    </p>
+                    <p class="text-secondary small mb-0">
+                        Paid plans are what let a group work with other people, take private
+                        residence cases and keep its own sessions. See the
+                        <a href="/pricing">current price list</a>, or ask us to price a band for a
+                        group your size.
+                    </p>
+                </div>
+            </div>
+        }
+        else if (!Features.PlanPurchasesEnabled)
+        {
+            @* A SuperAdmin has taken plans off sale (2026-09-14). The price list stays readable; what is
+               removed is the button that would start a payment the API now refuses. *@
+            <div class="card mb-4" id="plans-not-on-sale">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Plans aren't on sale at the moment</h2>
+                    <p class="mb-0 text-secondary">
+                        A plan your group already has carries on as it is. Prices are on the
+                        <a href="/pricing">price list</a>.
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5 card-title">
+                    @(_subscription?.Status is SubscriptionStatus.Active ? "Renew or change cadence" : "Subscribe")
+                </h2>
+                <p class="text-secondary small">
+                    Payment happens on Stripe's secure page — your card number never touches
+                    @(SiteOptions.Value.Name). The price is set by your group's size on the
+                    <a href="/pricing">current price list</a>.
+                </p>
+
+                <div class="row g-2 align-items-end" style="max-width:640px;">
+                    <div class="col-sm-4">
+                        <label class="form-label small">Billed</label>
+                        <select class="form-select" @onchange="OnIntervalChanged">
+                            <option value="1" selected="@(_interval == BillingInterval.Monthly)">Monthly</option>
+                            <option value="3" selected="@(_interval == BillingInterval.Quarterly)">Quarterly</option>
+                            <option value="6" selected="@(_interval == BillingInterval.HalfYearly)">Every 6 months</option>
+                            <option value="12" selected="@(_interval == BillingInterval.Yearly)">Yearly</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="form-label small">Coupon code (optional)</label>
+                        <input class="form-control" @bind="_couponCode" @bind:after="RefreshQuoteAsync"
+                               placeholder="Have a code?" />
+                    </div>
+                    <div class="col-sm-3">
+                        <button type="button" class="btn btn-primary w-100" @onclick="CheckoutAsync"
+                                disabled="@(_quote is null || _startingCheckout)">
+                            @(_startingCheckout ? "Opening…" : "Subscribe")
+                        </button>
+                    </div>
+                </div>
+
+                @if (_quoteError is not null)
+                {
+                    <div class="alert alert-warning mt-3 mb-0">@_quoteError</div>
+                }
+                else if (_quote is not null && _requestedTierName is { } asked && !string.Equals(asked, _quote.TierName, StringComparison.Ordinal))
+                {
+                    @* The plan chosen on the pricing page is not the band this group falls in. Said, not silently
+                       swapped: the price follows the group's size, which is the rule the price list states. *@
+                    <div class="alert alert-info mt-3 mb-0" id="tier-follows-size">
+                        You chose <strong>@asked</strong> on the price list. A group's price follows its size, so
+                        this group is priced as <strong>@_quote.TierName</strong>.
+                    </div>
+                }
+                else if (_quote is not null)
+                {
+                    <div class="mt-3 p-3 bg-body-tertiary rounded" style="max-width:640px;">
+                        <div class="d-flex justify-content-between">
+                            @* Item 233: a tour business is billed per tour, so the line says how
+                               many and at what each — a bare $87 against a $29 plan reads as an
+                               error rather than three walks. *@
+                            <span>
+                                @_quote.TierName — @Cadence(_quote.Interval)
+                                @if (_quote.IsPerUnit && _quote.UnitPrice is { } unit)
+                                {
+                                    <text> · @_quote.Units @(_quote.Units == 1 ? "tour" : "tours") × $@unit.ToString("0.00")</text>
+                                }
+                            </span>
+                            <span>$@_quote.ListPrice.ToString("0.00")</span>
+                        </div>
+                        @if (_quote.Discount > 0m)
+                        {
+                            <div class="d-flex justify-content-between text-success">
+                                <span>Coupon@(_quote.CouponAppliesForPeriods is { } n ? $" (first {n} period{(n == 1 ? "" : "s")})" : "")</span>
+                                <span>−$@_quote.Discount.ToString("0.00")</span>
+                            </div>
+                        }
+                        @if (_quote.CouponRefusedBecause is not null)
+                        {
+                            <div class="text-warning small">@_quote.CouponRefusedBecause</div>
+                        }
+                        <div class="d-flex justify-content-between text-secondary">
+                            <span>Tax (@_quote.TaxRatePercent.ToString("0.##")%)</span>
+                            <span>$@_quote.Tax.ToString("0.00")</span>
+                        </div>
+                        <hr class="my-2" />
+                        <div class="d-flex justify-content-between fw-bold">
+                            <span>Today</span>
+                            <span>$@((_quote.Payable + _quote.Tax).ToString("0.00"))</span>
+                        </div>
+                    </div>
+                }
+                @if (_checkoutError is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@_checkoutError</div>
+                }
+            </div>
+        </div>
+        }
+
+        @* ── Event credits (item 235) ─────────────────────────────────────── *@
+        @*  Here rather than in the events section because the question it answers is "what have
+            we paid for?", and that question is asked on the billing page. The publish refusal
+            links straight to this anchor.  *@
+        <div class="card mb-4" id="event-credits">
+            <div class="card-body">
+                <h2 class="h5 card-title">Event credits</h2>
+                <p class="text-secondary small">
+                    One credit publishes one event, whatever it costs to run and however many
+                    nights it lasts. A credit is good for a year from the day you buy it, is spent
+                    the moment an event goes live, and is not returned if you take that event down.
+                </p>
+
+                @if (_credits.Failed)
+                {
+                    @*  A card that says "no credits" when the truth is "we couldn't ask" tells
+                        somebody they have nothing when they may be holding hundreds of dollars.  *@
+                    <div class="alert alert-warning mb-0">
+                        @(_credits.Reason ?? "Your credits couldn't be loaded just now.")
+                    </div>
+                }
+                else if (_credits.Item is { } view)
+                {
+                    <p class="mb-3">
+                        @if (view.Spendable == 0)
+                        {
+                            <text>This group holds <strong>no credits</strong> ready to use.</text>
+                        }
+                        else
+                        {
+                            <text><strong>@view.Spendable</strong> ready to use@(NextExpiry(view) is { } next
+                                ? $", the next expiring {next:MM/dd/yyyy}" : "").</text>
+                        }
+                    </p>
+
+                    @if (view.OnSale)
+                    {
+                        <div class="row g-2 align-items-end mb-3" style="max-width:520px;">
+                            <div class="col-auto">
+                                <label class="form-label small" for="credit-quantity">How many</label>
+                                <input id="credit-quantity" type="number" class="form-control" style="width:6rem;"
+                                       min="1" max="@view.MaximumPerPurchase" @bind="_creditQuantity" />
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-secondary small">Each</div>
+                                <strong>$@view.UnitPrice.ToString("0.00")</strong>
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-secondary small">Total</div>
+                                <strong>$@((view.UnitPrice * Math.Clamp(_creditQuantity, 1, view.MaximumPerPurchase)).ToString("0.00"))</strong>
+                                <span class="text-secondary small">plus tax</span>
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-primary text-nowrap" id="buy-event-credits"
+                                        @onclick="BuyCreditsAsync" disabled="@_buyingCredits">
+                                    @(_buyingCredits ? "Opening…" : "Buy credits")
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary">
+                            Event credits aren't on sale at the moment. Anything this group already
+                            holds still works.
+                        </div>
+                    }
+
+                    @if (_creditError is not null)
+                    {
+                        <div class="alert alert-danger">@_creditError</div>
+                    }
+
+                    @if (view.Credits.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead><tr>
+                                    <th>Bought</th><th>Good until</th><th>Status</th>
+                                    <th class="text-end">Paid</th><th>Receipt</th>
+                                </tr></thead>
+                                <tbody>
+                                @foreach (var c in view.Credits)
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@c.PurchasedUtc.ToString("MM/dd/yyyy")</td>
+                                        <td class="text-nowrap">@c.ExpiresUtc.ToString("MM/dd/yyyy")</td>
+                                        <td>
+                                            <span class="badge @CreditBadge(c) me-2">@CreditState(c)</span>
+                                            @if (c.SpentOnEventName is { } name)
+                                            {
+                                                <span>@name</span>
+                                            }
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            @*  Nobody paid for a granted one, and "$0.00" in a
+                                                money column reads as a mistake rather than a
+                                                gift.  *@
+                                            @(c.GrantedReason is null ? $"${c.PriceAtPurchase:0.00}" : "Given to you")
+                                        </td>
+                                        <td class="text-nowrap">@(c.ReceiptNumber ?? "—")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ── The money trail ──────────────────────────────────────────────── *@
+        @* The empty sentence explained a group with no plan, and sat under "Current plan: Small group · Active" for one that
+           has a plan and no recorded charge yet — a seeded or comped plan (UI test pass, 2026-09-14). *@
+        <h2 class="h5 mt-4 mb-2">Billing history</h2>
+        <BenListState TItem="OrgBillingHistoryRecord" Result="@_history" Loading="@false"
+                      EmptyText="@(_subscription is null || _subscription.Status == SubscriptionStatus.Free
+                                     ? "No charges or payments yet — a group with no plan is charged nothing."
+                                     : "No charges or payments recorded yet.")">
+            <table class="table align-middle">
+                <thead><tr>
+                    <th>Date</th><th>What</th><th class="text-end">Amount</th>
+                    <th class="text-end">Tax</th><th>Receipt</th>
+                </tr></thead>
+                <tbody>
+                @foreach (var e in _history.Items)
+                {
+                    <tr>
+                        <td class="text-nowrap">@e.DateCreated.ToString("MM/dd/yyyy")</td>
+                        <td>
+                            <span class="badge @KindBadge(e.Kind) me-2">@KindText(e)</span>@e.Description
+                            @if (e.PeriodStart is { } ps)
+                            {
+                                <span class="text-secondary small"> (@ps.ToString("MM/dd/yyyy") – @(e.PeriodEnd?.ToString("MM/dd/yyyy")))</span>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @(e.Kind == BillingLedgerKind.Adjustment && e.AdjustmentIsCredit ? "−" : "")$@e.Amount.ToString("0.00")
+                        </td>
+                        <td class="text-end text-nowrap">@(e.TaxAmount > 0 ? $"${e.TaxAmount:0.00}" : "—")</td>
+                        <td>
+                            @if (e.ReceiptNumber is { } r)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                        @onclick="() => DownloadReceiptAsync(e.Id, r)">
+                                    <BenIcon Name="download" Class="me-1" />R-@r.ToString("00000")
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </BenListState>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    /// <summary>The caller's own overflow seat, when they hold one (item 144).</summary>
+    private RenderFragment SeatCard => __builder =>
+    {
+        if (_mySeat is not { } seat) return;
+
+        <div class="card mb-4 @(seat.Status == SubscriptionStatus.PendingPayment ? "border-warning" : "")">
+            <div class="card-body">
+                <h2 class="h5 card-title">Your member seat</h2>
+                @if (seat.Status == SubscriptionStatus.PendingPayment)
+                {
+                    <p class="mb-2">
+                        This group's plan covers a set number of members, and you joined past
+                        that line — your seat is
+                        <strong>$@seat.PriceAtStart.ToString("0.00")/@(seat.Interval == BillingInterval.Yearly ? "year" : "month")</strong>,
+                        billed to you. Joining was never blocked; paying keeps it that way.
+                    </p>
+                    @if (Features.PlanPurchasesEnabled)
+                    {
+                        <button type="button" class="btn btn-warning" @onclick="PaySeatAsync"
+                                disabled="@_startingSeatCheckout">
+                            @(_startingSeatCheckout ? "Opening…" : "Pay for your seat")
+                        </button>
+                    }
+                    else
+                    {
+                        <p class="text-secondary mb-0" id="seat-not-on-sale">
+                            Seats can't be paid for on the site at the moment. Your place in the group is not affected.
+                        </p>
+                    }
+                    @if (_seatError is not null)
+                    {
+                        <div class="alert alert-danger mt-2 mb-0">@_seatError</div>
+                    }
+                }
+                else
+                {
+                    <p class="mb-0">
+                        <span class="badge bg-success me-2">Active</span>
+                        $@seat.PriceAtStart.ToString("0.00")/@(seat.Interval == BillingInterval.Yearly ? "year" : "month"),
+                        paid through <strong>@(seat.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "—")</strong>.
+                        Renews automatically on your saved card.
+                    </p>
+                }
+            </div>
+        </div>
+    };
+
+    private bool _loading = true;
+    private bool _forbidden;
+
+    /// <summary>Arrived from the new-group wizard with a plan chosen (<c>?from=new</c>).</summary>
+    private bool _arrivedNew;
+
+    /// <summary>The band named in <c>?tier=</c>, when the person chose one on the price list.</summary>
+    private string? _requestedTierName;
+    private OrgSubscriptionView? _subscription;
+    private LoadResult<OrgBillingHistoryRecord> _history;
+    private SubscriptionQuoteResponse? _quote;
+    private string? _quoteError;
+    private string? _checkoutError;
+    private string _couponCode = "";
+    private BillingInterval _interval = BillingInterval.Monthly;
+    private bool _startingCheckout;
+    private (string Css, string Text)? _checkoutBanner;
+    private MyMemberSeatRecord? _mySeat;
+    private bool _startingSeatCheckout;
+    private string? _seatError;
+    private ItemResult<OrgEventCreditsView> _credits;
+    private int _creditQuantity = 1;
+    private bool _buyingCredits;
+    private string? _creditError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Reachable directly at /organizations/{id}/billing, so the hard-navigation race is
+        // live here: without this, the first render asks with no token and the owner is told
+        // their own billing is forbidden.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Stripe bounced us back with the outcome in the query — say what happened before
+        // anything loads, because "did that go through?" is the whole of the person's question.
+        var query = new Uri(Nav.Uri).Query;
+        if (query.Contains("checkout=success"))
+            _checkoutBanner = ("alert-success",
+                "Payment received — your subscription is active. The receipt is in the history below.");
+        else if (query.Contains("checkout=free"))
+            _checkoutBanner = ("alert-success", "You're subscribed — the coupon covered this period in full.");
+        else if (query.Contains("checkout=seat-paid"))
+            _checkoutBanner = ("alert-success",
+                "Seat paid — you're all set. Your receipt is available below.");
+        else if (query.Contains("checkout=cancelled"))
+            _checkoutBanner = ("alert-secondary", "Checkout was cancelled. Nothing was charged.");
+        else if (query.Contains("credits=success"))
+            _checkoutBanner = ("alert-success",
+                "Payment received — your event credits are below, and the receipt is in the history.");
+        else if (query.Contains("credits=cancelled"))
+            _checkoutBanner = ("alert-secondary", "Checkout was cancelled. No credits were bought.");
+
+        // From the pricing page or the new-group wizard (2026-09-14): the cadence the person was looking at, and the
+        // band they chose, so this page starts where they left off.
+        var parsed = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query);
+        if (parsed.TryGetValue("interval", out var intervalValue)
+            && int.TryParse(intervalValue, out var intervalNumber)
+            && Enum.IsDefined(typeof(BillingInterval), intervalNumber))
+            _interval = (BillingInterval)intervalNumber;
+        _arrivedNew = parsed.TryGetValue("from", out var from) && from == "new";
+        if (parsed.TryGetValue("tier", out var tierValue) && Guid.TryParse(tierValue, out var tierId))
+            _requestedTierName = (await AdminClient.GetPublicPricingAsync()).Items.FirstOrDefault(t => t.Id == tierId)?.Name;
+
+        await LoadAsync();
+        await RefreshQuoteAsync();
+        _loading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        // At most one, and gated on being the holder — loads for members the rest of the page
+        // refuses, which is why the seat is fetched before permission is judged.
+        _mySeat = (await AdminClient.GetMySeatAsync(OrgId)).Items.FirstOrDefault();
+        _subscription = await AdminClient.GetMySubscriptionAsync(OrgId);
+        _history = await AdminClient.GetOrgBillingHistoryAsync(OrgId);
+        _credits = await AdminClient.GetOrgEventCreditsAsync(OrgId);
+        // The subscription view answers null for BOTH "no row yet" (a free group) and a refusal.
+        // The history call can tell the difference, so it decides which page this person gets.
+        _forbidden = _subscription is null && _history.Failed && !_history.SessionExpired;
+    }
+
+    private async Task OnIntervalChanged(ChangeEventArgs e)
+    {
+        _interval = (BillingInterval)int.Parse((string)e.Value!);
+        await RefreshQuoteAsync();
+    }
+
+    private async Task RefreshQuoteAsync()
+    {
+        if (_forbidden) return;
+        var (quote, error) = await AdminClient.QuoteSubscriptionAsync(
+            OrgId, new SubscriptionQuoteRequest(_interval,
+                string.IsNullOrWhiteSpace(_couponCode) ? null : _couponCode));
+        _quote = quote;
+        _quoteError = quote is null ? (error ?? "Pricing is temporarily unavailable.") : null;
+        StateHasChanged();
+    }
+
+    private async Task CheckoutAsync()
+    {
+        _startingCheckout = true;
+        _checkoutError = null;
+        try
+        {
+            var (result, error) = await AdminClient.StartCheckoutAsync(
+                OrgId, new StartCheckoutRequest(_interval,
+                    string.IsNullOrWhiteSpace(_couponCode) ? null : _couponCode));
+            if (result is null)
+            {
+                _checkoutError = error ?? "Couldn't start checkout — try again.";
+                return;
+            }
+
+            // Stripe's page (or straight back here on the free-coupon path). forceLoad because
+            // checkout.stripe.com is not a Blazor route — SPA navigation would 404 in-app.
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally
+        {
+            _startingCheckout = false;
+        }
+    }
+
+    private async Task PaySeatAsync()
+    {
+        _startingSeatCheckout = true;
+        _seatError = null;
+        try
+        {
+            var (result, error) = await AdminClient.StartSeatCheckoutAsync(OrgId);
+            if (result is null) { _seatError = error ?? "Couldn't start checkout — try again."; return; }
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _startingSeatCheckout = false; }
+    }
+
+    private async Task BuyCreditsAsync()
+    {
+        _buyingCredits = true;
+        _creditError = null;
+        try
+        {
+            var max = _credits.Item?.MaximumPerPurchase ?? 1;
+            var (result, error) = await AdminClient.StartEventCreditCheckoutAsync(
+                OrgId, Math.Clamp(_creditQuantity, 1, max));
+            if (result is null) { _creditError = error ?? "Couldn't start checkout — try again."; return; }
+
+            // forceLoad for the same reason as the subscription checkout: Stripe's page is not a
+            // Blazor route, and SPA navigation would 404 inside the app.
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _buyingCredits = false; }
+    }
+
+    /// <summary>When the next usable credit lapses, so the card can say it without arithmetic.</summary>
+    private static DateTime? NextExpiry(OrgEventCreditsView view)
+        => view.Credits
+            .Where(c => c.SpentUtc is null && c.RefundedUtc is null && c.ExpiresUtc > DateTime.UtcNow)
+            .OrderBy(c => c.ExpiresUtc)
+            .Select(c => (DateTime?)c.ExpiresUtc)
+            .FirstOrDefault();
+
+    private static string CreditState(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "Refunded"
+         : c.SpentUtc is not null ? "Spent on"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "Expired"
+         : "Ready";
+
+    private static string CreditBadge(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "bg-secondary"
+         : c.SpentUtc is not null ? "bg-info"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "bg-warning text-dark"
+         : "bg-success";
+
+    private async Task DownloadReceiptAsync(Guid entryId, int number)
+    {
+        var receipt = await AdminClient.DownloadReceiptAsync(OrgId, entryId);
+        if (receipt is null) return;
+        await JS.InvokeVoidAsync("downloadFileFromBase64",
+            Convert.ToBase64String(receipt.Value.Data), "text/html",
+            string.IsNullOrWhiteSpace(receipt.Value.FileName) ? $"receipt-R-{number:00000}.html" : receipt.Value.FileName);
+    }
+
+    private static string Cadence(BillingInterval i) => i switch
+    {
+        BillingInterval.Monthly => "month", BillingInterval.Quarterly => "quarter",
+        BillingInterval.HalfYearly => "6 months", BillingInterval.Yearly => "year",
+        _ => i.ToString().ToLowerInvariant(),
+    };
+
+    private static string StatusText(SubscriptionStatus s) => s switch
+    {
+        SubscriptionStatus.Free => "Free", SubscriptionStatus.Active => "Active",
+        SubscriptionStatus.Lapsed => "Lapsed", _ => s.ToString(),
+    };
+
+    private static string StatusBadge(SubscriptionStatus s) => s switch
+    {
+        SubscriptionStatus.Active => "bg-success",
+        SubscriptionStatus.Lapsed => "bg-danger",
+        _ => "bg-secondary",
+    };
+
+    private static string KindText(OrgBillingHistoryRecord e) => e.Kind switch
+    {
+        BillingLedgerKind.Charge => "Charge",
+        BillingLedgerKind.Payment => "Payment",
+        BillingLedgerKind.Adjustment => e.AdjustmentIsCredit ? "Credit" : "Adjustment",
+        _ => e.Kind.ToString(),
+    };
+
+    private static string KindBadge(BillingLedgerKind k) => k switch
+    {
+        BillingLedgerKind.Payment => "bg-success",
+        BillingLedgerKind.Adjustment => "bg-info",
+        _ => "bg-secondary",
+    };
+}

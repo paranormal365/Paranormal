@@ -23,7 +23,8 @@ public sealed class AdminCaseController : BenControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<AdminCaseSummaryRecord>>> GetAll(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<AdminCaseSummaryRecord>>> GetAll(
+        CancellationToken ct, [FromQuery] int? page = null, [FromQuery] int? pageSize = null)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
         var cases = await db.Cases.AsNoTracking()
@@ -31,7 +32,7 @@ public sealed class AdminCaseController : BenControllerBase
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
 
-        return Ok(cases.Select(c => new AdminCaseSummaryRecord
+        var records = cases.Select(c => new AdminCaseSummaryRecord
         {
             Id               = c.Id,
             OrganizationId   = c.OrganizationId,
@@ -44,6 +45,7 @@ public sealed class AdminCaseController : BenControllerBase
             State            = c.State,
             DateCaseOpened   = c.DateCaseOpened,
             DateCaseClosed   = c.DateCaseClosed,
-        }));
+        }).ToList();
+        return Ok(ListPaging.Apply(records, page, pageSize, Response));
     }
 }

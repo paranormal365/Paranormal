@@ -13,13 +13,41 @@ namespace Ben.Service.Models.Entities;
 /// gives it a textarea. Decided by the server because the seed that declares settings lives there
 /// and the Blazor library cannot reference it.
 /// </param>
+/// <param name="IsBoolean">
+/// True when the value is on/off, so the editor gives it a switch. Decided by the server for the
+/// same reason as <paramref name="IsMultiLine"/>. Before this existed the only boolean setting
+/// had to carry "Accepts true or false" in its description — an instruction that only existed
+/// because the control was a text box.
+/// </param>
+/// <param name="Group">
+/// The section the admin page files this under. Stated by the server, like the label and the
+/// description, because the seed that declares settings lives there. Empty means the server did
+/// not file it anywhere — which a guard on the server refuses, so it should never be seen.
+/// </param>
+/// <param name="GroupBlurb">
+/// The line under that section's heading. Sent with every setting rather than looked up on the
+/// client, so the words and the grouping cannot drift apart — a page that spells a section name
+/// slightly differently from the server would silently lose its own heading.
+/// </param>
+/// <param name="DefaultWhenUnset">
+/// What an on/off setting <i>does</i> while nothing is stored. Sent because the switch used to be
+/// drawn from the stored value alone: a flag nobody had ever set read as null, rendered "Off", and
+/// so the page reported seven live features — the video editor, events, discovery, group pages,
+/// the media library, group messaging and voting — as switched off while every one of them was
+/// running. A control that misreports the state it controls is the same failure as one that does
+/// nothing. Meaningless for non-boolean settings.
+/// </param>
 public sealed record SiteSettingRecord(
     string Key,
     string Label,
     string? Value,
     string? Description,
     DateTime DateUpdated,
-    bool IsMultiLine = false);
+    bool IsMultiLine = false,
+    bool IsBoolean = false,
+    bool DefaultWhenUnset = false,
+    string Group = "",
+    string GroupBlurb = "");
 
 /// <param name="Value">Empty or whitespace clears the setting.</param>
 public sealed record SetSiteSettingRequest(string? Value);

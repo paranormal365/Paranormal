@@ -14,6 +14,23 @@ order: 50
 **My Profile**, in the menu under your avatar, is where you set your display name and photos.
 Your sign-in address is not changed here and is never shown publicly.
 
+The page opens with your name and picture, then three tabs:
+
+- **About** — your display name and both photos, with the consent switch for the private one.
+- **Contact** — email addresses, phone numbers, postal addresses and web links.
+- **Where you've been** — the map of investigations you have attended.
+
+Most visits here are to change one thing, which is why the sections are behind tabs rather than
+stacked down one page. The map in particular only loads when you open its tab.
+
+## Sex
+
+Under your name sits an optional **Sex** field — Male, Female, or Unspecified, and it starts
+blank. It exists for exactly one thing: when you have no photo, the site shows a placeholder
+icon, and this choice picks which of the three placeholders you get. It is never shown to
+anyone, never shared, and never guessed from your name; blank and Unspecified both mean the
+generic placeholder stands in.
+
 ## Two photos
 
 You can set two pictures, and they are treated very differently.
@@ -45,6 +62,10 @@ Mark one email and one phone as **Primary** if you want a single obvious "reach 
 a new one primary clears the old one automatically: it is a slot, not a checkbox you can tick
 twice.
 
+**An email address has to be confirmed before it can be primary**, the same as before it can be
+public — primary is the address you are presented by, and neither should be an address nobody has
+proved they can read. So a new one is added, confirmed, and then promoted.
+
 Addresses are looked up on a map as you type. If the lookup finds the place, the coordinates are
 stored with the address; if it does not, the address still saves — it simply has no pin.
 
@@ -59,14 +80,29 @@ the one thing that lets somebody invite you to a calendar event by typing your a
 lookup deliberately ignores your sign-in address, so an unpublished account cannot be found by
 guessing.
 
+## The tick
+
+A **green tick** next to something means we proved it, not that somebody typed it. It appears
+against a confirmed email address, against two-factor when it is on, and on your account address in
+the band at the top of the page. Hover it and it tells you what was proved and when.
+
+An **amber mark** means the opposite, and it always says what to do about it. You will not see one
+against something you cannot change: a fact with no way to prove it gets no mark at all, because a
+warning you can do nothing about is just an accusation.
+
 ## Confirming an email address
 
-An email address cannot be made public until you have confirmed it. That stops anyone typing a
-stranger's address into their own profile and then receiving that stranger's invitations.
+An email address cannot be made **public** or **primary** until you have confirmed it. That stops
+anyone typing a stranger's address into their own profile and then receiving that stranger's
+invitations — or being presented by an address that is not theirs.
 
-Press **Send confirmation link** next to the address. If the system is set up to send mail, the
-link arrives in that inbox. If it is not — which is normal on a test system — the page shows you
-the link instead so you can copy it.
+**Adding an address sends its confirmation straight away.** You do not have to ask for it: typing
+an address in is the request to confirm it, and the card tells you the link has gone. If the system
+is not set up to send mail — which is normal on a test system — the page shows you the link instead
+so you can copy it.
+
+**Send confirmation link** next to an unconfirmed address gets you another one, a minute after the
+last.
 
 Opening the link shows the address, partly hidden, and a **Confirm** button. You do not have to
 be signed in, and you can open it on any device. The address is only confirmed when you press the
@@ -78,7 +114,10 @@ entry goes back to private — the new address has not been proven, only the old
 
 ## Your investigation map
 
-**My Investigations** keeps a map of where you have actually been, under *Where I've been*.
+Your profile's **Where you've been** tab keeps a map of the places you have actually been; the
+same map appears on **My Investigations**. Clicking a pin opens the case that visit belonged to.
+Visits at one spot share a pin with a count; spots that only overlap at a distance gather into a
+count as well, and zooming in separates them.
 
 It shows visits you **attended** — not ones you were invited to, and not ones you said yes to. A
 map of places you might have gone is not a record of where you have been, and only the second is
@@ -87,3 +126,53 @@ worth keeping.
 That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
 scheduled investigation appears in your list straight away but on the map only once someone has
 confirmed you were there.
+
+## Security — your password and two-step sign-in
+
+The profile's **Security** tab holds how you get into your account.
+
+**Password.** Change it here whenever you like. If your account was created by signing in with
+Microsoft it has *no* password yet — the panel says so and offers **Add password** instead, which
+asks for no current password because being signed in already proves who you are. Adding one lets
+you sign in either way from then on; Microsoft sign-in keeps working.
+
+Locked out entirely? **Forgot your password?** on the sign-in page emails you a link, and that
+same link is how a Microsoft-only account sets its first password.
+
+That link can only go to a **confirmed** address. An account made by signing in with Microsoft
+starts with the address Microsoft gave us, but Microsoft does not vouch for it, so we send a
+confirmation link when the account is made and the profile shows a notice until you follow it —
+with a **Send the link again** button if it never arrived. Signing in with Microsoft keeps working
+meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
+included.
+
+**Signed in with Apple.** The same applies: no password until you add one. If you chose Hide My
+Email, the profile says "Signed in with Apple, using Hide My Email" where an address would be; if
+you shared no address, it warns you and offers to add one, because until then Apple is the only
+way in and no reset link can reach you.
+
+**Two-step sign-in.** Optional, off unless you turn it on, and worth turning on. Scan the code
+with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
+Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
+in when your phone is not to hand, and each one works once.
+
+## Deleting your account
+
+In the iPhone and iPad app, **Profile → Delete account**.
+
+**What goes:** you. Your name, email address, password, phone number, addresses, photos and any
+sign-in methods you connected — Microsoft, Apple — are destroyed, and the account can never sign
+in again by any route. If you signed in with Apple, we also tell Apple, so IsHaunted disappears
+from the list of apps using your Apple ID. There is no undo, no grace period and no reactivation, and your email
+address is freed for somebody to register with again.
+
+**What stays:** anything you wrote for a group. A case note, a report, a timeline entry or a
+message on a group's board belongs to that group and often to a client who paid for the work, and
+several of those records a group may be obliged to keep. Those stay, attributed to a former
+member rather than to you. Your own field sessions, recorded on your own rather than for an
+investigation, go with you.
+
+**If you own a group** you will be asked to hand it over first, and told which groups. Exactly one
+owner exists per group, so leaving would strand it with nobody able to administer it or reach its
+billing. Make somebody else the owner, or close the group, and then your account will delete.
+

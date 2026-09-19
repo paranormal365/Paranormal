@@ -9,7 +9,8 @@ namespace Ben.Service.RepositoryService.Tests;
 
 /// <summary>
 /// Tests for new entities added in 2026-08-02 session:
-/// CaseClientAccess, ScheduleProposalSlot, InvestigationScheduleProposal, CaseResearchEntry, CaseMessage.
+/// CaseClientAccess, ScheduleProposalSlot, InvestigationScheduleProposal, CaseMessage.
+/// (CaseResearchEntry was among them until 2026-09-16, when research became canvas boards.)
 /// </summary>
 public class NewEntityTests
 {
@@ -71,16 +72,6 @@ public class NewEntityTests
 
         await using var verifyDb = await factory.CreateDbContextAsync();
         Assert.Equal(0, await verifyDb.CaseClientAccesses.CountAsync(a => a.CaseId == caseId));
-    }
-
-    // ── CaseResearchEntry ─────────────────────────────────────────────────────
-
-    [Fact]
-    public void CaseResearchEntry_DefaultSortOrder_IsZero()
-    {
-        var e = new CaseResearchEntry();
-        Assert.Equal(0, e.SortOrder);
-        Assert.Equal(CaseResearchType.Note, e.ResearchType);
     }
 
     // ── InvestigationScheduleProposal ─────────────────────────────────────────

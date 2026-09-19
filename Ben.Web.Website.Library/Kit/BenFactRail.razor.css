@@ -1,0 +1,68 @@
+/*
+    Flex rather than a grid of equal tracks: a page with two facts to state would have had them
+    stretched to half its width each, which reads as two empty boxes rather than two answers. These
+    grow to share a row and stop at a width a short figure can fill.
+*/
+
+.ben-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.ben-fact {
+    flex: 1 1 8.5rem;
+    max-width: 13rem;
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .16s ease, transform .16s ease;
+}
+
+a.ben-fact:hover,
+a.ben-fact:focus-visible {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+}
+
+/* The one that decides whether they read on. */
+.ben-fact--lead {
+    border-color: color-mix(in srgb, var(--bs-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
+}
+
+.ben-fact__label {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.ben-fact__value {
+    font-size: 1.15rem;
+    font-weight: 650;
+    line-height: 1.15;
+}
+
+.ben-fact__sub {
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ben-fact {
+        transition: none;
+    }
+
+    a.ben-fact:hover,
+    a.ben-fact:focus-visible {
+        transform: none;
+    }
+}

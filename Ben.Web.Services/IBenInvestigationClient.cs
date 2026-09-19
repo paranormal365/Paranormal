@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -18,13 +19,24 @@ public interface IBenInvestigationClient
 {
     // ── Investigations ────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<LoadResult<InvestigationRecord>> GetInvestigationsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<InvestigationRecord?> GetInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
-    Task<InvestigationRecord?> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
-    Task<InvestigationRecord?> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<(InvestigationRecord? Result, string? Error)> CreateInvestigationAsync(Guid orgId, Guid caseId, UpsertInvestigationRequest request, CancellationToken token = default);
+    Task<(InvestigationRecord? Result, string? Error)> UpdateInvestigationAsync(Guid orgId, Guid caseId, Guid id, UpsertInvestigationRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Deletes an investigation, carrying back the server's own sentence when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// The bool-only version discards the refusal, which the UI then shows as success — the
+    /// failure shape this codebase keeps rediscovering. Prefer this one at every call site that
+    /// has somewhere to put a message.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteInvestigationExpectingReasonAsync(
+        Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
-    Task<IReadOnlyList<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
+    Task<LoadResult<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default);
     Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
@@ -32,7 +44,7 @@ public interface IBenInvestigationClient
     // ── Evidence Voting ───────────────────────────────────────────────────────
 
     Task<EvidenceVoteSummary?> GetEvidenceVoteSummaryAsync(Guid uploadFileId, CancellationToken token = default);
-    Task<IReadOnlyList<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default);
+    Task<LoadResult<EvidenceVoteRecord>> GetEvidenceVotesAsync(Guid uploadFileId, CancellationToken token = default);
     Task<EvidenceVoteSummary?> CastEvidenceVoteAsync(Guid uploadFileId, Ben.Data.Common.Enums.EvidenceVoteType voteType, string? comment, CancellationToken token = default);
     Task<bool> RemoveEvidenceVoteAsync(Guid uploadFileId, CancellationToken token = default);
 
@@ -47,18 +59,29 @@ public interface IBenInvestigationClient
     /// therefore cannot see a case-less visit at all. Render <c>CanEditRecord</c> as given; a UI
     /// that works out edit rights for itself will eventually disagree with the endpoint.
     /// </remarks>
-    Task<IReadOnlyList<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgInvestigationRow>> GetOrgInvestigationsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The organization's investigations as map pins, optionally only those inside a viewport.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="GetOrgInvestigationsAsync"/>: that one feeds the grid and carries a
+    /// permission verdict per row, this one carries a coordinate and nothing actionable, so it can
+    /// be asked for on every pan.
+    /// </remarks>
+    Task<ItemResult<OrgInvestigationMapPage>> GetOrgInvestigationMapAsync(
+        Guid orgId, MapBounds? bounds = null, CancellationToken token = default);
 
     // ── Investigation Scheduling ──────────────────────────────────────────────
 
     // Org side
-    Task<IReadOnlyList<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<LoadResult<ScheduleProposalDto>> GetScheduleProposalsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
     Task<ScheduleProposalDto?> CreateScheduleProposalAsync(Guid orgId, Guid caseId, CreateProposalRequest request, CancellationToken token = default);
     Task<bool> WithdrawScheduleProposalAsync(Guid orgId, Guid caseId, Guid proposalId, CancellationToken token = default);
     Task<ScheduleProposalDto?> ConvertProposalToInvestigationAsync(Guid orgId, Guid caseId, Guid proposalId, ConvertProposalRequest request, CancellationToken token = default);
 
     // Client side
-    Task<IReadOnlyList<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<ScheduleProposalDto>> GetMyScheduleProposalsAsync(Guid caseId, CancellationToken token = default);
     Task<ScheduleProposalDto?> AcceptScheduleProposalAsync(Guid caseId, Guid proposalId, Guid slotId, CancellationToken token = default);
     Task<ScheduleProposalDto?> CounterScheduleProposalAsync(Guid caseId, Guid proposalId, DateTime preferredDateTime, string? notes, CancellationToken token = default);
     Task<ScheduleProposalDto?> DeclineScheduleProposalAsync(Guid caseId, Guid proposalId, string? notes, CancellationToken token = default);
@@ -66,7 +89,7 @@ public interface IBenInvestigationClient
     // ── My Investigations (member dashboard) ──────────────────────────────────
 
     /// <summary>Returns all investigations the current user is assigned to attend.</summary>
-    Task<IReadOnlyList<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
+    Task<LoadResult<MyInvestigationItem>> GetMyInvestigationsAsync(CancellationToken token = default);
 
     /// <summary>
     /// Where the signed-in person has actually been: past investigations they attended.
@@ -75,8 +98,66 @@ public interface IBenInvestigationClient
     /// Only rows marked attended, so it is expected to be sparse — and honestly so — until arrival
     /// check-in exists. A map of places you were invited to is not a map of where you have been.
     /// </remarks>
-    Task<IReadOnlyList<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default);
+    Task<LoadResult<AttendedInvestigationItem>> GetAttendedInvestigationsAsync(CancellationToken token = default);
 
     /// <summary>Sets the current user's RSVP on their attendee record.</summary>
     Task UpdateMyInvestigationRsvpAsync(Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus rsvp, CancellationToken token = default);
+
+    // ── Field sessions recorded on a phone ────────────────────────────────────
+
+    /// <summary>Sessions uploaded for one investigation.</summary>
+    /// <summary>
+    /// How much of this account's personal storage allowance is used, or null when it could not be
+    /// asked.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint existed with no caller (2026-09-17 audit), so a solo investigator got no usage
+    /// figure and no warning before the cap refused an upload — while the phone showed a hardcoded
+    /// "2 GB" that is wrong for anybody a group's plan covers.
+    /// </remarks>
+    Task<AccountStorageItem?> GetMyStorageAsync(CancellationToken token = default);
+
+    Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
+        Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// One session, with the document the device wrote.
+    /// </summary>
+    /// <remarks>
+    /// Null when the server would not give it up — the session may have been removed, or the
+    /// caller may no longer have access to the investigation it belongs to. The page says so
+    /// rather than rendering an empty recording.
+    /// </remarks>
+    Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    // ── Sharing a session by link (item 207) ──────────────────────────────────
+
+    /// <summary>Every link ever made for this session, live and dead, newest first.</summary>
+    Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    /// <summary>Makes a link. Null when the server refused — the session, the file, or the caller.</summary>
+    Task<FieldSessionShareRecord?> CreateFieldSessionShareAsync(
+        Guid sessionId, CreateFieldSessionShareRequest request, CancellationToken token = default);
+
+    /// <summary>Pulls a link back. Takes effect on the next click, everywhere it was pasted.</summary>
+    Task<bool> RevokeFieldSessionShareAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default);
+
+    /// <summary>Who opened one link, newest first.</summary>
+    Task<LoadResult<FieldSessionShareViewRecord>> GetFieldSessionShareViewsAsync(
+        Guid sessionId, Guid shareId, CancellationToken token = default);
+
+    /// <summary>
+    /// The session behind a share link, for somebody with no account.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous on purpose: the recipient has no token and the whole feature is pointless if they
+    /// need one. Null covers unknown, expired and revoked alike, because the server answers all
+    /// three the same way and the page must not invent a distinction the server refused to make.
+    /// </remarks>
+    Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default);
+
 }

@@ -1,0 +1,85 @@
+/* The guest's picker (item 235 phase 6).
+
+   THE GRID IS BOUNDED AND THE SUMMARY SITS UNDER IT.
+
+   The first version made the summary `position: sticky; bottom: 0` and it never stuck. The site's
+   own `.content-wrapper` sets `overflow-x: hidden`, which makes it a scrolling box on BOTH axes,
+   so a sticky child pins to the bottom of that wrapper — the whole page — rather than to the
+   bottom of the window. It is off-screen from the first tap, which is exactly the failure the bar
+   exists to prevent, and Playwright reported it as "viewport ratio 0".
+
+   So the plan takes a ceiling and scrolls inside it, the way it already scrolls sideways, and the
+   summary is ordinary flow immediately below. A guest can always see what they have chosen and
+   the button that commits it without scrolling back past two hundred squares. Nothing is cut off:
+   the box scrolls rather than hides, which is the distinction phase 2 got wrong once already. */
+
+.picker ::deep .plan__grid {
+    max-height: min(58vh, 30rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.picker__bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-top: .75rem;
+    padding: .75rem;
+
+    background: var(--bs-body-bg);
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.picker__what {
+    min-width: 12rem;
+    flex: 1 1 auto;
+}
+
+/* ON A PHONE THE BAR IS FIXED TO THE WINDOW, and this is the third attempt.
+
+   Sticky was the first and it never stuck, for the reason above. Bounding the grid was the second
+   and it is kept — it stops the plan swallowing the page — but it is not enough on its own: the
+   event page carries a banner, the nights and the venue above all this, so the bar still lands
+   below the fold the moment somebody taps a seat.
+
+   Fixed is not affected by an overflow ancestor. It costs a strip at the bottom of the window
+   while somebody is choosing, which is exactly when they want it, and the picker reserves the
+   space so nothing is ever hidden underneath. The inset keeps it clear of a phone's home
+   indicator. */
+@media (max-width: 767.98px) {
+    .picker {
+        padding-bottom: 7.5rem;
+    }
+
+    /* A THUMB, NOT A MOUSE. The theme's ordinary button is 32 pixels tall, which is fine under a
+       cursor and too small for the button that commits somebody's evening — Playwright measured
+       it. 44 is the smallest target Apple and Google both call safe. */
+    .picker__bar .btn {
+        min-height: 2.75rem;
+    }
+
+    .picker__bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 3;
+
+        margin-top: 0;
+        padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px));
+
+        border-top: 1px solid var(--bs-border-color);
+        box-shadow: 0 -.25rem .75rem rgba(0, 0, 0, .15);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .picker__bar {
+        /* Stacked, so the two buttons are full width and a thumb cannot hit the wrong one. */
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

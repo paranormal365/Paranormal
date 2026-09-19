@@ -32,13 +32,11 @@ public sealed class ProjectService
     private readonly IHttpClientFactory      _httpClientFactory;
     private readonly VideoEditorOptions      _options;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        WriteIndented          = true,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters             = { new JsonStringEnumConverter() },
-    };
+    // One shared settings object (ProjectSerializer). There were four copies of these, and two of
+    // them — the site's My Videos page and its case editor — were missing the string-enum
+    // converter, so neither could read a project this service had written (2026-09-05 audit,
+    // persistence-1).
+    private static JsonSerializerOptions _jsonOptions => ProjectSerializer.Options;
 
     private IJSObjectReference? _module;
 
@@ -57,7 +55,7 @@ public sealed class ProjectService
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
         _module ??= await _js.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/ffmpegInterop.js");
+            "benImportEditorModule", "js/ffmpegInterop.js");
         return _module;
     }
 
@@ -128,17 +126,32 @@ public sealed class ProjectService
     /// An <see cref="ElementReference"/> to the hidden <c>&lt;input type="file"&gt;</c>.
     /// </param>
     public async Task<ProjectFile?> LoadAsync(ElementReference fileInputElement)
+        => (await LoadWithReasonAsync(fileInputElement)).File;
+
+    /// <summary>
+    /// Reads a project file from a file input, and says what was wrong when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// Picking a file that is not a project used to succeed: JSON with none of the expected
+    /// properties deserialises into an object whose every list is empty, so the editor replaced
+    /// the person's timeline with a blank one and reported success (2026-09-05 audit,
+    /// persistence-8).
+    /// </remarks>
+    public async Task<(ProjectFile? File, string? Problem)> LoadWithReasonAsync(
+        ElementReference fileInputElement)
     {
+        string json;
         try
         {
             var module = await GetModuleAsync();
-            var json   = await module.InvokeAsync<string>("readInputFileAsText", fileInputElement);
-            return JsonSerializer.Deserialize<ProjectFile>(json, _jsonOptions);
+            json = await module.InvokeAsync<string>("readInputFileAsText", fileInputElement);
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return (null, $"That file could not be read: {ex.Message}");
         }
+
+        return ProjectSerializer.Parse(json);
     }
 
     /// <summary>
@@ -170,7 +183,7 @@ public sealed class ProjectService
                 ServiceCollectionExtensions.ProjectPersistenceHttpClientName);
 
             if (progress is null)
-                return await client.GetFromJsonAsync<ProjectFile>(url, _jsonOptions);
+                return ProjectSerializer.Parse(await client.GetStringAsync(url)).File;
 
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
@@ -191,7 +204,8 @@ public sealed class ProjectService
             }
 
             buffer.Position = 0;
-            return await JsonSerializer.DeserializeAsync<ProjectFile>(buffer, _jsonOptions);
+            using var reader = new StreamReader(buffer);
+            return ProjectSerializer.Parse(await reader.ReadToEndAsync()).File;
         }
         catch
         {
@@ -222,6 +236,9 @@ public sealed class ProjectService
                 X          = k.X,
                 Y          = k.Y,
                 Scale      = k.Scale,
+                ScaleX     = k.ScaleX,
+                ScaleY     = k.ScaleY,
+                Rotation   = k.Rotation,
                 Alpha      = k.Alpha,
                 Easing     = k.Easing,
                 HandleOutX = k.HandleOutX,
@@ -257,6 +274,17 @@ public sealed class ProjectService
         Tracks      = _clips.Tracks.Select(MapTrack).ToList(),
         Markers     = _clips.Markers.ToList(),
         MotionPaths = _motion.AllPaths.Select(MapMotionPath).ToList(),
+        Bin         = MapBin(),
+    };
+
+    /// <summary>
+    /// The media bin, so what you imported survives a save whether or not you placed it.
+    /// </summary>
+    private ProjectMediaBin MapBin() => new()
+    {
+        VideoClips = _clips.BinVideoClips.Select(MapVideoClip).ToList(),
+        AudioClips = _clips.BinAudioClips.Select(MapAudioClip).ToList(),
+        ImageClips = _clips.BinImageClips.Select(MapImageClip).ToList(),
     };
 
     private ProjectOptionsSnapshot BuildOptionsSnapshot()
@@ -288,6 +316,7 @@ public sealed class ProjectService
         Order    = t.Order,
         IsMuted  = t.IsMuted,
         IsLocked = t.IsLocked,
+        DucksOthers = t.DucksOthers,
 
         VideoClips   = t.VideoClips.Select(MapVideoClip).ToList(),
         AudioClips   = t.AudioClips.Select(MapAudioClip).ToList(),
@@ -301,6 +330,7 @@ public sealed class ProjectService
     private static ProjectVideoClip MapVideoClip(VideoClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,
@@ -312,6 +342,9 @@ public sealed class ProjectService
         Height           = c.Height,
         Volume           = c.Volume,
         VolumeAutomation = c.VolumeAutomation.ToList(),
+        MuteAudio        = c.MuteAudio,
+        HasAudio         = c.HasAudio,
+        LinkedClipId     = c.LinkedClipId,
         Effects          = c.Effects,
         AppliedEffects   = c.AppliedEffects.Select(e => new ProjectAppliedEffect
         {
@@ -319,13 +352,25 @@ public sealed class ProjectService
             Parameters = new Dictionary<string, double>(e.Parameters),
         }).ToList(),
         IsMediaMissing   = false,           // session clip — media is present
-        OriginalFileName = c.MemFsName,     // hint for re-linking on next open
+        // The person's own filename, not the session-local MEMFS path this used to save. The field
+        // is documented as the hint shown when media has to be re-linked, and a hint reading
+        // "vid_3f2a91c4....mp4" helps nobody find their file (2026-09-05 audit, persistence-2).
+        // Falls back to the clip's name, which is what the file was called when it was imported.
+        OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,       // OPFS extension for auto-restore
+        // The three that make a project portable: which server file the media came from, and
+        // enough to tell whether a re-fetch brought back the same thing (2026-09-05 audit, F14).
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
+        Transform         = c.Transform is null ? null : c.Transform with { },
     };
 
     private static ProjectAudioClip MapAudioClip(AudioClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,
@@ -338,9 +383,16 @@ public sealed class ProjectService
         VolumeAutomation = c.VolumeAutomation.ToList(),
         LeftVolume       = c.LeftVolume,
         RightVolume      = c.RightVolume,
+        MuteAudio        = c.MuteAudio,
+        NoiseReduction   = c.NoiseReduction,
+        Normalise        = c.Normalise,
+        LinkedClipId     = c.LinkedClipId,
         IsMediaMissing   = false,
-        OriginalFileName = c.MemFsName,
+        OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
     };
 
     private static ProjectTransition MapTransition(Transition t) => new()
@@ -382,6 +434,7 @@ public sealed class ProjectService
         FadeInSeconds    = o.FadeInSeconds,
         FadeOutSeconds   = o.FadeOutSeconds,
         Opacity          = o.Opacity,
+        MaxWidth         = o.MaxWidth,
         ShadowColor      = o.ShadowColor,
         ShadowOffsetX    = o.ShadowOffsetX,
         ShadowOffsetY    = o.ShadowOffsetY,
@@ -391,6 +444,7 @@ public sealed class ProjectService
     private static ProjectImageClip MapImageClip(ImageClip c) => new()
     {
         Id               = c.Id,
+        SourceBinId      = c.SourceBinId,
         Name             = c.Name,
         TimelinePosition = c.TimelinePosition,
         Duration         = c.Duration,
@@ -404,8 +458,13 @@ public sealed class ProjectService
             Parameters = new Dictionary<string, double>(e.Parameters),
         }).ToList(),
         IsMediaMissing   = false,
-        OriginalFileName = c.MemFsName,
+        OriginalFileName = c.OriginalFileName ?? c.Name,
         OpfsExt          = c.OpfsExt,
+        SourceFileId      = c.SourceFileId,
+        SourceFileSize    = c.SourceFileSize,
+        SourceContentHash = c.SourceContentHash,
+        Redactions        = [.. c.Redactions.Select(r => r with { })],
+        Transform         = c.Transform is null ? null : c.Transform with { },
     };
 
     private static ProjectCalloutClip MapCalloutClip(CalloutClip c) => new()
@@ -437,9 +496,15 @@ public sealed class ProjectService
         FontBold         = c.FontBold,
         FontUnderline    = c.FontUnderline,
         Runs             = c.Runs?.Select(MapTextRun).ToList(),
+        TextAlign         = c.TextAlign,
+        TextVerticalAlign = c.TextVerticalAlign,
+        TextWrap          = c.TextWrap,
+        TextShadow        = c.TextShadow,
+        TextPadding       = c.TextPadding,
         FadeInSeconds    = c.FadeInSeconds,
         FadeOutSeconds   = c.FadeOutSeconds,
         OpfsAssetName    = c.OpfsAssetName,
+        OpfsExt          = c.OpfsExt,
         ControlPointValues = new Dictionary<string, double>(c.ControlPointValues),
     };
 
@@ -469,6 +534,8 @@ public sealed class ProjectService
         Width            = c.Width,
         Height           = c.Height,
         Rotation         = c.Rotation,
+        NativeWidth      = c.NativeWidth,
+        NativeHeight     = c.NativeHeight,
         Opacity          = c.Opacity,
         TintColor        = c.TintColor,
         ControlPointValues = new Dictionary<string, double>(c.ControlPointValues),
@@ -504,6 +571,9 @@ public sealed class ProjectService
             X          = k.X,
             Y          = k.Y,
             Scale      = k.Scale,
+            ScaleX     = k.ScaleX,
+            ScaleY     = k.ScaleY,
+            Rotation   = k.Rotation,
             Alpha      = k.Alpha,
             Easing     = k.Easing,
             HandleOutX = k.HandleOutX,

@@ -29,7 +29,7 @@ public sealed class NativeSidecarService(
     IJSRuntime js,
     ISidecarPairingReporter? pairingReporter = null) : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
     private IJSObjectReference? _module;
 
     /// <summary>Per-port budget for the discovery scan. Short on purpose: with nothing installed
@@ -71,6 +71,42 @@ public sealed class NativeSidecarService(
     /// from scratch rather than trusting cached state, since the sidecar may have been
     /// restarted/reset/closed between calls.
     /// </summary>
+    /// <summary>
+    /// Tells a connected sidecar that the editor is still open, so it does not stop underneath one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-19: the sidecar should run only while the video editor is being used. It
+    /// decides that by how long it has been since anything asked it for anything — which without
+    /// this would mean "since the last render", not "since the editor was closed". An hour of local
+    /// editing with no export looks exactly like a closed editor from the sidecar's side, and it
+    /// would stop; the next export would then have to wake it and re-render every retained segment,
+    /// because a new process means a new InstanceId and the remote-segment index is dropped.</para>
+    ///
+    /// <para>A plain health GET, because any request at all is what the sidecar counts. It is
+    /// deliberately quiet about failure: a sidecar that has gone away is not news here — the next
+    /// real call reports it properly, and this must never put an error in front of somebody who is
+    /// editing.</para>
+    /// </remarks>
+    public async Task HeartbeatAsync(CancellationToken ct = default)
+    {
+        if (DiscoveredPort is not { } port) return;
+
+        try
+        {
+            await transport.SendAsync(
+                "GET", $"http://127.0.0.1:{port}/v1/health", token: string.Empty,
+                timeout: ProbeTimeout, ct: ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Gone, asleep, or busy. Not this method's business.
+        }
+    }
+
     public async Task ProbeAsync(CancellationToken ct = default)
     {
         for (var port = SidecarProtocol.DefaultPort; port <= SidecarProtocol.DefaultPort + SidecarProtocol.DefaultPortScanRange; port++)
@@ -301,7 +337,7 @@ public sealed class NativeSidecarService(
     private async Task EnsureModuleAsync()
     {
         if (_module is not null) return;
-        try { _module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath); }
+        try { _module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath); }
         catch { /* stays null — every caller already treats that as "unavailable" */ }
     }
 

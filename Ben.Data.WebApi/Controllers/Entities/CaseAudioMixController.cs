@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -20,24 +21,41 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class CaseAudioMixController : BenControllerBase
 {
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
 
-    public CaseAudioMixController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage)
+    private readonly IMediaIngestService _mediaIngest;
+
+    public CaseAudioMixController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _fileStorage = fileStorage;
-    }
+        _mediaIngest = mediaIngest;
+     _security = security; }
 
     [HttpPost("export")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(RateLimiting.AudioProcessingPolicy)]
     public async Task<ActionResult<CaseFileRecord>> Export(
         Guid orgId, Guid caseId, [FromBody] ExportAudioMixRequest request, CancellationToken ct)
     {
-        if (request.Tracks.Count == 0) return BadRequest("At least one track is required.");
+        // Offsets were unbounded: one track placed at 10,000,000 seconds sizes the mix buffer from
+        // that offset, so a slider dragged into a text field became a multi-gigabyte allocation or
+        // an int overflow, both of which arrive as a 500 (2026-09-06 audio walk, finding 3).
+        if (AudioRequestLimits.MixProblem(request.Tracks) is { } problem) return BadRequest(problem);
 
         var userId = GetCurrentUserId();
+
+        // Before any bytes are written. The mix's UploadFile row carries AppUserId, so an unknown
+        // claim used to fail as a foreign-key violation AFTER the WAV had been rendered and stored
+        // (finding 14).
+        if (userId == Guid.Empty) return Unauthorized();
+
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
 
         var caseFileIds = request.Tracks.Select(t => t.CaseFileId).ToHashSet();
@@ -51,8 +69,9 @@ public sealed class CaseAudioMixController : BenControllerBase
         if (caseFiles.Values.Any(f => !f.UploadFile.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)))
             return BadRequest("Only audio files can be placed in the mixer.");
 
-        var anySolo = request.Tracks.Any(t => t.Solo);
-        var audible = request.Tracks.Where(t => !t.Muted && (!anySolo || t.Solo)).ToList();
+        // The same rule the mixer page uses to decide what its preview plays — shared, so a preview
+        // and the export it previews cannot be different mixes.
+        var audible = MixAudibility.Audible(request.Tracks);
         if (audible.Count == 0) return BadRequest("At least one track must be audible (not muted, and soloed if any track is soloed).");
 
         var openStreams = new List<Stream>();
@@ -65,7 +84,18 @@ public sealed class CaseAudioMixController : BenControllerBase
             foreach (var track in audible)
             {
                 var uploadFile = caseFiles[track.CaseFileId].UploadFile;
-                var stream = await _fileStorage.OpenReadAsync(uploadFile.StoragePath!, ct);
+
+                // Legacy rows hold their bytes in the database and have no StoragePath at all; the
+                // dereference was a 500 the moment one of them reached the mixer (finding 4). The
+                // edit and clip endpoints have always had this fallback.
+                Stream stream;
+                if (!string.IsNullOrEmpty(uploadFile.StoragePath))
+                    stream = await _fileStorage.OpenReadAsync(uploadFile.StoragePath, ct);
+                else if (uploadFile.FileData is not null)
+                    stream = new MemoryStream(uploadFile.FileData);
+                else
+                    return BadRequest($"'{uploadFile.FileName}' has no stored audio to mix.");
+
                 openStreams.Add(stream);
                 trackInputs.Add(new AudioMixer.TrackInput(stream, uploadFile.ContentType, track.OffsetSeconds, track.GainDb, track.Pan));
             }
@@ -75,6 +105,10 @@ public sealed class CaseAudioMixController : BenControllerBase
         catch (NotSupportedException ex)
         {
             return BadRequest(ex.Message);
+        }
+        catch (Exception ex) when (AudioSourceReader.IsUndecodable(ex))
+        {
+            return BadRequest($"Couldn't read one of those recordings: {ex.Message}");
         }
         finally
         {
@@ -92,9 +126,34 @@ public sealed class CaseAudioMixController : BenControllerBase
             FileName = $"Mix_{DateTime.UtcNow:yyyyMMdd_HHmmss}{mixExtension}", StoredFileName = storedName,
             ContentType = mixContentType, FileSize = mixedBytes.Length,
             StoragePath = storagePath, IsPublic = false,
+
+            // Where this mix came from. Every other derived audio file records its parent; a mix
+            // recorded none, so a case file that is plainly made of other case files looked like an
+            // original upload (finding 15). Several tracks went in and one has to be named: the
+            // first audible one, the same track whose capture details are carried below.
+            ParentFileId = audible.Select(t => caseFiles[t.CaseFileId].UploadFileId).FirstOrDefault()
+                is var parent && parent != Guid.Empty ? parent : null,
+
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFileEntity);
+
+        // A mix is a derivative of the tracks that went into it, so it keeps where they were
+        // recorded (Ben's rule, 2026-08-24). Sources from ONE case are almost always the same
+        // night at the same place; where they disagree the first audible track's provenance is
+        // the honest choice — it is a real source of these bytes, and the row says it was carried.
+        var firstSourceFileId = audible
+            .Select(t => caseFiles[t.CaseFileId].UploadFileId)
+            .FirstOrDefault();
+
+        var inherited = firstSourceFileId != Guid.Empty
+            ? await _mediaIngest.DeriveMetadataAsync(db, firstSourceFileId, uploadFileEntity.Id, "Audio", ct)
+            : null;
+
+        // Length and format measured off the rendered mix, which is the one thing about it nobody
+        // can inherit — and what the mixer needs to draw a clip at its real width (finding 11).
+        if (DerivedAudioMetadata.For(uploadFileEntity.Id, mixedBytes, inherited) is { } metadata)
+            db.UploadFileMetadata.Add(metadata);
 
         var caseFile = new CaseFile
         {
@@ -104,7 +163,16 @@ public sealed class CaseAudioMixController : BenControllerBase
         };
         db.CaseFiles.Add(caseFile);
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            try { await _fileStorage.DeleteAsync(storagePath, CancellationToken.None); } catch { /* report the insert's failure, not the cleanup's */ }
+            throw;
+        }
+
         caseFile.UploadFile = uploadFileEntity;
 
         return Ok(new CaseFileRecord
@@ -121,7 +189,15 @@ public sealed class CaseAudioMixController : BenControllerBase
         });
     }
 
-    private static async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
-        => await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+    /// <summary>Whether the caller may take <paramref name="action"/> on this group's cases.</summary>
+    /// <remarks>
+    /// The single endpoint here renders a mix and ATTACHES it to the case as a new file, so it
+    /// needs the grant a case-file upload needs. It asked <c>Case.Read</c> under the name
+    /// <c>IsOrgMember</c>, which is how a read-only member could add files to a case through the
+    /// mixer after the front door was locked.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId, Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
 }

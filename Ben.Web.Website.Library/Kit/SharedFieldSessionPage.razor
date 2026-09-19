@@ -1,0 +1,20 @@
+@namespace Ben.Web.Website.Library.Kit
+@page "/s/{Token}"
+
+@*
+    The end of a share link (item 207).
+
+    A short route, because this string is pasted into an email and read aloud on the phone. The
+    token names a row and nothing else — no session id, no case, no group — so a URL that escapes
+    into a proxy log or a Referer header discloses nothing about what it points at.
+
+    Anonymous by construction: there is no sign-in prompt on this page and no navigation off it.
+    A recipient who follows the link gets exactly the one thing they were sent, and the site is
+    not a doorway they have been let through.
+*@
+
+<FieldKitPlayer SessionId="Guid.Empty" ShareToken="@Token" Standalone="true" />
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+}

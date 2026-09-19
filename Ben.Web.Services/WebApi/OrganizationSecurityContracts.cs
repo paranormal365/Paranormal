@@ -28,6 +28,10 @@ public sealed class RegisterOrganizationRequest
 {
     public string Name { get; set; } = string.Empty;
     public string UrlName { get; set; } = string.Empty;
+
+    /// <summary>What kind of group to start (2026-08-24) — it decides the defaults.</summary>
+    public Ben.Data.Common.Enums.OrganizationKind Kind { get; set; }
+        = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
 }
 
 public sealed class CheckOrganizationAccessRequest
@@ -59,6 +63,8 @@ public sealed class OrganizationUserMembershipResponse
     public bool IsActive { get; set; }
     public DateTime DateCreated { get; set; }
     public DateTime? DateUpdated { get; set; }
+    public Guid? MemberLevelId { get; set; }
+    public string? MemberLevelName { get; set; }
 }
 
 public sealed class OrganizationAccessGrantResponse

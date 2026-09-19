@@ -1,0 +1,81 @@
+@* Shown when a project was opened somewhere its media is not, and the media can be fetched back
+   from the server.
+
+   The question exists because of size, not because of doubt. A few short clips are re-fetched
+   without asking — being interrupted over four megabytes is noise. This appears only when the
+   total is large, or when it is not recorded at all, because somebody opening a project on a
+   tethered phone to check one title should not have an evening's session recordings start moving
+   in silence (2026-09-05 audit, F14).
+
+   "Later" is a real answer, not a cancel: the project still opens, the clips still say they are
+   missing, and nothing has been lost. *@
+@if (Visible)
+{
+    <TelerikWindow Visible="true"
+                   VisibleChanged="@(v => { if (!v) Decline(); })"
+                   Width="420px"
+                   Modal="true"
+                   Draggable="true"
+                   Resizable="false"
+                   Class="bv-missing-media-prompt">
+        <WindowTitle>Media for this project</WindowTitle>
+        <WindowContent>
+            <p class="bv-missing-media-prompt__text">
+                @MediaRelinkPlan.Describe(Candidates)
+            </p>
+            <p class="bv-missing-media-prompt__hint">
+                Until they are downloaded those clips stay on the timeline with no picture or
+                sound, and are left out of any render.
+            </p>
+            @if (_busy)
+            {
+                <p class="bv-missing-media-prompt__hint" role="status">Downloading…</p>
+            }
+        </WindowContent>
+        <WindowFooter>
+            <TelerikButton OnClick="DownloadAsync"
+                           Enabled="@(!_busy)"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Download now
+            </TelerikButton>
+            <TelerikButton OnClick="Decline"
+                           Enabled="@(!_busy)"
+                           FillMode="@ThemeConstants.Button.FillMode.Flat"
+                           Size="@ThemeConstants.Button.Size.Small">
+                Later
+            </TelerikButton>
+        </WindowFooter>
+    </TelerikWindow>
+}
+
+@code {
+    /// <summary>The clips whose media could be fetched back. Empty means nothing to ask about.</summary>
+    [Parameter] public IReadOnlyList<MediaRelinkCandidate> Candidates { get; set; } = [];
+
+    /// <summary>Fetch them now.</summary>
+    [Parameter] public EventCallback OnDownload { get; set; }
+
+    /// <summary>Leave them missing for now.</summary>
+    [Parameter] public EventCallback OnLater { get; set; }
+
+    private bool Visible => Candidates.Count > 0;
+    private bool _busy;
+
+    private async Task DownloadAsync()
+    {
+        // Guarded rather than merely disabled: the window's own close path and a second click can
+        // both arrive while a large download is in flight, and starting it twice would fetch every
+        // file again.
+        if (_busy) return;
+        _busy = true;
+        try { await OnDownload.InvokeAsync(); }
+        finally { _busy = false; }
+    }
+
+    private void Decline()
+    {
+        if (_busy) return;
+        _ = OnLater.InvokeAsync();
+    }
+}

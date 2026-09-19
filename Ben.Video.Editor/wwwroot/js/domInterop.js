@@ -38,6 +38,13 @@ export function fileSize(inputId, index) {
     return document.getElementById(inputId)?.files?.[index]?.size ?? 0;
 }
 
+/** The browser's own MIME type for the file — what the operating system says it is, rather than
+ *  what somebody named it. Empty when the browser has no idea, which is common for the less usual
+ *  formats; the caller falls back to the extension. */
+export function fileType(inputId, index) {
+    return document.getElementById(inputId)?.files?.[index]?.type ?? '';
+}
+
 /** The File itself, handed back as a JS object reference so C# can stream it without a byte[]
  *  copy (same pattern as sidecarInterop.fetchResultAsFile). Null when absent. */
 export function fileAt(inputId, index) {
@@ -52,6 +59,54 @@ export function fileObjectUrl(inputId, index) {
 export function clearFileInput(inputId) {
     const el = document.getElementById(inputId);
     if (el) el.value = '';
+}
+
+// ── Leaving the page ─────────────────────────────────────────────────────────
+
+let _unloadGuard = null;
+
+/**
+ * Turns the browser's "leave site?" prompt on or off for this page.
+ *
+ * Nothing asked before this. Closing the tab, or following a link out of the editor, took whatever
+ * was unsaved with it — and a page that has not registered a handler gets no warning of its own, so
+ * there was no moment at which anybody could have noticed (2026-09-05 audit, F9).
+ *
+ * The listener is added and removed rather than left in place returning nothing, because a
+ * registered beforeunload handler disables the browser's back/forward cache even when it does not
+ * fire.
+ */
+export function setUnloadGuard(enabled, reason) {
+    if (enabled) {
+        if (_unloadGuard) { _unloadGuard.reason = reason; return; }
+
+        _unloadGuard = { reason };
+        _unloadGuard.handler = (e) => {
+            e.preventDefault();
+            // Ignored by most browsers now, which show their own wording. Set for the ones that
+            // still honour it.
+            e.returnValue = _unloadGuard.reason ?? '';
+            return _unloadGuard.reason ?? '';
+        };
+        window.addEventListener('beforeunload', _unloadGuard.handler);
+        return;
+    }
+
+    if (!_unloadGuard) return;
+    window.removeEventListener('beforeunload', _unloadGuard.handler);
+    _unloadGuard = null;
+}
+
+/**
+ * Calls back one last time as the page is hidden, so a pending autosave can be written.
+ *
+ * pagehide is the event that actually fires on every path out — a closed tab, a followed link, and
+ * on mobile a switch to another app, where beforeunload frequently does not fire at all.
+ */
+export function flushOnPageHide(dotnet, methodName) {
+    window.addEventListener('pagehide', () => {
+        try { dotnet.invokeMethodAsync(methodName); } catch { /* the page is going away */ }
+    }, { once: true });
 }
 
 // ── Misc ─────────────────────────────────────────────────────────────────────
@@ -98,6 +153,33 @@ export async function blobUrlAsBytes(url) {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`Reading rendered output failed: HTTP ${resp.status}`);
     return new Uint8Array(await resp.arrayBuffer());
+}
+
+/**
+ * Posts a blob straight from the browser to a URL, as a multipart file.
+ *
+ * The alternative — reading the blob into .NET and posting from there — is what the Blazor Server
+ * host used to do, and Blazor caps a JS-interop return value at 32 KB by default. A render is
+ * megabytes at least, so publishing from the site could not work at all (2026-09-05 audit,
+ * site-1). Here the bytes never leave the browser except on their way to the server.
+ *
+ * Returns the status and any body text rather than throwing, so the caller can say what the server
+ * said instead of "upload failed".
+ */
+export async function postBlobUrlTo(blobUrl, uploadUrl, fileName, contentType) {
+    try {
+        const blob = await (await fetch(blobUrl)).blob();
+
+        const form = new FormData();
+        form.append('file', new File([blob], fileName, { type: contentType || blob.type }), fileName);
+
+        const response = await fetch(uploadUrl, { method: 'POST', body: form, credentials: 'same-origin' });
+        const text = await response.text().catch(() => '');
+
+        return { ok: response.ok, status: response.status, body: text.slice(0, 300) };
+    } catch (err) {
+        return { ok: false, status: 0, body: String(err && err.message ? err.message : err) };
+    }
 }
 
 export function downloadText(text, fileName, mimeType) {

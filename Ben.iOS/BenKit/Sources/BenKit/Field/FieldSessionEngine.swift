@@ -1,0 +1,616 @@
+import Foundation
+
+/// What the live screen is told as a session runs.
+public enum FieldEvent: Sendable {
+    /// The instruments right now — for the gauges. Not everything here is logged.
+    case sample(LiveSample)
+    /// Something crossed the report level, and a reading was written for it.
+    case marked(FieldMarkerRecord)
+    /// A reading was appended to the log.
+    case logged(count: Int)
+}
+
+/// Everything the gauges draw, in one value.
+public struct LiveSample: Sendable, Equatable {
+    public var at: Date
+    public var magneticMicrotesla: Double?
+    public var magneticCalibration: MagneticFieldSample.CalibrationAccuracy?
+    public var soundDbfs: Double?
+    public var soundPeakDbfs: Double?
+    public var position: PositionSample?
+    public var headingDegrees: Double?
+    public var relativeAltitudeMeters: Double?
+
+    public init(at: Date) { self.at = at }
+
+    public var magneticMilligauss: Double? { magneticMicrotesla.map { $0 * 10 } }
+
+    /// How far the field has moved from base, in milligauss — the number the needle actually
+    /// shows once a base is set, because an absolute figure means nothing without one.
+    public func magneticDeviationMilligauss(from baselines: Baselines) -> Double? {
+        guard let now = magneticMicrotesla, let base = baselines.magneticMicrotesla else { return nil }
+        return (now - base) * 10
+    }
+
+    public func soundDeviationDb(from baselines: Baselines) -> Double? {
+        guard let now = soundDbfs, let base = baselines.soundDbfs else { return nil }
+        return now - base
+    }
+}
+
+/// A marker as it happened — the value the UI lists and the store persists.
+public struct FieldMarkerRecord: Sendable, Equatable, Identifiable {
+    public var id: UUID
+    public var at: Date
+    public var kind: MarkerKind
+    public var note: String?
+    /// The room the operator said they were in.
+    public var room: String?
+    public var magneticMicrotesla: Double?
+    public var soundDbfs: Double?
+    public var latitude: Double?
+    public var longitude: Double?
+    public var audioFilename: String?
+    public var audioOffsetSeconds: Double?
+
+    public init(id: UUID = UUID(), at: Date, kind: MarkerKind, note: String? = nil,
+                room: String? = nil,
+                magneticMicrotesla: Double? = nil, soundDbfs: Double? = nil,
+                latitude: Double? = nil, longitude: Double? = nil,
+                audioFilename: String? = nil, audioOffsetSeconds: Double? = nil) {
+        self.id = id
+        self.at = at
+        self.kind = kind
+        self.note = note
+        self.room = room
+        self.magneticMicrotesla = magneticMicrotesla
+        self.soundDbfs = soundDbfs
+        self.latitude = latitude
+        self.longitude = longitude
+        self.audioFilename = audioFilename
+        self.audioOffsetSeconds = audioOffsetSeconds
+    }
+}
+
+/// Runs a session: reads the instruments, decides what is worth writing down, and writes it.
+///
+/// An actor, and every decision inside it is a pure function of samples and a clock — so all of
+/// it can be tested on a Mac with scripted streams, which matters because the simulator has no
+/// magnetometer and the test host has no CoreMotion at all.
+public actor FieldSessionEngine {
+
+    private let sessionId: UUID
+    private let log: ReadingLog
+    private let sensors: SensorSuite
+    private let now: @Sendable () -> Date
+
+    public private(set) var policy: SamplingPolicy
+    public private(set) var baselines: Baselines
+    public private(set) var channels: CaptureChannels
+
+    private var latest = LiveSample(at: .distantPast)
+    private var sequence = 0
+    private var lastHeartbeat: Date?
+    /// When the tracking channels — fix, heading, altitude — first reported. They pay a heartbeat
+    /// only once one is overdue from here, so the first reading of the night is written by the
+    /// instruments, with everything that had arrived by then, rather than by whichever channel
+    /// happened to report first.
+    private var trackingSince: Date?
+    private var lastMagneticEvent: Date?
+    private var lastSoundEvent: Date?
+    private var lastMovementEvent: Date?
+    private var lastSceneEvent: Date?
+    /// Nil until the session is armed. While nil nothing automatic fires at all, which is what
+    /// makes "armed" a real state rather than a label.
+    private var sentry: SentryConfig?
+    /// Resting acceleration, learned when arming — a phone propped against a wall is not at
+    /// rest in the same way one flat on a table is.
+    private var movementFloorG: Double = 0
+    /// The most a resting phone is taken to read of its own — a propped one is a few
+    /// hundredths; anything past this on a first sample is movement, not a place to start from.
+    private static let restingCeilingG = 0.05
+    private var running = false
+    /// Whether readings reach the log. Sensors run from `start()` so the gauge moves and a base
+    /// level can be set; nothing is WRITTEN until `beginLogging()` — Start on the live screen
+    /// (item 215). Every path to the log goes through `append`, so this is the one gate.
+    private var logging = false
+    public var isLogging: Bool { logging }
+
+    /// Opens the log. Readings before this moment were never anybody's evidence.
+    public func beginLogging() {
+        logging = true
+    }
+    private var tasks: [Task<Void, Never>] = []
+
+    /// Set while a recording is running, so a marker can say where in the file it landed.
+    private var recording: (filename: String, startedAt: Date)?
+
+    /// Which room the operator says they are in.
+    ///
+    /// **The only reliable source of this fact.** A phone indoors is routinely 20–50 m out —
+    /// the width of the whole building — so nothing the instruments produce can tell one room
+    /// from another. A person saying "kitchen" is better data than any fix, and everything
+    /// recorded from that moment carries it until they say otherwise.
+    private var room: String?
+
+    /// The question currently being waited on. EVP work is question, silence, question — and
+    /// what a reviewer needs is the SILENCE bracketed, not just the moment somebody spoke.
+    private var openQuestion: (markerId: UUID, at: Date, text: String?)?
+
+    private var continuations: [UUID: AsyncStream<FieldEvent>.Continuation] = [:]
+
+    public init(sessionId: UUID,
+                log: ReadingLog,
+                sensors: SensorSuite,
+                policy: SamplingPolicy = .default,
+                channels: CaptureChannels = .default,
+                baselines: Baselines = Baselines(),
+                now: @escaping @Sendable () -> Date = Date.init) {
+        self.sessionId = sessionId
+        self.log = log
+        self.sensors = sensors
+        self.policy = policy
+        self.channels = channels
+        self.baselines = baselines
+        self.now = now
+    }
+
+    // MARK: - Events out
+
+    public func events() -> AsyncStream<FieldEvent> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeContinuation(id) }
+            }
+        }
+    }
+
+    private func removeContinuation(_ id: UUID) { continuations[id] = nil }
+
+    private func emit(_ event: FieldEvent) {
+        for continuation in continuations.values { continuation.yield(event) }
+    }
+
+    // MARK: - Running
+
+    public func start() {
+        guard !running else { return }
+        running = true
+        restartSensorTasks()
+    }
+
+    public func stop() async {
+        running = false
+        for task in tasks { task.cancel() }
+        tasks = []
+        try? await log.close()
+        for continuation in continuations.values { continuation.finish() }
+        continuations = [:]
+    }
+
+    /// Turns channels on and off mid-session. The streams for anything switched off are torn
+    /// down rather than left running quietly — the whole reason somebody switches video off at
+    /// 2am is that they want the battery back.
+    public func setChannels(_ channels: CaptureChannels) {
+        guard channels != self.channels else { return }
+        self.channels = channels
+        if running { restartSensorTasks() }
+    }
+
+    public func setPolicy(_ policy: SamplingPolicy) {
+        self.policy = policy
+    }
+
+    /// Says which room this is. Everything recorded from now on carries it.
+    public func setRoom(_ room: String?) {
+        let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.room = (trimmed?.isEmpty ?? true) ? nil : trimmed
+    }
+
+    public func currentRoom() -> String? { room }
+
+    // MARK: - Sentry
+
+    /// Starts watching. Baselines must already be set for the field and sound triggers to mean
+    /// anything, which is why the screen refuses to arm without them.
+    public func arm(_ config: SentryConfig) {
+        sentry = config
+        // Everything armed a moment ago describes a room nobody was in yet.
+        lastMagneticEvent = nil
+        lastSoundEvent = nil
+        lastMovementEvent = nil
+        lastSceneEvent = nil
+        // The resting level too: the phone has been picked up and put down somewhere else.
+        movementFloorG = 0
+        if running { restartSensorTasks() }
+    }
+
+    public func disarm() {
+        sentry = nil
+        if running { restartSensorTasks() }
+    }
+
+    public var isArmed: Bool { sentry != nil }
+    public var sentryConfig: SentryConfig? { sentry }
+
+    func ingest(movement sample: DeviceMovementSample) async {
+        // Learn the floor from the quiet moments rather than assuming zero. This used to be
+        // `max(floor * 0.995, min(floor, sample))`, which from a floor of zero is zero for ever —
+        // the floor never learned anything, and a phone propped against a wall, reading a steady
+        // 0.02 g of its own, sat above a 0.01 g threshold and marked "the device was moved" on
+        // every sample. A slow average follows the resting level and lets a knock stand out from it.
+        //
+        // Only quiet samples teach it. A knock is exactly what must NOT raise the floor, or a
+        // phone that is shaken twice learns that shaking is normal.
+        //
+        // The first sample IS the floor. Judged against zero it would be a knock on any phone
+        // that is not perfectly still, and a floor that only learns from quiet samples would then
+        // never learn at all — every sample a knock, the floor stuck at zero for the night.
+        //
+        // Capped, because a phone at rest does not read a fifth of a g of its own: a first sample
+        // that high is a knock before there was time to learn anything, and seeding the floor from
+        // it would swallow it. Above the cap the excess is judged as usual.
+        if movementFloorG == 0 { movementFloorG = min(sample.magnitudeG, Self.restingCeilingG) }
+        let excess = sample.magnitudeG - movementFloorG
+        let threshold = sentry?.watchDeviceMovement == true ? sentry?.deviceMovementThresholdG : nil
+        let isAKnock = threshold.map { excess >= $0 } ?? false
+        // A knock barely moves it; a level that stays raised — the phone picked up and carried —
+        // becomes the new floor over some seconds rather than being a knock for ever.
+        movementFloorG += (sample.magnitudeG - movementFloorG) * (isAKnock ? 0.005 : 0.02)
+
+        guard let sentry, sentry.watchDeviceMovement else { return }
+        guard isAKnock, passesDebounce(last: lastMovementEvent, at: sample.at) else { return }
+
+        lastMovementEvent = sample.at
+        await record(kind: .deviceMoved, at: sample.at,
+                     note: String(format: "the device was moved (%.2f g)", sample.magnitudeG))
+    }
+
+    func ingest(scene sample: SceneMotionSample) async {
+        guard let sentry, sentry.watchSceneMotion else { return }
+        guard sample.changedFraction >= sentry.sceneMotionThreshold,
+              passesDebounce(last: lastSceneEvent, at: sample.at)
+        else { return }
+
+        lastSceneEvent = sample.at
+        await record(kind: .sceneMotion, at: sample.at,
+                     note: String(format: "%.0f%% of the view changed",
+                                  sample.changedFraction * 100))
+    }
+
+    private func restartSensorTasks() {
+        for task in tasks { task.cancel() }
+        tasks = []
+
+        if channels.contains(.magnetic), let magnetometer = sensors.magnetometer,
+           magnetometer.isAvailable {
+            let stream = magnetometer.samples(hz: policy.gaugeHz)
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(magnetic: sample) }
+            })
+        }
+        if channels.contains(.audio), let audio = sensors.audio, audio.isAvailable {
+            let stream = audio.levels()
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(audio: sample) }
+            })
+        }
+        if channels.contains(.location), let location = sensors.location, location.isAvailable {
+            let positions = location.positions()
+            tasks.append(Task { [weak self] in
+                for await sample in positions { await self?.ingest(position: sample) }
+            })
+            let headings = location.headings()
+            tasks.append(Task { [weak self] in
+                for await sample in headings { await self?.ingest(heading: sample) }
+            })
+        }
+        // Only while armed and only when asked for: an accelerometer stream running all night
+        // for nothing is battery somebody wanted for the magnetometer.
+        if sentry?.watchDeviceMovement == true, let movement = sensors.deviceMovement,
+           movement.isAvailable {
+            let stream = movement.movements(hz: 10)
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(movement: sample) }
+            })
+        }
+        if sentry?.watchSceneMotion == true, let scene = sensors.sceneMotion, scene.isAvailable {
+            let stream = scene.sceneMotion()
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(scene: sample) }
+            })
+        }
+        if let altitude = sensors.altitude, altitude.isAvailable {
+            let stream = altitude.relativeAltitudes()
+            tasks.append(Task { [weak self] in
+                for await sample in stream { await self?.ingest(altitude: sample) }
+            })
+        }
+    }
+
+    // MARK: - Ingest
+
+    func ingest(magnetic sample: MagneticFieldSample) async {
+        latest.at = sample.at
+        latest.magneticMicrotesla = sample.magnitudeMicrotesla
+        latest.magneticCalibration = sample.calibration
+        emit(.sample(latest))
+
+        // A spike read while the magnetometer is uncalibrated is not evidence of anything, so
+        // it never raises an event. It is still logged on the heartbeat, carrying its accuracy,
+        // because hiding it entirely would be its own kind of dishonesty.
+        if sentry?.watchMagnetic == true,
+           sample.calibration.isTrustworthy,
+           let deviation = latest.magneticDeviationMilligauss(from: baselines),
+           abs(deviation) >= policy.reportAtMilligauss,
+           passesDebounce(last: lastMagneticEvent, at: sample.at) {
+            lastMagneticEvent = sample.at
+            await record(kind: .sentryEmf, at: sample.at,
+                         note: String(format: "field moved %.0f mG from base", deviation))
+        }
+
+        await heartbeatIfDue(at: sample.at)
+    }
+
+    func ingest(audio sample: AudioLevelSample) async {
+        latest.at = sample.at
+        latest.soundDbfs = sample.averageDbfs
+        latest.soundPeakDbfs = sample.peakDbfs
+        emit(.sample(latest))
+
+        if sentry?.watchSound == true,
+           let deviation = latest.soundDeviationDb(from: baselines),
+           deviation >= policy.reportAtDecibels,
+           passesDebounce(last: lastSoundEvent, at: sample.at) {
+            lastSoundEvent = sample.at
+            await record(kind: .sentrySound, at: sample.at,
+                         note: String(format: "sound rose %.0f dB above base", deviation))
+        }
+
+        await heartbeatIfDue(at: sample.at)
+    }
+
+    // The heartbeat is owed from EVERY channel, not only the two with a report level. It used to
+    // be paid only from the magnetometer and the microphone, so a session with both switched off
+    // — which is exactly what somebody does at 2am to save the battery — wrote no readings at
+    // all, and the walk it was still tracking never reached the log.
+
+    func ingest(position sample: PositionSample) async {
+        latest.position = sample
+        emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
+    }
+
+    func ingest(heading sample: HeadingSample) async {
+        latest.headingDegrees = sample.degrees
+        emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
+    }
+
+    func ingest(altitude sample: RelativeAltitudeSample) async {
+        latest.relativeAltitudeMeters = sample.metersSinceStart
+        emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
+    }
+
+    private func passesDebounce(last: Date?, at moment: Date) -> Bool {
+        guard let last else { return true }
+        return moment.timeIntervalSince(last) >= policy.debounceSeconds
+    }
+
+    // MARK: - Writing
+
+    /// Who is offering to write the heartbeat.
+    private enum HeartbeatPayer {
+        /// The magnetometer and the microphone. The first heartbeat is theirs at once.
+        case instruments
+        /// Fix, heading, altitude. They write one only when it is overdue — measured from the
+        /// last heartbeat or, before there is one, from when they first reported — so a session
+        /// with the instruments off still gets its heartbeats, and one with them on still has
+        /// its first reading written by them with everything that had arrived.
+        case tracking
+    }
+
+    private func heartbeatIfDue(at moment: Date, owedBy payer: HeartbeatPayer = .instruments) async {
+        if payer == .tracking, trackingSince == nil { trackingSince = moment }
+        let since = lastHeartbeat ?? (payer == .tracking ? trackingSince : nil)
+        if let since, moment.timeIntervalSince(since) < policy.heartbeatSeconds { return }
+        lastHeartbeat = moment
+        await append(reading(at: moment, triggeredBy: .interval))
+    }
+
+    /// The current state of the instruments, as a reading.
+    private func reading(at moment: Date,
+                         triggeredBy trigger: FieldReading.Trigger,
+                         marker: MarkerKind? = nil,
+                         note: String? = nil,
+                         audio: FieldReading.FileRef? = nil) -> FieldReading {
+        sequence += 1
+
+        var measurements: [String: FieldReading.Measurement] = [:]
+        if let marker {
+            // The kind rides here because the spec's `triggered_by` is a closed enum of three
+            // values. A string measurement needs no unit, so this is legal and machine-readable.
+            measurements["marker"] = .label(marker.rawValue)
+        }
+        if let field = latest.magneticMicrotesla {
+            measurements["emf"] = .number(
+                field, unit: "uT",
+                accuracy: latest.magneticCalibration?.microteslaTolerance,
+                baseline: baselines.magneticMicrotesla)
+        }
+        if let sound = latest.soundDbfs {
+            measurements["sound_level"] = .number(sound, unit: "dBFS",
+                                                  baseline: baselines.soundDbfs)
+        }
+        if let altitude = latest.relativeAltitudeMeters {
+            measurements["relative_altitude"] = .number(altitude, unit: "m")
+        }
+        if let battery = sensors.batteryPercent() {
+            measurements["battery"] = .number(battery, unit: "percent")
+        }
+        if let room {
+            // A label, so it needs no unit — the format's own way of extending a reading without
+            // inventing a top-level field.
+            measurements["room"] = .label(room)
+        }
+
+        // No fix means NO position — never a zero, which is a real place in the Gulf of Guinea.
+        var position: FieldReading.Position?
+        if let fix = latest.position {
+            position = .init(latitude: fix.latitude, longitude: fix.longitude,
+                             elevationMeters: fix.altitudeMeters,
+                             accuracyMeters: fix.accuracyMeters)
+        }
+
+        let motion = FieldReading.Motion(headingDegrees: latest.headingDegrees,
+                                         courseDegrees: latest.position?.courseDegrees,
+                                         speedMps: latest.position?.speedMps)
+
+        return FieldReading(
+            at: moment,
+            precision: .millisecond,
+            sequence: sequence,
+            triggeredBy: trigger,
+            measurements: measurements.isEmpty ? nil : measurements,
+            position: position,
+            motion: motion.isEmpty ? nil : motion,
+            audioRef: audio,
+            note: note)
+    }
+
+    private func append(_ reading: FieldReading) async {
+        guard logging else { return }
+        do {
+            try await log.append(reading)
+            emit(.logged(count: sequence))
+        } catch {
+            // A log that cannot be written is worth knowing about, but it must not take the
+            // session down: the person is standing in a building and the other channels still
+            // work. The failure surfaces through the session's reading count not moving.
+        }
+    }
+
+    /// Writes a marker — automatic or by hand — and tells the screen about it.
+    @discardableResult
+    public func mark(kind: MarkerKind, note: String? = nil) async -> FieldMarkerRecord {
+        await record(kind: kind, at: now(), note: note)
+    }
+
+    @discardableResult
+    private func record(kind: MarkerKind, at moment: Date, note: String?) async -> FieldMarkerRecord {
+        // A mark before Start has no session time to belong to. The screen hides the control
+        // until then; this is the guarantee behind it, so a stale button cannot log a phantom.
+        var audioRef: FieldReading.FileRef?
+        if let recording {
+            audioRef = .relative(recording.filename,
+                                 mediaType: "audio/mp4",
+                                 startOffsetSeconds: moment.timeIntervalSince(recording.startedAt))
+        }
+
+        await append(reading(at: moment, triggeredBy: kind.trigger,
+                             marker: kind, note: note, audio: audioRef))
+
+        let record = FieldMarkerRecord(
+            at: moment, kind: kind, note: note, room: room,
+            magneticMicrotesla: latest.magneticMicrotesla,
+            soundDbfs: latest.soundDbfs,
+            latitude: latest.position?.latitude,
+            longitude: latest.position?.longitude,
+            audioFilename: audioRef?.filename,
+            audioOffsetSeconds: audioRef?.startOffsetSeconds)
+        emit(.marked(record))
+        return record
+    }
+
+    // MARK: - Levels
+
+    /// Takes the room as it is right now and calls that normal.
+    @discardableResult
+    public func setBaselines() -> Baselines {
+        baselines = Baselines(magneticMicrotesla: latest.magneticMicrotesla,
+                              soundDbfs: latest.soundDbfs,
+                              setAt: now())
+        // A fresh base means the old debounce windows describe a world that no longer exists.
+        lastMagneticEvent = nil
+        lastSoundEvent = nil
+        return baselines
+    }
+
+    public func clearBaselines() {
+        baselines = Baselines()
+    }
+
+    public func setRecording(filename: String?, startedAt: Date?) {
+        if let filename, let startedAt {
+            recording = (filename, startedAt)
+        } else {
+            recording = nil
+        }
+    }
+
+    /// Notes a captured file against the session. Best-effort by design: the FILE is already on
+    /// disk by the time this runs, so a failure to write its reading loses the note, never the
+    /// photo.
+    @discardableResult
+    public func noteCapture(kind: CaptureKind, relativePath: String,
+                            durationSeconds: Double? = nil) async -> FieldReading {
+        sequence -= 1   // `reading` increments; keep the numbering continuous
+        let entry = reading(
+            at: now(), triggeredBy: .manual,
+            marker: nil,
+            note: "\(kind.rawValue): \(relativePath)",
+            audio: kind == .audio
+                ? FieldReading.FileRef.relative(relativePath, mediaType: "audio/mp4",
+                                                durationSeconds: durationSeconds)
+                : nil)
+
+        var withMarker = entry
+        // Photos and video have no home in the v1 format's `audio_ref`, so the kind travels as a
+        // marker label and the path in the note. Flagged for Ben as a `media_ref` candidate for
+        // a future spec version rather than inventing a top-level field here.
+        var measurements = withMarker.measurements ?? [:]
+        measurements["marker"] = .label(kind.rawValue)
+        withMarker.measurements = measurements
+
+        await append(withMarker)
+        return withMarker
+    }
+
+    // MARK: - EVP
+
+    /// Marks a question being asked, and starts the wait.
+    ///
+    /// Asking again while a wait is open closes the previous one first: somebody moving straight
+    /// to the next question has ended the last silence by speaking, and the record should say
+    /// where it actually ended rather than leaving it open forever.
+    @discardableResult
+    public func askQuestion(_ text: String?) async -> FieldMarkerRecord {
+        if openQuestion != nil { await endWait() }
+        let marker = await record(kind: .evpQuestion, at: now(), note: text)
+        openQuestion = (marker.id, marker.at, text)
+        return marker
+    }
+
+    /// Closes the wait after a question. Nil when nothing was open — ending a silence that never
+    /// started would put a mark in the file with nothing on the other end of it.
+    @discardableResult
+    public func endWait() async -> FieldMarkerRecord? {
+        guard let question = openQuestion else { return nil }
+        openQuestion = nil
+
+        let moment = now()
+        let waited = moment.timeIntervalSince(question.at)
+        let note = question.text.map { "waited \(Int(waited.rounded()))s after: \($0)" }
+            ?? "waited \(Int(waited.rounded()))s"
+        return await record(kind: .evpWaitEnd, at: moment, note: note)
+    }
+
+    /// When the open question was asked, if there is one.
+    public func questionOpenedAt() -> Date? { openQuestion?.at }
+
+    public func currentSample() -> LiveSample { latest }
+    public func readingCount() -> Int { sequence }
+}

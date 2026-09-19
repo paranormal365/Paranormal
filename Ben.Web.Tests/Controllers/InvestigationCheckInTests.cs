@@ -34,7 +34,7 @@ public class InvestigationCheckInTests
         IDbContextFactory<BenDataContext> Factory, Guid InvestigationId, Guid AttendeeRowId);
 
     private static OrgInvestigationsController Build(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, new Mock<IMapper>().Object, new Mock<IAuditLogService>().Object)
+        => new(f, new Mock<IMapper>().Object, new Mock<IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -86,6 +86,7 @@ public class InvestigationCheckInTests
         });
 
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, OrgId);
         return new World(factory, invId, attendeeRow);
     }
 
@@ -302,7 +303,12 @@ public class InvestigationCheckInTests
 
         await Build(w.Factory, AttendeeId).CheckIn(OrgId, w.InvestigationId, new CheckInRequest(), default);
 
-        var mine = new MyInvestigationsController(w.Factory)
+        var mineSecurity = new Mock<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>();
+        mineSecurity.Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+            It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityTable>(),
+            It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var mine = new MyInvestigationsController(w.Factory, mineSecurity.Object)
         {
             ControllerContext = new ControllerContext
             {

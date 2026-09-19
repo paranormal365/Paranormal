@@ -1,0 +1,114 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@*
+    The site's slideshow. One wrapper so a reel of photographs looks and behaves the same
+    everywhere (Ben, 2026-09-10: "create the slideshow as a reusable configurable component in the
+    library").
+
+    Telerik's Carousel does the paging, the arrows and the dots; this decides everything a caller
+    should not have to think about — the caption strip, the credit line, the alt text, what a
+    single slide does, and what nothing at all does.
+
+    Two rules worth stating, because both were mistakes waiting to happen:
+
+      * NOTHING renders when there are no slides. An empty carousel draws a grey box with arrows
+        that page through nothing, which reads as a broken page rather than as an absent one.
+      * ONE slide renders as a plain picture, with no arrows and no dots. Paging controls that
+        cannot go anywhere are furniture.
+
+    Telerik throws on an attribute it does not recognise, so every parameter here is declared and
+    forwarded explicitly rather than splatted.
+*@
+
+@if (Slides.Count == 1)
+{
+    @* A single picture needs no machinery around it. *@
+    <div class="ben-slideshow ben-slideshow--single" style="@HeightStyle">
+        @Frame(Slides[0])
+    </div>
+}
+else if (Slides.Count > 1)
+{
+    <div class="ben-slideshow" style="@HeightStyle">
+        <TelerikCarousel Data="@Slides"
+                         Width="100%"
+                         Height="@Height"
+                         LoopPages="@Loop"
+                         AutomaticPageChange="@AutoAdvance"
+                         AutomaticPageChangeInterval="@IntervalMilliseconds">
+            <Template>
+                @Frame((BenSlide)context)
+            </Template>
+        </TelerikCarousel>
+    </div>
+}
+
+@code {
+    /// <summary>The pictures, in the order they should be seen.</summary>
+    [Parameter] public IReadOnlyList<BenSlide> Slides { get; set; } = [];
+
+    /// <summary>Any CSS height — <c>"360px"</c>, <c>"50vh"</c>.</summary>
+    [Parameter] public string Height { get; set; } = "360px";
+
+    /// <summary>Whether the last slide leads back to the first.</summary>
+    [Parameter] public bool Loop { get; set; } = true;
+
+    /// <summary>
+    /// Whether it advances on its own.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, deliberately. A reel that moves while somebody is reading a caption takes
+    /// the page away from them, and it is the kind of motion a reader with vestibular trouble
+    /// cannot escape. Turn it on where a slideshow is decoration nobody is reading.
+    /// </remarks>
+    [Parameter] public bool AutoAdvance { get; set; }
+
+    /// <summary>How long each slide holds when <see cref="AutoAdvance"/> is on.</summary>
+    [Parameter] public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(6);
+
+    /// <summary>
+    /// How the picture is fitted: <c>cover</c> fills the frame and crops, <c>contain</c> shows the
+    /// whole picture and leaves bars.
+    /// </summary>
+    /// <remarks>
+    /// <c>cover</c> suits a reel of photographs of one subject; <c>contain</c> suits pictures whose
+    /// edges matter — a poster, a document, a screenshot.
+    /// </remarks>
+    [Parameter] public string Fit { get; set; } = "cover";
+
+    private int IntervalMilliseconds => (int)Math.Max(1000, Interval.TotalMilliseconds);
+
+    private string HeightStyle => $"height:{Height};";
+
+    private RenderFragment Frame(BenSlide slide) => __builder =>
+    {
+        <div class="ben-slideshow__frame">
+            @if (!string.IsNullOrWhiteSpace(slide.LinkUrl))
+            {
+                <a href="@slide.LinkUrl" class="ben-slideshow__link">
+                    <img src="@slide.Url" alt="@slide.Describe()" loading="lazy"
+                         class="ben-slideshow__image" style="@($"object-fit:{Fit};")" />
+                </a>
+            }
+            else
+            {
+                <img src="@slide.Url" alt="@slide.Describe()" loading="lazy"
+                     class="ben-slideshow__image" style="@($"object-fit:{Fit};")" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(slide.Caption) || !string.IsNullOrWhiteSpace(slide.Credit))
+            {
+                <div class="ben-slideshow__strip">
+                    @if (!string.IsNullOrWhiteSpace(slide.Caption))
+                    {
+                        <div class="ben-slideshow__caption">@slide.Caption</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(slide.Credit))
+                    {
+                        <div class="ben-slideshow__credit">@slide.Credit</div>
+                    }
+                </div>
+            }
+        </div>
+    };
+}

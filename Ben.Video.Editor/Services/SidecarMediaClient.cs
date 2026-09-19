@@ -21,7 +21,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class SidecarMediaClient(SidecarSourceUploader uploader, SidecarTransport transport, IJSRuntime js)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(400);
 
     public async Task<MediaProbeInfo> ProbeAsync(
@@ -55,7 +55,7 @@ public sealed class SidecarMediaClient(SidecarSourceUploader uploader, SidecarTr
 
         var jobId = await PostThumbnailJobAsync(baseUrl, token, new ThumbnailJobRequest(clipId, ext, count, duration), ct);
 
-        var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         var urls = new List<string>(count);
         try
         {

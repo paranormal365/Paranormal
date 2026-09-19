@@ -106,6 +106,16 @@ public class UploadFileAudioConfigControllerTests
         return (fileId, ownerId);
     }
 
+    /// <summary>A file anybody may view, so that "can view" and "can manage" pull apart.</summary>
+    private static async Task<(Guid FileId, Guid OwnerId)> SeedPublicFileAsync(BenDataContext db)
+    {
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        var file = await db.UploadFiles.FirstAsync(f => f.Id == fileId);
+        file.IsPublic = true;
+        await db.SaveChangesAsync();
+        return (fileId, ownerId);
+    }
+
     private static async Task<Guid> SeedConfigAsync(BenDataContext db, Guid fileId, Guid userId)
     {
         var id = Guid.NewGuid();
@@ -135,14 +145,72 @@ public class UploadFileAudioConfigControllerTests
     [Fact]
     public async Task Get_ReturnsNull_WhenFileExistsButNoConfigSaved()
     {
-        await using var db  = CreateDb();
-        var (fileId, _)     = await SeedFileAsync(db);
-        var ctrl            = Build(db, AuthUser(Guid.NewGuid()));
+        await using var db    = CreateDb();
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        var ctrl              = Build(db, AuthUser(ownerId));
 
-        var result          = await ctrl.Get(fileId);
+        var result            = await ctrl.Get(fileId);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Null(ok.Value);
+    }
+
+    /// <summary>
+    /// Reading had no per-file check at all — any signed-in caller could read the settings saved
+    /// against any recording (2026-09-06 audio walk, finding 9).
+    /// </summary>
+    [Fact]
+    public async Task Get_UnrelatedCaller_ReturnsForbid()
+    {
+        await using var db    = CreateDb();
+        var (fileId, ownerId) = await SeedFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl              = Build(db, AuthUser(Guid.NewGuid()));
+
+        var result            = await ctrl.Get(fileId);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Seeing a recording is not owning it.
+    /// </summary>
+    /// <remarks>
+    /// <para>PUT and DELETE asked <c>CanViewFileAsync</c>, so everyone the recording reached could
+    /// overwrite or delete the owner's saved view of it — zoom, colours, spectrogram, the whole
+    /// listening chain — and the owner would simply find it changed with no sign of who did it
+    /// (finding 9).</para>
+    ///
+    /// <para>A PUBLIC file is what makes this visible: the unrelated-caller tests already here pass
+    /// either way, because a stranger cannot view a private file at all. Everyone can view this
+    /// one, and only its owner may change it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Upsert_SomeoneWhoCanOnlyViewTheFile_ReturnsForbid()
+    {
+        await using var db    = CreateDb();
+        var (fileId, ownerId) = await SeedPublicFileAsync(db);
+        var ctrl              = Build(db, AuthUser(Guid.NewGuid()));
+
+        var result = await ctrl.Upsert(fileId, new UpsertAudioConfigRequest { WaveColor = "#000000" });
+
+        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Empty(db.UploadFileAudioConfigs);
+        Assert.NotEqual(Guid.Empty, ownerId);
+    }
+
+    [Fact]
+    public async Task Delete_SomeoneWhoCanOnlyViewTheFile_ReturnsForbid()
+    {
+        await using var db    = CreateDb();
+        var (fileId, ownerId) = await SeedPublicFileAsync(db);
+        await SeedConfigAsync(db, fileId, ownerId);
+        var ctrl              = Build(db, AuthUser(Guid.NewGuid()));
+
+        var result = await ctrl.Delete(fileId);
+
+        Assert.IsType<ForbidResult>(result);
+        Assert.Single(db.UploadFileAudioConfigs);
     }
 
     [Fact]
@@ -335,4 +403,22 @@ public class UploadFileAudioConfigControllerTests
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    // ── The race two saves a second apart create (2026-09-06 audio audit, phase 6) ──
+    //
+    // The editor saves the view automatically as controls are used, and the colour-ramp picker
+    // does it without being awaited — so toggling the spectrogram and then choosing a ramp puts
+    // two requests in the air at once. On a recording with no saved row yet both found nothing,
+    // both inserted, and the second hit the one-to-one unique index and came back as an unhandled
+    // 500 that the editor reported as "this recording isn't yours to change".
+    //
+    // THERE IS NO UNIT TEST HERE, deliberately. Reproducing the interleave needs one request to
+    // read after another has read and before it has written, and a controller test can only call
+    // Upsert start-to-finish: a sequential pair simply updates, and passes against the broken code
+    // just as happily. A test that cannot fail is worse than none.
+    //
+    // What is covered instead: AudioFilePreview serialises its saves so two are never in flight
+    // (the actual prevention), and the browser test that found this — How_you_set_the_editor_up —
+    // exercises exactly the two-controls-in-a-row gesture that produced it. The server's recovery
+    // is defence in depth for any other client.
 }

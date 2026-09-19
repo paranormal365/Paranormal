@@ -136,29 +136,41 @@ public class AreaOfOperationAdapterTests
             new(Guid.NewGuid(), "Ghost Hunters TN", "ghost-hunters-tn",
                 "Within 30 miles of Nashville, TN", 30, 12.4, true, false, null),
         };
-        api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<OrgSearchResult>>(
+        api.Setup(x => x.GetAnonymousListAsync<OrgSearchResult>(
                 It.Is<string>(s => s.StartsWith("/api/public/organizations/search")),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(results);
+           .ReturnsAsync(LoadResult<OrgSearchResult>.Ok(results));
 
         var result = await Build(api).SearchOrganizationsAsync(36.1627, -86.7816);
 
-        Assert.Single(result);
-        Assert.Equal("Ghost Hunters TN", result[0].Name);
-        Assert.True(result[0].IsWithinRange);
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("Ghost Hunters TN", result.Items[0].Name);
+        Assert.True(result.Items[0].IsWithinRange);
     }
 
+    /// <summary>
+    /// A refused search must not read as a part of the country with no groups in it.
+    /// </summary>
+    /// <remarks>
+    /// This test used to assert the opposite — that a failed fetch "returns empty" — which was a
+    /// green test defending item 120's bug. The front page runs this search for signed-out
+    /// visitors, who have no account and no error to go on.
+    /// </remarks>
     [Fact]
-    public async Task SearchOrganizationsAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task SearchOrganizationsAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<OrgSearchResult>>(
+        api.Setup(x => x.GetAnonymousListAsync<OrgSearchResult>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<OrgSearchResult>?)null);
+           .ReturnsAsync(LoadResult<OrgSearchResult>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).SearchOrganizationsAsync(36.0, -87.0);
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
@@ -166,10 +178,10 @@ public class AreaOfOperationAdapterTests
     {
         var api = ApiMock();
         string? capturedUrl = null;
-        api.Setup(x => x.GetAnonymousAsync<IReadOnlyList<OrgSearchResult>>(
+        api.Setup(x => x.GetAnonymousListAsync<OrgSearchResult>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
            .Callback<string, CancellationToken>((url, _) => capturedUrl = url)
-           .ReturnsAsync([]);
+           .ReturnsAsync(LoadResult<OrgSearchResult>.Ok([]));
 
         await Build(api).SearchOrganizationsAsync(36.1627, -86.7816, maxResults: 10);
 

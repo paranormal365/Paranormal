@@ -16,14 +16,22 @@ public sealed class ScheduleProposalController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public ScheduleProposalController(IDbContextFactory<BenDataContext> db) => _db = db;
+    private readonly Services.ClientStatusMailer _clientMail;
+
+    public ScheduleProposalController(IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ClientStatusMailer clientMail)
+    {
+        _clientMail = clientMail; _db = db; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ScheduleProposalDto>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Read, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposals = await db.InvestigationScheduleProposals.AsNoTracking()
@@ -41,9 +49,14 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         if (request.Slots is null || request.Slots.Count == 0) return BadRequest("At least one proposed slot is required.");
+
+        // A slot may cross midnight, and it may span a weekend — it may not finish before it
+        // starts. A client asked to choose between reversed windows has nothing to choose.
+        if (request.Slots.Any(s => s.EndDateTime is { } end && end <= s.StartDateTime))
+            return BadRequest("Every proposed date has to end after it starts.");
 
         var proposal = new InvestigationScheduleProposal
         {
@@ -77,7 +90,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Cases, OrganizationSecurityAction.Delete, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals
@@ -98,7 +111,7 @@ public sealed class ScheduleProposalController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, OrganizationPermissionArea.Investigations, OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
@@ -110,7 +123,12 @@ public sealed class ScheduleProposalController : BenControllerBase
 
         var investigation = new Investigation
         {
-            Id = Guid.NewGuid(), CaseId = caseId,
+            // OrganizationId is a direct FK and is NOT derived from the case at read time, so
+            // omitting it here left the investigation owned by Guid.Empty — belonging to no group,
+            // absent from every org-scoped list, while the proposal happily showed "Converted".
+            // The one investigation-creating path that had this wrong was the one the CLIENT
+            // starts by accepting a date.
+            Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
             Title = request.Title?.Trim() ?? "Investigation",
             ScheduledDateTime = slot.StartDateTime,
             EndDateTime = slot.EndDateTime,
@@ -124,12 +142,24 @@ public sealed class ScheduleProposalController : BenControllerBase
         proposal.DateUpdated = DateTime.UtcNow;
         proposal.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitScheduledAsync(db, caseForMail, investigation, ct);   // item 206
         return Ok(ToDto(proposal));
     }
 
-    private static async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
-        => await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+    /// <summary>Whether the caller may take <paramref name="action"/> in the given area.</summary>
+    /// <remarks>
+    /// Was <c>IsOrgMember</c>, asking <c>Case.Read</c> for every endpoint — so a member who could
+    /// only read a case could send the client date proposals in the group's name, withdraw them,
+    /// and convert one into a scheduled investigation. Converting creates an investigation, so it
+    /// is asked of the Investigations area rather than Cases: it is the same act as scheduling one
+    /// directly, and should need the same grant.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, OrganizationPermissionArea area,
+        OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId, area, action, ct);
 
     private static ScheduleProposalDto ToDto(InvestigationScheduleProposal p) => new(
         p.Id, p.CaseId, p.Status, p.Notes, p.AcceptedSlotId,

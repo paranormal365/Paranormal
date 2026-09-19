@@ -1,0 +1,102 @@
+@*
+    One block's render gate and edit session.
+
+    A board of hundreds of blocks re-renders only the blocks whose version, selection, focus or edit state
+    moved. The version comes from CanvasStore.VersionOf, which is bumped for every change a block is named
+    in - including a live move - so a block never stays drawn where it used to be.
+
+    While a block is being edited its body works on a copy of the data. When editing ends (Escape, a tap
+    elsewhere, another selection) the copy is committed once, so a whole edit is one undo step, and an edit
+    that changed nothing records nothing.
+*@
+@inject CanvasStore Store
+@inject IOptions<CanvasEditorOptions> Options
+@inject AnnouncerService Announcer
+
+<NodeFrame Node="Node" EditData="_draft" Selected="Selected" Focused="Focused" Editing="Editing" Candidate="Candidate" GroupLabel="@GroupLabel" OnStage="OnStage" />
+
+@code {
+    private int _renderedVersion = -1;
+    private bool _renderedSelected;
+    private bool _renderedFocused;
+    private bool _renderedEditing;
+    private bool _renderedCandidate;
+    private string? _renderedGroup;
+    private bool _renderedOnStage = true;
+    private NodeData? _draft;
+
+    [Parameter, EditorRequired] public CanvasNode Node { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Focused { get; set; }
+    [Parameter] public bool Editing { get; set; }
+    [Parameter] public bool Candidate { get; set; }
+    [Parameter] public string? GroupLabel { get; set; }
+
+    /// <summary>
+    /// Whether this block is the one being talked about, while the board is being presented.
+    /// </summary>
+    /// <remarks>
+    /// A parameter rather than something the frame reads for itself, because the render gate below is
+    /// the whole reason this component exists: a block that reads presentation state directly would
+    /// keep the class it was drawn with and the dimming would never move. That is exactly what
+    /// happened the first time (2026-09-16) — every card stayed lit.
+    /// </remarks>
+    [Parameter] public bool OnStage { get; set; } = true;
+
+    protected override void OnParametersSet()
+    {
+        if (Editing && _draft is null)
+        {
+            _draft = Node.Data.Clone();
+
+            // And the room it was in. A grid grows itself as rows are added (BlockFit), and that growth
+            // has to undo with the rows rather than as a step of its own.
+            _rectOnEntry = CanvasHitTester.RectOf(Node);
+        }
+        else if (!Editing && _draft is not null)
+        {
+            var draft = _draft;
+            var was = _rectOnEntry;
+            _draft = null;
+            _rectOnEntry = null;
+            Commit(draft, was);
+        }
+    }
+
+    private WorldRect? _rectOnEntry;
+
+    private void Commit(NodeData draft, WorldRect? rectOnEntry)
+    {
+        if (draft is MessageData message)
+        {
+            message.Html = PasteHtmlAllowList.Normalize(message.Html);
+            if (message.Html.Length > Options.Value.MaxHtmlChars)
+            {
+                Announcer.Say("That message is too long to keep, so the change was not saved.");
+                return;
+            }
+        }
+
+        if (draft is TextData text && text.Text.Length > Options.Value.MaxTextChars)
+            text.Text = text.Text[..Options.Value.MaxTextChars];
+
+        Store.ReplaceNodeData(Node.Id, draft, rectOnEntry);
+    }
+
+    protected override bool ShouldRender() =>
+        Version != _renderedVersion || Selected != _renderedSelected || Focused != _renderedFocused
+        || Editing != _renderedEditing || Candidate != _renderedCandidate || GroupLabel != _renderedGroup
+        || OnStage != _renderedOnStage;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        _renderedVersion = Version;
+        _renderedSelected = Selected;
+        _renderedFocused = Focused;
+        _renderedEditing = Editing;
+        _renderedCandidate = Candidate;
+        _renderedGroup = GroupLabel;
+        _renderedOnStage = OnStage;
+    }
+}

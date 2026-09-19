@@ -4,19 +4,24 @@
  * Central JS module for all ffmpeg.wasm interactions in Ben.Video.Editor.
  * Served at: /_content/Ben.Video.Editor/js/ffmpegInterop.js
  *
- * Requires the following UMD script to be loaded in the host index.html BEFORE Blazor:
- *   <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
+ * Requires the wrapper library to be loaded by the host page BEFORE Blazor:
+ *   <script src="_content/Ben.Video.Editor/js/ffmpeg.umd.js"></script>
  *
- * CDN bases:
- *   @ffmpeg/core (ST)  — https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/
- *   @ffmpeg/core-mt    — https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd/
+ * Nothing here reaches a CDN. The wrapper and both cores ship with this library:
+ *   js/ffmpeg.umd.js                 @ffmpeg/ffmpeg 0.12.15
+ *   js/ffmpeg-core/st/               @ffmpeg/core 0.12.10        (single-thread)
+ *   js/ffmpeg-core/mt/               @ffmpeg/core-mt 0.12.10     (multi-thread)
+ *
+ * The cores were fetched from cdn.jsdelivr.net at every load until 2026-09-05 — thirty megabytes
+ * of WebAssembly from a third party, with a retry loop around it because it failed often enough to
+ * need one. See the note above coreBase for why that is now vendored instead.
  *
  * Why blob: URLs?
- *   Web Workers can only be created from same-origin URLs. The CDN files are
- *   cross-origin, so we fetch them (browser caches the HTTP response), wrap
- *   them in blob: URLs (same-origin), and pass those to ffmpeg.load().
- *   WASM compilation takes ~5-30 s on first load; subsequent loads use the
- *   HTTP-cached files but still recompile (blob: URLs bypass the WASM JIT cache).
+ *   Web Workers can only be created from same-origin URLs. That was the original reason — the CDN
+ *   files were cross-origin — and it no longer applies, but the wrapping is kept because
+ *   ffmpeg.load() takes URLs and blob: URLs are what it has been given and tested with here.
+ *   WASM compilation takes ~5-30 s on first load; later loads read the HTTP-cached files and still
+ *   recompile, because a blob: URL bypasses the WASM JIT cache.
  */
 
 import { opfsExportsWriteBytes } from './opfsInterop.js';
@@ -33,10 +38,27 @@ const { FFmpeg } = FFmpegWASM;
  * @param {string} label
  * @returns {Promise<string>}
  */
+// The core is several megabytes fetched in one go, and a single blip loses the whole import:
+// `fetch` rejects with a bare "TypeError: Failed to fetch" that says nothing about which of DNS,
+// the connection or the transfer gave way. That surfaced as an editor stuck on "Error: Failed to
+// fetch" — recurring, never reproducible on demand, and hit once in a 401-test run on 2026-08-27.
+//
+// No retry loop any more. There were three attempts with a widening pause, and they existed
+// because the core came from a CDN that failed often enough to need them. It is served by this app
+// now, from the same origin as everything else: either the file is there or the deployment is
+// broken, and asking a second time will not change which (2026-09-05 audit, media-13).
 async function toBlobURL(url, mimeType, label) {
-    console.log(`[ffmpeg] ↓ ${label}…`);
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`[ffmpeg] ${label}: HTTP ${resp.status}`);
+    return fetchAsBlobURL(url, mimeType, label, 1);
+}
+
+async function fetchAsBlobURL(url, mimeType, label, attempt) {
+    console.log(`[ffmpeg] ↓ ${label}${attempt > 1 ? ` (attempt ${attempt})` : ''}…`);
+    const resp = await fetch(url, { cache: 'force-cache' });
+    if (!resp.ok) {
+        const err = new Error(`[ffmpeg] ${label}: HTTP ${resp.status}`);
+        err.httpStatus = resp.status;
+        throw err;
+    }
 
     const total = parseInt(resp.headers.get('Content-Length') || '0');
     if (total > 0 && resp.body) {
@@ -76,8 +98,22 @@ async function fetchFile(source) {
     return new Uint8Array(await resp.arrayBuffer());
 }
 
-const CORE_BASE    = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
-const CORE_MT_BASE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
+// The ffmpeg core, served by this app rather than fetched from a CDN.
+//
+// It used to come from cdn.jsdelivr.net at every load: thirty megabytes of WebAssembly from a
+// third party, undocumented anywhere, with a retry loop around it because it failed often enough
+// to need one. So the editor could not start at all if that CDN was slow, blocked or down, and a
+// person with no network had no editor even though every other thing it does is local
+// (2026-09-05 audit, media-13 and wasm-6). Vendoring is 62 MB in the repository and it buys an
+// editor that starts from its own origin, offline included.
+//
+// Resolved against document.baseURI for the same reason moduleLoader.js does it: the production
+// editor is served from a sub-path, where a root-absolute path asks the site root for a file that
+// lives under /editors/video.
+const coreBase = (variant) =>
+    // No trailing slash: callers append "/ffmpeg-core.js", and two slashes in a row is a different
+    // path to some servers even where it happens to work on others.
+    new URL(`_content/Ben.Video.Editor/js/ffmpeg-core/${variant}`, document.baseURI).href;
 
 // Singleton FFmpeg instance
 let _ffmpeg = null;
@@ -138,15 +174,18 @@ export async function loadCore(dotnetRef, multiThread) {
         console.log('[ffmpeg] ffmpeg.load() complete ✓');
     };
 
-    const base = multiThread ? CORE_MT_BASE : CORE_BASE;
     const mode = multiThread ? 'multi-thread' : 'single-thread';
 
     try {
-        await loadFrom(base, mode);
+        await loadFrom(coreBase(multiThread ? 'mt' : 'st'), mode);
     } catch (err) {
+        // The multi-thread core needs the page to be cross-origin isolated and the browser to
+        // allow SharedArrayBuffer. isMultiThreadSupported checks both, but a header can be
+        // stripped by something in front of the site, so the single-thread core stays the
+        // fallback rather than the load simply failing.
         if (multiThread) {
             console.warn('[ffmpeg] Multi-thread failed, retrying single-thread:', err);
-            await loadFrom(CORE_BASE, 'single-thread');
+            await loadFrom(coreBase('st'), 'single-thread');
         } else {
             throw err;
         }
@@ -309,6 +348,12 @@ export async function getMetadata(inputName, timeoutMs) {
         duration: parseFloat(video.duration ?? audio.duration ?? '0'),
         width: parseInt(video.width ?? '0', 10),
         height: parseInt(video.height ?? '0', 10),
+        // Whether the file actually carries sound. Render commands map an audio stream, and
+        // mapping one that does not exist fails the whole command ("Stream map '0:a' matches no
+        // streams") — which in the worker presents as a render that never finishes rather than
+        // as an error. Plenty of real footage has no audio: screen recordings, trail cameras,
+        // exported animations.
+        hasAudio: !!audio.codec_type,
     };
 }
 
@@ -326,18 +371,46 @@ export async function extractThumbnails(inputName, count, duration, timeoutMs) {
     // -ss/-frames:v/output groups after a single -i, reusing the same already-open input and
     // decoder across all of them — one exec, N output files, same per-frame timestamps as before
     // (t = interval * i), zero change to what the thumbnails actually show.
+    //
+    // Phase 4 of the 2026-09-05 audit (media-1) — those -ss values came AFTER -i, which makes
+    // them output-side seeks: ffmpeg decodes the stream from the beginning and throws frames away
+    // until it reaches the timestamp. With one input and N of them, importing a half-hour clip
+    // decoded that half hour once per thumbnail, for eight small pictures nobody has asked to be
+    // frame-accurate. It was the heaviest thing the import did and the likeliest cause of the
+    // out-of-bounds trap that killed the engine mid-import.
+    //
+    // Each frame gets its own input with the seek BEFORE it, so ffmpeg jumps straight there, and
+    // -skip_frame nokey means only keyframes are decoded on the way. The frames land on the
+    // nearest keyframe rather than the exact timestamp, which for a filmstrip is a difference
+    // nobody can see. An explicit -map per output is required once there are several inputs:
+    // without one, every output would take its picture from input 0.
     const interval = duration / (count + 1);
     const base = crypto.randomUUID();
     const outNames = [];
-    const args = ['-i', inputName];
+    const inputs = [];
+    const outputs = [];
+
     for (let i = 1; i <= count; i++) {
         const t = (interval * i).toFixed(2);
         const outName = `thumb_${base}_${i}.webp`;
         outNames.push(outName);
-        args.push('-ss', t, '-frames:v', '1', '-vf', 'scale=160:-1', outName);
+        inputs.push('-skip_frame', 'nokey', '-ss', t, '-i', inputName);
+        outputs.push('-map', `${i - 1}:v:0`, '-frames:v', '1', '-vf', 'scale=160:-1', outName);
     }
+
+    const args = [...inputs, ...outputs];
     console.log('[ffmpeg-exec]', args.join(' '));
-    await _ffmpeg.exec(args, timeoutMs ?? -1);
+
+    // The exit code was discarded, so a failed extraction produced no thumbnails and no error —
+    // the filmstrip was simply empty and nothing said why (2026-09-05 audit, media-1).
+    const code = await _ffmpeg.exec(args, timeoutMs ?? -1);
+    if (code !== 0) {
+        console.warn('[ffmpeg] thumbnail extraction exited with', code);
+        for (const outName of outNames) {
+            try { await deleteFile(outName); } catch { /* never written */ }
+        }
+        return [];
+    }
 
     const urls = [];
     for (const outName of outNames) {

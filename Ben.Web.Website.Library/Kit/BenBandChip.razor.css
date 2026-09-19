@@ -1,0 +1,36 @@
+/* A colour a party wears (item 235 phase 7).
+
+   The dot is a help and never the message: the word beside it is what a steward reads, and the
+   chip has to work for somebody who cannot see the difference between the dots at all. */
+
+.band-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+
+    padding: .15rem .5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 2rem;
+
+    font-size: .8125rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.band-chip__dot {
+    width: .75rem;
+    height: .75rem;
+    border-radius: 50%;
+    border: 1px solid var(--bs-border-color);
+    /* A band with no swatch still shows a ring, so the chip does not read as broken. */
+    background: transparent;
+}
+
+.band-chip__word {
+    font-weight: 600;
+}
+
+.band-chip__meaning {
+    color: var(--bs-secondary-color);
+    white-space: normal;
+}

@@ -1,0 +1,123 @@
+@page "/venue-claims/{ClaimId:guid}"
+@namespace Ben.Web.Website.Library.Manage.Venue
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* A group's claim to run a place, for a group that knows the place (item 235 phase 9).
+
+   Linked from the message every such group gets when a claim is proved. The one thing to do here is
+   say it is wrong, with why — which sends it to a person rather than letting the week run out. *@
+
+<PageTitle>A claim to run a venue</PageTitle>
+
+<div class="container py-3" style="max-width:720px;">
+    <h1 class="h3 mb-3">A claim to run a venue</h1>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" role="alert" id="objection-error">@_error</div>
+    }
+
+    <BenItemState TItem="VenueClaimRecord" Result="_claim" Loading="_loading" LoadingText="Loading the claim…" OnRetry="LoadAsync">
+        <ChildContent Context="claim">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <p class="mb-1">
+                        <strong>@claim.OrganizationName</strong> says it runs <a href="@($"/places/{claim.PlaceId}")">@claim.PlaceName</a>
+                        — @claim.ClaimantName, as its @claim.Role.ToString().ToLowerInvariant().
+                    </p>
+                    @if (claim.State == VenueClaimState.Proved && claim.ObjectionsCloseUtc is { } closes)
+                    {
+                        <p class="text-secondary small mb-0" id="objection-window">
+                            They proved they read the venue's own email. Unless somebody objects, it takes effect on
+                            @closes.ToViewerLocalTime(UserState).ToDisplayDate(). Nothing already booked there changes either way.
+                        </p>
+                    }
+                    else if (claim.State == VenueClaimState.Contested)
+                    {
+                        <p class="text-secondary small mb-0" id="objection-contested">
+                            @(claim.ObjectingOrganizationName ?? "A group") has objected, and a person is deciding.
+                        </p>
+                    }
+                    else if (claim.State is VenueClaimState.Approved or VenueClaimState.Refused or VenueClaimState.Withdrawn)
+                    {
+                        <p class="text-secondary small mb-0">This claim is settled.</p>
+                    }
+                </div>
+            </div>
+
+            @if (claim.MayObjectFor.Count > 0 && claim.State is VenueClaimState.Pending or VenueClaimState.Proved)
+            {
+                <div class="card">
+                    <div class="card-body">
+                        @if (claim.MayObjectFor.Count > 1)
+                        {
+                            <label class="form-label" for="objection-org">Objecting for</label>
+                            <select class="form-select mb-3" id="objection-org" @bind="_orgId">
+                                @foreach (var org in claim.MayObjectFor)
+                                {
+                                    <option value="@org">@(_orgNames.GetValueOrDefault(org, "Your group"))</option>
+                                }
+                            </select>
+                        }
+                        <label class="form-label" for="objection-reason">Why it's wrong</label>
+                        <textarea class="form-control mb-3" id="objection-reason" rows="4" maxlength="4000"
+                                  placeholder="e.g. The manager named here left in August; the new owners are the Hendersons."
+                                  @bind="_reason" @bind:event="oninput"></textarea>
+                        <button type="button" class="btn btn-danger" id="objection-submit" disabled="@_busy" @onclick="ObjectAsync">
+                            This claim is wrong
+                        </button>
+                    </div>
+                </div>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid ClaimId { get; set; }
+
+    private ItemResult<VenueClaimRecord> _claim;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _reason;
+    private Guid _orgId;
+    private Dictionary<Guid, string> _orgNames = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { Nav.NavigateTo($"/login?returnUrl=/venue-claims/{ClaimId}"); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _claim = await AdminClient.GetVenueClaimAsync(ClaimId);
+        _orgNames = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items.ToDictionary(o => o.OrganizationId, o => o.Name);
+        if (_claim.Item?.MayObjectFor.FirstOrDefault() is { } first && first != Guid.Empty) _orgId = first;
+        _loading = false;
+    }
+
+    private async Task ObjectAsync()
+    {
+        _busy = true;
+        _error = null;
+        var (claim, error) = await AdminClient.ObjectToVenueClaimAsync(ClaimId, new ObjectToVenueClaimRequest(_orgId, _reason));
+        _busy = false;
+        if (claim is null) { _error = error ?? "That couldn't be sent just now."; return; }
+        _claim = ItemResult<VenueClaimRecord>.Ok(claim);
+    }
+}

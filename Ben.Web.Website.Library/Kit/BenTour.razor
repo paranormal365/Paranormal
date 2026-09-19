@@ -1,0 +1,129 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    Item 166 W0: the walkthrough overlay. TourModel decides; this renders a highlight ring
+    around the current step's selector target (positioned by BenTour.razor.js, which also
+    scrolls it into view with the measured-fallback scroller from item 169's lesson) and the
+    step card beside it. Dismissal PERSISTENCE is the host's job via OnEnded — a UserTourState
+    row, never localStorage: an impersonating admin must see the real person's tour state, and
+    a cleared browser must not replay every tour.
+*@
+
+@if (Model.IsRunning)
+{
+    <div class="ben-tour-backdrop" @onclick="Skip"></div>
+    <div class="ben-tour-highlight" style="@_highlightStyle" aria-hidden="true"></div>
+    <div class="ben-tour-card card shadow" style="@_cardStyle" role="dialog" aria-label="@Model.Current.Title">
+        <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between gap-2">
+                <h6 class="card-title mb-1">@Model.Current.Title</h6>
+                <span class="text-secondary small text-nowrap">@(Model.CurrentIndex + 1) / @Model.Steps.Count</span>
+            </div>
+            <p class="card-text small mb-3">@Model.Current.Body</p>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-link btn-sm text-decoration-none px-0" @onclick="Skip">Skip tour</button>
+                <span class="flex-grow-1"></span>
+                @if (!Model.IsFirst)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="BackAsync">Back</button>
+                }
+                <button type="button" class="btn btn-primary btn-sm" @onclick="NextAsync">
+                    @(Model.IsLast ? "Done" : "Next")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public TourModel Model { get; set; } = default!;
+
+    /// <summary>Fires when the tour ends either way; the bool is TourModel.Completed. The host
+    /// persists the dismissal (both outcomes dismiss — a skip is an answer, not an accident).</summary>
+    [Parameter] public EventCallback<bool> OnEnded { get; set; }
+
+    private string _highlightStyle = "display:none";
+    private string _cardStyle      = "display:none";
+    private IJSObjectReference? _js;
+
+    /// <summary>Starts the tour and positions the first step. The host calls this — never
+    /// automatic, so auto-launch policy stays with the caller and its persisted state.</summary>
+    public async Task StartAsync()
+    {
+        Model.Start();
+        StateHasChanged();
+        await PositionAsync();
+    }
+
+    private async Task NextAsync()
+    {
+        Model.Next();
+        if (!Model.IsRunning) { await EndAsync(); return; }
+        await PositionAsync();
+    }
+
+    private async Task BackAsync()
+    {
+        Model.Back();
+        await PositionAsync();
+    }
+
+    private async Task Skip()
+    {
+        Model.Skip();
+        await EndAsync();
+    }
+
+    private async Task EndAsync()
+    {
+        _highlightStyle = "display:none";
+        _cardStyle      = "display:none";
+        StateHasChanged();
+        await OnEnded.InvokeAsync(Model.Completed);
+    }
+
+    private async Task PositionAsync()
+    {
+        try
+        {
+            _js ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Kit/BenTour.razor.js");
+            var pos = await _js.InvokeAsync<TourPosition?>("positionFor", Model.Current.Selector);
+            if (pos is null)
+            {
+                // A missing target must not strand the person mid-tour: the card centers and
+                // the highlight hides. The selector-guard test exists so this stays rare.
+                _highlightStyle = "display:none";
+                _cardStyle = "position:fixed;top:40%;left:50%;transform:translateX(-50%);z-index:1072;max-width:340px;";
+            }
+            else
+            {
+                _highlightStyle =
+                    $"position:fixed;top:{pos.Top - 4}px;left:{pos.Left - 4}px;width:{pos.Width + 8}px;" +
+                    $"height:{pos.Height + 8}px;z-index:1071;border:2px solid var(--bs-primary);" +
+                    "border-radius:6px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.45);";
+                _cardStyle =
+                    $"position:fixed;top:{pos.CardTop}px;left:{pos.CardLeft}px;z-index:1072;max-width:340px;";
+            }
+        }
+        catch
+        {
+            _highlightStyle = "display:none";
+            _cardStyle = "position:fixed;top:40%;left:50%;transform:translateX(-50%);z-index:1072;max-width:340px;";
+        }
+        StateHasChanged();
+    }
+
+    private sealed record TourPosition(double Top, double Left, double Width, double Height,
+                                       double CardTop, double CardLeft);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_js is not null)
+        {
+            try { await _js.DisposeAsync(); } catch { }
+        }
+    }
+}

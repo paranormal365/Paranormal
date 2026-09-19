@@ -234,24 +234,43 @@
         Playback.OnStateChanged -= RefreshAndRender;
     }
 
+    // Every edit below goes through CommitClipArtUpdate, so it can be undone. They all used to
+    // call UpdateClipArtClip, which mutates and notifies and pushes nothing — so nothing anybody
+    // did to a piece of clip art could be taken back, and Ctrl+Z reached past it to whatever
+    // happened before (2026-09-05 audit, callouts-8). The sliders fire on release rather than per
+    // tick, which is what keeps one drag to one undo step (callouts-17).
+    //
+    // The old value is read from the model, not from the panel's fields: the panel is refreshed by
+    // external events and its idea of "before" can already be the new value.
+
     private void ApplyDuration()
-        => Clips.UpdateClipArtClip(Clip.Id, c => c.Duration = _duration);
+    {
+        var was   = Clip.Duration;
+        var value = _duration;
+        Clips.CommitClipArtUpdate(Clip.Id, "duration",
+            c => c.Duration = value, c => c.Duration = was);
+    }
 
     private void ApplyGeometry()
-        => Clips.UpdateClipArtClip(Clip.Id, c =>
-        {
-            c.X        = _x;
-            c.Y        = _y;
-            c.Width    = _width;
-            c.Rotation = _rotation;
-        });
+    {
+        var (wasX, wasY, wasW, wasR) = (Clip.X, Clip.Y, Clip.Width, Clip.Rotation);
+        var (x, y, w, r) = (_x, _y, _width, _rotation);
+
+        Clips.CommitClipArtUpdate(Clip.Id, "position and size",
+            c => { c.X = x;    c.Y = y;    c.Width = w;    c.Rotation = r; },
+            c => { c.X = wasX; c.Y = wasY; c.Width = wasW; c.Rotation = wasR; });
+    }
 
     private void ApplyAppearance()
-        => Clips.UpdateClipArtClip(Clip.Id, c =>
-        {
-            c.Opacity   = _opacity;
-            c.TintColor = _tintPacked == 0 ? null : _tintPacked;
-        });
+    {
+        var (wasOpacity, wasTint) = (Clip.Opacity, Clip.TintColor);
+        var opacity = _opacity;
+        var tint    = _tintPacked == 0 ? (double?)null : _tintPacked;
+
+        Clips.CommitClipArtUpdate(Clip.Id, "appearance",
+            c => { c.Opacity = opacity;    c.TintColor = tint; },
+            c => { c.Opacity = wasOpacity; c.TintColor = wasTint; });
+    }
 
     private void OnTintColorChanged(double packed)
     {
@@ -263,7 +282,14 @@
         => Clip.ControlPointValues.TryGetValue(pt.PointId, out var v) ? v : pt.DefaultValue;
 
     private void SetPointValue(SvgControlPoint pt, double value)
-        => Clips.UpdateClipArtClip(Clip.Id, c => c.ControlPointValues[pt.PointId] = value);
+    {
+        var id  = pt.PointId;
+        var had = Clip.ControlPointValues.TryGetValue(id, out var was);
+
+        Clips.CommitClipArtUpdate(Clip.Id, "shape point",
+            c => c.ControlPointValues[id] = value,
+            c => { if (had) c.ControlPointValues[id] = was; else c.ControlPointValues.Remove(id); });
+    }
 
     private double GetPointColorPacked(SvgControlPoint pt)
     {
@@ -273,7 +299,15 @@
     }
 
     private void SetPointColor(SvgControlPoint pt, double packed)
-        => Clips.UpdateClipArtClip(Clip.Id, c => c.ControlPointColors[pt.PointId] = Effects.ColorHelper.ToHex(packed));
+    {
+        var id    = pt.PointId;
+        var had   = Clip.ControlPointColors.TryGetValue(id, out var was);
+        var value = Effects.ColorHelper.ToHex(packed);
+
+        Clips.CommitClipArtUpdate(Clip.Id, "shape colour",
+            c => c.ControlPointColors[id] = value,
+            c => { if (had) c.ControlPointColors[id] = was!; else c.ControlPointColors.Remove(id); });
+    }
 
     private async Task ActivateMotion()
         => await OnAnimate.InvokeAsync((Clip.Id, "ClipArtClip"));

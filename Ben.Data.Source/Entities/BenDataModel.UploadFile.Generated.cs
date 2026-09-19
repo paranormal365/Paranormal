@@ -5,7 +5,23 @@ namespace Ben.Data.Source.Entities
     public partial class UploadFile
     {
         public Guid UploadFileTypeId { get; set; }
-        public Guid AppUserId { get; set; }
+        /// <summary>
+        /// The person who owns this file — null once ownership has moved to a group (item 180
+        /// Phase B). Exactly one of this and <see cref="OwnerOrganizationId"/> is set.
+        /// </summary>
+        /// <remarks>
+        /// Nullable rather than re-pointed at some member of the group: every "is this mine"
+        /// check in the codebase reads <c>AppUserId == userId</c>, and null fails all of them at
+        /// once — the personal listing, the owner gates, the account purge — without a second
+        /// column each of them would have to remember to consult. Who uploaded it is still
+        /// <see cref="CreatedByAppUserId"/>.
+        /// </remarks>
+        public Guid? AppUserId { get; set; }
+        /// <summary>
+        /// The group that owns this file, when a person handed it over rather than destroy it
+        /// while the group was using it (item 180 Phase B). Null for a person's own file.
+        /// </summary>
+        public Guid? OwnerOrganizationId { get; set; }
         public string FileName { get; set; } = null!;
         public string StoredFileName { get; set; } = null!;
         public string ContentType { get; set; } = null!;
@@ -29,6 +45,25 @@ namespace Ben.Data.Source.Entities
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
+
+        // ── Retention (item 233) ─────────────────────────────────────────────
+        //
+        // Ben, 2026-09-10: a tour business's photographs last a month and its recordings a week,
+        // "unless they mark them to be saved". Three nullable columns, and NULL everywhere means
+        // exactly what it has always meant: this file has no clock on it. Every group that is not
+        // on a plan with retention limits keeps its files forever, as before.
+
+        /// <summary>When this file goes, or null when nothing is counting.</summary>
+        public DateTime? ExpiresAtUtc { get; set; }
+
+        /// <summary>When somebody decided to keep it. Set means the clock is off for good.</summary>
+        public DateTime? KeptAtUtc { get; set; }
+
+        /// <summary>Who kept it — the business, not the person who took the photograph.</summary>
+        public Guid? KeptByAppUserId { get; set; }
+
+        /// <summary>When the uploader was last warned it was going, so they are told once.</summary>
+        public DateTime? ExpiryNoticeSentAtUtc { get; set; }
 
         /// <summary>When this file was clipped from another file, the ID of the source file.</summary>
         public Guid? ParentFileId { get; set; }
@@ -74,7 +109,8 @@ namespace Ben.Data.Source.Entities
         public Guid? ArchivedFromUploadFileId { get; set; }
 
         public virtual UploadFileType UploadFileType { get; set; } = null!;
-        public virtual AppUser AppUser { get; set; } = null!;
+        public virtual AppUser? AppUser { get; set; }
+        public virtual Organization? OwnerOrganization { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual UploadFile? ParentFile { get; set; }

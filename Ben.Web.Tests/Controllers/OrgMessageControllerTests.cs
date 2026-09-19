@@ -49,7 +49,10 @@ public class OrgMessageControllerTests
 
     private static OrgMessageController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new OrgMessageController(factory, CreateMapper());
+        var ctrl = new OrgMessageController(
+            factory, CreateMapper(),
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -76,6 +79,53 @@ public class OrgMessageControllerTests
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = recipientId, Role = OrganizationMemberRole.Member,  IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = senderId });
         await db.SaveChangesAsync();
         return (factory, orgId, senderId, recipientId);
+    }
+
+    // ── Stored markup (2026-09-04) ───────────────────────────────────────────
+    //
+    // A message body is authored in a rich-text editor and rendered as markup by every reader, so
+    // whatever is stored runs in the reader's session. It used to be stored exactly as posted: an
+    // <img onerror> in a broadcast executed for each recipient, on the site's own origin, with no
+    // CSP standing in the way. These pin the cleaning that stops it.
+
+    [Fact]
+    public async Task Send_StripsEventHandlersFromTheStoredBody()
+    {
+        var (factory, orgId, senderId, recipientId) = await SeedAsync();
+        var sender = Build(factory, senderId);
+
+        await sender.Send(orgId, new SendOrgMessageRequest(
+            OrgMessageChannel.DirectMessage, "Kickoff",
+            "<p>Kickoff Friday.</p><img src=x onerror=\"window.stolen=document.cookie\">",
+            false, null, null, [recipientId]), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.OrgMessages.AsNoTracking().Select(m => m.Body).SingleAsync();
+
+        Assert.DoesNotContain("onerror", stored, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("document.cookie", stored, StringComparison.OrdinalIgnoreCase);
+        // The legitimate formatting the editor produces survives — cleaning must not turn a
+        // rich-text message into a wall of escaped tags.
+        Assert.Contains("Kickoff Friday.", stored);
+        Assert.Contains("<p>", stored);
+    }
+
+    [Fact]
+    public async Task Send_StripsScriptTagsFromTheStoredBody()
+    {
+        var (factory, orgId, senderId, recipientId) = await SeedAsync();
+        var sender = Build(factory, senderId);
+
+        await sender.Send(orgId, new SendOrgMessageRequest(
+            OrgMessageChannel.OrgBroadcast, "Notice",
+            "Read this<script>window.stolen=1</script>",
+            false, null, null, []), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.OrgMessages.AsNoTracking().Select(m => m.Body).SingleAsync();
+
+        Assert.DoesNotContain("<script", stored, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read this", stored);
     }
 
     // ── GetInbox ──────────────────────────────────────────────────────────────
@@ -225,5 +275,56 @@ public class OrgMessageControllerTests
         var result = await outsider.GetById(orgId, msgId, default);
 
         Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    // ── Belonging to the group ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A stranger cannot read a group's message board.
+    /// </summary>
+    /// <remarks>
+    /// Found by the write-endpoint audit of 2026-08-26: this controller carried
+    /// <c>[Authorize]</c> and nothing else. The organization id came from the route and the user
+    /// from the token, and nothing in between asked whether the two were related — so any signed-in
+    /// person could read a group's board, and post to it, by knowing its id.
+    /// </remarks>
+    [Fact]
+    public async Task GetInbox_AStrangerToTheOrg_IsRefused()
+    {
+        var (factory, orgId, _, _) = await SeedAsync();
+
+        var result = await Build(factory, Guid.NewGuid()).GetInbox(orgId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>And cannot post into it — the half that writes to somebody else's records.</summary>
+    [Fact]
+    public async Task Send_AStrangerToTheOrg_IsRefusedAndWritesNothing()
+    {
+        var (factory, orgId, _, recipientId) = await SeedAsync();
+
+        var result = await Build(factory, Guid.NewGuid()).Send(
+            orgId,
+            new SendOrgMessageRequest(
+                OrgMessageChannel.DirectMessage, null, "I do not belong here",
+                false, null, null, [recipientId]),
+            default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.OrgMessages.Where(m => m.Body == "I do not belong here"));
+    }
+
+    /// <summary>A member still gets through — the gate refuses strangers, not everybody.</summary>
+    [Fact]
+    public async Task GetInbox_AMember_IsAllowed()
+    {
+        var (factory, orgId, _, recipientId) = await SeedAsync();
+
+        var result = await Build(factory, recipientId).GetInbox(orgId, default);
+
+        Assert.IsNotType<ForbidResult>(result.Result);
     }
 }

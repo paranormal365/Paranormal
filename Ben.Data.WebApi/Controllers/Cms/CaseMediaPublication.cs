@@ -53,7 +53,12 @@ public static class CaseMediaPublication
 
         return await db.CaseTimelineEntryFiles.AsNoTracking()
             .Where(f => f.CaseTimelineEntry.CaseId == caseId
-                     && f.CaseTimelineEntry.Visibility == CaseTimelineVisibility.Public)
+                     && f.CaseTimelineEntry.Visibility == CaseTimelineVisibility.Public
+                     // A published board picture never publishes (canvas plan R22; see BoardSnapshots).
+                     // Asked of the upload row, not through the navigation, so a link whose upload
+                     // row is missing is judged by the rules above rather than dropped by a join.
+                     && !db.UploadFiles.Any(u => u.Id == f.UploadFileId
+                                              && u.UploadFileTypeId == Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId))
             .OrderByDescending(f => f.CaseTimelineEntry.EventDateTime ?? f.CaseTimelineEntry.DateCreated)
             .Select(f => new PublishableCaseFile(
                 f.UploadFileId,
@@ -86,7 +91,9 @@ public static class CaseMediaPublication
         return await db.CaseTimelineEntryFiles.AsNoTracking().AnyAsync(
             f => f.UploadFileId == uploadFileId
               && f.CaseTimelineEntry.CaseId == caseId
-              && f.CaseTimelineEntry.Visibility == CaseTimelineVisibility.Public, ct);
+              && f.CaseTimelineEntry.Visibility == CaseTimelineVisibility.Public
+              && !db.UploadFiles.Any(u => u.Id == f.UploadFileId
+                                       && u.UploadFileTypeId == Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId), ct);
     }
 
     /// <summary>Filters a set of file ids down to those publishable, preserving the caller's order.</summary>

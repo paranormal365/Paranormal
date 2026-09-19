@@ -25,7 +25,7 @@ public sealed class SidecarExportAssembler(
     SidecarTransport transport,
     ErrorLogService errorLog)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
     /// <summary>Generous relative to the preview's: an export is a deliberate, long operation the
@@ -95,7 +95,7 @@ public sealed class SidecarExportAssembler(
 
             // Stream straight into MEMFS as a File handle — no byte[] on the WASM heap.
             var outputName = $"assembled_{jobId.Value:N}.mp4";
-            var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             try
             {
                 var fileRef = await module.InvokeAsync<IJSObjectReference>(

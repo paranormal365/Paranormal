@@ -1,17 +1,29 @@
 @page "/profile"
 @using Ben.Service.Models.Entities
+@using Ben.Service.Models.People
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
 <PageTitle>My Profile</PageTitle>
 
-<div class="container-fluid py-3" style="max-width:720px;">
-    <h3 class="mb-1">My Profile</h3>
-    <p class="text-secondary small mb-4">
-        Everything here is about your own account. Only you can change it.
-    </p>
+@*
+    The template's profile idiom: a hero band carrying identity, then tabs.
+
+    The demo this borrows from holds far less than we do — a bio and a few cards — so this is a
+    layout adoption rather than a page swap. Ours carries two photos with their two-key consent,
+    four kinds of contact detail with their own visibility rules, and an investigation history.
+    Dropping those into a layout built for fewer of them would have produced one very long column,
+    which is what this page already was.
+
+    Tabs, because most visits here are to change ONE thing. The map in particular earns its own
+    tab rather than a place in the scroll: it loads a JS module and geocoded pins, and nobody
+    coming to fix a typo in their name should pay for that.
+*@
+
+<div class="container-fluid py-3" style="max-width:1100px;">
 
     @if (_error is not null)
     {
@@ -22,103 +34,385 @@
         <div class="alert alert-success py-2">Saved.</div>
     }
 
-    @if (_profile is null)
+    @if (_profile is null && !_loadAttempted)
     {
         <p class="text-secondary">Loading…</p>
     }
+    else if (_profile is null)
+    {
+        @* Asked, and got nothing back. Anything other than saying so leaves somebody waiting on a
+           request that already failed — the bug this replaces. *@
+        <div class="alert alert-warning d-flex align-items-center gap-3" role="alert"
+             data-testid="profile-load-failed">
+            <div class="flex-grow-1">
+                <strong>Your profile couldn't be loaded.</strong>
+                <div class="small">@(_error ?? "The server didn't answer.")</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                    @onclick="RetryLoadAsync">Try again</button>
+        </div>
+    }
     else
     {
+        @* ── Hero band ──────────────────────────────────────────────────────
+           Identity at a glance: the photo, the name, the sign-in address. The photo shown here is
+           whichever one exists, preferring the public: it is the picture other people see, so the
+           hero should show what they show. *@
         <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="card-title">Name</h6>
-                <p class="text-secondary small">
-                    Shown wherever your account appears — case notes, messages, member lists.
-                    Your sign-in address (@_profile.Email) isn't changed by this.
-                </p>
-                <div class="d-flex gap-2 align-items-start">
-                    @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur here,
-                       which loses the last edit when the user clicks Save directly. *@
-                    <input class="form-control" style="max-width:340px;" maxlength="100"
-                           placeholder="Your name" value="@_displayName"
-                           @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
-                    <button type="button" class="btn btn-primary" @onclick="SaveNameAsync" disabled="@(!(!_saving))">Save</button>
-                </div>
-            </div>
-        </div>
+            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                @* IH-06: falls back to the blank avatar this already uses when there is no
+                   photo — a failed load and an absent one should look the same. *@
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@(HeroPhotoSrc ?? BlankAvatar)"
+                    Class="rounded-circle border flex-shrink-0"
+                    Style="width:96px;height:96px;object-fit:cover;">
+                    <Fallback>
+                        <img src="@BlankAvatar" alt=""
+                             class="rounded-circle border flex-shrink-0"
+                             style="width:96px;height:96px;object-fit:cover;" />
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="card-title">Public photo</h6>
-                <p class="text-secondary small">
-                    Anyone can see this one, including visitors to public case pages.
-                </p>
-                @PhotoSlot(_profile.PublicPhoto, isPublic: true)
-            </div>
-        </div>
+                <div class="min-w-0">
+                    <h3 class="mb-1">@(string.IsNullOrWhiteSpace(_displayName) ? "Your profile" : _displayName)</h3>
+                    @*
+                        An Apple relay address, or the placeholder a withheld address leaves behind,
+                        is not something this person recognises as their email. Printing it here as
+                        though they chose it tells them something untrue about themselves.
+                    *@
+                    @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                    {
+                        <div class="text-secondary small">@_profile.Email</div>
+                    }
+                    else if (_profile.EmailKind == EmailAddressKind.AppleRelay)
+                    {
+                        <div class="text-secondary small">
+                            Signed in with Apple, using Hide My Email
+                            <BenIcon Name="info" Class="ms-1"
+                                     title="Apple gives us a forwarding address instead of your own. We never see your real one." />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-secondary small">Signed in with Apple, no email address</div>
+                    }
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="card-title">Private photo<HelpLink Slug="your-profile" Anchor="who-sees-your-private-photo" /></h6>
-                <p class="text-secondary small">
-                    Shown only to people you actually work with — never on public pages.
-                </p>
-                @PhotoSlot(_profile.PrivatePhoto, isPublic: false)
+                    @if (_profile.EmailKind == EmailAddressKind.Unreachable)
+                    {
+                        @*
+                            Worth a warning rather than a chip. This account has no address anyone
+                            can write to AND no password, so Apple is the only way in and there is
+                            no reset link to fall back on. Adding an address is what fixes it, and
+                            that is the one thing this page can offer.
+                        *@
+                        <div class="alert alert-warning py-2 small mt-2 mb-0">
+                            We have no email address for you, so we can't send you a way back in if
+                            you ever lose access to your Apple ID. Adding one below fixes that.
+                        </div>
+                    }
+                    else if (_profile.EmailKind == EmailAddressKind.Ordinary && !_profile.EmailConfirmed)
+                    {
+                        @*
+                            An account made from a Microsoft (or, rarely, Apple) address the provider
+                            never verified. It works through that provider today, but the address is
+                            only a claim until the link in the confirmation is followed, and until
+                            then a password reset cannot go to it and neither can anything else. The
+                            forgot-password page would say nothing useful — it refuses an
+                            unconfirmed address silently — so this is where the person learns why,
+                            and the one place that can send the link again.
+                        *@
+                        <div class="alert alert-warning py-2 small mt-2 mb-0" id="profile-confirm-address">
+                            <div>
+                                You haven't confirmed <strong>@_profile.Email</strong> yet. We sent a link
+                                there when this account was made. Until you follow it we can't email you
+                                — including a password reset if you ever lose your sign-in.
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        id="profile-resend-confirmation"
+                                        disabled="@_resending" @onclick="ResendConfirmationAsync">
+                                    @(_resending ? "Sending…" : "Send the link again")
+                                </button>
+                                @if (_resendResult is not null)
+                                {
+                                    <span class="text-secondary">@_resendResult</span>
+                                }
+                            </div>
+                        </div>
+                    }
 
-                <hr />
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        @* Chips, as the template's hero has — but each says something true about
+                           this account rather than decorating it. *@
+                        @* The account address, marked the same way the emails card marks the
+                           others — this one was prose in a warning box and nothing at all once
+                           confirmed, so a confirmed account said less about itself than an
+                           ordinary contact row did. The unproved path is the resend button
+                           directly above, which is why the unproved state may be drawn. *@
+                        @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                        {
+                            <BenProven Chip="true"
+                                       Label="Email confirmed"
+                                       UnprovedText="Email not confirmed"
+                                       Proved="@_profile.EmailConfirmed"
+                                       Unproved="Use Send the link again above, then open the link we email you." />
+                        }
+                        else
+                        {
+                            @* Apple proved this one, and there is nothing here to confirm. *@
+                            <BenProven Chip="true"
+                                       Label="Signed in with Apple"
+                                       Proved="true"
+                                       Detail="Apple confirmed who you are; we never saw a password." />
+                        }
 
-                <div class="d-flex align-items-start gap-2">
-                    <input type="checkbox" class="form-check-input mt-1" id="share-private"
-                           checked="@_shareWithClients"
-                           @onchange="@(e => ToggleShareAsync((bool)(e.Value ?? false)))" />
-                    <label for="share-private" class="mb-0">
-                        Show my private photo to clients of the groups I work with
-                        <span class="d-block text-secondary small">
-                            Clients see a face rather than a name alone. Your group has to allow
-                            this too — both of you decide, not just one.
+                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
+                            @(_profile.PublicPhoto is null ? "No public photo" : "Public photo set")
                         </span>
-                    </label>
+                        @if (_profile.PrivatePhoto is not null)
+                        {
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
+                                @(_shareWithClients ? "Private photo shared with clients" : "Private photo, not shared")
+                            </span>
+                        }
+                    </div>
                 </div>
 
-                @* An opt-in that silently does nothing is worse than no opt-in: say so plainly
-                   rather than letting the user believe they've shared something they haven't. *@
-                @if (_shareWithClients && !_profile.AnyOrgAllowsPrivatePhotoSharing)
-                {
-                    <div class="alert alert-warning py-2 mt-2 mb-0 small">
-                        You've turned this on, but none of your groups currently allow member
-                        photos to be shown to clients — so nothing is being shared yet. It will
-                        take effect if a group turns it on.
+                <div class="ms-auto d-flex gap-2">
+                    <a class="btn btn-outline-secondary btn-sm" href="/my-investigations">My investigations</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/my-cases">My cases</a>
+                    @* Reachable, or it is a page only a URL can find — and it is the one place
+                       somebody gets back what they photographed at a stranger's event. *@
+                    <a class="btn btn-outline-secondary btn-sm" href="/my-evidence">My evidence</a>
+                </div>
+            </div>
+        </div>
+
+        <BenTabs>
+            <BenTab Title="About">
+                <div class="row g-3">
+                    <div class="col-lg-7">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Name</h6>
+                                <p class="text-secondary small">
+                                    Shown wherever your account appears — case notes, messages, member lists.
+                                    @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                                    {
+                                        @:Your sign-in address (@_profile.Email) isn't changed by this.
+                                    }
+                                    else
+                                    {
+                                        @:You sign in with Apple, and that isn't changed by this.
+                                    }
+                                </p>
+                                <div class="d-flex gap-2 align-items-start">
+                                    @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur here,
+                                       which loses the last edit when the user clicks Save directly. *@
+                                    <input class="form-control" style="max-width:340px;" maxlength="100"
+                                           placeholder="Your name" value="@_displayName"
+                                           @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
+                                </div>
+
+                                @* Legal name. Required, and separate from the display name above:
+                                   a person may go by a nickname here and still be Margaret on a
+                                   case report. Accounts created before these fields existed had
+                                   theirs guessed by splitting the display name, so this is also
+                                   where somebody corrects a guess that got it wrong. *@
+                                <hr class="my-3" />
+                                <h6 class="card-title mb-1">Your real name</h6>
+                                <p class="text-secondary small">
+                                    Used on case paperwork and reports. Not shown to other members in place of
+                                    your display name.
+                                </p>
+                                <div class="row g-2" style="max-width:520px;">
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-first">First name</label>
+                                        <input id="profile-first" class="form-control" maxlength="100"
+                                               placeholder="First name" value="@_firstName"
+                                               @oninput="@(e => _firstName = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-last">Last name</label>
+                                        <input id="profile-last" class="form-control" maxlength="100"
+                                               placeholder="Last name" value="@_lastName"
+                                               @oninput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label small" for="profile-gender">Sex</label>
+                                        @* Ben's spec (2026-08-23): default is NOTHING — the blank
+                                           row — with Male, Female, Unspecified as the choices.
+                                           Unspecified stores the same null as never-answered:
+                                           the two are indistinguishable on purpose, both select
+                                           the generic placeholder and nothing else ever reads
+                                           this field. *@
+                                        <select id="profile-gender" class="form-select"
+                                                value="@((int)_gender)"
+                                                @onchange="@(e => _gender = Enum.TryParse<Ben.Data.Common.Enums.ClientGender>(e.Value?.ToString(), out var g) ? g : Ben.Data.Common.Enums.ClientGender.NotProvided)">
+                                            <option value="0" selected="@(_gender == Ben.Data.Common.Enums.ClientGender.NotProvided)"></option>
+                                            <option value="1">Male</option>
+                                            <option value="2">Female</option>
+                                            <option value="0">Unspecified</option>
+                                        </select>
+                                        <div class="form-text" style="font-size:.72rem;">
+                                            Optional. Only used to pick the placeholder icon shown
+                                            when you have no photo — never shown or shared itself.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (_nameError is not null)
+                                {
+                                    <div class="alert alert-danger py-2 mt-2 mb-0">@_nameError</div>
+                                }
+
+                                <button type="button" class="btn btn-primary mt-3" @onclick="SaveNameAsync" disabled="@_saving">
+                                    @(_saving ? "Saving…" : "Save")
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Public photo</h6>
+                                <p class="text-secondary small">
+                                    Anyone can see this one, including visitors to public case pages.
+                                </p>
+                                @PhotoSlot(_profile.PublicPhoto, isPublic: true)
+                            </div>
+                        </div>
                     </div>
-                }
-            </div>
-        </div>
 
-        @* Contact details. Each card loads and saves on its own — one slow lookup or one failed
-           save has no business blocking the rest of the page. *@
-        <MyEmailsCard />
-        <MyPhonesCard />
-        <MyAddressesCard />
-        <MyLinksCard />
+                    <div class="col-lg-5">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Private photo<HelpLink Slug="your-profile" Anchor="who-sees-your-private-photo" /></h6>
+                                <p class="text-secondary small">
+                                    Shown only to people you actually work with — never on public pages.
+                                </p>
+                                @PhotoSlot(_profile.PrivatePhoto, isPublic: false)
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="card-title">Where you've been<HelpLink Slug="your-profile" Anchor="your-investigation-map" /></h6>
-                <p class="text-secondary small">
-                    A map of the investigations you have actually attended, kept on your
-                    investigations page.
-                </p>
-                <a class="btn btn-outline-primary btn-sm" href="/my-investigations">My investigations</a>
-            </div>
-        </div>
+                                <hr />
+
+                                @* W-CL4: the switch reads "the groups I work with", and it was
+                                   offered to people who work with none — clients, who are the other
+                                   side of that sentence. The photo itself stays: it is theirs, it is
+                                   private, and it is used the moment they join a group. *@
+                                @if (!_profile.BelongsToAnyOrganization)
+                                {
+                                    <div id="private-photo-no-group" class="text-secondary small mb-0">
+                                        This one is for members of an investigation group — it decides whether
+                                        that group's clients see your face. Nothing to decide yet.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex align-items-start gap-2">
+                                        <input type="checkbox" class="form-check-input mt-1" id="share-private"
+                                               checked="@_shareWithClients"
+                                               @onchange="@(e => ToggleShareAsync((bool)(e.Value ?? false)))" />
+                                        <label for="share-private" class="mb-0">
+                                            Show my private photo to clients of the groups I work with
+                                            <span class="d-block text-secondary small">
+                                                Clients see a face rather than a name alone. Your group has to allow
+                                                this too — both of you decide, not just one.
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    @* An opt-in that silently does nothing is worse than no opt-in: say so plainly
+                                       rather than letting the user believe they've shared something they haven't. *@
+                                    @if (_shareWithClients && !_profile.AnyOrgAllowsPrivatePhotoSharing)
+                                    {
+                                        <div class="alert alert-warning py-2 mt-2 mb-0 small">
+                                            You've turned this on, but none of your groups currently allow member
+                                            photos to be shown to clients — so nothing is being shared yet. It will
+                                            take effect if a group turns it on.
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </BenTab>
+
+            <BenTab Title="Contact">
+                @* Each card loads and saves on its own — one slow lookup or one failed save has no
+                   business blocking the rest of the page. *@
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <MyEmailsCard />
+                        <MyAddressesCard />
+                    </div>
+                    <div class="col-lg-6">
+                        <MyPhonesCard />
+                        <MyLinksCard />
+                    </div>
+                </div>
+            </BenTab>
+
+            <BenTab Title="Where you've been">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Where you've been<HelpLink Slug="your-profile" Anchor="your-investigation-map" /></h6>
+                        <p class="text-secondary small">
+                            The investigations you have actually attended. Click a pin to open one.
+                        </p>
+
+                        @if (_mapLoading)
+                        {
+                            <p class="text-secondary small mb-0">Loading your investigations…</p>
+                        }
+                        else if (_attendedPins.Any(p => p.Latitude.HasValue))
+                        {
+                            <InvestigationsMap Pins="@_attendedPins" Height="420px" OnPinClicked="@OpenInvestigation" />
+                        }
+                        else
+                        {
+                            @* Says which of the two reasons applies. "No map" reads as broken when
+                               the real answer is "you have not been on one yet". *@
+                            <p class="text-secondary small mb-2">
+                                @(_attendedPins.Count == 0
+                                    ? "You haven't attended an investigation yet — once you do, it appears here."
+                                    : "The investigations you've attended don't have map locations recorded.")
+                            </p>
+                            <a class="btn btn-outline-primary btn-sm" href="/my-investigations">My investigations</a>
+                        }
+                    </div>
+                </div>
+            </BenTab>
+
+            @* Security is its own tab rather than a card under About: it is where somebody goes
+               deliberately, and mixing "your photo" with "how you sign in" makes both harder to
+               find. *@
+            <BenTab Title="Security">
+                <div class="row g-3">
+                    <div class="col-lg-8">
+                        <PasswordPanel />
+                        <div class="mt-3">
+                            <TwoFactorPanel />
+                        </div>
+                    </div>
+                </div>
+            </BenTab>
+        </BenTabs>
     }
 </div>
 
 @code {
     private MyProfileRecord? _profile;
     private string _displayName = string.Empty;
+    private string _firstName   = string.Empty;
+    private string _lastName    = string.Empty;
+    private Ben.Data.Common.Enums.ClientGender _gender = Ben.Data.Common.Enums.ClientGender.NotProvided;
+    private string? _nameError;
     private bool   _shareWithClients;
     private bool   _saving;
     private bool   _saved;
     private string? _error;
+    private bool    _resending;
+    private string? _resendResult;
 
     // Slot currently uploading, so only that card shows a spinner.
     private bool? _uploadingSlot;
@@ -138,6 +432,90 @@
     /// </remarks>
     private readonly Dictionary<Guid, string> _previews = [];
 
+    // ── Hero band ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A 1×1 transparent PNG, so the hero's circle keeps its shape before a photo exists.
+    /// </summary>
+    /// <remarks>
+    /// Inline rather than a file: an &lt;img&gt; with no src draws a broken-image glyph in most
+    /// browsers, and a placeholder served from wwwroot is a request to make the page look
+    /// unfinished slightly faster.
+    /// </remarks>
+    private const string BlankAvatar =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+    /// <summary>
+    /// The photo for the hero: public first, then private.
+    /// </summary>
+    /// <remarks>
+    /// The hero shows what other people see, and the public photo is the one most of them get. The
+    /// private one is the fallback only because a face is more useful than an empty circle to the
+    /// person looking at their own profile — it is never shown to anyone else from here.
+    /// </remarks>
+    private string? HeroPhotoSrc
+    {
+        get
+        {
+            var photo = _profile?.PublicPhoto ?? _profile?.PrivatePhoto;
+            return photo is not null && _previews.TryGetValue(photo.UploadFileId, out var src)
+                ? src
+                : null;
+        }
+    }
+
+    // ── Investigation map ─────────────────────────────────────────────────────
+
+    private List<AttendedInvestigationItem> _attended = [];
+    private List<InvestigationMapPin> _attendedPins = [];
+    private bool _mapLoading = true;
+
+    /// <summary>
+    /// Loads the attended investigations behind the map tab.
+    /// </summary>
+    /// <remarks>
+    /// Failures are swallowed and leave an empty list. The rest of this page is a person's own
+    /// account settings; a history map that cannot be drawn must not stop them changing their
+    /// name. Same reasoning as the identical call on MyInvestigations.
+    /// </remarks>
+    private async Task LoadMapAsync()
+    {
+        try
+        {
+            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).Items.ToList();
+            _attendedPins = _attended
+                .Select(a => new InvestigationMapPin(
+                    a.InvestigationId, a.Title, a.Latitude, a.Longitude, IsPast: true))
+                .ToList();
+        }
+        catch
+        {
+            _attended = [];
+            _attendedPins = [];
+        }
+        finally
+        {
+            _mapLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the case an investigation belongs to — the same destination MyInvestigations uses
+    /// for the same click, so a pin means the same thing on both pages.
+    /// </summary>
+    /// <remarks>
+    /// The rows are kept alongside the pins because the pin itself carries only an id and a title;
+    /// the organization and case ids needed to build the URL live on the attendance record.
+    /// </remarks>
+    private void OpenInvestigation(Guid investigationId)
+    {
+        var row = _attended.FirstOrDefault(a => a.InvestigationId == investigationId);
+        if (row is null) return;
+        NavManager.NavigateTo(row.CaseId is { } caseId
+            ? $"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{row.OrganizationId}?tab=investigations&inv={row.InvestigationId}");
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
@@ -154,6 +532,15 @@
         StateHasChanged();
     }
 
+    /// <summary>Whether the profile has been asked for yet, however that turned out.</summary>
+    /// <remarks>
+    /// Without this the page cannot tell "still waiting" from "asked, and got nothing", and both
+    /// look like a null profile. It showed "Loading…" for ever in the second case — reported by
+    /// Ben on 2026-08-27, and reproduced here after a restart invalidated the stored token, which
+    /// is the ordinary way a call comes back null.
+    /// </remarks>
+    private bool _loadAttempted;
+
     private async Task LoadAsync()
     {
         try
@@ -162,37 +549,85 @@
             if (_profile is not null)
             {
                 _displayName      = _profile.DisplayName ?? string.Empty;
+                _firstName        = _profile.FirstName ?? string.Empty;
+                _lastName         = _profile.LastName ?? string.Empty;
+                _gender           = _profile.Gender;
                 _shareWithClients = _profile.SharePrivatePhotoWithClients;
                 await LoadPreviewsAsync();
+                await LoadMapAsync();
+            }
+            else
+            {
+                // A null is a refusal, not a slow answer. Saying so is the whole point: the page
+                // used to sit on "Loading…" and let somebody wait for something that had already
+                // finished failing.
+                _error = "Couldn't load your profile — the server didn't answer. "
+                       + "Your session may have expired; try signing in again.";
             }
         }
         catch { _error = "Couldn't load your profile. Please refresh."; }
+        finally { _loadAttempted = true; }
     }
 
-    private async Task LoadPreviewsAsync()
+    /// <summary>
+    /// Sends the confirmation link again. The server answers the same neutral sentence whatever it
+    /// did (it will not say whether an address is registered, and it rate-limits repeats), and that
+    /// sentence is shown as it came.
+    /// </summary>
+    private async Task ResendConfirmationAsync()
+    {
+        if (_profile?.Email is not { Length: > 0 } email || _resending) return;
+        _resending = true; _resendResult = null;
+        try   { _resendResult = await AdminClient.ResendConfirmationAsync(email); }
+        catch { _resendResult = "Couldn't send it just now. Please try again in a minute."; }
+        finally { _resending = false; }
+    }
+
+    /// <summary>Try again without a full page reload.</summary>
+    private async Task RetryLoadAsync()
+    {
+        _error = null;
+        _loadAttempted = false;
+        await LoadAsync();
+    }
+
+    /// <summary>Points the two profile photos at URLs the browser fetches.</summary>
+    /// <remarks>
+    /// Only two files, so this was never the disaster the media library was — but a profile photo
+    /// is a full-size camera image, and there is no reason to route one through the server and
+    /// inflate it by a third as base64 when the browser can fetch a thumbnail and cache it.
+    /// </remarks>
+    private Task LoadPreviewsAsync()
     {
         foreach (var photo in new[] { _profile?.PublicPhoto, _profile?.PrivatePhoto })
         {
             if (photo is null || _previews.ContainsKey(photo.UploadFileId)) continue;
-            try
-            {
-                var file = await AdminClient.GetFileDataAsync(photo.UploadFileId);
-                if (file is { } f)
-                    _previews[photo.UploadFileId] =
-                        $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
-            }
-            catch { /* a photo that won't load isn't worth failing the whole page over */ }
+            _previews[photo.UploadFileId] = MediaUrls.Thumbnail(photo.UploadFileId);
         }
+        return Task.CompletedTask;
     }
 
     private async Task SaveNameAsync()
     {
-        _saving = true; _error = null; _saved = false;
+        _saving = true; _error = null; _saved = false; _nameError = null;
+
+        // Checked here as well as on the server so the person gets the answer without a round
+        // trip. The server refuses an empty value too — this is the courtesy, that is the rule.
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _nameError = "First and last name are both required.";
+            _saving = false;
+            return;
+        }
+
         try
         {
-            // Only the name is sent. The consent field stays null so saving a name can never
+            // Only the names are sent. The consent field stays null so saving a name can never
             // change what you've agreed to share.
-            var updated = await AdminClient.UpdateMyProfileAsync(new UpdateMyProfileRequest(_displayName));
+            var updated = await AdminClient.UpdateMyProfileAsync(
+                new UpdateMyProfileRequest(_displayName, SharePrivatePhotoWithClients: null,
+                                           FirstName: _firstName, LastName: _lastName,
+                                           Gender: _gender));
             if (updated is null) { _error = "Couldn't save your name."; return; }
             _profile = updated;
             _saved = true;
@@ -293,10 +728,21 @@
         <div class="d-flex align-items-center gap-3 flex-wrap">
             @if (photo is not null && _previews.TryGetValue(photo.UploadFileId, out var src))
             {
-                <img src="@src"
-                     alt="@(photo.AltText ?? "Profile photo")"
-                     class="rounded-circle border"
-                     style="width:88px;height:88px;object-fit:cover;" />
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@src"
+                    Alt="@(photo.AltText ?? "Profile photo")"
+                    Class="rounded-circle border"
+                    Style="width:88px;height:88px;object-fit:cover;">
+                    <Fallback>
+                        @* IH-06: the photo is recorded but its bytes did not arrive. Say so in
+                           the frame instead of spilling alt text out of a circle. *@
+                        <div class="rounded-circle border d-flex align-items-center justify-content-center text-secondary text-center"
+                             style="width:88px;height:88px;font-size:.65rem;line-height:1.1;"
+                             title="This photo could not be loaded">
+                            <span>Photo<br/>unavailable</span>
+                        </div>
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
             }
             else if (photo is not null)
             {

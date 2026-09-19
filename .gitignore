@@ -54,6 +54,9 @@ telerik-license.txt
 **/appsettings.Development.json
 **/appsettings.*.json
 !**/appsettings.json
+# UAT settings carry no secret: integrated security to the UAT copy of the database, and the
+# log sink pointed at the same place. Tracked so the UAT environment is reproducible.
+!**/appsettings.UAT.json
 
 # .NET user secrets
 **/secrets.json
@@ -73,6 +76,12 @@ ProjectNotes/Agent007/
 
 # Ben.Video.Sidecar build outputs — fetched/built locally by scripts/fetch-ffmpeg.* and
 # installer/macos/build.sh, never committed (100+ MB of binaries; also environment-specific).
+#
+# The Intel Mac image was briefly committed here on 2026-09-05 so a Windows deploy host would have
+# one without a Mac in the loop, and taken back out: at 122 MiB it is over GitHub's hard 100 MiB
+# per-file limit, so the push was refused. All three images reach the server the same way — the
+# deploy script stages them from this folder — which means the deploy runs from a machine that has
+# built them.
 Ben.Video.Sidecar/ffmpeg/
 Ben.Video.Sidecar/installer/dist/
 
@@ -82,3 +91,42 @@ Ben.Video.Sidecar/installer/dist/
 
 # Rider/ReSharper per-user solution settings — machine-specific, not shared config.
 *.DotSettings.user
+
+# Publish output for the standalone editor (scripts/publish-editor.sh). Regenerated on demand and
+# around 65 MB, most of it the .NET runtime — a build product, not a source artefact.
+artifacts/
+
+# Sidecar zips are staged into the editor's downloads folder at publish time, never committed —
+# scripts/publish-editor.sh copies them from Ben.Video.Sidecar/installer/dist.
+Ben.Wasm.Video/wwwroot/downloads/*.zip
+Ben.Wasm.Video/wwwroot/downloads/checksums.txt
+TestResults/
+
+# Loose credential files kept beside the repo but never in it.
+# The patterns above matched appsettings and SECRETS.md but not an ad-hoc file like
+# "IsHaunted - AZURE Client Secrets", which sat untracked and committable in the repo root.
+# This repo has already had an Azure secret scrubbed from history with git-filter-repo once.
+*[Cc]lient [Ss]ecret*
+*[Cc]lient[-_][Ss]ecret*
+*CLIENT_SECRET*
+*.secrets
+
+# ── Ben.iOS (Xcode / SwiftPM) ────────────────────────────────────────────────
+# Anywhere, not just Ben.iOS: a stray workspace made during Xcode Cloud troubleshooting shipped
+# its window-state binary because the old rule was path-scoped.
+**/xcuserdata/
+Ben.iOS/**/.DS_Store
+Ben.iOS/BenKit/.build/
+Ben.iOS/DerivedData/
+
+# F5b: the NSFW screening model is fetched, not committed (87MB; see scripts/get-screener-model.sh)
+Ben.Data.WebApi/Models/nsfw/*.onnx
+
+.uploads-e2e/
+# Any scratch database gets an uploads directory named after it (scripts/run-e2e.sh), so the
+# pattern has to be the shape, not one database's name — item 225 made a second one and it landed
+# in git status.
+.uploads-*/
+
+# Working-copy-only secrets, e.g. the App Review demo password
+*.local.md

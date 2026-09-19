@@ -5,6 +5,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Controllers.Admin;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -149,7 +150,25 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         return Ok(result);
     }
 
-    /// <summary>Returns a single organization for the edit form. Requires Read access or SuperAdmin.</summary>
+    /// <summary>
+    /// Returns a single organization. Any active member may read it; everyone else needs explicit
+    /// Read access or SuperAdmin.
+    /// </summary>
+    /// <remarks>
+    /// <para>Membership alone used to be insufficient here, and that made a group's own page
+    /// unreachable for most of its members. <c>HasAccessAsync</c> returns true for Owners and
+    /// Administrators and then falls through to explicit grants and named roles — a plain Member
+    /// with neither is refused for every table, including this one. Three of BenCo's four seeded
+    /// members got a 403 from this endpoint, and the organisation hub, whose very first call this
+    /// is, told them "Organization not found or you do not have access" about a group they belong
+    /// to and can already post messages in.</para>
+    ///
+    /// <para>The record returned here is the group's own name, URL name and whether it is
+    /// accepting applications — nothing a member does not already know by being one. So membership
+    /// is the right bar for reading it, and the check is written here rather than inside
+    /// <c>HasAccessAsync</c> deliberately: that method answers for every table, and members are
+    /// emphatically not entitled to read all of them.</para>
+    /// </remarks>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrganizationAdminRecord>> GetByIdWithPermissions(Guid id, CancellationToken ct)
     {
@@ -157,13 +176,20 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         if (!isSuperAdmin)
         {
-            var canRead = await _security.HasAccessAsync(userId.Value, id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Read, ct);
-            if (!canRead) return Forbid();
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == id && m.AppUserId == userId.Value && m.IsActive, ct);
+
+            if (!isActiveMember)
+            {
+                var canRead = await _security.HasAccessAsync(userId.Value, id, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Read, ct);
+                if (!canRead) return Forbid();
+            }
         }
 
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
@@ -204,7 +230,43 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         // Keeps the old address working. A group's address is the one part of this product that
         // ends up on a business card, and renaming used to break every printed link in silence.
         await OrganizationUrlNames.ApplyAsync(db, org, request.UrlName, userId, ct);
+        // Advertising for members is where the paid gate is felt FIRST, on purpose. Refusing only
+        // at acceptance would let a free group collect applications it cannot accept — the
+        // dead-end pattern items 149/150 made policy against. Turning the switch OFF is always
+        // allowed: a rule that trapped somebody with a setting they could not undo would be worse
+        // than the one it is enforcing.
+        if (request.IsAcceptingApplications && !org.IsAcceptingApplications
+            && await Services.Billing.PaidPlan.WhyCannotAddMemberAsync(db, id, ct) is { } needsPlan)
+        {
+            return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
+        }
         org.IsAcceptingApplications = request.IsAcceptingApplications;
+        // A group that has chosen not to be found stays that way unless this call says otherwise.
+        if (request.IsUnlisted is { } unlisted) org.IsUnlisted = unlisted;
+        // Item 233: becoming a tour business is a sign-up by another route, so the switch that
+        // closes the front door closes this one too. Only the change INTO one is refused — a
+        // business already classified this way keeps everything, which is exactly what Ben asked
+        // for, and turning the flag OFF is always allowed so nobody is trapped.
+        var becomingATour =
+            (request.Kind is { } wantedKind
+                && OrganizationKindDefaults.RunsPublicTours(wantedKind)
+                && !OrganizationKindDefaults.RunsPublicTours(org.Kind))
+            // The flag is its own route in: a group of any kind that starts walking people
+            // around has signed up to run tours, whatever it calls itself.
+            || (request.RunsPublicTours is true && !org.RunsPublicTours);
+
+        if (becomingATour && !isSuperAdmin
+            && !await SiteSettingsService.GetBoolAsync(
+                    db, SiteSettingKeys.AllowTourBusinessSignUps, whenUnset: true, ct))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "We aren't taking on new ghost walking tours just now, so this group can't start "
+                + "running them yet. Nothing about it changes in the meantime — get in touch and "
+                + "we will let you know when they reopen.");
+        }
+
+        if (request.Kind is { } kind) org.Kind = kind;
+        if (request.RunsPublicTours is { } runsTours) org.RunsPublicTours = runsTours;
         org.PublicPhone             = request.PublicPhone?.Trim();
         org.PublicEmail             = request.PublicEmail?.Trim();
         org.PublicWebsite           = request.PublicWebsite?.Trim();
@@ -212,6 +274,23 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         // caller editing the name must not be able to revoke a privacy policy it never sent.
         if (request.AllowMemberPrivatePhotosToClients is { } allow)
             org.AllowMemberPrivatePhotosToClients = allow;
+
+        // W-M1: which role people start on. Two fields rather than one, because "leave it alone"
+        // and "clear it" are different instructions and null cannot carry both — every other
+        // optional field on this record uses null for the first, so clearing needed its own flag.
+        // The role has to be this group's own: a group must not be able to point its starting
+        // role at somebody else's, which would hand its members a permission set it cannot see.
+        if (request.SetDefaultMemberRole)
+        {
+            if (request.DefaultMemberRoleId is { } startingRoleId)
+            {
+                var roleIsOurs = await db.OrganizationRoles
+                    .AnyAsync(r => r.Id == startingRoleId && r.OrganizationId == id, ct);
+                if (!roleIsOurs)
+                    return BadRequest("That role does not belong to this group.");
+            }
+            org.DefaultMemberRoleId = request.DefaultMemberRoleId;
+        }
         org.DateUpdated            = DateTime.UtcNow;
         org.UpdatedByAppUserId     = userId.Value;
 
@@ -238,8 +317,67 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
+        // The rows created WITH the organization, which therefore cannot be anyone's reason to
+        // keep it: the founder's own membership, and the default calendar event types stamped at
+        // registration. Every foreign key onto Organizations is NoAction by convention here, so
+        // these have to go explicitly — and until they did, a group created after the default
+        // event types shipped (item 148) could never be deleted at all: five rows nobody asked
+        // for, arriving at birth, turning every delete into a 500.
+        var birthChildren = await db.OrgCalendarEventTypes
+            .Where(t => t.OrganizationId == id).ToListAsync(ct);
+        db.OrgCalendarEventTypes.RemoveRange(birthChildren);
+
+        var birthLevels = await db.OrganizationMemberLevels
+            .Where(l => l.OrganizationId == id).ToListAsync(ct);
+        db.OrganizationMemberLevels.RemoveRange(birthLevels);
+
+        var birthDuties = await db.InvestigationDuties
+            .Where(d => d.OrganizationId == id).ToListAsync(ct);
+        db.InvestigationDuties.RemoveRange(birthDuties);
+
+        // The group's own pointer at one of its roles is cleared FIRST, in its own save (site
+        // evaluation 2026-09-06, W-M1). Not merely set to null: an organization and the role it
+        // points at, both marked Deleted in one SaveChanges, are a cycle EF refuses outright —
+        // "a circular dependency was detected in the data to be saved". The pointer has to be
+        // gone from the database before the rows that make the cycle are staged for removal.
+        if (org.DefaultMemberRoleId is not null)
+        {
+            org.DefaultMemberRoleId = null;
+            await db.SaveChangesAsync(ct);
+        }
+
+        // Roles and their dependents are birth children too (item 156 Phase C) — removed
+        // leaf-first: assignments, then grants, then the roles themselves.
+        var birthRoleIds = await db.OrganizationRoles
+            .Where(r => r.OrganizationId == id).Select(r => r.Id).ToListAsync(ct);
+        db.OrganizationRoleMemberships.RemoveRange(
+            db.OrganizationRoleMemberships.Where(m => birthRoleIds.Contains(m.OrganizationRoleId)));
+        db.OrganizationRolePermissions.RemoveRange(
+            db.OrganizationRolePermissions.Where(p => birthRoleIds.Contains(p.OrganizationRoleId)));
+        db.OrganizationRoles.RemoveRange(
+            db.OrganizationRoles.Where(r => r.OrganizationId == id));
+
+        var memberships = await db.OrganizationUserMemberships
+            .Where(m => m.OrganizationId == id).ToListAsync(ct);
+        db.OrganizationUserMemberships.RemoveRange(memberships);
+
         db.Organizations.Remove(org);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Everything else hanging off a group — cases, files, events, publications — is real
+            // work, and refusing to delete a group that still has some is right. Saying so is the
+            // part that was missing: this used to surface as an unhandled 500, which tells the
+            // administrator nothing about what to do next.
+            return Conflict(
+                "This group still has records attached to it — cases, files, events or similar. "
+                + "Remove or transfer those first, then delete the group.");
+        }
+
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(nameof(Organization), id, org, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
@@ -274,7 +412,14 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             CreatedByAppUserId = userId.Value
         };
 
+        // The kind decides what this group STARTS as — public meeting point and public
+        // events for a tour, the pre-existing private defaults for an investigation group.
+        // Defaults only: everything is adjustable the moment the group wants.
+        org.Kind = request.Kind;
+        org.RunsPublicTours = OrganizationKindDefaults.RunsPublicTours(request.Kind);
+
         db.Organizations.Add(org);
+        await NewOrganizationDefaults.AddAllAsync(db, org, userId.Value, ct);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
@@ -310,11 +455,82 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         return Ok(entries);
     }
 
+    /// <summary>
+    /// The group's roster — who belongs, in what role — readable by anybody who belongs to it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists next to the near-identical <c>user-directory</c>:</b> that one
+    /// answers "what are these people called", for name pickers. This one answers "who is in this
+    /// group", which is what the hub's Members tab shows, and it needs the role and the active
+    /// flag that a name directory has no business carrying.</para>
+    ///
+    /// <para><b>What it replaces.</b> The Members tab used to read
+    /// <c>organizations/{id}/security/users</c>, whose service method requires Owner or
+    /// Administrator — it is the endpoint behind *managing* access. So an ordinary member's own
+    /// roster was refused, and since the website's API client turns a non-2xx into an empty list,
+    /// the tab told them their group had no members at all while the Details tab beside it
+    /// counted three. Item 109, and the same fault phase 5 found in messaging.</para>
+    ///
+    /// <para>The manage endpoint keeps its stricter gate; it is still the one used to change
+    /// anybody's role. Reading a roster and editing one are different questions.</para>
+    ///
+    /// <para>Inactive memberships are included, because the tab shows an Active column — a
+    /// roster that silently omitted lapsed members would misrepresent the group.</para>
+    /// </remarks>
+    [HttpGet("{organizationId:guid}/roster")]
+    public async Task<ActionResult<IEnumerable<OrgRosterEntry>>> GetRoster(
+        Guid organizationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+            if (!isActiveMember) return Forbid();
+        }
+
+        var roster = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId)
+            .OrderBy(m => m.Role).ThenBy(m => m.DateCreated)
+            .Join(db.AppUsers.AsNoTracking(), m => m.AppUserId, u => u.Id,
+                (m, u) => new OrgRosterEntry(
+                    m.Id, m.OrganizationId, m.AppUserId,
+                    u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString(),
+                    m.Role, m.IsActive, m.DateCreated, m.DateUpdated,
+                    m.MemberLevelId,
+                    m.MemberLevel != null ? m.MemberLevel.Name : null))
+            .ToListAsync(ct);
+
+        return Ok(roster);
+    }
+
 }
 
 /// <summary>Minimal name-resolution entry for <see cref="OrganizationController.GetUserDirectory"/> —
 /// deliberately excludes everything <c>AppUserRecord</c> carries beyond Id/DisplayName.</summary>
 public sealed record OrgUserDirectoryEntry(Guid Id, string DisplayName);
+
+/// <summary>
+/// One line of a group's roster: who, in what role, still active or not.
+/// </summary>
+/// <remarks>
+/// Carries no email, phone or account flags. A member may see who else is in their group and what
+/// each of them does; that is not a reason to hand out contact details, which live behind the
+/// consent rules on a person's own profile.
+/// </remarks>
+public sealed record OrgRosterEntry(
+    Guid MembershipId,
+    Guid OrganizationId,
+    Guid AppUserId,
+    string DisplayName,
+    OrganizationMemberRole Role,
+    bool IsActive,
+    DateTime DateCreated,
+    DateTime? DateUpdated,
+    Guid? MemberLevelId = null,
+    string? MemberLevelName = null);
 
 public sealed record OrganizationListItemResponse(
     Guid Id,
@@ -331,8 +547,21 @@ public sealed record OrganizationListItemResponse(
 
 public sealed record AdminUpdateOrganizationRequest(string Name, string UrlName,
     bool IsAcceptingApplications = false,
+    // Optional, and null means "leave as-is" — the same reasoning as the photo policy
+    // below: an older caller that omits it must not silently reclassify a group.
+    Ben.Data.Common.Enums.OrganizationKind? Kind = null,
+    bool? RunsPublicTours = null,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null,
     // Optional so an existing caller that omits it can't silently switch the policy off.
     // Null means "leave as-is"; see OrganizationController.Update.
-    bool? AllowMemberPrivatePhotosToClients = null);
+    bool? AllowMemberPrivatePhotosToClients = null,
+    // Null means "leave as-is" for the same reason: a caller that predates this field must not
+    // silently list a group that had chosen to be unlisted.
+    bool? IsUnlisted = null,
+    // Which functional role new members start on (W-M1). Null means "leave as-is"; the sentinel
+    // below is how a caller says "none", since null cannot mean both.
+    Guid? DefaultMemberRoleId = null,
+    // True when DefaultMemberRoleId is meant literally, INCLUDING when it is null. Without this
+    // an owner could set a starting role but never clear one.
+    bool SetDefaultMemberRole = false);
 

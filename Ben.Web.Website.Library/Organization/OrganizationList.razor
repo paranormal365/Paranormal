@@ -1,9 +1,12 @@
 @page "/organizations"
 @using Ben.Web.Website.Library.Shared
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject Ben.Web.Services.SiteFeaturesProvider Features
 
 <PageTitle>Organizations</PageTitle>
 
@@ -13,14 +16,23 @@
         <div class="col">
             <h3 class="mb-0">Organizations</h3>
         </div>
-        @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
-        {
-            <div class="col-auto">
-                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))"><BenIcon Name="plus" Class="me-1" />
-                    New Organization
+        <div class="col-auto d-flex gap-2">
+            @* Anyone may found a group — the register endpoint always allowed it, and the billing
+               model depends on it; only the button was missing. The SuperAdmin keeps the fuller
+               admin create beside it, and is exempt from the switch below. *@
+            @if (Features.AllowOrganizationSelfRegistration || UserState.IsSuperAdmin)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/organizations/new"))"><BenIcon Name="plus" Class="me-1" />
+                    Start a Group
                 </button>
-            </div>
-        }
+            }
+            @if (UserState.IsSuperAdmin && !UserState.IsImpersonating)
+            {
+                <button type="button" class="btn btn-outline-secondary" @onclick="@(() => NavManager.NavigateTo("/organizations/create"))">
+                    Admin Create
+                </button>
+            }
+        </div>
     </div>
 
     @if (_errorMessage is not null)
@@ -32,13 +44,56 @@
         <div class="alert alert-success mb-3">@_successMessage</div>
     }
 
-    @if (_orgs is null)
+    @* A refused list used to render as an empty grid, telling a signed-in member there are no
+       groups on the site at all. Item 120. *@
+    @* IH-04: an application had no acknowledgement anywhere in the applicant's own account, so
+       people reasonably concluded it had not gone through and applied again — one test account
+       reached 23 applications to the same group. This is where somebody with no memberships
+       lands, so this is where their pending application belongs. *@
+    @if (_myRequests.Count > 0)
     {
-        <BenLoaderOverlay Visible="true" Text="Loading organizations…" />
+        <div class="card mb-3">
+            <div class="card-header fw-semibold py-2">Your applications</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var r in _myRequests)
+                {
+                    <li class="list-group-item d-flex align-items-center justify-content-between gap-2 flex-wrap"
+                        data-testid="my-membership-request">
+                        <div>
+                            <a href="/o/@r.OrganizationId">@r.OrganizationName</a>
+                            <span class="text-secondary small ms-2">
+                                applied @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </span>
+                            @if (r.Status == OrganizationMembershipRequestStatus.Denied
+                                 && !string.IsNullOrWhiteSpace(r.DenialReason))
+                            {
+                                <div class="text-secondary small">@r.DenialReason</div>
+                            }
+                        </div>
+                        <span class="badge @StatusBadgeClass(r.Status)">@StatusLabel(r)</span>
+                    </li>
+                }
+            </ul>
+        </div>
     }
-    else
-    {
-        <TelerikGrid Data="@_orgs"
+
+    @* IH-05, Ben's 2026-08-26 sweep: this list is the groups YOU belong to, but the empty text
+       said none had ever been created — to a new user, on their first screen, while 21 existed.
+       An empty state has to describe the list it is standing in for, and then say what to do. *@
+    <BenListState TItem="OrganizationListItemResponse" Result="@_orgs" Loading="@_loadingOrgs"
+                  LoadingText="Loading organizations…"
+                  OnRetry="@LoadOrgs">
+        <Empty>
+            <div class="text-secondary text-center py-4">
+                <div>You're not a member of any group yet.</div>
+                <div class="mt-2">
+                    <a href="/find" class="btn btn-primary btn-sm">Find a group to join</a>
+                    <a href="/organizations/new" class="btn btn-outline-secondary btn-sm ms-1">Start your own</a>
+                </div>
+            </div>
+        </Empty>
+        <ChildContent>
+        <TelerikGrid Data="@_orgs.Items"
                      TItem="OrganizationListItemResponse"
                      Pageable="true"
                      PageSize="25"
@@ -78,16 +133,14 @@
                             var org = (OrganizationListItemResponse)context;
                         }
                         <div class="btn-group">
-                            <button type="button" class="btn btn-link text-decoration-none btn-sm text-nowrap"
-                                    @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
-                                <BenIcon Name="eye" Class="me-1" />View
-                            </button>
-                            <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="180px">
-                                <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
+                            <BenGridAction Icon="eye" Label="View" OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))" />
+                            <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="180px" Floating="true">
+                                <ToggleContent><BenIcon Name="more-horizontal" /></ToggleContent>
                                 <ChildContent>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">CMS</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">Cases</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/calendar"))">Calendar</button></li>
+                                    <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/tours"))">Tours</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/messages"))">Messages</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/client-settings"))">Clients</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/membership-questions"))">Q&amp;A</button></li>
@@ -100,7 +153,8 @@
                 </GridColumn>
             </GridColumns>
         </TelerikGrid>
-    }
+        </ChildContent>
+    </BenListState>
 </div>
 
 @* ── Delete Confirmation ── *@
@@ -118,7 +172,30 @@
 </BenConfirmDialog>
 
 @code {
-    private IReadOnlyList<OrganizationListItemResponse>? _orgs;
+    private LoadResult<OrganizationListItemResponse> _orgs;
+
+    /// <summary>This person's own applications — see the IH-04 note in the markup.</summary>
+    private List<OrganizationMembershipRequestRecord> _myRequests = [];
+
+    private static string StatusLabel(OrganizationMembershipRequestRecord r) => r.Status switch
+    {
+        // "Pending" alone reads as limbo; saying somebody is looking at it is the reassurance
+        // that stops a second application.
+        OrganizationMembershipRequestStatus.Pending  => r.IsUnderReview ? "Being voted on" : "Waiting for a decision",
+        OrganizationMembershipRequestStatus.Accepted => "Accepted",
+        OrganizationMembershipRequestStatus.Denied   => r.CanReapply == true ? "Declined — you may apply again" : "Declined",
+        OrganizationMembershipRequestStatus.Withdrawn => "You withdrew this",
+        _ => r.Status.ToString(),
+    };
+
+    private static string StatusBadgeClass(OrganizationMembershipRequestStatus status) => status switch
+    {
+        OrganizationMembershipRequestStatus.Pending   => "text-bg-warning",
+        OrganizationMembershipRequestStatus.Accepted  => "text-bg-success",
+        OrganizationMembershipRequestStatus.Denied    => "text-bg-secondary",
+        _ => "text-bg-secondary",
+    };
+    private bool _loadingOrgs = true;
     private string? _errorMessage;
     private string? _successMessage;
     private bool _isBusy;
@@ -148,7 +225,16 @@
     }
 
     private async Task LoadOrgs()
-        => _orgs = await AdminClient.GetOrganizationsAsync();
+    {
+        _loadingOrgs = true;
+        _orgs = await AdminClient.GetOrganizationsAsync();
+
+        // A failure here must not cost somebody their group list — the applications card simply
+        // does not appear.
+        try { _myRequests = (await AdminClient.GetMyMembershipRequestsAsync()).Items.ToList(); }
+        catch { _myRequests = []; }
+        _loadingOrgs = false;
+    }
 
     private void RequestDelete(OrganizationListItemResponse org)
     {

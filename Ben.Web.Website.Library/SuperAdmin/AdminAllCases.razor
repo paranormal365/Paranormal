@@ -13,13 +13,13 @@
 
     <AdminPageHeader Title="All Cases" Subtitle="Every case across every organization." />
 
-    @if (_cases is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading cases…" />
-    }
-    else
-    {
-        <TelerikGrid Data="@_cases"
+    @* A refused cross-org list used to render as an empty grid — the same untruth that left
+       both admin pages blank on the deployment for a day (items 120, 126). *@
+    <BenListState TItem="AdminCaseSummaryRecord" Result="@_cases" Loading="@_loading"
+                  LoadingText="Loading cases…"
+                  EmptyText="No cases anywhere yet."
+                  OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_cases.Items"
                      TItem="AdminCaseSummaryRecord"
                      Sortable="true"
                      FilterMode="@GridFilterMode.FilterRow"
@@ -42,34 +42,55 @@
                         @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="90px">
-                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))">
-                        Open
-                    </GridCommandButton>
+                <GridCommandColumn Width="100px">
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /></GridCommandButton>
+                    @* Item 183: goes to the delete page with this case chosen, never deletes from
+                       here. A destructive verb on a grid row is the first half of an accident. *@
+                    @* Icon only, with Title for the tooltip and the accessible name. NO
+                       aria-label: Telerik throws on an unmatched attribute and takes the circuit
+                       with it (item 112). Title is a real GridCommandButton parameter. *@
+                    <GridCommandButton Command="Delete"
+                                       ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@((GridCommandEventArgs e) => DeleteCase((AdminCaseSummaryRecord)e.Items.First()))"
+                                       Title="Delete this case"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
-    }
+    </BenListState>
 </div>
 
 @code {
-    private IReadOnlyList<AdminCaseSummaryRecord>? _cases;
+    private LoadResult<AdminCaseSummaryRecord> _cases;
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
         _cases = await AdminClient.GetAllCasesAsync();
+        _loading = false;
         StateHasChanged();
     }
 
     private void OpenCase(AdminCaseSummaryRecord c)
         => NavManager.NavigateTo($"/organizations/{c.OrganizationId}/cases/{c.Id}");
+
+    private void DeleteCase(AdminCaseSummaryRecord c)
+        => NavManager.NavigateTo($"/admin/delete-case/{c.Id}");
 }

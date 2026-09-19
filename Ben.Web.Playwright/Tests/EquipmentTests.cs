@@ -88,8 +88,16 @@ public class EquipmentTests : BenTestBase
 
         // Most categories have no makes in the dev data, so taking the first one skipped every
         // run. Walk them until one leads somewhere — that is what a person would do too.
-        var categories = await selects.Nth(0).Locator("option").EvaluateAllAsync<string[]>(
-            "options => options.map(o => o.value).filter(v => v !== '')");
+        // Polled, not read once: the select is VISIBLE before its async fetch fills it, and
+        // under full-suite load that window stretches past a single read — the taxonomy looked
+        // empty when only the request was still in flight.
+        string[] categories = [];
+        for (var poll = 0; poll < 20 && categories.Length == 0; poll++)
+        {
+            categories = await selects.Nth(0).Locator("option").EvaluateAllAsync<string[]>(
+                "options => options.map(o => o.value).filter(v => v !== '')");
+            if (categories.Length == 0) await Page.WaitForTimeoutAsync(500);
+        }
         Assert.That(categories, Is.Not.Empty, "no equipment categories in the taxonomy");
 
         // Walks makes as well as categories. The make list is not filtered by category — only the
@@ -105,6 +113,13 @@ public class EquipmentTests : BenTestBase
             var makes = await OptionValuesAsync(selects.Nth(1));
             foreach (var make in makes)
             {
+                // The make list is re-rendered over the circuit when the category changes, so a
+                // value read a moment ago can be absent for a beat while the new list arrives.
+                // Selecting into that gap times out after 30 s with "did not find some options",
+                // which reads as a broken taxonomy rather than a list still on its way. Wait for
+                // the option to actually be there, and move on if this category has stopped
+                // offering it at all.
+                if (!await OptionIsPresentAsync(selects.Nth(1), make)) continue;
                 await selects.Nth(1).SelectOptionAsync(make);
                 if (!await PickFirstRealOptionAsync(selects.Nth(2))) continue;   // no models here
                 reached = true;
@@ -242,6 +257,18 @@ public class EquipmentTests : BenTestBase
     /// taxonomy data.
     /// </summary>
     /// <summary>The real (non-placeholder) option values of a select, once it is enabled.</summary>
+    /// <summary>Waits for one option to be present on a select that may still be re-rendering.</summary>
+    private async Task<bool> OptionIsPresentAsync(ILocator select, string value, int timeoutMs = 8_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if ((await OptionValuesAsync(select)).Contains(value)) return true;
+            await Task.Delay(150);
+        }
+        return false;
+    }
+
     private async Task<string[]> OptionValuesAsync(ILocator select)
     {
         await Expect(select).ToBeEnabledAsync(new() { Timeout = 8_000 });
@@ -252,7 +279,17 @@ public class EquipmentTests : BenTestBase
 
     private async Task<bool> PickFirstRealOptionAsync(ILocator select)
     {
-        var values = await OptionValuesAsync(select);
+        // Polled, for the same reason the category select is: the options arrive from an async
+        // fetch after the select is already visible, and under full-suite load that window
+        // stretches past a single read. Read-once here made every category×make pair look
+        // model-less while the API was serving models for all of them — the walk exhausted the
+        // whole taxonomy and reported that gear could not be added at all.
+        var values = Array.Empty<string>();
+        for (var poll = 0; poll < 10 && values.Length == 0; poll++)
+        {
+            values = await OptionValuesAsync(select);
+            if (values.Length == 0) await Page.WaitForTimeoutAsync(300);
+        }
         if (values.Length == 0) return false;
 
         await select.SelectOptionAsync(values[0]);

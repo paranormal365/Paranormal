@@ -1,4 +1,6 @@
 @page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/video-editor"
+@using Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject ProjectService Projects
@@ -7,112 +9,157 @@
 @inject IJSRuntime JSRuntime
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
-<PageTitle>Case Video Editor</PageTitle>
+<FeatureGate Flag="@SiteFeatures.VideoEditor">
+    <PageTitle>Case Video Editor</PageTitle>
 
-@if (_case is null && !_loaded)
-{
-    <BenLoaderOverlay Visible="true" Text="Loading…" />
-    return;
-}
+    @if (_case is null && !_loaded)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+        return;
+    }
 
-@if (_error is not null)
-{
-    <div class="container py-3"><div class="alert alert-danger">@_error</div></div>
-    return;
-}
-
-@* 100vh alone ignores the site's TelerikAppBar (58px) sitting above <main>, which has no
-   explicit height of its own for a height:100% chain to resolve against — the 58px
-   overshoot pushed the video editor's transport controls below the visible viewport. *@
-<div class="d-flex flex-column" style="height:calc(100vh - 58px); overflow:hidden;">
-
-    @* ── Header bar ──────────────────────────────────────────────────────── *@
-    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
-        <a href="/organizations/@OrgId/cases/@CaseId" class="text-secondary small">← @(_case?.DisplayLabel ?? "Case")</a>
-        <span class="vr"></span>
-        <h6 class="mb-0 me-auto text-truncate" style="max-width:300px;">Case Video Editor</h6>
-
-        @if (_caseProjects.Count > 0)
-        {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />
-                Case Projects (@_caseProjects.Count)
-            </button>
-        }
-
-        @if (_saving)
-        {
-            <span class="text-muted small">Saving…</span>
-        }
-        else
-        {
-            <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Case</button>
-        }
-    </div>
-
-    @* ── Editor (full remaining height) ─────────────────────────────────── *@
-    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor OnPublishExport="OnPublishExportAsync" />
-    </div>
-</div>
-
-@* ── Case Projects dialog ────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showProjectList" Title="Case Projects" Size="lg">
-    <ChildContent>
-        @if (_loadingList)
-        {
-            <BenLoaderOverlay Visible="true" Text="Loading…" />
-        }
-        else if (_caseProjects.Count == 0)
-        {
-            <p class="text-muted">No projects saved to this case yet.</p>
-        }
-        else
-        {
-            <TelerikGrid Data="@_caseProjects" Pageable="false" Sortable="false" Height="380px">
-                <GridColumns>
-                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
-                    <GridColumn Title="By" Width="130px">
-                        <Template>
-                            @* GetMyVideoProjectsAsync only ever returns the viewer's own projects. *@
-                            <span class="text-muted small">You</span>
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Title="Saved" Width="110px">
-                        <Template>
-                            @{ var proj = (VideoProjectRecord)context; }
-                            @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Width="160px">
-                        <Template>
-                            @{ var row2 = (VideoProjectRecord)context; }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row2))">Open</button>
-                            <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row2))" disabled="@(!(!_publishing))" title="Publish rendered video to case"><BenIcon Name="upload" /></button>
-                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(row2))"><BenIcon Name="trash-2" /></button>
-                        </Template>
-                    </GridColumn>
-                </GridColumns>
-            </TelerikGrid>
-        }
-    </ChildContent>
-</BenModal>
-
-@* ── Delete confirm ──────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
-    <ChildContent>
-        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
-            <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+    @if (_needsSignIn)
+    {
+        <div class="container py-4">
+            <p class="text-muted">You must be signed in to edit this case's video.</p>
+            <a class="btn btn-primary"
+               href="/login?returnUrl=@Uri.EscapeDataString($"/organizations/{OrgId}/cases/{CaseId}/video-editor")">Sign in</a>
         </div>
-    </ChildContent>
-</BenModal>
+        return;
+    }
 
-@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
-<InputFile id="publish-input-case" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+    @if (_error is not null)
+    {
+        <div class="container py-3"><div class="alert alert-danger">@_error</div></div>
+        return;
+    }
+
+    <div class="ben-editor-page">
+
+        @* ── Header bar ──────────────────────────────────────────────────────── *@
+        <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+            <a href="/organizations/@OrgId/cases/@CaseId" class="text-secondary small">← @(_case?.DisplayLabel ?? "Case")</a>
+            <span class="vr"></span>
+            <h6 class="mb-0 me-auto text-truncate" style="max-width:300px;">Case Video Editor<HelpLink Slug="using-the-video-editor" /></h6>
+
+            @if (_caseProjects.Count > 0)
+            {
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />
+                    Case Projects (@_caseProjects.Count)
+                </button>
+            }
+
+            @if (_saving)
+            {
+                <span class="text-muted small">Saving…</span>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Case</button>
+            }
+        </div>
+
+        @* ── Editor (full remaining height) ─────────────────────────────────── *@
+        <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+            <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         EnablePostToFeed="@_canPostToFeed"
+                         OnPostToFeed="OnPostToFeedAsync"
+                         ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+        </div>
+    </div>
+
+    @* ── "Post to the feed" confirmation (item 186 F7) ─────────────────────────
+       Case lineage travels with the render; a private-engagement case gets the explicit
+       wording and the recorded tick. CaseLabel is the DISPLAY label — the redaction-aware
+       name — never the client's real name. *@
+    <FeedPostFromEditorDialog @bind-Visible="_feedDialogVisible"
+                              Exported="_pendingFeedExport"
+                              SourceCaseId="CaseId"
+                              IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)"
+                              CaseLabel="@_case?.DisplayLabel"
+                              OnPosted="OnFeedPostedAsync"
+                              OnCancelled="OnFeedCancelled" />
+
+    @* ── Case Projects dialog ────────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showProjectList" Title="Case Projects" Size="lg">
+        <ChildContent>
+            @if (_loadingList)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else if (_caseProjectsResult.Failed)
+            {
+                <BenListState TItem="VideoProjectRecord" Result="@_caseProjectsResult" />
+            }
+            else if (_caseProjects.Count == 0)
+            {
+                <p class="text-muted">No projects saved to this case yet.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_caseProjects" Pageable="false" Sortable="false" Height="380px">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                        <GridColumn Title="By" Width="130px">
+                            <Template>
+                                @{ var owner = (VideoProjectRecord)context; }
+                                @* A case's projects are everybody's to see now, so this column has
+                                   real work to do (2026-09-05 audit, persistence-14 and site-7). *@
+                                <span class="text-muted small">
+                                    @(owner.CreatedByAppUserId == UserState.UserId
+                                        ? "You"
+                                        : owner.CreatedByName ?? "Member")
+                                </span>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="Saved" Width="110px">
+                            <Template>
+                                @{ var proj = (VideoProjectRecord)context; }
+                                @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Width="160px">
+                            <Template>
+                                @{ var row2 = (VideoProjectRecord)context; }
+                                <span class="d-flex gap-1 text-nowrap">
+                                <BenGridAction Icon="edit-2" Label="Open" OnClick="@(() => OpenProjectAsync(row2))" />
+                                @* Reading is shared, writing is not: the server refuses a publish
+                                   or a delete on somebody else's project, and a button that can
+                                   only be refused is worse than no button. *@
+                                @if (row2.CreatedByAppUserId == UserState.UserId)
+                                {
+                                    <BenGridAction Icon="upload" Label="Publish rendered video to case" Tone="GridActionTone.Success" OnClick="@(() => TriggerPublishAsync(row2))" Disabled="@_publishing" />
+                                    <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDelete(row2))" />
+                                }
+                                </span>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </ChildContent>
+    </BenModal>
+
+    @* ── Delete confirm ──────────────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
+        <ChildContent>
+            <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+                <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            </div>
+        </ChildContent>
+    </BenModal>
+
+    @* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
+    <InputFile id="publish-input-case" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+</FeatureGate>
 
 @code {
     [Parameter] public Guid OrgId { get; set; }
@@ -121,7 +168,9 @@
     private CaseRecord? _case;
     private bool _loaded;
     private string? _error;
+    private bool     _needsSignIn;
     private List<VideoProjectRecord> _caseProjects = [];
+    private LoadResult<VideoProjectRecord> _caseProjectsResult;
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
@@ -133,10 +182,46 @@
     /// export updates the same project instead of creating a new row per render.</summary>
     private Guid? _publishedProjectId;
 
+    // ── "Post to the feed" (item 186 F7) ─────────────────────────────────────
+    private bool _canPostToFeed;
+    private bool _feedDialogVisible;
+    private ExportedVideo? _pendingFeedExport;
+    private TaskCompletionSource? _feedFlowDone;
+
+    /// <summary>
+    /// The editor's feed destination. Holds the editor's prompt open (its busy state) until the
+    /// confirmation dialog resolves — posted, or walked away. Throwing on cancel is the
+    /// contract: it tells the prompt to stay open with the render still in hand.
+    /// </summary>
+    private async Task OnPostToFeedAsync(ExportedVideo exported)
+    {
+        _pendingFeedExport = exported;
+        _feedFlowDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _feedDialogVisible = true;
+        StateHasChanged();
+        await _feedFlowDone.Task;
+    }
+
+    private Task OnFeedPostedAsync(FeedPostRecord post)
+    {
+        _pendingFeedExport = null;
+        Toasts.Success("Posted to the feed — it appears once the video clears screening.");
+        _feedFlowDone?.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private void OnFeedCancelled()
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { _error = "You must be signed in."; _loaded = true; return; }
+        // Not _error. Being signed out is not a fault, and a red alert saying so with nothing to
+        // click is a dead end (2026-09-05 audit, site-13).
+        if (!UserState.IsAuthenticated) { _needsSignIn = true; _loaded = true; return; }
 
         try
         {
@@ -146,7 +231,12 @@
             // Set the default project name from the case title
             ProjectStore.CurrentProjectName = _case.Title ?? "Case Project";
 
-            _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+            _caseProjectsResult = await AdminClient.GetMyVideoProjectsAsync(CaseId);
+            _caseProjects       = _caseProjectsResult.Items.ToList();
+
+            // Whether the feed destination is offered at all — the server's own CanPost, and
+            // null when the feed feature is dark. The editor never guesses (item 186 F7).
+            _canPostToFeed = (await AdminClient.GetFeedAsync())?.CanPost == true;
         }
         catch (Exception ex)
         {
@@ -161,7 +251,7 @@
     private async Task LoadCaseProjectsAsync()
     {
         _loadingList = true;
-        _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).ToList();
+        _caseProjects = (await AdminClient.GetMyVideoProjectsAsync(CaseId)).Items.ToList();
         _loadingList = false;
     }
 
@@ -194,9 +284,19 @@
         _showProjectList = false;
         try
         {
-            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
-                record.ProjectJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // ProjectSerializer, not a fresh options object. This used to build its own with only
+            // case-insensitive names and no string-enum converter — and the editor writes every
+            // enum as a string, so opening a server project here always threw and was swallowed by
+            // the catch below, which is why it looked like nothing happened (2026-09-05 audit,
+            // persistence-1).
+            var (file, problem) = Ben.Video.Editor.Services.ProjectSerializer.Parse(record.ProjectJson);
+            if (problem is not null)
+            {
+                // Said out loud rather than swallowed: a project that will not open is worth a
+                // reason, not a shrug.
+                Toasts.Error(problem);
+                return;
+            }
             if (file is not null)
                 await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
         }

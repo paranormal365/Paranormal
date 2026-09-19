@@ -1,3 +1,4 @@
+@implements IDisposable
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -20,8 +21,15 @@
                 @onclick="Toggle">
             @if (_avatarFileId is { } fileId)
             {
-                <img src="@AdminClient.GetFileDownloadUrl(fileId)" alt=""
-                     class="profile-image profile-image-md rounded-circle" />
+                @* IH-06: a photo that fails to load falls back to the SAME initials the
+                   no-photo case shows, rather than a broken glyph in a round frame. *@
+                <Ben.Web.Website.Library.Kit.BenImage
+                    Src="@AdminClient.GetFileThumbnailUrl(fileId)"
+                    Class="profile-image profile-image-md rounded-circle">
+                    <Fallback>
+                        <span class="profile-image profile-image-md rounded-circle d-inline-flex align-items-center justify-content-center bg-secondary text-white">@Initials</span>
+                    </Fallback>
+                </Ben.Web.Website.Library.Kit.BenImage>
             }
             else
             {
@@ -63,7 +71,13 @@
     private bool _open;
     private Guid?   _avatarFileId;
     private string? _displayName;
-    private bool    _loaded;
+
+    /// <summary>Whose name and picture are showing, by email address: null until they have been fetched for somebody.</summary>
+    /// <remarks>
+    /// The address, not the user id: "view as" swaps the tokens and the address at once, but the id is only known after a
+    /// later call, so a menu keyed on the id saw nobody and never fetched the member's name.
+    /// </remarks>
+    private string? _loadedFor;
 
     private string Initials
     {
@@ -80,22 +94,55 @@
         }
     }
 
+    // Whose menu this is changes inside one circuit — a SuperAdmin starting or stopping "view as", or signing out and in as
+    // somebody else. Fetched once at first render, it went on showing the SuperAdmin's name and picture above the member's
+    // email address (UI test pass 6.13, 2026-09-14).
+    protected override void OnInitialized() => UserState.StateChanged += OnUserChanged;
+
+    private void OnUserChanged() => InvokeAsync(async () =>
+    {
+        _open = false;
+        await LoadForCurrentUserAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => UserState.StateChanged -= OnUserChanged;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _loaded) return;
+        if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) return;
+        await LoadForCurrentUserAsync();
+        StateHasChanged();
+    }
 
-        _loaded = true;
+    private async Task LoadForCurrentUserAsync()
+    {
+        var who = UserState.IsAuthenticated ? UserState.UserEmail : null;
+        if (string.Equals(who, _loadedFor, StringComparison.OrdinalIgnoreCase)) return;
+
+        // Nothing of the last person's stays on screen while the next person's is fetched.
+        _loadedFor = who;
+        _displayName = null;
+        _avatarFileId = null;
+        if (who is null) return;
+
         try
         {
             var profile = await AdminClient.GetMyProfileAsync();
-            if (profile is null) return;
-            _displayName = profile.DisplayName;
+            // The person changed again while this was asked for.
+            if (profile is null || !string.Equals(UserState.UserEmail, who, StringComparison.OrdinalIgnoreCase)) return;
+            // Same fallback as onboarding (W-S3): an account with a legal name but no display
+            // name should show its own initials, not the ones its email address happens to spell.
+            _displayName = profile.DisplayName is { Length: > 0 } shown
+                ? shown
+                : string.Join(' ', new[] { profile.FirstName, profile.LastName }
+                    .Where(part => !string.IsNullOrWhiteSpace(part))).Trim() is { Length: > 0 } legal
+                    ? legal
+                    : null;
             // Public photo only. This chrome renders on every page for the signed-in user
             // themselves, so there is no audience question to answer here.
             _avatarFileId = profile.PublicPhoto?.UploadFileId;
-            StateHasChanged();
         }
         catch
         {

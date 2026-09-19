@@ -27,17 +27,29 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class OrgInvestigationsController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
 
     public OrgInvestigationsController(
-        IDbContextFactory<BenDataContext> db, IMapper mapper, IAuditLogService auditLog)
+        IDbContextFactory<BenDataContext> db, IMapper mapper, IAuditLogService auditLog,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _mapper = mapper;
         _auditLog = auditLog;
+        _security = security;
     }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     /// <summary>
     /// Every investigation this organization ran, with or without a case, each carrying what the
@@ -107,9 +119,73 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 GeocodeNote: i.GeocodeNote,
                 AttendeeCount: i.AttendeeCount,
                 CanEditRecord: f.CanEditRecord,
-                CanCompleteMyFindings: f.CanCompleteMyFindings);
+                CanCompleteMyFindings: f.CanCompleteMyFindings,
+                PlaceKind: i.Place?.Kind);
         }));
     }
+
+    /// <summary>
+    /// The organization's investigations as map pins, optionally only those inside a viewport.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="GetAll"/> on purpose. That one feeds the grid and carries a
+    /// permission verdict per row; this one carries a coordinate and nothing a person could act
+    /// on, so it can be asked for on every pan without the cost.</para>
+    ///
+    /// <para>Shaped after <c>FieldSessionUploadController.GetMyMapPoints</c> rather than inventing
+    /// a second convention: all four bounds or none, corners normalised, a hard cap, and the count
+    /// of what matched so the page can say "the newest 500 of 4,000 in view" instead of quietly
+    /// showing a fraction.</para>
+    /// </remarks>
+    [HttpGet("map")]
+    public async Task<ActionResult<OrgInvestigationMapPage>> GetMapPoints(
+        Guid orgId,
+        [FromQuery] double? north, [FromQuery] double? south,
+        [FromQuery] double? east,  [FromQuery] double? west,
+        CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+
+        var bounded = north is not null || south is not null || east is not null || west is not null;
+        if (bounded && (north is null || south is null || east is null || west is null))
+            return BadRequest("Give all four bounds, or none.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var query = db.Investigations.AsNoTracking()
+            .Include(i => i.Place)
+            .Where(i => i.OrganizationId == orgId
+                     && i.Latitude != null && i.Longitude != null);
+
+        if (bounded)
+        {
+            // Normalised, because map libraries disagree about which corner they hand over first
+            // and a reversed box reads as "nothing here" rather than as a mistake.
+            var n  = (decimal)Math.Max(north!.Value, south!.Value);
+            var so = (decimal)Math.Min(north!.Value, south!.Value);
+            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
+            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            query = query.Where(i => i.Latitude <= n && i.Latitude >= so
+                                  && i.Longitude <= e && i.Longitude >= w);
+        }
+
+        var total = await query.CountAsync(ct);
+        var now   = DateTime.UtcNow;
+
+        var points = await query
+            .OrderByDescending(i => i.ScheduledDateTime)
+            .Take(MapPointCap)
+            .Select(i => new OrgInvestigationMapPoint(
+                i.Id, i.Title, i.Latitude!.Value, i.Longitude!.Value,
+                i.ScheduledDateTime < now,
+                i.Place == null ? null : i.Place.Kind))
+            .ToListAsync(ct);
+
+        return Ok(new OrgInvestigationMapPage(points, total));
+    }
+
+    /// <summary>The most pins one answer will ever carry. See the remarks on GetMapPoints.</summary>
+    private const int MapPointCap = 500;
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<InvestigationRecord>> GetById(
@@ -134,7 +210,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     public async Task<ActionResult<InvestigationRecord>> Create(
         Guid orgId, [FromBody] CreateOrgInvestigationRequest request, CancellationToken ct)
     {
-        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (string.IsNullOrWhiteSpace(request.Title)) return BadRequest("A title is required.");
 
         var userId = GetCurrentUserId();
@@ -174,9 +250,20 @@ public sealed class OrgInvestigationsController : BenControllerBase
         if (placement.Error is not null) return BadRequest(placement.Error);
 
         // A landmark defaults to sharing with others who have worked it; a home does not. Chosen
-        // from the place rather than left to whoever clicks fastest.
-        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+        // from the place rather than left to whoever clicks fastest — and from the plan as well as
+        // the place since 2026-09-17: an account that pays nothing shares a landmark's findings
+        // with everyone, and may not narrow them.
+        //
+        // This door never asked the old solo question at all, which the case-nested one did. Both
+        // now call the same overload, so a visit cannot be judged differently by which screen
+        // booked it.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(db, orgId, ct);
+
+        entity.Visibility = request.Visibility
+            ?? InvestigationVisibilityFilter.DefaultFor(placement.Place, publicByDefault);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         // Same auto-calendar-event behaviour as the case-bound controller, so a visit booked this
@@ -250,6 +337,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] CheckInRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -297,6 +385,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] OverrideAttendanceRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -345,6 +434,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] SetLeadRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -374,6 +464,196 @@ public sealed class OrgInvestigationsController : BenControllerBase
         // The whole roster comes back, not just the row that was clicked: naming a lead changes
         // somebody else's row too, and returning one row would leave the old lead's badge showing.
         return Ok(await RosterAsync(db, id, ct));
+    }
+
+    // ── Duties (item 158) ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The duty board for one visit: the group's duties, who holds each, and which are unfilled.
+    /// </summary>
+    /// <remarks>
+    /// One payload on purpose — the point of structuring duties at all is that the organizer can
+    /// see the gap ("nobody has Evidence Collection") before the night of, and that reading
+    /// requires joining duties to assignments, which the server does once rather than every
+    /// screen doing it differently.
+    /// </remarks>
+    [HttpGet("{id:guid}/duties")]
+    public async Task<ActionResult<InvestigationDutyBoard>> GetDutyBoard(
+        Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var duties = await db.InvestigationDuties.AsNoTracking()
+            .Where(d => d.OrganizationId == orgId && d.IsActive)
+            .OrderBy(d => d.SortOrder)
+            .Select(d => new InvestigationDutyInfo(
+                d.Id, d.Name, d.IsSingleHolder,
+                d.MinimumMemberLevel != null ? d.MinimumMemberLevel.Name : null,
+                d.MinimumMemberLevel != null ? d.MinimumMemberLevel.SortOrder : (int?)null))
+            .ToListAsync(ct);
+
+        var assignments = await db.InvestigationDutyAssignments.AsNoTracking()
+            .Where(x => x.InvestigationAttendee.InvestigationId == id)
+            .Select(x => new InvestigationDutyAssignmentInfo(
+                x.InvestigationAttendeeId, x.InvestigationDutyId, x.EligibilityOverridden))
+            .ToListAsync(ct);
+
+        return Ok(new InvestigationDutyBoard(duties, assignments));
+    }
+
+    /// <summary>Hands an attendee a duty for this visit.</summary>
+    /// <remarks>
+    /// <para>Same gate as naming a lead: whoever may manage the visit hands out its duties.</para>
+    ///
+    /// <para><b>Eligibility is soft.</b> A duty may carry a minimum title
+    /// (<see cref="Ben.Data.Source.Entities.InvestigationDuty.MinimumMemberLevelId"/>); an
+    /// attendee below it is refused with a sentence naming the gap — unless the caller sets
+    /// <c>Override</c>, which assigns anyway and records that it was deliberate. The senior calls
+    /// in sick and the capable junior steps up; a hard wall here would just push the group back
+    /// to organising by text message.</para>
+    ///
+    /// <para><b>Single-holder duties displace.</b> Assigning one clears the previous holder on
+    /// this visit, mirroring the lead semantics. The seeded "Lead Investigator" duty also writes
+    /// through to <c>InvestigationAttendee.IsLead</c>, so the existing manage-this-visit logic
+    /// and every lead badge keep working with no second source of truth. A group that renames
+    /// that duty keeps a working duty; only the write-through is tied to the name.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/attendees/{attendeeId:guid}/duties/{dutyId:guid}")]
+    public async Task<ActionResult<InvestigationDutyBoard>> AssignDuty(
+        Guid orgId, Guid id, Guid attendeeId, Guid dutyId,
+        [FromBody] AssignDutyRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Whoever may manage the visit, or whoever holds a duty on it that confers handing the
+        // others out (item 160). The second is additive: a duty opens a door, never closes one.
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
+            return Forbid();
+
+        var attendee = await db.InvestigationAttendees
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id
+                                   && a.Investigation.OrganizationId == orgId, ct);
+        if (attendee is null) return NotFound();
+
+        var duty = await db.InvestigationDuties.AsNoTracking()
+            .Include(d => d.MinimumMemberLevel)
+            .FirstOrDefaultAsync(d => d.Id == dutyId && d.OrganizationId == orgId && d.IsActive, ct);
+        if (duty is null) return NotFound();
+
+        // The matrix if this duty has one, the single minimum if it does not — see DutyEligibility
+        // for why both rules live there rather than here.
+        var verdict = await DutyEligibility.CheckAsync(db, duty, orgId, attendee.AppUserId, ct);
+        if (!verdict.Eligible)
+        {
+            // A duty the group marked as a RULE has no per-visit exception, for anybody. The way
+            // past it is to change the rule on the settings grid — deliberate and visible — rather
+            // than to wave one night through it (Ben, 2026-09-04).
+            if (duty.IsEnforced)
+            {
+                return Conflict(
+                    $"“{duty.Name}” is a requirement rather than a guide in this group, so it "
+                  + "cannot be assigned past. Change who it is open to under Settings, or pick "
+                  + "somebody who already qualifies.");
+            }
+
+            if (!request.Override) return Conflict(verdict.Refusal);
+
+            // An override into a duty that CONFERS something is a different act from one into a
+            // duty that is only a label: it hands out point-of-contact or the right to hand out
+            // the other duties, and the person given it could then override somebody else. So that
+            // one takes standing authority over the group's investigations, not merely the right
+            // to manage tonight.
+            if (duty.Capabilities != InvestigationDutyCapabilities.None
+                && !User.IsInRole(RoleNames.SuperAdmin)
+                && !await InvestigationAccess.HasOrgAuthorityAsync(db, orgId, userId, ct))
+            {
+                return Conflict(
+                    $"“{duty.Name}” carries authority on the night, so assigning it past the "
+                  + "eligibility rules is an administrator's call. Ask an owner or administrator, "
+                  + "or pick somebody the duty is already open to.");
+            }
+        }
+        var overridden = !verdict.Eligible;
+
+        if (duty.IsSingleHolder)
+        {
+            var displaced = await db.InvestigationDutyAssignments
+                .Where(x => x.InvestigationDutyId == dutyId
+                         && x.InvestigationAttendee.InvestigationId == id)
+                .ToListAsync(ct);
+            db.InvestigationDutyAssignments.RemoveRange(displaced);
+        }
+
+        var already = await db.InvestigationDutyAssignments
+            .AnyAsync(x => x.InvestigationAttendeeId == attendeeId && x.InvestigationDutyId == dutyId, ct);
+        if (!already)
+        {
+            db.InvestigationDutyAssignments.Add(new InvestigationDutyAssignment
+            {
+                InvestigationAttendeeId = attendeeId,
+                InvestigationDutyId = dutyId,
+                EligibilityOverridden = overridden,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+        }
+
+        if (duty.IsSingleHolder && duty.Name.Equals(
+                Ben.Data.Source.Services.OrgInvestigationDutyDefaults.LeadDutyName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var attendees = await db.InvestigationAttendees
+                .Where(a => a.InvestigationId == id).ToListAsync(ct);
+            foreach (var other in attendees) other.IsLead = other.Id == attendeeId;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetDutyBoard(orgId, id, ct);
+    }
+
+    /// <summary>Takes a duty back from an attendee.</summary>
+    [HttpDelete("{id:guid}/attendees/{attendeeId:guid}/duties/{dutyId:guid}")]
+    public async Task<ActionResult<InvestigationDutyBoard>> UnassignDuty(
+        Guid orgId, Guid id, Guid attendeeId, Guid dutyId, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Same gate as handing one out: taking one back is the other half of the same job.
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct)
+            && !await InvestigationAccess.HasDutyCapabilityAsync(
+                db, id, userId, InvestigationDutyCapabilities.MayAssignDuties, ct))
+            return Forbid();
+
+        var assignment = await db.InvestigationDutyAssignments
+            .Include(x => x.InvestigationDuty)
+            .FirstOrDefaultAsync(x => x.InvestigationAttendeeId == attendeeId
+                                   && x.InvestigationDutyId == dutyId
+                                   && x.InvestigationAttendee.InvestigationId == id, ct);
+        if (assignment is null) return NotFound();
+
+        db.InvestigationDutyAssignments.Remove(assignment);
+
+        if (assignment.InvestigationDuty.IsSingleHolder && assignment.InvestigationDuty.Name.Equals(
+                Ben.Data.Source.Services.OrgInvestigationDutyDefaults.LeadDutyName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var attendee = await db.InvestigationAttendees.FirstOrDefaultAsync(a => a.Id == attendeeId, ct);
+            if (attendee is not null) attendee.IsLead = false;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetDutyBoard(orgId, id, ct);
     }
 
     // ── Findings ──────────────────────────────────────────────────────────────
@@ -421,6 +701,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] UpsertFindingRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var narrative = request.Narrative?.Trim();
         if (string.IsNullOrWhiteSpace(narrative))
@@ -477,6 +758,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     public async Task<IActionResult> DeleteMyFinding(Guid orgId, Guid id, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -549,12 +831,32 @@ public sealed class OrgInvestigationsController : BenControllerBase
     /// Membership check, delegating to the shared helper rather than adding a seventh hand-copied
     /// <c>IsOrgMemberAsync</c> — the duplication a previous dedupe pass was cleaning up.
     /// </summary>
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, GetCurrentUserId(), ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+
+    /// <summary>Whether the caller may take <paramref name="action"/> on this group's investigations.</summary>
+    /// <remarks>
+    /// <para><b>Create was gated on Read until 2026-08-26</b> — the one write verb here the IH-03
+    /// sweep missed, because every OTHER write in this controller carries a second per-row
+    /// <c>InvestigationAccess.CanManageAsync</c> gate and this one never did: scheduling a new
+    /// visit has no row to manage yet. A member holding only Investigation.Read could schedule
+    /// visits in the group's name. Found by the e2e assertion that a read-only member sees no
+    /// "Schedule an investigation" button — the button was there, and the server would have
+    /// honoured it.</para>
+    ///
+    /// <para><see cref="CheckIn"/> stays on <see cref="IsMemberAsync"/> deliberately: checking in
+    /// records the caller's OWN presence at a visit they are on the roster for — participation,
+    /// not editing — and the roster itself is the gate that matters there.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                  Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations, action, ct);
 }
 
 /// <summary>
@@ -594,7 +896,21 @@ public sealed record OrgInvestigationRow(
     string? GeocodeNote,
     int AttendeeCount,
     bool CanEditRecord,
-    bool CanCompleteMyFindings);
+    bool CanCompleteMyFindings,
+    // Null when the visit has no place at all. The map draws a known landmark differently and
+    // leaves everything else exactly as it was — an unknown is not a private residence.
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
+
+/// <summary>One investigation as a map needs it, and nothing else.</summary>
+public sealed record OrgInvestigationMapPoint(
+    Guid Id, string Title, decimal Latitude, decimal Longitude, bool IsPast,
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind);
+
+/// <summary>
+/// The pins in view, and how many matched — so "500 of 500" can be told from "500 of 4,000".
+/// </summary>
+public sealed record OrgInvestigationMapPage(
+    IReadOnlyList<OrgInvestigationMapPoint> Points, int Total);
 
 /// <summary>
 /// One person on an investigation's team, and whether they turned up.
@@ -605,6 +921,20 @@ public sealed record OrgInvestigationRow(
 /// recording is not exposed here — the roster is read by the whole team, and the part that matters
 /// to them is that it came from somewhere other than the attendee.
 /// </remarks>
+/// <summary>The duty board: the group's duties and who holds each on this visit.</summary>
+public sealed record InvestigationDutyBoard(
+    IReadOnlyList<InvestigationDutyInfo> Duties,
+    IReadOnlyList<InvestigationDutyAssignmentInfo> Assignments);
+
+public sealed record InvestigationDutyInfo(
+    Guid Id, string Name, bool IsSingleHolder, string? MinimumLevelName, int? MinimumLevelSortOrder);
+
+public sealed record InvestigationDutyAssignmentInfo(
+    Guid AttendeeId, Guid DutyId, bool EligibilityOverridden);
+
+/// <summary>Assign a duty. <c>Override</c> confirms past the duty's minimum title.</summary>
+public sealed record AssignDutyRequest(bool Override = false);
+
 public sealed record InvestigationRosterEntry(
     Guid AttendeeId,
     Guid AppUserId,

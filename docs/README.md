@@ -53,6 +53,183 @@ Sanity check afterwards: the PDF's byte size should change whenever the help did
 Do **not** try to grep the PDF for text. Chrome subsets its fonts and writes glyph indices, so even
 text that is plainly present will not match — a search there returns false negatives, not answers.
 
+## The developer handover documents
+
+Eight documents for handing the project to another developer — two for the apps, six for the
+website, **one per user type**, each named for its audience:
+
+| Document | Who it is for |
+|---|---|
+| `IsHaunted-iOS-iPhone.pdf` / `IsHaunted-iOS-iPad.pdf` | Somebody picking up the native app |
+| `IsHaunted-Web-Visitor.pdf` | The site with no account |
+| `IsHaunted-Web-Client.pdf` | Someone who asked a group for help |
+| `IsHaunted-Web-Member.pdf` | An ordinary member of a group |
+| `IsHaunted-Web-Viewer.pdf` | A member who may look and change nothing |
+| `IsHaunted-Web-Owner.pdf` | A group's owner or administrator |
+| `IsHaunted-Web-Superadmin.pdf` | Runs the platform |
+
+**One document per seat rather than one with six chapters.** The permission model is real: the site
+is a different application from each of those seats, and a reader only needs their own. More to the
+point, an administrator passes every permission check by role, so a surface broken for everybody
+else looks perfect from that seat — which is why each document is CAPTURED while signed in as that
+person rather than described from the code.
+
+### Rebuilding them
+
+Website — one run per seat, with all three hosts up (`scripts/run-e2e.sh --keep` on a throwaway
+`BEN_E2E_DB`, never the shared database):
+
+```bash
+source scripts/seeded-passwords.sh
+for p in visitor client member viewer owner superadmin; do
+  BEN_PERSONA=$p BEN_PERSONA_OUT="$PWD/docs/web-media" BEN_BASE_URL=http://localhost:5078 \
+    dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll \
+    --TestCaseFilter:"FullyQualifiedName~PersonaDocCaptureTests"
+done
+python3 docs/build-persona-documentation.py
+```
+
+`scripts/seeded-passwords.sh` exports the seeded accounts as `BEN_*_PASSWORD`, reading them from
+the gitignored `Ben.Data.WebApi/appsettings.Development.json` and printing none of them. It is the
+same file `run-e2e.sh` uses, so a capture run and a test run sign in as the same people. Without
+those variables each persona signs in as nobody and photographs seven refusals.
+
+**Switch the feed on first.** Three of the six seats photograph `/feed`, and the help capture puts
+that flag back to whatever it found — so a persona run that follows one captures "Page not found"
+and calls it the feed. As the SuperAdmin:
+`PUT /api/admin/site-settings/features.public-feed` with `{"value":"true"}`, then give the site
+thirty seconds to notice.
+
+Apps — once per device, from `Ben.iOS/`. **Every flag must be a shell environment variable with the
+`TEST_RUNNER_` prefix, not a build setting**, or the test silently skips and reports a pass in under
+a second:
+
+```bash
+source ../scripts/seeded-passwords.sh
+TEST_RUNNER_BEN_DOC_SHOTS=1 \
+TEST_RUNNER_BEN_API_BASE_URL=http://localhost:5252 \
+TEST_RUNNER_BEN_CLIENT_EMAIL=daniel.park@benco.dev \
+TEST_RUNNER_BEN_CLIENT_PASSWORD="$BEN_CLIENT_PASSWORD" \
+xcodebuild -project IsHaunted.xcodeproj -scheme IsHaunted \
+  -destination 'platform=iOS Simulator,id=<udid>' \
+  -only-testing:IsHauntedUITests/DeveloperDocCaptureTests \
+  -resultBundlePath /tmp/doc.xcresult test
+xcrun xcresulttool export attachments --path /tmp/doc.xcresult --output-path /tmp/ios-shots
+python3 docs/build-ios-documentation.py iphone
+```
+
+The export writes files named by UUID plus a `manifest.json` that maps each one to its
+`suggestedHumanReadableName`; rename them to the leading `NN-slug.png` before they land in
+`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix. A run
+covers 21 of the guide's frames — the hosted-event and door ones come from `HelpMediaCaptureTests`
+and are left alone, so copy the renamed frames over rather than emptying the folder first.
+
+**The store-set script does this renaming itself** (`Ben.iOS/scripts/capture-app-store-media.sh`),
+into a directory of its own before copying the finished frames across. It used to export straight
+into the set, where the iPhone's resize loop then globbed the FINISHED frames and re-encoded them
+in place while that run's real captures sat beside them unrenamed: the set looked refreshed and was
+the old pictures, re-compressed (2026-09-17). If you write a capture step of your own, export
+somewhere else and copy in at the end.
+
+**The iPhone guide is also on the website**, as the App Store listing's Marketing URL:
+`Ben.Web.Website/wwwroot/guides/IsHaunted-iOS-iPhone.pdf`, served at
+`https://ishaunted.com/guides/IsHaunted-iOS-iPhone.pdf`. It is a copy, not a link, so after
+rebuilding `IsHaunted-iOS-iPhone.pdf` copy it over the site's one too, or the listing keeps
+pointing at the old guide.
+
+**`BEN_API_BASE_URL` is not optional.** Without it the app uses its shipped address and the capture
+signs in to the LIVE SITE — which would put real accounts and real cases into a document whose
+first page says everything in it is simulated. Point it at the same isolated stack the website
+captures use, and switch the feed on there first (`PUT /api/admin/site-settings/features.public-feed`
+as the SuperAdmin) or the app's first screen photographs as "the feed isn't available right now".
+
+**A stale session beats the credentials you passed.** The simulator Keychain survives a reinstall
+and `SessionStore.signIn` returns immediately unless the app is signed out, so `-autoSignIn` is a
+no-op over a restored session — a whole capture once came out as a different person's account
+without a word about it. The test now signs that session out and asks again, and fails loudly if
+the account it ends up in is not the one it was told to use.
+
+Set the simulator to dark first: `xcrun simctl ui <udid> appearance dark`. The website captures
+force dark by emulating `prefers-color-scheme`, which is the path `ben-boot.js` already falls back
+to — the site choosing dark for itself rather than a test writing a stored preference.
+
+### Everything in them is simulated
+
+Seeded accounts, seeded cases, and generated media. `scripts/generate-media-posters.py` gives every
+stored file a poster so no post renders as a grey box: video gets an atmospheric frame with a
+semi-transparent play button, and audio gets **its own real waveform** — decoded with `afconvert`
+and drawn in the site's WaveSurfer bar style. Headless WaveSurfer was tried first and does not
+work: `decodeAudioData` never resolves there, so its loader hangs until the screenshot is taken.
+
+Every frame is captioned `SIMULATED`, and each document says so on its first page, so nothing can
+be mistaken for a real investigation.
+
+**The builders name any section whose screenshot is missing** rather than shipping a silent gap.
+As of 2026-09-08 no section is missing on either device.
+
+`53-session-review` had been recorded here as unreachable. It is reachable, and what blocked it was
+one line, five screens earlier: the note composer's field is a `TextField` with a vertical axis,
+which XCUITest reports as a **textField**, and the capture asked for `textViews`. Nothing was typed,
+Save stayed disabled, and the sheet sat over every control below it — including the Stop button that
+opens the review. Six sections went missing that way, with no error anywhere.
+
+## The investor overview
+
+`docs/IsHaunted-Investor-Overview.pdf` is printed from `docs/investor-overview.html` the same way,
+and its screenshots come from the same `TestCategory=Capture` run (the `InvestorMediaCapture`
+fixture). **Reprint it after any capture run**, or its pictures and the ones in the repository
+drift apart. Its feed shot needs the feed switched on, and the help capture restores that flag to
+whatever it found — so run `Capture_TheFeed` first, or turn the flag on by hand, or that one test
+skips itself and says so.
+
+
+## Hosted Events brochure and the advertisements
+
+- **`docs/IsHaunted-Hosted-Events.pdf`** — an eight-page brochure for hosted events and the iPhone app.
+- **`docs/ads/IsHaunted-Ad-*.pdf`** — one-sheet, front-and-back advertisements for the whole product,
+  enthusiasts, investigation groups, ghost walk tours, venues and event hosts.
+
+Both are built by one script from the repository root:
+
+```bash
+python3 docs/ads/build-ads.py --png
+```
+
+`--png` also renders every page to `docs/ads/preview/` (ignored by git) for checking. Check them before
+calling a document done; a PDF cannot be read here.
+
+**The design.** Each ad takes its palette from its lead photograph: a deep base colour from the shadows
+and a complementary accent from the light — indigo with candle amber, night blue with lamplight, oxblood
+with champagne. Every frame is sized from its image's own proportions, so no screenshot is ever cropped
+mid-sentence.
+
+**Where the pictures come from:**
+
+- **Photographs** — `docs/media/stock/`, from Unsplash, credited in
+  `ProjectNotes/FeatureHistory/README-hosted-events-235-media.md`.
+- **Website screens** — `docs/media/hosted-events/walk/`, from `HostedEventPersonaWalk`.
+- **Letters** — `docs/media/hosted-events/emails/`.
+- **iPhone screens** — the help captures in `Ben.Web.Website/wwwroot/help/media/the-mobile-apps/`.
+
+**Re-walking.** The walk runs against the local hosts on `IsHauntedDb_player`, with the API's mail pointed
+at a local catcher so nothing leaves the machine:
+
+- Start the API with `Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__UseSsl=false Smtp__User=`.
+- Run a catcher that writes each letter as `.html` to a folder, then:
+
+```bash
+BEN_CAPTURE_WALK=1 BEN_MAIL_CATCHER_DIR=<catcher folder> dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter FullyQualifiedName~HostedEventPersonaWalk
+```
+
+Photograph the letters with headless Chrome at 720 px wide.
+
+**Then reissue the demo guest's pass.** Every pictured QR code must be a withdrawn one, because this
+repository is public.
+
+**iPhone help captures** need `TEST_RUNNER_BEN_API_BASE_URL`: `HelpMediaCaptureTests` refuses to run
+without it. Reset the simulator's keychain first (`xcrun simctl keychain <udid> reset`), so a leftover
+session can't photograph the wrong person.
+
 ## What it deliberately leaves out
 
 No business, market or financial information, and no usage figures — only what the software does.

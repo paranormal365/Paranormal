@@ -1,0 +1,701 @@
+---
+title: The iPhone and iPad Apps
+summary: What the apps do, how to get signed in, and what still lives on the website.
+section: Getting Started
+audience: Everyone
+order: 47
+---
+
+There are native apps for iPhone and iPad — one app that runs on both, laid out for each. It is
+the same account and the same data as the website: sign in on your phone and you are looking at
+the same groups, cases and investigations you see in a browser, because both are talking to the
+same place.
+
+The apps are built for the half of this work that happens **away from a desk** — standing in a
+building at two in the morning with one hand free. Anything long or fiddly (writing a report,
+editing video, laying out a public page) stays better on the website, and always will.
+
+## What you need an account for — and what you don't
+
+Reading the feed and browsing public events needs **no account at all**, exactly as on the
+website. Sign in when you want to join in.
+
+Signing in works the same way it does in a browser, including two-step codes if you have them
+switched on. You can also **sign in with your Apple Account**: if you already have an account
+here under the same email address, that signs you into it rather than making a second one. If
+you don't, the app asks for the name people will see and your @name, and makes one — Apple has
+already confirmed the email address, so there is no confirmation link to wait for. Choosing
+"Hide My Email" works too; the address Apple gives us is a relay that reaches you. Your phone stays signed in afterwards; you will not be asked again every time you
+open the app.
+
+Setting two-step **up** on the phone works a little differently from the website, for a good
+reason: on a phone the app is itself the second device, so there is no QR code to scan. Instead
+the app shows you the key to copy, and offers a link that hands it straight to your authenticator
+app. Your recovery codes are shown once, with a button to save or send them — the site cannot
+show them to you again.
+
+## What's in the app today
+
+| | |
+|---|---|
+| **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
+| **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
+| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
+| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
+| **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
+| **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
+| **Field Kit** | The phone as an instrument during an investigation — see below. |
+| **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
+| **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
+
+Anything the app cannot do yet says so plainly rather than showing you an empty screen. A count
+with no screen behind it yet is still listed on Notifications — it just isn't tappable, rather
+than pretending to lead somewhere.
+
+
+## Field Kit — the phone as an instrument
+
+Field Kit records an investigation on the device. It needs **no signal and no account**: a member
+standing in a cellar with no bars can start recording, and everything stays on the phone until
+they choose to send it. Signing in still matters, because a session records who was signed in
+when it was made — and being signed in needs no connection, so a member who signed in last week
+is still identified in that cellar.
+
+![Field Kit, listing sessions recorded on this device](/help/media/the-mobile-apps/iphone-home.png)
+
+### Your first session, start to finish
+
+1. Open **Field Kit** and tap **Start a session**.
+2. Give it a name in your own words — "back bedroom, north wall". This is what you will
+   recognise it by next week, so a room beats a timestamp.
+3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
+   attach the session to an investigation later.
+4. Under **What to record**, choose the channels: magnetic field, sound, video and location, each
+   with what it costs in battery. Magnetic field, sound and location start on and **video starts
+   off**, because video is the one that ends a night early. All four can be changed later while
+   the session is running.
+5. Tap **Open the session**. The live screen opens but **nothing is being recorded yet** — the
+   gauge runs so you can see the room, and the bar says *not started*. Take your time here.
+6. Set up. Name the room, switch channels on or off, and once the room has settled for a few
+   seconds tap **Set base**. Everything you record is measured against what this room reads
+   when nothing is happening, and it is far better set before the clock starts than after.
+7. Tap **Start**. The clock begins, readings start landing, and Mark, Note, EVP and the capture
+   buttons appear — none of them exist before Start, because a mark before the clock began
+   would belong to no moment.
+8. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
+9. Tap **Stop** when you are done. The session opens for review straight away.
+
+If the night turns out to be nothing before you ever press Start, tap **Discard** next to the
+Start button. The session is removed and the space comes back at once. A session that was
+set up but never started also survives the app being closed: it comes back exactly as it was,
+ready to start or discard — it is not reported as interrupted, because nothing was lost.
+
+Nothing you record needs a signal, and nothing leaves the phone until you send it.
+
+### What it measures, and what it does not
+
+The dial is a **magnetic field meter**, not an EMF meter in the sense most detectors mean. The
+phone's magnetometer reads the DC magnetic field — the Earth's, plus whatever local wiring, iron
+and motors are doing to it. It cannot see the AC electromagnetic fields a K‑II style detector
+responds to, and the app says so on the screen rather than leaving anyone to assume otherwise.
+
+The needle shows **how far the field has moved from the base level you set**, not the absolute
+figure. An absolute reading means nothing on its own: the Earth alone is around 500 mG and every
+building bends that. Setting a base is the act that turns a number into a measurement, which is
+why several things refuse to work until you have.
+
+![The instrument panel: the dial, sound level, position and the controls](/help/media/the-mobile-apps/iphone-meter.png)
+
+On screen at once: the wall clock and how long the session has run, the dial in milligauss, a
+sound meter in decibels with your base and report levels marked on it, and where you are —
+**with the accuracy of that fix**. Indoors a phone is routinely 20 to 50 metres out, often the
+width of the whole building, so the number is always shown. A reading taken with no fix at all
+carries no position rather than a made-up one.
+
+If the magnetometer reports itself uncalibrated, nothing is reported as an event and the screen
+asks you to move the phone in a figure of eight. A reading the instrument does not trust is not
+evidence.
+
+### Choosing what a session records
+
+Four channels: **magnetic field**, **audio**, **video** and **location**. Each says what it costs.
+You choose them on the **New session** sheet before the session opens, and the same switches are on
+the running session's screen under *Recording* — switching one off tears it down rather than
+leaving it running quietly, which is the whole reason to switch video off at two in the morning.
+
+Video starts **off**. With it on, the camera stays on: a viewfinder to aim by on the running
+session's screen, and the sentry's eye for movement seen through it. It is not a recording — five
+hours of video is tens of gigabytes and a flat battery long before the night is over.
+
+The **Photo** button takes a photograph of whatever the camera sees, without leaving the app. With
+video on, the photo is taken there and then of what the viewfinder shows; with it off, a viewfinder
+opens so you can frame the shot and closes itself after. Photographs are always available whatever
+the channels say. Clips are not offered from a running session for now.
+
+### If you put the app away
+
+A session **with sound on** carries on when you switch to another app, go to the home screen or
+lock the phone: the sound and every reading keep being recorded in your pocket, because recording
+sound is what keeps the app awake. With sound off nothing does — iOS pauses the app a few seconds
+after it leaves the screen, and the readings stop until you come back. The camera never carries on;
+iOS takes it from any app that is not on screen, and it comes back the moment you do. Either way the
+stretch you were away is marked on the review, *App put away* to *Back in the app*, with a line
+saying which of those happened, so nobody reading the session later mistakes a dark camera for a
+dead one. The session player on the website shades the same stretch.
+
+![The capture bar, the channel switches, and what has been marked](/help/media/the-mobile-apps/iphone-controls.png)
+
+### Saying which room you're in
+
+At the top of the session screen is the **room**. Tap it, pick one, and everything from that
+moment on — every reading, every mark, every photo — is recorded as having happened there. Moving
+rooms is one tap, and it drops a mark of its own, so a review a week later shows when you went
+down to the cellar.
+
+This is worth doing because **nothing else can tell rooms apart**. A fix indoors is twenty to
+fifty metres wide — the width of the whole building — so the app cannot work out which room you
+are in, and it does not pretend to. A person saying so is the only reliable source there is.
+
+Rooms you have already used this session come first in the list, so walking a loop through a
+house is a tap per room rather than typing a name again in the dark. You can stop naming rooms at
+any time; readings keep their position and simply stop claiming a room.
+
+### Marking, and setting the level things get marked at
+
+**Mark** drops a marker at this second; **Note** adds one with a line of explanation. Under
+*Levels* you set the base and the **report level** — how far the field or the sound has to move
+before the app marks it for you — along with a quiet period, so one door slamming leaves one
+record rather than forty.
+
+### Notes you can speak
+
+Writing in the dark with a glove off is the worst part of taking notes, so **Note** lets you
+speak instead. The words are turned into text **on the phone itself** — nothing you say is sent
+anywhere, and it works with no signal, which is the only reason it is worth having in a cellar.
+
+You can correct the wording before saving; a transcription is a machine's best guess, and the
+person who said it is the authority on what they said.
+
+If a device cannot turn speech into text without a connection, **the option is not offered at
+all**. A button that works in the car park and fails in the building would be worse than none.
+Typing is always available, and you can record the note **as audio** instead — sometimes what was
+said matters less than how it was said.
+
+The same choice appears when messaging your group about a case: type it, or speak it, on any
+device that can transcribe offline.
+
+### Photographs of the property
+
+Photos you take during a session are kept with it. Under **Property photos** you can choose one
+to stand for the place — the front of the building, the room in question — and it represents the
+case and the investigation, so a list of cases shows somewhere recognisable rather than a row of
+identical folders.
+
+Choosing is entirely optional and can be undone: tap the chosen photo again to un-choose it.
+Most photographs in a session are evidence and should never be a portrait of anything, so nothing
+is picked unless you pick it.
+
+Each photo carries the **room** you were in when you took it, so "a doorway" becomes "Cellar — a
+doorway" a month later, when it matters. That comes from the room you set on the session screen;
+there is nothing extra to type per photo.
+
+### Leaving the device in a room
+
+*Watching* arms the session so it records events while nobody is holding the phone. It can watch
+for the magnetic field, sound, **the device itself being moved** (somebody knocking the tripod)
+and **movement seen through the camera**. Those last two answer different questions and the app
+spells out which is which. Camera motion is deliberately crude — it cannot tell a person from a
+curtain — so its sensitivity is adjustable and every trigger records how much of the view changed.
+
+Arming is refused until the base levels the triggers measure against have been set, and the
+screen stays awake while watching so it can be read across a room.
+
+### EVP question and answer
+
+EVP mode marks the **question and the silence after it**, not just the moment you spoke. Both
+marks point into the recording with the offset, so reviewing later means jumping to a list of
+places to listen rather than scrubbing hours of tape. Asking the next question closes the
+previous wait. Recording keeps running when the screen locks.
+
+![EVP mode: one large control, and the wait timing itself](/help/media/the-mobile-apps/iphone-evp.png)
+
+### Blacking out the screen
+
+A lit phone in a dark room reaches the recording, the room and everyone in it. The moon button
+takes the screen to black and holds the phone awake; a tap anywhere brings it back. Your
+brightness is put back exactly where it was.
+
+### Reviewing what you recorded
+
+A finished session plays back on the phone: one playhead moving the magnetic trace, the map, the
+compass and whatever was being recorded at that second, with every mark listed to jump to. Marks
+land you a few seconds *before* the event so you hear what led up to it.
+
+![Reviewing a session — the trace, the map and what was marked](/help/media/the-mobile-apps/iphone-review.png)
+
+On an iPad the same screens use the extra width, putting the instruments beside the log while
+recording and the trace beside the map while reviewing.
+
+![The instrument panel on an iPad](/help/media/the-mobile-apps/ipad-meter.png)
+
+Reviewing on an iPad puts the trace beside the map, so a spike and the place it happened are
+visible at the same moment rather than one scroll apart.
+
+![Reviewing a session on an iPad](/help/media/the-mobile-apps/ipad-review.png)
+
+### Battery, storage and a long night
+
+A session logging magnetic field and position costs very little. Audio adds a steady trickle;
+video is the one that will end a night early, which is why it is off unless you ask for it and
+why it records clips rather than running continuously.
+
+The readings themselves are tiny — a five-hour session is a few megabytes of numbers. It is the
+recordings that fill a phone, and those are the only thing clearing a session removes.
+
+### If something goes wrong
+
+**The dial says the magnetometer needs calibrating.** Move the phone slowly in a figure of eight.
+Nothing is reported as an event until it settles, because a reading the instrument does not trust
+should not ring a bell.
+
+**Nothing is being marked.** Check that you set a base level, and that the session is *watching*
+if you have put the device down. Until a base exists there is nothing for a reading to depart
+from.
+
+**The position never appears.** Indoors a phone often never gets a fix at all. The session
+carries on without it; readings simply have no position rather than a guessed one.
+
+**A recording came back empty.** The app says so rather than listing it — usually another app had
+the microphone. Start it again.
+
+**The app closed mid-session.** The session survives. It is listed as *interrupted*, with
+everything recorded up to that moment intact. Its end time is left unknown, because it is.
+
+### Sending a session to your group
+
+Recording works offline; **sending needs a connection**. When you have one, choose the
+investigation it belongs to — which chooses its case too — and pick which recordings go with it.
+
+Everything you tick goes up together as **one `.ben` file** — the readings, the marks and the
+recordings, sealed with a checksum of every part. If the connection drops, press **Send** again:
+the server replaces its own copy rather than making a second, and a file that arrives damaged is
+refused rather than quietly accepted. On the website the session appears as that one file, not as
+a wall of separate uploads.
+
+Who can send a recording to an investigation: anyone who was **on** it, any active **member of
+the group** running it, and — when the investigation or its case is **public** — anybody at all.
+An open investigation is an invitation, and a dozen visitors with phones is much of the value of
+running one.
+
+A session does not need an investigation at all. Somebody scouting a building, or a guide walking
+a route, can keep it against their own account and attach it to an investigation later.
+
+Once everything is up, the app offers to clear the recordings off the phone. It only offers when
+**every** file is confirmed on the server, and clearing takes the photos, video and audio while
+keeping the session, its readings and its marks — those are small, and losing the trace of a
+night to reclaim video space would be a poor trade. Individual captures can be deleted at any
+time for the ones not worth keeping.
+
+Uploaded sessions play back on the website too, on the same one-playhead idea — and the case
+manager can **cite them in the final report**. A report section of type *Field Sessions* points at
+the sessions recorded for that case, and the PDF the client receives says what each one holds:
+where it was, when it ran, who recorded it, and how many readings and marks it carries. Your work
+in the field ends up in the document, rather than only in the system.
+
+A session can also be sent to somebody with **no account at all** — a client, or a producer — as a
+link that expires, can be withdrawn, and tells you whether it was opened. That is done from the
+session's playback page on the website; see *Working a case* for what the link does and does not
+carry.
+
+### Sending only the part that mattered
+
+An hour of recording usually matters for ten seconds. On the **Send** screen, under **What to
+send**, the session sits on a track with a **green dot** at the start and a **red dot** at the
+end. Drag the green dot to move the in point and the red dot to move the out point; the time under
+each shows as you drag it, and the bolder green band between them is exactly what will be sent.
+
+Below the track you can see what is under the handle — the field and sound at that moment — and
+**Play what will be sent** runs from the in point to the out point with the recording following,
+so what you hear is what the group will get and nothing else. The list beneath says, file by file,
+what happens to each recording: sent whole, cut to a shorter stretch, or not sent because it falls
+outside the window. Readings and marks outside the window are not sent either.
+
+**The full recording stays on this phone.** Nothing outside the window leaves the device, and a cut
+recording is a copy — the original on the phone is never touched. Clearing the phone afterwards is
+a separate choice, offered only once everything has arrived, and it is the only thing that removes
+the original.
+
+A trimmed session is named for what it is: **back bedroom (20:00–30:00)**, with the in and out
+times after the session's own name, on the website's list, in the player and in any report that
+cites it. A session sent whole keeps its name.
+
+**Send the whole session** puts both dots back at the ends.
+
+### How much goes at once
+
+Your phone is never limited. It records for as long as the night needs, at whatever the camera
+gives, and it keeps every second of that afterwards. What is measured out is the **upload**.
+
+One upload carries **5 minutes of video** and **500 MB in total**. Readings, marks, photographs and
+sound are not rationed by time — a whole night of instruments and audio goes in one send. Only
+video is, because a minute of video outweighs an hour of everything else.
+
+Above the Send button the screen says what this window weighs and how much video is in it. If it
+is over, there are two ways through, and the screen offers whichever one fits the problem:
+
+- **Too long?** Drag the handles in to make a clip of it, send that, then move the window along and
+  send the next. You can send as many times as it takes, and nothing already sent is changed by
+  sending more.
+- **Too heavy?** Under **Send the video smaller** you can send the footage at 1080p or 720p, and at
+  24 frames a second, with the size each choice would produce shown beside it. This changes only
+  the copy that is sent; the recording on your phone stays exactly as it was filmed.
+
+Sizes on that screen are estimates. A dark, still room compresses better than the estimate
+suggests, so the real upload is usually smaller.
+
+### Exporting a session
+
+From a session's review screen, **Export a bundle** writes the whole night as one **`.ben` file**
+and hands it to the share sheet, so it can go by AirDrop, Messages, Mail or Files to anyone. Inside
+it is the published IsHaunted device data format — the same one any instrument maker can write —
+so it is readable outside this app too.
+
+The file carries a **seal**: a checksum of every part, and the id of the phone and the account that
+recorded it. A copy that lost or changed bytes on the way fails its seal and is refused when opened,
+rather than opened with a hole in it. The seal says which device made the recording; it is not a
+signature, and it never carries anybody's name.
+
+### Opening a session somebody sent you — or pulling your own back down
+
+A `.ben` that reaches your phone opens in the app, and **plays exactly as it did for the person who
+recorded it**: the same trace, the same map, the same marks and recordings, with the review screen,
+the replay, the trimmer and the export all working as if the night had been recorded on your phone.
+The only difference is a line on the review screen that says where it came from.
+
+There are three ways in, and they all lead to the same place:
+
+- **Tap the file** wherever it arrived — an AirDrop, a message, a mail attachment, Files. The
+  app is offered to open it.
+- **Open a .ben file** on the Field Kit screen shows the Files browser, for a file already saved.
+- **On the server, not on this phone**, further down the Field Kit screen, lists the sessions you
+  have sent up that are not on this phone — sent from another device, or cleared from this one.
+  **Download** brings the whole night back, and the app already knows it is on the server. Only
+  sessions that were sent as one file are offered; anything sent before session files existed is
+  counted underneath, and is still on the website.
+
+![An imported session on the review screen: the trace, the map, the marks, and where it came from](/help/media/the-mobile-apps/iphone-review-imported.png)
+
+A session that is **already on this phone** is not imported twice; the app says which one it is.
+Imported sessions show in the list with *shared with you*, *from the server* or *opened from a file*
+under the name, and the review screen's facts carry a **Source** line to match — so a night somebody
+handed you is never quietly attributed to you.
+
+## Sharing what you found — the field archive
+
+A session normally belongs to you, or to the investigation you recorded it for. There is a third
+option, and it is the reason the app is worth having without a group at all.
+
+After a session has been sent, the send screen offers **Add to the public archive**. That puts the
+session's readings on the page for the place you recorded at — alongside everybody else who has
+ever recorded there.
+
+### Why that is worth doing
+
+One person's readings at a location are a story. The same location recorded by ten people, over
+years, is something anybody can check. If eleven of twelve visits show a magnetic anomaly on the
+same set of stairs, that is a persistent feature of the building. If one visit in twelve shows it,
+it was noise. Nothing else in this field can tell those two apart, because everybody's recordings
+normally stay on the phone that made them.
+
+### How it works
+
+1. Send the session as usual.
+2. Tap **Add to the public archive**.
+3. The app offers **public locations near where you recorded**, each showing how many sessions are
+   already there. Picking one is what keeps a location on a single page — two people typing the
+   same cave slightly differently would otherwise create two.
+4. Nothing nearby? Name the place, and it will still be matched against any existing record before
+   a new one is created.
+
+### What becomes public, and what does not
+
+- **Your readings, your name, and when you recorded** go on the location's page.
+- **Photos, video and audio** are shared too, and can be flagged by any reader — a flagged session
+  has its media hidden immediately, until a moderator looks. The readings stay either way.
+- **Public locations only.** A session recorded at somebody's home can never be archived. That
+  work stays with you and your group, which is what the paid plans are for.
+- **Taking it back is part of a paid plan.** Publishing is something anybody may do; removing it
+  afterwards is not. A free account's contribution stays on the location's page — that is what
+  makes the archive worth reading, and what a paid plan buys is keeping your work to yourself in
+  the first place. So it is worth a moment's thought before the first publish: what people have
+  already read cannot be unread either way.
+
+**On the website, the same place page goes further.** A public location offers to schedule a visit
+there and to post about it, and if you have no group at all it offers to set you up with a private
+space of your own in one step — free, and yours. What you record there is public on a free account,
+exactly as a published session is. See
+[Investigating on your own](getting-started#investigating-on-your-own).
+
+## How much you can keep
+
+An account with no paid plan behind it holds a limited amount of recorded material. **My field
+sessions** on the website shows what you have used, with a bar that turns amber and then red as it
+fills, so the cap is something you see coming rather than something you meet when an upload is
+refused.
+
+If a group you belong to is on a paid plan, that covers your storage and the page says so — there
+is no personal cap to show you, and it does not invent one.
+
+When you are close to full there are two ways on: remove sessions you no longer need, or join a
+group on a paid plan. Removing a session frees its space immediately.
+
+## Deleting a session
+
+**My Field Sessions** on the website lists everything the app has sent up, and a session that is
+yours alone has a delete beside **Play back**. It asks first, and it takes the readings, the
+recordings and any share link you made of it. There is no undo.
+
+Three sessions cannot be deleted there, and the page says which:
+
+- **Recorded for an investigation.** It is the group's record of that night, not your phone's
+  history, so the row says *the group's* instead of offering a button. Ask the group.
+- **Cited by a case report.** Removing it would leave a finished report pointing at nothing. The
+  citation has to go first.
+- **Published to a place's archive.** Deleting it takes it back out of the archive, which is the
+  same thing as retracting it — and retracting is part of a paid plan, for the reason given above.
+  An unpublished session deletes freely on any plan.
+
+The place itself is never touched. Where a session happened is a fact about the recording, not a
+consequence of having shared it.
+
+## Your seat on a walk
+
+Asking for a place on a ghost walk is a **request** — the tour confirms it. Say how many of you are
+coming, and the night's page will say your seat is with the tour until somebody there decides. When
+it is approved the page says how many places are reserved, and **Got it** tells them you have seen
+it. That is optional; your place is held either way.
+
+**The phone reminds you itself.** Once a seat is reserved it sets two reminders — the night before,
+and an hour before — each carrying the meeting point, and both on the walk's own clock. They are
+set on the phone rather than sent from here, so they still arrive in a cellar with no signal. You
+are asked for permission at the moment you have a seat to be reminded about, and if you say no
+everything else goes on working.
+
+A seat that is turned down, or a walk you cancel, takes its reminders with it.
+
+**Money is arranged with the business.** Nothing is taken through the app.
+
+## An event you've booked
+
+Some events are run by a venue or a group through this site — a séance weekend at a hotel, a dinner
+and a play over three nights. Places at those are asked for, or chosen on a seating plan, on the
+event's own page, and the app shows you where that stands.
+
+**On the event.** Open the night from Events and the booking panel says it in a word — *Waiting for
+the venue*, *Held for you*, *Confirmed*, *Turned down* — with what you asked for underneath. A request
+or a hold you no longer want can be let go from there. If you have no booking yet, **Ask for a place**
+(or **Choose your places**, where the venue uses a seating plan) opens the event's page inside the
+app; when you close it, the panel reads your booking again.
+
+**What I'm going to.** Under **Profile**, every hosted event you have asked for, one row each, with
+its dates, the venue, what you have and a way to your pass.
+
+![What I'm going to: each event once, with where the booking stands](/help/media/the-mobile-apps/iphone-my-events.png)
+
+**Your pass.** Once the venue confirms you and issues it, **Your pass** shows the code the door scans,
+the short code to read out when a camera will not focus, how many it admits, and the nights and rooms
+or seats. The screen turns itself up to full brightness while it is open and goes back when you leave.
+
+![A pass on the phone: the code, the short code and what it admits](/help/media/the-mobile-apps/iphone-event-pass.png)
+
+- **It works with no signal.** The last pass the app saw is kept on the phone, so a basement bar or a
+  hotel with no reception still gets you in. When it is showing the kept copy it says so, and when.
+- **A withdrawn pass is shown as withdrawn**, faded and banded, never quietly left looking valid.
+  If the venue withdraws it while you are online, the kept copy goes too.
+- **Opening the app with no signal does not sign you out.** It stays signed in and catches up when
+  the phone is back online.
+- **Signing out removes the kept passes**, so the next person to pick up the phone never sees yours.
+
+Choosing seats on a plan stays on the website for now; everything you choose there shows here.
+
+### During the event
+
+**The event** on What I'm going to (or **Programme and room** on a confirmed booking) opens everything
+for that event in one place. A row appears only when there is something behind it: no programme yet,
+or menus the venue hasn't shared with you, simply aren't listed. When the hosts have said how to get in
+and around — stairs, a step-free door, parking, low light — it is under **Getting in and getting around**.
+
+![The event's own screen: pass, programme, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
+
+- **Programme** — night by night, **on the venue's clock** with the zone named, so 9:00 PM CDT is the
+  same wherever you read it. **Sign up** asks how many of your party are coming. A full session puts you
+  on its waiting list and says where you are in line, and when there aren't enough places left for your
+  whole party it says that too. **Give up** or **Leave** hands your place to the next person. The
+  calendar button at the top adds the whole programme to your calendar.
+- **Menus** — each meal with its time, course by course, with the venue's dietary labels.
+- **Downloads** — the files the organizers share with guests. Tap one to open it, and share it on from
+  there.
+- **The room** — what the people at the event are posting. Press the pencil to write, or to add photos
+  and video from your library or the camera. Several at once go in as one post each, with your words on
+  the first. The first photo you add at an event asks you to agree, in the organizers' words, to it being
+  shown in the room and on their photo wall. **Also send to…** gives the organizers a copy. Press and hold
+  your own post to send it on later or take it down; press and hold somebody else's to report it. Your
+  photos stay yours whichever you choose.
+
+![The programme, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
+
+![A menu, course by course](/help/media/the-mobile-apps/iphone-event-menus.png)
+
+![The room, with a photo posted from the phone](/help/media/the-mobile-apps/iphone-event-room.png)
+
+Hiding posts and closing the room stay on the website, where an organizer can see the whole room.
+
+### Photos with no signal
+
+A cellar, a hotel with one bar, a field: post anyway. When the room can't be reached, what you wrote and
+every photo not yet sent are **kept on the phone** and sent as soon as there's signal — when you come
+back to the app, when the network comes back while it's open, or when you open the room. The room opens
+with no signal too, showing it as it was last time, so you can still add to it.
+
+![The room with two posts waiting to send](/help/media/the-mobile-apps/iphone-room-waiting.png)
+
+- **Waiting to send** lists them, in the order you took them. **Send now** tries straight away.
+- If the room won't take one when it gets there — it closed, or the organizers kept photos to their team —
+  it moves to **Couldn't be sent** with the reason. Swipe it to remove it from the phone.
+- Photos are sent as JPEG, whatever the camera saved them as. A video can be up to 95 MB in one post.
+- Signing out removes anything still waiting.
+
+### Sharing photos from the Photos app
+
+Choose photos or videos in the Photos app, press **Share**, and pick **IsHaunted**. Choose which of your
+events they're for, add a caption, agree to the photo notice if that event asks, and choose whether to
+send the organizers a copy. **Add** keeps them on the phone; IsHaunted sends them the next time it's open
+with signal — open it straight away to send them at once.
+
+![Sharing a photo to an event from the Photos app](/help/media/the-mobile-apps/iphone-share-to-event.png)
+
+The events offered are the ones you're confirmed at and the ones you're helping at. Open an event's room in
+the app once and the share sheet also knows that room's rules — whether it takes your photos, and who a
+copy goes to.
+
+## Running the door
+
+If an event's organizers have asked you to help at the door — or you are one of the group with that
+job — **Doors I'm running** appears under **Profile**. For everybody else it simply isn't there.
+
+![Tonight's door: the count, the scan button and who is still to come](/help/media/the-mobile-apps/iphone-door.png)
+
+- **The count comes first**: how many are in, how many are expected, and how many more could come in
+  tonight.
+- **Scan a pass** opens the camera. It reads the guest's code and closes, and the door screen shows the
+  **reservation** that pass belongs to. Nobody is checked in by scanning alone.
+- **Tap the reservation** to open it: the name, how many are in the party, the nights and the room or
+  seat, the colour they wear, anybody with them, and anything the kitchen needs to know. **Check in as
+  arrived** records them — set how many are actually here first if the whole party hasn't come.
+- A pass that isn't for this event, was withdrawn, or isn't expected tonight is said in words on the door
+  screen instead.
+- **Name or pass code** at the top finds a reservation by name, or by the six characters under the code
+  when the camera won't focus. Tap it to open it, or press **Check in** beside it.
+- **Undo** takes an arrival back; **Somebody without a booking** writes down a walk-up — how many, and a
+  name if they give one.
+- Nobody's address or phone number is on these screens, and the screen stays awake while the door is open.
+
+![A scanned pass, showing its reservation](/help/media/the-mobile-apps/iphone-door-scanned.png)
+
+![The reservation, ready to check in](/help/media/the-mobile-apps/iphone-door-reservation.png)
+
+### With no signal
+
+Open the door once while you have signal — before the doors open is ideal — and tonight's list is kept
+on the phone.
+
+- The door then opens with **no signal** and says when the list was kept. The camera still reads codes,
+  and a scanned pass finds its reservation on the kept list.
+- Everybody you check in is kept on the phone **with the time they came in**, and **N arrivals waiting
+  to send** goes as soon as there's signal (or press **Send now**). The server checks each pass again
+  when it arrives.
+- If the organizers withdrew a pass in the meantime, the phone tells you who, once it catches up.
+- Writing down a walk-up, and taking back an arrival that has already gone through, wait for a signal —
+  both have to be checked first.
+
+Opening the app with no signal keeps you signed in as you, so your doors and your passes are all there.
+Signing out removes the kept lists from the phone.
+
+## What you photographed on somebody else's event
+
+If you go on a ghost walk or a paid event, you can offer what you caught to the group running it
+— and **Settings → My evidence** is where everything you have offered lives afterwards.
+
+It exists because the two decisions involved are not the same decision, and only one of them is
+theirs:
+
+- **The group decides what their own event shows.** They accept a photograph for their event's
+  record, or they do not. That is their gallery to curate.
+- **You decide whether it joins the archive of the place.** Yours, whatever they decided. A
+  picture they did not use is still yours to contribute; one they did use is not published to the
+  location by that alone.
+
+So the screen shows both, side by side: the group's answer, and whether it is in the place's
+archive. A photograph you offered is **always yours to open**, whether it is waiting, accepted or
+turned down — you never hand over your only copy.
+
+![My evidence: what you offered, what the group said, and whether it is in the place's archive](/help/media/the-mobile-apps/iphone-my-evidence.png)
+
+Where the event was held at a public location, each row offers **Add to place archive**. Where it
+was not, the row says so rather than showing a button that could only refuse. This is the part
+that makes a tour worth more than a night out: a walk that visits the same building every week
+builds that building's public record faster than anything else on the site.
+
+## The app only shows you what applies to you
+
+The app is a **tool**, and a tool should not be cluttered with parts that do nothing in your
+hands. What it offers follows who you actually are:
+
+| If you are | You see |
+|---|---|
+| **Investigating on your own** | The feed, Field Kit, and your profile. No case list, no investigations — you have neither, and an empty screen is worse than no screen. |
+| **Somebody's client** | Your case as well, even though you belong to no group. You asked for the investigation; it is yours to follow. |
+| **In a group** | Cases, investigations and events, as your group's roles allow. |
+| **On a ghost walk** | Events, and My evidence for what you photographed there. |
+
+Nothing is hidden that you have permission to use — this is about whether a section leads
+anywhere for you today, which is a different question from whether you are allowed through the
+door. Join a group and the sections appear; leave one and they go quiet again.
+
+## A note on what the app shows you
+
+The app follows exactly the same rules as the website about who may see what. A private
+engagement is redacted the same way, media waits for the same safety check before it appears,
+and a group's name only appears on footage it has claimed. Nothing is looser on a phone because
+it is on a phone.
+
+## Getting the app
+
+The iPhone and iPad app has been submitted to the App Store and is awaiting Apple's review. When
+it is approved, this page will link to it.
+
+## Links that open the app
+
+Once the app is installed, tapping a link to this site from your mail or messages opens it in the
+app rather than in the browser, on the pages where the app has a matching screen: the feed and
+anything in it, your cases, your investigations, notifications, your profile, the events list, and
+an email confirmation link.
+
+Everything else stays in the browser on purpose. Some pages have no app screen at all — a group's
+public page, a shared session link, an individual event — and sending you to the app for one of
+those would take you away from the page that actually works. If a link does not open the app, that
+is the intended answer rather than a fault.
+
+Nothing changes on a phone or computer without the app: every link opens the website as it always
+has.
+
+## Installing the site itself
+
+On Android, Windows or a Mac there is no native app, but the website can be installed to your home
+screen or dock and will then open in its own window with no address bar. The browser offers this
+itself — **Install** in Chrome's address bar, or **Add to Home screen** in its menu.
+
+It is the same site, so everything you can do on the web you can do there. What it does not have is
+the Field Kit, which needs the sensors on an iPhone.
+

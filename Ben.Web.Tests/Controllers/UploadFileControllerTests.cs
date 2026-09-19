@@ -70,6 +70,11 @@ public class UploadFileControllerTests
         Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null, bool isSuperAdmin = false)
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        // A file the tests then serve is a file that EXISTS. Moq's default for a bool is
+        // false, which would make every download 404 through the missing-bytes guard — so the
+        // realistic default is set here once. A test about missing bytes overrides it, which
+        // works because Moq honours the last matching setup.
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
         storage.Setup(s => s.UserFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
                .Returns<Guid, string>((uid, name) => $"users/{uid}/{name}");
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
@@ -114,6 +119,8 @@ public class UploadFileControllerTests
         Mock<Ben.Data.Common.Interfaces.IFileStorageService>? storageMock = null)
     {
         var storage = storageMock ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        // Same realistic default as the authenticated builder: a file these tests serve exists.
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
         var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object, storage.Object,
             new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
@@ -294,6 +301,15 @@ public class UploadFileControllerTests
             new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
 
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, ownerId.ToString())], "Bearer"))
+            }
+        };
+
         var result = await ctrl.GetChildClips(sourceId, default);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
@@ -301,6 +317,60 @@ public class UploadFileControllerTests
         var clipList = clips.ToList();
         Assert.Single(clipList);
         Assert.Equal(realClipId, clipList[0].Id);
+    }
+
+    /// <summary>
+    /// The clip list is a list of a private recording's contents.
+    /// </summary>
+    /// <remarks>
+    /// This endpoint had no check of any kind: hand it any file id and it answered with the names,
+    /// descriptions, ids and region ranges of every clip cut from that file, whoever cut them and
+    /// whoever owns the recording. The names are the interesting part — people label a clip with
+    /// what they think they heard on it (2026-09-06 audio walk, finding 16).
+    /// </remarks>
+    [Fact]
+    public async Task GetChildClips_IsRefused_ToSomeoneWhoCannotSeeTheRecording()
+    {
+        var factory  = CreateFactory();
+        var ownerId  = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = sourceId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "private.mp3", StoredFileName = "s.mp3", ContentType = "audio/mpeg",
+                FileSize = 1, IsPublic = false,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "says my name.wav", StoredFileName = "c.wav", ContentType = "audio/wav",
+                FileSize = 1, ParentFileId = sourceId, RegionStart = 12, RegionEnd = 14,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = new UploadFileController(factory, new Mock<IMapper>().Object,
+            new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Mock<IAuditLogService>().Object,
+            new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFileController>.Instance);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"))
+            }
+        };
+
+        var result = await ctrl.GetChildClips(sourceId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
     // ── Replace (item #6 phase 3) ────────────────────────────────────────────────
@@ -748,9 +818,47 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildController(factory, Guid.NewGuid(), storage); // unrelated user
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<ForbidResult>(result);
+        storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Download_RowExistsButBytesAreGone_Returns404NotAServerError()
+    {
+        // The database can outlive the blobs: a restored database, a cleared dev .uploads, a
+        // half-finished migration. Storage throws FileNotFoundException for a missing file,
+        // and that reached the exception handler as a 500 — so one missing avatar on a page
+        // full of them produced a wall of server errors. "Not found" is the honest answer,
+        // and it lets the caller's own broken-image fallback do its job.
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .ThrowsAsync(new FileNotFoundException("Stored file not found"));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "gone.png", StoredFileName = "gone.png", ContentType = "image/png",
+                FileSize = 1, StoragePath = "users/owner/gone.png", IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = BuildController(factory, ownerId, storage);
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(false);   // the bytes are gone
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        // And it never even tried to open it — the guard is before the throw, not a catch
+        // around it, so the log stays clean rather than full of handled exceptions.
         storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -775,7 +883,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildAnonymousController(factory, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<UnauthorizedResult>(result);
         storage.Verify(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -804,7 +912,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildAnonymousController(factory, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<FileStreamResult>(result);
     }
@@ -832,7 +940,7 @@ public class UploadFileControllerTests
         }
 
         var ctrl   = BuildController(factory, ownerId, storage);
-        var result = await ctrl.Download(fileId, default);
+        var result = await ctrl.Download(PassthroughIngest(), fileId, default);
 
         Assert.IsType<FileStreamResult>(result);
     }
@@ -926,6 +1034,90 @@ public class UploadFileControllerTests
             new UpdateUploadFileRequest(Guid.NewGuid(), null, false, 0), default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Delete_ByNonOwner_ReturnsForbid_AndTheFileSurvives()
+    {
+        // Until 2026-08-23 this endpoint had no ownership check at all: any authenticated user
+        // could hard-delete anyone's file AND its blob. The destructive sibling of this
+        // controller family's earlier read gaps — a read leaks, a delete destroys.
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/x/a.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = BuildController(factory, Guid.NewGuid(), storage);
+
+        var result = await ctrl.Delete(fileId, default);
+
+        Assert.IsType<ForbidResult>(result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.NotNull(await verify.UploadFiles.FindAsync(fileId));
+        // The blob too: a Forbid that still deleted from disk would be the same hole in a
+        // different layer.
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Delete_ByOwner_RemovesRowAndBlob()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                StoragePath = "users/x/a.jpg",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = BuildController(factory, ownerId, storage);
+
+        var result = await ctrl.Delete(fileId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Null(await verify.UploadFiles.FindAsync(fileId));
+        storage.Verify(x => x.DeleteAsync("users/x/a.jpg", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Delete_BySuperAdmin_Succeeds()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "a.jpg", StoredFileName = "a.jpg", ContentType = "image/jpeg", FileSize = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        Assert.IsType<NoContentResult>(await ctrl.Delete(fileId, default));
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Null(await verify.UploadFiles.FindAsync(fileId));
     }
 
     [Fact]
@@ -1073,5 +1265,369 @@ public class UploadFileControllerTests
         // author of their edit. It is server-derived now and the field is gone from the DTO.
         await using var verify = await factory.CreateDbContextAsync();
         Assert.Equal(ownerId, (await verify.UploadFiles.FindAsync(fileId))!.UpdatedByAppUserId);
+    }
+
+    /// <summary>
+    /// An ingest service that serves the original — the production fallback when a file has no
+    /// sanitized derivative, which is every file in these fixtures. Download prefers the stripped
+    /// copy when one exists (2026-08-24); these tests are about the audience gate, not stripping.
+    /// </summary>
+    private static Ben.Data.WebApi.Services.IMediaIngestService PassthroughIngest()
+    {
+        var mock = new Mock<Ben.Data.WebApi.Services.IMediaIngestService>();
+        mock.Setup(m => m.ServingPathFor(It.IsAny<string>())).Returns<string>(p => p);
+        return mock.Object;
+    }
+
+    // ── Item 180 Phase B: delete asks two questions; the second can hand the file over ────────
+    //
+    // Ben, 2026-08-24 and again 2026-09-04: ownership stays with the uploader until they press
+    // Delete. If a group is using the file they are asked whether to remove it everywhere; yes
+    // destroys it; no, then "still delete", hands it to the group. Nothing moves on its own.
+
+    private static async Task<(Guid OwnerId, Guid OrgId, Guid FileId, Guid CopyId)> SeedFileInUseAsync(
+        IDbContextFactory<BenDataContext> factory, Guid? adminId = null, bool viaShare = true, bool viaCaseCopy = true)
+    {
+        var ownerId = Guid.NewGuid();
+        var orgId   = Guid.NewGuid();
+        var fileId  = Guid.NewGuid();
+        var copyId  = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Organizations.Add(new Organization
+        {
+            Id = orgId, Name = "Night Watch", UrlName = $"nw-{Guid.NewGuid():N}"[..12],
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        if (adminId is { } admin)
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = admin,
+                Role = OrganizationMemberRole.Administrator, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = admin,
+            });
+        }
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = fileId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+            FileName = "orb.jpg", StoredFileName = "orb.jpg", ContentType = "image/jpeg", FileSize = 3,
+            StoragePath = "users/o/orb.jpg", DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        db.UploadFileMetadata.Add(new UploadFileMetadata
+        {
+            Id = Guid.NewGuid(), UploadFileId = fileId, GpsLatitude = 36.1, GpsLongitude = -86.7,
+        });
+        if (viaShare)
+        {
+            db.UploadFileOrganizationShares.Add(new UploadFileOrganizationShare
+            {
+                Id = Guid.NewGuid(), UploadFileId = fileId, OrganizationId = orgId, SharedByAppUserId = ownerId,
+                Visibility = FileShareVisibility.OrgMembers, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        }
+        if (viaCaseCopy)
+        {
+            var caseId = Guid.NewGuid();
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = orgId, Title = "The attic", DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = copyId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId,
+                FileName = "orb.jpg", StoredFileName = "copy.jpg", ContentType = "image/jpeg", FileSize = 3,
+                StoragePath = "cases/c/copy.jpg", CaseCopyOfUploadFileId = fileId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = copyId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        }
+        await db.SaveChangesAsync();
+        return (ownerId, orgId, fileId, copyId);
+    }
+
+    [Fact]
+    public async Task Usage_ListsTheGroupWithItsShareAndCaseCopy()
+    {
+        var factory = CreateFactory();
+        var (ownerId, orgId, fileId, _) = await SeedFileInUseAsync(factory);
+
+        var result = await BuildController(factory, ownerId).GetUsage(fileId, default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var usage = Assert.IsType<FileUsageRecord>(ok.Value);
+        Assert.True(usage.InUseByAnOrganization);
+        var org = Assert.Single(usage.Organizations);
+        Assert.Equal(orgId, org.OrganizationId);
+        Assert.Equal("Night Watch", org.OrganizationName);
+        Assert.Equal(1, org.Shares);
+        Assert.Equal(1, org.CaseCopies);
+    }
+
+    [Fact]
+    public async Task Usage_IsForTheOwnerOnly()
+    {
+        var factory = CreateFactory();
+        var (_, _, fileId, _) = await SeedFileInUseAsync(factory);
+
+        var result = await BuildController(factory, Guid.NewGuid()).GetUsage(fileId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task PlainDelete_RefusesWithTheUsage_WhenAGroupIsUsingIt()
+    {
+        // The two questions have to be asked; the old door deleted without looking.
+        var factory = CreateFactory();
+        var (ownerId, _, fileId, _) = await SeedFileInUseAsync(factory);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+
+        var result = await BuildController(factory, ownerId, storage).Delete(fileId, default);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.IsType<FileUsageRecord>(conflict.Value);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.NotNull(await verify.UploadFiles.FindAsync(fileId));
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task PlainDelete_StillWorks_WhenNobodyElseIsUsingIt()
+    {
+        var factory = CreateFactory();
+        var (ownerId, _, fileId, _) = await SeedFileInUseAsync(factory, viaShare: false, viaCaseCopy: false);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+
+        var result = await BuildController(factory, ownerId, storage).Delete(fileId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        storage.Verify(x => x.DeleteAsync("users/o/orb.jpg", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteEverywhere_EndsTheShare_RemovesTheCaseCopy_AndDestroysTheFile()
+    {
+        var factory = CreateFactory();
+        var (ownerId, _, fileId, copyId) = await SeedFileInUseAsync(factory);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+
+        var result = await BuildController(factory, ownerId, storage).DeleteEverywhere(fileId, default);
+
+        var ok      = Assert.IsType<OkObjectResult>(result.Result);
+        var summary = Assert.IsType<DeleteEverywhereResult>(ok.Value);
+        Assert.Equal(1, summary.SharesRemoved);
+        Assert.Equal(1, summary.CaseCopiesRemoved);
+
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Null(await verify.UploadFiles.FindAsync(fileId));
+        Assert.Null(await verify.UploadFiles.FindAsync(copyId));
+        Assert.False(await verify.CaseFiles.AnyAsync(cf => cf.UploadFileId == copyId));
+        Assert.False(await verify.UploadFileOrganizationShares.AnyAsync(s => s.UploadFileId == fileId && s.IsActive));
+        storage.Verify(x => x.DeleteAsync("cases/c/copy.jpg", It.IsAny<CancellationToken>()), Times.Once);
+        storage.Verify(x => x.DeleteAsync("users/o/orb.jpg", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Reassign_HandsTheFileToTheGroup_KeepsItsMetadata_AndLeavesThePersonsFiles()
+    {
+        var factory = CreateFactory();
+        var (ownerId, orgId, fileId, copyId) = await SeedFileInUseAsync(factory);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OrgFilePath(It.IsAny<Guid>(), It.IsAny<string>()))
+               .Returns<Guid, string>((o, n) => $"orgs/{o}/{n}");
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync(() => new MemoryStream([1, 2, 3]));
+        var ctrl = BuildController(factory, ownerId, storage);
+
+        var result = await ctrl.Reassign(fileId, new ReassignUploadFileRequest(orgId), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var verify = await factory.CreateDbContextAsync();
+        var file = await verify.UploadFiles.FindAsync(fileId);
+        Assert.NotNull(file);
+        Assert.Null(file!.AppUserId);
+        Assert.Equal(orgId, file.OwnerOrganizationId);
+        Assert.Equal(ownerId, file.CreatedByAppUserId);                       // who uploaded it is not forgotten
+        Assert.True(await verify.UploadFileMetadata.AnyAsync(m => m.UploadFileId == fileId)); // the EXIF record came with it
+        Assert.NotNull(await verify.UploadFiles.FindAsync(copyId));            // the group's case copy is untouched
+        Assert.True(await verify.UploadFileOrganizationShares.AnyAsync(s => s.UploadFileId == fileId && s.IsActive));
+        Assert.True(await verify.OrganizationFiles.AnyAsync(f => f.OrganizationId == orgId && f.SourceUploadFileId == fileId));
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // It has left their files.
+        var listing = await ctrl.GetAll(default);
+        var files = Assert.IsAssignableFrom<IEnumerable<UploadFileRecord>>(Assert.IsType<OkObjectResult>(listing.Result).Value);
+        Assert.DoesNotContain(files, f => f.Id == fileId);
+    }
+
+    [Fact]
+    public async Task Reassign_RefusesAGroupThatIsNotUsingTheFile()
+    {
+        // Otherwise anybody could plant a file in any group's library.
+        var factory = CreateFactory();
+        var (ownerId, _, fileId, _) = await SeedFileInUseAsync(factory);
+
+        var result = await BuildController(factory, ownerId).Reassign(fileId, new ReassignUploadFileRequest(Guid.NewGuid()), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AfterReassign_TheFormerOwnerCannotDeleteOrChangeIt()
+    {
+        var factory = CreateFactory();
+        var (ownerId, orgId, fileId, _) = await SeedFileInUseAsync(factory);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var f = await db.UploadFiles.FindAsync(fileId);
+            f!.AppUserId = null; f.OwnerOrganizationId = orgId;
+            await db.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+
+        var result = await BuildController(factory, ownerId, storage).Delete(fileId, default);
+
+        Assert.IsType<ForbidResult>(result);
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AfterReassign_AGroupAdministratorCanDeleteIt_AndAMemberCannot()
+    {
+        var factory = CreateFactory();
+        var adminId = Guid.NewGuid();
+        var (_, orgId, fileId, _) = await SeedFileInUseAsync(factory, adminId: adminId, viaShare: false, viaCaseCopy: false);
+        var memberId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var f = await db.UploadFiles.FindAsync(fileId);
+            f!.AppUserId = null; f.OwnerOrganizationId = orgId;
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = memberId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = memberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<ForbidResult>(await BuildController(factory, memberId).Delete(fileId, default));
+        Assert.IsType<NoContentResult>(await BuildController(factory, adminId).Delete(fileId, default));
+    }
+
+    [Fact]
+    public async Task AfterReassign_AnyActiveMemberOfTheGroupCanSeeIt_AndAStrangerCannot()
+    {
+        var factory = CreateFactory();
+        var (_, orgId, fileId, _) = await SeedFileInUseAsync(factory, viaShare: false, viaCaseCopy: false);
+        var memberId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var f = await db.UploadFiles.FindAsync(fileId);
+            f!.AppUserId = null; f.OwnerOrganizationId = orgId;
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = memberId,
+                Role = OrganizationMemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = memberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await factory.CreateDbContextAsync();
+        Assert.True(await FileAudienceAccess.CanViewFileAsync(read, fileId, memberId, default));
+        Assert.False(await FileAudienceAccess.CanViewFileAsync(read, fileId, Guid.NewGuid(), default));
+    }
+
+    // ── Field Kit recordings (Ben, 2026-09-04: "This will include FieldKit uploads?") ────────
+
+    private static async Task<Guid> AttachToASessionAsync(IDbContextFactory<BenDataContext> factory, Guid fileId, Guid ownerId, Guid? orgId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        Guid? investigationId = null;
+        if (orgId is { } org)
+        {
+            investigationId = Guid.NewGuid();
+            db.Investigations.Add(new Investigation
+            {
+                Id = investigationId.Value, OrganizationId = org, Title = "Night walk", DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        }
+        var docId = Guid.NewGuid();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = docId, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId, FileName = "data.json",
+            StoredFileName = "data.json", ContentType = "application/json", FileSize = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        var sessionId = Guid.NewGuid();
+        db.FieldSessionUploads.Add(new FieldSessionUpload
+        {
+            Id = sessionId, SubmittedByAppUserId = ownerId, DeviceSessionId = Guid.NewGuid(), DeviceModel = "iPhone",
+            DocumentUploadFileId = docId, InvestigationId = investigationId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
+        {
+            Id = Guid.NewGuid(), FieldSessionUploadId = sessionId, UploadFileId = fileId, RelativePath = "media/a.m4a",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return sessionId;
+    }
+
+    [Fact]
+    public async Task ASessionOnAGroupsInvestigation_CountsAsThatGroupUsingTheRecording()
+    {
+        var factory = CreateFactory();
+        var (ownerId, orgId, fileId, _) = await SeedFileInUseAsync(factory, viaShare: false, viaCaseCopy: false);
+        await AttachToASessionAsync(factory, fileId, ownerId, orgId);
+
+        var result = await BuildController(factory, ownerId).GetUsage(fileId, default);
+
+        var usage = Assert.IsType<FileUsageRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        var org = Assert.Single(usage.Organizations);
+        Assert.Equal(orgId, org.OrganizationId);
+        Assert.Equal(1, org.DirectLinks);
+    }
+
+    [Fact]
+    public async Task ARecordingHeldByASession_IsNotDestroyed_AndTheReasonSaysSo()
+    {
+        var factory = CreateFactory();
+        var (ownerId, _, fileId, _) = await SeedFileInUseAsync(factory, viaShare: false, viaCaseCopy: false);
+        await AttachToASessionAsync(factory, fileId, ownerId, orgId: null);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+
+        var plain = await BuildController(factory, ownerId, storage).Delete(fileId, default);
+        var everywhere = await BuildController(factory, ownerId, storage).DeleteEverywhere(fileId, default);
+
+        Assert.Contains("field session", Assert.IsType<ConflictObjectResult>(plain).Value!.ToString());
+        Assert.Contains("field session", Assert.IsType<ConflictObjectResult>(everywhere.Result).Value!.ToString());
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.NotNull(await verify.UploadFiles.FindAsync(fileId));
+        storage.Verify(x => x.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ARecordingHeldByASession_CanStillBeHandedToTheGroup()
+    {
+        var factory = CreateFactory();
+        var (ownerId, orgId, fileId, _) = await SeedFileInUseAsync(factory, viaShare: false, viaCaseCopy: false);
+        await AttachToASessionAsync(factory, fileId, ownerId, orgId);
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.OrgFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns<Guid, string>((o, n) => $"orgs/{o}/{n}");
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new MemoryStream([1]));
+
+        var result = await BuildController(factory, ownerId, storage).Reassign(fileId, new ReassignUploadFileRequest(orgId), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal(orgId, (await verify.UploadFiles.FindAsync(fileId))!.OwnerOrganizationId);
     }
 }

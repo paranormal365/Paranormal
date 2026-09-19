@@ -1,0 +1,407 @@
+@page "/my-field-sessions"
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Shared
+@using Ben.Web.Website.Library.Kit
+@implements IDisposable
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    What this account has sent up from the phone.
+
+    Until now nothing on the website listed these. `GetFieldSessionsAsync` had no Razor consumer at
+    all, so the only routes to /field-sessions/{id} were Report Builder's "Play back" button and a
+    URL somebody already held — which meant a member who recorded a session on the app, uploaded it,
+    and then opened the website had no way to find it. The upload appeared to have gone nowhere.
+
+    A table rather than cards: these are compared, not browsed. What matters is when, where, how
+    much was recorded and whether anything was flagged, and those read as columns.
+
+    Every row's readings live in a file, and that file can be missing — a session uploaded from one
+    machine's storage is a row this server cannot open. Rather than let "Play back" lead somewhere
+    that refuses, a session whose document is gone says so on the row.
+*@
+
+<PageTitle>My field sessions — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <h3 class="mb-1">My field sessions</h3>
+    <p class="text-muted">
+        Everything you have sent up from the app, newest first. Recording never needs an account;
+        uploading does, so this is the list of the ones you chose to send.
+    </p>
+
+    @* What this account has used, and the cap if it has one (2026-09-17 audit).
+
+       The endpoint has always been able to answer this and nothing asked, so a solo investigator
+       got no figure and no warning — the first they knew of the cap was an upload being refused.
+       The phone is worse: it shows "2 GB" hardcoded from a comment, which is simply wrong for
+       anybody a group's plan covers.
+
+       "Uncapped" rather than a number for a covered member. A figure they are not measured
+       against would be a lie however carefully it were labelled — the same rule the endpoint
+       follows by sending a null cap. *@
+    @if (_storage is { } storage)
+    {
+        <div class="mb-3" data-testid="my-storage">
+            @if (storage.CapBytes is { } cap)
+            {
+                var used = storage.UsedBytes;
+                var pct = cap <= 0 ? 0 : (int)Math.Min(100, used * 100 / cap);
+                <div class="d-flex justify-content-between align-items-baseline small mb-1">
+                    <span class="text-secondary">
+                        Using @Describe(used) of @Describe(cap)
+                    </span>
+                    @if (pct >= 90)
+                    {
+                        <span class="badge text-bg-danger">Nearly full</span>
+                    }
+                    else if (pct >= 75)
+                    {
+                        <span class="badge text-bg-warning">@pct%</span>
+                    }
+                </div>
+                <div class="progress" style="height:.4rem;" role="progressbar"
+                     aria-label="Storage used" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar @(pct >= 90 ? "bg-danger" : pct >= 75 ? "bg-warning" : "")"
+                         style="width:@pct%"></div>
+                </div>
+                @if (pct >= 90)
+                {
+                    <div class="form-text">
+                        Joining a group on a paid plan, or removing sessions you no longer need,
+                        makes room.
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-secondary small mb-0">
+                    Using @Describe(storage.UsedBytes). Your group's plan covers your storage, so
+                    there is no personal cap.
+                </p>
+            }
+        </div>
+    }
+
+    @if (_deleteError is not null)
+    {
+        @* The server's own sentence: "a case report cites this" and "retracting is part of a paid
+           plan" are different problems with different answers, and a guard whose reason the screen
+           throws away is barely better than no guard. *@
+        <div class="alert alert-danger" data-testid="delete-session-error">@_deleteError</div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" />
+    }
+    else if (_refusal is not null)
+    {
+        @* "Couldn't ask" and "you have none" are different sentences, and showing the second when
+           the first happened is the lie this codebase keeps hunting. *@
+        <div class="alert alert-warning" data-testid="sessions-refusal">@_refusal</div>
+    }
+    else if (_rows is null || _rows.Count == 0)
+    {
+        <div class="alert alert-secondary" data-testid="no-sessions">
+            You haven't uploaded a field session yet. Record one in the app's Field Kit, then use
+            <strong>Send to the server</strong> when you stop it.
+        </div>
+    }
+    else
+    {
+        @* The map answers a different question from the table: not "what did I record" but
+           "where have I been". Same treatment as the groups on the home page, and the same
+           honesty — a session only appears when it actually got a fix, and indoors most never
+           do, so the count of what is missing is stated rather than left as a shorter list. *@
+        @if (_mapShown)
+        {
+            <div class="card mb-3">
+                <div class="card-header py-2">Where these were recorded</div>
+                <div class="card-body p-2">
+                    <InvestigationsMap Pins="@_pins" Height="320px" Noun="sessions"
+                                       OnPinClicked="@OpenSession"
+                                       OnViewportChanged="@OnViewportChanged" />
+                </div>
+                <span hidden data-testid="map-bounded-loads">@_boundedLoads</span>
+                <span hidden data-testid="map-last-bounds">@_lastBounds</span>
+                <div class="card-footer py-2 text-muted small d-flex flex-wrap gap-3" data-testid="map-footer">
+                    @if (_pins.Count == 0)
+                    {
+                        @* The map stays up when a pan finds nothing: taking it away would read as
+                           the page breaking, when the person has simply looked somewhere they
+                           never recorded. *@
+                        <span data-testid="map-empty-view">Nothing recorded in this view.</span>
+                    }
+                    @if (_capped)
+                    {
+                        <span data-testid="map-capped">
+                            Showing the newest @_pins.Count of @_mapTotal in view — zoom in to see the rest.
+                        </span>
+                    }
+                    @if (_withoutFix > 0)
+                    {
+                        <span data-testid="unmapped-note">
+                            @_withoutFix of your @_rows.Count sessions had no position to plot —
+                            a phone indoors often never gets a fix.
+                        </span>
+                    }
+                    @if (_unresolved > 0)
+                    {
+                        <span data-testid="map-unresolved">
+                            @_unresolved older session@(_unresolved == 1 ? "" : "s") still being
+                            placed; move the map to bring more in.
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Recorded</th>
+                        <th>Where they stood</th>
+                        <th class="text-end">Readings</th>
+                        <th class="text-end">Flagged</th>
+                        <th class="text-end">Files</th>
+                        <th>Device</th>
+                        <th class="text-end">&nbsp;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr data-testid="session-row">
+                            <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToDisplayDate()</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
+                            <td class="text-end font-monospace">@row.ReadingCount.ToString("N0")</td>
+                            <td class="text-end">
+                                @if (row.MarkerCount > 0)
+                                {
+                                    <span class="badge bg-warning text-dark">@row.MarkerCount</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="text-end font-monospace">@row.Files.Count</td>
+                            <td class="text-secondary small">@row.DeviceModel</td>
+                            <td class="text-end text-nowrap">
+                                <a class="btn btn-secondary btn-sm text-nowrap"
+                                   data-testid="play-back"
+                                   href="@($"/field-sessions/{row.Id}")">Play back</a>
+                                @* Item 218. A session recorded for an investigation is the group's
+                                   record of that night, so it has no delete here — and the reason
+                                   is shown rather than left as a missing button. *@
+                                @if (row.InvestigationId is null)
+                                {
+                                    <button type="button" class="btn btn-outline-danger btn-sm ms-1"
+                                            title="Delete this session" data-testid="delete-session"
+                                            @onclick="() => AskToDelete(row)">
+                                        <BenIcon Name="trash-2" />
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary small ms-2" data-testid="belongs-to-group"
+                                          title="Recorded for an investigation, so it belongs to the group's record of that night.">
+                                        the group's
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* ── Delete a session (item 218) ─────────────────────────────────────────── *@
+<BenConfirmDialog @bind-Visible="@_showDelete" Title="Delete this session" Width="440px"
+                  Busy="@_deleting" BusyText="Deleting…" ConfirmText="Delete"
+                  OnConfirm="ConfirmDeleteAsync" OnCancel="@(() => _pendingDelete = null)">
+    @if (_pendingDelete is { } pending)
+    {
+        <p class="mb-2">
+            Delete the session recorded on
+            <strong>@pending.StartedAt.ToLocalTime().ToDisplayDate()</strong>@(string.IsNullOrWhiteSpace(pending.LocationLabel) ? "" : $" at {pending.LocationLabel}")?
+        </p>
+        <p class="text-secondary small mb-0">
+            Its @pending.ReadingCount.ToString("N0") reading@(pending.ReadingCount == 1 ? "" : "s"),
+            @pending.Files.Count recording@(pending.Files.Count == 1 ? "" : "s") and any link you
+            shared of it go with it. <strong>There is no undo.</strong>
+        </p>
+        @if (pending.PublishedAtUtc is not null)
+        {
+            <div class="alert alert-warning py-2 small mt-2 mb-0" data-testid="published-warning">
+                This session is published to a place's archive. Deleting it takes it back out of
+                the archive, which is part of a paid plan.
+            </div>
+        }
+    }
+</BenConfirmDialog>
+
+@code {
+    private IReadOnlyList<FieldSessionSummaryRecord>? _rows;
+    private List<InvestigationMapPin> _pins = [];
+    private int     _withoutFix;
+    private int     _mapTotal;
+    private int     _unresolved;
+    private bool    _capped;
+    private CancellationTokenSource? _viewportLoad;
+    /// <summary>How many bounded loads have run — rendered hidden so a browser test can see the
+    /// debounce work, since Blazor Server makes the API call where the browser cannot watch it.</summary>
+    private int _boundedLoads;
+    private string _lastBounds = "";
+    /// <summary>Once the map has had something to show it stays on the page; a pan that finds
+    /// nothing says so in the footer rather than unmounting the map under the person's hands.</summary>
+    private bool _mapShown;
+    private bool    _loading = true;
+    private string? _refusal;
+
+    // Delete a session (item 218)
+    private bool _showDelete;
+    private bool _deleting;
+    private FieldSessionSummaryRecord? _pendingDelete;
+    private string? _deleteError;
+
+    /// <summary>What this account has used, and its cap if it has one. Null when unavailable.</summary>
+    private AccountStorageItem? _storage;
+
+    /// <summary>Bytes in the units a person would say them in — the server's own wording.</summary>
+    private static string Describe(long bytes) => bytes >= 1024L * 1024L * 1024L
+        ? $"{bytes / (double)(1024L * 1024L * 1024L):0.#} GB"
+        : bytes >= 1024L * 1024L
+            ? $"{bytes / (double)(1024L * 1024L):0.#} MB"
+            : $"{Math.Max(0, bytes / 1024L)} KB";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The page renders long before the circuit is live; asking who is signed in before that
+        // answers "nobody" and bounces a legitimate member to the front page.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        var result = await AdminClient.GetMyFieldSessionsAsync();
+
+        if (result.SessionExpired)
+            _refusal = "You have been signed out. Sign in again to see your sessions.";
+        else if (result.Failed)
+            _refusal = result.Reason ?? "Couldn't load your field sessions just now.";
+        else
+        {
+            _rows = result.Items;
+            await LoadMapAsync();
+        }
+
+        // Best-effort, like the map: a figure that cannot be fetched is not a reason to withhold
+        // the list, and the section simply does not appear.
+        try { _storage = await AdminClient.GetMyStorageAsync(); }
+        catch { _storage = null; }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// The pins, best-effort. A map that cannot load is not a reason to withhold the list, so a
+    /// failure here leaves the map out rather than turning the whole page into a refusal.
+    /// </summary>
+    private Task LoadMapAsync() => LoadMapAsync(bounds: null, CancellationToken.None);
+
+    private async Task LoadMapAsync(MapBounds? bounds, CancellationToken ct)
+    {
+        if (bounds is not null) { _boundedLoads++; _lastBounds = $"{bounds.North:0.####},{bounds.South:0.####},{bounds.East:0.####},{bounds.West:0.####}"; }
+        var page = await AdminClient.GetMyFieldSessionMapAsync(bounds, ct);
+        if (ct.IsCancellationRequested) return;
+        if (page.Failed || page.Item is null) { if (bounds is null) { _pins = []; _withoutFix = 0; } return; }
+
+        _pins = [.. page.Item.Points.Select(p => new InvestigationMapPin(
+            p.Id,
+            p.MarkerCount > 0 ? $"{p.Title} — {p.MarkerCount} flagged" : p.Title,
+            p.Latitude, p.Longitude,
+            IsPast: true))];
+
+        if (_pins.Count > 0) _mapShown = true;
+        _mapTotal   = page.Item.Total;
+        _unresolved = page.Item.Unresolved;
+        _capped     = page.Item.Total > page.Item.Points.Count;
+        // Only meaningful for the whole-world answer: inside a viewport, "not in view" and
+        // "never had a fix" are different reasons for a session to be missing from the map.
+        if (bounds is null) _withoutFix = Math.Max(0, (_rows?.Count ?? 0) - page.Item.Total);
+    }
+
+    /// <summary>
+    /// A pan or zoom finished. Ask the server for what is now in view — after a short pause, and
+    /// only for the most recent gesture.
+    /// </summary>
+    /// <remarks>
+    /// <para>The map raises one event per gesture, but a person exploring pans five times in three
+    /// seconds, and five requests for five viewports they have already left is the overload this
+    /// was written to avoid. So: wait 350 ms; if another gesture arrives first, the earlier one is
+    /// cancelled and never sent. Cancellation also covers a request already in flight — its answer
+    /// would describe somewhere the map no longer is, and drawing it would move pins under the
+    /// person's cursor.</para>
+    ///
+    /// <para>The server bounds every answer to 500 pins and says how many it left out, so even an
+    /// honest request for the whole world cannot come back heavier than that.</para>
+    /// </remarks>
+    private async Task OnViewportChanged(MapViewport viewport)
+    {
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            await LoadMapAsync(new MapBounds(viewport.North, viewport.South, viewport.East, viewport.West), cts.Token);
+            if (!cts.IsCancellationRequested) StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a later gesture — nothing to draw
+        }
+    }
+
+    private void OpenSession(Guid sessionId) => NavManager.NavigateTo($"/field-sessions/{sessionId}");
+
+    public void Dispose() => _viewportLoad?.Cancel();
+
+    // ── Delete a session (item 218) ──────────────────────────────────────────
+
+    private void AskToDelete(FieldSessionSummaryRecord row)
+    {
+        _pendingDelete = row;
+        _deleteError   = null;
+        _showDelete    = true;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDelete is not { } row) return;
+
+        _deleting = true;
+        var (deleted, error) = await AdminClient.DeleteMyFieldSessionAsync(row.Id);
+        _deleting = false;
+        _showDelete = false;
+        _pendingDelete = null;
+
+        if (!deleted)
+        {
+            _deleteError = error ?? "That session could not be deleted.";
+            return;
+        }
+
+        _rows = _rows is null ? null : [.. _rows.Where(r => r.Id != row.Id)];
+        // The map is drawn from the sessions, so a pin has to go with the row.
+        await LoadMapAsync();
+    }
+}

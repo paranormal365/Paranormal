@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -29,6 +31,10 @@
     {
         <BenLoaderOverlay Visible="true" Text="Loading pending requests…" />
     }
+    else if (_requestsResult.Failed)
+    {
+        <BenListState TItem="OrgPendingRequestRecord" Result="@_requestsResult" OnRetry="@LoadAsync" />
+    }
     else if (_requests.Count == 0)
     {
         <div class="text-center py-5 text-secondary">
@@ -52,20 +58,46 @@
                                 <div class="text-secondary small">
                                     Submitted @r.DateApplied.ToViewerLocalTime(UserState).ToDisplayDate()
                                 </div>
+                                @* A request from the signed-out wizard belongs to an account that
+                                   has not confirmed its email yet, so no message the group sends
+                                   will reach its owner and they cannot sign in to read one. Said
+                                   here so a silence is explained rather than read as being
+                                   ignored (site evaluation 2026-09-06, phase 1). *@
+                                @if (!r.ClientEmailConfirmed)
+                                {
+                                    <div class="small text-warning mt-1">
+                                        <BenIcon Name="alert-triangle" Class="me-1" />
+                                        The client hasn't confirmed their email yet — messages
+                                        won't reach them until they do. You can still accept.
+                                    </div>
+                                }
                             </div>
                             <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @* W-A4 (site evaluation 2026-09-06): the door to the vote page used
+                                   to disappear the moment a request went Under Review — which is
+                                   exactly when voting opens. Reviewers were left following the
+                                   platform message to find a page the card had stopped offering.
+                                   It stays for every state where the request is still open. *@
+                                <a class="btn btn-outline-secondary btn-sm" href="/organizations/@OrgId/request-review/@r.ClientRequestId"><BenIcon Name="eye" Class="me-1" />
+                                    Review &amp; vote
+                                </a>
                                 @if (r.Status == ClientOrgRequestStatus.Pending || r.Status == ClientOrgRequestStatus.Viewed)
                                 {
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => MarkUnderReview(r))" disabled="@(!(!_isBusy))"><BenIcon Name="search" Class="me-1" />
                                         Under Review
                                     </button>
                                 }
-                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenAccept(r))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
-                                    Accept
-                                </button>
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenDecline(r))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
-                                    Decline
-                                </button>
+                                @* Only for whoever may decide (UI test pass 6.15): every member can read and vote, and the
+                                   buttons that answer the client were offered to all of them. *@
+                                @if (_canDecide)
+                                {
+                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenAccept(r))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
+                                        Accept
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenDecline(r))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
+                                        Decline
+                                    </button>
+                                }
                             </div>
                         </div>
 
@@ -75,15 +107,18 @@
                             <div class="mt-3 border-top pt-3">
                                 <div class="text-secondary small fw-semibold mb-1">Request Details</div>
                                 <div class="text-body-secondary small">@((MarkupString)r.Description)</div>
+                                <button type="button" class="btn btn-link btn-sm p-0 mt-1" @onclick="@(() => ToggleExpand(r))">Show less</button>
                             </div>
                         }
                         else if (!isExpanded && !string.IsNullOrWhiteSpace(r.Description))
                         {
-                            <div class="text-secondary small mt-2 border-top pt-2"
-                                 style="max-height:3em;overflow:hidden;cursor:pointer;"
-                                 @onclick="@(() => ToggleExpand(r))">
-                                @((MarkupString)TruncateHtml(r.Description, 150))
-                                <span class="text-primary ms-1">View more…</span>
+                            @* "View more…" sat inside the 3em box that clips the excerpt, so the link was cut off with the text
+                               it offered to show (UI test pass, 2026-09-14). It is a button below the box. *@
+                            <div class="mt-2 border-top pt-2">
+                                <div class="text-secondary small" style="max-height:3em;overflow:hidden;">
+                                    @((MarkupString)TruncateHtml(r.Description, 150))
+                                </div>
+                                <button type="button" class="btn btn-link btn-sm p-0" @onclick="@(() => ToggleExpand(r))">View more</button>
                             </div>
                         }
                     </div>
@@ -105,7 +140,7 @@
                 </p>
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="orgpendingrequests-case-title-optional-280c">Case Title <span class="text-secondary fw-normal">(optional)</span></label>
-                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="Auto-generated from client name and city if blank" @bind="@_acceptTitle" @bind:event="oninput" />
+                    <input id="orgpendingrequests-case-title-optional-280c" type="text" class="form-control" placeholder="The town, if you leave this blank" @bind="@_acceptTitle" @bind:event="oninput" />
                 </div>
                 @if (_actionError is not null)
                 {
@@ -149,6 +184,7 @@
     [Parameter] public bool EmbeddedMode { get; set; }
 
     private List<OrgPendingRequestRecord>? _requests;
+    private LoadResult<OrgPendingRequestRecord> _requestsResult;
     private string? _error;
     private bool _isBusy;
     private Guid? _expandedId;
@@ -157,6 +193,9 @@
     private OrgPendingRequestRecord? _acceptTarget;
     private string _acceptTitle = "";
     private OrgPendingRequestRecord? _declineTarget;
+
+    /// <summary>Whether this person may accept or decline — the client-requests grant, or an admin seat.</summary>
+    private bool _canDecide;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -168,8 +207,19 @@
 
     private async Task LoadAsync()
     {
-        try { _requests = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).ToList(); }
-        catch { _error = "Failed to load pending requests."; _requests = []; }
+        try
+        {
+            _requestsResult = await AdminClient.GetOrgPendingRequestsAsync(OrgId);
+            _requests       = _requestsResult.Items.ToList();
+            _canDecide = UserState.IsSuperAdmin
+                || (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.May(OrganizationPermissionArea.Clients, OrganizationSecurityAction.Update) == true;
+        }
+        catch
+        {
+            // A group that thinks it has no pending requests leaves people waiting unanswered.
+            _requestsResult = LoadResult<OrgPendingRequestRecord>.Failure();
+            _requests       = [];
+        }
     }
 
     private async Task ToggleExpand(OrgPendingRequestRecord r)
@@ -233,8 +283,8 @@
             var req = new AcceptClientRequestAsCaseRequest(
                 Title: string.IsNullOrWhiteSpace(_acceptTitle) ? null : _acceptTitle.Trim(),
                 CaseManagerAppUserId: null);
-            var newCase = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
-            if (newCase is null) { _actionError = "Accept failed."; }
+            var (newCase, error) = await AdminClient.AcceptClientRequestAsCaseAsync(OrgId, _acceptTarget.ClientRequestId, req);
+            if (newCase is null) { _actionError = error ?? "Accept failed."; }
             else
             {
                 _acceptTarget = null;
@@ -251,9 +301,16 @@
         _isBusy = true; _actionError = null;
         try
         {
-            await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
-            _requests?.Remove(_declineTarget);
-            _declineTarget = null;
+            var (declined, error) = await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
+            if (declined)
+            {
+                _requests?.Remove(_declineTarget);
+                _declineTarget = null;
+            }
+            else
+            {
+                _actionError = error ?? "The request could not be declined. It is still waiting for an answer.";
+            }
         }
         catch (Exception ex) { _actionError = ex.Message; }
         finally { _isBusy = false; }

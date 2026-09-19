@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Services;
 /// general principle:</para>
 /// <list type="bullet">
 /// <item><description><b>Geocoding.</b> The address search endpoint is anonymous and proxies
-/// geocod.io, which is <i>metered and paid</i>. Without a limit, anyone with a shell loop spends
+/// the Apple Maps Server API, whose <i>daily quota</i> is shared with the website's maps. Without a limit, anyone with a shell loop spends
 /// the account's quota.</description></item>
 /// <item><description><b>Identity.</b> <c>/login</c> is an unthrottled password oracle and
 /// <c>/register</c> creates accounts. Identity's own lockout protects a single account from
@@ -34,11 +34,70 @@ namespace Ben.Data.WebApi.Services;
 /// </remarks>
 public static class RateLimiting
 {
-    /// <summary>Anonymous geocoding proxy — guards a paid third-party quota.</summary>
+    /// <summary>Anonymous geocoding proxy — guards a shared daily quota.</summary>
     public const string GeocodingPolicy = "geocoding";
 
     /// <summary>Identity endpoints — login, registration, password reset.</summary>
     public const string AuthPolicy = "auth";
+
+    /// <summary>
+    /// Guests signing themselves up for a public event — the one place a crowd of strangers all
+    /// calls at once from a single address.
+    /// </summary>
+    /// <remarks>
+    /// <para>A ghost walking tour is thirty guests a session and three sessions a night, none of
+    /// them members, each signing up on their own phone at the meeting point. Every one of those
+    /// phones is behind the venue's wifi or a carrier NAT, so to the limiter they are one caller
+    /// making thirty sign-ups in the same minute — indistinguishable from a script, and refused by
+    /// the global ceiling once the crowd is browsing as well as signing up. That crowd is the tour
+    /// operator's entire business, so it gets a partition of its own rather than a share of the
+    /// ceiling meant for one runaway client.</para>
+    ///
+    /// <para>Generous here is safe only because the abuse this endpoint invites — using it as a
+    /// mailer, since it sends to any address typed in — is stopped by a per-event ceiling in the
+    /// controller rather than by the per-caller limit. An IP cannot tell thirty guests from one
+    /// attacker; an event that has issued far more invitations than it has seats can.</para>
+    /// </remarks>
+    public const string EventAttendancePolicy = "event-attendance";
+
+    /// <summary>
+    /// Audio edit, clip, EVP scan and mix export \u2014 the endpoints that decode a whole recording
+    /// while the caller waits.
+    /// </summary>
+    /// <remarks>
+    /// Each of these holds the decoded recording in memory for the length of the request; a
+    /// 30-minute stereo source is over a gigabyte of it. The global ceiling of 600 a minute is
+    /// about right for pages and far too generous for these, so they get a partition of their own
+    /// sized for a person working through a recording rather than for a browser
+    /// (2026-09-06 audio walk, finding 17).
+    /// </remarks>
+    public const string AudioProcessingPolicy = "audio-processing";
+
+    /// <summary>
+    /// Taking and giving back places on a hosted event's plan (item 235 phase 4).
+    /// </summary>
+    /// <remarks>
+    /// <para>The abuse this invites is not volume, it is denial: a script that holds every seat in
+    /// the house for two days empties a venue's weekend without booking anything. The per-caller
+    /// ceiling is deliberately low because a person picking seats presses this button once, twice
+    /// if they lose a race, and never thirty times a minute.</para>
+    ///
+    /// <para>The real defence is elsewhere and has to be — an attacker has more than one account.
+    /// A cap on how many holds one account may have at once, and the hold expiry that gives them
+    /// back, are what bound the damage; this only slows the loudest version down.</para>
+    /// </remarks>
+    public const string HostedBookingPolicy = "hosted-booking";
+
+    /// <summary>
+    /// Picking places on a hosted event without signing in (item 235 slice 11d).
+    /// </summary>
+    /// <remarks>
+    /// Keyed by address, because there is nobody signed in to key by, and windowed over ten minutes
+    /// rather than one: a person picks, perhaps loses a race and picks again, then goes to their
+    /// email. Six in ten minutes is that with room to spare, and a script sending a different made-up
+    /// address each time is stopped here long before the per-night ceiling has to.
+    /// </remarks>
+    public const string HostedEmailPickPolicy = "hosted-email-pick";
 
     // Defaults, all per caller per minute. A SuperAdmin can override each one from the site
     // settings page; configuration (RateLimits:*) is the fallback, and these are the last resort.
@@ -48,10 +107,56 @@ public static class RateLimiting
     internal const int DefaultAuthPerMinute      = 20;
     internal const int DefaultGlobalPerMinute    = 600;
 
+    /// <summary>
+    /// Sized for a crowd rather than a person: a sold-out tour signing up at the meeting point,
+    /// several sessions running over, and everyone reloading the page while they wait.
+    /// </summary>
+    internal const int DefaultEventAttendancePerMinute = 300;
+
+    /// <summary>Thirty a minute: a person picking seats, not a script taking a house.</summary>
+    internal const int DefaultHostedBookingPerMinute = 30;
+
+    /// <summary>Six unproven picks per address per ten minutes.</summary>
+    internal const int DefaultHostedEmailPicksPerWindow = 6;
+    internal static readonly TimeSpan HostedEmailPickWindow = TimeSpan.FromMinutes(10);
+    /// <summary>
+    /// Enough for somebody working steadily \u2014 trying a gain, undoing it, clipping two regions,
+    /// running a scan \u2014 and nowhere near enough to keep a server busy decoding.
+    /// </summary>
+    internal const int DefaultAudioProcessingPerMinute = 12;
+
+    /// <summary>
+    /// Turning a pasted link into a preview card on a case canvas (canvas plan M6-10).
+    /// </summary>
+    /// <remarks>
+    /// Per signed-in person. Thirty a minute is somebody pasting links as fast as they can find
+    /// them; each miss makes this server fetch a stranger's page, and the week-long cache means a
+    /// person re-opening their boards spends almost none of it.
+    /// </remarks>
+    public const string LinkUnfurlPolicy = "link-unfurl";
+
+    /// <summary>
+    /// The link-unfurl image proxy: a preview card's picture, re-encoded by us.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="LinkUnfurlPolicy"/> because opening a board draws every link
+    /// card's picture at once: a board with forty cards would be refused at the unfurl limit on open,
+    /// for work the person never asked to repeat.</para>
+    ///
+    /// <para>Per person, and not the only bound: <c>LinkUnfurlImageCeiling</c> caps the whole server,
+    /// because cheap accounts multiply a per-person limit (canvas plan review R21).</para>
+    /// </remarks>
+    public const string LinkUnfurlImagePolicy = "link-unfurl-image";
+
+    internal const int DefaultLinkUnfurlPerMinute = 30;
+    internal const int DefaultLinkUnfurlImagePerMinute = 120;
+
     public static IServiceCollection AddBenRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<RateLimitSettingsProvider>();
+        services.AddSingleton<RateLimitAlerting>();
+        services.AddHostedService<RateLimitFlushService>();
 
         services.AddRateLimiter(options =>
         {
@@ -70,15 +175,36 @@ public static class RateLimiting
                 context.HttpContext.Response.ContentType = "application/json";
                 await context.HttpContext.Response.WriteAsync(
                     "{\"error\":\"Too many requests. Please retry shortly.\"}", ct);
+
+                // Somebody was just turned away. Counting is in-memory and synchronous; only a
+                // threshold crossing reaches the database, and it does so without holding up the
+                // response that is already being written.
+                var alerting = context.HttpContext.RequestServices
+                    .GetRequiredService<RateLimitAlerting>();
+
+                if (alerting.Record(PolicyNameOf(context.HttpContext), ClientKey(context.HttpContext))
+                    is { } alert)
+                {
+                    _ = Task.Run(() => alerting.TryNotifyAsync(alert, CancellationToken.None), CancellationToken.None);
+                }
             };
 
             // Limits are read per request from the provider's in-memory snapshot, so a change made
             // in the admin page applies to a running server.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-                context => FixedWindowByClient(context, Limits(context).Global));
+                context => HasOwnPolicy(context)
+                    ? RateLimitPartition.GetNoLimiter<string>("named-policy")
+                    : FixedWindowByClient(context, Limits(context).Global));
 
-            options.AddPolicy(GeocodingPolicy, context => FixedWindowByClient(context, Limits(context).Geocoding));
-            options.AddPolicy(AuthPolicy,      context => FixedWindowByClient(context, Limits(context).Auth));
+            options.AddPolicy(GeocodingPolicy,       context => FixedWindowByClient(context, Limits(context).Geocoding));
+            options.AddPolicy(AuthPolicy,            context => FixedWindowByClient(context, Limits(context).Auth));
+            options.AddPolicy(EventAttendancePolicy, context => FixedWindowByClient(context, Limits(context).EventAttendance));
+            options.AddPolicy(AudioProcessingPolicy, context => FixedWindowByClient(context, Limits(context).AudioProcessing));
+            options.AddPolicy(HostedBookingPolicy,   context => FixedWindowByClient(context, DefaultHostedBookingPerMinute));
+            options.AddPolicy(HostedEmailPickPolicy, context => FixedWindowByClient(
+                context, DefaultHostedEmailPicksPerWindow, HostedEmailPickWindow));
+            options.AddPolicy(LinkUnfurlPolicy,      context => FixedWindowByClient(context, DefaultLinkUnfurlPerMinute));
+            options.AddPolicy(LinkUnfurlImagePolicy, context => FixedWindowByClient(context, DefaultLinkUnfurlImagePerMinute));
         });
 
         return services;
@@ -86,6 +212,41 @@ public static class RateLimiting
 
     private static RateLimitSnapshot Limits(HttpContext context)
         => context.RequestServices.GetRequiredService<RateLimitSettingsProvider>().Current;
+
+    /// <summary>
+    /// Whether this endpoint declares a rate-limiting policy of its own, in which case the global
+    /// ceiling steps aside and lets that policy be the whole answer.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The global limiter applies to every request, named policy or not</b> — they stack,
+    /// and the stricter of the two decides. That went unnoticed for as long as every policy here
+    /// was stricter than the ceiling: geocoding at 20 and auth at 20 both bite long before 600, so
+    /// which one refused made no difference to anybody.</para>
+    ///
+    /// <para>The event-attendance policy is the first that must be <i>more</i> generous than the
+    /// ceiling, and stacking would have silently thrown it away — the setting would exist, be
+    /// editable, read back correctly, and change nothing above 600, which is the write-only
+    /// failure this codebase keeps finding. A policy chosen for an endpoint is a deliberate
+    /// statement about that endpoint; it should replace the catch-all, not be quietly floored
+    /// by it.</para>
+    /// </remarks>
+    private static bool HasOwnPolicy(HttpContext context)
+        => context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>() is not null;
+
+    /// <summary>
+    /// Which limit refused this request — the endpoint's own policy, or the global ceiling.
+    /// </summary>
+    /// <remarks>
+    /// Reported so an alert can name the setting a SuperAdmin would edit. Since
+    /// <see cref="HasOwnPolicy"/> exempts a policied endpoint from the ceiling, exactly one limit
+    /// can have done the refusing and there is no ambiguity to resolve.
+    /// </remarks>
+    private static string PolicyNameOf(HttpContext context)
+        => context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName
+           ?? GlobalPolicyName;
+
+    /// <summary>What the global ceiling is called when an alert has to name it.</summary>
+    public const string GlobalPolicyName = "global";
 
     /// <summary>
     /// One fixed one-minute window per client, <paramref name="permitLimit"/> requests wide.
@@ -102,13 +263,14 @@ public static class RateLimiting
     /// land at some unpredictable later point. Including it means a new limit is simply a new
     /// partition, and the stale one is evicted once idle.</para>
     /// </remarks>
-    private static RateLimitPartition<string> FixedWindowByClient(HttpContext context, int permitLimit)
+    private static RateLimitPartition<string> FixedWindowByClient(
+        HttpContext context, int permitLimit, TimeSpan? window = null)
         => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: $"{ClientKey(context)}|{permitLimit}",
+            partitionKey: $"{ClientKey(context)}|{permitLimit}|{(window ?? TimeSpan.FromMinutes(1)).TotalSeconds}",
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = permitLimit,
-                Window      = TimeSpan.FromMinutes(1),
+                Window      = window ?? TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             });
 

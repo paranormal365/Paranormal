@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -24,8 +25,24 @@ public class AttendedInvestigationsTests
     private static readonly Guid OrgId = Guid.NewGuid();
     private static readonly Guid MeId = Guid.NewGuid();
 
-    private static MyInvestigationsController Build(IDbContextFactory<BenDataContext> f, Guid? asUser = null)
-        => new(f)
+
+    /// <summary>
+    /// A permission service that says yes. These tests are about what the endpoint returns for
+    /// somebody who may read the group's cases; the refusal path has tests of its own.
+    /// </summary>
+    private static Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService
+        SecurityAllowing(bool allowed = true)
+    {
+        var security = new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(Moq.It.IsAny<Guid>(), Moq.It.IsAny<Guid>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityTable>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityAction>(), Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allowed);
+        return security.Object;
+    }
+
+    private static MyInvestigationsController Build(IDbContextFactory<BenDataContext> f, Guid? asUser = null, bool canReadCases = true)
+        => new(f, SecurityAllowing(canReadCases))
         {
             ControllerContext = new ControllerContext
             {

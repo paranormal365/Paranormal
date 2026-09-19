@@ -1,3 +1,4 @@
+﻿using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -18,6 +19,32 @@ public interface IBenPlacesClient
 {
     // ── Places (Area 9) ───────────────────────────────────────────────────────
 
+    // ── Rooms inside a place (item 197) ───────────────────────────────────────
+    //
+    // Per ORGANIZATION as well as per place: a Place is shared, so two groups describing the same
+    // building keep separate lists and neither can edit the other's.
+
+    /// <summary>The rooms this group has named in this place, in the order it arranged them.</summary>
+    Task<LoadResult<PlaceRoomRecord>> GetPlaceRoomsAsync(Guid orgId, Guid placeId, CancellationToken token = default);
+
+    /// <summary>Names a room. Null when the name is taken or the caller may not.</summary>
+    Task<PlaceRoomRecord?> CreatePlaceRoomAsync(Guid orgId, Guid placeId, SavePlaceRoomRequest request, CancellationToken token = default);
+
+    /// <summary>Edits a room.</summary>
+    Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Removes a room, keeping the server's reason when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// A bare bool used to be enough, and stopped being enough on 2026-09-12 when the server began
+    /// refusing a room that is on an event's plan by naming the event. A screen that threw that
+    /// sentence away had to guess at one, and a guess is how "an event may still be offering it"
+    /// gets shown to somebody whose room is not on any plan at all.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
+
     /// <summary>One place, for the place page header and map.</summary>
     Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);
 
@@ -25,11 +52,30 @@ public interface IBenPlacesClient
     /// Investigations at a place that the signed-in caller may see — their own group's, anything
     /// public, and anything shared with groups who have also investigated there.
     /// </summary>
-    Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+    Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default);
 
     /// <summary>"N investigations by M groups since Y", counted over what this caller may see.</summary>
     Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// The caller's own groups' cases at this place, whatever their status (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Answers the question a member arrives at a place with — do we already have a case here? —
+    /// which the public list cannot, because the answer is usually a case nobody published.
+    /// </remarks>
+    Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// A place's posts for a signed-in reader, and whether they may add one (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The anonymous place endpoint carries the posts too, but it is called without a token on
+    /// purpose and so always answers "no" to whether you may post. This is the same question asked
+    /// as somebody.
+    /// </remarks>
+    Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default);
 
     /// <summary>
     /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
@@ -40,7 +86,7 @@ public interface IBenPlacesClient
     /// of a mile); the caller shows the answer and the person picks. Returns nothing when there is
     /// neither an address nor a name to go on.
     /// </remarks>
-    Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+    Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default);
 
@@ -61,11 +107,11 @@ public interface IBenPlacesClient
     /// rather than the one that was clicked. Leading is also an edit right, so the server requires
     /// the caller to already hold one.
     /// </remarks>
-    Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
 
     /// <summary>Every account filed for an investigation. Any member of the group may read them.</summary>
-    Task<IReadOnlyList<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
+    Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>
@@ -83,7 +129,34 @@ public interface IBenPlacesClient
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>Who is on an investigation's team and who has turned up. Any member may read it.</summary>
-    Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+    // ── Investigation duties + case contacts (item 158) ──────────────────────
+    Task<InvestigationDutyBoard?> GetInvestigationDutyBoardAsync(Guid orgId, Guid investigationId, CancellationToken token = default);
+    Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility, CancellationToken token = default);
+    Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default);
+    Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The whole title-by-duty matrix for this group (item 160). Any member may read it — knowing
+    /// what a title opens up is how somebody knows what to work towards.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Sets one duty's row: the whole set of titles it is open to, and what it confers. Group
+    /// administrators only. Returns the matrix as it now stands.
+    /// </summary>
+    Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
+        CancellationToken token = default);
+    Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
+    Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId, CancellationToken token = default);
+    Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default);
+    Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+    Task<(IReadOnlyList<CaseContactItem> Contacts, string? Error)> SetCaseContactsAsync(Guid orgId, Guid caseId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default);
+
+    Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>
@@ -110,13 +183,13 @@ public interface IBenPlacesClient
     /// callers that need them refetch the list rather than have the create path assemble a second,
     /// subtly different shape.
     /// </remarks>
-    Task<InvestigationRecord?> CreateOrgInvestigationAsync(
+    Task<(InvestigationRecord? Result, string? Error)> CreateOrgInvestigationAsync(
         Guid orgId, CreateOrgInvestigationRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<OrgCalendarEventTypeRecord?> UpdateCalendarEventTypeAsync(Guid orgId, Guid id, UpsertCalendarEventTypeRequest request, CancellationToken token = default);
     Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default);
 
-    Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> CreateCalendarEventAsync(Guid orgId, UpsertCalendarEventRequest request, CancellationToken token = default);
 
@@ -131,9 +204,29 @@ public interface IBenPlacesClient
     Task<(OrgCalendarEventRecord? Result, string? Error)> SaveCalendarEventAsync(
         Guid orgId, Guid? eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
-    Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    /// <remarks>
+    /// Keeps the server's refusal: an event run from its hosted-event pages is archived there, not deleted here, and a
+    /// calendar that read only true/false left the event in place with nothing said (UI test pass 6.4, 2026-09-14).
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
-    Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    // ── Seats on a tour date (item 234) ─────────────────────────────────────
+
+    /// <summary>
+    /// Approves a sign-up: the places are held, and the guest gets the tour's welcome.
+    /// </summary>
+    /// <remarks>
+    /// The reason-carrying shape, because "only 2 places left on this date, and this is a request
+    /// for 4" is a sentence a business acts on. A bare null would send them looking for a fault.
+    /// </remarks>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> ApproveSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+
+    /// <summary>Turns a sign-up down. Recorded, so the guest can see they are not coming.</summary>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> TurnDownSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
 
     /// <summary>
@@ -141,19 +234,103 @@ public interface IBenPlacesClient
     /// Returns null when nobody with that address has an account.
     /// </summary>
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeByEmailAsync(Guid orgId, Guid eventId, string email, CancellationToken token = default);
+
+    /// <summary>
+    /// Sends a sign-up link to somebody who has no account here — the walk-up at the meeting point.
+    /// </summary>
+    /// <remarks>
+    /// The companion to <see cref="AddCalendarAttendeeByEmailAsync"/>, which can only resolve an
+    /// address an existing account has published. Requires the calendar permission, and the link
+    /// it sends carries the organiser's authority: it confirms after sign-ups close and past a
+    /// full house, which is what a late arrival needs.
+    /// </remarks>
+    Task<bool> InviteEventGuestAsync(Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
     Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
 
-    // ── Directions ────────────────────────────────────────────────────────────
-    Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default);
 
     // ── Published investigations (item #89) ─────────────────────────────────
 
     /// <summary>What an organization has published, most recent first. Anonymous.</summary>
-    Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+    Task<LoadResult<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
         string orgUrlName, CancellationToken token = default);
 
     /// <summary>One published investigation, by the address people share.</summary>
     Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
         string orgUrlName, string investigationSlug, CancellationToken token = default);
+
+    /// <summary>
+    /// Feed posts by the seeded accounts — the fixture people the e2e suite writes as — hidden or
+    /// not, newest first. SuperAdmin only.
+    /// </summary>
+    Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default);
+
+    /// <summary>Hide the chosen test posts; a top-level post takes its visible replies with it.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>Put the chosen test posts back on the feed.</summary>
+    Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    /// <summary>
+    /// Places close enough to one another to be one place typed twice. SuperAdmin.
+    /// </summary>
+    /// <remarks>
+    /// A finder rather than a list: the pairs worth showing are exactly the ones the automatic
+    /// matcher could not settle, and they are few.
+    /// </remarks>
+    /// <summary>
+    /// Every field session this account uploaded, newest first. The phone's side of the archive,
+    /// which until now the website had no page for.
+    /// </summary>
+    /// <summary>
+    /// Deletes one of your own field sessions: its recordings, its document, its share links and
+    /// the row (item 218).
+    /// </summary>
+    /// <remarks>
+    /// The error sentence is the server's own, because the three refusals are three different
+    /// problems with three different answers — it belongs to a group's investigation, a case
+    /// report cites it, or it is published and retracting is part of a paid plan.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Where this account's sessions were recorded. Separate from the list because the coordinate
+    /// lives inside each session document, so it costs a file read apiece.
+    /// </summary>
+    Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default);
+
+    /// <summary>
+    /// Every session file on the server, newest first — what /admin/session-files lists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. Deleting a session is its owner's decision, or the orphan sweep for sessions
+    /// whose bytes are gone; neither belongs on a list whose job is to show what is there.
+    /// </remarks>
+    Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(CancellationToken token = default);
+
+    /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
+    Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes the chosen sessions. The server intersects the ids with its own orphan set, so a
+    /// stale screen is refused rather than half-obeyed.
+    /// </summary>
+    Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default);
+
+    Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Moves everything off one place onto another and deletes the empty one. Irreversible.
+    /// </summary>
+    Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
+        Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default);
 }

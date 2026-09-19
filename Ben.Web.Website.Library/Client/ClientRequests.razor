@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -11,27 +13,28 @@
 <div class="container-fluid py-3" style="max-width:860px;">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">My Investigation Requests</h3>
-        <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))"><BenIcon Name="plus" Class="me-1" />
+        <a href="/my-requests/new" class="btn btn-primary"><BenIcon Name="plus" Class="me-1" />
             New Request
-        </button>
+        </a>
     </div>
-
-    @if (_error is not null)
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
 
     @if (_requests is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading your requests…" />
     }
+    else if (_requestsResult.Failed)
+    {
+        @* "You haven't submitted a request yet" to somebody who has is how a client ends up
+           submitting a second one. *@
+        <BenListState TItem="ClientRequestRecord" Result="@_requestsResult" OnRetry="@LoadAsync" />
+    }
     else if (_requests.Count == 0)
     {
         <div class="text-center py-5 text-secondary">
             <p class="mb-3">You haven't submitted an investigation request yet.</p>
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/my-requests/new"))">
+            <a href="/my-requests/new" class="btn btn-primary">
                 Submit Your First Request
-            </button>
+            </a>
         </div>
     }
     else
@@ -39,7 +42,9 @@
         <div class="d-flex flex-column gap-3">
             @foreach (var r in _requests)
             {
-                <div class="card" style="cursor:pointer;" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{r.Id}"))">
+                @* W-CL5: this was a click-only div — no link, no keyboard, no open-in-a-new-tab.
+                   The card is a real anchor now; the buttons inside it stop the propagation. *@
+                <a class="card text-decoration-none text-reset" href="/my-requests/@r.Id">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between">
                             <div>
@@ -50,13 +55,13 @@
                                 <span class="badge @StatusBadgeClass(r.Status)">@StatusLabel(r.Status)</span>
                                 @if (r.OrgCount > 0)
                                 {
-                                    <span class="badge bg-light text-dark border" style="font-size:.7rem;">
+                                    <span class="badge bg-body-secondary text-body-emphasis border" style="font-size:.7rem;">
                                         @r.OrgCount org@(r.OrgCount == 1 ? "" : "s")
                                     </span>
                                 }
                                 @if (r.Status is ClientRequestStatus.Declined or ClientRequestStatus.Withdrawn)
                                 {
-                                    <span @onclick="@(() => { })" @onclick:stopPropagation="true">
+                                    <span @onclick="@(() => { })" @onclick:stopPropagation="true" @onclick:preventDefault="true">
                                         <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenPickerAsync(r))">
                                             @(r.Status == ClientRequestStatus.Withdrawn ? "Resubmit to an Organization" : "Choose Another Organization")
                                         </button>
@@ -70,9 +75,13 @@
                                 @((MarkupString)TruncateHtml(r.Description, 120))
                             </div>
                         }
-                        <div class="text-secondary small mt-2">Submitted @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                        @* W-R5: a draft said "Submitted", which is the one thing it is not. *@
+                        <div class="text-secondary small mt-2">
+                            @(r.Status == ClientRequestStatus.Draft ? "Started" : "Submitted")
+                            @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                        </div>
                     </div>
-                </div>
+                </a>
             }
         </div>
     }
@@ -136,7 +145,7 @@
 
 @code {
     private List<ClientRequestRecord>? _requests;
-    private string? _error;
+    private LoadResult<ClientRequestRecord> _requestsResult;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -147,11 +156,21 @@
             NavManager.NavigateTo("/login");
             return;
         }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
         try
         {
-            _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+            _requestsResult = await AdminClient.GetMyClientRequestsAsync();
+            _requests       = _requestsResult.Items.ToList();
         }
-        catch { _error = "Failed to load requests."; _requests = []; }
+        catch
+        {
+            _requestsResult = LoadResult<ClientRequestRecord>.Failure();
+            _requests       = [];
+        }
         StateHasChanged();
     }
 
@@ -198,11 +217,20 @@
 
         try
         {
-            var alreadyApplied = (await AdminClient.GetClientRequestOrgsAsync(request.Id))
-                .Select(a => a.OrganizationId)
-                .ToHashSet();
-            var results = await AdminClient.SearchOrganizationsAsync(
-                (double)request.Latitude.Value, (double)request.Longitude.Value);
+            // A refusal here would silently offer organizations the person has already applied
+            // to, so it is treated as a failure to open the picker rather than as "none yet".
+            var applied = await AdminClient.GetClientRequestOrgsAsync(request.Id);
+            if (applied.Failed)
+            {
+                _pickerError = applied.SessionExpired
+                    ? "You've been signed out. Sign in again to choose an organization."
+                    : applied.Reason
+                      ?? "Couldn't check which organizations you've already applied to. Please try again.";
+                return;
+            }
+            var alreadyApplied = applied.Items.Select(a => a.OrganizationId).ToHashSet();
+            var results = (await AdminClient.SearchOrganizationsAsync(
+                (double)request.Latitude.Value, (double)request.Longitude.Value)).Items;
             _pickerOrgs = results.Where(o => !alreadyApplied.Contains(o.OrganizationId)).ToList();
         }
         catch
@@ -223,7 +251,8 @@
             if (result is not null)
             {
                 _pickerTarget = null;
-                _requests = (await AdminClient.GetMyClientRequestsAsync()).ToList();
+                _requestsResult = await AdminClient.GetMyClientRequestsAsync();
+                _requests       = _requestsResult.Items.ToList();
             }
             else
             {

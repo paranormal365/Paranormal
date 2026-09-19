@@ -33,14 +33,33 @@ public sealed class PlaceController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var place = await db.Places.AsNoTracking()
+        var stored = await db.Places.AsNoTracking()
             .Where(p => p.Id == id)
-            .Select(p => new PlaceRecord(
+            .Select(p => new
+            {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind))
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+            })
             .FirstOrDefaultAsync(ct);
 
-        return place is null ? NotFound() : Ok(place);
+        if (stored is null) return NotFound();
+
+        // Being signed in is not a reason to know where somebody lives — accounts are free and
+        // self-service, so this endpoint asks for standing and otherwise serves the same shape the
+        // anonymous one would (2026-09-17 audit).
+        var inFull = stored.Kind != PlaceKind.PrivateResidence
+                  || await PlaceDisclosure.MaySeeInFullAsync(
+                         db, id, GetCurrentUserId(), await CallerIsSuperAdminAsync(), ct);
+
+        return Ok(inFull
+            ? new PlaceRecord(
+                stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
+                stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
+                stored.GeocodeNote, stored.Kind)
+            : PlaceDisclosure.Public(
+                stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
+                stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
+                stored.GeocodeNote, stored.Kind));
     }
 
     /// <summary>
@@ -82,6 +101,101 @@ public sealed class PlaceController : BenControllerBase
                 i.OrganizationId,
                 i.Organization.Name,
                 myOrgIds.Contains(i.OrganizationId)))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// The posts about this place, and whether this caller may add one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists beside the anonymous copy.</b> The place page reads its published
+    /// content through <c>PublicPlaceController</c>, and the website calls that one
+    /// <i>anonymously</i> on purpose — published is published, and sending a token would invite a
+    /// second idea of who may see what. But "may YOU post here" is a question about the caller, and
+    /// an anonymous call can only ever answer no. So a signed-in reader asks here instead, exactly
+    /// as they already do for investigations: two endpoints, one rule each side of them.</para>
+    ///
+    /// <para>The posts themselves come from <see cref="FeedController.LatestForPlaceAsync"/>, the
+    /// same method the anonymous page uses, so hidden posts and the block list behave identically.
+    /// The only difference is the reader it is asked on behalf of.</para>
+    /// </remarks>
+    [HttpGet("{id:guid}/posts")]
+    public async Task<ActionResult<PlacePostsRecord>> GetPosts(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var kind = await db.Places.AsNoTracking()
+            .Where(p => p.Id == id)
+            .Select(p => (PlaceKind?)p.Kind)
+            .FirstOrDefaultAsync(ct);
+        if (kind is null) return NotFound();
+
+        // Place posts ARE feed posts and follow the feed's own switch. Asked here rather than left
+        // to the page: without it the box is offered, clicked, and the post refused by an endpoint
+        // that 404s when the feed is off — a control that looks live and is not, which is the
+        // failure the server-guard-needs-a-UI-path rule exists to prevent. Found by driving it.
+        var feedOn = await Services.SiteSettingsService.GetBoolAsync(
+            db, Services.SiteSettingKeys.FeaturePublicFeed, whenUnset: false, ct);
+        if (!feedOn) return Ok(new PlacePostsRecord([], CanPost: false));
+
+        var posts = await FeedController.LatestForPlaceAsync(db, id, userId, PlacePostsShown, ct);
+
+        // Signing in is enough for a public location, which is wider than the feed's front page —
+        // see FeedParticipation.PlaceRefusal for why. A residence takes no posts at all.
+        return Ok(new PlacePostsRecord(
+            posts,
+            CanPost: Services.FeedParticipation.PlaceRefusal(userId) is null
+                  && kind == PlaceKind.PublicLocation));
+    }
+
+    /// <summary>How many of a place's posts one read returns. Matches the anonymous page's.</summary>
+    private const int PlacePostsShown = 20;
+
+    /// <summary>
+    /// The caller's own groups' cases at this place, whatever their status.
+    /// </summary>
+    /// <remarks>
+    /// <para>The signed-in half of the place page's case list. The public one shows only cases
+    /// somebody published; this one answers the question a member actually arrives with — <i>do we
+    /// already have a case here?</i> — which the public list cannot, because the answer is usually a
+    /// case that is not published and never will be.</para>
+    ///
+    /// <para><b>Scoped to the caller's own memberships and nothing else.</b> No visibility ladder to
+    /// apply and none invented: another group's unpublished case at the same building is their
+    /// business, and the fact that they have one is itself something they have not shared.</para>
+    ///
+    /// <para>Deferred out of the case-names-a-place work on 2026-09-17 and finished here.</para>
+    /// </remarks>
+    [HttpGet("{id:guid}/my-cases")]
+    public async Task<ActionResult<IEnumerable<PlaceCaseRow>>> GetMyCases(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Places.AsNoTracking().AnyAsync(p => p.Id == id, ct)) return NotFound();
+
+        var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+
+        if (myOrgIds.Count == 0) return Ok(Array.Empty<PlaceCaseRow>());
+
+        var rows = await db.Cases.AsNoTracking()
+            .Where(c => c.PlaceId == id && myOrgIds.Contains(c.OrganizationId))
+            .OrderByDescending(c => c.DateCaseOpened)
+            .Select(c => new PlaceCaseRow(
+                c.Id,
+                c.OrganizationId,
+                c.Organization.Name,
+                $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
+                c.Title,
+                c.Status,
+                c.DateCaseOpened,
+                c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted)))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -229,6 +343,31 @@ public sealed record PlaceRecord(
 /// <c>IsMine</c> says whether the viewer's own organization ran it, so the page can separate "our
 /// visits" from "what others have shared" without the client guessing from ids.
 /// </remarks>
+/// <summary>
+/// A place's posts as one signed-in reader sees them, and whether they may add one (2026-09-17).
+/// </summary>
+public sealed record PlacePostsRecord(
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord> Posts,
+    bool CanPost);
+
+/// <summary>
+/// One of the caller's own groups' cases at a place (2026-09-17).
+/// </summary>
+/// <param name="IsPublished">
+/// Whether a visitor would see it too — the flag AND a published status, the same pair every other
+/// answer on the site means by "public". Shown so a member can tell at a glance which of their
+/// cases is already on the place's public list.
+/// </param>
+public sealed record PlaceCaseRow(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    string CaseReference,
+    string Title,
+    CaseStatus Status,
+    DateTime DateCaseOpened,
+    bool IsPublished);
+
 public sealed record PlaceInvestigationRow(
     Guid Id,
     string Title,

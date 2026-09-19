@@ -1,0 +1,25 @@
+.ben-section {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    margin: 0 0 .75rem;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: .01em;
+}
+
+.ben-section::after {
+    content: "";
+    flex: 1 1 auto;
+    /* Baseline alignment puts the rule on the text's baseline, which is where a rule beside a
+       heading belongs; it needs its own height because a pseudo-element with no content has none. */
+    align-self: center;
+    height: 1px;
+    background: var(--bs-border-color);
+}
+
+.ben-section__note {
+    font-size: .85rem;
+    font-weight: 400;
+    color: var(--bs-secondary-color);
+}

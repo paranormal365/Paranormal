@@ -1,4 +1,5 @@
 @page "/organizations/{OrgId:guid}/cms"
+@using Ben.Web.Services
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -7,6 +8,8 @@
 @using System.Text.Json
 @using Ben.Data.Common.Enums
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.CmsPages">
 @if (!EmbeddedMode)
 {
     <PageTitle>CMS — @(_orgName ?? OrgId.ToString())</PageTitle>
@@ -18,9 +21,9 @@
     {
         <div class="row mb-3 align-items-center">
             <div class="col">
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+                <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")"><BenIcon Name="arrow-left" Class="me-1" />
                     Back to Organizations
-                </button>
+                </a>
                 <h3 class="d-inline-block ms-3 mb-0">CMS — @(_orgName ?? OrgId.ToString())</h3>
             </div>
         </div>
@@ -38,10 +41,15 @@
     <BenTabs>
 
         @* ── Pages tab ─────────────────────────────────────────────────────── *@
-        <BenTab Title="Pages">
+        <BenTab Title="Pages" Id="cms-pages">
 
             <div class="d-flex justify-content-end mb-2">
-                <button type="button" class="btn btn-primary" @onclick="OpenNewPageDialogAsync"><BenIcon Name="plus" Class="me-1" />
+                <button type="button" id="cms-tour-launch" class="btn btn-outline-secondary me-2"
+                        title="How pages work" @onclick="StartTourAsync">
+                    <BenIcon Name="help-circle" />
+                    <span class="visually-hidden">How pages work</span>
+                </button>
+                <button type="button" id="cms-new-page" class="btn btn-primary" @onclick="OpenNewPageDialogAsync"><BenIcon Name="plus" Class="me-1" />
                     New Page
                 </button>
             </div>
@@ -95,27 +103,30 @@
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(CmsPageListItem.SectionCount)" Title="Sections" Width="90px" />
-                        <GridColumn Title="Actions" Width="260px">
+                        @* Item 169: four stacked buttons wrapped to two lines here. The house
+                           pattern for a busy Actions cell is OrganizationList's — the primary
+                           action as a button, the rest behind a More-actions dropdown — which
+                           also keeps the pair on ONE line at a sane width. *@
+                        <GridColumn Title="Actions" Width="170px">
                             <Template>
                                 @{ var pg = (CmsPageListItem)context; }
-                                @if (pg.CanEdit)
-                                {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditPageDialog(pg))"><BenIcon Name="edit-2" Class="me-1" />
-                                        Edit
-                                    </button>
-                                }
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))"><BenIcon Name="layout" Class="me-1" />
-                                    Sections
-                                </button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenPreview(pg))"><BenIcon Name="eye" Class="me-1" />
-                                    Preview
-                                </button>
-                                @if (pg.CanDelete)
-                                {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RequestDeletePage(pg))"><BenIcon Name="trash-2" Class="me-1" />
-                                        Delete
-                                    </button>
-                                }
+                                <span class="text-nowrap">
+                                <BenGridAction Icon="layout" Label="Sections" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))" />
+                                <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="160px" Floating="true">
+                                    <ToggleContent><BenIcon Name="more-horizontal" /></ToggleContent>
+                                    <ChildContent>
+                                        @if (pg.CanEdit)
+                                        {
+                                            <li><button class="dropdown-item" type="button" @onclick="@(() => OpenEditPageDialog(pg))">Edit</button></li>
+                                        }
+                                        <li><button class="dropdown-item" type="button" @onclick="@(() => OpenPreview(pg))">Preview</button></li>
+                                        @if (pg.CanDelete)
+                                        {
+                                            <li><button class="dropdown-item text-danger" type="button" @onclick="@(() => RequestDeletePage(pg))">Delete</button></li>
+                                        }
+                                    </ChildContent>
+                                </BenDropdown>
+                                </span>
                             </Template>
                         </GridColumn>
                     </GridColumns>
@@ -124,7 +135,7 @@
         </BenTab>
 
         @* ── Logos tab ─────────────────────────────────────────────────────── *@
-        <BenTab Title="Logos">
+        <BenTab Title="Logos" Id="cms-logos">
 
             <div class="d-flex justify-content-end mb-2">
                 <button type="button" class="btn btn-primary" @onclick="OpenLogoDialog"><BenIcon Name="plus" Class="me-1" />
@@ -163,18 +174,16 @@
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationLogoRecord.AltText)" Title="Alt Text" />
-                        <GridColumn Title="Actions" Width="160px">
+                        <GridColumn Title="Actions" Width="200px">
                             <Template>
                                 @{ var logo = (OrganizationLogoRecord)context; }
+                                <span class="text-nowrap">
                                 @if (!logo.IsActive)
                                 {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => SetLogoActive(logo))">
-                                        Set Active
-                                    </button>
+                                    <BenGridAction Icon="star" Label="Set Active" OnClick="@(() => SetLogoActive(logo))" />
                                 }
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => DeleteLogo(logo))"><BenIcon Name="trash-2" Class="me-1" />
-                                    Remove
-                                </button>
+                                <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => DeleteLogo(logo))" />
+                                </span>
                             </Template>
                         </GridColumn>
                     </GridColumns>
@@ -213,22 +222,23 @@
                                 { <BenIcon Name="check" /> }
                             </Template>
                         </GridColumn>
-                        <GridCommandColumn Width="210px">
+                        <GridCommandColumn Width="136px">
                             <GridCommandButton Command="Edit"
-                                               Icon="@SvgIcon.Pencil"
-                                               OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))">
-                                Edit
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Edit"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                             <GridCommandButton Command="Members"
-                                               Icon="@SvgIcon.User"
-                                               OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))">
-                                Members
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Members"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="users" /></GridCommandButton>
                             <GridCommandButton Command="Delete"
-                                               Icon="@SvgIcon.Trash"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))">
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Delete"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -326,32 +336,35 @@
 @* ── Add Logo dialog ──────────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showLogoDialog" Title="Add Logo" Size="lg">
     <ChildContent>
-        @if (_orgImageFiles is null)
-        {
-            <div class="p-3 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
-        }
-        else
-        {
+            @* Item 175 sweep: the last hand-rolled thumbnail grid becomes the picker. *@
             <BenTabs>
                 <BenTab Title="From Library">
-                    @if (_orgImageFiles.Count == 0)
-                    {
-                        <p class="text-secondary p-3 mb-0">No image files are shared with this organization yet. Use the Upload tab to add one.</p>
-                    }
-                    else
-                    {
-                        <div class="d-flex flex-wrap gap-2 p-2" style="max-height:260px;overflow-y:auto;">
-                            @foreach (var f in _orgImageFiles)
+                    <div class="d-flex align-items-center gap-3 p-2">
+                        @if (_selectedLogoFileId is { } chosenLogoId)
+                        {
+                            <div class="border rounded p-1" id="logo-chosen">
+                                <CmsFileThumbnail FileId="@chosenLogoId" Width="110px" Height="75px" Alt="@_selectedLogoName" />
+                            </div>
+                            @if (_selectedLogoName is not null)
                             {
-                                var fId = f.Id;
-                                var selected = _selectedLogoFileId == fId;
-                                <div style="cursor:pointer;width:120px;text-align:center;" @onclick="@(() => _selectedLogoFileId = fId)">
-                                    <div class="@(selected ? "border border-primary border-2 rounded" : "border rounded")" style="padding:3px;">
-                                        <CmsFileThumbnail FileId="@fId" Width="110px" Height="75px" Alt="@f.FileName" />
-                                    </div>
-                                    <small class="text-truncate d-block mt-1" style="max-width:120px;" title="@f.FileName">@f.FileName</small>
-                                </div>
+                                <small class="text-truncate" style="max-width:16rem;">@_selectedLogoName</small>
                             }
+                        }
+                        else
+                        {
+                            <span class="text-secondary small">No image chosen yet.</span>
+                        }
+                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="logo-choose"
+                                @onclick="@(() => _showLogoPicker = true)">
+                            Choose from library…
+                        </button>
+                    </div>
+                    @if (_selectedLogoNotPublic)
+                    {
+                        <div class="alert alert-warning py-2 mx-2 mb-0" id="logo-visibility-warning">
+                            This image is <strong>members only</strong>, so the logo renders for members and
+                            shows a broken picture to visitors. Pick a public image, or make this one public
+                            on its file page first.
                         </div>
                     }
                 </BenTab>
@@ -377,7 +390,6 @@
                     </div>
                 </BenTab>
             </BenTabs>
-        }
 
         <hr class="my-3" />
         <div class="row g-3">
@@ -404,6 +416,13 @@
         </div>
     </ChildContent>
 </BenModal>
+
+<BenContentPicker @bind-Visible="_showLogoPicker"
+                  Title="Choose a logo image"
+                  SelectText="Use this image"
+                  EmptyText="No images are shared with this group yet — use the Upload New tab instead."
+                  Loader="@LoadLogoImagesAsync"
+                  OnSelected="@OnLogoImageChosen" />
 
 @* ── Page preview window ──────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showPreview" Title="@PreviewTitle" Size="xl">
@@ -496,12 +515,13 @@
                     <GridColumns>
                         <GridColumn Title="Member" Field="@nameof(GroupMemberRow.DisplayName)" />
                         <GridColumn Title="Role" Field="@nameof(GroupMemberRow.Role)" Width="110px" />
-                        <GridCommandColumn Width="90px">
+                        <GridCommandColumn Width="72px">
                             <GridCommandButton Command="Remove"
-                                               Icon="@SvgIcon.Trash"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))">
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))"
+                                               Title="Remove from the group"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="user-x" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -528,7 +548,52 @@
     </ChildContent>
 </BenModal>
 
+<BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+
+</FeatureGate>
+
 @code {
+    // ── Item 166 W4(a): the editor tour — how pages are made, linked and published. ──
+    private const string TourName = "cms-editor";
+    private BenTour? _tourRef;
+    private readonly TourModel _tour = new(
+    [
+        new TourModel.TourStep("#cms-new-page",
+            "Pages are born here",
+            "A page gets a title and a web address. Give it a parent and it nests under that page in your public site's menu — that's how pages link into a structure rather than a pile."),
+        new TourModel.TourStep("#tab-cms-pages",
+            "Content lives in sections",
+            "Each page is a stack of sections — text, pictures, your cases, your calendar. The Sections button on a page's row opens the builder. A layout you like can be saved and reused: reusing copies the arrangement onto the new page, so editing one page never rewrites another."),
+        new TourModel.TourStep("#tab-cms-pages",
+            "Draft first, publish when ready",
+            "A page has two switches: visible to the public, and published. Until both are on, only your editors see it. Put on a public page only what you'd hand a stranger — contact details you actually answer, cases you've chosen to publish."),
+        new TourModel.TourStep("#tab-cms-logos",
+            "Logos",
+            "The active logo appears on your public pages. Upload several, switch the active one whenever you like."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(TourName, completed); } catch { }
+    }
+
+    private async Task MaybeAutoLaunchTourAsync()
+    {
+        if (_tourRef is null) return;
+        try
+        {
+            var dismissed = (await AdminClient.GetMyDismissedToursAsync()).Items;
+            if (dismissed.Contains(TourName)) return;
+        }
+        catch { return; }
+        await _tourRef.StartAsync();
+    }
+
     /// <summary>Dialog heading. A property because literal text plus a C# expression is mixed
     /// content in a component attribute.</summary>
     private string PreviewTitle => $"Preview — {_previewPage?.PageTitle}";
@@ -558,7 +623,6 @@
     private string? _uploadedLogoName;
     private string? _logoAltText;
     private bool _logoIsActive = true;
-    private IList<UploadFileRecord>? _orgImageFiles;
     private IReadOnlyList<UploadFileTypeRecord>? _fileTypes;
     private Guid _uploadFileTypeId;
 
@@ -599,6 +663,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
         StateHasChanged();
+        await MaybeAutoLaunchTourAsync();   // once per person; the ? replays it forever
     }
 
     private async Task LoadAsync()
@@ -606,13 +671,13 @@
         try
         {
             // Get org name from the pages list (or first page's org)
-            _pages = await AdminClient.GetCmsPagesAsync(OrgId);
-            _logos = await AdminClient.GetOrgLogosAsync(OrgId);
-            _groups = await AdminClient.GetGroupsAsync(OrgId);
+            _pages = (await AdminClient.GetCmsPagesAsync(OrgId)).Items;
+            _logos = (await AdminClient.GetOrgLogosAsync(OrgId)).Items;
+            _groups = (await AdminClient.GetGroupsAsync(OrgId)).Items;
 
             // Pre-load org membership + user list for member management
-            _orgMemberships = await AdminClient.GetOrganizationMembersAsync(OrgId);
-            _orgUsers = await AdminClient.GetOrgUserDirectoryAsync(OrgId);
+            _orgMemberships = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
+            _orgUsers = (await AdminClient.GetOrgUserDirectoryAsync(OrgId)).Items;
 
             // Try to get org name
             var org = await AdminClient.GetOrganizationAsync(OrgId);
@@ -651,7 +716,7 @@
         _pageForm     = new PageFormModel { SortOrder = (_pages?.Count ?? 0) + 1 };
         _showPageDialog = true;
 
-        _pageTemplates = [.. await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)];
+        _pageTemplates = [.. (await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)).Items];
     }
 
     private void OpenEditPageDialog(CmsPageListItem pg)
@@ -690,7 +755,7 @@
 
         if (_editingPage is null)
         {
-            var result = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
+            var (result, createError) = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
                 _pageForm.PageTitle.Trim(),
                 _pageForm.UrlName.Trim().ToLowerInvariant(),
                 _pageForm.PageHtml,
@@ -699,7 +764,9 @@
                 _pageForm.SortOrder,
                 _pageForm.FromTemplateId));
 
-            if (result is null) _dialogError = "Failed to create page. The URL slug may already be in use.";
+            // The server names the reserved word or the clashing address; the guess only stands in
+            // when no sentence came back.
+            if (result is null) _dialogError = createError ?? "Failed to create page. The URL slug may already be in use.";
             else
             {
                 _showPageDialog = false;
@@ -719,8 +786,8 @@
                 _pageForm.ParentPageId,
                 _pageForm.SortOrder));
 
-            if (result is null) _dialogError = "Failed to update page.";
-            else { _showPageDialog = false; _successMessage = $"Page '{result.PageTitle}' updated."; }
+            if (result.Result is null) _dialogError = result.Error ?? "Failed to update page.";
+            else { _showPageDialog = false; _successMessage = $"Page '{result.Result.PageTitle}' updated."; }
         }
 
         _isBusy = false;
@@ -801,23 +868,20 @@
     private async Task OpenLogoDialog()
     {
         // Reset dialog state
-        _selectedLogoFileId = null;
-        _uploadedLogoName   = null;
-        _logoAltText        = null;
-        _logoIsActive       = true;
-        _logoError          = null;
+        _selectedLogoFileId    = null;
+        _selectedLogoName      = null;
+        _selectedLogoNotPublic = false;
+        _uploadedLogoName      = null;
+        _logoAltText           = null;
+        _logoIsActive          = true;
+        _logoError             = null;
 
-        // Load data BEFORE opening the dialog — avoids the TelerikDialog portal
-        // not seeing StateHasChanged() calls made after the dialog is already open.
+        // The library itself now loads inside the picker, per open; only the upload tab's
+        // file-type lookup still needs to happen up front.
         try
         {
-            var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
-            _orgImageFiles = allFiles
-                .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
             if (_fileTypes is null)
-                _fileTypes = await AdminClient.GetPublicFileTypesAsync();
+                _fileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
 
             // Auto-select the dedicated "Logo" type; fall back to first available
             if (_fileTypes is not null && _uploadFileTypeId == Guid.Empty)
@@ -829,20 +893,53 @@
         }
         catch
         {
-            _orgImageFiles ??= [];
-            _logoError = "Could not load the file library. You can still upload a new image using the Upload tab.";
+            _logoError = "Could not load the file types. You can still choose from the library.";
         }
 
-        // Open the dialog now that all data is ready — content renders correctly on first paint.
         _showLogoDialog = true;
+    }
+
+    // Item 175 sweep: the picker replacing the dialog's hand-rolled thumbnail grid. Same
+    // visitor-visibility concern as the banner: the logo shows on the group's PUBLIC page,
+    // and the anonymous thumbnail route only serves IsPublic files.
+    private bool _showLogoPicker;
+    private string? _selectedLogoName;
+    private bool _selectedLogoNotPublic;
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadLogoImagesAsync()
+    {
+        var result = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+        // A refused library must not read as an empty one — throwing hands the picker its own
+        // load-failure sentence instead of "no images yet".
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items
+            .Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new ContentPickerItem(
+                f.Id, f.FileName, "Image",
+                $"{f.DateCreated:MM/dd/yyyy}",
+                new Dictionary<string, string>
+                {
+                    ["Visibility"] = f.IsPublic ? "Public" : "Members only",
+                },
+                f.ContentType, f.FileSize))];
+    }
+
+    private void OnLogoImageChosen(ContentPickerItem item)
+    {
+        _selectedLogoFileId    = item.Id;
+        _selectedLogoName      = item.Name;
+        _selectedLogoNotPublic = item.Facets?.GetValueOrDefault("Visibility") == "Members only";
+        _uploadedLogoName      = null;
     }
 
     private void CloseLogoDialog()
     {
-        _showLogoDialog   = false;
-        _selectedLogoFileId = null;
-        _uploadedLogoName   = null;
-        _logoError          = null;
+        _showLogoDialog        = false;
+        _selectedLogoFileId    = null;
+        _selectedLogoName      = null;
+        _selectedLogoNotPublic = false;
+        _uploadedLogoName      = null;
+        _logoError             = null;
     }
 
     private async Task OnLogoFileSelected(InputFileChangeEventArgs e)
@@ -879,11 +976,10 @@
             }
             else
             {
-                _selectedLogoFileId = uploaded.Id;
-                _uploadedLogoName   = file.Name;
-                // Refresh the library list so the new image appears
-                var allFiles = await AdminClient.GetOrgSharedFilesAsync(OrgId);
-                _orgImageFiles = allFiles.Where(f => f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)).ToList();
+                _selectedLogoFileId    = uploaded.Id;
+                _selectedLogoName      = file.Name;
+                _selectedLogoNotPublic = false; // UploadImageAsync uploads as public
+                _uploadedLogoName      = file.Name;
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)
@@ -911,11 +1007,12 @@
         _logoError = null;
         try
         {
-            var result = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
+            var (result, logoError) = await AdminClient.CreateOrgLogoAsync(OrgId, new CmsCreateLogoRequest(
                 _selectedLogoFileId.Value, _logoAltText?.Trim(), _logoIsActive, (_logos?.Count ?? 0) + 1));
             if (result is null)
             {
-                _logoError = "Failed to add logo. The file may not exist, or you may not have permission.";
+                _logoError = logoError
+                    ?? "Failed to add logo. The file may not exist, or you may not have permission.";
             }
             else
             {
@@ -1036,7 +1133,7 @@
     {
         if (_membersGroup is null) return;
 
-        var rawMembers = await AdminClient.GetGroupMembersAsync(OrgId, _membersGroup.Id);
+        var rawMembers = (await AdminClient.GetGroupMembersAsync(OrgId, _membersGroup.Id)).Items;
         var memberships = _orgMemberships ?? [];
         var users = _orgUsers ?? [];
 

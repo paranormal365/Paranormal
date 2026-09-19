@@ -13,7 +13,7 @@ namespace Ben.Web.Playwright.Tests;
 public class OrgPublicPageTests : BenTestBase
 {
     // Seeded by DevelopmentDataSeeder
-    private const string TghUrl = "tgh";
+    private const string TghUrl = "paranormal365";
     private const string NpsUrl = "nps";
 
     [Test]
@@ -21,7 +21,9 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false }))
+        // Heading role, not bare text: the Apply-to-join panel also names the group, and a
+        // strict-mode GetByText resolves to both. The heading is the sharper assertion anyway.
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Paranormal365" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -30,7 +32,10 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" });
+        // Exact, because the page also carries a sentence linking to "public cases" at the same
+        // address; without it this is a strict-mode violation rather than a failed assertion, and
+        // it reads as the nav item being missing when the nav item is right there.
+        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases", Exact = true });
         await Expect(casesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -57,10 +62,19 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}/cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" }).First;
-        await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        var href = await viewLink.GetAttributeAsync("href");
+
+        // The whole card is the link. This used to look for a "View Details" button in the card's
+        // footer, which made a reader aim at a small target for the only thing the card does; the
+        // test followed the button rather than the behaviour, and broke when the button went.
+        var card = Page.Locator("a.case-card").First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var href = await card.GetAttributeAsync("href");
         Assert.That(href, Does.Contain($"/o/{TghUrl}/cases/"), "Expected case detail link");
+
+        // And it actually goes there, which the href alone does not prove.
+        await card.ClickAsync();
+        await Page.WaitForURLAsync($"**/o/{TghUrl}/cases/**", new() { Timeout = 15_000 });
     }
 
     [Test]
@@ -80,7 +94,7 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{NpsUrl}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Nashville Paranormal Society", new() { Exact = false }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Nashville Paranormal Society" }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -90,7 +104,7 @@ public class OrgPublicPageTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}/cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // Should have a link back to the org home
-        var orgLink = Page.GetByRole(AriaRole.Link, new() { Name = "Tennessee Ghost Hunters", Exact = false });
+        var orgLink = Page.GetByRole(AriaRole.Link, new() { Name = "Paranormal365", Exact = false });
         await Expect(orgLink.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

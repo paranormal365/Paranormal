@@ -1,6 +1,8 @@
 @page "/admin/experience-taxonomy"
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -23,6 +25,10 @@
     {
         <BenLoaderOverlay Visible="true" Text="Loading taxonomy…" />
     }
+    else if (_categoriesResult.Failed)
+    {
+        <BenListState TItem="ExperienceCategoryRecord" Result="@_categoriesResult" OnRetry="@LoadAsync" />
+    }
     else if (_categories.Count == 0)
     {
         <p class="text-secondary">No categories yet.</p>
@@ -36,9 +42,9 @@
                     <div class="d-flex align-items-center gap-2">
                         @if (!string.IsNullOrEmpty(cat.IconClass))
                         {
-                            <i class="@cat.IconClass @cat.ColorClass"></i>
+                            <i class="@cat.IconClass @cat.ColorClass.ToThemeSafeColorClass()"></i>
                         }
-                        <strong class="@cat.ColorClass">@cat.Name</strong>
+                        <strong class="@cat.ColorClass.ToThemeSafeColorClass()">@cat.Name</strong>
                         @if (!cat.IsApproved)
                         {
                             <span class="badge bg-warning text-dark ms-2">Pending Approval</span>
@@ -175,6 +181,34 @@
         {
             <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
         }
+
+        @* The server's merge offer, and the way to take it (2026-09-17 audit).
+
+           Renaming onto an existing name answers 409 with this offer — the record's own remarks
+           say it is "returned rather than performed" because folding two entries into one changes
+           what somebody's records say. The adapter discarded the 409 and this dialog said "Save
+           failed", so the offer was written, sent and never read, and the endpoint that accepts it
+           had no caller anywhere. An admin fixing a typo had no route through at all. *@
+        @if (_mergeOffer is { } offer)
+        {
+            <div class="alert alert-warning mt-3 mb-0" data-testid="taxonomy-merge-offer">
+                <div class="mb-2">@offer.Message</div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning btn-sm"
+                            disabled="@_isBusy"
+                            data-testid="taxonomy-merge-accept"
+                            @onclick="AcceptMergeAsync">
+                        @(_isBusy ? "Merging…" : $"Merge into \"{offer.TargetName}\"")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            disabled="@_isBusy"
+                            @onclick="@(() => _mergeOffer = null)">
+                        Keep both — I'll pick another name
+                    </button>
+                </div>
+            </div>
+        }
+
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 
@@ -204,6 +238,7 @@
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
     private List<ExperienceCategoryRecord>? _categories;
+    private LoadResult<ExperienceCategoryRecord> _categoriesResult;
     private Dictionary<Guid, List<ExperienceTypeRecord>> _typesByCat = new();
     private string? _error;
     private bool _isBusy;
@@ -238,11 +273,17 @@
     {
         try
         {
-            _categories = (await AdminClient.GetAllExperienceCategoriesAsync()).ToList();
+            _categoriesResult = await AdminClient.GetAllExperienceCategoriesAsync();
+            _categories       = _categoriesResult.Items.ToList();
             _typesByCat.Clear();
             foreach (var cat in _categories)
             {
-                var types = (await AdminClient.GetAllExperienceTypesAsync(cat.Id)).ToList();
+                // Each category's own types. The categories list above already reports a
+                // refusal; a per-category failure leaves that category looking empty, which is
+                // the same lie one level down — so it is carried on the same result.
+                var typesResult = await AdminClient.GetAllExperienceTypesAsync(cat.Id);
+                if (typesResult.Failed) _categoriesResult = LoadResult<ExperienceCategoryRecord>.Failure(typesResult.Reason);
+                var types = typesResult.Items.ToList();
                 _typesByCat[cat.Id] = types;
             }
         }
@@ -346,7 +387,12 @@
         _showTypeDialog = true;
     }
 
-    private void CloseTypeDialog() => _showTypeDialog = false;
+    private void CloseTypeDialog()
+    {
+        _showTypeDialog = false;
+        // Cleared with the dialog, or the next type edited opens carrying somebody else's offer.
+        _mergeOffer = null;
+    }
 
     private async Task SaveType()
     {
@@ -362,14 +408,56 @@
                 _typeForm.SortOrder,
                 _typeForm.IsActive);
 
-            var result = _editType is null
-                ? await AdminClient.CreateExperienceTypeAsync(_typeParentCat.Id, req)
-                : await AdminClient.UpdateExperienceTypeAsync(_typeParentCat.Id, _editType.Id, req);
+            _mergeOffer = null;
 
-            if (result is null) { _dialogError = "Save failed."; }
-            else { CloseTypeDialog(); await LoadAsync(); }
+            if (_editType is null)
+            {
+                var created = await AdminClient.CreateExperienceTypeAsync(_typeParentCat.Id, req);
+                if (created is null) { _dialogError = "Save failed."; }
+                else { CloseTypeDialog(); await LoadAsync(); }
+            }
+            else
+            {
+                var (result, error, offer) = await AdminClient.UpdateExperienceTypeAsync(
+                    _typeParentCat.Id, _editType.Id, req);
+
+                if (offer is not null) { _mergeOffer = offer; }
+                else if (result is null) { _dialogError = error ?? "Save failed."; }
+                else { CloseTypeDialog(); await LoadAsync(); }
+            }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
+        finally { _isBusy = false; }
+    }
+
+    /// <summary>The merge the server offered instead of the rename, or null.</summary>
+    private TaxonomyMergeOffer? _mergeOffer;
+
+    /// <summary>
+    /// Takes the offer: everything tagged with the source moves to the target and the duplicate
+    /// goes.
+    /// </summary>
+    /// <remarks>
+    /// Merge can still refuse — with a sentence, not a shape — when the direction would lose a
+    /// reviewed name for an unreviewed one. That is shown where the offer was, because it is the
+    /// answer to the button that was just pressed.
+    /// </remarks>
+    private async Task AcceptMergeAsync()
+    {
+        if (_mergeOffer is not { } offer || _typeParentCat is null) return;
+
+        _isBusy = true;
+        try
+        {
+            var (ok, error) = await AdminClient.MergeExperienceTypeAsync(
+                _typeParentCat.Id, offer.SourceId, offer.TargetId);
+
+            if (!ok) { _dialogError = error ?? "The merge could not be completed."; return; }
+
+            _mergeOffer = null;
+            CloseTypeDialog();
+            await LoadAsync();
+        }
         finally { _isBusy = false; }
     }
 

@@ -49,7 +49,7 @@ public class EquipmentCheckoutTests
                 .ReturnsAsync((Guid u, Guid _, OrganizationSecurityTable _, OrganizationSecurityAction _, CancellationToken _)
                     => checkoutApproverId is not null && u == checkoutApproverId);
 
-        return new EquipmentCheckoutController(f, security.Object, new Mock<IAuditLogService>().Object)
+        return new EquipmentCheckoutController(f, security.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f))
         {
             ControllerContext = new ControllerContext
             {

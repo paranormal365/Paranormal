@@ -16,6 +16,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 [ApiController]
 [AllowAnonymous]
 [Route("api/public/organizations")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureCmsPages)]
 public sealed class OrgPublicController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -40,11 +41,14 @@ public sealed class OrgPublicController : ControllerBase
         var logos    = await BuildLogosAsync(db, org.Id, ct);
         var homePage = await BuildPageAsync(db, org.Id, isHome: true, pageSlug: null, ct);
         var navPages = await BuildNavPagesAsync(db, org.Id, homePageId: homePage?.Id, ct);
+        // Only when there is no authored page: a group that wrote one gets exactly what it wrote.
+        var facts = homePage is null ? await BuildFactsAsync(db, org, ct) : null;
 
         return Ok(new OrgPublicHomeResponse(
             org.Id, org.Name, org.UrlName,
             logos, homePage, navPages,
-            org.PublicPhone, org.PublicEmail, org.PublicWebsite));
+            org.PublicPhone, org.PublicEmail, org.PublicWebsite,
+            org.Kind, org.RunsPublicTours, facts));
     }
 
     // ── GET /api/public/organizations/{urlName}/pages/{pageSlug} ─────────────
@@ -74,6 +78,63 @@ public sealed class OrgPublicController : ControllerBase
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+    /// <summary>
+    /// The default page's facts. Everything here is a record the group already keeps — its area
+    /// of operation, whether it takes clients, its active members, when it joined, its public
+    /// cases, its next public event — so the page can say something true before the group has
+    /// said anything itself.
+    /// </summary>
+    private static async Task<OrgPublicFacts> BuildFactsAsync(BenDataContext db, Ben.Data.Source.Entities.Organization org, CancellationToken ct)
+    {
+        var area = await db.OrganizationAreaOfOperations.AsNoTracking()
+            .Where(a => a.OrganizationId == org.Id)
+            .Select(a => new { a.DisplayLabel, a.RadiusMiles })
+            .FirstOrDefaultAsync(ct);
+        // Honours the two switches the owner actually set (2026-09-17 audit).
+        //
+        // This took the first address by Id with no filter at all, so an owner could mark an
+        // address Private — and see a grey "Private" badge confirming it — while this line put
+        // that address's city and state on the group's public page. PublicDisplayMode.Hidden means
+        // "show nothing to this audience" and was equally ignored. RegionOnly still discloses a
+        // region, which a city and state are, so it passes.
+        var city = await db.OrganizationAddresses.AsNoTracking()
+            .Where(a => a.OrganizationId == org.Id
+                     && a.Visibility == Ben.Data.Common.Enums.OrganizationAddressVisibility.Public
+                     && a.PublicDisplayMode != Ben.Data.Common.Enums.OrganizationAddressDisplayMode.Hidden)
+            .OrderBy(a => a.SortOrder).ThenBy(a => a.Id)
+            .Select(a => new { a.City, a.State })
+            .FirstOrDefaultAsync(ct);
+        var place = city is not null && !string.IsNullOrWhiteSpace(city.City)
+            ? city.City + (string.IsNullOrWhiteSpace(city.State) ? "" : ", " + city.State) : null;
+        var areaServed = !string.IsNullOrWhiteSpace(area?.DisplayLabel) ? area!.DisplayLabel
+            : area is not null && place is not null ? $"within {area.RadiusMiles:0} miles of {place}"
+            : place;
+
+        var members = await db.OrganizationUserMemberships.AsNoTracking()
+            .CountAsync(m => m.OrganizationId == org.Id && m.IsActive, ct);
+        // PUBLISHED, not merely flagged: the same two conditions the group's public case list uses.
+        // Counting the flag alone made this number disagree with the list under it — the flag is an
+        // intention recorded well before a case is published, and from 2026-09-17 an unpaid
+        // account's cases carry it from the moment they are opened.
+        var publicCases = await db.Cases.AsNoTracking()
+            .CountAsync(c => c.OrganizationId == org.Id
+                          && c.IsPublic
+                          && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted), ct);
+
+        var now = DateTime.UtcNow;
+        var next = await db.OrgCalendarEvents.AsNoTracking()
+            .Where(e => e.OrganizationId == org.Id && e.IsPublic && e.StartDateTime >= now)
+            .OrderBy(e => e.StartDateTime)
+            .Select(e => new OrgPublicNextEvent(
+                e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay, e.Location, null,
+                e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
+                e.TimeZoneId ?? (e.Tour != null ? e.Tour.TimeZoneId : null)))
+            .FirstOrDefaultAsync(ct);
+
+        return new OrgPublicFacts(areaServed, org.IsAcceptingClients, org.IsAcceptingApplications,
+                                  members, org.DateCreated.Year, publicCases, next);
+    }
+
 
     private static async Task<IReadOnlyList<OrgPublicLogoItem>> BuildLogosAsync(
         BenDataContext db, Guid orgId, CancellationToken ct)
@@ -152,7 +213,35 @@ public sealed record OrgPublicHomeResponse(
     IReadOnlyList<OrgPublicNavItem> NavPages,
     string? PublicPhone = null,
     string? PublicEmail = null,
-    string? PublicWebsite = null);
+    string? PublicWebsite = null,
+    // Kind is what this group is (2026-08-24), shown as a badge on its public page;
+    // RunsPublicTours is worth saying even on an investigation group. Plain comments, not XML:
+    // a /// on a positional record parameter is not a valid doc target, so the compiler warns and
+    // the text never reaches the generated documentation anyway.
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    bool RunsPublicTours = false,
+    // Facts for the default page, shown when the group has published no home page (item 205).
+    OrgPublicFacts? Facts = null);
+/// <summary>
+/// What a group's public page can say before the group has written one (item 205): built from
+/// records the group already keeps, so every line is checkable and none is invented.
+/// </summary>
+public sealed record OrgPublicFacts(
+    string? AreaServed,
+    bool IsAcceptingClients,
+    bool IsAcceptingApplications,
+    int MemberCount,
+    int OnSinceYear,
+    int PublicCaseCount,
+    OrgPublicNextEvent? NextPublicEvent);
+
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    // The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
+    // nobody has said, and the reader is shown UTC and told so; see EventClock.
+    string? TimeZoneId = null);
+
 
 public sealed record OrgPublicPageResponse(
     Guid OrgId,

@@ -43,6 +43,14 @@ public record UploadFileAudioConfigRecord
     public string? MinimapOptionsJson { get; init; }
     public string? SpectrogramOptionsJson { get; init; }
     public string? SpectrogramWindowedOptionsJson { get; init; }
+    /// <summary>
+    /// The listening chain — equaliser, filters, compressor, noise gate — as JSON.
+    /// </summary>
+    /// <remarks>
+    /// What somebody set up to hear a recording more clearly. None of it changes the file, and
+    /// null means the component's own defaults.
+    /// </remarks>
+    public string? EditStateJson { get; init; }
     public string? EnvelopeOptionsJson { get; init; }
 
     // Component layout
@@ -98,6 +106,14 @@ public record UpsertAudioConfigRequest
     public string? MinimapOptionsJson { get; init; }
     public string? SpectrogramOptionsJson { get; init; }
     public string? SpectrogramWindowedOptionsJson { get; init; }
+    /// <summary>
+    /// The listening chain — equaliser, filters, compressor, noise gate — as JSON.
+    /// </summary>
+    /// <remarks>
+    /// What somebody set up to hear a recording more clearly. None of it changes the file, and
+    /// null means the component's own defaults.
+    /// </remarks>
+    public string? EditStateJson { get; init; }
     public string? EnvelopeOptionsJson { get; init; }
 
     public string InitialHeight { get; init; } = "200px";

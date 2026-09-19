@@ -16,11 +16,16 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
     public const string AppUserIdClaimType = "app_user_id";
 
     private readonly UserManager<AppUser> _userManager;
+    private readonly ExternalSignInService _external;
     private readonly ILogger<EntraClaimsTransformation> _logger;
 
-    public EntraClaimsTransformation(UserManager<AppUser> userManager, ILogger<EntraClaimsTransformation> logger)
+    public EntraClaimsTransformation(
+        UserManager<AppUser> userManager,
+        ExternalSignInService external,
+        ILogger<EntraClaimsTransformation> logger)
     {
         _userManager = userManager;
+        _external    = external;
         _logger      = logger;
     }
 
@@ -35,42 +40,35 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
         if (string.IsNullOrEmpty(oidStr) || !Guid.TryParse(oidStr, out var oid))
             return principal;
 
-        // Log the OID and available email-like claims to help diagnose OID mismatches
-        var emailClaim   = principal.FindFirstValue("email");
-        var preferredName = principal.FindFirstValue("preferred_username");
-        var upn          = principal.FindFirstValue("upn");
-        _logger.LogDebug("EntraClaimsTransformation: oid={Oid} email={Email} preferred_username={PrefUser} upn={Upn}",
-            oidStr, emailClaim ?? "(none)", preferredName ?? "(none)", upn ?? "(none)");
-
-        // Try OID lookup first (fast path)
+        // BY SUBJECT, AND ONLY BY SUBJECT. Until 2026-09-10 an object id nobody had linked was
+        // looked up by its email / preferred_username / upn claim and the account found was linked
+        // to it for good, meant for the day an app registration rotates every object id. But
+        // Microsoft does not vouch for a personal account's email claim, this authority accepts
+        // personal accounts, and so anybody could reach an account here by putting its address on
+        // a Microsoft account of their own. Removed, not narrowed (decided with Ben): a rotated
+        // object id uses the link door once, proving the account with its password and second
+        // factor, which is what ExternalSignInService.LinkAsync is for.
         var user = await _userManager.FindByLoginAsync("Microsoft", oid.ToString());
-
-        // Fallback: match by email/preferred_username when OID changed (e.g. after app registration rotation).
-        // Note: access tokens for custom APIs do not always include email/preferred_username — see Azure Portal
-        // optional claims if this fallback is needed. Login can also be re-linked via /entra/complete-profile.
         if (user is null)
         {
-            var email = emailClaim ?? preferredName ?? upn;
-            if (!string.IsNullOrEmpty(email))
-            {
-                user = await _userManager.FindByEmailAsync(email);
-                _logger.LogDebug("EntraClaimsTransformation: OID not linked — email fallback for '{Email}': {Found}",
-                    email, user is not null ? "found" : "not found");
-            }
-
-            if (user is not null)
-            {
-                // Re-link the new OID permanently
-                var loginInfo = new UserLoginInfo("Microsoft", oid.ToString(), "Microsoft");
-                var result = await _userManager.AddLoginAsync(user, loginInfo);
-                _logger.LogInformation("EntraClaimsTransformation: re-linked OID {Oid} to {Email} — succeeded={Ok}",
-                    oidStr, user.Email, result.Succeeded);
-            }
+            _logger.LogDebug("EntraClaimsTransformation: no local account linked to OID {Oid}", oidStr);
+            return principal;
         }
 
-        if (user is null)
+        // MAY THIS ACCOUNT BE USED AT ALL. This is the choke point for every Entra request, and
+        // nothing downstream asks — a Microsoft token IS the credential, so there is no sign-in
+        // step to run the usual checks. Without this, closing an account or locking it stopped
+        // passwords and did nothing whatever to anybody holding a linked Microsoft identity.
+        //
+        // The gate is the shared service's — the same one every external door asks — so the two
+        // Microsoft doors cannot disagree about who may come in. Refusing here means the principal
+        // keeps its Microsoft identity but gains no local one, so it resolves exactly as an
+        // unlinked Entra caller does. That is the honest outcome: the person really is signed in
+        // to Microsoft, and really has no account here they may use.
+        if (!await _external.MaySignInAsync(user))
         {
-            _logger.LogDebug("EntraClaimsTransformation: no local account found for OID {Oid}", oidStr);
+            _logger.LogWarning(
+                "EntraClaimsTransformation: refused {UserId} — the account may not sign in.", user.Id);
             return principal;
         }
 

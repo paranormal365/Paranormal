@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,18 +9,84 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Controllers.Public;
 
 /// <summary>
-/// Cross-org public case discovery. No authentication required.
-/// Returns all public/haunted cases with city-level coordinates and vote aggregates.
+/// Cross-org case discovery: every public case, plus any this caller may already see.
 /// </summary>
+/// <remarks>
+/// <para><b>Anonymous is still the default.</b> The route stays <c>[AllowAnonymous]</c> and a
+/// visitor with no token gets exactly what it always returned. A signed-in caller additionally
+/// gets the cases they could already open elsewhere, because a discovery map that is empty for a
+/// member whose group has work on it is a poor front door.</para>
+///
+/// <para><b>Coordinates are approximated for everybody, including for your own cases.</b> One code
+/// path, so there is no branch on which a real address could escape. A member who needs the
+/// address has the case page; a map is for finding, not for navigating to somebody's door.</para>
+/// </remarks>
 [ApiController]
 [Route("api/public/cases")]
 [AllowAnonymous]
 public sealed class PublicCaseDiscoveryController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public PublicCaseDiscoveryController(IDbContextFactory<BenDataContext> db)
-    { _db = db; }
+    public PublicCaseDiscoveryController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _security = security; }
+
+    /// <summary>
+    /// The cases this caller may see beyond the public ones, or an empty set for a visitor.
+    /// </summary>
+    /// <remarks>
+    /// Three doors, and each is the one the owning screen already uses rather than a looser
+    /// restatement: the org-side gate is <c>HasAccessAsync(Case, Read)</c> — the same call
+    /// <c>CaseController</c> makes, so a member without the cases grant gains nothing here — and
+    /// the client-side pair is the union <c>MyCaseController</c> builds, the originating request
+    /// and any co-client access row.
+    /// </remarks>
+    private async Task<HashSet<Guid>> AlreadyVisibleToCallerAsync(BenDataContext db, CancellationToken ct)
+    {
+        var visible = new HashSet<Guid>();
+
+        var userId = Guid.TryParse(
+            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var parsed)
+            ? parsed : Guid.Empty;
+        if (userId == Guid.Empty) return visible;
+
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin))
+        {
+            visible.UnionWith(await db.Cases.AsNoTracking().Select(c => c.Id).ToListAsync(ct));
+            return visible;
+        }
+
+        // Their own memberships first, so HasAccessAsync is asked about a handful of orgs rather
+        // than every organization on the site.
+        var orgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive)
+            .Select(m => m.OrganizationId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        foreach (var orgId in orgIds)
+        {
+            if (!await _security.HasAccessAsync(userId, orgId,
+                    OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct))
+                continue;
+
+            visible.UnionWith(await db.Cases.AsNoTracking()
+                .Where(c => c.OrganizationId == orgId)
+                .Select(c => c.Id).ToListAsync(ct));
+        }
+
+        visible.UnionWith(await db.Cases.AsNoTracking()
+            .Where(c => c.ClientRequest != null && c.ClientRequest.AppUserId == userId)
+            .Select(c => c.Id).ToListAsync(ct));
+        visible.UnionWith(await db.CaseClientAccesses.AsNoTracking()
+            .Where(a => a.AppUserId == userId)
+            .Select(a => a.CaseId).ToListAsync(ct));
+
+        return visible;
+    }
 
     /// <summary>
     /// Returns paginated public cases across all organizations.
@@ -28,48 +95,91 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
     /// this endpoint is unauthenticated and public, so it must never geocode on the
     /// request path; a case with no resolved coordinates just omits them.
     /// </summary>
+    /// <remarks>
+    /// <para><b>The four bounds are optional and all-or-nothing.</b> Without them this answers the
+    /// whole map, which is what a first load wants; with them it answers only what is in view,
+    /// which is what every pan afterwards wants. Shaped after
+    /// <c>FieldSessionUploadController.GetMyMapPoints</c> rather than inventing a second
+    /// convention — corners normalised, because map libraries disagree about which one they hand
+    /// over first and a reversed box reads as "nothing here" rather than as a mistake.</para>
+    ///
+    /// <para>A case with no resolved coordinates is <b>kept</b> when unbounded and dropped when
+    /// bounded. It cannot be inside a box nobody can place it in, and silently keeping it would
+    /// make the count disagree with the pins.</para>
+    /// </remarks>
     [HttpGet]
     public async Task<ActionResult<PublicCaseDiscoveryPagedResponse>> GetAll(
         [FromQuery] int    page     = 1,
         [FromQuery] int    pageSize = 20,
         [FromQuery] string sort     = "votes",
+        [FromQuery] double? north   = null, [FromQuery] double? south = null,
+        [FromQuery] double? east    = null, [FromQuery] double? west  = null,
         CancellationToken  ct       = default)
     {
         if (page < 1) page = 1;
         pageSize = Math.Clamp(pageSize, 1, 100);
 
+        var bounded = north is not null || south is not null || east is not null || west is not null;
+        if (bounded && (north is null || south is null || east is null || west is null))
+            return BadRequest("Give all four bounds, or none.");
+
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var cases = await db.Cases.AsNoTracking()
+        // Public, plus whatever this caller could already open. Proposed is excluded on both
+        // sides: a case nobody has agreed to yet is not a place, and MyCases hides it too.
+        var mine = await AlreadyVisibleToCallerAsync(db, ct);
+
+        var query = db.Cases.AsNoTracking()
             .Include(c => c.Organization)
-            .Where(c => c.IsPublic
-                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
-            .ToListAsync(ct);
+            .Where(c => c.Status != CaseStatus.Proposed
+                     && ((c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+                         || mine.Contains(c.Id)));
+
+        if (bounded)
+        {
+            var n  = (decimal)Math.Max(north!.Value, south!.Value);
+            var so = (decimal)Math.Min(north!.Value, south!.Value);
+            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
+            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            query = query.Where(c => c.Latitude != null && c.Longitude != null
+                                  && c.Latitude <= n && c.Latitude >= so
+                                  && c.Longitude <= e && c.Longitude >= w);
+        }
+
+        var cases = await query.ToListAsync(ct);
 
         if (cases.Count == 0)
             return Ok(new PublicCaseDiscoveryPagedResponse([], 0, page, pageSize));
 
         var caseIds = cases.Select(c => c.Id).ToList();
 
-        // Aggregate evidence vote counts for all cases in one query
-        var voteCounts = await db.EvidenceVotes.AsNoTracking()
-            .Join(db.CaseTimelineEntryFiles,
-                  ev => ev.UploadFileId,
-                  f  => f.UploadFileId,
-                  (ev, f) => new { ev, f.CaseTimelineEntryId })
-            .Join(db.CaseTimelineEntries,
-                  x  => x.CaseTimelineEntryId,
-                  e  => e.Id,
-                  (x, e) => new { x.ev, e.CaseId })
-            .Where(x => caseIds.Contains(x.CaseId))
-            .GroupBy(x => x.CaseId)
+        // Item 184: titles of private-engagement cases substitute real names at display time.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, caseIds, ct);
+
+        // ── The card's tally ─────────────────────────────────────────────────
+        // CaseVotes — a vote on the CASE — because that is what the card's own buttons cast and
+        // what /vote-summaries reads back.
+        //
+        // W-H1 of the 2026-09-06 evaluation: a card printed "No votes yet" beside "✓ 3 ✗ 0 ? 0 ·
+        // 3 votes". Neither number was wrong. This aggregate counted EvidenceVotes — votes on
+        // individual files, reached through the timeline — while the widget below it counted
+        // CaseVotes, and the card labelled both "votes". A case can easily have three people
+        // saying "yes, haunted" and nobody yet arguing about a particular photo, which is exactly
+        // what that card was reporting, twice, in contradictory words.
+        //
+        // Evidence votes are a real thing and they belong on the piece of evidence. They are not
+        // the number to put beside a button that casts something else: a visitor who voted here
+        // watched the tally above their click stay at zero.
+        var voteCounts = await db.CaseVotes.AsNoTracking()
+            .Where(v => caseIds.Contains(v.CaseId))
+            .GroupBy(v => v.CaseId)
             .Select(g => new
             {
                 CaseId       = g.Key,
                 Total        = g.Count(),
-                Confirms     = g.Count(x => x.ev.VoteType == EvidenceVoteType.Confirms),
-                Disputes     = g.Count(x => x.ev.VoteType == EvidenceVoteType.Disputes),
-                Inconclusive = g.Count(x => x.ev.VoteType == EvidenceVoteType.Inconclusive),
+                Confirms     = g.Count(v => v.VoteType == EvidenceVoteType.Confirms),
+                Disputes     = g.Count(v => v.VoteType == EvidenceVoteType.Disputes),
+                Inconclusive = g.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             })
             .ToDictionaryAsync(x => x.CaseId, ct);
 
@@ -86,7 +196,7 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
             return new PublicCaseDiscoveryItem(
                 CaseId:            c.Id,
                 CaseReference:     $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
-                Title:             c.Title,
+                Title:             CaseProseRedactor.RedactFor(rosters, c.Id, c.Title)!,
                 City:              c.City,
                 State:             c.State,
                 Country:           c.Country,
@@ -104,7 +214,8 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 TotalVotes:        vc?.Total        ?? 0,
                 ApproxLatitude:    approxLat,
                 ApproxLongitude:   approxLon,
-                ClientName:        PublicClientName.For(c));
+                ClientName:        PublicClientName.For(c),
+                IsPublic:          c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted));
         }).ToList();
 
         // Sort
@@ -122,16 +233,46 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
     /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all
     /// visible list-cards without firing one request per card.
     /// </summary>
+    /// <remarks>
+    /// <para><b>The voting switch is asked here, in the action.</b> This is the batch sibling of
+    /// <c>api/public/cases/{caseId}/votes</c>, which carries <c>[FeatureGated]</c> at the class —
+    /// but this one lives on the DISCOVERY controller, which is deliberately ungated (discovery
+    /// gates the "near you" panel and the maps, not the case directory). So the voting gate had a
+    /// hole one route away from itself, and a site whose admin page said Voting was Off still
+    /// answered batch tallies to anything holding the URL (2026-09-17 audit).</para>
+    ///
+    /// <para><c>FeatureGatedAttribute</c> is <c>AttributeTargets.Class</c> on purpose — "gating
+    /// per action is how one endpoint eventually forgets" — so it cannot be used here, and this is
+    /// the exception the rule anticipated rather than a way around it. 404, matching the attribute:
+    /// a switched-off section looks like one that was never built.</para>
+    /// </remarks>
     [HttpGet("vote-summaries")]
     public async Task<ActionResult<IReadOnlyList<CaseVoteSummary>>> GetVoteSummaries(
         [FromQuery] Guid[] caseIds, CancellationToken ct)
     {
-        if (caseIds.Length == 0) return Ok(Array.Empty<CaseVoteSummary>());
-
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        if (!await Services.SiteSettingsService.GetBoolAsync(
+                db, Services.SiteSettingKeys.FeatureVoting,
+                Services.SiteSettingKeys.DefaultFor(Services.SiteSettingKeys.FeatureVoting), ct))
+            return NotFound();
+
+        if (caseIds.Length == 0) return Ok(Array.Empty<CaseVoteSummary>());
+
+        // Only published cases answer. Votes can only be CAST on a published case, so without this
+        // the reachable disclosure was the tally of a case that has since been unpublished — a
+        // surface that should have gone dark with the case and did not (2026-09-17 audit). An id
+        // that is not published now returns a zero row, exactly like an id with no votes, so this
+        // is not an existence oracle either.
+        var published = await db.Cases.AsNoTracking()
+            .Where(c => caseIds.Contains(c.Id)
+                     && c.IsPublic
+                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+
         var votes = await db.CaseVotes.AsNoTracking()
-            .Where(v => caseIds.Contains(v.CaseId))
+            .Where(v => published.Contains(v.CaseId))
             .ToListAsync(ct);
 
         // Resolve the authenticated user's ID (null when anonymous)
@@ -194,4 +335,7 @@ public sealed record PublicCaseDiscoveryItem(
     int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
-    string?  ClientName);
+    string?  ClientName,
+    // False for a case shown only because this caller may already open it (their group's, or their own as a client), so
+    // the card can say it is not public — the section is headed "Public Investigations". Trailing and defaulted: additive.
+    bool     IsPublic = true);

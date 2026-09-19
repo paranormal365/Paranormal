@@ -1,0 +1,45 @@
+/* A clip in a card-sized box. The block owns the size; the film fits inside it. */
+
+.bc-video-wrap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: -.5rem;
+}
+
+/* object-fit: contain, never cover — a cropped frame of evidence is a lie about what was filmed,
+   and a portrait clip in a landscape block would lose its edges. Letterboxing is the honest fit. */
+.bc-video {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    object-fit: contain;
+    border-radius: inherit;
+}
+
+.bc-video__placeholder {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .375rem;
+    padding: .5rem;
+    text-align: center;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+}
+
+.bc-video__caption {
+    flex: 0 0 auto;
+    padding: .25rem .5rem;
+    margin: 0;
+    color: var(--bc-text-muted);
+    font-size: .75rem;
+}
+
+.bc-video__edit {
+    flex: 0 0 auto;
+    padding: .375rem .5rem;
+}

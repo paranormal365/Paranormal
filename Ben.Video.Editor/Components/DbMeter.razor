@@ -32,7 +32,7 @@
         if (!firstRender || string.IsNullOrEmpty(VideoElementId)) return;
 
         _module = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/dbMeter.js");
+            "benImportEditorModule", "js/dbMeter.js");
 
         await _module.InvokeVoidAsync("init", _canvas, VideoElementId);
     }

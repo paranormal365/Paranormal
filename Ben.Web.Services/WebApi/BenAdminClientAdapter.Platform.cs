@@ -22,9 +22,11 @@ public sealed partial class BenAdminClientAdapter
     public Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<NotificationSummaryResponse>("/api/me/notification-summary", token);
 
-    public async Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
-        => await _api.GetAsync<List<MyMessageRecord>>(
-               $"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token) ?? [];
+    public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
+        => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
+
+    public Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default)
+        => _api.GetListAsync<MyMessageRecord>($"/api/me/messages?unreadOnly={(unreadOnly ? "true" : "false")}", token);
 
     public Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default)
         => _api.PutVoidAsync<object?>($"/api/me/messages/{id}/read", null, token);
@@ -45,22 +47,36 @@ public sealed partial class BenAdminClientAdapter
         return await _api.GetAsync<AuditLogPagedResponse>($"/api/admin/audit-logs{qs}", token);
     }
 
-    public async Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<string>>("/api/admin/audit-logs/entity-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/admin/audit-logs/entity-types", token);
 
     public Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default)
         => _api.PostAsync<SendAuditLogMessageRequest, bool>("/api/admin/audit-logs/send-message", request, token);
 
+    // ── Error Log (Serilog) ───────────────────────────────────────────────────
+
+    public async Task<ErrorLogPagedResponse?> GetErrorLogsAsync(
+        int page = 1, int pageSize = 50, string? search = null, string? source = null,
+        DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default)
+    {
+        var qs = $"?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) qs += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrWhiteSpace(source)) qs += $"&source={Uri.EscapeDataString(source)}";
+        if (dateFrom.HasValue) qs += $"&dateFrom={Uri.EscapeDataString(dateFrom.Value.ToString("o"))}";
+        if (dateTo.HasValue)   qs += $"&dateTo={Uri.EscapeDataString(dateTo.Value.ToString("o"))}";
+        return await _api.GetAsync<ErrorLogPagedResponse>($"/api/admin/error-logs{qs}", token);
+    }
+
+    public Task<ErrorLogSummary?> GetErrorLogSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<ErrorLogSummary>("/api/admin/error-logs/summary", token);
+
+    public Task<LoadResult<string>> GetErrorLogSourcesAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/admin/error-logs/sources", token);
+
     // ── Generic Lookup Types ──────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<LookupTypeAdminRecord>>($"/{route}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default)
+        => _api.GetListAsync<LookupTypeAdminRecord>($"/{route}", token);
 
     public Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default)
         => _api.PostAsync<LookupTypeUpsertRequest, LookupTypeAdminRecord>($"/{route}", request, token);
@@ -75,6 +91,127 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SiteContactInfo>("/api/public/site-contact", token);
+
+    public Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default)
+        => _api.GetAnonymousAsync<SiteFeaturesInfo>("/api/public/site-features", token);
+
+    // ── Dashboard statistics ──────────────────────────────────────────────────
+
+    public Task<AdminStatsSummary?> GetAdminStatsSummaryAsync(CancellationToken token = default)
+        => _api.GetAsync<AdminStatsSummary>("/api/admin/stats/summary", token);
+
+    public Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default)
+        => _api.GetAsync<AdminStatsCharts>($"/api/admin/stats/charts?days={days}", token);
+
+    public Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default)
+        => _api.GetAsync<AdminSignInInsights>($"/api/admin/stats/sign-ins?days={days}", token);
+
+    public async Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
+        Guid fieldSessionId, string? reason, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/field-sessions/{fieldSessionId}/flag", new { Reason = reason }, token);
+        return (error is null, error);
+    }
+
+    public Task<AccountStorageItem?> GetMyStorageAsync(CancellationToken token = default)
+        => _api.GetAsync<AccountStorageItem>("/api/field-sessions/my-storage", token);
+
+    public string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId)
+        => $"{_webApiBaseUrl}/api/public/field-sessions/{fieldSessionId}/media/{uploadFileId}";
+
+    public Task<OrganizationPurgePreview?> GetOrganizationPurgePreviewAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationPurgePreview>(
+            $"/api/admin/organizations/{organizationId}/purge", token);
+
+    public async Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
+        Guid organizationId, string confirmName, CancellationToken token = default)
+    {
+        var (removed, error) = await _api.SendExpectingReasonAsync<object, OrganizationPurgePreview>(
+            HttpMethod.Delete, $"/api/admin/organizations/{organizationId}/purge",
+            new { ConfirmName = confirmName }, token);
+        return (removed, error);
+    }
+
+    public Task<AppUserPurgePreview?> GetAppUserPurgePreviewAsync(
+        Guid userId, CancellationToken token = default)
+        => _api.GetAsync<AppUserPurgePreview>($"/api/admin/users/{userId}/purge", token);
+
+    public async Task<(AppUserPurgeResult? Result, string? Error)> PurgeAppUserAsync(
+        Guid userId, string confirmName, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, AppUserPurgeResult>(
+            HttpMethod.Delete, $"/api/admin/users/{userId}/purge",
+            new { ConfirmName = confirmName }, token);
+        return (result, error);
+    }
+
+    public Task<CasePurgePreview?> GetCasePurgePreviewAsync(
+        Guid caseId, CancellationToken token = default)
+        => _api.GetAsync<CasePurgePreview>($"/api/admin/cases/{caseId}/purge", token);
+
+    public async Task<(CasePurgeResult? Result, string? Error)> PurgeCaseAsync(
+        Guid caseId, string confirmTitle, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, CasePurgeResult>(
+            HttpMethod.Delete, $"/api/admin/cases/{caseId}/purge",
+            new { ConfirmTitle = confirmTitle }, token);
+        return (result, error);
+    }
+
+    public Task<SessionInsightsRecord?> GetSessionInsightsAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<SessionInsightsRecord>($"/api/field-sessions/{sessionId}/insights", token);
+
+    public Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default)
+        => _api.GetAsync<OrgStatsSummary>($"/api/organizations/{organizationId}/stats", token);
+
+    public Task<LoadResult<AdminOrganizationAdRecord>> GetAdminOrgAdsAsync(CancellationToken token = default)
+        => _api.GetListAsync<AdminOrganizationAdRecord>("/api/admin/organization-ads", token);
+
+    public async Task<(bool Ok, string? Error)> ApproveOrgAdAsync(Guid adId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/admin/organization-ads/{adId}/approve", new { }, token);
+        return (error is null, error);
+    }
+
+    public async Task<(bool Ok, string? Error)> RejectOrgAdAsync(Guid adId, string reason, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"/api/admin/organization-ads/{adId}/reject", new { Reason = reason }, token);
+        return (error is null, error);
+    }
+
+    public async Task<LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(
+        int take = 3, CancellationToken token = default,
+        double? lat = null, double? lon = null)
+    {
+        // The viewer's consented coordinates order the answer nearest-first (item 186 F8) and
+        // are never sent unless the person shared them this session.
+        var geo = lat is { } la && lon is { } lo
+            ? $"&lat={la.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+              + $"&lon={lo.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : string.Empty;
+
+        // Null means the FETCH failed (an empty placement list deserializes as an empty
+        // list, not null) — reported as Failure so no caller mistakes an outage for
+        // "no ads exist". The card component treats failure as render-nothing, on record
+        // in LoadResultRenderedGuardTests.Decorations.
+        var cards = await _api.GetAnonymousAsync<List<PromotedGroupCard>>(
+            $"/api/public/promoted-groups?take={take}{geo}", token);
+        return cards is null
+            ? LoadResult<PromotedGroupCard>.Failure()
+            : LoadResult<PromotedGroupCard>.Ok(cards);
+    }
+
+    public Task<LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default)
+        => _api.GetListAsync<string>("/api/me/tours", token);
+
+    public async Task DismissTourAsync(string tourName, bool completed, CancellationToken token = default)
+        => await _api.PutAsync<object, object>($"/api/me/tours/{Uri.EscapeDataString(tourName)}",
+               new { Completed = completed }, token);
 
     public Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default)
         => _api.GetAnonymousAsync<SupportFormTokenResponse>("/api/public/support-tickets/form-token", token);
@@ -97,8 +234,8 @@ public sealed partial class BenAdminClientAdapter
         return await _api.GetAsync<SupportTicketPage>($"/api/admin/support-tickets?{string.Join("&", query)}", token);
     }
 
-    public async Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default)
-        => await _api.GetAsync<IReadOnlyList<SupportTicketReplyRecord>>($"/api/admin/support-tickets/{id}/replies", token) ?? [];
+    public Task<LoadResult<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default)
+        => _api.GetListAsync<SupportTicketReplyRecord>($"/api/admin/support-tickets/{id}/replies", token);
 
     public Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/admin/support-tickets/{id}/replies", request, token);
@@ -108,17 +245,11 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/inbox", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/inbox", token);
 
-    public async Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgMessageRecord>>($"/api/organizations/{orgId}/messages/sent", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/sent", token);
 
     public Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default)
         => _api.GetAsync<OrgMessageRecord>($"/api/organizations/{orgId}/messages/{messageId}", token);
@@ -128,11 +259,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Calendar ──────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventTypeRecord>>($"/api/organizations/{orgId}/calendar-event-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types", token);
 
     public Task<OrgCalendarEventTypeRecord?> CreateCalendarEventTypeAsync(Guid orgId, UpsertCalendarEventTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertCalendarEventTypeRequest, OrgCalendarEventTypeRecord>($"/api/organizations/{orgId}/calendar-event-types", request, token);
@@ -143,13 +271,12 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteCalendarEventTypeAsync(Guid orgId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/calendar-event-types/{id}", token);
 
-    public async Task<IReadOnlyList<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default)
+    public Task<LoadResult<OrgCalendarEventRecord>> GetCalendarEventsAsync(Guid orgId, DateTime? from = null, DateTime? to = null, CancellationToken token = default)
     {
         var qs = string.Empty;
         if (from.HasValue) qs += $"?from={Uri.EscapeDataString(from.Value.ToString("o"))}";
         if (to.HasValue)   qs += (qs.Length > 0 ? "&" : "?") + $"to={Uri.EscapeDataString(to.Value.ToString("o"))}";
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventRecord>>($"/api/organizations/{orgId}/calendar{qs}", token);
-        return result ?? [];
+        return _api.GetListAsync<OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar{qs}", token);
     }
 
     public Task<OrgCalendarEventRecord?> GetCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
@@ -170,14 +297,27 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default)
         => _api.PutAsync<UpsertCalendarEventRequest, OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar/{eventId}", request, token);
 
-    public Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
+    public Task<(bool Deleted, string? Error)> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
 
-    public async Task<IReadOnlyList<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<OrgCalendarEventAttendeeRecord>>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
+
+    // ── Seats on a tour date (item 234) ─────────────────────────────────────
+
+    public Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> ApproveSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/approve",
+               new { }, token);
+
+    public Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> TurnDownSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/turn-down",
+               new { }, token);
 
     public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddAttendeeRequest, OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", request, token);
@@ -186,6 +326,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<AddAttendeeByEmailRequest, OrgCalendarEventAttendeeRecord>(
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/by-email",
                new AddAttendeeByEmailRequest(email), token);
+
+    public Task<bool> InviteEventGuestAsync(
+        Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default)
+        => _api.PostAsync<InviteGuestRequest, bool>(
+               $"/api/organizations/{orgId}/calendar/{eventId}/guest-invites",
+               new InviteGuestRequest(email, displayName), token);
 
     public Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
         => _api.PutAsync<object, OrgCalendarEventAttendeeRecord>(
@@ -197,23 +343,14 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryWithTypesResponse>>("/api/experience-categories/with-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default)
+        => _api.GetListAsync<ExperienceCategoryWithTypesResponse>("/api/experience-categories/with-types", token);
 
-    public async Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceCategoryRecord>>("/api/admin/experience-categories", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default)
+        => _api.GetListAsync<ExperienceCategoryRecord>("/api/admin/experience-categories", token);
 
-    public async Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<ExperienceTypeRecord>>($"/api/admin/experience-categories/{categoryId}/types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default)
+        => _api.GetListAsync<ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", token);
 
     public Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertExperienceCategoryRequest, ExperienceCategoryRecord>("/api/admin/experience-categories", request, token);
@@ -230,8 +367,21 @@ public sealed partial class BenAdminClientAdapter
     public Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", request, token);
 
-    public Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+    public Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
+        => _api.SendExpectingConflictAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord, TaxonomyMergeOffer>(
+               HttpMethod.Put, $"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+
+    public async Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default)
+    {
+        // Merge answers 204, and refuses with a 409 carrying a SENTENCE (not a shape) when the
+        // direction would lose a reviewed name. SendExpectingReasonAsync recovers exactly that.
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post,
+            $"/api/admin/experience-categories/{categoryId}/types/{id}/merge-into/{targetId}",
+            new { }, token);
+
+        return (error is null, error);
+    }
 
     public Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/experience-categories/{categoryId}/types/{id}", token);
@@ -263,12 +413,55 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default)
         => _api.RemoveMyVoteAsync(fileId, token);
 
+    // ── Rate limits (item 199) ────────────────────────────────────────────────
+
+    public Task<LoadResult<RateLimitRefusalRecord>> GetRateLimitRefusalsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<RateLimitRefusalRecord>("/api/admin/rate-limits", token);
+
+    public Task<bool> ReArmRateLimitNoticeAsync(
+        string policyName, CancellationToken token = default)
+        => _api.PostAsync<object, bool>(
+               $"/api/admin/rate-limits/{Uri.EscapeDataString(policyName)}/notify-again",
+               new object(), token);
+
+    // ── Mail diagnostics ──────────────────────────────────────────────────────
+
+    public Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(state)) query.Add($"state={Uri.EscapeDataString(state)}");
+        if (!string.IsNullOrWhiteSpace(kind)) query.Add($"kind={Uri.EscapeDataString(kind)}");
+        query.Add($"take={take}");
+
+        return _api.GetListAsync<OutboxLetterItem>(
+            $"/api/admin/mail/outbox?{string.Join("&", query)}", token);
+    }
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, $"/api/admin/mail/outbox/{id}/retry", new { }, token);
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, "/api/admin/mail/outbox/retry-failed", new { }, token);
+
+    public Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default)
+        => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);
+
+    public Task<MailTestResultRecord?> SendTestEmailAsync(
+        string to, CancellationToken token = default)
+        => _api.PostAsync<object, MailTestResultRecord>(
+               "/api/admin/mail/test", new { To = to }, token);
+
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(
+    public Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(
         int take = 200, CancellationToken token = default)
-        => await _api.GetAsync<List<SidecarInstallLogRecord>>(
-               $"/api/sidecar-telemetry?take={take}", token) ?? [];
+        => _api.GetListAsync<SidecarInstallLogRecord>($"/api/sidecar-telemetry?take={take}", token);
 
     public Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(
         CancellationToken token = default)
@@ -276,13 +469,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Published investigations (item #89) ─────────────────────────────────
 
-    public async Task<IReadOnlyList<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
+    public Task<LoadResult<PublicInvestigationListItem>> GetPublishedInvestigationsAsync(
         string orgUrlName, CancellationToken token = default)
-    {
-        var result = await _api.GetAnonymousAsync<IReadOnlyList<PublicInvestigationListItem>>(
-            $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations", token);
-        return result ?? [];
-    }
+        => _api.GetAnonymousListAsync<PublicInvestigationListItem>($"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/investigations", token);
 
     public Task<PublicInvestigationDetail?> GetPublishedInvestigationAsync(
         string orgUrlName, string investigationSlug, CancellationToken token = default)
@@ -304,5 +493,23 @@ public sealed partial class BenAdminClientAdapter
             url += $"&query={Uri.EscapeDataString(query)}";
 
         return _api.GetAnonymousAsync<NearbyResults>(url, token);
+    }
+
+    // ── Merging groups (item 110) ─────────────────────────────────────────────
+
+    public async Task<(Ben.Service.Models.Admin.MergePreview? Result, string? Error)> PreviewOrgMergeAsync(
+        Guid baseId, Guid mergedId, CancellationToken token = default)
+    {
+        var preview = await _api.GetAsync<Ben.Service.Models.Admin.MergePreview>(
+            $"/api/admin/organization-merge/preview?baseId={baseId}&mergedId={mergedId}", token);
+        return preview is null ? (null, "The preview could not be computed.") : (preview, null);
+    }
+
+    public async Task<string?> MergeOrganizationsAsync(
+        Ben.Service.Models.Admin.OrganizationMergeRequest request, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<Ben.Service.Models.Admin.OrganizationMergeRequest, object>(
+            HttpMethod.Post, "/api/admin/organization-merge", request, token);
+        return error;
     }
 }

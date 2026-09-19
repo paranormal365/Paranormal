@@ -33,18 +33,40 @@
                 <h4 class="mb-0">Files — @_orgName</h4>
             </div>
         }
+        @* Each button for whoever the server lets use it — Upload and Share need Files create, the delete log Files delete —
+           and "← Organizations" only on the page of its own, not inside a group's hub (member test pass M.6, 2026-09-14). *@
         <div class="d-flex gap-2 flex-wrap mb-3">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showUploadDialog = true)">⬆ Upload</button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showCopyDialog = true)">📋 Share from User</button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showDeleteLog = !_showDeleteLog)">
-                    🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
-                </button>
-                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+                @if (_canCreate)
+                {
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showUploadDialog = true)">⬆ Upload</button>
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showCopyDialog = true)">📋 Share from User</button>
+                }
+                @if (_canDelete)
+                {
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showDeleteLog = !_showDeleteLog)">
+                        🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
+                    </button>
+                }
+                @if (!EmbeddedMode)
+                {
+                    <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+                }
+                @if (!_canCreate)
+                {
+                    <span class="small text-secondary align-self-center" id="org-files-who-adds">Members with the Files permission add the group's files.</span>
+                }
             </div>
 
         @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
 
         @* ── Files grid ──────────────────────────────────────────────────── *@
+        @* Wrapped so a refused fetch says so. Before this the grid rendered "No records
+           available" whether the group had no files or the server had turned the reader away —
+           and for every ordinary member it was the latter. *@
+        <BenListState TItem="OrganizationFileRecord" Result="@_filesResult" Loading="@_loading"
+                      LoadingText="Loading the group's files…"
+                      EmptyText="This group hasn't shared any files yet"
+                      OnRetry="@ReloadAsync">
         <TelerikGrid Data="@_files" Pageable="true" PageSize="20" Sortable="true" Class="mb-4">
             <GridColumns>
                 <GridColumn Field="@nameof(OrganizationFileRecord.FileName)" Title="File Name" />
@@ -80,33 +102,58 @@
                 </GridColumn>
                 <GridColumn Title="Source" Width="70px">
                     <Template>
-                        @((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload"
+                        @* The parens wrap the whole ternary. Without the outer pair the expression
+                           ends at the cast, so Razor rendered the record's ToString() — the cell
+                           printed "OrganizationFileRecord { Id = … }" and the rest as text. It
+                           compiled, and nobody saw it because a populated row in this grid was
+                           unreachable: every ordinary member was refused (item 119) and the page
+                           itself loaded before auth (item 122). *@
+                        @(((OrganizationFileRecord)context).SourceUploadFileId.HasValue ? "📋 Copy" : "⬆ Upload")
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
-                <GridCommandColumn Width="240px">
+                @* Publish/Unpublish + Edit + Delete, and Edit Image as well on an image row —
+                   the widest of these columns, and the one whose contents change per row. *@
+                @if (_canUpdate || _canDelete)
+                {
+                <GridCommandColumn Width="172px">
+                    @if (_canUpdate)
+                    {
                     <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                       Size="@ThemeConstants.Button.Size.Small">
-                        @(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")
-                    </GridCommandButton>
-                    @{ var fc = (OrganizationFileRecord)context; }
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="@(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="@(((OrganizationFileRecord)context).IsPublic ? "cloud-off" : "upload-cloud")" /></GridCommandButton>
+                    var fc = (OrganizationFileRecord)context;
                     @if (fc.ContentType.StartsWith("image/"))
                     {
-                        <GridCommandButton Icon="@SvgIcon.Pencil"
-                                           Size="@ThemeConstants.Button.Size.Small" Class="ms-1"
-                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))">
-                            Edit Image
-                        </GridCommandButton>
+                        <GridCommandButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))"
+                                           Title="Edit image"
+                                           Class="ben-grid-action"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
                     }
                     <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
-                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Edit</GridCommandButton>
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="Edit"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                    }
+                    @if (_canDelete)
+                    {
                     <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Delete</GridCommandButton>
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="Delete"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                    }
                 </GridCommandColumn>
+                }
             </GridColumns>
         </TelerikGrid>
+        </BenListState>
 
         @* ── Delete log (expandable) ─────────────────────────────────────── *@
         @if (_showDeleteLog)
@@ -191,9 +238,29 @@
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label fw-semibold" for="organizationfiles-user-file-id-guid-e00a">User File ID (Guid)</label>
-                <input id="organizationfiles-user-file-id-guid-e00a" type="text" class="form-control" placeholder="Paste the UploadFile ID..." @bind="@_copySourceId" @bind:event="oninput" />
-                <small class="text-secondary">The file must be public or shared with this organization.</small>
+                <label class="form-label fw-semibold">File to share</label>
+                @if (_copySource is null)
+                {
+                    <div>
+                        <button type="button" id="orgcopy-choose" class="btn btn-outline-primary"
+                                @onclick="@(() => _showFilePicker = true)">
+                            <BenIcon Name="folder" Class="me-1" />Choose a file…
+                        </button>
+                    </div>
+                    <small class="text-secondary">Public files, and files their owners have shared with this group.</small>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-2 border rounded p-2" id="orgcopy-chosen">
+                        <BenIcon Name="file" />
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small text-truncate">@_copySource.Name</div>
+                            <div class="small text-secondary">@_copySource.TypeLabel@(_copySource.MetaLine is null ? "" : $" · {_copySource.MetaLine}")</div>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-decoration-none"
+                                @onclick="@(() => { _copySource = null; _showFilePicker = true; })">Change</button>
+                    </div>
+                }
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="organizationfiles-description-blank-keep-original-55d2">Description <span class="text-secondary small">(blank = keep original)</span></label>
@@ -287,6 +354,14 @@
                    ImageUrl="@_editImageUrl"
                    FileName="@_editImageName" />
 
+@* Item 175: the reusable content picker, replacing the paste-a-Guid box. *@
+<BenContentPicker @bind-Visible="_showFilePicker"
+                      Title="Share a file with this group"
+                      SelectText="Use this file"
+                      EmptyText="No shareable files — a file must be public, or its owner must share it with this group first."
+                      Loader="@LoadShareableFilesAsync"
+                      OnSelected="@OnShareFileChosen" />
+
 @code {
     [Parameter] public Guid OrgId        { get; set; }
     [Parameter] public bool EmbeddedMode  { get; set; }
@@ -295,7 +370,11 @@
     private string? _error;
     private string  _orgName = string.Empty;
     private List<OrganizationFileRecord>          _files      = [];
+    private LoadResult<OrganizationFileRecord>   _filesResult;
     private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
+    private bool _canCreate;
+    private bool _canUpdate;
+    private bool _canDelete;
     private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
     private bool _showDeleteLog;
 
@@ -324,7 +403,8 @@
 
     // Copy/Share
     private bool   _showCopyDialog;
-    private string _copySourceId    = string.Empty;
+    private bool   _showFilePicker;
+    private Kit.ContentPickerItem? _copySource;
     private string _copyDescription = string.Empty;
     private bool   _copyPublishNow;
     private bool   _copyCanPublish;   // determined by API response
@@ -348,17 +428,36 @@
     private OrganizationFileRecord? _pendingDelete;
     private bool _deleting;
 
-    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        // Same race OrganizationMembers had (item 122): this page has its own route, so a hard
+        // navigation renders it before the circuit is live and every call comes back
+        // unauthorised. It now shows "Couldn't load this" rather than claiming the group has no
+        // files — but not failing at all is better than failing honestly.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
         _loading = true;
         try
         {
-            _files      = (await AdminClient.GetOrgFilesAsync(OrgId)).ToList();
-            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).ToList();
-            _fileTypes  = await AdminClient.GetPublicFileTypesAsync();
-            var orgs    = await AdminClient.GetOrganizationsAsync();
+            // This is the tab where a 403 rendered as "the group has no files" to every ordinary
+            // member (item 119). GetOrgFilesAsync returns the outcome rather than a bare list, and
+            // the grid below is wrapped in BenListState so the difference is on screen rather than
+            // only in the type.
+            _filesResult = await AdminClient.GetOrgFilesAsync(OrgId);
+            _files      = _filesResult.Items.ToList();
+            var perms   = UserState.IsSuperAdmin ? null : await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            bool May(Ben.Data.Common.Enums.OrganizationSecurityAction action) => UserState.IsSuperAdmin
+                || perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Files, action) == true;
+            _canCreate  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create);
+            _canUpdate  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update);
+            _canDelete  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete);
+            _deleteLogs = _canDelete ? (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).Items.ToList() : [];
+            _fileTypes  = (await AdminClient.GetPublicFileTypesAsync()).Items;
+            var orgs    = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -396,9 +495,43 @@
         finally { _uploading = false; }
     }
 
+    /// <summary>Item 175: the picker's source — every file the copy endpoint would accept,
+    /// with a Source facet separating this group's shared offers from world-public files.</summary>
+    private async Task<IReadOnlyList<Kit.ContentPickerItem>> LoadShareableFilesAsync()
+    {
+        var files = (await AdminClient.GetShareableUserFilesAsync(OrgId)).Items;
+        return [.. files.Select(f => new Kit.ContentPickerItem(
+            f.Id, f.FileName,
+            TypeLabelFor(f.ContentType),
+            $"{f.OwnerDisplayName ?? "?"} · {FormatBytes(f.FileSize)} · {f.DateCreated:MM/dd/yyyy}",
+            new Dictionary<string, string>
+            {
+                ["Source"] = f.SharedWithOrganization ? "Shared with this group" : "Public",
+            },
+            f.ContentType, f.FileSize))];
+    }
+
+    private void OnShareFileChosen(Kit.ContentPickerItem item) => _copySource = item;
+
+    private static string TypeLabelFor(string contentType) => contentType.Split('/')[0] switch
+    {
+        "image" => "Image",
+        "video" => "Video",
+        "audio" => "Audio",
+        _ => contentType == "application/pdf" ? "PDF" : "File",
+    };
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes / (1024.0 * 1024):F1} MB",
+    };
+
     private async Task CopyAsync()
     {
-        if (!Guid.TryParse(_copySourceId.Trim(), out var sourceId)) { _copyError = "Enter a valid GUID."; return; }
+        if (_copySource is null) { _copyError = "Choose a file first."; return; }
+        var sourceId = _copySource.Id;
         _copying = true; _copyError = null;
         try
         {
@@ -407,7 +540,7 @@
             {
                 _copyCanPublish = result.CanPublishImmediately;
                 _showCopyDialog  = false;
-                _copySourceId    = string.Empty;
+                _copySource      = null;
                 _copyDescription = string.Empty;
                 _copyPublishNow  = false;
                 await ReloadAsync();
@@ -487,7 +620,7 @@
             if (ok)
             {
                 await ReloadAsync();
-                Toasts.Error("Deleted. Audit record saved.");
+                Toasts.Success("Deleted. Audit record saved.");   // a red error that stayed until dismissed (M.7)
             }
             else
             {

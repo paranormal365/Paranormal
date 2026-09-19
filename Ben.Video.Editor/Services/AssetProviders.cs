@@ -27,11 +27,23 @@ public sealed class LocalOpfsAssetProvider : IAssetProvider
         _opfs = opfs;
     }
 
+    /// <summary>Extensions this provider can actually offer as artwork.</summary>
+    /// <remarks>
+    /// Storage holds every clip ever imported — a person's whole footage library sits in the same
+    /// directory. Listing all of it made "My Imported Files" offer .mp4s and .m4as as clip art,
+    /// each labelled PNG because that is what the format guess falls back to, and each one drawing
+    /// nothing when placed (2026-09-05 audit, callouts-6).
+    /// </remarks>
+    private static readonly HashSet<string> ArtworkExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".svg", ".png", ".webp", ".avif", ".gif", ".jpg", ".jpeg" };
+
     public async Task<IReadOnlyList<VideoAssetCatalogItem>> GetAssetsAsync(CancellationToken ct = default)
     {
         var files = await _opfs.ListClipsAsync(ct);
 
-        return files.Select(f => new VideoAssetCatalogItem
+        return files
+            .Where(f => ArtworkExtensions.Contains(f.Ext))
+            .Select(f => new VideoAssetCatalogItem
         {
             Id               = f.ClipId,
             Name             = f.FileName,
@@ -51,7 +63,7 @@ public sealed class LocalOpfsAssetProvider : IAssetProvider
                 AllowEasing   = true,
                 FlattenOnExport = true,
             },
-        }).ToList();
+            }).ToList();
     }
 
     /// <summary>Local files are already in OPFS — nothing to download.</summary>

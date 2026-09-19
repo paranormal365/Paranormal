@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.SeedData;
 
 /// <summary>
-/// Seeds the Home/Work/Mobile-style lookup rows behind a person's own emails, phones, addresses
-/// and links. Idempotent — safe to run on every startup.
+/// Seeds the Home/Work/Mobile-style lookup rows behind emails, phones, addresses, links and
+/// notes — for a person AND for an organization. Idempotent — safe to run on every startup.
 /// </summary>
 /// <remarks>
 /// <para>These four tables have existed since early in the project and were never populated by
@@ -20,9 +20,69 @@ namespace Ben.Data.WebApi.SeedData;
 /// <para>Matched by name rather than by a fixed id, so a deployment that already created its own
 /// "Home" by hand keeps it instead of gaining a duplicate. Nothing here is ever updated or removed
 /// on a later run — an administrator's edits and deletions are theirs to keep.</para>
+///
+/// <para><b>The organization side was added 2026-08-22</b>, after a database check found five of
+/// these tables completely empty: organization emails, phones, links and notes, plus user notes.
+/// The user-side half had been fixed when the self-service profile made it load-bearing, and the
+/// identical hole on the group side simply went unlooked-at — a group administrator adding their
+/// group's email got a dropdown with nothing in it and a save that could not succeed. Same
+/// invisible failure, one table over.</para>
 /// </remarks>
 internal static class ContactTypeSeeder
 {
+    // ── Organization-side ────────────────────────────────────────────────────
+    // Worded for a group rather than a person: a group has a "Main" address and a "Bookings"
+    // inbox, not a "Home" one.
+
+    private static readonly (string Name, string Description, string Icon)[] OrgEmailTypes =
+    [
+        ("General",  "The address people should write to first.",        "bi bi-envelope"),
+        ("Bookings", "Enquiries about investigations and events.",       "bi bi-calendar-check"),
+        ("Press",    "Media and interview requests.",                    "bi bi-megaphone"),
+        ("Other",    "Anything that doesn't fit the three above.",       "bi bi-envelope-plus"),
+    ];
+
+    private static readonly (string Name, string Description, string Icon)[] OrgPhoneTypes =
+    [
+        ("Main",      "The number to ring first.",                       "bi bi-telephone"),
+        ("Mobile",    "A phone somebody carries on investigations.",     "bi bi-phone"),
+        ("Emergency", "For urgent contact during an investigation.",     "bi bi-telephone-forward"),
+        ("Other",     "Anything that doesn't fit the three above.",      "bi bi-telephone-plus"),
+    ];
+
+    private static readonly (string Name, string Description, string Icon)[] OrgAddressTypes =
+    [
+        ("Headquarters", "Where the group is based.",                    "bi bi-building"),
+        ("Mailing",      "Where post should go, if that differs.",       "bi bi-mailbox"),
+        ("Storage",      "Where the group keeps its equipment.",         "bi bi-box-seam"),
+        ("Meeting",      "Where the group gathers.",                     "bi bi-people"),
+        ("Other",        "Anything that doesn't fit the four above.",    "bi bi-geo-alt"),
+    ];
+
+    private static readonly (string Name, string Description, string Icon)[] OrgLinkTypes =
+    [
+        ("Website", "The group's own site.",                             "bi bi-globe"),
+        ("Social",  "A profile on a social network.",                    "bi bi-people"),
+        ("Video",   "A channel where the group posts footage.",          "bi bi-camera-video"),
+        ("Other",   "Anything that doesn't fit the three above.",        "bi bi-link-45deg"),
+    ];
+
+    private static readonly (string Name, string Description, string Icon)[] OrgNoteTypes =
+    [
+        ("General",   "Anything worth writing down about the group.",    "bi bi-sticky"),
+        ("Meeting",   "Notes from a group meeting.",                     "bi bi-journal-text"),
+        ("Equipment", "Notes about gear, its condition or its history.", "bi bi-tools"),
+        ("Admin",     "Internal administrative notes.",                  "bi bi-clipboard"),
+    ];
+
+    private static readonly (string Name, string Description, string Icon)[] UserNoteTypes =
+    [
+        ("General",  "Anything worth writing down.",                     "bi bi-sticky"),
+        ("Contact",  "A record of speaking to somebody.",                "bi bi-chat-left-text"),
+        ("Research", "Background reading and findings.",                 "bi bi-search"),
+        ("Admin",    "Internal administrative notes.",                   "bi bi-clipboard"),
+    ];
+
     private static readonly (string Name, string Description, string Icon)[] EmailTypes =
     [
         ("Personal", "A private address you use day to day.",        "bi bi-house"),
@@ -120,6 +180,44 @@ internal static class ContactTypeSeeder
             });
         }
 
+        // ── Organization-side, and the user notes that were missed with them ──
+        await SeedAsync(db.OrganizationEmailTypes,   OrgEmailTypes,   owner.Id,
+            (id, n, d, i, o) => new OrganizationEmailType   { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+        await SeedAsync(db.OrganizationPhoneTypes,   OrgPhoneTypes,   owner.Id,
+            (id, n, d, i, o) => new OrganizationPhoneType   { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+        await SeedAsync(db.OrganizationAddressTypes, OrgAddressTypes, owner.Id,
+            (id, n, d, i, o) => new OrganizationAddressType { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+        await SeedAsync(db.OrganizationLinkTypes,    OrgLinkTypes,    owner.Id,
+            (id, n, d, i, o) => new OrganizationLinkType    { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+        await SeedAsync(db.OrganizationNoteTypes,    OrgNoteTypes,    owner.Id,
+            (id, n, d, i, o) => new OrganizationNoteType    { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+        await SeedAsync(db.UserNoteTypes,            UserNoteTypes,   owner.Id,
+            (id, n, d, i, o) => new UserNoteType            { Id = id, Name = n, Description = d, IconClass = i, IsActive = true, IsPublic = true, SortOrder = o, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner.Id });
+
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Adds the rows whose names are not already there. Name-matched, never updating.
+    /// </summary>
+    /// <remarks>
+    /// Generic because six tables now share this shape exactly, and six hand-written loops is six
+    /// chances to forget one — which is how the organization side stayed empty while the user side
+    /// was fixed.
+    /// </remarks>
+    private static async Task SeedAsync<T>(
+        Microsoft.EntityFrameworkCore.DbSet<T> set,
+        (string Name, string Description, string Icon)[] rows,
+        Guid ownerId,
+        Func<Guid, string, string, string, int, T> make) where T : class
+    {
+        var existing = await set.Select(t => EF.Property<string>(t, "Name")).ToListAsync();
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var (name, description, icon) = rows[i];
+            if (existing.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            set.Add(make(Guid.NewGuid(), name, description, icon, i));
+        }
     }
 }

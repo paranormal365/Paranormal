@@ -61,7 +61,8 @@ public class EquipmentSharingTests
 
     private static OrganizationEquipmentController BuildOrg(IDbContextFactory<BenDataContext> f, Guid userId)
         => new(f, new Mock<IOrganizationSecurityService>().Object, new Mock<IFileStorageService>().Object,
-               new Mock<IAuditLogService>().Object, BuildIngest())
+               new Mock<IAuditLogService>().Object, BuildIngest(),
+               new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -151,6 +152,7 @@ public class EquipmentSharingTests
             (storage ?? new Mock<IFileStorageService>()).Object,
             new FileMetadataExtractorService(),
             new MediaSanitizationService(),
+            Ben.Web.Tests.TestMedia.Stripper(),
             NullLogger<MediaIngestService>.Instance);
 
     [Fact]

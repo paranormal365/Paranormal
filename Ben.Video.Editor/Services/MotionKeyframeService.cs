@@ -38,6 +38,41 @@ public sealed class MotionKeyframeService
     // ── Mutation ──────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Moves a layer's whole animation along with the layer.
+    /// </summary>
+    /// <remarks>
+    /// <para>Keyframes are stored in project seconds, and nothing connected them to the layer they
+    /// animate: dragging a callout two seconds later left its animation exactly where it was, so
+    /// the movement played over whatever happened to be there instead (2026-09-05 audit,
+    /// motion-3).</para>
+    ///
+    /// <para>Shifting on the move rather than storing times relative to the layer: both give the
+    /// same behaviour, and this one needs no migration of every project file already saved.</para>
+    /// </remarks>
+    public void ShiftKeyframes(Guid layerId, double deltaSeconds)
+    {
+        if (Math.Abs(deltaSeconds) < 0.001) return;
+        if (!_paths.TryGetValue(layerId, out var path) || path.Keyframes.Count == 0) return;
+
+        foreach (var keyframe in path.Keyframes)
+            keyframe.Time = Math.Max(0, keyframe.Time + deltaSeconds);
+
+        path.Keyframes.Sort((a, b) => a.Time.CompareTo(b.Time));
+        Notify();
+    }
+
+    /// <summary>Forgets a layer's animation — for when the layer itself is gone.</summary>
+    /// <remarks>
+    /// Removing a callout left its path behind, and the orphan was then written into the project
+    /// file (2026-09-05 audit, motion-18).
+    /// </remarks>
+    public void RemovePath(Guid layerId)
+    {
+        if (_paths.Remove(layerId)) Notify();
+    }
+
+
+    /// <summary>
     /// Add or update a keyframe for <paramref name="layerId"/>.
     /// The path is created automatically if it does not exist.
     /// Keyframes are kept sorted by <see cref="MotionKeyframe.Time"/>.
@@ -65,7 +100,23 @@ public sealed class MotionKeyframeService
     public void RemoveKeyframe(Guid layerId, double time)
     {
         if (!_paths.TryGetValue(layerId, out var path)) return;
-        var idx = path.Keyframes.FindIndex(k => Math.Abs(k.Time - time) < 0.1);
+
+        // The nearest one within reach, not the first one in the list that happens to be within
+        // reach. With two keyframes closer together than the tolerance — which is ordinary on a
+        // short animation — asking to remove the second removed the first (2026-09-05 audit,
+        // motion-2).
+        const double reach = 0.1;
+        var idx = -1;
+        var best = double.MaxValue;
+
+        for (var i = 0; i < path.Keyframes.Count; i++)
+        {
+            var distance = Math.Abs(path.Keyframes[i].Time - time);
+            if (distance >= reach || distance >= best) continue;
+            best = distance;
+            idx  = i;
+        }
+
         if (idx < 0) return;
         path.Keyframes.RemoveAt(idx);
         if (path.Keyframes.Count == 0) _paths.Remove(layerId);
@@ -170,6 +221,13 @@ public sealed class MotionKeyframeService
         X                  = frame.X,
         Y                  = frame.Y,
         Scale              = frame.Scale,
+        // Per-axis scale and rotation used to be dropped here, so adding a keyframe part-way
+        // through an animation that stretched or turned a layer silently flattened it from that
+        // point on — the new keyframe said "uniform, upright" because nothing had told it
+        // otherwise (2026-09-05 audit, motion-4).
+        ScaleX             = frame.ScaleX,
+        ScaleY             = frame.ScaleY,
+        Rotation           = frame.Rotation,
         Alpha              = frame.Alpha,
         FillColor          = frame.FillColor,
         StrokeColor        = frame.StrokeColor,

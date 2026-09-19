@@ -3,8 +3,15 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading proposals…" /> }
+else if (_proposalsResult.Failed)
+{
+    @* A pending proposal that does not render is a date nobody replies to. *@
+    <BenListState TItem="ScheduleProposalDto" Result="@_proposalsResult" OnRetry="@OnInitializedAsync" />
+}
 else
 {
     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -33,8 +40,7 @@ else
                                 var isAccepted = prop.AcceptedSlotId == slot.Id;
                                 <div class="small @(isAccepted ? "text-success fw-semibold" : "")">
                                     @(isAccepted ? "✓ " : "• ")
-                                    @slot.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                    @if (slot.EndDateTime.HasValue) { <span> – @slot.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                    @(slot.StartDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(slot.EndDateTime?.ToViewerLocalTime(UserState)))
                                 </div>
                             }
                         </div>
@@ -72,15 +78,34 @@ else
                 <textarea id="schedulingproposalpanel-message-to-client-optional-66d6" class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
             </div>
             <div class="col-12 fw-semibold small">Proposed Date/Time Options</div>
+            @* Same rule as the schedule dialog: one arrival and one departure, allowed to cross
+               midnight, is a single day. A proposal for a weekend or a week ticks the box. *@
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="schedulingproposalpanel-multi-day"
+                           checked="@_multiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="schedulingproposalpanel-multi-day">
+                        These run over more than one day
+                    </label>
+                </div>
+            </div>
             @for (var i = 0; i < _slots.Count; i++)
             {
                 var idx = i;
                 <div class="col-12">
                     <div class="d-flex gap-2 align-items-center">
                         <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
-                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].Start" Width="200px" />
+                        <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_slots[idx].StartDate" Width="150px" />
+                        <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_slots[idx].StartTime" Width="120px" />
                         <span class="text-secondary small">to</span>
-                        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_slots[idx].End" Width="200px" />
+                        @if (_multiDay)
+                        {
+                            <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_slots[idx].End" Width="200px" />
+                        }
+                        else
+                        {
+                            <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_slots[idx].EndTime" Width="120px" />
+                        }
                         @if (_slots.Count > 1)
                         {
                             <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.RemoveAt(idx))"><BenIcon Name="trash-2" /></button>
@@ -88,8 +113,12 @@ else
                     </div>
                 </div>
             }
+            @if (!_multiDay)
+            {
+                <div class="col-12 form-text">An end at or before the start is the next morning.</div>
+            }
             <div class="col-12">
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _slots.Add(new SlotForm()))"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddSlot"><BenIcon Name="plus" Class="me-1" />Add Another Date</button>
             </div>
         </div>
     </ChildContent>
@@ -106,16 +135,18 @@ else
 
     private List<ScheduleProposalDto> _proposals = [];
     private bool _loading = true;
+    private LoadResult<ScheduleProposalDto> _proposalsResult;
     private bool _saving;
     private string? _error;
 
     private bool _showProposeDialog;
+    private bool _multiDay;
     private string _proposeNotes = "";
-    private List<SlotForm> _slots = [new()];
+    private List<SlotForm> _slots = [new() { Start = DefaultSlotStart() }];
 
     protected override async Task OnInitializedAsync()
     {
-        try { _proposals = (await AdminClient.GetScheduleProposalsAsync(OrgId, CaseId)).ToList(); }
+        try { _proposalsResult = await AdminClient.GetScheduleProposalsAsync(OrgId, CaseId); _proposals = _proposalsResult.Items.ToList(); }
         catch { _error = "Failed to load proposals."; }
         _loading = false;
     }
@@ -125,7 +156,7 @@ else
         _saving = true;
         var slots = _slots
             .Where(s => s.Start.HasValue)
-            .Select((s, i) => new SlotInput(s.Start!.Value, s.End))
+            .Select((s, i) => new SlotInput(s.Start!.Value, EffectiveEnd(s)))
             .ToList();
         try
         {
@@ -136,16 +167,32 @@ else
                 _proposals.Insert(0, result);
                 _showProposeDialog = false;
                 _proposeNotes = "";
-                _slots = [new()];
+                _slots = [new SlotForm { Start = DefaultSlotStart() }];
             }
         }
         catch { _error = "Failed to send proposal."; }
         finally { _saving = false; StateHasChanged(); }
     }
 
+    /// <summary>
+    /// Takes dates back off the table — and only says so if the server agreed.
+    /// </summary>
+    /// <remarks>
+    /// The status used to be written locally from a discarded bool (2026-09-17 audit), so a
+    /// refused withdrawal read as "Withdrawn" to the group while the dates were still live on the
+    /// client's side. The client could then accept one, and an investigation would be scheduled
+    /// that the group believed it had retracted. Of all the discarded results in this sweep this
+    /// is the one whose consequence lands on somebody else.
+    /// </remarks>
     private async Task Withdraw(Guid proposalId)
     {
-        await AdminClient.WithdrawScheduleProposalAsync(OrgId, CaseId, proposalId);
+        if (!await AdminClient.WithdrawScheduleProposalAsync(OrgId, CaseId, proposalId))
+        {
+            _error = "Those dates could not be withdrawn, so they are still offered to your client.";
+            StateHasChanged();
+            return;
+        }
+
         var idx = _proposals.FindIndex(p => p.Id == proposalId);
         if (idx >= 0) _proposals[idx] = _proposals[idx] with { Status = ScheduleProposalStatus.Withdrawn };
         StateHasChanged();
@@ -175,9 +222,81 @@ else
         _                                       => "bg-secondary",
     };
 
+    /// <summary>
+    /// Where a proposed window starts before anybody touches it: a week out, at 7pm — the hour a
+    /// visit usually begins, and far enough ahead that a client has time to answer.
+    /// </summary>
+    private static DateTime DefaultSlotStart() => DateTime.Today.AddDays(7).AddHours(19);
+
+    /// <summary>Each further option is the next evening, which is how three dates get offered.</summary>
+    private void AddSlot()
+    {
+        var last = _slots.LastOrDefault()?.Start ?? DefaultSlotStart().AddDays(-1);
+        _slots.Add(new SlotForm { Start = last.AddDays(1) });
+    }
+
+    private DateTime? EffectiveEnd(SlotForm slot)
+    {
+        if (_multiDay) return slot.End;
+        if (slot.Start is not { } start || slot.EndTime is not { } t) return null;
+        return InvestigationWindow.SingleDayEnd(start, t.TimeOfDay);
+    }
+
+    /// <summary>Carries each slot's end across rather than clearing it.</summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _multiDay) return;
+
+        foreach (var slot in _slots)
+        {
+            if (on)
+            {
+                slot.End = EffectiveEnd(slot) ?? slot.Start?.AddDays(1);
+                slot.EndTime = null;
+            }
+            else
+            {
+                slot.EndTime = slot.End;
+                slot.End = null;
+            }
+        }
+
+        _multiDay = on;
+    }
+
     private class SlotForm
     {
-        public DateTime? Start { get; set; }
-        public DateTime? End   { get; set; }
+        /// <summary>
+        /// Seeded, never null, and that is load-bearing rather than a convenience.
+        /// </summary>
+        /// <remarks>
+        /// An empty Telerik date field rebuilds the whole date the first time a segment is
+        /// stepped: type <c>09</c>, press Up on the day, and you get <c>10/01</c> — the month you
+        /// typed is gone. Reproduced on 2026-09-09 and it is deterministic, not a race. A field
+        /// that already holds a date steps its segments correctly, so the fix is to start from
+        /// one. The Schedule Investigation dialog has always seeded its start and has never had
+        /// the fault.
+        /// </remarks>
+        public DateTime? Start   { get; set; }
+
+        /// <summary>The two halves of the start, over one field.</summary>
+        public DateTime StartDate
+        {
+            get => Start?.Date ?? DefaultSlotStart().Date;
+            set => Start = value.Date + (Start?.TimeOfDay ?? DefaultSlotStart().TimeOfDay);
+        }
+
+        public DateTime StartTime
+        {
+            get => Start ?? DefaultSlotStart();
+            set => Start = (Start?.Date ?? DefaultSlotStart().Date) + value.TimeOfDay;
+        }
+
+        /// <summary>The end when the dialog is in multi-day mode.</summary>
+        public DateTime? End     { get; set; }
+
+        /// <summary>The end when it is not — only the time of day is read.</summary>
+        public DateTime? EndTime { get; set; }
     }
 }

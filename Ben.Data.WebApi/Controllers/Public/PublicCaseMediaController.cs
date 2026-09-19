@@ -4,6 +4,7 @@ using Ben.Data.WebApi.Controllers.Cms;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Ben.Data.WebApi.Services;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -44,9 +45,11 @@ public sealed class PublicCaseMediaController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
 
-    public PublicCaseMediaController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage)
-    { _db = db; _fileStorage = fileStorage; }
+    public PublicCaseMediaController(
+        IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, IMediaIngestService mediaIngest)
+    { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest; }
 
     /// <summary>Streams one published file's bytes, or 404.</summary>
     /// <remarks>
@@ -70,12 +73,24 @@ public sealed class PublicCaseMediaController : ControllerBase
         // migration still keep their bytes in the column.
         if (!string.IsNullOrEmpty(file.StoragePath))
         {
-            var stream = await _fileStorage.OpenReadAsync(file.StoragePath, ct);
-            return File(stream, file.ContentType, file.FileName);
+            // The SANITIZED copy when one exists — an anonymous reader must never receive more
+            // than the stripped derivative. MediaSanitizationService's own contract says the
+            // sanitized copy "is what every serve path returns", and until 2026-08-24 exactly one
+            // path honoured it: a public case photo was handing out its EXIF (and, from a phone,
+            // its GPS) while the map beside it showed a deliberately vague city pin.
+            // ServingPathFor falls back to the original when nothing was sanitized, so this is a
+            // no-op for the files that have no derivative yet.
+            var servingPath = _mediaIngest.ServingPathFor(file.StoragePath);
+            var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
+            // The row's ContentType already describes the SERVED copy — ingest records the
+            // derivative's type, not the original's — so it is right for a cleaned JPEG, a
+            // remuxed MP4 (item 181) and an unsanitized original alike.
+            // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+            return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
         }
 
         if (file.FileData is not null)
-            return File(file.FileData, file.ContentType, file.FileName);
+            return File(file.FileData, file.ContentType, file.FileName, enableRangeProcessing: true);
 
         return NotFound();
     }

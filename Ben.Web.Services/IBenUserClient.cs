@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -28,8 +29,15 @@ public interface IBenUserClient
     /// </summary>
     Task<MyProfileRecord?> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken token = default);
 
+    /// <summary>Whether the caller has answered first-run onboarding (item 166 W2). Null — e.g.
+    /// a transport failure — reads as onboarded: the gate must never trap someone in a wizard
+    /// it cannot verify they need.</summary>
+    Task<bool?> GetMyOnboardingStateAsync(CancellationToken token = default);
+    /// <summary>Stamps the caller onboarded. Finishing and skipping both call this.</summary>
+    Task CompleteMyOnboardingAsync(CancellationToken token = default);
+
     /// <summary>Every photo the current user has set, newest first — including inactive ones.</summary>
-    Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default);
 
     /// <summary>Makes an already-uploaded file the current user's photo for one slot.</summary>
     Task<AppUserPhotoRecord?> SetMyPhotoAsync(SetMyPhotoRequest request, CancellationToken token = default);
@@ -50,7 +58,7 @@ public interface IBenUserClient
     // Same scoping rule as My profile above: every call is implicitly the signed-in user, so none
     // of these take a user id — there is no "edit someone else" shape to get wrong.
 
-    Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
+    Task<LoadResult<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default);
     Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default);
     Task<MyEmailRecord?> UpdateMyEmailAsync(Guid id, UpsertMyEmailRequest request, CancellationToken token = default);
     Task<bool> DeleteMyEmailAsync(Guid id, CancellationToken token = default);
@@ -61,17 +69,17 @@ public interface IBenUserClient
     /// </summary>
     Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
+    Task<LoadResult<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default);
     Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default);
     Task<MyPhoneRecord?> UpdateMyPhoneAsync(Guid id, UpsertMyPhoneRequest request, CancellationToken token = default);
     Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
+    Task<LoadResult<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default);
     Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default);
     Task<MyAddressRecord?> UpdateMyAddressAsync(Guid id, UpsertMyAddressRequest request, CancellationToken token = default);
     Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default);
 
-    Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
+    Task<LoadResult<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default);
     Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default);
     Task<MyLinkRecord?> UpdateMyLinkAsync(Guid id, UpsertMyLinkRequest request, CancellationToken token = default);
     Task<bool> DeleteMyLinkAsync(Guid id, CancellationToken token = default);
@@ -94,7 +102,7 @@ public interface IBenUserClient
     /// EntityReadControllerBase's doc comment. Org-admin surfaces that only need to resolve
     /// member display names should use <see cref="GetOrgUserDirectoryAsync"/> instead.</summary>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
-    Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
 
     /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
     /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
@@ -102,7 +110,7 @@ public interface IBenUserClient
     /// of <paramref name="organizationId"/> themselves.</summary>
     /// <param name="organizationId">The organization whose member directory to return.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
-    Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
+    Task<LoadResult<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>Returns the full detail aggregate for a single user, including addresses, emails, phones, links, notes, memberships, and files.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user.</param>
@@ -114,7 +122,8 @@ public interface IBenUserClient
     /// <param name="request">The new user fields including email, password, display name and role flags.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The created <see cref="AppUserAdminRecord"/>, or <c>null</c> if creation failed.</returns>
-    Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
+    /// <summary>Creates an account, or returns the server's reason for refusing (a taken email, a username with a space, a weak password).</summary>
+    Task<(AppUserAdminRecord? Result, string? Error)> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
 
     /// <summary>Updates editable profile fields for a user including audit timestamps.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user to update.</param>
@@ -122,6 +131,17 @@ public interface IBenUserClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The updated admin record, or <c>null</c> if the update failed.</returns>
     Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Sets the site roles a person holds — the whole set (item 216). SuperAdmin only. The server
+    /// refuses to strip your own SuperAdmin role or the last one on the site.
+    /// </summary>
+    /// <param name="userId">The person whose roles change.</param>
+    /// <param name="roles">Every role they should hold afterwards; anything not listed is removed.</param>
+    /// <param name="token">Propagates cancellation from the Blazor component.</param>
+    /// <returns>The roles now held, or <c>null</c> when the server refused.</returns>
+    /// <summary>Sets the whole set of site roles, or returns the server's reason for refusing.</summary>
+    Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
 
     // ── Impersonation ─────────────────────────────────────────────────────────
 
@@ -142,15 +162,19 @@ public interface IBenUserClient
     /// Calls <c>/api/me</c> to re-establish IsSuperAdmin on the restored token — the Identity
     /// API's opaque tokens can't have that claim read back out of them locally.
     /// </remarks>
-    Task StopImpersonatingAsync(CancellationToken token = default);
+    /// <summary>
+    /// Returns to the caller's own identity. False means their roles could not be confirmed —
+    /// see <c>WebApiAuthService.StopImpersonatingAsync</c> (2026-09-17 audit).
+    /// </summary>
+    Task<bool> StopImpersonatingAsync(CancellationToken token = default);
 
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
-    Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
     Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);

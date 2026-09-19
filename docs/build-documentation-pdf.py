@@ -99,9 +99,16 @@ sections = []
 for d in docs:
     md.reset()
     d["html"] = md.convert(resolve_media(d["body"], d["slug"]))
-    if not sections or sections[-1][0] != d["section"]:
-        sections.append((d["section"], []))
-    sections[-1][1].append(d)
+    # Grouped by section, NOT by runs of consecutive sections. The order values interleave
+    # (Getting Started is 10, then the client chapters, then Getting Started again at 45+),
+    # and matching only against the PREVIOUS document split "Getting Started" into two
+    # identical headings in the contents. A section keeps the position of its first document
+    # and collects every later one, so the order field still decides sequence.
+    existing = next((s for s in sections if s[0] == d["section"]), None)
+    if existing is None:
+        existing = (d["section"], [])
+        sections.append(existing)
+    existing[1].append(d)
 
 if missing_media:
     raise SystemExit(

@@ -10,16 +10,38 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
+    <!-- SQLite, for the tests that have to watch a DELETE actually happen. The InMemory provider
+         implements neither ExecuteDelete nor ExecuteUpdate, which is what all three purges are
+         built from, so before this the most destructive code in the product had no behaviour
+         test at all (item 183). Test-only; nothing ships against SQLite. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ben.Data.WebApi\Ben.Data.WebApi.csproj" />
+    <!-- The canvas document format, so the board the seeder hand-builds can be read back with the
+         editor's own reader. Core is a plain library with no packages and no Blazor. -->
+    <ProjectReference Include="..\Ben.Canvas.Core\Ben.Canvas.Core.csproj" />
     <ProjectReference Include="..\Ben.Web.Website.Library\Ben.Web.Website.Library.csproj" />
+    <!-- The website host itself, for services that live there because they need the host's
+         Data Protection ring (UploadTicketService and kin). -->
+    <ProjectReference Include="..\Ben.Web.Website\Ben.Web.Website.csproj" />
+  </ItemGroup>
+
+  <!-- The repo's only real MP3, shared with the Playwright fixtures rather than copied: the MP3
+       decode path has no other way to be tested, and it was broken off Windows for as long as
+       nothing decoded one in a unit test (2026-09-06 audio audit, phase 4). -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Ben.Web.Playwright\Fixtures\test-audio.mp3" Link="Fixtures\test-audio.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

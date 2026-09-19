@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -22,18 +22,42 @@ public sealed partial class BenAdminClientAdapter
     public Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceRecord>($"/api/places/{placeId}", token);
 
-    public async Task<IReadOnlyList<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
+    // ── Rooms inside a place (item 197) ───────────────────────────────────────
+
+    private static string Rooms(Guid orgId, Guid placeId)
+        => $"/api/organizations/{orgId}/places/{placeId}/rooms";
+
+    public Task<LoadResult<PlaceRoomRecord>> GetPlaceRoomsAsync(
+        Guid orgId, Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceRoomRecord>(Rooms(orgId, placeId), token);
+
+    public Task<PlaceRoomRecord?> CreatePlaceRoomAsync(
+        Guid orgId, Guid placeId, SavePlaceRoomRequest request, CancellationToken token = default)
+        => _api.PostAsync<SavePlaceRoomRequest, PlaceRoomRecord>(Rooms(orgId, placeId), request, token);
+
+    public Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default)
+        => _api.PutAsync<SavePlaceRoomRequest, PlaceRoomRecord>($"{Rooms(orgId, placeId)}/{roomId}", request, token);
+
+    public Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
+
+    public Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<PlaceInvestigationRow>>(
-            $"/api/places/{placeId}/investigations", token);
-        return result ?? [];
-    }
+        => _api.GetListAsync<PlaceInvestigationRow>($"/api/places/{placeId}/investigations", token);
 
     public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
 
-    public async Task<IReadOnlyList<PlaceCandidate>> FindPlaceCandidatesAsync(
+    public Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceCaseRow>($"/api/places/{placeId}/my-cases", token);
+
+    public Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlacePostsRecord>($"/api/places/{placeId}/posts", token);
+
+    public Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default)
     {
@@ -54,21 +78,16 @@ public sealed partial class BenAdminClientAdapter
         Add("latitude", latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Add("longitude", longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-        var result = await _api.GetAsync<IReadOnlyList<PlaceCandidate>>(
+        return _api.GetListAsync<PlaceCandidate>(
             $"/api/places/candidates?{string.Join("&", query)}", token);
-        return result ?? [];
     }
 
     public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
 
-    public async Task<IReadOnlyList<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
+    public Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
-    {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationFindingRecord>>(
-            $"/api/organizations/{orgId}/investigations/{investigationId}/findings", token);
-        return result ?? [];
-    }
+        => _api.GetListAsync<InvestigationFindingRecord>($"/api/organizations/{orgId}/investigations/{investigationId}/findings", token);
 
     public Task<InvestigationFindingRecord?> SaveMyInvestigationFindingAsync(
         Guid orgId, Guid investigationId, string narrative, CancellationToken token = default)
@@ -81,21 +100,115 @@ public sealed partial class BenAdminClientAdapter
         => _api.DeleteAsync(
             $"/api/organizations/{orgId}/investigations/{investigationId}/findings/mine", token);
 
-    public async Task<IReadOnlyList<InvestigationRosterEntry>> SetInvestigationLeadAsync(
+    /// <summary>
+    /// Sets or clears an attendee's lead flag and returns the roster as it now stands.
+    /// </summary>
+    /// <remarks>
+    /// A save, so no <see cref="LoadResult{T}"/> — but it had the same defect. A refused PUT became
+    /// <c>null</c> and then an empty roster, which reads as "this investigation now has nobody on
+    /// it": the opposite of what the caller just asked for, presented as the result of asking.
+    /// </remarks>
+    public async Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default)
     {
-        var result = await _api.PutAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+        var (result, error) = await _api.SendExpectingReasonAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+            HttpMethod.Put,
             $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/lead",
             new { IsLead = isLead }, token);
-        return result ?? [];
+
+        if (result is null)
+            return ([], error ?? "The lead could not be changed.");
+
+        return (result, null);
     }
 
-    public async Task<IReadOnlyList<InvestigationRosterEntry>> GetInvestigationRosterAsync(
+    public Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetListAsync<InvestigationRosterEntry>($"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
+
+    // ── Investigation duties (item 158) ──────────────────────────────────────
+
+    public Task<InvestigationDutyBoard?> GetInvestigationDutyBoardAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetAsync<InvestigationDutyBoard>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/duties", token);
+
+    /// <summary>Assigns a duty; a 409 carries the eligibility sentence (assign again with
+    /// <paramref name="overrideEligibility"/> to confirm the exception).</summary>
+    public async Task<(InvestigationDutyBoard? Board, string? Refusal)> AssignInvestigationDutyAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, bool overrideEligibility,
+        CancellationToken token = default)
     {
-        var result = await _api.GetAsync<IReadOnlyList<InvestigationRosterEntry>>(
-            $"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);
-        return result ?? [];
+        var (result, error) = await _api.SendExpectingReasonAsync<object, InvestigationDutyBoard>(
+            HttpMethod.Put,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/duties/{dutyId}",
+            new { Override = overrideEligibility }, token);
+        return (result, result is null ? error ?? "The duty could not be assigned." : null);
+    }
+
+    public async Task<InvestigationDutyBoard?> UnassignInvestigationDutyAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, Guid dutyId, CancellationToken token = default)
+    {
+        var (result, _) = await _api.SendExpectingReasonAsync<object?, InvestigationDutyBoard>(
+            HttpMethod.Delete,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/duties/{dutyId}",
+            null, token);
+        return result;
+    }
+
+    // ── Duty definitions (group Settings) ────────────────────────────────────
+
+    public Task<LoadResult<OrgInvestigationDutyItem>> GetInvestigationDutiesAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties", token);
+
+    public Task<OrgInvestigationDutyItem?> CreateInvestigationDutyAsync(
+        Guid orgId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId,
+        CancellationToken token = default)
+        => _api.PostAsync<object, OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive, IsSingleHolder = isSingleHolder, MinimumMemberLevelId = minimumLevelId }, token);
+
+    public Task<OrgInvestigationDutyItem?> UpdateInvestigationDutyAsync(
+        Guid orgId, Guid dutyId, string name, int sortOrder, bool isActive, bool isSingleHolder, Guid? minimumLevelId,
+        CancellationToken token = default)
+        => _api.PutAsync<object, OrgInvestigationDutyItem>($"/api/organizations/{orgId}/investigation-duties/{dutyId}",
+            new { Name = name, SortOrder = sortOrder, IsActive = isActive, IsSingleHolder = isSingleHolder, MinimumMemberLevelId = minimumLevelId }, token);
+
+    public Task<bool> DeleteInvestigationDutyAsync(Guid orgId, Guid dutyId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/investigation-duties/{dutyId}", token);
+
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> GetDutyEligibilityMatrixAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.Entities.DutyEligibilityMatrix>($"/api/organizations/{orgId}/investigation-duties/matrix", token);
+
+    public Task<Ben.Service.Models.Entities.DutyEligibilityMatrix?> SetDutyEligibilityAsync(
+        Guid orgId, Guid dutyId, IReadOnlyList<Guid> titleIds,
+        Ben.Data.Common.Enums.InvestigationDutyCapabilities capabilities,
+        bool isEnforced,
+        CancellationToken token = default)
+        => _api.PutAsync<object, Ben.Service.Models.Entities.DutyEligibilityMatrix>(
+            $"/api/organizations/{orgId}/investigation-duties/{dutyId}/eligibility",
+            new { TitleIds = titleIds, Capabilities = capabilities, IsEnforced = isEnforced }, token);
+
+    // ── Case contacts (item 158) ─────────────────────────────────────────────
+
+    public Task<LoadResult<CaseContactItem>> GetCaseContactsAsync(
+        Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<CaseContactItem>($"/api/orgs/{orgId}/cases/{caseId}/contacts", token);
+
+    public async Task<(IReadOnlyList<CaseContactItem> Contacts, string? Error)> SetCaseContactsAsync(
+        Guid orgId, Guid caseId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, IReadOnlyList<CaseContactItem>>(
+            HttpMethod.Put, $"/api/orgs/{orgId}/cases/{caseId}/contacts",
+            new { AppUserIds = appUserIds }, token);
+
+        // A refused save answers with the empty list AND the reason together, never the empty
+        // list alone — the tuple is what keeps this from being the swallowed-refusal pattern.
+        if (result is null)
+            return (Array.Empty<CaseContactItem>(), error ?? "The contacts could not be saved.");
+
+        return (result, null);
     }
 
     public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
@@ -111,13 +224,68 @@ public sealed partial class BenAdminClientAdapter
             $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
             new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
 
-    // ── Directions ────────────────────────────────────────────────────────────
-    public Task<DirectionsResult?> GetDirectionsAsync(double fromLat, double fromLon, double toLat, double toLon, CancellationToken token = default)
+
+    /// <inheritdoc />
+    public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
+        => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
+
+    public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
+        => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> HideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/hide", new { Ids = ids }, token);
+
+    public Task<(TestFeedPostHideResult? Result, string? Error)> UnhideTestFeedPostsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TestFeedPostHideResult>(
+            HttpMethod.Post, "/api/admin/feed/test-posts/unhide", new { Ids = ids }, token);
+
+    /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteMyFieldSessionAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/field-sessions/{sessionId}", token);
+
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetMyFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>("/api/field-sessions/mine", token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
+        MapBounds? bounds = null, CancellationToken token = default)
     {
-        var fLat = fromLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var fLon = fromLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var tLat = toLat.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        var tLon = toLon.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-        return _api.GetAsync<DirectionsResult>($"/api/directions?fromLat={fLat}&fromLon={fLon}&toLat={tLat}&toLon={tLon}", token);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var url = bounds is null
+            ? "/api/field-sessions/mine/map"
+            : $"/api/field-sessions/mine/map?north={bounds.North.ToString(inv)}&south={bounds.South.ToString(inv)}"
+              + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
+        return _api.GetItemAsync<FieldSessionMapPage>(url, token);
     }
+
+    /// <inheritdoc />
+    public Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<SessionFileRecord>("/api/admin/session-files", token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);
+
+    /// <inheritdoc />
+    public Task<(OrphanedFieldSessionPurgeResult? Result, string? Error)> PurgeOrphanedFieldSessionsAsync(
+        IReadOnlyList<Guid> ids, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrphanedFieldSessionPurgeResult>(
+            HttpMethod.Delete, "/api/admin/orphaned-field-sessions", new { Ids = ids }, token);
+
+    /// <inheritdoc />
+    public Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
+        Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<MergePlaceRequest, PlaceMergeResult>(
+            HttpMethod.Post, $"/api/admin/places/{losingPlaceId}/merge",
+            new MergePlaceRequest(intoPlaceId), token);
 }
+
+/// <summary>The body the merge endpoint expects.</summary>
+public sealed record MergePlaceRequest(Guid IntoPlaceId);

@@ -6,10 +6,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+
+  <!--
+    Item 225: no EntityFrameworkCore / Identity.EntityFrameworkCore / EntityFrameworkCore.SqlServer
+    here. Nothing in this project used them - they were declared and never referenced - and their
+    only effect was to drag EF Core and the SQL Server provider into every consumer, including
+    Ben.Service.Models and, through it, any client that wants the DTOs. Every project that really
+    does use EF gets it from Ben.Data.Source or declares it itself. A new EF reference here means
+    entity code has landed in the wrong project.
+  -->
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

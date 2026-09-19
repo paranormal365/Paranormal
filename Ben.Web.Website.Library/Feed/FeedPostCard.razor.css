@@ -1,0 +1,53 @@
+/*
+    One post's own styles (item 233, 2026-09-11).
+
+    Scoped to this component rather than added to the site stylesheet, which is where the feed's
+    other rules went and where they have been sitting unread: `Ben.Web.Website/wwwroot/css/app.css`
+    is not referenced by anything — the page loads `wwwroot/app.css` through `Assets["app.css"]` —
+    so `.bv-feed-post__body`'s pre-wrap and the mention colours have never applied. A scoped file
+    is served with the component that needs it and cannot go quiet the same way.
+*/
+
+/* "said at {place}" — the mark and the name on one line, the mark opening the spot in Maps.
+   A full-width map under every post would make a scrolling feed unreadable, so it is a square. */
+.bv-feed-post__place {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.bv-feed-post__placemap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: .45rem;
+    /* The body colour, not the primary: the theme's primary is a deep blue that all but
+       disappears at 14 pixels against a dark panel — which is what the first version did. */
+    color: var(--bs-body-color);
+    /* Two hairline grids over the theme's own panel colour, held well back so the pin is the
+       thing being read. Enough to say "map" at this size, and no tile request to anybody. */
+    background:
+        linear-gradient(color-mix(in srgb, var(--bs-border-color) 55%, transparent) 1px, transparent 1px) 0 0 / 100% .7rem,
+        linear-gradient(90deg, color-mix(in srgb, var(--bs-border-color) 55%, transparent) 1px, transparent 1px) 0 0 / .7rem 100%,
+        var(--bs-tertiary-bg);
+}
+
+.bv-feed-post__placemap:hover,
+.bv-feed-post__placemap:focus-visible {
+    color: var(--bs-primary);
+    box-shadow: 0 0 0 1px var(--bs-primary);
+}
+
+/* ::deep, because the <svg> is BenIcon's markup carrying BenIcon's scope attribute rather than
+   this component's — and the theme's .sa-icon gives every icon a translucent grey fill, so
+   without this the pin comes out solid. */
+.bv-feed-post__placemap ::deep svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none !important;
+    stroke: currentColor;
+    stroke-width: 2;
+}

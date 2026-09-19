@@ -4,6 +4,8 @@
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* Equipment as this group sees it. Phase 2 is members' shared personal gear; phase 3 adds the
    group's own equipment alongside it. EmbeddedMode so the same component works as an org tab and,
@@ -42,13 +44,21 @@
     </BenTabs>
 
     @* A link rather than a tab: moderation is a whole task somebody sits down to do, and its page
-       is the only surface that names both sides of a piece of feedback. The page itself is what
-       checks the caller's standing — this link is a signpost, not a gate. *@
-    <div class="mt-3">
-        <a href="@($"/organizations/{OrgId}/equipment-feedback")" class="small text-decoration-none">
-            Equipment feedback (Administrators)
-        </a>
-    </div>
+       is the only surface that names both sides of a piece of feedback. The page itself is still
+       what checks the caller's standing — this link was never a gate.
+
+       W-M3 of the 2026-09-06 evaluation: it was shown to everybody, with "(Administrators)" in
+       the label doing the work of an explanation. A plain member read a link, clicked it, and was
+       refused by a page whose own title had told them it was not for them. A link that names its
+       own audience in brackets is a link that should not have been drawn. *@
+    @if (_canManage)
+    {
+        <div class="mt-3">
+            <a href="@($"/organizations/{OrgId}/equipment-feedback")" class="small text-decoration-none">
+                Equipment feedback
+            </a>
+        </div>
+    }
 </div>
 
 <OrgEquipmentEditor Visible="@_editorVisible"
@@ -173,17 +183,17 @@
                         <div class="d-flex gap-1">
                             @if (!row.IsRetired)
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenBorrow(row.Id, row.DisplayName))">Borrow</button>
+                                <BenGridAction Icon="log-out" Label="Borrow" OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))" />
                             }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/equipment/{row.Id}"))">History</button>
+                            <BenGridAction Icon="clock" Label="History" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/equipment/{row.Id}"))" />
                             @* Buttons render from the server's verdict, never from a guess. *@
                             @if (row.Flags.CanEdit)
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditor(row))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                                <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => OpenEditor(row))" />
                             }
                             @if (row.Flags.CanDelete)
                             {
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => _pendingDelete = row)"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                                <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => _pendingDelete = row)" />
                             }
                         </div>
                     </Template>
@@ -202,6 +212,10 @@
     @if (_loading)
     {
         <BenLoaderOverlay Visible="true" Text="Loading shared equipment…" />
+    }
+    else if (_itemsResult.Failed)
+    {
+        <BenListState TItem="SharedEquipmentItemRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
     }
     else if (_items.Count == 0)
     {
@@ -240,7 +254,7 @@
                         {
                             @* The server decides whether this caller may actually ask; the dialog
                                shows its answer, including the reason when it is no. *@
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenBorrow(row.Id, row.DisplayName))">Ask to borrow</button>
+                            <BenGridAction Icon="log-out" Label="Ask to borrow" OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))" />
                         }
                     </Template>
                 </GridColumn>
@@ -316,7 +330,7 @@
         EquipmentCheckoutStatus.Requested  => "bg-warning text-dark",
         EquipmentCheckoutStatus.Approved   => "bg-info text-dark",
         EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "bg-danger" : "bg-success",
-        EquipmentCheckoutStatus.Returned   => "bg-light text-secondary border",
+        EquipmentCheckoutStatus.Returned   => "bg-body-secondary text-body-secondary border",
         _                                  => "bg-secondary",
     };
 
@@ -329,6 +343,7 @@
     private bool _canReviewLoans;
     private string _activeTab = "owned";
     private bool _loading = true;
+    private LoadResult<SharedEquipmentItemRecord> _itemsResult;
     private bool _ownedLoading = true;
     private string? _error;
     private Guid _loadedForOrg;
@@ -398,7 +413,8 @@
         _loading = true;
         try
         {
-            _items = [.. await AdminClient.GetOrgSharedEquipmentAsync(OrgId)];
+            _itemsResult = await AdminClient.GetOrgSharedEquipmentAsync(OrgId);
+            _items       = [.. _itemsResult.Items];
         }
         catch (Exception ex)
         {

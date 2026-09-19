@@ -1,4 +1,4 @@
-@page "/my-investigations"
+﻿@page "/my-investigations"
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Shared
@@ -6,6 +6,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject NotificationState Notifications
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>My Investigations</PageTitle>
 
@@ -21,6 +23,11 @@
     {
         <BenLoaderOverlay Visible="true" Text="Loading your investigations…" />
     }
+    else if (_itemsResult.Failed)
+    {
+        @* A client told they have no investigations stops expecting one. *@
+        <BenListState TItem="MyInvestigationItem" Result="@_itemsResult" OnRetry="@LoadAsync" />
+    }
     else if (_items.Count == 0 && _myEvents.Count == 0)
     {
         @* Both empty, or the page would tell somebody they have nothing while listing the event
@@ -28,6 +35,9 @@
         <div class="text-center py-5 text-secondary">
             <p class="mb-3">You have not been assigned to any investigations.</p>
             <p class="small">When an investigation group schedules a visit and adds you to the team, it will appear here.</p>
+            @* A client whose home had a visit booked read "you have not been assigned to any investigations" and nothing
+               about the visit (client test pass P.13, 2026-09-14). *@
+            <p class="small">Visits a group makes to your own home or property are on <a href="/my-cases">My Cases</a>.</p>
             <p class="small">
                 Anyone can come along to a group's <a href="/events">public events</a>.
             </p>
@@ -124,7 +134,7 @@
                                     @ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDate()
                                     @if (!ev.IsAllDay)
                                     {
-                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTime()</span>
+                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTimeNoSeconds()</span>
                                     }
                                 </div>
                             </div>
@@ -186,6 +196,7 @@
 
 @code {
     private List<MyInvestigationItem>? _items;
+    private LoadResult<MyInvestigationItem> _itemsResult;
     private List<AttendedInvestigationItem> _attended = [];
 
     /// <summary>Public events this person said they would attend. Empty is the ordinary case.</summary>
@@ -199,14 +210,19 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
-        _myEvents = await AdminClient.GetMyPublicEventsAsync();
+        await LoadAsync();
+    }
 
-        try { _items = (await AdminClient.GetMyInvestigationsAsync()).ToList(); }
+    private async Task LoadAsync()
+    {
+        _myEvents = (await AdminClient.GetMyPublicEventsAsync()).Items;
+
+        try { _itemsResult = await AdminClient.GetMyInvestigationsAsync(); _items = _itemsResult.Items.ToList(); }
         catch { _error = "Failed to load investigations."; _items = []; }
 
         try
         {
-            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).ToList();
+            _attended = (await AdminClient.GetAttendedInvestigationsAsync()).Items.ToList();
             _attendedPins = _attended
                 .Select(a => new InvestigationMapPin(
                     a.InvestigationId, a.Title, a.Latitude, a.Longitude, IsPast: true))
@@ -225,17 +241,22 @@
 
     private void OpenInvestigation(MyInvestigationItem inv)
     {
-        // CaseId is nullable now. A case-less visit has no case page to open, and building the URL
-        // anyway would navigate to /cases/ with nothing after it.
-        if (inv.CaseId is not { } caseId) return;
-        NavManager.NavigateTo($"/organizations/{inv.OrgId}/cases/{caseId}?tab=investigations");
+        // A case-bound visit opens its case page. A case-less one has no case page — it opens the
+        // group's Investigations tab instead, focused on this row. A card that invites a click
+        // must always land somewhere; the old "return;" here left two of Ben's investigations
+        // unclickable (2026-08-22).
+        NavManager.NavigateTo(inv.CaseId is { } caseId
+            ? $"/organizations/{inv.OrgId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{inv.OrgId}?tab=investigations&inv={inv.InvestigationId}");
     }
 
     private void OpenById(Guid investigationId)
     {
         var row = _attended.FirstOrDefault(a => a.InvestigationId == investigationId);
-        if (row?.CaseId is not { } caseId) return;
-        NavManager.NavigateTo($"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations");
+        if (row is null) return;
+        NavManager.NavigateTo(row.CaseId is { } caseId
+            ? $"/organizations/{row.OrganizationId}/cases/{caseId}?tab=investigations"
+            : $"/organizations/{row.OrganizationId}?tab=investigations&inv={row.InvestigationId}");
     }
 
     private static string AttendedWhere(AttendedInvestigationItem row)
@@ -243,7 +264,10 @@
         if (!string.IsNullOrWhiteSpace(row.PlaceName)) return row.PlaceName!;
         var cityState = string.Join(", ",
             new[] { row.PlaceCity, row.PlaceState }.Where(v => !string.IsNullOrWhiteSpace(v)));
-        return string.IsNullOrWhiteSpace(cityState) ? "—" : cityState;
+        if (!string.IsNullOrWhiteSpace(cityState)) return cityState;
+        // No place on file: the investigation's own location text, which is what the card above
+        // already shows. A dash under a card that names the barn read as a bug (2026-09-03).
+        return string.IsNullOrWhiteSpace(row.Location) ? "—" : row.Location!;
     }
 
     private async Task SetRsvp(MyInvestigationItem inv, RsvpStatus rsvp)
@@ -280,21 +304,27 @@
                         <span class="badge bg-secondary" style="font-size:.72rem;">@inv.AssignedRole</span>
                     }
                 </div>
+                @* IH-11: an investigation need not belong to a case, and the separators were
+                   rendered regardless — so a case-less visit opened with a dot in front of the
+                   group name, a delimiter for a field that was not there. *@
                 <div class="text-secondary small">
-                    <span class="font-monospace">@inv.CaseReference</span>
-                    <span class="mx-1">·</span>@inv.CaseTitle
-                    <span class="mx-1">·</span>
+                    @if (!string.IsNullOrWhiteSpace(inv.CaseReference))
+                    {
+                        <span class="font-monospace">@inv.CaseReference</span>
+                        <span class="mx-1">·</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(inv.CaseTitle))
+                    {
+                        @inv.CaseTitle
+                        <span class="mx-1">·</span>
+                    }
                     <strong @onclick:stopPropagation="true">
                         <OrgNameLink OrganizationId="@inv.OrgId" OrganizationName="@inv.OrgName" OrgUrlName="@inv.OrgUrlName" IsMember="true" />
                     </strong>
                 </div>
                 <div class="small mt-1">
                     <BenIcon Name="calendar" />
-                    @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                    @if (inv.EndDateTime.HasValue)
-                    {
-                        <span class="text-secondary"> – @inv.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span>
-                    }
+                    @(inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(inv.EndDateTime?.ToViewerLocalTime(UserState)))
                 </div>
                 @if (!string.IsNullOrWhiteSpace(inv.Location))
                 {

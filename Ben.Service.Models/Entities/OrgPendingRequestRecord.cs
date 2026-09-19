@@ -18,4 +18,11 @@ public record OrgPendingRequestRecord
     public decimal? Latitude { get; init; }
     public decimal? Longitude { get; init; }
     public ClientOrgRequestStatus Status { get; init; } = ClientOrgRequestStatus.Pending;
+
+    /// <summary>
+    /// Whether the client can be reached yet. A request made from the signed-out wizard belongs
+    /// to an account that has not confirmed its email, so no mail reaches its owner and they
+    /// cannot sign in to read messages — the group should know why a reply may be slow.
+    /// </summary>
+    public bool ClientEmailConfirmed { get; init; } = true;
 }

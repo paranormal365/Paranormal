@@ -42,3 +42,29 @@
     color: var(--kendo-color-subtle-text, var(--bv-text-muted));
     font-variant-numeric: tabular-nums;
 }
+
+/* The way out of "install the sidecar" — the panel used to ask for it and offer
+   nothing to click (2026-09-05 audit, F17). */
+.bv-sidecar-panel__download {
+    font-weight: 600;
+}
+
+.bv-sidecar-panel__hint {
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
+/* The "a newer sidecar is available" line. Quiet on purpose: nothing is broken, the sidecar in
+   front of the person is working, and this is the only channel that will ever mention an update
+   (2026-09-19). --bv-attention rather than the raw warning colour, for the contrast reason in the
+   theme file. */
+.bv-sidecar-panel__update {
+    margin-top: .5rem;
+    font-size: .8rem;
+    color: var(--bv-attention, var(--bv-text-muted));
+}
+
+.bv-sidecar-panel__update a {
+    color: inherit;
+    text-decoration: underline;
+}

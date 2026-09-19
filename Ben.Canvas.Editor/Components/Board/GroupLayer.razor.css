@@ -1,0 +1,83 @@
+.bc-groups {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 0;
+}
+
+.bc-group {
+    position: absolute;
+    border: 2px dashed var(--bc-node-color, var(--bc-group-stroke));
+    background: var(--bc-group-fill);
+    border-radius: var(--bc-radius);
+    pointer-events: none;
+}
+
+.bc-group[data-bc-selected] {
+    border-style: solid;
+    border-color: var(--bc-selection-stroke);
+}
+
+.bc-group.bc-node--dragging {
+    transform: translate(var(--bc-dx, 0px), var(--bc-dy, 0px));
+    will-change: transform;
+}
+
+.bc-group.bc-node--resizing {
+    left: var(--bc-rx) !important;
+    top: var(--bc-ry) !important;
+    width: var(--bc-rw) !important;
+    height: var(--bc-rh) !important;
+}
+
+.bc-group__label,
+.bc-group__input {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    pointer-events: auto;
+    transform-origin: 0 100%;
+    transform: scale(calc(1 / var(--bc-zoom, 1)));
+}
+
+.bc-group__label {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    min-height: 28px;
+    max-width: 320px;
+    padding: .125rem .5rem;
+    margin-bottom: .25rem;
+    border-radius: var(--bc-radius-sm);
+    background: var(--bc-surface-3);
+    color: var(--bc-text);
+    font-size: .8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: grab;
+}
+
+.bc-group__label:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 2px;
+}
+
+.bc-group__input {
+    width: 220px;
+    margin-bottom: .25rem;
+}
+
+/* A panel: the moodboard's section and the deck's slide. Solid tint, solid border, and the label
+   reads as a title rather than a tag pinned to the corner. */
+.bc-group--panel {
+    border-style: solid;
+    border-width: 1px;
+    background: color-mix(in srgb, var(--bc-node-color, var(--bc-group-stroke)) 14%, var(--bc-surface-2));
+}
+
+.bc-group--panel .bc-group__label {
+    background: color-mix(in srgb, var(--bc-node-color, var(--bc-group-stroke)) 28%, var(--bc-surface-3));
+    border-radius: var(--bc-radius-sm) var(--bc-radius-sm) 0 0;
+}

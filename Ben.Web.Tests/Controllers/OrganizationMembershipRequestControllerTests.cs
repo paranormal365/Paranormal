@@ -80,7 +80,14 @@ public class OrganizationMembershipRequestControllerTests
         return ctrl;
     }
 
-    private static async Task<(IDbContextFactory<BenDataContext>, Guid orgId, Guid applicantId, Guid adminId)> SeedAsync(bool acceptingApps = true)
+    /// <param name="paidPlan">
+    /// Whether the group is on an active plan. Accepting a member beyond the first became a paid
+    /// feature on 2026-08-31 (Ben: "group management is a paid feature after 1 user"), so a test
+    /// about what ACCEPTANCE does has to be run by a group entitled to accept — see
+    /// <see cref="Respond_Accept_OnAFreeGroupOfOne_AsksForAPlan"/> for the free answer.
+    /// </param>
+    private static async Task<(IDbContextFactory<BenDataContext>, Guid orgId, Guid applicantId, Guid adminId)> SeedAsync(
+        bool acceptingApps = true, bool paidPlan = true)
     {
         var factory     = CreateFactory();
         var orgId       = Guid.NewGuid();
@@ -94,6 +101,15 @@ public class OrganizationMembershipRequestControllerTests
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = adminId, Role = OrganizationMemberRole.Owner, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
         // Seed a UserMessageType so the Respond notification doesn't fail
         db.UserMessageTypes.Add(new UserMessageType { Id = new Guid("00000000-0000-0000-0000-000000000001"), Name = "Org Membership Response", DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId });
+        if (paidPlan)
+        {
+            db.OrganizationSubscriptions.Add(new OrganizationSubscription
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId,
+                Status = SubscriptionStatus.Active, Interval = BillingInterval.Monthly,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId,
+            });
+        }
         await db.SaveChangesAsync();
         return (factory, orgId, applicantId, adminId);
     }
@@ -190,6 +206,54 @@ public class OrganizationMembershipRequestControllerTests
     }
 
     [Fact]
+    public async Task Respond_Accept_GivesTheNewMemberTheGroups_StartingRole()
+    {
+        // W-M1 (site evaluation 2026-09-06): the acceptance message says "Welcome to the
+        // organization!" — this is what makes that true. A rank alone opens nothing below
+        // Administrator, so without the group's starting role the new member joins to a desk
+        // full of case links that answer 403.
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+
+        Guid startingRoleId;
+        await using (var setup = await factory.CreateDbContextAsync())
+        {
+            var org = await setup.Organizations.SingleAsync(o => o.Id == orgId);
+            await Ben.Data.Source.Services.NewOrganizationDefaults.AddAllAsync(setup, org, adminId);
+            startingRoleId = org.DefaultMemberRoleId!.Value;
+        }
+
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        await Build(factory, adminId, hasPermission: true)
+            .Respond(orgId, reqId, new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var membership = await db.OrganizationUserMemberships
+            .SingleAsync(m => m.OrganizationId == orgId && m.AppUserId == applicantId);
+        Assert.True(await db.OrganizationRoleMemberships.AnyAsync(
+            rm => rm.OrganizationUserMembershipId == membership.Id
+               && rm.OrganizationRoleId == startingRoleId));
+    }
+
+    [Fact]
+    public async Task Respond_Accept_OnAGroupWithNoStartingRole_ChangesNothing()
+    {
+        // Every group that existed before the setting did has none of these, and none of them
+        // should silently gain permissions because this shipped.
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        await Build(factory, adminId, hasPermission: true)
+            .Respond(orgId, reqId, new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.OrganizationUserMemberships.AnyAsync(m => m.AppUserId == applicantId));
+        Assert.Empty(await db.OrganizationRoleMemberships.ToListAsync());
+    }
+
+    [Fact]
     public async Task Respond_Deny_UpdatesStatusWithReason()
     {
         var (factory, orgId, applicantId, adminId) = await SeedAsync();
@@ -204,6 +268,56 @@ public class OrganizationMembershipRequestControllerTests
         var req = await db.OrganizationMembershipRequests.FindAsync(reqId);
         Assert.Equal(OrganizationMembershipRequestStatus.Denied, req!.Status);
         Assert.Equal("Capacity issues", req.DenialReason);
+    }
+
+    /// <summary>
+    /// The decline note is typed by an administrator and lands in a body the applicant's
+    /// notification page renders as markup — so it is encoded, not passed through.
+    /// </summary>
+    [Fact]
+    public async Task Respond_Deny_EncodesTheResponseNoteInTheNotification()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        var applicant = Build(factory, applicantId);
+        var reqId = ((OrganizationMembershipRequestRecord)((CreatedAtActionResult)(await applicant.Apply(orgId, new ApplyForMembershipRequest(null), default)).Result!).Value!).Id;
+
+        var admin = Build(factory, adminId, hasPermission: true);
+        await admin.Respond(orgId, reqId, new RespondToMembershipRequest(
+            OrganizationMembershipRequestStatus.Denied,
+            "<img src=x onerror=\"window.stolen=1\">", false, "Capacity"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var body = await db.UserMessages.AsNoTracking().Select(m => m.MessageBody).SingleAsync();
+
+        Assert.DoesNotContain("<img", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&lt;img", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// One person is free; working with somebody else is the paid part (Ben, 2026-08-31). The
+    /// refusal lands at ACCEPTANCE — where the member would actually be added — and the applicant
+    /// is never punished for a decision that is not theirs, so Apply itself stays open.
+    /// </summary>
+    [Fact]
+    public async Task Respond_Accept_OnAFreeGroupOfOne_AsksForAPlan()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync(paidPlan: false);
+        await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest(null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var requestId = (await db.OrganizationMembershipRequests.SingleAsync()).Id;
+
+        var result = await Build(factory, adminId).Respond(
+            orgId, requestId,
+            new RespondToMembershipRequest(OrganizationMembershipRequestStatus.Accepted, null),
+            default);
+
+        var refusal = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status402PaymentRequired, refusal.StatusCode);
+
+        // And nobody was added on the way to saying no.
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await after.OrganizationUserMemberships.CountAsync(m => m.OrganizationId == orgId && m.IsActive));
     }
 
     [Fact]
@@ -276,5 +390,108 @@ public class OrganizationMembershipRequestControllerTests
         var result = await attacker.GetVotes(otherOrgId, reqId, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    // ── Item 174: GetMine with history — the Pending row wins, then the newest ──
+
+    [Fact]
+    public async Task GetMine_WithHistory_ReturnsThePendingRowNotAnArbitraryOne()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var pendingId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Withdrawn FIRST, so an unordered FirstOrDefault picks it — exactly how a live
+            // cleanup once withdrew the wrong row and left a Pending application stranded.
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Withdrawn,
+                DateCreated = DateTime.UtcNow.AddDays(-1), CreatedByAppUserId = applicantId,
+            });
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = pendingId, OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Pending,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = applicantId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, applicantId).GetMine(orgId, default);
+
+        var record = Assert.IsType<OrganizationMembershipRequestRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(pendingId, record.Id);
+        Assert.Equal(OrganizationMembershipRequestStatus.Pending, record.Status);
+    }
+
+    [Fact]
+    public async Task GetMine_WithOnlyHistory_ReturnsTheNewestRow()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var newestId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Denied,
+                DateCreated = DateTime.UtcNow.AddDays(-2), CreatedByAppUserId = applicantId,
+            });
+            db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+            {
+                Id = newestId, OrganizationId = orgId, AppUserId = applicantId,
+                Status = OrganizationMembershipRequestStatus.Withdrawn,
+                DateCreated = DateTime.UtcNow.AddDays(-1), CreatedByAppUserId = applicantId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, applicantId).GetMine(orgId, default);
+
+        var record = Assert.IsType<OrganizationMembershipRequestRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(newestId, record.Id);
+    }
+
+    // ── IH-04: the applicant's own view ──────────────────────────────────────
+
+    /// <summary>
+    /// An applicant can see their own application without being a member of the group.
+    /// </summary>
+    /// <remarks>
+    /// The per-organization <c>my</c> endpoint only answers for somebody who already knows to
+    /// look at that group's page — which an applicant is not a member of. With nothing in their
+    /// own account acknowledging the application, people applied again; one test account reached
+    /// 23 applications to a single group.
+    /// </remarks>
+    [Fact]
+    public async Task GetMineEverywhere_ReturnsTheApplicantsOwnPendingApplication()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        var apply = Build(factory, applicantId);
+        await apply.Apply(orgId, new ApplyForMembershipRequest("Please let me join"), default);
+
+        var result = await Build(factory, applicantId).GetMineEverywhere(default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var list = Assert.IsAssignableFrom<IEnumerable<OrganizationMembershipRequestRecord>>(ok.Value).ToList();
+        var mine = Assert.Single(list);
+        Assert.Equal(orgId, mine.OrganizationId);
+        Assert.Equal(OrganizationMembershipRequestStatus.Pending, mine.Status);
+    }
+
+    /// <summary>And it is genuinely account-scoped — one person cannot read another's.</summary>
+    [Fact]
+    public async Task GetMineEverywhere_ShowsNobodyElsesApplications()
+    {
+        var (factory, orgId, applicantId, _) = await SeedAsync();
+        await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest("Me please"), default);
+
+        var stranger = await Build(factory, Guid.NewGuid()).GetMineEverywhere(default);
+
+        var ok = Assert.IsType<OkObjectResult>(stranger.Result);
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<OrganizationMembershipRequestRecord>>(ok.Value));
     }
 }

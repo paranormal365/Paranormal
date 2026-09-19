@@ -31,6 +31,28 @@ public abstract record TrackItem
     /// <summary>Duration of this item on the timeline in seconds.</summary>
     public double Duration { get; set; }
 
+    /// <summary>
+    /// The media-bin entry this was placed from, when it was.
+    /// </summary>
+    /// <remarks>
+    /// One source can be placed on the timeline as many times as you like, so the bin needs to know
+    /// how many of its own entries are in use — the "on timeline ×2" a card shows. Null for
+    /// anything that predates the bin, and for the bin entries themselves.
+    /// </remarks>
+    public Guid? SourceBinId { get; set; }
+
+    /// <summary>
+    /// How much of the timeline this item occupies, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// The one place to ask. Video and audio clips answer with their trimmed length and everything
+    /// else with its plain duration; before this, each caller special-cased <c>VideoClip</c> and
+    /// quietly used the untrimmed <see cref="Duration"/> for audio (2026-09-05 audit, audio-11).
+    /// Speed is deliberately not applied here — that changes how long the render is, not how much
+    /// room the item takes on the timeline.
+    /// </remarks>
+    public virtual double EffectiveLength => Duration;
+
     /// <summary>Sort order within the track — kept in sync with <see cref="TimelinePosition"/> so
     /// the sequential (video/audio/transition) row's flex layout renders chips in the right
     /// order. NOT used for overlay stacking — see <see cref="LayerIndex"/>.</summary>
@@ -58,6 +80,46 @@ public abstract record TrackItem
     /// Original file name (no path) stored so the UI can hint which file to re-link.
     /// </summary>
     public string? OriginalFileName { get; set; }
+
+    /// <summary>
+    /// The media-library file this clip's media came from, when it came from one.
+    /// </summary>
+    /// <remarks>
+    /// <para>A project was not portable. A clip persisted only its original file name and its
+    /// stored extension, and restoring read <i>this</i> browser's storage by clip id — so a project
+    /// opened anywhere else, or after the storage was cleared, came back with every clip missing
+    /// and a manual re-link as the only way out. Help promised you could "pick it up on another
+    /// machine" (2026-09-05 audit, F14).</para>
+    ///
+    /// <para>This is what makes that true: with the file's own id the editor can fetch it again
+    /// from the server. Null for a clip imported straight off somebody's disk, which nothing can
+    /// re-fetch — the file exists only where they put it.</para>
+    /// </remarks>
+    public Guid? SourceFileId { get; set; }
+
+    /// <summary>
+    /// How large the source file was, so a re-fetch can be checked against it.
+    /// </summary>
+    /// <remarks>
+    /// Free to record and enough to catch the common mistake: a re-link that picked the wrong file,
+    /// or a server file replaced since the project was saved. See <see cref="SourceContentHash"/>
+    /// for when the stronger check is available.
+    /// </remarks>
+    public long? SourceFileSize { get; set; }
+
+    /// <summary>
+    /// A SHA-256 of the source file, when one was cheap enough to take.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately optional. Hashing needs the whole file in memory at once — the browser's
+    /// digest has no streaming form — so it is taken only under a size ceiling and left null above
+    /// it. Session footage is routinely hundreds of megabytes, and stalling an import to hash one
+    /// would cost more than the check is worth.</para>
+    ///
+    /// <para>Null therefore means "not taken", never "did not match". Verification uses the
+    /// strongest thing it has.</para>
+    /// </remarks>
+    public string? SourceContentHash { get; set; }
 
     /// <summary>
     /// File extension of the source clip stored in OPFS (e.g. <c>".mp4"</c>).

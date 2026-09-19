@@ -30,32 +30,60 @@ public class CaseFileControllerTests
     }
 
     private static CaseFileController BuildController(
-        IDbContextFactory<BenDataContext> factory, Guid userId, Mock<IFileStorageService>? storageMock = null)
+        IDbContextFactory<BenDataContext> factory, Guid userId, Mock<IFileStorageService>? storageMock = null,
+        bool isSuperAdmin = false)
     {
         var storage = storageMock ?? new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("fake/path");
         storage.Setup(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object);
+        var ctrl = new CaseFileController(factory, storage.Object, new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
     }
 
+    /// <summary>
+    /// A form file with REAL bytes. Since 2026-08-24 this door ingests what it is given — it
+    /// decodes an image to strip its EXIF — so a buffer of zeros claiming to be a JPEG is now a
+    /// 400, not an upload. Images get a genuinely encodable 2x2 bitmap; everything else keeps the
+    /// cheap filler, which is all a non-image upload path ever reads.
+    /// </summary>
     private static IFormFile MakeFile(string fileName = "evidence.jpg", string contentType = "image/jpeg", long size = 256)
     {
         var fileMock = new Mock<IFormFile>();
-        var bytes    = new byte[size];
+
+        byte[] bytes;
+        if (size == 0)
+        {
+            // An explicitly empty upload stays empty — that is what the empty-file guard is for.
+            bytes = [];
+        }
+        else if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            using var bitmap = new SkiaSharp.SKBitmap(2, 2);
+            bitmap.SetPixel(0, 0, SkiaSharp.SKColors.Red);
+            using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+            using var data  = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+            bytes = data.ToArray();
+        }
+        else
+        {
+            bytes = new byte[size];
+        }
+
         fileMock.Setup(f => f.FileName).Returns(fileName);
-        fileMock.Setup(f => f.Length).Returns(size);
+        fileMock.Setup(f => f.Length).Returns(bytes.Length);
         fileMock.Setup(f => f.ContentType).Returns(contentType);
+        fileMock.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
         fileMock.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
                 .Returns<Stream, CancellationToken>((s, _) =>
                 {
@@ -88,6 +116,7 @@ public class CaseFileControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return (factory, orgId, caseId, userId);
     }
 
@@ -105,6 +134,20 @@ public class CaseFileControllerTests
     }
 
     [Fact]
+    public async Task GetAll_SuperAdminNonMember_ReturnsOk()
+    {
+        // The audio-mix bug (2026-08-22): the SuperAdmin could open a case but not list its
+        // files, because this controller's IsOrgMember lacked the SuperAdmin bypass every
+        // sibling case surface already had. Half the page loaded, the other half said Forbid.
+        var (factory, orgId, caseId, _) = await SeedAsync();
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
     public async Task GetAll_Member_ReturnsEmptyList()
     {
         var (factory, orgId, caseId, userId) = await SeedAsync();
@@ -115,6 +158,56 @@ public class CaseFileControllerTests
         var ok   = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsAssignableFrom<IEnumerable<CaseFileRecord>>(ok.Value);
         Assert.Empty(list);
+    }
+
+    /// <summary>
+    /// A listed file carries how long it is, when that has been measured.
+    /// </summary>
+    /// <remarks>
+    /// The mixer draws each placed clip at its real length and had nothing to draw it from, so
+    /// every block was the same width — a three-minute recording and a four-second one looked
+    /// identical and the grid could not represent what was on it (2026-09-06 audio walk, finding
+    /// K-length).
+    /// </remarks>
+    [Fact]
+    public async Task GetAll_CarriesTheDurationOfAnythingThatHasBeenMeasured()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+
+        var measured   = await SeedSourceFileAsync(factory, userId, storagePath: "users/owner/a.wav");
+        var unmeasured = await SeedSourceFileAsync(factory, userId, storagePath: "users/owner/b.wav");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFileMetadata.Add(new UploadFileMetadata
+            {
+                Id = Guid.NewGuid(), UploadFileId = measured.Id, MediaKind = "Audio",
+                DurationSeconds = 186.4, ExtractedAtUtc = DateTime.UtcNow,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = measured.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = unmeasured.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl   = BuildController(factory, userId);
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        var ok    = Assert.IsType<OkObjectResult>(result.Result);
+        var files = Assert.IsAssignableFrom<IEnumerable<CaseFileRecord>>(ok.Value).ToList();
+
+        Assert.Equal(186.4, files.Single(f => f.UploadFileId == measured.Id).DurationSeconds);
+
+        // Null, not zero: "nobody has measured this" is a different thing from "no length", and the
+        // mixer draws the two differently.
+        Assert.Null(files.Single(f => f.UploadFileId == unmeasured.Id).DurationSeconds);
     }
 
     // ── Upload ────────────────────────────────────────────────────────────────

@@ -1,0 +1,51 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    The people leading a walk, as a guest sees them.
+
+    Ben's reason for the picture was safety (2026-09-10): somebody walking up to a stranger on a
+    dark street should already know that face. So the photograph gets room of its own rather than
+    being an avatar beside a line of text — and a guide who has published no photograph is still
+    named, because the picture was always optional and a missing one must not hide the person.
+
+    Shared by the tour's page and by each of its dates: the same people, told the same way, so a
+    guest who reads one and then the other is not introduced to them twice in two different voices.
+*@
+
+@if (Guides.Count > 0)
+{
+    <div class="ben-guides @Class">
+        @foreach (var guide in Guides)
+        {
+            <div class="ben-guide">
+                @if (guide.PhotoUploadFileId is { } photoId)
+                {
+                    <img src="@MediaUrls.GuidePhoto(photoId)" alt="@guide.DisplayName"
+                         class="ben-guide__photo" loading="lazy" />
+                }
+                else
+                {
+                    <span class="ben-guide__photo ben-guide__photo--none"
+                          style="@TourPlate.HueStyle(guide.DisplayName)" aria-hidden="true">
+                        @TourPlate.Monogram(guide.DisplayName)
+                    </span>
+                }
+                <span class="ben-guide__name">@guide.DisplayName</span>
+                <span class="ben-guide__role">@Role</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<PublicGuideRecord> Guides { get; set; } = [];
+
+    /// <summary>The word under the name. "Guide" on a tour, "Your guide" on a date somebody booked.</summary>
+    [Parameter] public string Role { get; set; } = "Guide";
+
+    [Parameter] public string? Class { get; set; }
+}

@@ -30,6 +30,25 @@ public record CaseRecord
     public decimal? Longitude { get; init; }
     public string? PublicPseudonym { get; init; }
     public bool IsPublic { get; init; }
+
+    /// <summary>Item 184: private-lane work — public prose substitutes names, publication is plan-gated.</summary>
+    public bool IsPrivateEngagement { get; init; }
+
+    /// <summary>
+    /// The shared place this case is about, once one is bound (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Null for every case opened before cases learned to name a place, and for any opened without
+    /// one since. The case keeps its own address columns either way — those are the record of what
+    /// was reported, and this is the shared identity used for "who else has been here".
+    /// </remarks>
+    public Guid? PlaceId { get; init; }
+
+    /// <summary>What that place is called, when it has a name. Mapped from the navigation.</summary>
+    public string? PlaceName { get; init; }
+
+    /// <summary>Item 184 Phase D: true when a lapse unpublished this case; the republish banner's switch.</summary>
+    public bool? WasPublicBeforeLapse { get; init; }
     public DateTime DateCaseOpened { get; init; }
     public DateTime? DateCaseClosed { get; init; }
     public DateTime DateCreated { get; init; }
@@ -37,3 +56,18 @@ public record CaseRecord
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
 }
+
+
+/// <summary>One place a client's real name appears in prose somebody typed (item 182).</summary>
+public sealed record ClientNameOccurrence(
+    string Where, string Field, string Matched, Guid EntityId, string Kind);
+
+/// <summary>What applying a case's privacy protections after the fact did — and did not do.</summary>
+public sealed record CasePrivacyRetrofitResult(
+    bool MadePrivate,
+    bool LocationGeneralized,
+    int FilesStripped,
+    int FilesAlreadyClean,
+    int FilesUnstrippable,
+    IReadOnlyList<ClientNameOccurrence> NameOccurrences,
+    bool WasEverPublic);

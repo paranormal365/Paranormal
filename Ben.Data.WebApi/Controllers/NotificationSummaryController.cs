@@ -46,11 +46,20 @@ public sealed class NotificationSummaryController : BenControllerBase
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-        // ── Internal org messages addressed to me ────────────────────────────
-        var orgMessages = await BucketAsync(
-            db.OrgMessageRecipients.AsNoTracking()
-              .Where(r => r.RecipientAppUserId == userId && r.DateRead == null)
-              .Select(r => (DateTime?)r.OrgMessage.DateCreated), ct);
+        // ── Internal org messages addressed to me, PER GROUP (item 173) ──────
+        // The single cross-org number sent Ben to a page showing a different count: 54 unread
+        // across every group, one group's inbox showing its 18. Each group's slice renders as
+        // its own row linking to that group's Messages tab; the aggregate is the fold of the
+        // slices, so the bell's total always equals what the rows can open. Org-less rows
+        // (feed posts create none, but nothing structurally forbids one) are deliberately NOT
+        // counted — a number no surface can show is a lie on a badge.
+        var orgMessageGroups = await db.OrgMessageRecipients.AsNoTracking()
+            .Where(r => r.RecipientAppUserId == userId && r.DateRead == null
+                     && r.OrgMessage!.OrganizationId != null)
+            .GroupBy(r => r.OrgMessage!.OrganizationId!.Value)
+            .Select(g => new { OrgId = g.Key, Count = g.Count(),
+                               Oldest = g.Min(x => (DateTime?)x.OrgMessage!.DateCreated) })
+            .ToListAsync(ct);
 
         // ── Case messages awaiting an org reply, for orgs I actively belong to ──
         var myOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
@@ -58,14 +67,59 @@ public sealed class NotificationSummaryController : BenControllerBase
             .Select(m => m.OrganizationId)
             .ToListAsync(ct);
 
-        var caseMessagesAsOrg = myOrgIds.Count == 0
+        // Routed to the people responsible for the case (item 158), not the whole roster:
+        // explicit contacts when set, else the case manager, else every member (the pre-contact
+        // behaviour, kept as the floor so a case nobody claimed still nags somebody). Org owners
+        // and administrators always see them — the bypass rule, same as everywhere else.
+        var myAdminOrgIds = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.AppUserId == userId && m.IsActive
+                     && (m.Role == OrganizationMemberRole.Owner
+                      || m.Role == OrganizationMemberRole.Administrator))
+            .Select(m => m.OrganizationId)
+            .ToListAsync(ct);
+
+        var caseMessageGroups = myOrgIds.Count == 0
+            ? []
+            : await db.CaseMessages.AsNoTracking()
+                .Where(m => m.SenderSide == CaseMessageSide.Client
+                         && !m.IsReadByOrg
+                         && myOrgIds.Contains(m.Case.OrganizationId)
+                         && (myAdminOrgIds.Contains(m.Case.OrganizationId)
+                             || (db.CaseContacts.Any(cc => cc.CaseId == m.CaseId)
+                                 ? db.CaseContacts.Any(cc => cc.CaseId == m.CaseId && cc.AppUserId == userId)
+                                 : (m.Case.CaseManagerAppUserId != null
+                                     ? m.Case.CaseManagerAppUserId == userId
+                                     : true))))
+                .GroupBy(m => new { m.CaseId, m.Case.OrganizationId, m.Case.Title })
+                .Select(g => new { g.Key.CaseId, OrgId = g.Key.OrganizationId, g.Key.Title,
+                                   Count = g.Count(), Oldest = g.Min(x => (DateTime?)x.DateCreated) })
+                .ToListAsync(ct);
+
+        // Names in one small lookup, joined in memory — EF will not translate a grouped join
+        // into a record constructor, and two clean queries beat one untranslatable clever one.
+        var namedOrgIds = orgMessageGroups.Select(g => g.OrgId)
+            .Union(caseMessageGroups.Select(g => g.OrgId)).ToList();
+        var orgNames = namedOrgIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Organizations.AsNoTracking()
+                .Where(o => namedOrgIds.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.Name, ct);
+
+        var orgMessagesByOrg = orgMessageGroups
+            .Select(g => new OrgScopedBucket(g.OrgId, orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
+            .ToList();
+        var orgMessages = Fold(orgMessagesByOrg);
+
+        var caseMessagesAsOrgByCase = caseMessageGroups
+            .Select(g => new CaseScopedBucket(g.CaseId, g.OrgId, g.Title,
+                orgNames.GetValueOrDefault(g.OrgId, "?"), g.Count, g.Oldest))
+            .ToList();
+        var caseMessagesAsOrg = caseMessagesAsOrgByCase.Count == 0
             ? NotificationBucket.Empty
-            : await BucketAsync(
-                db.CaseMessages.AsNoTracking()
-                  .Where(m => m.SenderSide == CaseMessageSide.Client
-                           && !m.IsReadByOrg
-                           && myOrgIds.Contains(m.Case.OrganizationId))
-                  .Select(m => (DateTime?)m.DateCreated), ct);
+            : new NotificationBucket(
+                caseMessagesAsOrgByCase.Sum(c => c.Count),
+                caseMessagesAsOrgByCase.Where(c => c.OldestUnreadUtc.HasValue)
+                    .Select(c => c.OldestUnreadUtc).DefaultIfEmpty(null).Min());
 
         // ── Case messages awaiting me as the client ──────────────────────────
         // "My cases" is both the ones I originated and the ones shared with me as a co-client.
@@ -149,10 +203,233 @@ public sealed class NotificationSummaryController : BenControllerBase
                               && checkoutOrgIds.Contains(c.EquipmentItem.OwningOrganizationId.Value)))))
               .Select(c => (DateTime?)c.DateCreated), ct);
 
+        // ── Public-feed activity: mentions, and replies to your posts ────────
+        // Only asked for when the feed is switched on. A site that has never turned it on should
+        // show no trace of it on the bell, and should not pay for the query either.
+        //
+        // Item 186 F3 added replies to what counts as activity. Likes are DELIBERATELY not here:
+        // being named and being answered are addressed to you, while a like is applause — and a
+        // badge that ticks on every like is a badge nobody reads within a week.
+        var feedActivity = NotificationBucket.Empty;
+        if (await FeedController.FeedEnabledAsync(db, ct))
+        {
+            var mentionTimes = db.OrgMessageMentions.AsNoTracking()
+                .Where(m => m.MentionedAppUserId == userId
+                         // Their own post naming themselves is not a notification.
+                         && m.OrgMessage.AuthorAppUserId != userId
+                         // A hidden post's mention is withdrawn with it.
+                         && m.OrgMessage.HiddenUtc == null
+                         // Read exactly when the post carrying it has been opened. The same
+                         // marker the rest of messaging uses — a second one would drift.
+                         && !db.OrgMessageViews.Any(v =>
+                                v.OrgMessageId == m.OrgMessageId && v.ViewerAppUserId == userId))
+                .Select(m => (DateTime?)m.DateCreated);
+
+            var replyTimes = db.OrgMessages.AsNoTracking()
+                .Where(r => r.ChannelType == OrgMessageChannel.PublicFeed
+                         && r.HiddenUtc == null
+                         && r.ParentMessageId != null
+                         // Somebody else answering something you wrote.
+                         && r.AuthorAppUserId != userId
+                         && r.ParentMessage!.AuthorAppUserId == userId
+                         && r.ParentMessage.HiddenUtc == null
+                         // Cleared by opening the thread, exactly like a mention: the view marker
+                         // is recorded against the ROOT post, which is the thing you open.
+                         && !db.OrgMessageViews.Any(v =>
+                                v.OrgMessageId == r.ParentMessageId!.Value
+                                && v.ViewerAppUserId == userId))
+                .Select(r => (DateTime?)r.DateCreated);
+
+            feedActivity = await BucketAsync(mentionTimes.Concat(replyTimes), ct);
+        }
+
+        var feedMentions = feedActivity;
+
+        // ── Tour seats (item 234) ────────────────────────────────────────────
+        // Two directions, because they are two different jobs. A business has people waiting on a
+        // decision; a guest has a decision waiting to be read.
+        //
+        // The business side is scoped to orgs this person can actually DECIDE for — owners and
+        // administrators — rather than to every org they belong to. A guide with no calendar
+        // permission nagged about a queue they cannot work is a bell that teaches people to
+        // ignore it. Anyone else with the calendar grant still sees the badge on the date itself.
+        var seatsToDecide = myAdminOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.OrgCalendarEventAttendees.AsNoTracking()
+                    .Where(a => a.SeatStatus == TourSeatStatus.Requested
+                             && myAdminOrgIds.Contains(a.OrgCalendarEvent.OrganizationId)
+                             // A night already past is not a decision anybody still needs to make.
+                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                             // Item 235: an umbrella row's requested seats belong to a hosted
+                             // event's own bucket below. Counting them here would put a hotel
+                             // weekend behind a bell row that lands on a walk's screen.
+                             && a.OrgCalendarEvent.HostedEventId == null)
+                    .Select(a => (DateTime?)a.DateCreated),
+                ct);
+
+        // The guest's side: decided and not yet acknowledged. Cleared by their own optional
+        // "Got it", which is what makes that button worth having.
+        var mySeats = await BucketAsync(
+            db.OrgCalendarEventAttendees.AsNoTracking()
+                .Where(a => a.AppUserId == userId
+                         && a.SeatStatus != null
+                         && a.SeatStatus != TourSeatStatus.Requested
+                         && a.GuestAcknowledgedUtc == null
+                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                         && a.OrgCalendarEvent.HostedEventId == null)
+                // Dated by the DECISION, so "waiting since" means since somebody answered them.
+                .Select(a => a.SeatDecidedUtc),
+            ct);
+
+        // ── Hosted events, the same two sides (item 235 phase 2.3) ───────────
+        // Read off the BOOKING rather than the umbrella attendee row, because the booking is where
+        // a hosted event's truth lives: a request has no attendee row at all until somebody
+        // confirms it, so counting attendees would show a venue an empty queue.
+        // ── Hosted-event bookings (item 235) ─────────────────────────────────
+        // WHO DECIDES is whoever HostedEventAccess says may (phase 8): owners and administrators,
+        // anybody whose role grants EventBooking.Update, and the event's own staff handed Decides.
+        // The bell used to ask only the first of those, so a steward told to answer requests was
+        // never told there were any.
+        var deciderOrgIds = new HashSet<Guid>(myAdminOrgIds);
+        foreach (var orgId in myOrgIds.Where(o => !deciderOrgIds.Contains(o)))
+        {
+            if (await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.EventBooking,
+                                               OrganizationSecurityAction.Update, ct))
+                deciderOrgIds.Add(orgId);
+        }
+
+        var staffEventIds = await db.HostedEventStaff.AsNoTracking()
+            .Where(x => x.AppUserId == userId && x.DateConfirmed != null && x.Decides)
+            .Select(x => x.HostedEventId)
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var lapsingBy = now + Services.Events.EventBookingDigest.SoonLapsing;
+
+        var decidable = db.HostedEventBookings.AsNoTracking()
+            .Where(b => (deciderOrgIds.Contains(b.HostedEvent.OrganizationId)
+                      || staffEventIds.Contains(b.HostedEventId))
+                     // Their own booking is not a decision waiting on them.
+                     && b.LeadAppUserId != userId
+                     // A weekend already over is not a decision anybody still needs to make.
+                     && b.HostedEvent.EndsOn >= now.Date);
+
+        var anyDecider = deciderOrgIds.Count > 0 || staffEventIds.Count > 0;
+
+        // A HOLD IS WAITING ON THE VENUE as much as a request is — the guest picked, and nothing
+        // happens until somebody confirms. A hold about to run out gets its own row instead, so a
+        // booking is counted once and the urgent ones are not lost among the rest.
+        var eventBookingsToDecide = !anyDecider
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                decidable
+                    .Where(b => b.Status == HostedEventBookingStatus.Requested
+                             || (b.Status == HostedEventBookingStatus.Held
+                                 && (b.HoldExpiresUtc == null || b.HoldExpiresUtc > lapsingBy)))
+                    .Select(b => (DateTime?)b.DateCreated),
+                ct);
+
+        var eventHoldsLapsing = !anyDecider
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                decidable
+                    .Where(b => b.Status == HostedEventBookingStatus.Held
+                             && b.HoldExpiresUtc != null
+                             && b.HoldExpiresUtc > now
+                             && b.HoldExpiresUtc <= lapsingBy)
+                    .Select(b => (DateTime?)b.DateCreated),
+                ct);
+
+        // A guest whose booking was answered, and who has not said they read it. Includes a
+        // cancellation they never asked for, which is the one they most need to see. NOT a hold:
+        // holding seats is what the guest did, not something anybody answered (phase 8).
+        var myEventBookings = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status != HostedEventBookingStatus.Requested
+                         && b.Status != HostedEventBookingStatus.Held
+                         && b.GuestAcknowledgedUtc == null
+                         && b.HostedEvent.EndsOn >= now.Date)
+                // Dated by the DECISION, so "waiting since" means since somebody answered them.
+                .Select(b => b.DecidedUtc),
+            ct);
+
+        // The guest's own hold running out while the venue has still not confirmed it: the one
+        // moment they might want to ask the venue, or pick something they can be sure of.
+        var myEventHoldLapsing = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status == HostedEventBookingStatus.Held
+                         && b.HoldExpiresUtc != null
+                         && b.HoldExpiresUtc > now
+                         && b.HoldExpiresUtc <= lapsingBy)
+                .Select(b => (DateTime?)b.DateCreated),
+            ct);
+
+        // ── Groups asking to use a venue this person answers for (phase 9) ───────
+        // Answered by whoever may change the group's settings, like the page itself: letting
+        // another group publish at your address is a commitment the building makes.
+        var venueOrgIds = new HashSet<Guid>(myAdminOrgIds);
+        var pendingVenueOrgs = await db.VenueHostingRequests.AsNoTracking()
+            .Where(r => r.Status == VenueHostingRequestStatus.Pending && myOrgIds.Contains(r.VenueOrganizationId))
+            .Select(r => r.VenueOrganizationId).Distinct().ToListAsync(ct);
+        foreach (var orgId in pendingVenueOrgs.Where(o => !venueOrgIds.Contains(o)))
+        {
+            if (await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.OrganizationSettings,
+                                               OrganizationSecurityAction.Update, ct))
+                venueOrgIds.Add(orgId);
+        }
+
+        var venueRequestsToDecide = venueOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.VenueHostingRequests.AsNoTracking()
+                    .Where(r => r.Status == VenueHostingRequestStatus.Pending
+                             && venueOrgIds.Contains(r.VenueOrganizationId))
+                    .Select(r => (DateTime?)r.DateCreated),
+                ct);
+
+        // ── A guest's programme changed since they last looked (phase 10) ────────
+        // Dated by the change, one per booking however many sessions moved: "the programme changed"
+        // is one thing to go and read, not a count of edits.
+        var eventScheduleChanges = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status == HostedEventBookingStatus.Confirmed
+                         && b.HostedEvent.ProgrammePublishedUtc != null
+                         && b.HostedEvent.EndsOn >= now.Date
+                         && db.HostedEventSessions.Any(x => x.HostedEventId == b.HostedEventId
+                                && x.ChangedUtc != null
+                                && (b.ProgrammeSeenUtc == null || x.ChangedUtc > b.ProgrammeSeenUtc)))
+                .Select(b => db.HostedEventSessions
+                    .Where(x => x.HostedEventId == b.HostedEventId && x.ChangedUtc != null)
+                    .Max(x => x.ChangedUtc)),
+            ct);
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
-            investigationInvites, equipmentCheckouts));
+            investigationInvites, equipmentCheckouts, feedMentions,
+            OrgMessagesByOrg: [.. orgMessagesByOrg.OrderBy(b => b.OrganizationName)],
+            CaseMessagesAsOrgMemberByCase:
+                [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)],
+            TourSeatsToDecide: seatsToDecide,
+            MyTourSeats: mySeats,
+            EventBookingsToDecide: eventBookingsToDecide,
+            MyEventBookings: myEventBookings,
+            EventHoldsLapsing: eventHoldsLapsing,
+            MyEventHoldLapsing: myEventHoldLapsing,
+            VenueRequestsToDecide: venueRequestsToDecide,
+            EventScheduleChanges: eventScheduleChanges));
     }
+
+    /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>
+    private static NotificationBucket Fold(IReadOnlyList<OrgScopedBucket> slices)
+        => slices.Count == 0
+            ? NotificationBucket.Empty
+            : new NotificationBucket(
+                slices.Sum(s => s.Count),
+                slices.Where(s => s.OldestUnreadUtc.HasValue).Select(s => s.OldestUnreadUtc).DefaultIfEmpty(null).Min());
 
     /// <summary>
     /// Collapses a stream of arrival timestamps into a count plus the earliest of them, in one

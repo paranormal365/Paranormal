@@ -1,0 +1,284 @@
+import Foundation
+import SwiftData
+
+/// What a marker means. The enum the person sees; the wire carries it as a `marker`
+/// measurements label, since the spec's `triggered_by` is a closed enum of three values.
+public enum MarkerKind: String, Codable, Sendable, CaseIterable {
+    case manual = "manual_marker"
+    case sentryEmf = "sentry_emf"
+    case sentrySound = "sentry_sound"
+    case evpQuestion = "evp_question"
+    case evpWaitEnd = "evp_wait_end"
+    /// The device itself was moved — a bump, a knock, somebody picking it up.
+    case deviceMoved = "device_moved"
+    /// Something in the camera's view moved.
+    case sceneMotion = "scene_motion"
+    /// The app was put away — the home screen, another app, the phone locked — while the session
+    /// ran. Sound and readings carry on (the app declares the background-audio mode for exactly
+    /// this); the camera cannot, because iOS takes it from any app that is not on screen.
+    case appBackgrounded = "app_backgrounded"
+    /// The app came back after being put away.
+    case appReturned = "app_returned"
+
+    /// Which of the spec's three legal `triggered_by` values this kind reports as.
+    public var trigger: FieldReading.Trigger {
+        switch self {
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: .event
+        case .manual, .evpQuestion, .evpWaitEnd: .manual
+        }
+    }
+
+    public var isAutomatic: Bool {
+        switch self {
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: true
+        case .manual, .evpQuestion, .evpWaitEnd: false
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .manual: "Marked"
+        case .sentryEmf: "Magnetic spike"
+        case .sentrySound: "Sound"
+        case .evpQuestion: "Question asked"
+        case .evpWaitEnd: "Stopped waiting"
+        case .deviceMoved: "Device moved"
+        case .sceneMotion: "Movement seen"
+        case .appBackgrounded: "App put away"
+        case .appReturned: "Back in the app"
+        }
+    }
+}
+
+public enum CaptureKind: String, Codable, Sendable {
+    case photo, video, audio
+
+    public var mediaTypePrefix: String { self == .photo ? "image/" : "\(rawValue)/" }
+}
+
+/// Where a session is. `interrupted` is not a failure to hide — a session that ended because
+/// the phone died is a fact a reviewer needs, and its `ended_at` is genuinely unknown.
+///
+/// `pending` (item 215, Ben 2026-09-04): created and open on the live screen, but nothing is
+/// being logged yet. The sensors run so the gauge moves and a base level can be set, and the
+/// person presses Start when the room is ready. It is a THIRD state on purpose: a pending
+/// session that the phone dies on lost nothing, so it must not be reported as interrupted, and
+/// it holds no readings, so it must not be listed as a recording.
+public enum FieldSessionOutcome: String, Codable, Sendable {
+    case pending, recording, ended, interrupted
+}
+
+/// One field session. SwiftData holds the low-volume, editable, relational rows; the readings
+/// themselves stream to an append-only log beside them, because a five-hour session is tens of
+/// thousands of readings and inserting those one at a time through a MainActor context would
+/// make the live screen unusable.
+@Model
+public final class FieldSession {
+    @Attribute(.unique) public var id: UUID
+
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var outcomeRaw: String
+
+    /// The operator's own words for where this is — "back bedroom, north wall".
+    public var locationLabel: String?
+
+    /// Set when the session was started against one of the user's investigations. Nil is
+    /// ordinary: a tour guide or somebody scouting a building records without one.
+    public var investigationId: UUID?
+    public var investigationTitle: String?
+
+    /// Denormalised so the sessions list never has to open a log file to draw a row.
+    public var readingCount: Int
+    public var markerCount: Int
+    public var captureCount: Int
+
+    /// Baselines as armed, in the units the wire uses.
+    public var baselineEmfMicrotesla: Double?
+    public var baselineSoundDbfs: Double?
+
+    public var batteryPercentAtStart: Double?
+    public var deviceModel: String
+
+    /// What this session was set up to record, chosen before it opened and adjustable on the live
+    /// screen. Stored so a session that outlives the app's process comes back recording the same
+    /// things — and so the video button is where it was left, rather than gone.
+    ///
+    /// OPTIONAL on purpose: an added optional attribute is the one shape SwiftData will migrate
+    /// without being asked, and every session recorded before this existed ran the defaults.
+    public var channelsRaw: Int?
+
+    /// Set once the session's document has reached the server. The device keeps everything
+    /// regardless — this says what is safe to delete, never what has been deleted.
+    public var serverSessionId: UUID?
+    public var uploadedAt: Date?
+    public var timezoneIdentifier: String
+
+    /// When this session arrived on this device as a `.ben`, rather than being recorded here.
+    ///
+    /// Ben, 2026-09-16: "someone else can share their .ben file with another person on the
+    /// iphone and the other person can view it like they had recorded it themselves." It plays
+    /// exactly as if they had; this is only the record that they did not. Optional, like every
+    /// attribute added after the first release — the one shape SwiftData migrates unasked.
+    public var importedAt: Date?
+
+    /// The device that recorded it, as its seal said — `identifierForVendor` of the phone the
+    /// session was made on. Nil for a session recorded here. Compared with this device's own id,
+    /// it is how the list tells "shared with you" from "yours, pulled back from the server".
+    public var sourceDeviceId: String?
+
+    /// The account the seal named as having recorded it, when the bundle said.
+    public var recordedByAccountId: UUID?
+
+    @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
+    public var markers: [FieldMarker]
+    @Relationship(deleteRule: .cascade, inverse: \FieldCapture.session)
+    public var captures: [FieldCapture]
+
+    public init(id: UUID = UUID(),
+                startedAt: Date,
+                locationLabel: String? = nil,
+                investigationId: UUID? = nil,
+                investigationTitle: String? = nil,
+                batteryPercentAtStart: Double? = nil,
+                deviceModel: String,
+                channels: CaptureChannels = .default,
+                timezoneIdentifier: String = TimeZone.current.identifier) {
+        self.id = id
+        self.startedAt = startedAt
+        // Pending until Start is pressed on the live screen — see FieldSessionOutcome.
+        self.outcomeRaw = FieldSessionOutcome.pending.rawValue
+        self.locationLabel = locationLabel
+        self.investigationId = investigationId
+        self.investigationTitle = investigationTitle
+        self.readingCount = 0
+        self.markerCount = 0
+        self.captureCount = 0
+        self.batteryPercentAtStart = batteryPercentAtStart
+        self.deviceModel = deviceModel
+        self.channelsRaw = channels.rawValue
+        self.timezoneIdentifier = timezoneIdentifier
+        self.markers = []
+        self.captures = []
+    }
+
+    public var outcome: FieldSessionOutcome {
+        get { FieldSessionOutcome(rawValue: outcomeRaw) ?? .interrupted }
+        set { outcomeRaw = newValue.rawValue }
+    }
+
+    /// A session recorded before channels were remembered ran the defaults, and says so rather
+    /// than coming back recording nothing.
+    public var channels: CaptureChannels {
+        get { channelsRaw.map(CaptureChannels.init(rawValue:)) ?? .default }
+        set { channelsRaw = newValue.rawValue }
+    }
+
+    /// How long it ran. An interrupted session has no honest end, so it reports what was
+    /// actually observed rather than pretending it stopped when the app happened to relaunch.
+    public var duration: TimeInterval? {
+        guard let endedAt else { return nil }
+        return endedAt.timeIntervalSince(startedAt)
+    }
+}
+
+@Model
+public final class FieldMarker {
+    @Attribute(.unique) public var id: UUID
+    public var at: Date
+    public var kindRaw: String
+    /// Editable in review — a marker dropped in the dark gets its explanation later.
+    public var note: String?
+
+    /// Set when a recording was running: which file, and how far into it.
+    public var audioFilename: String?
+    public var audioOffsetSeconds: Double?
+
+    /// What the instruments read at that moment, kept for the review list so the timeline does
+    /// not have to seek the log.
+    public var emfMicrotesla: Double?
+    public var soundDbfs: Double?
+
+    public var latitude: Double?
+    public var longitude: Double?
+    /// The room this was marked in.
+    public var room: String?
+
+    public var session: FieldSession?
+
+    public init(id: UUID = UUID(), at: Date, kind: MarkerKind, note: String? = nil,
+                audioFilename: String? = nil, audioOffsetSeconds: Double? = nil,
+                emfMicrotesla: Double? = nil, soundDbfs: Double? = nil,
+                latitude: Double? = nil, longitude: Double? = nil, room: String? = nil) {
+        self.id = id
+        self.at = at
+        self.kindRaw = kind.rawValue
+        self.note = note
+        self.room = room
+        self.audioFilename = audioFilename
+        self.audioOffsetSeconds = audioOffsetSeconds
+        self.emfMicrotesla = emfMicrotesla
+        self.soundDbfs = soundDbfs
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+
+    public var kind: MarkerKind {
+        get { MarkerKind(rawValue: kindRaw) ?? .manual }
+        set { kindRaw = newValue.rawValue }
+    }
+}
+
+@Model
+public final class FieldCapture {
+    @Attribute(.unique) public var id: UUID
+    public var at: Date
+    public var kindRaw: String
+    /// Relative to the session directory — `media/photo-001.jpg`. Never absolute: this is the
+    /// path that ends up in an exported bundle, where absolute paths are a security boundary.
+    public var relativePath: String
+    public var byteCount: Int64
+    public var durationSeconds: Double?
+
+    public var latitude: Double?
+    public var longitude: Double?
+    public var headingDegrees: Double?
+
+    /// When this file reached the server, if it has. Per FILE, because somebody picks three of
+    /// twenty and the rest are still only on the phone.
+    public var uploadedAt: Date?
+    /// Why the last attempt failed, kept so a retry is an informed one rather than a guess.
+    public var uploadProblem: String?
+
+    /// The room the operator said they were in when this was captured. The only dependable
+    /// answer to "where in the building was this taken" — a fix cannot tell rooms apart.
+    public var room: String?
+
+    /// Marked as the picture that represents the property — the one a case or an investigation
+    /// would show. Optional by design: most captures are evidence, not a portrait, and nothing
+    /// is chosen unless somebody chooses it.
+    public var isRepresentative: Bool = false
+
+    public var session: FieldSession?
+
+    public init(id: UUID = UUID(), at: Date, kind: CaptureKind, relativePath: String,
+                byteCount: Int64, durationSeconds: Double? = nil,
+                latitude: Double? = nil, longitude: Double? = nil,
+                headingDegrees: Double? = nil, room: String? = nil) {
+        self.id = id
+        self.at = at
+        self.kindRaw = kind.rawValue
+        self.relativePath = relativePath
+        self.byteCount = byteCount
+        self.durationSeconds = durationSeconds
+        self.latitude = latitude
+        self.longitude = longitude
+        self.headingDegrees = headingDegrees
+        self.room = room
+    }
+
+    public var kind: CaptureKind {
+        get { CaptureKind(rawValue: kindRaw) ?? .photo }
+        set { kindRaw = newValue.rawValue }
+    }
+}

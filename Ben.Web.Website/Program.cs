@@ -1,6 +1,11 @@
+﻿using Ben.Data.Common;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.HttpOverrides;
+using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
 using Ben.Web.Website.Components;
+using Ben.Web.Website.Services;
 using Ben.Web.Services.Help;
 using Ben.Video.Editor.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -34,36 +39,38 @@ builder.Host.UseSerilog();
 builder.Services.AddTelerikBlazor();
 builder.Services.AddBenVideoEditor(options =>
 {
-    options.MultiTrack      = true;
-    options.AudioTracks     = true;
-    options.Transitions     = true;
-    options.TextOverlays    = true;
-    options.VideoEffects    = true;
-    options.MediaLibrary    = true;
-    options.ProjectPersistence = true;
-    options.ErrorLog        = true;
-    options.RippleEdit      = true;
-    // Item #36 phase E rollout: background render worker + rough/fine two-pass preview.
-    options.BackgroundRendering = true;
-    // Item #70 phase 173: show the "Native acceleration" panel so a user who has installed the
-    // sidecar can pair with it. Opt-in twice over — this only makes the editor probe the user's
-    // own loopback ports and render the pairing panel; nothing is routed anywhere until they
-    // paste that sidecar's one-time code. With no sidecar installed the probe finds nothing and
-    // every path stays on ffmpeg.wasm exactly as before.
-    options.NativeSidecar   = true;
-    options.MediaLibraryBaseUrl = builder.Configuration["WebApi:BaseUrl"];
-    // Turns on SharedCatalogAssetProvider, which has existed in the editor since phase 49 but
-    // stayed dark because nothing served GET /api/video-assets. That endpoint is now real, so
-    // the shared clipart library shows up in the editor's asset browser. The catalog's read
-    // endpoints are anonymous by design — this named HttpClient carries no auth handler.
-    options.AssetCatalogUrl = builder.Configuration["WebApi:BaseUrl"];
-    options.DocumentPostUrl = $"{builder.Configuration["WebApi:BaseUrl"]}/api/video-projects";
+    // The same editor the standalone host offers — one list, in VideoEditorHostDefaults, so the
+    // two hosts cannot drift again. Includes the native sidecar panel: it only makes the editor
+    // probe the user's own loopback ports, and nothing is routed there until they paste that
+    // sidecar's one-time pairing code.
+    VideoEditorHostDefaults.ApplyEditingDefaults(options);
+
+    // Site-absolute: the downloads page lives under the standalone editor, and the site's own
+    // editor pages are elsewhere entirely (2026-09-05 audit, F17).
+    options.SidecarDownloadUrl = "/editors/video/downloads/";
+
+    // What that page is handing out, so the editor can tell somebody their installed sidecar is
+    // older than it. Nothing else tells them: there is no auto-updater and no update feed, so an
+    // install from before 1.1.0 would otherwise go on watching the whole filesystem for ever.
+    options.PublishedSidecarVersion = Ben.Video.Core.SidecarContracts.SidecarRelease.Version;
+
+    // Media library, shared asset catalog and Save-to-server. The catalog's read endpoints are
+    // anonymous by design, so its named HttpClient carries no auth handler.
+    VideoEditorHostDefaults.ApplyServerIntegration(options, builder.Configuration["WebApi:BaseUrl"]);
 });
 // Override the default HttpMediaLibraryProvider with one that injects the bearer token.
 builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryProvider, BenMediaLibraryProvider>();
+// BenMediaLibraryProvider answers the scope question too (item 91). The editor's own registration
+// resolves IMediaLibraryScopeSource by casting whatever IMediaLibraryProvider is registered, so
+// this line is what makes that cast land on the site's provider rather than the editor's default.
+builder.Services.AddScoped<Ben.Video.Editor.Services.IMediaLibraryScopeSource>(sp =>
+    (Ben.Video.Editor.Services.IMediaLibraryScopeSource)
+        sp.GetRequiredService<Ben.Video.Editor.Services.IMediaLibraryProvider>());
 // Handles VideoEditor.OnPublishExport — sends a finished render to the server, saving the project
 // first when it has never been saved (the publish endpoint attaches to an existing project row).
 builder.Services.AddScoped<VideoExportPublisher>();
+// Its feed sibling (item 186 F7): the editor's "Post to the feed" destination.
+builder.Services.AddScoped<FeedExportPublisher>();
 // Records a sidecar pairing against the signed-in account, using the circuit's token. The WASM
 // host registers its own implementation; the editor calls whichever it finds, or none.
 builder.Services.AddScoped<Ben.Video.Editor.Services.ISidecarPairingReporter,
@@ -73,17 +80,107 @@ builder.Services.Configure<WebApiOptions>(builder.Configuration.GetSection("WebA
 // and the link previews that carry a shared URL into a chat window.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
 builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
+// Backs both ticket services. Singleton and in-memory: a restart empties it, which costs nothing
+// this app had — a Blazor Server restart has already destroyed every circuit, so the pages holding
+// those URLs are gone anyway (item 201).
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<Ben.Web.Website.Services.BrowserTicketStore>();
+builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
+
+// Points the video editor's Server tab at the media relay above, so a clip streams from the API
+// to the browser instead of through this process (2026-09-05 audit, site-2).
+builder.Services.AddScoped<Ben.Web.Services.IMediaTicketMinter,
+                           Ben.Web.Website.Services.SiteMediaTicketMinter>();
+builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
+
+// The video editor's publish path. Registered so VideoExportPublisher prefers it over reading the
+// render back through the circuit, which Blazor caps at 32 KB and which therefore could not
+// publish a real video at all (2026-09-05 audit, site-1).
+builder.Services.AddScoped<Ben.Web.Services.IVideoUploadRelay,
+                           Ben.Web.Website.Services.BrowserVideoUploadRelay>();
+
+// The same idea for a file onto a case: the browser posts it to this site's own relay, so the
+// upload component can show progress. Reading it through the circuit showed none at all.
+builder.Services.AddScoped<Ben.Web.Services.ICaseFileUploads,
+                           Ben.Web.Website.Services.SiteCaseFileUploads>();
+
+// Save to Server, through the client this host already authenticates. The editor's default store
+// posts over a named HttpClient, and the bearer token here lives in the circuit where a
+// root-registered message handler cannot reach it — so that button answered 401, always
+// (2026-09-05 audit, F13).
+builder.Services.AddScoped<Ben.Video.Editor.Services.IProjectServerStore,
+                           Ben.Web.Services.BenProjectServerStore>();
+builder.Services.AddScoped<Ben.Web.Services.IMediaUrlBuilder, Ben.Web.Website.Services.MediaUrlBuilder>();
+// ApiBasePathHandler is what keeps "/webapi" attached. Every call site writes its path with a
+// leading slash, which BaseAddress treats as root-relative and so discards the base path - see the
+// handler for the full story. Harmless when the API is at an origin root, as it is in development.
 builder.Services.AddHttpClient<IWebApiIdentityClient, WebApiIdentityClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
-});
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
+
 builder.Services.AddHttpClient<IWebApiClient, WebApiClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
-});
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IWebApiAuthService, WebApiAuthService>();
+
+// The SAME instance, not a second one. WebApiAuthService holds the circuit's token store, so a
+// separate instance would adopt a session nothing on the page can see.
+builder.Services.AddScoped<IExternalSignInAdopter>(sp =>
+    (IExternalSignInAdopter)sp.GetRequiredService<IWebApiAuthService>());
+
+// ── Sign in with Apple, on the web ────────────────────────────────────────────
+//
+// A Services ID, NOT one of the app bundle ids: Apple identifies a website differently from an app,
+// and that value becomes the token's audience, so it must also be in the API's Apple:ClientIds.
+// Ships unconfigured, and the button hides itself until it is set — a door that cannot open is
+// worse than no door.
+builder.Services.AddSingleton(sp =>
+{
+    var section = sp.GetRequiredService<IConfiguration>().GetSection("Apple");
+    return new AppleWebOptions(
+        section["ServicesId"] ?? string.Empty,
+        section["RedirectUri"] ?? string.Empty);
+});
+
+// Singleton: it hands a token from a plain HTTP endpoint to a Blazor circuit, and those are two
+// different scopes. See the class for why the token travels as an opaque code.
+builder.Services.AddSingleton<Ben.Web.Website.Services.AppleSignInHandoff>();
+
+// Apple Maps (item 228). The private key is read from a FILE named in configuration, never from
+// configuration itself: the repository is public and the development settings sit beside it.
+// A missing or empty path means "not configured": every map on the site then says it could not
+// be loaded, which is the honest state of a deployment with no key. A malformed key, by contrast,
+// throws at startup — that is a deployment mistake and should stop the deploy.
+builder.Services.AddSingleton(sp =>
+{
+    var section = sp.GetRequiredService<IConfiguration>().GetSection("Maps");
+    var path = section["PrivateKeyPath"];
+    var pem = PrivateKeyFile.ReadOrEmpty(path, "Maps:PrivateKeyPath");
+    return new Ben.Web.Website.Services.MapKitSigningOptions(
+        section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
+});
+builder.Services.AddSingleton<Ben.Web.Website.Services.MapKitTokenService>();
+builder.Services.AddSingleton(sp => new Ben.Web.Website.Library.Kit.Maps.MapsOptions(
+    sp.GetRequiredService<Ben.Web.Website.Services.MapKitTokenService>().IsConfigured));
+
+// The client itself is shared with the desktop app. It adopts through IExternalSignInAdopter,
+// which WebApiAuthService implements, so a website Apple sign-in lands exactly where a password
+// one does.
+//
+// No bearer handler on this one: both Apple doors are anonymous, and the whole point is that the
+// person has no session yet.
+builder.Services.AddHttpClient<AppleSignInClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IBenAdminClient, BenAdminClientAdapter>();
 builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredService<IWebApiTokenStore>());
 // One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
@@ -100,17 +197,38 @@ builder.Services.AddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
 // Help documents are embedded, immutable between deployments and identical for every reader, so
 // one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
 // in the resolver instead.
+// Singleton: which sections are on is a property of the site, not of the visitor, so one
+// snapshot serves every circuit. It refreshes itself behind readers and falls back to the
+// declared defaults, so the navigation and the route guards can answer synchronously during the
+// first render — which is what lets a switched-off section refuse its URL instead of drawing and
+// then hiding itself.
+builder.Services.AddSingleton<SiteFeaturesProvider>();
+
 builder.Services.AddSingleton<HelpContentService>();
 builder.Services.AddScoped<HelpViewerResolver>();
+
+// The public changelog. A singleton for the same reason the help is one: the content is embedded
+// and cannot change without a redeploy, so parsing it per request would buy nothing.
+builder.Services.AddSingleton<Ben.Web.Services.Changelog.ChangelogService>();
 
 // ── Microsoft Entra OIDC ─────────────────────────────────────────────────────
 // EntraTokenHolder is populated by middleware before the Blazor circuit starts
 // so that the access token is available to components after the circuit is up.
 builder.Services.AddScoped<EntraTokenHolder>();
 
+// A year, not the 30-day default, and every subdomain: www serves the same site over TLS and
+// nothing else answers under ishaunted.com. Not preloaded - that is a one-way door into the
+// browser lists and a decision to take on its own, once the www redirect is settled.
+builder.Services.AddHsts(hsts =>
+{
+    hsts.MaxAge            = TimeSpan.FromDays(365);
+    hsts.IncludeSubDomains = true;
+});
+
 var azureAd = builder.Configuration.GetSection("AzureAd");
-bool entraEnabled = !string.IsNullOrWhiteSpace(azureAd["ClientId"])
-                    && azureAd["ClientId"] != "YOUR_WEBAPP_CLIENT_ID";
+// One rule, shared with Ben.Data.WebApi, so the two hosts cannot disagree about whether Entra is
+// configured - see EntraConfig for what went wrong when they each had their own.
+bool entraEnabled = EntraConfig.IsConfigured(azureAd["ClientId"]);
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -120,12 +238,15 @@ builder.Services
         cookie.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 
+var tenantId = EntraConfig.TenantOrCommon(azureAd["TenantId"]);
+bool multiTenant = EntraConfig.IsMultiTenant(tenantId);
+
 if (entraEnabled)
 {
     builder.Services.AddAuthentication()
         .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, oidc =>
         {
-            oidc.Authority = $"https://login.microsoftonline.com/{azureAd["TenantId"]}/v2.0";
+            oidc.Authority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
             oidc.ClientId = azureAd["ClientId"];
             oidc.ClientSecret = azureAd["ClientSecret"];
             oidc.ResponseType = OpenIdConnectResponseType.Code;
@@ -143,10 +264,16 @@ if (entraEnabled)
 
             oidc.TokenValidationParameters = new TokenValidationParameters
             {
-                // ValidateIssuer must be false when TenantId = "common".
-                // Each user's token carries their own tenant-specific issuer URL,
-                // not the /common endpoint URL used during discovery.
-                ValidateIssuer = false,
+                // ValidateIssuer has to be false on the multi-tenant authorities: every user's
+                // token carries their own tenant's issuer URL, not the /common URL used during
+                // discovery, so there is no single value to check against.
+                //
+                // Pointed at one tenant there is, and leaving this off would be a real hole -
+                // a token minted in ANY Microsoft tenant would satisfy the rest of the checks.
+                // ValidIssuer is deliberately not set: the handler then takes the issuer from
+                // the authority's own discovery document, which is correct whether TenantId is
+                // written as a GUID or as a domain name (the token always says GUID).
+                ValidateIssuer = !multiTenant,
                 NameClaimType = "preferred_username",
             };
 
@@ -166,6 +293,83 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+// ── Behind a reverse proxy ──────────────────────────────────────────────────
+//
+// Must run BEFORE anything that inspects the scheme — UseHttpsRedirection below is the one that
+// matters. A proxy (Cloudflare Tunnel today, Azure App Service later) terminates TLS and forwards
+// to this app over plain HTTP, so without this the app sees IsHttps == false, issues its
+// 307 to https://, the proxy fetches that, and the request loops. The site looks completely
+// broken with nothing wrong in IIS.
+//
+// Only X-Forwarded-Proto and X-Forwarded-For are honoured. Both are trivially spoofable by a
+// client, so ASP.NET Core trusts them **only from loopback** by default and that default is left
+// alone deliberately: cloudflared runs on this machine and connects to localhost, so the immediate
+// peer genuinely is loopback. Widening KnownProxies/KnownNetworks would let any caller claim to
+// have arrived over HTTPS from any address.
+//
+// X-Forwarded-For also restores the real client IP, which the audit log would otherwise record as
+// the proxy for every single request.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+});
+
+// ── Security response headers ───────────────────────────────────────────────
+// Two headers, both cheap, both closing a real gap the deploy audit named:
+//
+//   X-Content-Type-Options: nosniff — stops a browser second-guessing a declared content type.
+//     This site serves user-uploaded files, and a browser that decides an uploaded "image" is
+//     really HTML will run it as HTML on this origin. The upload paths already refuse SVG for
+//     exactly that reason; this is the same defence applied to everything at once.
+//
+//   Referrer-Policy: strict-origin-when-cross-origin — the full URL stops travelling to other
+//     sites in the Referer header. Paths here carry case, investigation, place and organization
+//     ids, so a link out to a map or an evidence source was quietly handing that address to a
+//     third party. Same-origin navigation keeps the full path, so nothing internal changes.
+//
+// Deliberately NOT a Content-Security-Policy: this site loads Telerik, wavesurfer, mapping and
+// inline Blazor bootstrap script, and a CSP written blind would either be so loose it means
+// nothing or would break the editor in ways only found in production. It is worth doing
+// properly, on its own, with the browser console open.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // Nothing on this site is meant to live inside another site's frame, and nothing here frames
+    // itself (no <iframe> anywhere in the Razor). Both headers, because older browsers read only
+    // the first and everything current reads the second. This is the whole of the site's CSP on
+    // purpose - see the note above about why a full policy is a separate piece of work.
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+    await next();
+});
+
+// -- One canonical host -----------------------------------------------------
+//
+// See CanonicalHost for why this exists: www serves this same site, and a sign-in begun there
+// fails its state check because Apple posts back to the bare name. Runs after the forwarded
+// headers so the scheme is the one the person actually used, and before anything that does work
+// on a request that is about to be moved.
+app.Use(async (context, next) =>
+{
+    var apex = CanonicalHost.ApexFor(context.Request.Host.Host, context.Request.Path.Value);
+    if (apex is not null)
+    {
+        var host = context.Request.Host.Port is int port
+            ? new HostString(apex, port)
+            : new HostString(apex);
+
+        context.Response.Redirect(
+            UriHelper.BuildAbsolute(
+                context.Request.Scheme, host, context.Request.PathBase,
+                context.Request.Path, context.Request.QueryString),
+            permanent: true);
+        return;
+    }
+
+    await next();
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -228,9 +432,571 @@ app.MapGet("/auth/entra-signout", async (HttpContext ctx) =>
         });
 }).AllowAnonymous();
 
+// ── Sign in with Apple ───────────────────────────────────────────────────────
+//
+// Two endpoints rather than a Blazor page, because Apple answers with a form POST and a form POST
+// has no circuit. The token then crosses to a page through AppleSignInHandoff as an opaque code,
+// so it never appears in a URL, a log, or a browser history entry.
+//
+// NOTE: neither of these can be exercised on a development machine. Apple refuses a plain-http or
+// localhost redirect, so the round trip needs a real https host and a Services ID. Everything
+// either side of the redirect is deliberately pure and covered by tests.
+const string AppleStateCookie = "ben.apple.state";
+
+app.MapGet("/auth/apple-signin", (HttpContext ctx, AppleWebOptions options) =>
+{
+    if (!options.IsConfigured)
+        return Results.Redirect("/login");
+
+    var state = AppleWebAuthorizeRequest.NewSecret();
+    var nonce = AppleWebAuthorizeRequest.NewSecret();
+
+    // SameSite=None because Apple posts the answer back cross-site; without it the browser drops
+    // the cookie and every sign-in fails the state check for a reason nothing on screen explains.
+    // Secure is required alongside None, and is correct anyway: this flow is https-only.
+    ctx.Response.Cookies.Append(AppleStateCookie, $"{state}:{nonce}", new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.None,
+        MaxAge = TimeSpan.FromMinutes(10),
+        Path = "/",
+    });
+
+    return Results.Redirect(AppleWebAuthorizeRequest.Build(options, state, nonce).ToString());
+}).AllowAnonymous();
+
+app.MapPost("/auth/apple-callback", async (
+    HttpContext ctx,
+    AppleWebOptions options,
+    Ben.Web.Website.Services.AppleSignInHandoff handoff) =>
+{
+    if (!options.IsConfigured)
+        return Results.Redirect("/login");
+
+    ctx.Request.Cookies.TryGetValue(AppleStateCookie, out var stashed);
+
+    // Spent either way. A state value that survives one answer can authenticate a second.
+    ctx.Response.Cookies.Delete(AppleStateCookie, new CookieOptions
+    {
+        HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Path = "/",
+    });
+
+    var expectedState = stashed?.Split(':', 2).FirstOrDefault();
+
+    var form = await ctx.Request.ReadFormAsync();
+    var fields = form.ToDictionary(f => f.Key, f => (string?)f.Value.ToString(), StringComparer.Ordinal);
+
+    var callback = AppleWebAuthorizeRequest.ReadCallback(fields, expectedState);
+
+    // Closing Apple's page is a decision, not a failure. Back to sign-in with nothing to apologise
+    // for.
+    if (callback.WasCancelled)
+        return Results.Redirect("/login");
+
+    if (!callback.Succeeded)
+        return Results.Redirect("/login?appleError=1");
+
+    var code = handoff.Stash(callback.IdentityToken!, callback.DisplayName, callback.Code);
+    return Results.Redirect($"/apple/complete?code={Uri.EscapeDataString(code)}");
+}).AllowAnonymous().DisableAntiforgery();
+
 app.MapStaticAssets();
 app.UseAntiforgery();
 
+// ── /build-info.json - which build is actually on disk ───────────────────────
+//
+// Read from disk PER REQUEST, deliberately: this is what the deploy script's smoke check asks
+// for to prove the copy phase really happened, so a value cached at startup would answer for the
+// process rather than for the files and defeat the point.
+//
+// It needs its own endpoint because MapStaticAssets serves only what the build-time manifest
+// (Ben.Web.Website.staticwebassets.endpoints.json) lists, and the deploy script stamps this file
+// into wwwroot AFTER publish - so the framework 404s it while it sits there on disk. That 404 is
+// exactly what the first identity-checked deploy hit on 2026-08-27.
+app.MapGet("/build-info.json", (IWebHostEnvironment env) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "wwwroot", "build-info.json");
+    return File.Exists(path)
+        ? Results.Text(File.ReadAllText(path), "application/json")
+        : Results.NotFound();
+}).AllowAnonymous();
+
+
+// ── Universal links and the web manifest (item 209) ──────────────────────────
+//
+// Both are endpoints rather than files in wwwroot, for the same two reasons: the association file
+// has NO EXTENSION so static middleware has no content type for it, and both must be served with
+// an exact type — iOS refuses an association file that is not application/json, over HTTPS, with
+// no redirect in front of it. Building them here also means the app identifier and the site name
+// come from configuration instead of from a JSON blob nothing validates.
+//
+// The path is the modern one. iOS 9 looked in the site root; every version since checks
+// /.well-known/ first, and serving only the well-known copy is what Apple documents today.
+// ── Apple domain verification, for Sign in with Apple on the web ─────────────
+//
+// Apple will not accept a Return URL until it has fetched this file from the domain and matched it
+// against what the portal issued. The contents are a blob Apple generates; it is not a secret, and
+// it must be served EXACTLY as downloaded — a trailing newline added by an editor is enough to
+// fail verification, which is why it is a config value rather than a file somebody edits.
+//
+// No default, for the same reason the association file below has none: serving a wrong or empty
+// one is worse than a 404, because the portal reports it as a mismatch rather than as absent.
+app.MapGet("/.well-known/apple-developer-domain-association.txt", (IConfiguration config) =>
+{
+    var association = config["Apple:DomainAssociation"];
+
+    return string.IsNullOrWhiteSpace(association)
+        ? Results.NotFound()
+        : Results.Text(association, "text/plain");
+}).AllowAnonymous();
+
+// The token MapKit JS presents to Apple (item 228). Anonymous, because the map on the home page
+// is; same-origin, because the token names the origin it was minted for and Apple refuses it
+// anywhere else. 404 when unconfigured, for the same reason as the files above: a page that
+// fetches this and gets nothing useful should fail the way an absent feature fails.
+//
+// ?origin= mints for a DIFFERENT origin, but only one listed in Maps:AllowedTokenOrigins — empty in
+// production, the local canvas editor (http://localhost:5125) in development, where it runs on its
+// own port and a same-origin token would draw no tiles (canvas plan M6-12). Anything unlisted is 404,
+// never a token for somebody else's site. See MapKitTokenOrigin.
+app.MapGet(Ben.Web.Website.Library.Kit.Maps.MapsOptions.TokenPath,
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config) =>
+{
+    if (!tokens.IsConfigured) return Results.NotFound();
+
+    var requestOrigin = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    var allowed = config.GetSection("Maps:AllowedTokenOrigins").Get<string[]>() ?? [];
+    var origin = Ben.Web.Website.Services.MapKitTokenOrigin.Resolve(requestOrigin, ctx.Request.Query["origin"], allowed);
+    if (origin is null) return Results.NotFound();
+
+    if (!string.Equals(origin, requestOrigin, StringComparison.OrdinalIgnoreCase))
+    {
+        // The override exists for a page on another origin, which fetches this cross-origin.
+        ctx.Response.Headers.AccessControlAllowOrigin = origin;
+        ctx.Response.Headers.Vary = "Origin";
+    }
+    ctx.Response.Headers.CacheControl = "no-store";
+    return Results.Text(tokens.Issue(origin, DateTimeOffset.UtcNow), "text/plain");
+}).AllowAnonymous();
+
+// A still picture of a place for the canvas editor's map boxes (canvas plan R35): a redirect to a signed Apple
+// Maps Web Snapshot, so the browser fetches the picture from Apple and nothing is stored here (Apple's terms keep
+// map data temporary). The signed address expires with the token lifetime; the redirect is cached privately for
+// a little less. 404 when maps are unconfigured or when the request is not from our own pages - see
+// MapKitSnapshotRequest.
+app.MapGet("/auth/mapkit-snapshot",
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config) =>
+{
+    if (!tokens.IsConfigured) return Results.NotFound();
+
+    var q = ctx.Request.Query;
+    var ask = Ben.Web.Website.Services.MapKitSnapshotRequest.Read(
+        q["lat"], q["lng"], q["z"], q["w"], q["h"], q["scheme"],
+        $"{ctx.Request.Scheme}://{ctx.Request.Host}", ctx.Request.Headers.Referer,
+        config.GetSection("Maps:AllowedTokenOrigins").Get<string[]>() ?? []);
+    if (ask is null) return Results.NotFound();
+
+    ctx.Response.Headers.CacheControl = "private, max-age=1500";
+    return Results.Redirect(tokens.SnapshotUrl(ask.Latitude, ask.Longitude, ask.Zoom, ask.Width, ask.Height, ask.ColorScheme, DateTimeOffset.UtcNow));
+}).AllowAnonymous();
+
+app.MapGet("/.well-known/apple-app-site-association", (IConfiguration config) =>
+{
+    // No default. An association file naming the wrong team would be worse than none: it claims
+    // links for an app that cannot open them, and the failure appears only on somebody's phone.
+    var appId = config["Apple:AppLinks:AppId"];
+    if (string.IsNullOrWhiteSpace(appId)) return Results.NotFound();
+
+    return Results.Json(
+        Ben.Web.Website.Services.AppleAppSiteAssociation.For(appId),
+        contentType: "application/json");
+}).AllowAnonymous();
+
+app.MapGet("/manifest.webmanifest", (
+    Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site) =>
+    Results.Json(
+        Ben.Web.Website.Services.WebAppManifest.For(site.Value),
+        contentType: "application/manifest+json"))
+    .AllowAnonymous();
+
+
+// ── /go/{adId} — the counted door on a promoted card (item 186 F8) ───────────
+// A minimal endpoint, not a Blazor page: a redirect must not stand up a circuit. The API counts
+// the click and answers where the card leads; the redirect renders from NOTHING but the two
+// fields of that closed-set answer. Any failure lands on /find — a stale ad in an old tab is a
+// person to deliver somewhere honest, never a dead end (item 149's rule).
+app.MapGet("/go/{adId:guid}", async (
+    Guid adId, IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    try
+    {
+        using var http = httpFactory.CreateClient();
+        http.Timeout = TimeSpan.FromSeconds(5);
+        using var response = await http.PostAsync(
+            $"{config["WebApi:BaseUrl"]}/api/public/promoted-groups/{adId}/click", null, ct);
+        if (response.IsSuccessStatusCode)
+        {
+            var target = await response.Content
+                .ReadFromJsonAsync<Ben.Service.Models.Entities.PromotedClickTarget>(cancellationToken: ct);
+            if (target is not null && target.TargetKind == "org"
+                && !string.IsNullOrWhiteSpace(target.OrganizationUrlName))
+                return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}");
+            // An event on this site (item 235 phase 11) — built from the two slugs, still never a free URL.
+            if (target is not null && target.TargetKind == "event"
+                && !string.IsNullOrWhiteSpace(target.OrganizationUrlName) && !string.IsNullOrWhiteSpace(target.EventUrlName))
+                return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}/events/{Uri.EscapeDataString(target.EventUrlName)}");
+        }
+    }
+    catch (Exception)
+    {
+        // The counter is garnish on the navigation, not the other way round.
+    }
+    return Results.Redirect("/find");
+});
+
+// ── Media, streamed ───────────────────────────────────────────────────────────
+//
+// The browser fetches a file's picture or bytes THROUGH here, and this process never holds the
+// file: the API's response is copied straight to the client as it arrives. What this replaced
+// fetched whole files into memory and base64'd them into the page, which took the site to
+// sixteen gigabytes on a media library and got it killed.
+//
+// The ticket carries WHO is asking (see MediaTicketService). The API remains the authority on
+// what they may see — this endpoint asserts nothing, it only forwards a bearer token — so the
+// audience rules cannot drift apart from the ones the API already enforces.
+// A session's recordings are gated on the investigation, not on the file's own audience, so they
+// come from the field-session endpoint. Same ticket, same streaming, different upstream path.
+app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
+    Guid sessionId, Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/field-sessions/{sessionId}/files/{fileId}",
+        accessToken, httpFactory, ctx, ct);
+});
+
+// One of a hosted event's files (item 235 phase 11). The ticket carries the viewer's token when
+// they are signed in; without one the API serves only what the event has made public.
+app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
+    Guid eventId, Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/files/{fileId}/download",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// What an organizer takes away from an event before its files are removed, as one zip (item 235 phase 12).
+// The organizer's own permission is checked by the API; the ticket carries who they are.
+app.MapGet("/media/event-keep/{orgId:guid}/{eventId:guid}", async (
+    Guid orgId, Guid eventId, string? ids, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(eventId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/organizations/{orgId}/events/{eventId}/keep.zip?ids={Uri.EscapeDataString(ids ?? "")}",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A photo or video in an event's room (item 235 phase 11). Members only, so the ticket is required.
+app.MapGet("/media/event-room/{eventId:guid}/{messageId:guid}", async (
+    Guid eventId, Guid messageId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(messageId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/room/messages/{messageId}/media",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A recording reached through a share link (item 207). No ticket and no bearer token: the share
+// token IS the authority, and the API re-checks its expiry, its revocation and which file it
+// covers on every request. This endpoint asserts nothing — it forwards a path and streams the
+// answer — which is what keeps the rule in one place instead of two that can drift apart.
+app.MapGet("/media/shared/{token}/files/{fileId:guid}", async (
+    string token, Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/shared-sessions/{Uri.EscapeDataString(token)}/files/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A tour guide's photograph (item 233). Anonymous end to end: it has to render for a guest who
+// has no account and may be reading it in an email client. The API decides — it serves the file
+// only while it is a photograph its owner has published — so this forwards and asserts nothing,
+// exactly like the share-link route above.
+app.MapGet("/media/guide-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/guide-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A picture from a tour's gallery (item 233). Anonymous like the guide photograph above: a tour
+// page is read by people with no account.
+// A picture from a hosted event's public gallery (item 235 phase 11). Anonymous, like a tour's.
+app.MapGet("/media/event-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/event-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A link preview's picture (2026-09-14): our own small copy of the picture another site published for its page. Anonymous
+// and un-ticketed on purpose — the address is stored inside research pages, and a card is drawn for readers who are not
+// signed in. The API serves only pictures it copied for a kept preview.
+app.MapGet("/media/link-preview/{previewId:guid}", async (
+    Guid previewId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/link-previews/{previewId}/thumbnail",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+app.MapGet("/media/venue-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/venue-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+app.MapGet("/media/tour-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/tour-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A session on a hosted event's programme, as a calendar file (item 235 phase 10). Anonymous: the
+// programme is public once published, and a calendar app following the link carries no session.
+app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics", async (
+    Guid eventId, Guid sessionId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/sessions/{sessionId}/calendar.ics",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+app.MapGet("/media/{fileId:guid}/{kind}", async (
+    Guid fileId, string kind, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    if (kind is not ("thumbnail" or "download")) return Results.NotFound();
+
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/upload-files/{fileId}/{kind}",
+        accessToken, httpFactory, ctx, ct);
+});
+
+// ── Chunked upload relays ────────────────────────────────────────────────────
+//
+// The browser PUTs chunks HERE, not to the API: page JavaScript holds no bearer token (and must
+// not), so the circuit mints an UploadTicket bound to the session and the relay speaks to the API
+// with the token inside it — the same trust shape as the media endpoints above, in the opposite
+// direction. Each relay streams the body straight through; the file never lands in this process.
+// The framework's request-size ceiling is off on the chunk PUT because the real ceiling is the
+// API's configurable chunk limit — these chunks are also what keeps every request under
+// Cloudflare's 100 MB, which is the reason chunked uploads exist at all.
+
+app.MapPut("/uploads/chunked/{sessionId:guid}/chunks/{index:int}", async (
+    Guid sessionId, int index, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // one chunk on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Put,
+        $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}/chunks/{index}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapGet("/uploads/chunked/{sessionId:guid}", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    using var request = new HttpRequestMessage(
+        HttpMethod.Get, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapPost("/uploads/chunked/{sessionId:guid}/complete", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // assembly of a large file is a slow disk copy
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}/complete");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+app.MapDelete("/uploads/chunked/{sessionId:guid}", async (
+    Guid sessionId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(sessionId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    using var request = new HttpRequestMessage(
+        HttpMethod.Delete, $"{config["WebApi:BaseUrl"]}/api/chunked-uploads/{sessionId}");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// The classic-upload relay: the same browser-side JS path, for the files chunking refuses (an
+// SVG is sanitised as a whole document) or doesn't help (anything small). The nonce is a random
+// id the circuit minted purely to bind the ticket to — one ticket, one upload gesture. The
+// multipart body streams through untouched, boundary and all.
+app.MapPost("/uploads/classic/{nonce:guid}", async (
+    Guid nonce, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(nonce, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/upload-files");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// The video editor's finished render, straight from the browser to the API.
+//
+// Publishing used to pull the whole file back into the circuit as one JS-interop byte[] return —
+// which Blazor Server caps at 32 KB by default, and which nothing here raises. A render is
+// megabytes at the very least, so a real one could not be published from the site at all
+// (2026-09-05 audit, site-1). The render lives in the browser's own storage; this hands it to the
+// API without it ever entering this process's memory, exactly as the other upload relays do.
+//
+// The ticket is bound to the project id, so a ticket minted for one publish cannot be replayed
+// against another project.
+app.MapPost("/uploads/video-project/{projectId:guid}", async (
+    Guid projectId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(projectId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // a long render on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/video-projects/{projectId}/publish");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// One file onto a case, posted by the browser's own upload component rather than carried through
+// the circuit (Ben, 2026-09-17). The circuit route gave no progress and no way to cancel, so a big
+// recording was a long silence that read as a failure — and the file it could not report on was
+// arriving in SignalR messages the whole time.
+//
+// The ticket is bound to the case id, so a ticket minted for one case cannot be replayed against
+// another: the endpoint it unlocks names that case in its path. The body is streamed to the API and
+// never enters this process's memory, as the video publish relay does.
+app.MapPost("/uploads/case-file/{orgId:guid}/{caseId:guid}", async (
+    Guid orgId, Guid caseId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(caseId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // a long recording on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/orgs/{orgId}/cases/{caseId}/files");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()

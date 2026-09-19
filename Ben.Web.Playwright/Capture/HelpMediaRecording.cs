@@ -98,8 +98,8 @@ public sealed class HelpMediaRecording : BenTestBase
         var (page, context) = await StartRecordingAsync(async () =>
         {
             await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-            if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Bell Witch"))
-                Assert.Ignore("Seed case not present in Tennessee Ghost Hunters.");
+            if (!await OpenOrgCaseAsync("Paranormal365", "Bell Witch"))
+                Assert.Ignore("Seed case not present in Paranormal365.");
             return Page.Url;
         });
 
@@ -117,6 +117,68 @@ public sealed class HelpMediaRecording : BenTestBase
         await WriteGifAsync(page, context, "working-a-case", "case-tabs.gif");
     }
 
+    /// <summary>working-a-case: a card growing into the next one, then the board presented.</summary>
+    /// <remarks>
+    /// <para>
+    /// Filmed on the seeded board and it changes nothing: the card it grows is taken back with Undo before the
+    /// recording ends, so no run leaves a card behind for the screenshots to find. That is also worth seeing —
+    /// one Undo takes back the card and its arrow together.
+    /// </para>
+    /// <para>
+    /// The canvas is a separate application on its own host. The recording context carries the signed-in state
+    /// across, and the handover from the case's Research tab does the rest.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Description("working-a-case: growing a card, then presenting the board.")]
+    public async Task Record_GrowingAndPresentingABoard()
+    {
+        var (page, context) = await StartRecordingAsync(async () =>
+        {
+            await LoginAsync(UserEmail, UserPassword);
+            if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
+                Assert.Ignore("The seeded Belmont case is not in this database.");
+            return Page.Url.Split('?')[0] + "?tab=research";
+        });
+
+        var boards = page.Locator("[data-testid=case-research-boards]");
+        await Expect(boards).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await page.WaitForTimeoutAsync(1_200);
+
+        await boards.GetByText("Previous owners and where they are buried").ClickAsync();
+        await page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await page.WaitForTimeoutAsync(2_500);
+
+        // Select the last card in the chain, so its side handles come up with room to their right.
+        await page.Locator(".bc-node").Last.ClickAsync();
+        await Expect(page.Locator(".bc-port--right")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await page.WaitForTimeoutAsync(1_200);
+
+        await page.Locator(".bc-port--right").ClickAsync();
+        await page.WaitForTimeoutAsync(2_000);            // the new card arrives, joined, ready to type in
+        await page.Keyboard.PressAsync("Escape");
+        await page.WaitForTimeoutAsync(600);
+
+        // Taken back on camera: one step for the card and its arrow.
+        await page.Keyboard.PressAsync("Control+z");
+        await page.WaitForTimeoutAsync(1_500);
+
+        await page.Locator("[data-bc-action=present]").ClickAsync();
+        await Expect(page.Locator(".bc-present")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await page.WaitForTimeoutAsync(1_600);
+        for (var i = 0; i < 2; i++)
+        {
+            await page.Keyboard.PressAsync("ArrowRight");
+            await page.WaitForTimeoutAsync(1_600);
+        }
+
+        await page.Keyboard.PressAsync("Escape");
+        await page.WaitForTimeoutAsync(1_200);
+
+        await WriteGifAsync(page, context, "working-a-case", "board-grow-and-present.gif");
+    }
+
     /// <summary>
     /// Signs in on the ordinary context, then opens a second, recording context that resumes that
     /// session and lands directly on the page to be filmed.
@@ -130,6 +192,54 @@ public sealed class HelpMediaRecording : BenTestBase
     /// true, the recorded context lands on a signed-out page and the assertion below says so
     /// rather than quietly filming a sign-in form.
     /// </remarks>
+    /// <summary>Picking seats on an evening's plan, signed out (item 235 phase 17d).</summary>
+    /// <remarks>
+    /// Nothing is held: seats are only chosen, and the recording ends before "Hold these places". Each click waits for
+    /// the summary to count the seat; the pause after it is the viewer's time to read the frame, which is what a
+    /// recording is for.
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: picking seats on the plan.")]
+    public async Task Record_PickingSeats()
+    {
+        _sinceRecordingStarted.Restart();
+        var context = await Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize    = new ViewportSize { Width = 1280, Height = 800 },
+            ColorScheme     = ColorScheme.Dark,
+            RecordVideoDir  = VideoDir,
+            RecordVideoSize = new RecordVideoSize { Width = 1280, Height = 800 },
+        });
+        await context.AddInitScriptAsync(RecordingInitScript);
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/o/paranormal365/events/an-evening-of-evidence");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var free = page.Locator(".plan__unit[data-state='free']");
+        await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await free.Nth(40).ScrollIntoViewIfNeededAsync();
+        await page.Locator("#hosted-places").EvaluateAsync("el => el.scrollIntoView({ block: 'center' })");
+        await Expect(free.Nth(40)).ToBeInViewportAsync();
+        _subjectStartsAt = _sinceRecordingStarted.Elapsed;
+
+        // Three neighbouring seats, fixed by their keys before any is picked: a picked seat keeps its free state until
+        // the plan redraws, so "the 40th free seat" would be the same one again.
+        var keys = new List<string>();
+        for (var i = 40; i < 43; i++)
+            keys.Add((await free.Nth(i).GetAttributeAsync("data-key"))!);
+
+        for (var picked = 1; picked <= keys.Count; picked++)
+        {
+            await page.Locator($".plan__unit[data-key='{keys[picked - 1]}']").ClickAsync();
+            await Expect(page.Locator("#picker-bar")).ToContainTextAsync($"party of {picked}");
+            await page.WaitForTimeoutAsync(1_100);
+        }
+        await page.WaitForTimeoutAsync(1_200);
+
+        await WriteGifAsync(page, context, "going-to-an-event", "picking-seats.gif");
+    }
+
     private async Task<(IPage Page, IBrowserContext Context)> StartRecordingAsync(Func<Task<string>> arrange)
     {
         var url = await arrange();

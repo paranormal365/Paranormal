@@ -1,0 +1,175 @@
+@page "/organizations/{OrgId:guid}/feed-attributions"
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    Which feed posts link back to this group (item 186 F7).
+
+    A post rendered from one of the group's cases lands here Unclaimed: credited to the person
+    who posted it, with NO group link, until somebody here decides. Claiming puts the group's
+    name on it and marks it "Group verified" — the group vouching the footage. Declining leaves
+    the post up with no link, and either decision can be changed later.
+*@
+
+<PageTitle>Feed attribution</PageTitle>
+
+<div class="container py-3" style="max-width: 760px;">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+        <h3 class="mb-0">Feed attribution <HelpLink Slug="organization-administration" /></h3>
+        <a class="btn btn-outline-secondary btn-sm" href="@($"/organizations/{OrgId}/edit")">Group settings</a>
+    </div>
+    <p class="text-secondary">
+        Footage from your cases, posted to the public feed. Nothing links back to
+        @(_orgName ?? "your group") until you claim it.
+    </p>
+
+    <BenListState TItem="FeedAttributionItem" Result="@_result" OnRetry="@LoadAsync" />
+
+    @if (!_result.Failed && _loaded)
+    {
+        @if (_items.Count == 0)
+        {
+            <div class="alert alert-light border">
+                Nothing yet. When somebody posts a video rendered from one of this group's
+                cases, it shows up here for your decision.
+            </div>
+        }
+
+        @foreach (var item in _items)
+        {
+            <div class="card mb-2">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-baseline gap-2 mb-1 flex-wrap">
+                        <strong>@item.AuthorDisplayName</strong>
+                        <span class="text-secondary small">
+                            @item.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </span>
+                        @if (item.CaseTitle is not null)
+                        {
+                            <span class="text-secondary small">· from @item.CaseTitle</span>
+                        }
+                        @switch (item.State)
+                        {
+                            case OrgAttributionState.Claimed:
+                                <span class="badge text-bg-success">Claimed</span>
+                                break;
+                            case OrgAttributionState.Declined:
+                                <span class="badge bg-body-secondary text-body-emphasis">Declined</span>
+                                break;
+                        }
+                    </div>
+
+                    <p class="mb-2">@item.Body</p>
+
+                    @if (item.HasMedia && item.MediaKind == FeedMediaKind.Video)
+                    {
+                        <video src="@AdminClient.GetFeedMediaUrl(item.PostId)" controls preload="metadata"
+                               class="rounded mb-2" style="max-height:18rem;max-width:100%;background:#000;"></video>
+                    }
+                    else if (item.HasMedia)
+                    {
+                        <img src="@AdminClient.GetFeedMediaUrl(item.PostId)" alt=""
+                             class="rounded mb-2" style="max-height:18rem;max-width:100%;object-fit:contain;" />
+                    }
+                    else
+                    {
+                        <p class="text-secondary small mb-2">
+                            The media hasn't cleared screening yet — the post is public but its
+                            video isn't showing. You can still decide.
+                        </p>
+                    }
+
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        @if (item.State != OrgAttributionState.Claimed)
+                        {
+                            <button type="button" class="btn btn-success btn-sm"
+                                    disabled="@(_deciding == item.PostId)"
+                                    @onclick="() => DecideAsync(item, claim: true)">
+                                Claim — link it to us
+                            </button>
+                        }
+                        @if (item.State != OrgAttributionState.Declined)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    disabled="@(_deciding == item.PostId)"
+                                    @onclick="() => DecideAsync(item, claim: false)">
+                                Decline — no link
+                            </button>
+                        }
+                        @if (item.DecidedUtc is { } decided)
+                        {
+                            <span class="text-secondary small">
+                                Decided by @(item.DecidedByDisplayName ?? "someone")
+                                on @decided.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </span>
+                        }
+                        <a class="btn btn-link btn-sm ms-auto" href="@($"/feed/{item.PostId}")"
+                           target="_blank">Open the post</a>
+                    </div>
+                    @if (_decideError is not null && _decideErrorPost == item.PostId)
+                    {
+                        <div class="text-danger small mt-1">@_decideError</div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private LoadResult<FeedAttributionItem> _result;
+    private List<FeedAttributionItem> _items = [];
+    private bool _loaded;
+    private string? _orgName;
+    private Guid? _deciding;
+    private string? _decideError;
+    private Guid? _decideErrorPost;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        _orgName = (await AdminClient.GetOrganizationAsync(OrgId))?.Name;
+    }
+
+    private async Task LoadAsync()
+    {
+        _result = await AdminClient.GetFeedAttributionsAsync(OrgId);
+        _items = _result.Items.ToList();
+        _loaded = true;
+        StateHasChanged();
+    }
+
+    private async Task DecideAsync(FeedAttributionItem item, bool claim)
+    {
+        _deciding = item.PostId;
+        _decideError = null;
+        try
+        {
+            var ok = claim
+                ? await AdminClient.ClaimFeedAttributionAsync(OrgId, item.PostId)
+                : await AdminClient.DeclineFeedAttributionAsync(OrgId, item.PostId);
+            if (!ok)
+            {
+                // The refusal, rendered where the click happened — never a silent no-op.
+                _decideError = "Couldn't record that decision. Try again in a moment.";
+                _decideErrorPost = item.PostId;
+                return;
+            }
+            await LoadAsync();
+        }
+        finally
+        {
+            _deciding = null;
+        }
+    }
+}

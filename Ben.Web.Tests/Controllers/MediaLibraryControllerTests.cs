@@ -45,6 +45,9 @@ public class MediaLibraryControllerTests
                    Id = f.Id, FileName = f.FileName, StoredFileName = f.StoredFileName,
                    ContentType = f.ContentType, FileSize = f.FileSize, DateCreated = f.DateCreated,
                    AppUserId = f.AppUserId, IsPublic = f.IsPublic,
+                   // Carried because the listing reads it to name a group that was handed a
+                   // file (item 180 Phase B) — a stand-in mapper that drops it hides V-3.
+                   OwnerOrganizationId = f.OwnerOrganizationId,
                })
              : []);
         return m.Object;
@@ -64,9 +67,14 @@ public class MediaLibraryControllerTests
         return ctrl;
     }
 
-    private static async Task<List<UploadFileRecord>> GetFilesAsync(MediaLibraryController ctrl, string? contentTypePrefixes = null)
+    private static async Task<List<UploadFileRecord>> GetFilesAsync(
+        MediaLibraryController ctrl,
+        string? contentTypePrefixes = null,
+        string? scope = null,
+        Guid? caseId = null,
+        Guid? investigationId = null)
     {
-        var result = await ctrl.GetFiles(contentTypePrefixes, CancellationToken.None);
+        var result = await ctrl.GetFiles(contentTypePrefixes, scope, caseId, investigationId, CancellationToken.None);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         return ((IEnumerable<UploadFileRecord>)ok.Value!).ToList();
     }
@@ -575,5 +583,275 @@ public class MediaLibraryControllerTests
 
         var files = await GetFilesAsync(Build(factory, userId));
         Assert.Single(files);
+    }
+
+    // ── Scoping (item 91) ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The property everything else rests on: a scope narrows, and cannot widen.
+    /// </summary>
+    /// <remarks>
+    /// This is the one that would matter if the implementation were rearranged. The controller
+    /// computes the full audience union first and intersects a scope over the result, so a caller
+    /// naming a case they have no access to gets nothing. Weaving the scope into the union — the
+    /// obvious "optimisation" — would turn the query string into a way of reading other people's
+    /// case media.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_CaseScope_CannotReachACaseTheCallerHasNoAccessTo()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+
+        var strangerOrgId = Guid.NewGuid();
+        var strangerCaseId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = strangerOrgId, Name = "Someone else", UrlName = "else",
+                CreatedByAppUserId = strangerId, DateCreated = DateTime.UtcNow,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = strangerCaseId, OrganizationId = strangerOrgId, Title = "Not yours",
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = strangerId,
+            });
+
+            var theirFile = MakeFile(strangerId, "video/mp4");
+            db.UploadFiles.Add(theirFile);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = strangerCaseId, UploadFileId = theirFile.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = strangerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId), scope: "case", caseId: strangerCaseId);
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public async Task GetFiles_PersonalScope_ReturnsOnlyOwnFiles()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+        var mineId = Guid.NewGuid();
+        var otherOwnerId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var mine = MakeFile(userId, "video/mp4");
+            mine.Id = mineId;
+            db.UploadFiles.Add(mine);
+
+            // Reachable through the case, but not mine.
+            var theirs = MakeFile(otherOwnerId, "video/mp4");
+            db.UploadFiles.Add(theirs);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = theirs.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherOwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, (await GetFilesAsync(Build(factory, userId))).Count);
+
+        var personal = await GetFilesAsync(Build(factory, userId), scope: "personal");
+        Assert.Single(personal);
+        Assert.Equal(mineId, personal[0].Id);
+    }
+
+    [Fact]
+    public async Task GetFiles_CaseScope_ReturnsThatCasesMediaAndNothingElse()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+        var onTheCaseId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var onTheCase = MakeFile(userId, "video/mp4");
+            onTheCase.Id = onTheCaseId;
+            db.UploadFiles.Add(onTheCase);
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = onTheCaseId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+
+            // Mine, and reachable, but attached to no case.
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        var scoped = await GetFilesAsync(Build(factory, userId), scope: "case", caseId: caseId);
+
+        Assert.Single(scoped);
+        Assert.Equal(onTheCaseId, scoped[0].Id);
+    }
+
+    /// <summary>
+    /// A case scope with no case chosen returns nothing, rather than everything.
+    /// </summary>
+    /// <remarks>
+    /// The tempting reading is "no case named, so do not filter". That turns a half-made selection
+    /// into the widest possible answer, which is the opposite of what the person was in the middle
+    /// of asking for.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_CaseScopeWithNoCase_ReturnsNothing()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Empty(await GetFilesAsync(Build(factory, userId), scope: "case"));
+    }
+
+    [Fact]
+    public async Task GetFiles_UnknownScope_BehavesAsNoScope()
+    {
+        // A typo should not blank the media tab.
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.Add(MakeFile(userId, "video/mp4"));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Single(await GetFilesAsync(Build(factory, userId), scope: "nonsense"));
+    }
+
+    [Fact]
+    public async Task GetScopes_OffersOnlyCasesAtTheCallersOwnOrganizations()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var strangerOrgId = Guid.NewGuid();
+            db.Organizations.Add(new Organization
+            {
+                Id = strangerOrgId, Name = "Someone else", UrlName = "else",
+                CreatedByAppUserId = Guid.NewGuid(), DateCreated = DateTime.UtcNow,
+            });
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = strangerOrgId, Title = "Not yours",
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId).GetScopes(CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var scopes = ((IEnumerable<MediaScopeCase>)ok.Value!).ToList();
+
+        var offered = Assert.Single(scopes);
+        Assert.Equal(caseId, offered.Id);
+    }
+
+    // ── Owner and case, so two identical file names can be told apart (V-3) ──
+
+    /// <summary>
+    /// Every listed file says who owns it.
+    /// </summary>
+    /// <remarks>
+    /// V-3 of the 2026-09-06 evaluation: the video editor's Server tab showed seven identical
+    /// <c>test-audio.mp3</c> rows — other people's uploads, reachable through a shared group —
+    /// with no owner and no case. A file name is not an identity, and this listing is the one
+    /// place that spans several people's files at once.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_SaysWhoOwnsEachFile()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        var otherId = Guid.NewGuid();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.AppUsers.AddRange(
+                new AppUser { Id = userId,  DisplayName = "Sarah Mitchell", Email = "sarah@t.com", DateCreated = DateTime.UtcNow },
+                new AppUser { Id = otherId, DisplayName = "James Thornton", Email = "james@t.com", DateCreated = DateTime.UtcNow });
+
+            var mine   = MakeFile(userId);
+            var theirs = MakeFile(otherId, isPublic: true);   // reachable as public
+            db.UploadFiles.AddRange(mine, theirs);
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId));
+        Assert.Equal(2, files.Count);
+        Assert.Contains(files, f => f.OwnerDisplayName == "Sarah Mitchell");
+        Assert.Contains(files, f => f.OwnerDisplayName == "James Thornton");
+    }
+
+    /// <summary>A file handed to a group names the group, and says it is one.</summary>
+    /// <remarks>
+    /// Item 180 Phase B leaves such a file with no owning person at all, so "who owns this" has
+    /// to have a second answer or the row goes back to being anonymous.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_NamesTheGroupWhenAFileWasHandedOver()
+    {
+        var (factory, userId, orgId, _) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var handedOver = MakeFile(userId, isPublic: true);
+            handedOver.AppUserId           = null;
+            handedOver.OwnerOrganizationId = orgId;
+            db.UploadFiles.Add(handedOver);
+            await db.SaveChangesAsync();
+        }
+
+        var file = Assert.Single(await GetFilesAsync(Build(factory, userId)));
+        Assert.Equal("Org (group)", file.OwnerDisplayName);
+    }
+
+    /// <summary>A file attached to a case carries the case's reference.</summary>
+    [Fact]
+    public async Task GetFiles_SaysWhichCaseAFileBelongsTo()
+    {
+        var (factory, userId, _, caseId) = await SeedAsync();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.AppUsers.Add(new AppUser { Id = userId, DisplayName = "Sarah Mitchell", Email = "sarah@t.com", DateCreated = DateTime.UtcNow });
+
+            var attached = MakeFile(userId);
+            var loose    = MakeFile(userId);
+            db.UploadFiles.AddRange(attached, loose);
+
+            var seeded = await db.Cases.FirstAsync(c => c.Id == caseId);
+            seeded.CaseYear      = 2026;
+            seeded.OrgCaseNumber = 3;
+
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = attached.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+
+            var files = await GetFilesAsync(Build(factory, userId));
+            Assert.Equal(2, files.Count);
+            Assert.Equal("#2026-003", files.Single(f => f.Id == attached.Id).CaseReference);
+
+            // And a file that belongs to no case says nothing rather than guessing.
+            Assert.Null(files.Single(f => f.Id == loose.Id).CaseReference);
+        }
     }
 }

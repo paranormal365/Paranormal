@@ -23,7 +23,8 @@ public sealed class BlurEffect : IClipEffect
     };
 
     public string BuildFilterFragment(
-        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0)
+        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         var ic    = System.Globalization.CultureInfo.InvariantCulture;
         var sigma = p.GetValueOrDefault("sigma", 5.0);

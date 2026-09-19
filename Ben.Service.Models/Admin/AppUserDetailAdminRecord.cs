@@ -15,4 +15,10 @@ public record AppUserDetailAdminRecord
     public IReadOnlyList<UserMessageAdminRecord> Messages { get; init; } = [];
     public IReadOnlyList<OrganizationUserMembershipAdminRecord> Memberships { get; init; } = [];
     public IReadOnlyList<UploadFileAdminRecord> UploadFiles { get; init; } = [];
+
+    /// <summary>
+    /// The site roles this person holds — SuperAdmin, Admin, Moderator, or any role created under
+    /// Site Roles (item 216). Site-wide, unlike the per-group role on each membership above.
+    /// </summary>
+    public IReadOnlyList<string> Roles { get; init; } = [];
 }

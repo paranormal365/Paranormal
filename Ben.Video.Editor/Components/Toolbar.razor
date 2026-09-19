@@ -7,24 +7,29 @@
 
 <header class="bv-toolbar">
 
-    <span class="bv-toolbar__title">Ben.Video</span>
-
     <TelerikToolBar OverflowMode="@ToolBarOverflowMode.Menu"
                      Size="@ThemeConstants.Button.Size.Small"
                      Class="bv-toolbar__telerik-bar">
 
-        <!-- Initialize ffmpeg.wasm core -->
-        <ToolBarButton OnClick="OnInitializeClicked"
-                       Enabled="@(Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
-                       Icon="@SvgIcon.Play">
-            Initialize
-        </ToolBarButton>
+        @* Initialize ffmpeg.wasm core. Hidden once it has loaded: it is a one-shot action whose
+           result is already announced by the status chip, so leaving it in place costs permanent
+           width for a button nobody presses twice. It comes back on Error, which is the one case
+           where pressing it again is exactly what to do. *@
+        @if (Ffmpeg.State is FfmpegState.Idle or FfmpegState.Error)
+        {
+            <ToolBarButton OnClick="OnInitializeClicked"
+                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                           Overflow="@ToolBarItemOverflow.Never"
+                           Icon="@SvgIcon.Play">
+                Initialize
+            </ToolBarButton>
+        }
 
         <!-- Open files — only active when ready -->
         <ToolBarButton OnClick="OnOpenClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.FolderOpen">
             Open
         </ToolBarButton>
@@ -36,8 +41,9 @@
         <ToolBarButton OnClick="OnPreviewClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Eye"
-                       Title="Preview the final result at full resolution/quality (opens in a separate window)">
+                       Title="@WhyOrWhat("Preview the final result at full resolution/quality (opens in a separate window)")">
             Preview
         </ToolBarButton>
 
@@ -45,24 +51,42 @@
         <ToolBarButton OnClick="OnExportClicked"
                        Enabled="@(Ffmpeg.State == FfmpegState.Ready && HasClips)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
+                       Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Download"
-                       Title="Render the final video locally in the browser (ffmpeg.wasm), then save or upload">
+                       Title="@WhyOrWhat("Render the final video locally in the browser (ffmpeg.wasm), then save or upload")">
             Export
         </ToolBarButton>
 
         <!-- Undo -->
+        @* Undo/Redo carry a label as well as an icon, hidden in the bar (.bv-icon-only) and shown
+           if they ever render in a menu — a menu of unlabelled icons is a list of guesses.
+
+           Every action button before the spacer now sets Overflow="Never". They used to take
+           Telerik's default of Auto, so as soon as the status chip grew a progress bar the whole
+           primary row — Initialize, Open, Preview, Export, Undo, Redo — collapsed into "…", and
+           the first thing the help tells a new person to press was not on screen (2026-09-05
+           audit, F1). What may still collapse is deliberately the two least urgent items: the
+           Assets toggle and Save-to-server, both labelled. *@
         <ToolBarButton OnClick="OnUndoClicked"
                        Enabled="@CanUndo"
                        Icon="@SvgIcon.Undo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")" />
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="bv-icon-only"
+                       Title="@(UndoDescription is not null ? $"Undo: {UndoDescription}" : "Nothing to undo")">
+            Undo
+        </ToolBarButton>
 
         <!-- Redo -->
         <ToolBarButton OnClick="OnRedoClicked"
                        Enabled="@CanRedo"
                        Icon="@SvgIcon.Redo"
                        FillMode="@ThemeConstants.Button.FillMode.Flat"
-                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")" />
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Class="bv-icon-only"
+                       Title="@(RedoDescription is not null ? $"Redo: {RedoDescription}" : "Nothing to redo")">
+            Redo
+        </ToolBarButton>
 
         <!-- File menu — replaces the old Save / Open / Project buttons -->
         <ToolBarTemplateItem>
@@ -74,19 +98,23 @@
                     <DropDownButtonItems>
                         <DropDownButtonItem Icon="@SvgIcon.Plus"
                                             OnClick="OnNewProjectClicked">New</DropDownButtonItem>
+                        @* CanSave, not HasClips: a project can be worth saving without a video
+                           clip in it — markers, a title, audio, or simply unsaved changes. Gating
+                           on video content meant Save was disabled on work that plainly existed
+                           (2026-09-05 audit, persistence-4). *@
                         <DropDownButtonItem Icon="@SvgIcon.Save"
                                             OnClick="OnSaveClicked"
-                                            Enabled="@HasClips">Save</DropDownButtonItem>
+                                            Enabled="@CanSave">Save</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Download"
                                             OnClick="OnSaveToDeviceClicked"
-                                            Enabled="@HasClips">Save to Device…</DropDownButtonItem>
+                                            Enabled="@CanSave">Save to Device…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.FolderOpen"
                                             OnClick="OnOpenProjectListClicked">Open…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Upload"
                                             OnClick="OnImportJsonClicked">Import JSON…</DropDownButtonItem>
                         <DropDownButtonItem Icon="@SvgIcon.Download"
                                             OnClick="OnExportJsonClicked"
-                                            Enabled="@HasClips">Export JSON</DropDownButtonItem>
+                                            Enabled="@CanSave">Export JSON</DropDownButtonItem>
                         @if (HasSubtitles)
                         {
                             <DropDownButtonItem Icon="@SvgIcon.FileTxt"
@@ -94,8 +122,10 @@
                             <DropDownButtonItem Icon="@SvgIcon.FileTxt"
                                                 OnClick="OnExportVttClicked">Export Captions (.vtt)</DropDownButtonItem>
                         }
+                        @* Named for what it opens. As "Help" nobody found the shortcut list, and
+                           the same word means the help article everywhere else on the site. *@
                         <DropDownButtonItem Icon="@SvgIcon.QuestionCircle"
-                                            OnClick="OnHelpClicked">Help</DropDownButtonItem>
+                                            OnClick="OnHelpClicked">Keyboard shortcuts</DropDownButtonItem>
                         @if (ShowErrorLog)
                         {
                             <DropDownButtonItem Icon="@SvgIcon.FileError"
@@ -111,7 +141,14 @@
                        type="text"
                        value="@ProjectName"
                        @onchange="e => OnProjectNameChanged.InvokeAsync(e.Value?.ToString() ?? ProjectName)"
-                       title="Project name — click to rename" />
+                       title="@(IsDirty ? "Project name — click to rename. Unsaved changes." : "Project name — click to rename")" />
+                @* Drawn beside the box, not inside its value. As part of the value it became part
+                   of the name the moment anybody renamed the project (2026-09-05 audit,
+                   persistence-5). *@
+                @if (IsDirty)
+                {
+                    <span class="bv-toolbar__proj-dirty" title="Unsaved changes" aria-label="Unsaved changes">*</span>
+                }
         </ToolBarTemplateItem>
 
         @if (ShowProjectPersistence && ShowSaveToServer)
@@ -121,41 +158,30 @@
                            Enabled="@(HasClips)"
                            ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
                            Icon="@SvgIcon.Cloud"
-                           Title="Save to server" />
+                           Class="bv-icon-only"
+                           Title="Save to server">
+                Save to server
+            </ToolBarButton>
         }
 
         <ToolBarSpacer />
 
-        <!-- Panel visibility toggles — never overflow into the "..." menu, these are
-             always-relevant layout controls, not one-off actions. -->
-        <ToolBarButton OnClick="OnToggleClipBrowserClicked"
-                       Icon="@SvgIcon.LayoutSideBySide"
-                       FillMode="@(ShowClipBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowClipBrowser ? "bv-toggle--active" : "")"
-                       Title="Toggle clip browser" />
-        <ToolBarButton OnClick="OnTogglePreviewClicked"
-                       Icon="@SvgIcon.Eye"
-                       FillMode="@(ShowPreview ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowPreview ? "bv-toggle--active" : "")"
-                       Title="Toggle preview" />
-        <ToolBarButton OnClick="OnToggleTimelineClicked"
-                       Icon="@SvgIcon.Film"
-                       FillMode="@(ShowTimeline ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
-                       ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowTimeline ? "bv-toggle--active" : "")"
-                       Title="Toggle timeline" />
+        @* The clip-browser / preview / timeline toggles that used to sit here were wired to
+           parameters VideoEditor never passed, so every click invoked an empty delegate and the
+           buttons rendered permanently "active". The panel they would have hidden no longer
+           exists either. Removed with their parameters and LayoutService members rather than
+           wired up: Camtasia has no such toggles, and the Media & Properties panel has its own
+           close and reopen (2026-09-05 audit, F4). *@
+        @* Labelled and allowed to collapse: this is the first thing to give up the bar when
+           space runs out, and in the "…" menu a bare picture icon says nothing. *@
         <ToolBarButton OnClick="OnToggleAssetBrowserClicked"
                        Icon="@SvgIcon.Image"
                        FillMode="@(ShowAssetBrowser ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat)"
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Base"
-                       Overflow="@ToolBarItemOverflow.Never"
-                       Class="@(ShowAssetBrowser ? "bv-toggle--active" : "")"
-                       Title="Toggle asset browser (clipart, callouts, catalog)" />
+                       Class="@(ShowAssetBrowser ? "bv-toggle--active bv-icon-only" : "bv-icon-only")"
+                       Title="Toggle asset browser (clipart, callouts, catalog)">
+            Assets
+        </ToolBarButton>
         @if (ShowPanel)
         {
             <ToolBarButton OnClick="OnTogglePanelClicked"
@@ -212,11 +238,42 @@
                                         Indeterminate="@(GetDownloadPercent() < 0)"
                                         Class="bv-toolbar__progress" />
                 }
+                @* The one control that gets the editor going again, next to the thing saying it
+                   is stuck. Without it a wedge or a crash left the person with a red chip and no
+                   action anywhere in the interface (2026-09-05 audit, F7). *@
+                @if (ShowResetEngine)
+                {
+                    <TelerikButton OnClick="OnResetEngineClicked"
+                                   Icon="@SvgIcon.ArrowRotateCw"
+                                   Size="@ThemeConstants.Button.Size.Small"
+                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
+                                   Class="btn-sm text-nowrap"
+                                   Title="Restart the video engine. Your project is untouched.">
+                        Restart engine
+                    </TelerikButton>
+                }
         </ToolBarTemplateItem>
 
-        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip. Always shown: makes
-           MEMFS residency, the operation trace, and the raw log tail one click away instead of
-           only reachable by exporting the error log after the fact. *@
+        @* Whatever the host wants beside its own status — the standalone editor puts its sign-in
+           state here. The editor has no idea who is signed in and should not guess; it only leaves
+           room. Without this the standalone host had no sign-in door at all, and the only way in
+           was to know the /login URL and type it (2026-09-05 audit, F11). *@
+        @if (HostStatusContent is not null)
+        {
+            <ToolBarTemplateItem>
+                @HostStatusContent
+            </ToolBarTemplateItem>
+        }
+
+        @* Phase 141 (flakiness investigation) — ffmpeg diagnostics chip: MEMFS residency, the
+           operation trace and the raw log tail, one click away instead of only reachable by
+           exporting the error log after the fact.
+
+           Shown only where the host says so (VideoEditorOptions.ShowDiagnostics). It is an
+           operator tool, and it was previously on the toolbar for every user regardless of who
+           they were. *@
+        @if (ShowDiagnostics)
+        {
         <ToolBarTemplateItem>
             <button type="button"
                     class="bv-diagnostics-chip @(Ffmpeg.IsWorkerWedged ? "bv-diagnostics-chip--wedged" : $"bv-diagnostics-chip--{Ffmpeg.State.ToString().ToLowerInvariant()}")"
@@ -225,6 +282,7 @@
                 @(Ffmpeg.IsWorkerWedged ? "⚠ Stuck — Reset?" : $"🩺 {DiagnosticsChipLabel()}")
             </button>
         </ToolBarTemplateItem>
+        }
 
         @* Item #38 phase E — native sidecar status chip. Only shown when the host opted in
            (VideoEditorOptions.NativeSidecar); clicking it opens the pairing panel regardless of
@@ -243,12 +301,20 @@
 
     </TelerikToolBar>
 
+    @* The mark sits at the end of the bar rather than the start: the left edge is where the eye
+       looks for the next action, and the logo does not need it. Sized in CSS so it can never
+       grow the bar's height. *@
+    <span class="bv-toolbar__mark" aria-hidden="true"></span>
+
     @if (ShowNativeSidecar)
     {
         <NativeSidecarPanel @bind-Visible="_showSidecarPanel" />
     }
 
-    <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    @if (ShowDiagnostics)
+    {
+        <DiagnosticsPanel @bind-Visible="_showDiagnosticsPanel" OnResetWorker="OnInitializeClicked" />
+    }
 
     <!-- Feature badges — purely informational, so kept outside the ToolBar (whose
          ToolBarTemplateItem always behaves as Overflow=Never and can't collapse
@@ -266,6 +332,7 @@
     <!-- Hidden file input for JSON import -->
     <input @ref="_importFileInput"
            type="file"
+           id="bv-import-json-input"
            accept=".benvideo,.json"
            class="bv-import-json-input"
            style="display:none"
@@ -280,9 +347,21 @@
 
     private async Task<IJSObjectReference> DomAsync() =>
         _dom ??= await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Ben.Video.Editor/js/domInterop.js");
+            "benImportEditorModule", "js/domInterop.js");
 
     [Parameter] public bool HasClips            { get; set; }
+
+    /// <summary>
+    /// The button's tooltip: what it does when it can, and why not when it cannot. A disabled Export
+    /// used to keep the "Render the final video…" title and dim barely at all, so a timeline holding
+    /// only text and callouts had a green Export that did nothing when pressed (2026-09-16).
+    /// </summary>
+    private string WhyOrWhat(string whenReady) =>
+        Ffmpeg.State != FfmpegState.Ready
+            ? "Press Initialize first — the renderer is not loaded yet."
+            : !HasClips
+                ? "Add a video or image clip to the timeline first — text and callouts are drawn on top of one."
+                : whenReady;
     [Parameter] public bool ShowMultiTrack      { get; set; }
     [Parameter] public bool ShowAudioTracks     { get; set; }
     [Parameter] public bool ShowTransitions     { get; set; }
@@ -295,11 +374,6 @@
     /// <summary>When true, the Save button becomes a dropdown with "Save to Device" / "Save to Server".</summary>
     [Parameter] public bool ShowSaveToServer    { get; set; }
     [Parameter] public string ProjectName       { get; set; } = "project";
-
-    // Panel visibility state (read by toggle button fill modes)
-    [Parameter] public bool ShowClipBrowser     { get; set; } = true;
-    [Parameter] public bool ShowPreview         { get; set; } = true;
-    [Parameter] public bool ShowTimeline        { get; set; } = true;
 
     [Parameter] public EventCallback OnInitialize { get; set; }
     [Parameter] public EventCallback OnOpen       { get; set; }
@@ -321,9 +395,6 @@
     /// </summary>
     [Parameter] public EventCallback OnSave          { get; set; }
     [Parameter] public EventCallback<ElementReference> OnOpenProject { get; set; }
-    [Parameter] public EventCallback OnToggleClipBrowser { get; set; }
-    [Parameter] public EventCallback OnTogglePreview     { get; set; }
-    [Parameter] public EventCallback OnToggleTimeline    { get; set; }
     [Parameter] public int            QueueCount          { get; set; }
     [Parameter] public bool           HasSubtitles        { get; set; }
     [Parameter] public bool           ShowAssetBrowser    { get; set; }
@@ -363,13 +434,24 @@
     // Item #71 — decision logic lives in FfmpegStatusPresentation (pure, unit-tested) rather than
     // inline here; see that class's doc comment for the actual bug this phase fixes.
     private string StatusLabel => FfmpegStatusPresentation.Label(
-        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel,
+        Ffmpeg.LastError, Ffmpeg.IsWorkerWedged);
 
     private string StatusCssClass =>
-        $"bv-toolbar__status bv-status--{FfmpegStatusPresentation.CssModifier(Ffmpeg.State, Ffmpeg.IsWorkerBusy)}";
+        $"bv-toolbar__status bv-status--{FfmpegStatusPresentation.CssModifier(Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.IsWorkerWedged)}";
 
     private string StatusTooltip => FfmpegStatusPresentation.Tooltip(
-        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel, Ffmpeg.LastError);
+        Ffmpeg.State, Ffmpeg.IsWorkerBusy, Ffmpeg.ProgressPercent, Ffmpeg.DownloadLabel,
+        Ffmpeg.LastError, Ffmpeg.IsWorkerWedged);
+
+    /// <summary>
+    /// Whether to show the restart button beside the status chip — for everyone, not only for a
+    /// host that switched diagnostics on (2026-09-05 audit, F7).
+    /// </summary>
+    private bool ShowResetEngine =>
+        FfmpegStatusPresentation.ShouldOfferReset(Ffmpeg.State, Ffmpeg.IsWorkerWedged);
+
+    private async Task OnResetEngineClicked() => await OnResetEngine.InvokeAsync();
 
     private async Task OnInitializeClicked() => await OnInitialize.InvokeAsync();
     private async Task OnOpenClicked()       => await OnOpen.InvokeAsync();
@@ -404,9 +486,6 @@
     private async Task OnSaveToServerClicked() => await OnSaveToServer.InvokeAsync();
     private async Task OnSaveClicked() => await OnSave.InvokeAsync();
 
-    private async Task OnToggleClipBrowserClicked()    => await OnToggleClipBrowser.InvokeAsync();
-    private async Task OnTogglePreviewClicked()         => await OnTogglePreview.InvokeAsync();
-    private async Task OnToggleTimelineClicked()        => await OnToggleTimeline.InvokeAsync();
     private async Task OnToggleAssetBrowserClicked()    => await OnToggleAssetBrowser.InvokeAsync();
     private async Task OnTogglePanelClicked()           => await OnTogglePanel.InvokeAsync();
     private async Task OnToggleQueueClicked()           => await OnToggleQueue.InvokeAsync();
@@ -444,7 +523,14 @@
     }
 
     private async Task OnImportFileSelectedAsync()
-        => await OnImportJson.InvokeAsync(_importFileInput);
+    {
+        await OnImportJson.InvokeAsync(_importFileInput);
+
+        // Cleared so the same file can be picked again. A file input only raises change when the
+        // selection differs, so choosing the same project twice — after a mistake, or to start
+        // over — did nothing at all the second time (2026-09-05 audit, persistence-19).
+        await (await DomAsync()).InvokeVoidAsync("clearFileInput", "bv-import-json-input");
+    }
 
     private async Task OnOpenProjectClicked()
         => await (await DomAsync()).InvokeVoidAsync("click", "input[type=file][accept*=benvideo]", false);
@@ -456,15 +542,45 @@
 
     [Parameter] public bool ShowNativeSidecar { get; set; }
 
+    /// <summary>Whether the operator tools (diagnostics chip and panel) are shown at all.</summary>
+    [Parameter] public bool ShowDiagnostics { get; set; }
+
+    /// <summary>
+    /// Whether there is anything worth saving — which is not the same question as whether there is
+    /// a video clip on the timeline.
+    /// </summary>
+    [Parameter] public bool CanSave { get; set; }
+
+    /// <summary>Restarts the video engine after a wedge or a crash.</summary>
+    [Parameter] public EventCallback OnResetEngine { get; set; }
+
+    /// <summary>Host chrome shown in the toolbar, such as a sign-in chip.</summary>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
+
     private bool _showSidecarPanel;
 
     protected override void OnInitialized()
     {
         NativeSidecar.OnChanged += OnNativeSidecarChanged;
+
+        // This toolbar reads the ffmpeg state straight from the injected service — the status
+        // chip, its progress bar, and the Enabled of Initialize/Open/Preview/Export all depend on
+        // it — but nothing here re-renders when that state changes. The parent re-rendering is not
+        // enough: Blazor skips a child whose parameters have not changed, and going from
+        // Processing back to Ready changes none of this component's parameters.
+        //
+        // The result was a toolbar frozen mid-render: a chip stuck at "Processing… 33%" with
+        // Export greyed out behind it, while the service had long since returned to Ready — a
+        // stale paint, not a stalled render, and it survived until something else happened to
+        // change a parameter.
+        Ffmpeg.OnStateChanged += OnFfmpegStateChanged;
+
         if (ShowNativeSidecar) _ = NativeSidecar.ProbeAsync();
     }
 
     private void OnNativeSidecarChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnFfmpegStateChanged() => InvokeAsync(StateHasChanged);
 
     private string SidecarChipLabel() => NativeSidecar.State switch
     {
@@ -475,7 +591,11 @@
         _ => "",
     };
 
-    void IDisposable.Dispose() => NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+    void IDisposable.Dispose()
+    {
+        NativeSidecar.OnChanged -= OnNativeSidecarChanged;
+        Ffmpeg.OnStateChanged   -= OnFfmpegStateChanged;
+    }
 
     /// <summary>Audit #4 — releases the cached domInterop handle. Separate from the sync
     /// <see cref="Dispose"/> above (which only unsubscribes events) because a JS module handle can

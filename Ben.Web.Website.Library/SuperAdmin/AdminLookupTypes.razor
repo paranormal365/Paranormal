@@ -5,6 +5,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Lookup Types</PageTitle>
 
@@ -35,6 +37,10 @@
     else if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
+    }
+    else if (_itemsResult.Failed)
+    {
+        <BenListState TItem="LookupTypeAdminRecord" Result="@_itemsResult" OnRetry="@LoadAsync" />
     }
     else
     {
@@ -90,17 +96,18 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="140px">
+                <GridCommandColumn Width="100px">
                     <GridCommandButton Command="Edit"
-                                       Icon="@SvgIcon.Pencil"
-                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((LookupTypeAdminRecord)e.Items.First()))">
-                        Edit
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((LookupTypeAdminRecord)e.Items.First()))"
+                                       Title="Edit"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                     <GridCommandButton Command="Delete"
-                                       Icon="@SvgIcon.Trash"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((LookupTypeAdminRecord)e.Items.First()))">
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((LookupTypeAdminRecord)e.Items.First()))"
+                                       Title="Delete"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
@@ -189,6 +196,7 @@
     private string _familyLabel => _families.FirstOrDefault(f => f.Route == _selectedFamily)?.Label ?? "Type";
 
     private IReadOnlyList<LookupTypeAdminRecord> _items = [];
+    private LoadResult<LookupTypeAdminRecord> _itemsResult;
     private bool _loading;
     private string? _error;
 
@@ -208,7 +216,7 @@
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin)
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -227,7 +235,8 @@
         _error = null;
         try
         {
-            _items = await AdminClient.GetLookupTypesAsync(_selectedFamily);
+            _itemsResult = await AdminClient.GetLookupTypesAsync(_selectedFamily);
+            _items       = _itemsResult.Items;
         }
         catch (Exception ex)
         {

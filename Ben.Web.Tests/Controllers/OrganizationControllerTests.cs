@@ -635,6 +635,46 @@ public class OrganizationControllerTests
     }
 
     [Fact]
+    public async Task Delete_RemovesTheRowsCreatedWithTheOrganization()
+    {
+        // Item 148 gave every new group five default calendar event types at birth. Foreign keys
+        // onto Organizations are NoAction by convention, so from that moment no newly created
+        // group could be deleted at all — the delete threw a FK violation and surfaced as a 500.
+        var factory    = CreateFactory();
+        var userId     = Guid.NewGuid();
+        var org        = await SeedOrgAsync(factory);
+        var controller = BuildController(factory, UserPrincipal(userId, isSuperAdmin: true));
+
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            Ben.Data.Source.Services.OrgCalendarDefaults.AddDefaultEventTypes(seed, org.Id, userId);
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(seed, org.Id, userId);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(seed, org.Id, userId);
+            Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(seed, org.Id, userId);
+            seed.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = org.Id, AppUserId = userId,
+                Role = OrganizationMemberRole.Owner, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var result = await controller.Delete(org.Id, default);
+
+        Assert.IsType<NoContentResult>(result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null(await db.Organizations.FindAsync(org.Id));
+        Assert.Empty(await db.OrgCalendarEventTypes.Where(t => t.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.OrganizationMemberLevels.Where(l => l.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.InvestigationDuties.Where(d => d.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.OrganizationRoles.Where(r => r.OrganizationId == org.Id).ToListAsync());
+        Assert.Empty(await db.OrganizationRolePermissions.ToListAsync());
+        Assert.Empty(await db.OrganizationUserMemberships.Where(m => m.OrganizationId == org.Id).ToListAsync());
+    }
+
+    [Fact]
     public async Task Delete_AsMember_WithDeleteAccess_RemovesOrg()
     {
         var factory  = CreateFactory();
@@ -716,6 +756,30 @@ public class OrganizationControllerTests
         Assert.NotNull(created);
         Assert.Equal("New Org", created.Name);
         Assert.Equal(userId, created.CreatedByAppUserId);
+
+        // Every create door stamps the default calendar event types (OrgCalendarDefaults). This
+        // door leaves org.Id for EF's client-side Guid generation, so the child rows depend on
+        // the Id being real immediately after Add — this asserts that wiring holds.
+        var typeCount = await db.OrgCalendarEventTypes.CountAsync(t => t.OrganizationId == created.Id);
+        Assert.Equal(5, typeCount);
+
+        var ladderCount = await db.OrganizationMemberLevels.CountAsync(l => l.OrganizationId == created.Id);
+        Assert.Equal(5, ladderCount);
+
+        var dutyCount = await db.InvestigationDuties.CountAsync(d => d.OrganizationId == created.Id);
+        Assert.Equal(5, dutyCount);
+
+        // Item 160: a new group starts with a filled-in matrix, not an empty grid. Asserted here
+        // rather than only in its own tests because this is the door that has to remember to seed
+        // it — the ladder and the duties are useless to each other without it.
+        var dutyIds = await db.InvestigationDuties
+            .Where(d => d.OrganizationId == created.Id).Select(d => d.Id).ToListAsync();
+        var cells = await db.InvestigationDutyEligibilities
+            .CountAsync(e => dutyIds.Contains(e.InvestigationDutyId));
+        Assert.True(cells > 0, "A new group should start with a title-by-duty matrix.");
+
+        var roleCount = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == created.Id);
+        Assert.Equal(Ben.Data.Source.Services.OrgRoleDefaults.Defaults.Count, roleCount);
     }
 
     [Fact]

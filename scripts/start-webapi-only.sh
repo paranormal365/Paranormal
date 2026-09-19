@@ -5,7 +5,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_URL="${BEN_WEBAPI_URL:-http://localhost:5252}"
+# 127.0.0.1, not localhost — see the note in start-website-with-api.sh and item 187: binding
+# "localhost" opens an IPv6 listener too, and .NET's IPv6 accept path on macOS kills the process
+# (dotnet/runtime#102663). Clients using "localhost" still reach this.
+API_URL="${BEN_WEBAPI_URL:-http://127.0.0.1:5252}"
 SWAGGER_URL="$API_URL/swagger/index.html"
 LOG="$ROOT_DIR/.vscode/webapi.log"
 

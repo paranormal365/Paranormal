@@ -23,7 +23,7 @@ public sealed class RasterClipArtAnimationExporter : IAsyncDisposable
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
 
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/rasterClipArtRenderer.js";
+    private const string ModulePath = "js/rasterClipArtRenderer.js";
 
     public RasterClipArtAnimationExporter(IJSRuntime js)
     {
@@ -76,7 +76,7 @@ public sealed class RasterClipArtAnimationExporter : IAsyncDisposable
 
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         return _module;
     }
 

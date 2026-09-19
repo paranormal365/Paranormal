@@ -179,22 +179,69 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
         if (!await db.OrganizationRoles.AnyAsync(r => r.Id == roleId && r.OrganizationId == orgId, ct))
             return NotFound();
 
-        // Replace all permissions
         var existing = await db.OrganizationRolePermissions
             .Where(p => p.OrganizationRoleId == roleId)
             .ToListAsync(ct);
+
+        // ── Item 156 Phase E, decision D4: excluded areas are grayed-but-REMEMBERED ──
+        // The editor disables toggles whose area the plan does not include, so an honest client
+        // never sends a change to one. The server enforces the same rule: an attempted CHANGE to
+        // an excluded table is refused with a sentence, and untouched excluded grants are carried
+        // forward verbatim — a save of the sections you MAY edit must never silently delete the
+        // sections you may not. Nothing is ever deleted by a downgrade; it resumes on upgrade.
+        var includedAreas = await Ben.Data.Source.Services.TierAreaResolution
+            .IncludedAreasAsync(db, orgId, ct);
+        var incomingByTable = permissions
+            .Where(p => p.Actions != OrganizationSecurityAction.None)
+            .GroupBy(p => p.TableName)
+            .ToDictionary(g => g.Key, g => g.Aggregate(OrganizationSecurityAction.None, (a, p) => a | p.Actions));
+        var existingByTable = existing
+            .GroupBy(p => p.TableName)
+            .ToDictionary(g => g.Key, g => g.Aggregate(OrganizationSecurityAction.None, (a, p) => a | p.Actions));
+
+        bool Excluded(OrganizationSecurityTable table)
+            => Ben.Data.Common.Constants.PermissionAreas.AreaFor(table) is { } area
+            && !includedAreas.Contains(area);
+
+        foreach (var table in incomingByTable.Keys.Union(existingByTable.Keys).Where(Excluded))
+        {
+            var incoming = incomingByTable.GetValueOrDefault(table, OrganizationSecurityAction.None);
+            var current  = existingByTable.GetValueOrDefault(table, OrganizationSecurityAction.None);
+            // Absent means "the editor didn't let me touch it" — carried forward below. Present
+            // and identical is a no-op round-trip. Present and DIFFERENT is a change the plan
+            // does not include.
+            if (incomingByTable.ContainsKey(table) && incoming != current)
+            {
+                var areaName = Ben.Data.Common.Constants.PermissionAreas.AreaFor(table);
+                return BadRequest(
+                    $"Your group's plan does not include custom-role permissions for {areaName}. "
+                    + "The stored settings are kept and will apply again if the plan changes — "
+                    + "see the Pricing page for what each plan includes.");
+            }
+        }
+
         db.OrganizationRolePermissions.RemoveRange(existing);
 
-        var newPermissions = permissions
-            .Where(p => p.Actions != OrganizationSecurityAction.None)
-            .Select(p => new OrganizationRolePermission
+        var newPermissions = incomingByTable
+            .Where(kv => !Excluded(kv.Key))
+            .Select(kv => new OrganizationRolePermission
             {
                 OrganizationRoleId = roleId,
-                TableName          = p.TableName,
-                Actions            = p.Actions,
+                TableName          = kv.Key,
+                Actions            = kv.Value,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = userId.Value
             })
+            // Excluded tables: the EXISTING grants survive verbatim, whatever the payload said.
+            .Concat(existingByTable.Where(kv => Excluded(kv.Key))
+                .Select(kv => new OrganizationRolePermission
+                {
+                    OrganizationRoleId = roleId,
+                    TableName          = kv.Key,
+                    Actions            = kv.Value,
+                    DateCreated        = DateTime.UtcNow,
+                    CreatedByAppUserId = userId.Value
+                }))
             .ToList();
 
         db.OrganizationRolePermissions.AddRange(newPermissions);

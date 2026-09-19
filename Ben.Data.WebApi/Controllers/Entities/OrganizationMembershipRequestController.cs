@@ -84,15 +84,59 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // A person can have HISTORY here — withdrawn or denied applications alongside a live
+        // one. The row that matters is the Pending one when it exists, else the most recent:
+        // an unordered FirstOrDefault returned an arbitrary row, which once handed a caller
+        // the old Withdrawn application while a Pending one sat unanswered (item 174).
         var request = await db.OrganizationMembershipRequests
             .Include(r => r.Organization)
             .Include(r => r.Applicant)
             .Include(r => r.UpdatedByAppUser)
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.OrganizationId == orgId && r.AppUserId == userId.Value, ct);
+            .Where(r => r.OrganizationId == orgId && r.AppUserId == userId.Value)
+            .OrderByDescending(r => r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ThenByDescending(r => r.DateCreated)
+            .FirstOrDefaultAsync(ct);
 
         if (request is null) return NotFound();
         return Ok(_mapper.Map<OrganizationMembershipRequestRecord>(request));
+    }
+
+    // ── GET /api/me/membership-requests ─────────────────────────────────────
+    /// <summary>
+    /// Every application this person has made, across all organizations.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>IH-04, Ben's 2026-08-26 production sweep.</b> An applicant had nowhere to see
+    /// that their own application existed. The per-organization <c>my</c> endpoint above only
+    /// answers for somebody who already knows to go and look at that group's page — which an
+    /// applicant, by definition, is not a member of. So a person applied, saw no acknowledgement
+    /// anywhere in their account, and reasonably concluded it had not gone through. One test
+    /// account accumulated <b>23 applications to the same group</b>.</para>
+    ///
+    /// <para>Deliberately account-scoped rather than org-scoped, and it returns resolved
+    /// applications too: "you were declined" is also an answer somebody is owed.</para>
+    /// </remarks>
+    [HttpGet("/api/me/membership-requests")]
+    public async Task<ActionResult<IEnumerable<OrganizationMembershipRequestRecord>>> GetMineEverywhere(
+        CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var requests = await db.OrganizationMembershipRequests
+            .Include(r => r.Organization)
+            .Include(r => r.Applicant)
+            .Include(r => r.UpdatedByAppUser)
+            .AsNoTracking()
+            .Where(r => r.AppUserId == userId.Value)
+            // Pending first — those are the ones somebody is waiting on — then most recent.
+            .OrderByDescending(r => r.Status == OrganizationMembershipRequestStatus.Pending)
+            .ThenByDescending(r => r.DateCreated)
+            .ToListAsync(ct);
+
+        return Ok(requests.Select(_mapper.Map<OrganizationMembershipRequestRecord>).ToList());
     }
 
     // ── POST /api/organizations/{orgId}/membership-requests ─────────────────
@@ -112,6 +156,12 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orgId, ct);
         if (org is null) return NotFound("Organization not found.");
         if (!org.IsAcceptingApplications) return BadRequest("This organization is not currently accepting membership applications.");
+
+        // Deliberately NOT gated on the plan here. The paid gate sits on the ADVERTISING switch,
+        // so a free group cannot invite applications in the first place, and on ACCEPTANCE, where
+        // the member would actually be added. Refusing the applicant as well would punish the
+        // wrong person for a decision that is not theirs — and this door is already closed by
+        // IsAcceptingApplications above.
 
         // Prevent duplicate active requests
         var existing = await db.OrganizationMembershipRequests
@@ -220,9 +270,32 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
             var alreadyMember = await db.OrganizationUserMemberships
                 .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == membershipRequest.AppUserId && m.IsActive, ct);
 
+            // One person is free; working with other people is the paid part. Guarded here as
+            // well as on the advertising switch, because an application can arrive by a route
+            // that never reads that flag — an invite link, a direct call.
+            if (!alreadyMember
+                && await Services.Billing.PaidPlan.WhyCannotAddMemberAsync(db, orgId, ct) is { } needsPlan)
+            {
+                return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
+            }
+
+            // A personal organization that gains a second person has become a group, and should
+            // stop being hidden from the places groups are found. Leaving the flag set would give
+            // them a group nobody can discover — the opposite of what they just paid for.
             if (!alreadyMember)
             {
-                db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+                var joined = await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId, ct);
+                if (joined is { IsPersonal: true })
+                {
+                    joined.IsPersonal = false;
+                    joined.DateUpdated = DateTime.UtcNow;
+                    joined.UpdatedByAppUserId = userId.Value;
+                }
+            }
+
+            if (!alreadyMember)
+            {
+                var newMembership = new OrganizationUserMembership
                 {
                     Id                 = Guid.NewGuid(),
                     OrganizationId     = orgId,
@@ -231,21 +304,45 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
                     IsActive           = true,
                     DateCreated        = DateTime.UtcNow,
                     CreatedByAppUserId = userId.Value,
-                });
+                };
+                db.OrganizationUserMemberships.Add(newMembership);
+
+                // W-M1: the welcome message says "Welcome to the organization!" — this is what
+                // makes that true. Without the group's starting role the new member joins to a
+                // desk full of links that answer 403. See MemberDefaultRole.
+                await Ben.Data.Source.Services.MemberDefaultRole.ApplyAsync(
+                    db, orgId, newMembership, userId.Value, ct);
             }
         }
+
+        // Item 144: a join past the group's frozen band creates a PendingPayment overflow seat
+        // for the NEW member — the group's contract stays at its band, the extra person pays for
+        // themselves. Never blocks the join; the seat is the billing record, and the acceptance
+        // message carries the price so nobody learns it from an invoice.
+        var seat = accepted
+            ? await Ben.Data.WebApi.Services.Billing.OverflowSeats.MaybeOfferSeatAsync(
+                db, orgId, membershipRequest.AppUserId, userId.Value, ct)
+            : null;
 
         // Send a UserMessage notification to the applicant
         var orgName = membershipRequest.Organization.Name;
         var subject = accepted
             ? $"Membership Accepted: {orgName}"
             : $"Membership Application Update: {orgName}";
+        // Everything a person typed is encoded on the way into a body that is rendered as markup —
+        // the group's name and the responder's note both are. See NotificationText.
+        var safeOrgName = Ben.Data.WebApi.Services.NotificationText.Safe(orgName);
         var body = accepted
-            ? $"Your application to join <strong>{orgName}</strong> has been accepted. Welcome to the organization!"
-            : $"Your application to join <strong>{orgName}</strong> has not been approved at this time. " +
+            ? $"Your application to join <strong>{safeOrgName}</strong> has been accepted. Welcome to the organization!"
+              + (seat is null ? string.Empty
+                  : $"<br><br><strong>{safeOrgName}</strong> has grown past its plan's member count, so your "
+                  + $"seat is billed individually: <strong>${seat.PriceAtStart:0.00} per "
+                  + $"{Ben.Data.WebApi.Services.Billing.OverflowSeats.CadenceNoun(seat.Interval)}</strong>. "
+                  + "Your membership is active now; you'll find the seat and its status on the Pricing page.")
+            : $"Your application to join <strong>{safeOrgName}</strong> has not been approved at this time. " +
               (string.IsNullOrWhiteSpace(request.ResponseNote)
                   ? string.Empty
-                  : $"<br><br><em>{request.ResponseNote.Trim()}</em>");
+                  : $"<br><br><em>{Ben.Data.WebApi.Services.NotificationText.Safe(request.ResponseNote.Trim())}</em>");
 
         var message = new UserMessage
         {

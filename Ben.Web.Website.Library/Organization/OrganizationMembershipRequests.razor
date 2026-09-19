@@ -11,13 +11,34 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject BenToastService Toasts
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <div class="mt-4">
     <h5 class="mb-3 fw-semibold">Membership Applications</h5>
 
+    @* The server's reason for refusing an acceptance, kept on the page rather than only in a
+       toast that fades. The likeliest one is the 402 explaining what a second member costs, and
+       that is something somebody has to act on — so it stays put, with the way to act on it. *@
+    @if (_acceptRefusal is not null)
+    {
+        <div class="alert alert-warning" data-testid="accept-refused">
+            @_acceptRefusal
+            <div class="mt-1">
+                <a href="@($"/organizations/{OrgId}/billing")">Your group's plan</a> ·
+                <a href="/pricing">See what each plan includes</a>
+            </div>
+        </div>
+    }
+
     @if (_loading)
     {
         <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+    }
+    else if (_requestsResult.Failed)
+    {
+        @* People waiting to join, shown as nobody waiting, is an application that never gets answered. *@
+        <BenListState TItem="OrganizationMembershipRequestRecord" Result="@_requestsResult" OnRetry="@ReloadAsync" />
     }
     else if (_requests.Count == 0)
     {
@@ -41,18 +62,25 @@
                             @applied.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
-                    <GridCommandColumn Width="260px">
+                    <GridCommandColumn Width="136px">
                         <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                          Size="@ThemeConstants.Button.Size.Small">Accept</GridCommandButton>
+                                          Size="@ThemeConstants.Button.Size.Small"
+                                          Title="Accept"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="check" /></GridCommandButton>
                         <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                           Size="@ThemeConstants.Button.Size.Small"
-                                          Class="ms-1">Deny</GridCommandButton>
+                                          Title="Deny"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="x" /></GridCommandButton>
                         <GridCommandButton OnClick="@(e => OpenVoteDialog((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
                                           Size="@ThemeConstants.Button.Size.Small"
-                                          Class="ms-1">Vote</GridCommandButton>
+                                          Title="Vote"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="thumbs-up" /></GridCommandButton>
                     </GridCommandColumn>
                 </GridColumns>
             </TelerikGrid>
@@ -60,23 +88,33 @@
 
         @* ── Resolved ─────────────────────────────────────────────────────── *@
         var resolved = _requests.Where(r => r.Status != OrganizationMembershipRequestStatus.Pending).ToList();
-        @if (resolved.Any())
+        @* IH-09, Ben's 2026-08-26 sweep: this listed 23 withdrawn applications from the SAME
+           person across three pages, every row identical but for the date — so a genuinely new
+           application would be hard to spot among them. One row per person per outcome, with a
+           count and the most recent date. The individual rows are still reachable; they are just
+           no longer the first thing an owner has to read past. *@
+        var grouped = ResolvedGroups(resolved);
+        @if (grouped.Count > 0)
         {
             <h6 class="text-secondary small text-uppercase fw-semibold mb-2">Resolved (@resolved.Count)</h6>
-            <TelerikGrid Data="@resolved" Pageable="true" PageSize="10">
+            <TelerikGrid Data="@grouped" Pageable="@(grouped.Count > 10)" PageSize="10">
                 <GridColumns>
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.ApplicantDisplayName)" Title="Applicant" />
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.Status)" Title="Status" Width="110px">
+                    <GridColumn Field="@nameof(ResolvedGroup.ApplicantDisplayName)" Title="Applicant" />
+                    <GridColumn Title="Status" Width="150px">
                         <Template>
-                            @{ var r = (OrganizationMembershipRequestRecord)context; }
-                            <span class="badge @StatusBadge(r.Status)">@r.Status</span>
+                            @{ var g = (ResolvedGroup)context; }
+                            <span class="badge @StatusBadge(g.Status)">@g.Status</span>
+                            @if (g.Count > 1)
+                            {
+                                <span class="text-secondary small ms-1" title="@g.Count applications with this outcome">×@g.Count</span>
+                            }
                         </Template>
                     </GridColumn>
-                    <GridColumn Field="@nameof(OrganizationMembershipRequestRecord.RespondedByDisplayName)" Title="Responded By" />
-                    <GridColumn Title="Date" Width="110px">
+                    <GridColumn Field="@nameof(ResolvedGroup.RespondedByDisplayName)" Title="Responded By" />
+                    <GridColumn Title="Most recent" Width="130px">
                         <Template>
-                            @{ var responded = (OrganizationMembershipRequestRecord)context; }
-                            @responded.DateResponded?.ToViewerLocalTime(UserState).ToDisplayDate()
+                            @{ var g2 = (ResolvedGroup)context; }
+                            @g2.MostRecent?.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
                 </GridColumns>
@@ -124,7 +162,7 @@
             When the deadline passes, votes are tallied: majority Approve → Accepted, otherwise → Denied.
         </p>
         <label class="form-label fw-semibold">Vote Deadline <span class="text-danger">*</span></label>
-        <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
+        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
         @if (_voteDialogError is not null)
         {
             <div class="text-danger small mt-2">@_voteDialogError</div>
@@ -144,7 +182,32 @@
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
     private bool _loading = true;
+
+    /// <summary>Why the last acceptance was refused, in the server's words, or null.</summary>
+    private string? _acceptRefusal;
+    /// <summary>One row per applicant per outcome — see the IH-09 note in the markup.</summary>
+    private sealed record ResolvedGroup(
+        string ApplicantDisplayName,
+        OrganizationMembershipRequestStatus Status,
+        string? RespondedByDisplayName,
+        int Count,
+        DateTime? MostRecent);
+
+    private static List<ResolvedGroup> ResolvedGroups(List<OrganizationMembershipRequestRecord> resolved)
+        => resolved
+            .GroupBy(r => (r.ApplicantDisplayName, r.Status))
+            .Select(g => new ResolvedGroup(
+                g.Key.ApplicantDisplayName,
+                g.Key.Status,
+                // The responder on the most recent one; older rows may name somebody else.
+                g.OrderByDescending(r => r.DateResponded ?? r.DateCreated).First().RespondedByDisplayName,
+                g.Count(),
+                g.Max(r => r.DateResponded ?? r.DateCreated)))
+            .OrderByDescending(g => g.MostRecent)
+            .ToList();
+
     private List<OrganizationMembershipRequestRecord> _requests = [];
+    private LoadResult<OrganizationMembershipRequestRecord> _requestsResult;
 
     private bool _showDenyDialog;
     private OrganizationMembershipRequestRecord? _pendingDeny;
@@ -163,14 +226,17 @@
     private async Task ReloadAsync()
     {
         _loading = true;
-        try { _requests = (await AdminClient.GetMembershipRequestsAsync(OrgId)).ToList(); }
+        try { _requestsResult = await AdminClient.GetMembershipRequestsAsync(OrgId);
+            _requests = _requestsResult.Items.ToList(); }
         catch { _requests = []; }
         finally { _loading = false; }
     }
 
     private async Task AcceptAsync(OrganizationMembershipRequestRecord r)
     {
-        var updated = await AdminClient.RespondToMembershipRequestAsync(
+        _acceptRefusal = null;
+
+        var (updated, error) = await AdminClient.RespondToMembershipRequestAsync(
             OrgId, r.Id, OrganizationMembershipRequestStatus.Accepted, null);
         if (updated is not null)
         {
@@ -179,7 +245,11 @@
         }
         else
         {
-            Toasts.Error($"Failed to accept {r.ApplicantDisplayName}. Please try again.");
+            // The server's own words when it has any. The likeliest refusal here is the 402 that
+            // explains what a second member costs, and "Please try again" is advice that can
+            // never work for it.
+            _acceptRefusal = error;
+            Toasts.Error(error ?? $"Failed to accept {r.ApplicantDisplayName}. Please try again.");
         }
     }
 
@@ -194,7 +264,7 @@
     private async Task ConfirmDenyAsync()
     {
         if (_pendingDeny is null) return;
-        var updated = await AdminClient.RespondToMembershipRequestAsync(
+        var (updated, error) = await AdminClient.RespondToMembershipRequestAsync(
             OrgId, _pendingDeny.Id, OrganizationMembershipRequestStatus.Denied,
             _denyNote, canReapply: _canReapply,
             denialReason: string.IsNullOrWhiteSpace(_denyNote) ? null : _denyNote);
@@ -207,7 +277,7 @@
         }
         else
         {
-            Toasts.Error("Failed to deny the request. Please try again.");
+            Toasts.Error(error ?? "Failed to deny the request. Please try again.");
         }
     }
 

@@ -13,17 +13,46 @@ namespace Ben.Video.Sidecar.Tests;
 /// </summary>
 public sealed class ThumbnailArgvFactoryTests
 {
+    /// <summary>
+    /// Each frame seeks before its own input and decodes keyframes only.
+    /// </summary>
+    /// <remarks>
+    /// There used to be one input with the seeks after it, which makes them output-side seeks:
+    /// ffmpeg decodes from the beginning and discards frames until it reaches the timestamp, so a
+    /// half-hour clip was decoded once per thumbnail (2026-09-05 audit, media-1).
+    /// </remarks>
     [Fact]
-    public void Build_SingleInputFollowedByPerFrameOutputGroups()
+    public void Build_SeeksBeforeEachInputAndDecodesKeyframesOnly()
     {
         var args = ThumbnailArgvFactory.Build("/src/clip.mp4", count: 3, duration: 12.0);
 
-        // One -i, exactly once — the whole point of the phase-145 rewrite is that ffmpeg opens and
-        // decodes the source once for the entire strip.
-        Assert.Single(args, a => a == "-i");
-        Assert.Equal("-i", args[0]);
-        Assert.Equal("/src/clip.mp4", args[1]);
+        Assert.Equal(3, args.Count(a => a == "-i"));
         Assert.Equal(3, args.Count(a => a == "-frames:v"));
+        Assert.Equal(3, args.Count(a => a == "-skip_frame"));
+
+        // Every -ss precedes its own -i.
+        for (var i = 0; i < args.Count; i++)
+        {
+            if (args[i] != "-ss") continue;
+            Assert.Equal("-i", args[i + 2]);
+            Assert.Equal("/src/clip.mp4", args[i + 3]);
+        }
+    }
+
+    /// <summary>
+    /// With several inputs, an output with no map takes its picture from input 0 — so all three
+    /// thumbnails would be the same frame.
+    /// </summary>
+    [Fact]
+    public void Build_MapsEachOutputToItsOwnInput()
+    {
+        var args = ThumbnailArgvFactory.Build("/src/clip.mp4", count: 3, duration: 12.0);
+
+        var maps = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+            if (args[i] == "-map") maps.Add(args[i + 1]);
+
+        Assert.Equal(["0:v:0", "1:v:0", "2:v:0"], maps);
     }
 
     [Fact]
@@ -74,8 +103,10 @@ public sealed class ThumbnailArgvFactoryTests
 
         // Same interval formula.
         Assert.Contains("duration / (count + 1)", body);
-        // Same per-frame flag sequence and fixed scale.
-        Assert.Contains("'-ss', t, '-frames:v', '1', '-vf', 'scale=160:-1'", body);
+        // Same per-frame input and output shapes, and the same fixed scale.
+        Assert.Contains("'-skip_frame', 'nokey', '-ss', t, '-i', inputName", body);
+        Assert.Contains("'-frames:v', '1', '-vf', 'scale=160:-1'", body);
+        Assert.Contains("'-map', `${i - 1}:v:0`", body);
         Assert.Contains(ThumbnailArgvFactory.ScaleFilter, body);
         // Same 2-decimal timestamp formatting the C# uses via "F2".
         Assert.Contains("toFixed(2)", body);

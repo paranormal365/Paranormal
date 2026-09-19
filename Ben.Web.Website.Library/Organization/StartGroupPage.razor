@@ -1,0 +1,594 @@
+﻿@page "/organizations/new"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject Ben.Web.Services.SiteFeaturesProvider Features
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Web.Website.Library.Help
+@using Ben.Web.Website.Library.Kit
+@using System.Text.Json
+
+<PageTitle>Start a Group</PageTitle>
+
+@*
+    The founder's door, now a guided wizard (item 166 W1) instead of the two-field card the
+    item-109 journey originally surfaced. The philosophy is unchanged — a founder needs very
+    little at the door, and everything else lives in the hub they are about to own — but the
+    wizard walks them through the little that helps up front: identity, where they work
+    (optional, feeds discovery), first settings, then a review. Closing the tab keeps a draft;
+    the self-registration switch (item 152) still closes the whole door with a sentence.
+*@
+
+<div class="d-flex align-items-center justify-content-center p-3">
+    <div class="card shadow-sm" style="width:100%;max-width:38rem;">
+        <div class="card-body p-4">
+            <h2 class="h4 mb-1">Start a group<HelpLink Slug="getting-started" Anchor="joining-a-group-or-starting-your-own" /></h2>
+
+            @if (_closed)
+            {
+                <div class="alert alert-info mb-0" id="newgroup-closed">
+                    New groups are not being accepted at the moment. If you would like to start
+                    one, <a href="/contact">get in touch</a> and we will help you.
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small mb-3">
+                    You'll be its owner. Only the first step is required — everything here can be
+                    changed later from your group's own page.
+                </p>
+
+                <BenInteractiveOnly>
+                <BenWizard @ref="_wizardRef" Model="@_wizard" DraftKey="start-group"
+                           CaptureDraft="@CaptureDraft" RestoreDraft="@RestoreDraft"
+                           OnFinish="@CreateAsync" OnStepChanged="@StateHasChanged"
+                           FinishText="Create the group">
+                    @switch (_wizard.CurrentIndex)
+                    {
+                        case 0:
+                            @if (_chosenTier is { } plan)
+                            {
+                                @* Arrived from a plan's button on the pricing page (2026-09-14). The group has to
+                                   exist before it can pay, so the plan is confirmed on its billing page next. *@
+                                <div class="alert alert-info py-2 small mb-3" id="newgroup-plan-chosen">
+                                    Plan: <strong>@plan.Name</strong>.
+                                    @if (ChosenTierIsPaid)
+                                    {
+                                        <text>Once the group exists you'll go to its billing page to confirm the plan and pay — the price follows the group's size.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Nothing to pay.</text>
+                                    }
+                                    @if (!plan.IsBandedByMembers)
+                                    {
+                                        <text> This plan is for tour and events businesses, so choose one of those below.</text>
+                                    }
+                                </div>
+                            }
+                            @* The first question, because it decides the defaults every later
+                               step starts from (2026-08-24). Not a permanent classification —
+                               the hub can change it — but getting it right here means a tour
+                               operator never has to undo privacy they never asked for. *@
+                            <div class="mb-3">
+                                <label class="form-label d-block">What are you starting?</label>
+                                <div class="row g-2" role="group" aria-label="Kind of group">
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-investigation"
+                                           checked="@(_kind == OrganizationKind.InvestigationGroup)"
+                                           @onchange="@(() => SetKind(OrganizationKind.InvestigationGroup))" />
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-investigation">
+                                        <BenIcon Name="search" Class="me-1" />Investigation group
+                                    </label></div>
+                                    @if (!_toursClosed)
+                                    {
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
+                                           checked="@(_kind == OrganizationKind.GhostWalkingTour)"
+                                           @onchange="@(() => SetKind(OrganizationKind.GhostWalkingTour))" />
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-tour">
+                                        <BenIcon Name="map" Class="me-1" />Ghost walking tour
+                                    </label></div>
+                                    }
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-events"
+                                           checked="@(_kind == OrganizationKind.PublicEventProvider)"
+                                           @onchange="@(() => SetKind(OrganizationKind.PublicEventProvider))" />
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-events">
+                                        <BenIcon Name="calendar" Class="me-1" />Paranormal events
+                                    </label></div>
+                                    <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-property"
+                                           checked="@(_kind == OrganizationKind.HauntedProperty)"
+                                           @onchange="@(() => SetKind(OrganizationKind.HauntedProperty))" />
+                                    <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-property">
+                                        <BenIcon Name="home" Class="me-1" />Haunted property
+                                    </label></div>
+                                </div>
+                                @if (_toursClosed)
+                                {
+                                    <div class="form-text" id="newgroup-tours-closed">
+                                        We aren't taking on new ghost walking tours just now. Every
+                                        other kind is open — or
+                                        <a href="/contact">get in touch</a> and we will let you know
+                                        when tours reopen.
+                                    </div>
+                                }
+
+                                <div class="form-text">
+                                    @* One sentence per kind, saying what it STARTS as. None of it is a
+                                       gate — every kind can do everything, and all of this is editable
+                                       afterwards — so the wording promises a starting point, not a
+                                       category. *@
+                                    @if (_kind == OrganizationKind.GhostWalkingTour)
+                                    {
+                                        <text>Tours are <strong>public by default</strong>: your meeting
+                                        point is shown and searchable, and the tours you schedule are
+                                        visible to everyone. You can change any of it later.</text>
+                                    }
+                                    else if (_kind == OrganizationKind.PublicEventProvider)
+                                    {
+                                        <text>Events are <strong>public by default</strong>: the venue
+                                        and the dates are shown and searchable, because that is what
+                                        people are looking for. You can change any of it later.</text>
+                                    }
+                                    else if (_kind == OrganizationKind.HauntedProperty)
+                                    {
+                                        <text>Your property is <strong>public by default</strong>: the
+                                        address is shown and searchable, since it is the place people
+                                        are coming to. You can change any of it later.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Investigation groups start <strong>private</strong>: your
+                                        address is hidden and cases stay between you and your clients.
+                                        You can run public events too.</text>
+                                    }
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="newgroup-name">Group name <span class="text-danger">*</span></label>
+                                <input id="newgroup-name" type="text" class="form-control" maxlength="200"
+                                       placeholder="e.g. Nashville Night Watch" @bind="_name" @bind:event="oninput"
+                                       @bind:after="SuggestUrlName" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label" for="newgroup-url">Web address <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">/o/</span>
+                                    <input id="newgroup-url" type="text" class="form-control" maxlength="100"
+                                           placeholder="nashville-night-watch" @bind="_urlName" @bind:event="oninput" />
+                                </div>
+                                <div class="form-text">Lowercase letters, numbers and hyphens. This is permanent-ish — choose kindly.</div>
+                            </div>
+                            break;
+
+                        case 1:
+                            @if (Ben.Data.Common.Enums.OrganizationKindDefaults.IsPublicFacing(_kind))
+                            {
+                                <p class="small text-secondary">
+                                    @(_kind == OrganizationKind.HauntedProperty
+                                        ? "Where is the property? This is shown publicly and feeds the \"near you\" search, so visitors can find you."
+                                        : _kind == OrganizationKind.PublicEventProvider
+                                            ? "Where do your events happen? This is shown publicly and feeds the \"near you\" search, so visitors can find you."
+                                            : "Where do your tours meet? This is shown publicly and feeds the \"near you\" search, so visitors can find you.")
+                                    <strong>Optional</strong> — you can add it later.
+                                </p>
+                            }
+                            else
+                            {
+                                <p class="small text-secondary">
+                                    Where is your group based — your home, or an office? This is the point
+                                    the "near you" search measures distance from, so a client sees how far
+                                    away you are. <strong>Optional</strong> — leave it empty to add it
+                                    later, and it stays private either way.
+                                </p>
+                            }
+                            <div class="mb-2">
+                                <label class="form-label" for="newgroup-street">Street address</label>
+                                <input id="newgroup-street" type="text" class="form-control" maxlength="200" @bind="_street" />
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label" for="newgroup-city">City</label>
+                                    <input id="newgroup-city" type="text" class="form-control" maxlength="100" @bind="_city" />
+                                </div>
+                                <div class="col-3">
+                                    <label class="form-label" for="newgroup-state">State</label>
+                                    <input id="newgroup-state" type="text" class="form-control" maxlength="50" @bind="_state" />
+                                </div>
+                                <div class="col-3">
+                                    <label class="form-label" for="newgroup-zip">Zip</label>
+                                    <input id="newgroup-zip" type="text" class="form-control" maxlength="20" @bind="_zip" />
+                                </div>
+                            </div>
+                            break;
+
+                        case 2:
+                            @* Client work first, because it is the switch that decides whether the
+                               group exists as far as a client is concerned. Before this step asked
+                               about it, a group finished the wizard invisible to every client and
+                               nothing said so — the setting lived on a page the group's own hub
+                               did not link to. *@
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="newgroup-clients"
+                                       checked="@_takesClients"
+                                       @onchange="@(e => { _takesClients = e.Value is true; _clientsChosen = true; })" />
+                                <label class="form-check-label" for="newgroup-clients">
+                                    Take cases from clients
+                                    <div class="form-text">
+                                        People asking for an investigation can find you and send you their request.
+                                        Leave it off if you only work your own cases.
+                                    </div>
+                                </label>
+                            </div>
+
+                            @if (_takesClients)
+                            {
+                                <div class="ms-4 mb-3">
+                                    <label class="form-label" for="newgroup-area">Where you work</label>
+                                    <div class="input-group" style="max-width:420px;">
+                                        <input id="newgroup-area" type="text" class="form-control" maxlength="120"
+                                               placeholder="e.g. Nashville, TN" @bind="_serviceArea" />
+                                        <span class="input-group-text">within</span>
+                                        <input id="newgroup-radius" type="number" class="form-control" style="max-width:6rem;"
+                                               min="1" max="500" @bind="_radiusMiles" />
+                                        <span class="input-group-text">miles</span>
+                                    </div>
+                                    <div class="form-text">
+                                        A town or city, not your street — this is how far out a client
+                                        will see you, and clients are never shown the centre point.
+                                        You can change it whenever you like.
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="newgroup-applications" @bind="_acceptingApplications" />
+                                <label class="form-check-label" for="newgroup-applications">
+                                    Accept membership applications
+                                    <div class="form-text">
+                                        People can apply to join from your public page. You review every
+                                        application. A brand-new group is on the free lane, where the group
+                                        is just you — so this takes effect once you have a plan with members.
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label" for="newgroup-email">Public contact email</label>
+                                <input id="newgroup-email" type="email" class="form-control" maxlength="200"
+                                       placeholder="hello@yourgroup.org" @bind="_publicEmail" />
+                                <div class="form-text">Shown on your public page. Optional.</div>
+                            </div>
+                            break;
+
+                        case 3:
+                            <dl class="row g-1 small mb-0" id="newgroup-review">
+                                @if (_chosenTier is { } reviewPlan)
+                                {
+                                    <dt class="col-sm-4 text-secondary">Plan</dt>
+                                    <dd class="col-sm-8">@reviewPlan.Name@(ChosenTierIsPaid ? " — confirmed and paid on the billing page next" : "")</dd>
+                                }
+                                <dt class="col-sm-4 text-secondary">Name</dt>
+                                <dd class="col-sm-8 fw-semibold">@_name</dd>
+                                <dt class="col-sm-4 text-secondary">Web address</dt>
+                                <dd class="col-sm-8"><code>/o/@_urlName</code></dd>
+                                <dt class="col-sm-4 text-secondary">Your base</dt>
+                                <dd class="col-sm-8">@(HasAddress ? $"{_street}, {_city}, {_state} {_zip} (kept private)" : "Not given — add it later")</dd>
+                                <dt class="col-sm-4 text-secondary">Client cases</dt>
+                                <dd class="col-sm-8">
+                                    @if (!_takesClients)
+                                    {
+                                        <text>Not taking them yet</text>
+                                    }
+                                    else if (string.IsNullOrWhiteSpace(_serviceArea))
+                                    {
+                                        <text>Taking them — add where you work so clients can find you</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Taking them, within @_radiusMiles miles of @_serviceArea</text>
+                                    }
+                                </dd>
+                                <dt class="col-sm-4 text-secondary">Applications</dt>
+                                @* Every new group starts on the free lane, and the server refuses to open
+                                   applications there — so "Open" was a promise this screen could never
+                                   keep. Says what will actually happen instead. *@
+                                <dd class="col-sm-8">@(_acceptingApplications ? "Open once your plan includes members" : "Closed")</dd>
+                                <dt class="col-sm-4 text-secondary">Contact email</dt>
+                                <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(_publicEmail) ? "None" : _publicEmail)</dd>
+                            </dl>
+                            break;
+                    }
+                </BenWizard>
+                </BenInteractiveOnly>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger py-2 mt-3" id="newgroup-error">@_error</div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly WizardModel _wizard;
+    private BenWizard? _wizardRef;
+
+    private string _name = "";
+    private string _urlName = "";
+    private bool   _urlEdited;
+    private string _street = "";
+    private string _city = "";
+    private string _state = "";
+    private string _zip = "";
+    private bool   _acceptingApplications = true;
+    private string _publicEmail = "";
+
+    // Client work (item: the client funnel). On by default for an investigation group, because
+    // taking cases is what one is for; off for a tour or an events provider, whose clients are
+    // ticket buyers rather than households.
+    private bool   _takesClients = true;
+    private bool   _clientsChosen;
+    private string _serviceArea = "";
+    private int    _radiusMiles = 30;
+
+    private bool _busy;
+    private string? _error;
+    private bool _closed;
+
+    /// <summary>Whether the ghost-walking-tour choice is hidden (item 233).</summary>
+    private bool _toursClosed;
+
+    private bool HasAddress => !string.IsNullOrWhiteSpace(_city);
+
+    /// <summary>The plan chosen on the pricing page (<c>?tier=</c>), when the founder came from one.</summary>
+    private PublicSubscriptionTier? _chosenTier;
+
+    private bool ChosenTierIsPaid => _chosenTier is { } t && t.Prices.Any(p => p.Price > 0);
+
+    public StartGroupPage()
+    {
+        _wizard = new WizardModel(
+        [
+            new WizardModel.WizardStep("Identity", IdentityGateAsync),
+            new WizardModel.WizardStep("Your base", AddressGateAsync),
+            new WizardModel.WizardStep("First settings", SettingsGateAsync),
+            new WizardModel.WizardStep("Review"),
+        ]);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            // The whole address, query included: a visitor who pressed a plan's button on the pricing page must
+            // come back to the wizard with that plan still chosen.
+            var here = "/" + NavManager.ToBaseRelativePath(NavManager.Uri);
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(here)}");
+            return;
+        }
+
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("tier", out var tierValue) && Guid.TryParse(tierValue, out var tierId))
+        {
+            // Named from the live price list rather than trusted from the address; an unknown id shows nothing.
+            var pricing = await AdminClient.GetPublicPricingAsync();
+            _chosenTier = pricing.Items.FirstOrDefault(t => t.Id == tierId);
+        }
+
+        _closed = !Features.AllowOrganizationSelfRegistration && !UserState.IsSuperAdmin;
+
+        // Item 233: the site can be closed to NEW ghost walking tours while staying open to every
+        // other kind, events businesses included. Asked before the choices are drawn, because the
+        // alternative is somebody picking "ghost walking tour", filling in four steps and being
+        // refused at the end.
+        _toursClosed = !Features.AllowTourBusinessSignUps && !UserState.IsSuperAdmin;
+        if (_toursClosed && _kind == OrganizationKind.GhostWalkingTour)
+            SetKind(OrganizationKind.InvestigationGroup);
+    }
+
+    // ── Step gates: null allows Next, a sentence refuses (WizardModel contract) ──
+
+    private Task<string?> IdentityGateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+            return Task.FromResult<string?>("Give your group a name first.");
+        var slug = _urlName.Trim().ToLowerInvariant();
+        if (slug.Length == 0)
+            return Task.FromResult<string?>("Pick a web address — it's how people find your public page.");
+        if (!slug.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-') || slug.StartsWith('-') || slug.EndsWith('-'))
+            return Task.FromResult<string?>("The web address can only use lowercase letters, numbers and hyphens.");
+        return Task.FromResult<string?>(null);
+    }
+
+    private Task<string?> AddressGateAsync()
+    {
+        // Optional as a whole, but a half-address helps nobody: all-or-nothing.
+        var parts = new[] { _street, _city, _state, _zip };
+        var filled = parts.Count(p => !string.IsNullOrWhiteSpace(p));
+
+        // Their base is almost always where they work from, so the next step arrives pre-answered
+        // rather than asking the same town twice. Still theirs to change.
+        if (string.IsNullOrWhiteSpace(_serviceArea) && !string.IsNullOrWhiteSpace(_city))
+            _serviceArea = string.IsNullOrWhiteSpace(_state) ? _city.Trim() : $"{_city.Trim()}, {_state.Trim()}";
+
+        if (filled is 0 or 4) return Task.FromResult<string?>(null);
+        return Task.FromResult<string?>("Either fill in the whole address, or leave all four fields empty to add it later.");
+    }
+
+    private Task<string?> SettingsGateAsync()
+    {
+        if (_takesClients && string.IsNullOrWhiteSpace(_serviceArea))
+            return Task.FromResult<string?>(
+                "Say where you work, so a client can find you — a town or city is enough. "
+              + "Or untick taking client cases for now.");
+
+        if (!string.IsNullOrWhiteSpace(_publicEmail) && !_publicEmail.Contains('@'))
+            return Task.FromResult<string?>("That contact email doesn't look like an email address.");
+        return Task.FromResult<string?>(null);
+    }
+
+    /// <summary>Suggests a slug from the name until the person edits the slug themselves.</summary>
+    private void SuggestUrlName()
+    {
+        if (_urlEdited && _urlName.Length > 0) return;
+        _urlName = string.Concat(_name.ToLowerInvariant()
+                .Select(c => char.IsLetterOrDigit(c) ? c : '-'))
+            .Trim('-');
+        while (_urlName.Contains("--")) _urlName = _urlName.Replace("--", "-");
+    }
+
+    // ── Draft round-trip (BenWizard persists it to localStorage) ──────────────
+
+    private sealed record Draft(string Name, string UrlName, string Street, string City,
+                                string State, string Zip, bool Applications, string Email);
+
+    private string? CaptureDraft()
+        => JsonSerializer.Serialize(new Draft(_name, _urlName, _street, _city, _state, _zip,
+                                              _acceptingApplications, _publicEmail));
+
+    private void RestoreDraft(string data)
+    {
+        try
+        {
+            if (JsonSerializer.Deserialize<Draft>(data) is not { } d) return;
+            _name = d.Name; _urlName = d.UrlName; _street = d.Street; _city = d.City;
+            _state = d.State; _zip = d.Zip; _acceptingApplications = d.Applications;
+            _publicEmail = d.Email;
+            _urlEdited = _urlName.Length > 0;
+        }
+        catch { /* a stale draft starts the wizard fresh, never breaks it */ }
+    }
+
+    // ── Finish: register, then the follow-up writes, then the hub with its tour ──
+
+    /// <summary>What the founder says they are starting. Drives every default below.</summary>
+    private OrganizationKind _kind = OrganizationKind.InvestigationGroup;
+
+    /// <summary>
+    /// The kind decides whether client work starts on — an investigation group is for taking
+    /// cases, a tour's customers buy tickets. Only until the founder touches the switch: after
+    /// that their answer stands, whatever they pick afterwards.
+    /// </summary>
+    private void SetKind(OrganizationKind kind)
+    {
+        _kind = kind;
+        if (!_clientsChosen) _takesClients = kind == OrganizationKind.InvestigationGroup;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var name = _name.Trim();
+            var slug = _urlName.Trim().ToLowerInvariant();
+
+            var created = await AdminClient.RegisterOrganizationAsync(
+                new RegisterOrganizationRequest { Name = name, UrlName = slug, Kind = _kind });
+
+            if (created is null)
+            {
+                // The wizard has finished, so the buttons are gone — the error and the person's
+                // answers both survive (the draft is only cleared on success) and the review
+                // step stays on screen. Reloading resumes the draft.
+                _error = "That couldn't be created — the web address may already be taken. "
+                       + "Your answers are saved; go back and pick a different one.";
+                _wizard.Restore(0);
+                return;
+            }
+
+            // Follow-up writes are best-effort: the group EXISTS now, and each of these is
+            // editable from the hub, so a failed extra must not strand the founder on an error.
+            try
+            {
+                // Two writes, not one, and deliberately in this order. Opening applications on a
+                // brand-new group is REFUSED — the free lane is one person, so the paid gate turns
+                // the whole save away — and when both settings travelled together that refusal
+                // silently took the founder's contact email with it.
+                if (!string.IsNullOrWhiteSpace(_publicEmail))
+                {
+                    await AdminClient.UpdateOrganizationAsync(created.OrganizationId,
+                        new AdminUpdateOrganizationRequest(name, slug,
+                            IsAcceptingApplications: false,
+                            PublicEmail: _publicEmail.Trim()));
+                }
+
+                if (HasAddress)
+                {
+                    var types = (await AdminClient.GetOrgAddressTypesAsync()).Items;
+                    var typeId = types.FirstOrDefault()?.Id;
+                    if (typeId is { } t)
+                    {
+                        // The kind's address defaults, from the one definition both sides
+                        // share — a tour's meeting point is shown, a group's HQ is not.
+                        var defaults = OrganizationKindDefaults.AddressDefaults(_kind);
+                        await AdminClient.CreateOrgAddressAsync(created.OrganizationId,
+                            new OrgAddressUpsertRequest(t, _street.Trim(), null, _city.Trim(),
+                                _state.Trim(), _zip.Trim(), "US", SortOrder: 1,
+                                Visibility: defaults.Visibility,
+                                PublicDisplayMode: defaults.PublicDisplayMode,
+                                IsSearchable: defaults.IsSearchable,
+                                SearchVisibility: defaults.SearchVisibility));
+                    }
+                }
+
+                // ── client work ──────────────────────────────────────────────
+                // The whole point of asking on the wizard: a group that says it takes cases is
+                // findable the moment it exists. Acceptance is set first and on its own, so a
+                // town that will not geocode leaves the group accepting rather than silently
+                // invisible — the hub then asks for the missing area.
+                if (_takesClients)
+                {
+                    await AdminClient.UpdateClientAcceptanceAsync(
+                        created.OrganizationId, isAcceptingClients: true, acceptsClientsOutsideRange: false);
+
+                    var where = _serviceArea.Trim();
+                    if (where.Length > 0)
+                    {
+                        var point = await AdminClient.SearchGeocodingAsync(where);
+                        if (point?.Latitude is { } lat && point.Longitude is { } lon)
+                        {
+                            await AdminClient.UpsertOrgAreaOfOperationAsync(created.OrganizationId,
+                                new UpsertAreaOfOperationRequest(
+                                    RadiusMiles: _radiusMiles,
+                                    CenterLatitude: lat,
+                                    CenterLongitude: lon,
+                                    DisplayLabel: $"Within {_radiusMiles} miles of {where}",
+                                    IsAcceptingClients: true,
+                                    AcceptsClientsOutsideRange: false));
+                        }
+                    }
+                }
+
+                // Last, because it is the one write the server is expected to refuse: a brand-new
+                // group is on the free lane, where the paid gate turns away any attempt to open
+                // membership applications. Everything above must already have happened when it
+                // does. Kept rather than dropped so the answer is honoured the day a group can
+                // start life with a plan.
+                if (_acceptingApplications)
+                {
+                    await AdminClient.UpdateOrganizationAsync(created.OrganizationId,
+                        new AdminUpdateOrganizationRequest(name, slug,
+                            IsAcceptingApplications: true,
+                            PublicEmail: string.IsNullOrWhiteSpace(_publicEmail) ? null : _publicEmail.Trim()));
+                }
+            }
+            catch { /* hub-editable extras; the group is already theirs */ }
+
+            if (_wizardRef is not null) await _wizardRef.ClearDraftAsync();
+
+            // A founder who chose a paid plan on the pricing page goes on to pay for it; everyone else to the hub and
+            // its tour, as before. The billing page offers the hub from its welcome banner.
+            if (ChosenTierIsPaid && Features.PlanPurchasesEnabled)
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}/billing?from=new&tier={_chosenTier!.Id}");
+            else
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}?welcome=1");
+        }
+        finally { _busy = false; }
+    }
+}

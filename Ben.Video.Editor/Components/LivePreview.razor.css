@@ -1,0 +1,83 @@
+/* ── The sequence player (phase 12, decision D5) ────────────────────────────
+   Laid out like VideoPreview so that switching between Rendered and Live does not move the
+   picture: same column, same stage filling the row, same transport strip underneath. */
+:host,
+.bv-live {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+}
+
+.bv-live__stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Black behind the picture, so a gap in the timeline looks like a gap rather than like the
+       panel showing through. */
+    background: #000;
+    overflow: hidden;
+}
+
+/* Both video elements and the still occupy the same box: which one is visible is the cut, and a
+   cut has to happen without anything moving. */
+.bv-live__video,
+.bv-live__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+
+.bv-live__empty {
+    color: var(--kendo-color-subtle, var(--bv-text-muted));
+    font-size: .875rem;
+}
+
+.bv-live__warning {
+    position: absolute;
+    left: .5rem;
+    right: .5rem;
+    bottom: .5rem;
+    padding: .35rem .6rem;
+    border-radius: var(--kendo-border-radius-md, 4px);
+    background: var(--kendo-color-warning-subtle, rgba(255, 193, 7, .18));
+    color: var(--kendo-color-warning-on-subtle, var(--bv-text));
+    font-size: .75rem;
+    text-align: center;
+}
+
+/* ── Transport ───────────────────────────────────────────────────────────── */
+.bv-live__transport {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .5rem;
+    border-top: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+}
+
+.bv-live__clock {
+    font-variant-numeric: tabular-nums;
+    font-size: .8rem;
+    color: var(--kendo-color-subtle, var(--bv-text-muted));
+}
+
+.bv-live__badge {
+    margin-left: auto;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: var(--kendo-color-primary-subtle, rgba(13, 110, 253, .18));
+    color: var(--kendo-color-primary-on-subtle, var(--bv-text));
+}

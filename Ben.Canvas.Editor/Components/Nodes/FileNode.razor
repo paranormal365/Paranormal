@@ -1,0 +1,68 @@
+@*
+    A file that is not a picture: an icon by kind, its name and its size. Its download comes from the
+    device store, and from the case once M6 saves it there.
+*@
+@inherits BlockRendererBase
+@implements IDisposable
+@inject CanvasAssetStore Assets
+@inject ICanvasMediaStore Media
+
+<div class="bc-file">
+    <BcIcon Name="@IconFor(File.FileName)" Class="bc-file__icon" />
+    <div class="bc-file__text">
+        <span class="bc-file__name">@(string.IsNullOrWhiteSpace(File.FileName) ? "File" : File.FileName)</span>
+        <span class="bc-file__meta">@BcFileSize.Format(File.Size)@(Stored ? "" : " · not on this device")</span>
+    </div>
+    @if (Link is not null)
+    {
+        <a class="bc-file__download" href="@Link" download="@File.FileName" aria-label="@($"Download {File.FileName}")" title="Download">
+            <BcIcon Name="download" />
+        </a>
+    }
+</div>
+
+@code {
+    /// <summary>A URL the file can be downloaded from, once a store provides one.</summary>
+    [Parameter] public string? DownloadUrl { get; set; }
+
+    private FileData File => Data as FileData ?? new FileData();
+
+    private string? _stored;
+
+    private string? Link => DownloadUrl ?? _stored;
+
+    protected override void OnInitialized() => Assets.Ready += OnAssetsReady;
+
+    protected override async Task OnParametersSetAsync() => _stored = await LookUpAsync();
+
+    /// <summary>The copy on this device first; otherwise the case's copy.</summary>
+    private async Task<string?> LookUpAsync()
+    {
+        var local = File.AssetId is { } id ? await Assets.GetUrlAsync(id, File.OpfsExt) : null;
+        if (local is not null || File.UploadFileId is not { } uploaded) return local;
+        return await Media.GetDisplayUrlAsync(uploaded, thumbnail: false);
+    }
+
+    private void OnAssetsReady() => _ = InvokeAsync(async () =>
+    {
+        _stored = await LookUpAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Assets.Ready -= OnAssetsReady;
+
+    private bool Stored => File.AssetId is not null || File.UploadFileId is not null;
+
+    internal static string IconFor(string? name)
+    {
+        var ext = System.IO.Path.GetExtension(name ?? "").ToLowerInvariant();
+        return ext switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".heic" => "image",
+            ".mp3" or ".wav" or ".m4a" or ".ogg" or ".flac" => "music",
+            ".mp4" or ".mov" or ".webm" => "video",
+            ".pdf" or ".txt" or ".doc" or ".docx" or ".rtf" or ".md" => "file-text",
+            _ => "file",
+        };
+    }
+}

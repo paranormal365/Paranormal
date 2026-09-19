@@ -1,0 +1,216 @@
+/*
+ * bc-kit.css - styles for the Kit look-alikes copied into the canvas editor.
+ * Copied from Ben.Web.Website.Library/wwwroot/kit/ben-kit.css (loader veil, modal z, context menu),
+ * with the Kit-owned class names renamed ben-* to bc-*.
+ *
+ * Only bc-* rules live here. Bootstrap's own class definitions belong to the host
+ * (Ben.Wasm.Canvas/wwwroot/css/bootstrap-subset.css), so when this library runs inside the site
+ * it never competes with the site's full Bootstrap build.
+ *
+ * Z-INDEX CONTRACT
+ * Inside .bc-board (isolation: isolate):
+ *   group layer 0, edge layer 1, node layer 2 (nodes carry NO z-index - paint order is DOM order,
+ *   sorted by the document's Z), selection overlay 3, marquee 4.
+ * Chrome outside the board:
+ *   minimap 8; rail, toolbar and properties panel 10; bottom sheet 20;
+ *   dropdown backdrop 1000 / menu 1001; fullscreen panel 1040;
+ *   modal backdrop 1050 / modal 1055; context menu 1085 / 1086; Kendo popups 1090; toasts 1095.
+ * These are the site's own numbers, so hosting the editor inside the site never fights its shell.
+ */
+
+/* ── BcLoaderOverlay ───────────────────────────────────────────────────── */
+.bc-loader-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Tied to the active theme's own surface, so it reads in both themes without a second rule. */
+    background: color-mix(in srgb, var(--bs-body-bg) 70%, transparent);
+    z-index: 5;
+}
+
+/* ── BcModal ───────────────────────────────────────────────────────────── */
+/* The component renders .d-block instead of letting Bootstrap's JS add inline styles, and needs the
+   backdrop beneath the dialog rather than over it. */
+.modal.show.d-block { z-index: 1055; }
+.modal-backdrop.show { z-index: 1050; }
+
+/* ── BcContextMenu ─────────────────────────────────────────────────────── */
+/* The backdrop is what closes it: a document-level listener would outlive the component. */
+.bc-context-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1085;
+}
+
+.bc-context-menu {
+    position: fixed;
+    z-index: 1086;
+    display: block;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* ── BcToastHost ───────────────────────────────────────────────────────── */
+.bc-toasts { z-index: 1095; }
+
+/* ── BcIcon inside text ────────────────────────────────────────────────── */
+/* An icon beside a label sits on the text baseline and follows the label's size, rather than taking
+   its own line at a fixed 20px. */
+.btn > .sa-icon,
+.dropdown-item > .sa-icon,
+.toast-header > .sa-icon {
+    display: inline-block;
+    width: 1.05em;
+    height: 1.05em;
+    vertical-align: -.125em;
+}
+
+/* ── Icons inside the editor ───────────────────────────────────────────── */
+/* The site sizes and strokes .sa-icon in its compiled theme, which the standalone host does not load.
+   Without a size an inline SVG is 300 by 150 pixels and covers the buttons beside it; without a stroke
+   the Feather paths draw nothing. Scoped to the editor so it never restyles the site's own icons. */
+.bc-editor .sa-icon {
+    display: inline-block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+.bc-editor .btn > .sa-icon,
+.bc-editor .dropdown-item > .sa-icon {
+    width: 1.05em;
+    height: 1.05em;
+    vertical-align: -.125em;
+}
+
+.bc-editor .bc-node__head .sa-icon { width: 16px; height: 16px; }
+
+/* The paste catcher: a real textarea so Safari fires copy, cut and paste for board shortcuts, kept off
+   screen and out of the tab order. Not display:none, which cannot take focus. */
+.bc-editor .bc-paste-catcher {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    resize: none;
+    pointer-events: none;
+}
+
+/* A drop is on its way: the script adds the class while something is dragged over the board. */
+.bc-editor .bc-board.bc-board--dropping {
+    outline: 2px dashed var(--bc-accent);
+    outline-offset: -6px;
+}
+
+/* The import button is a label, so a tap opens the file picker natively. */
+.bc-editor label.bc-header__button {
+    margin: 0;
+    cursor: pointer;
+}
+/* Rows in a phone sheet (Add, More): the full width is the target, never less than a finger. */
+.bc-editor .bc-sheet-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 .5rem .5rem;
+}
+
+.bc-editor .bc-sheet-list__row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    min-height: 48px;
+    margin: 0;
+    padding: 0 .75rem;
+    border: 0;
+    border-radius: var(--bc-radius-sm);
+    background: transparent;
+    color: var(--bc-text);
+    font-size: 1rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bc-editor .bc-sheet-list__row:hover,
+.bc-editor .bc-sheet-list__row:focus-visible {
+    background: var(--bc-surface-3);
+    outline: none;
+}
+
+.bc-editor .bc-paste-sheet {
+    padding: 0 1rem 1rem;
+}
+/* Notices appear under the header at every size: the bottom of the screen holds the zoom controls, and on
+   a phone the tool bar. Only the notices themselves take touches. */
+.bc-toasts.toast-container {
+    top: calc(var(--bc-toolbar-h) + env(safe-area-inset-top, 0px));
+    bottom: auto !important;
+    pointer-events: none;
+}
+
+.bc-toasts .toast {
+    pointer-events: auto;
+}
+
+@media (max-width: 767.98px) {
+    .bc-toasts.toast-container {
+        left: 0;
+        right: 0 !important;
+        width: auto !important;
+        box-sizing: border-box;
+        padding: .5rem !important;
+    }
+
+    .bc-toasts .toast {
+        width: 100%;
+        max-width: none;
+    }
+}
+/* Save to case in the header (M6). Global because the editor, not the header, renders it. */
+.bc-editor .bc-header__save {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    min-height: var(--bc-tap);
+    white-space: nowrap;
+}
+@media (max-width: 575.98px) {
+    .bc-editor .bc-header__save-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}
+
+/* A view-only board (R33) says so beside the actions, in words and a glyph, never colour alone. */
+.bc-editor .bc-header__viewonly {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    padding: .25rem .5rem;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+    white-space: nowrap;
+}
+
+/* The properties panel's fieldset only exists to disable every control at once. */
+.bc-editor .bc-props__fields {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.bc-editor .bc-bar--readonly { grid-template-columns: repeat(3, 1fr); }
+/* A map box names both picture schemes; only the one matching the site's theme shows (and, being lazy, loads). */
+.bc-editor .bc-map__img--dark { display: none; }
+[data-bs-theme="dark"] .bc-editor .bc-map__img--dark { display: block; }
+[data-bs-theme="dark"] .bc-editor .bc-map__img--light { display: none; }

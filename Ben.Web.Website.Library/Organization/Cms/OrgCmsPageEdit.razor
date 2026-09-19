@@ -7,7 +7,11 @@
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @using Ben.Data.Common.Enums
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
+@* Item 154: the address must die with the feature switch, not just the links to it. *@
+<FeatureGate Flag="@SiteFeatures.CmsPages">
 <PageTitle>@(_page?.PageTitle ?? "Edit Page") — CMS</PageTitle>
 
 <div class="container-fluid px-3">
@@ -235,7 +239,7 @@
                         </button>
                     </div>
                     <div class="card-body">
-                        <TelerikEditor @bind-Value="@_metaForm.PageHtml"
+                        <BenEditor @bind-Value="@_metaForm.PageHtml"
                                        Height="200px" />
                     </div>
                 </div>
@@ -327,17 +331,18 @@
                                             { <BenIcon Name="check" /> }
                                         </Template>
                                     </GridColumn>
-                                    <GridCommandColumn Width="130px">
+                                    <GridCommandColumn Width="100px">
                                         <GridCommandButton Command="Edit"
-                                                           Icon="@SvgIcon.Pencil"
-                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))">
-                                            Edit
-                                        </GridCommandButton>
+                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))"
+                                                           Title="Edit"
+                                                           Class="ben-grid-action"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                                         <GridCommandButton Command="Delete"
-                                                           Icon="@SvgIcon.Trash"
                                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))">
-                                        </GridCommandButton>
+                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))"
+                                                           Title="Delete"
+                                                           Class="ben-grid-action"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                                     </GridCommandColumn>
                                 </GridColumns>
                             </TelerikGrid>
@@ -464,6 +469,8 @@
     </ChildContent>
 </BenModal>
 
+</FeatureGate>
+
 @code {
     [Parameter] public Guid OrgId  { get; set; }
     [Parameter] public Guid PageId { get; set; }
@@ -533,6 +540,10 @@
         CmsSectionType.EmbeddedInvestigations => "Our investigations",
         CmsSectionType.EmbeddedCases          => "Our cases",
         CmsSectionType.CaseMedia              => "Photos from a case",
+        CmsSectionType.EventBooking           => "An event: dates and ask for a place",
+        CmsSectionType.EventProgramme         => "An event's programme",
+        CmsSectionType.EventGallery           => "An event's pictures",
+        CmsSectionType.EventVenue             => "An event's venue",
         _                                     => type.ToString(),
     };
 
@@ -576,10 +587,12 @@
         var usersTask  = AdminClient.GetOrgUserDirectoryAsync(OrgId);
         await Task.WhenAll(permsTask, groupsTask, membersTask, usersTask);
 
-        _permissionRecords = [..permsTask.Result];
-        var groups  = groupsTask.Result;
-        var members = membersTask.Result;
-        var users   = usersTask.Result;
+        _permissionRecords = [.. permsTask.Result.Items];
+        var groups  = groupsTask.Result.Items;
+        var members = membersTask.Result.Items;
+        // A name lookup for the permission rows. If the directory is refused the rows still
+        // render, showing ids where names would be — visible, and not a claim about access.
+        var users   = usersTask.Result.Items;
 
         _groupOptions = groups.Select(g => new GroupPermOption(g.Id, g.Name)).ToList();
         _orgMemberOptions = members
@@ -697,8 +710,8 @@
             _metaForm.SortOrder));
 
         _isBusy = false;
-        if (result is not null) { _successMessage = "Page settings saved."; _page = result; }
-        else _errorMessage = "Failed to save page settings.";
+        if (result.Result is not null) { _successMessage = "Page settings saved."; _page = result.Result; }
+        else _errorMessage = result.Error ?? "Failed to save page settings.";
     }
 
     // ── Preview ───────────────────────────────────────────────────────────────

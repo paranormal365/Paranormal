@@ -2,8 +2,10 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject SiteFeaturesProvider Features
 
 <PageTitle>SuperAdmin — Site Settings</PageTitle>
 
@@ -24,18 +26,36 @@
         <div class="alert alert-success py-2">Saved.</div>
     }
 
-    @if (_settings is null)
-    {
-        <p class="text-secondary">Loading…</p>
-    }
-    else
-    {
-        @foreach (var setting in _settings)
+    @* Was `@if (_settings is null) { Loading… }`, which stayed true after a failed load — so the
+       page showed the red error banner and a spinner at the same time, reading as "it failed, but
+       it is also still trying". BenListState is exactly the missing third and fourth state, and it
+       is what tells a signed-out SuperAdmin to sign in rather than quoting a 401 at them.
+       Item 133. *@
+    <BenListState TItem="SiteSettingRecord" Result="@_result" Loading="@_loading"
+                  LoadingText="Loading site settings…"
+                  EmptyText="No site settings are defined yet"
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+        @* Grouped, not one long run of twenty-seven identical cards. The sections come from the
+           server beside the settings themselves, so adding a setting files it without touching
+           this page — and a setting filed nowhere is refused there rather than quietly dropped
+           here. *@
+        @foreach (var section in Sections)
+        {
+            <div class="mb-2">
+                <h5 class="mb-1 pt-2">@section.Key</h5>
+                <p class="text-secondary small mb-3">
+                    @(string.IsNullOrWhiteSpace(section.First().GroupBlurb)
+                        ? "Settings the site has not filed under a heading."
+                        : section.First().GroupBlurb)
+                </p>
+            </div>
+        @foreach (var setting in section)
         {
             var s = setting;
             <div class="card mb-3">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
                         <div class="flex-grow-1">
                             @* The key is the API's name for it, not a label a person should have
                                to read first — description leads, key is shown small for support. *@
@@ -43,7 +63,7 @@
                             <div class="text-secondary small">@s.Description</div>
                             <div class="text-muted font-monospace" style="font-size:.7rem;">@s.Key</div>
                         </div>
-                        <span class="badge @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "bg-secondary" : "bg-success")">
+                        <span class="badge flex-shrink-0 @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "bg-secondary" : "bg-success")">
                             @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "Not set" : "Set")
                         </span>
                     </div>
@@ -51,7 +71,29 @@
                     <div class="d-flex gap-2 align-items-start mt-2 flex-wrap">
                         @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur in
                            this codebase, which loses the last edit when Save is clicked directly. *@
-                        @if (s.IsMultiLine)
+                        @if (s.IsBoolean)
+                        {
+                            @* On/off settings get a switch. They used to get the same text box as
+                               everything else, which is why the self-registration setting's
+                               description had to end with "Accepts true or false" — the control
+                               was making the admin do its job. Saving happens on the toggle: a
+                               switch that needs a separate Save button reads as already applied. *@
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="@($"sw-{s.Key}")"
+                                       checked="@IsOn(s)"
+                                       disabled="@(_savingKey == s.Key)"
+                                       @onchange="@(e => ToggleAsync(s.Key, e.Value is true))" />
+                                <label class="form-check-label" for="@($"sw-{s.Key}")">
+                                    @(IsOn(s) ? "On" : "Off")
+                                    @if (string.IsNullOrWhiteSpace(_drafts[s.Key]))
+                                    {
+                                        <span class="text-secondary small ms-1">(default)</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                        else if (s.IsMultiLine)
                         {
                             @* A postal address in a one-line input is technically editable and
                                miserable to edit. The server says which settings need the room. *@
@@ -60,6 +102,21 @@
                                       value="@_drafts[s.Key]"
                                       @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
                         }
+                        else if (AvatarKeys.Contains(s.Key))
+                        {
+                            @* An upload, not a Guid box (Ben, 2026-08-23): the value IS a file id,
+                               but asking an administrator to mint one elsewhere and paste it here
+                               was the plumbing showing through. Same flow as anyone's avatar —
+                               upload as a public file, then point the setting at it; both steps
+                               happen behind this one control. One control per default (item 163):
+                               generic, man, woman. *@
+                            <label class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") mb-0" for="@($"avatar-upload-{s.Key}")">
+                                @(_savingKey == s.Key ? "Uploading…" : "Upload image")
+                            </label>
+                            <InputFile id="@($"avatar-upload-{s.Key}")" style="display:none;"
+                                       accept="image/png,image/jpeg,image/gif,image/webp"
+                                       OnChange="@(e => OnDefaultAvatarSelectedAsync(e, s.Key))" />
+                        }
                         else
                         {
                             <input class="form-control" style="max-width:420px;"
@@ -67,8 +124,11 @@
                                    value="@_drafts[s.Key]"
                                    @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                         }
+                        @if (!s.IsBoolean && !AvatarKeys.Contains(s.Key))
+                        {
                         <button type="button" class="btn btn-primary" @onclick="@(() => SaveAsync(s.Key))" disabled="@(!(_savingKey != s.Key))">Save</button>
-                        @if (!string.IsNullOrWhiteSpace(s.Value))
+                        }
+                        @if (!s.IsBoolean && !string.IsNullOrWhiteSpace(s.Value))
                         {
                             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => ClearAsync(s.Key))" disabled="@(!(_savingKey != s.Key))">Clear</button>
                         }
@@ -76,16 +136,16 @@
 
                     @* The default avatar is a file id, which is unreadable as text — show the
                        image so a wrong or deleted id is obvious rather than silently inert. *@
-                    @if (s.Key == DefaultAvatarKey && _avatarPreview is not null)
+                    @if (AvatarKeys.Contains(s.Key) && _avatarPreviews.GetValueOrDefault(s.Key) is { } preview)
                     {
                         <div class="mt-2 d-flex align-items-center gap-2">
-                            <img src="@_avatarPreview" alt="Default avatar"
+                            <img src="@preview" alt="Default avatar"
                                  class="rounded-circle border"
                                  style="width:56px;height:56px;object-fit:cover;" />
-                            <span class="text-secondary small">Current default</span>
+                            <span class="text-secondary small">Current image</span>
                         </div>
                     }
-                    else if (s.Key == DefaultAvatarKey && !string.IsNullOrWhiteSpace(s.Value))
+                    else if (AvatarKeys.Contains(s.Key) && !string.IsNullOrWhiteSpace(s.Value))
                     {
                         <div class="alert alert-warning py-2 mt-2 mb-0 small">
                             That file id doesn't resolve to a readable image. People with no photo
@@ -95,23 +155,54 @@
                 </div>
             </div>
         }
-    }
+        }
+        </ChildContent>
+    </BenListState>
 </div>
 
 @code {
+    /// <summary>
+    /// The settings as the page lays them out: the server's sections, in the server's order.
+    /// </summary>
+    /// <remarks>
+    /// Anything the server did not file lands in a section of its own at the end rather than
+    /// vanishing. A setting nobody can find is the same as a setting that does not exist, and a
+    /// page that silently drops one is worse than an ugly page.
+    /// </remarks>
+    private IEnumerable<IGrouping<string, SiteSettingRecord>> Sections
+        => (_settings ?? [])
+            .GroupBy(s => string.IsNullOrWhiteSpace(s.Group) ? "Other" : s.Group)
+            .OrderBy(g => g.Key == "Other" ? int.MaxValue : SectionOrder.IndexOf(g.Key));
+
+    /// <summary>The order the server sent them in, which is the order they were declared in.</summary>
+    private List<string> SectionOrder
+        => (_settings ?? []).Select(s => s.Group).Where(g => !string.IsNullOrWhiteSpace(g))
+            .Distinct().ToList();
+
     private const string DefaultAvatarKey = "avatar.default.upload-file-id";
 
+    /// <summary>The three default-avatar settings (item 163): generic, man, woman. All render
+    /// the same upload control and preview; resolution order lives on the server.</summary>
+    private static readonly IReadOnlySet<string> AvatarKeys = new HashSet<string>
+    {
+        DefaultAvatarKey,
+        "avatar.default.man.upload-file-id",
+        "avatar.default.woman.upload-file-id",
+    };
+
     private List<SiteSettingRecord>? _settings;
+    private LoadResult<SiteSettingRecord> _result;
+    private bool _loading = true;
     private readonly Dictionary<string, string> _drafts = [];
     private string? _savingKey;
     private string? _savedKey;
     private string? _error;
-    private string? _avatarPreview;
+    private readonly Dictionary<string, string> _avatarPreviews = new();
 
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
         await LoadAsync();
     }
 
@@ -128,11 +219,24 @@
     {
         try
         {
-            _settings = await AdminClient.GetSiteSettingsAsync();
+            // LoadSiteSettings, not GetSiteSettings: the old call turned any refusal into an empty
+            // list, so this page rendered blank on the ishaunted.com deploy with no error anywhere
+            // — the catch below never fired, because nothing threw (items 120 and 126).
+            _result = await AdminClient.GetSiteSettingsAsync();
+
+            if (_result.Failed)
+            {
+                // No _error banner: BenListState renders the failure, and a signed-out reader gets
+                // a way back rather than a status code. Setting both would say it twice.
+                return;
+            }
+
+            _settings = _result.Items.ToList();
             foreach (var s in _settings) _drafts[s.Key] = s.Value ?? string.Empty;
             await LoadAvatarPreviewAsync();
         }
-        catch { _error = "Couldn't load site settings."; }
+        catch { _result = LoadResult<SiteSettingRecord>.Failure(); }
+        finally { _loading = false; }
     }
 
     /// <summary>
@@ -142,16 +246,74 @@
     /// </summary>
     private async Task LoadAvatarPreviewAsync()
     {
-        _avatarPreview = null;
-        var raw = _settings?.FirstOrDefault(s => s.Key == DefaultAvatarKey)?.Value;
+        foreach (var key in AvatarKeys) await LoadAvatarPreviewAsync(key);
+    }
+
+    private async Task LoadAvatarPreviewAsync(string key)
+    {
+        _avatarPreviews.Remove(key);
+        var raw = _settings?.FirstOrDefault(s => s.Key == key)?.Value;
         if (!Guid.TryParse(raw, out var fileId)) return;
+        // A URL the browser fetches. Only a handful of avatars, so this was never heavy — but
+        // there is no reason to route an image through the server to show it.
+        _avatarPreviews[key] = MediaUrls.Thumbnail(fileId);
+    }
+
+    /// <summary>Ceiling for the default avatar image. Matches the profile-photo limit.</summary>
+    private const long MaxDefaultAvatarBytes = 10 * 1024 * 1024;
+
+    private async Task OnDefaultAvatarSelectedAsync(InputFileChangeEventArgs e, string key)
+    {
+        _savingKey = key; _error = null; _savedKey = null;
+        StateHasChanged();
         try
         {
-            var file = await AdminClient.GetFileDataAsync(fileId);
-            if (file is { } f)
-                _avatarPreview = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Data)}";
+            var file = e.File;
+            var typeId = await AdminClient.GetProfilePhotoFileTypeIdAsync();
+            if (typeId is null) { _error = "Photo uploads aren't configured."; return; }
+
+            // Buffered before it goes anywhere: a RemoteBrowserFileStream fed straight into
+            // request content freezes the page and replays the click on reconnect.
+            using var ms = new MemoryStream();
+            await using (var browserStream = file.OpenReadStream(MaxDefaultAvatarBytes))
+                await browserStream.CopyToAsync(ms);
+
+            // Public on purpose: this image renders for people with no photo, to viewers who may
+            // not be signed in at all. A private default would be a broken image for exactly the
+            // audience it exists for.
+            var uploaded = await AdminClient.UploadUserFileAsync(
+                typeId.Value, UserState.UserId ?? Guid.Empty,
+                file.Name, file.ContentType, ms.ToArray(),
+                description: "Site default avatar", isPublic: true);
+            if (uploaded is null)
+            {
+                _error = "Upload failed — the image must be JPEG, PNG, GIF or WebP.";
+                return;
+            }
+
+            // Replace, not accumulate (Ben): once the setting points at the new image, the old
+            // one has no job left. Remembered before the save, deleted best-effort after it — a
+            // file that is genuinely in use elsewhere (someone's own photo pointed at by the old
+            // Guid workflow) survives because its references make the hard delete refuse, which
+            // is exactly the right arbiter.
+            Guid? previous = Guid.TryParse(_drafts.GetValueOrDefault(key), out var prev)
+                ? prev : null;
+
+            _drafts[key] = uploaded.Id.ToString();
+            await SaveAsync(key);
+
+            if (previous is { } old && old != uploaded.Id && _savedKey == key)
+                await AdminClient.DeleteUploadFileAdminAsync(old);
         }
-        catch { /* leaves the "doesn't resolve" warning showing, which is the useful signal */ }
+        catch (IOException)
+        {
+            _error = "That image is too large — 10 MB at most.";
+        }
+        finally
+        {
+            if (_savingKey == key) _savingKey = null;
+            StateHasChanged();
+        }
     }
 
     private async Task SaveAsync(string key)
@@ -167,10 +329,39 @@
             _drafts[key] = updated.Value ?? string.Empty;
             _savedKey = key;
 
-            if (key == DefaultAvatarKey) await LoadAvatarPreviewAsync();
+            if (AvatarKeys.Contains(key)) await LoadAvatarPreviewAsync(key);
+
+            // Feature switches are read from a snapshot that refreshes on its own every 30
+            // seconds. That is right for every other reader and wrong for the person who just
+            // moved the switch: without this they save, look at the site, see no change, and
+            // reasonably conclude it did not work. Awaited, not just invalidated: Invalidate
+            // schedules a refresh behind the NEXT reader, so the admin's own next page could
+            // still render the old snapshot — exactly the "did it save?" moment this exists
+            // to prevent (found by the announcement-banner e2e test).
+            await Features.PrimeAsync();
         }
         catch { _error = "Couldn't save that setting."; }
         finally { _savingKey = null; StateHasChanged(); }
+    }
+
+    /// <summary>A stored value is text; "true" in any casing is on, everything else is off.</summary>
+    private static bool IsTrue(string? raw) => bool.TryParse(raw, out var v) && v;
+
+    /// <summary>
+    /// What the switch should show: the stored value when there is one, otherwise what the site
+    /// actually does with nothing stored. Drawing this from the stored value alone made the page
+    /// report seven running features as "Off" — the switch has to describe the site, not the row.
+    /// </summary>
+    private bool IsOn(SiteSettingRecord s)
+        => string.IsNullOrWhiteSpace(_drafts[s.Key])
+            ? s.DefaultWhenUnset
+            : IsTrue(_drafts[s.Key]);
+
+    /// <summary>Writes a switch immediately — see the note on the switch markup.</summary>
+    private async Task ToggleAsync(string key, bool on)
+    {
+        _drafts[key] = on ? "true" : "false";
+        await SaveAsync(key);
     }
 
     private async Task ClearAsync(string key)

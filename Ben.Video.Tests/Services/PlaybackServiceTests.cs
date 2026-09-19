@@ -256,13 +256,39 @@ public sealed class PlaybackServiceTests
 
     // ── Phase 42: SessionFps ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// The editing frame rate and the export's own default are the same number.
+    /// </summary>
+    /// <remarks>
+    /// <para>This test existed and asserted the literal 24, with a comment explaining that the
+    /// point was to match <see cref="ExportSettings"/>. So when the export default moved to 30,
+    /// the two drifted apart and the test that was there to prevent exactly that went on passing:
+    /// stepping a frame moved the preview by a twenty-fourth of a second while the render used
+    /// thirtieths, until somebody happened to open the export dialog (2026-09-05 audit,
+    /// preview-7).</para>
+    ///
+    /// <para>Asserting the relationship rather than the value is the difference between a test
+    /// that documents an invariant and one that documents a number.</para>
+    /// </remarks>
     [Fact]
-    public void SessionFps_DefaultIs24()
+    public void SessionFps_MatchesTheExportDefault()
     {
-        // Matches ExportSettings.Fps's own default (24) — kept in sync so a fresh session's
-        // Working Window frame-stepping isn't inconsistent with what a fresh Export would use.
         var svc = new PlaybackService();
-        Assert.Equal(24, svc.SessionFps);
+
+        Assert.Equal(new ExportSettings().Fps, svc.SessionFps);
+    }
+
+    /// <summary>
+    /// And the ruler counts in the same frames the preview steps in.
+    /// </summary>
+    /// <remarks>
+    /// The ruler's frame rate was a constant, so at any other rate it counted frames that did not
+    /// exist — a 25 fps project's "frame 300" was really frame 250 (2026-09-05 audit, timeline-17).
+    /// </remarks>
+    [Fact]
+    public void The_rulers_default_frame_rate_matches_the_sessions()
+    {
+        Assert.Equal(TimelineViewState.DefaultFps, new PlaybackService().SessionFps);
     }
 
     [Fact]
@@ -280,7 +306,7 @@ public sealed class PlaybackServiceTests
         var fired = false;
         svc.OnStateChanged += () => fired = true;
 
-        svc.SetSessionFps(24); // same as default — should not fire
+        svc.SetSessionFps(svc.SessionFps); // same as it already is — should not fire
 
         Assert.False(fired);
     }
@@ -292,7 +318,7 @@ public sealed class PlaybackServiceTests
         var fired = false;
         svc.OnStateChanged += () => fired = true;
 
-        svc.SetSessionFps(30);
+        svc.SetSessionFps(25);
 
         Assert.True(fired);
     }

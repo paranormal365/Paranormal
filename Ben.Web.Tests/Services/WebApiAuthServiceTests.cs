@@ -348,13 +348,40 @@ public class WebApiAuthServiceTests
     public async Task LoginAsync_WhenCredentialsRejected_ReportsInvalidCredentials()
     {
         var (svc, _, idMock, _) = Build();
+        // "Failed" is what the API actually answers for a wrong password — verified against a
+        // running server, alongside "NotAllowed" and "LockedOut". This fixture used a DETAIL-LESS
+        // 401, which the endpoint never sends, and that unfaithfulness is what let a detail-less
+        // refusal be reported as a wrong password for as long as it was.
         idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-              .ReturnsAsync(new LoginAttempt(null, 401));
+              .ReturnsAsync(new LoginAttempt(null, 401, "Failed"));
 
         var ok = await svc.LoginAsync("user@test.com", "wrong");
 
         Assert.False(ok);
         Assert.Equal(LoginFailure.InvalidCredentials, svc.LastLoginFailure);
+    }
+
+    /// <summary>
+    /// A 401 whose reason never arrived is unknown, not a wrong password.
+    /// </summary>
+    /// <remarks>
+    /// The case a full Playwright run hit: an unconfirmed account with the CORRECT password was
+    /// told its password was wrong, because the problem-detail did not survive the read under
+    /// load. Naming the password is a guess, and the wrong guess sends somebody to reset one that
+    /// was always right.
+    /// </remarks>
+    [Fact]
+    public async Task LoginAsync_WhenTheReasonCannotBeRead_DoesNotBlameThePassword()
+    {
+        var (svc, _, idMock, _) = Build();
+        idMock.Setup(x => x.TryLoginAsync(It.IsAny<string>(), It.IsAny<string>(), default))
+              .ReturnsAsync(new LoginAttempt(null, 401));   // no detail: unreadable body
+
+        var ok = await svc.LoginAsync("user@test.com", "right-password-actually");
+
+        Assert.False(ok);
+        Assert.Equal(LoginFailure.UnknownRefusal, svc.LastLoginFailure);
+        Assert.NotEqual(LoginFailure.InvalidCredentials, svc.LastLoginFailure);
     }
 
     [Fact]

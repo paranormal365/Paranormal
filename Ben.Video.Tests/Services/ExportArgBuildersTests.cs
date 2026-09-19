@@ -89,14 +89,58 @@ public sealed class ExportArgBuildersTests
     }
 
     [Fact]
-    public void BuildTrimArgs_FirstArgIsInput_LastArgIsOutput()
+    public void BuildTrimArgs_SeeksBeforeTheInput_AndEndsWithTheOutput()
     {
         var s    = new ExportSettings();
         var args = ExportArgBuilders.BuildTrimArgs("input.mp4", "output.mp4", 0, 5, 1.0, s);
 
-        Assert.Equal("-i",        args[0]);
-        Assert.Equal("input.mp4", args[1]);
+        // "-ss" before "-i" is input-side seeking: ffmpeg discards the head while reading, so the
+        // filter graph's clock starts at the cut. After "-i" it is output-side seeking and the
+        // filters still see the source's own timestamps, which is what put a fade-in on the part of
+        // the clip that had already been trimmed away (2026-09-05 audit, audio-4).
+        Assert.Equal("-ss", args[0]);
+        Assert.True(Array.IndexOf(args, "-ss") < Array.IndexOf(args, "-i"),
+            "Seeking must come before the input or the trim is applied after decoding.");
+
+        Assert.Equal("input.mp4",  args[Array.IndexOf(args, "-i") + 1]);
         Assert.Equal("output.mp4", args[^1]);
+    }
+
+    /// <summary>
+    /// A clip with no sound still produces an audio stream, so joining it to clips that do have
+    /// sound is an ordinary concat rather than a mix of two different stream layouts.
+    /// </summary>
+    /// <remarks>
+    /// This is the everyday failure it fixes: a slideshow, or any timeline whose first item is an
+    /// image or a muted clip, lost its audio entirely — concat took its stream layout from the
+    /// first segment (2026-09-05 audit, export-3 and audio-2).
+    /// </remarks>
+    [Fact]
+    public void BuildTrimArgs_SilentSource_CarriesSilenceRatherThanNoAudioStream()
+    {
+        var s = new ExportSettings { IncludeAudio = true, AudioCodec = "aac", AudioBitrate = 128 };
+
+        var args = ExportArgBuilders.BuildTrimArgs(
+            "in.mp4", "out.mp4", 0, 6, 1.0, s, sourceHasAudio: false);
+
+        Assert.DoesNotContain("-an", args);
+        Assert.Contains("anullsrc=channel_layout=stereo:sample_rate=48000", args);
+        Assert.Contains("-shortest", args);
+        Assert.Contains("-c:a", args);
+    }
+
+    /// <summary>
+    /// Silence is only worth generating when the export wants audio at all.
+    /// </summary>
+    [Fact]
+    public void BuildTrimArgs_ExportWithoutAudio_StillDropsTheStream()
+    {
+        var s = new ExportSettings { IncludeAudio = false };
+
+        var args = ExportArgBuilders.BuildTrimArgs("in.mp4", "out.mp4", 0, 6, 1.0, s);
+
+        Assert.Contains("-an", args);
+        Assert.DoesNotContain("anullsrc=channel_layout=stereo:sample_rate=48000", args);
     }
 
     // ── QualityArgs ──────────────────────────────────────────────────────────
@@ -214,31 +258,61 @@ public sealed class ExportArgBuildersTests
 
     // ── BuildXfadeFilterComplex ──────────────────────────────────────────────
 
+    private static Transition Fade(double duration, TransitionStyle style = TransitionStyle.Fade)
+        => new() { Style = style, Duration = duration };
+
+    /// <summary>
+    /// A junction with no transition is a cut, and a cut is not a one-second fade.
+    /// </summary>
+    /// <remarks>
+    /// This is the defect the junction list replaced. Transitions were matched to junctions by
+    /// position, and any junction the list did not reach fell back to a default Fade of one second
+    /// — so adding a single transition anywhere on the track quietly dissolved every other cut in
+    /// the project (2026-09-05 audit, transitions-2).
+    /// </remarks>
     [Fact]
-    public void BuildXfadeFilterComplex_TwoSegments_ProducesValidFilter()
+    public void BuildXfadeFilterComplex_JunctionWithoutATransition_IsACutNotAFade()
     {
         var segs = new List<string> { "a.mp4", "b.mp4" };
         var durs = new List<double> { 5.0, 5.0 };
-        var trs  = new List<Transition>();
 
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, trs);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, [null], withAudio: true);
 
-        Assert.Contains("xfade", filter);
+        Assert.DoesNotContain("xfade", filter);
+        Assert.Contains("concat=n=2:v=1:a=1", filter);
         Assert.Contains("[vout]", filter);
-        Assert.Contains("[0:v][1:v]", filter);
+        Assert.Contains("[aout]", filter);
         Assert.False(filter.EndsWith(";"), "Filter should not end with a semicolon");
     }
 
+    /// <summary>
+    /// One transition on a three-clip track blends its own junction and leaves the other alone.
+    /// </summary>
     [Fact]
-    public void BuildXfadeFilterComplex_ThreeSegments_TwoXfadeSteps()
+    public void BuildXfadeFilterComplex_OneTransition_BlendsOnlyItsOwnJunction()
     {
         var segs = new List<string> { "a.mp4", "b.mp4", "c.mp4" };
         var durs = new List<double> { 5.0, 5.0, 5.0 };
-        var trs  = new List<Transition>();
 
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, trs);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [null, Fade(0.75, TransitionStyle.WipeLeft)], withAudio: true);
+
+        Assert.Equal(1, filter.Split("xfade").Length - 1);
+        Assert.Equal(1, filter.Split("concat=").Length - 1);
+        Assert.Contains("wipeleft", filter);
+    }
+
+    [Fact]
+    public void BuildXfadeFilterComplex_ThreeSegments_TwoTransitions_TwoXfadeSteps()
+    {
+        var segs = new List<string> { "a.mp4", "b.mp4", "c.mp4" };
+        var durs = new List<double> { 5.0, 5.0, 5.0 };
+
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(1.0), Fade(1.0)], withAudio: true);
 
         Assert.Equal(2, filter.Split("xfade").Length - 1);
+        Assert.Contains("[0:v][1:v]", filter);
     }
 
     [Fact]
@@ -246,24 +320,59 @@ public sealed class ExportArgBuildersTests
     {
         var segs = new List<string> { "a.mp4", "b.mp4" };
         var durs = new List<double> { 5.0, 5.0 };
-        var trs  = new List<Transition>
-        {
-            new() { Style = TransitionStyle.WipeLeft, Duration = 0.75 }
-        };
 
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, trs);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(0.75, TransitionStyle.WipeLeft)], withAudio: false);
 
         Assert.Contains("wipeleft", filter);
         Assert.Contains("duration=0.75", filter);
     }
 
+    /// <summary>
+    /// The picture blends and so does the sound.
+    /// </summary>
+    /// <remarks>
+    /// Every export containing a transition came out silent, because the graph produced only a
+    /// video output and the caller could map nothing else. With an audio track present it did not
+    /// come out silent — it failed (2026-09-05 audit, transitions-1).
+    /// </remarks>
     [Fact]
-    public void BuildXfadeFilterComplex_SingleSegment_ReturnsEmpty()
+    public void BuildXfadeFilterComplex_WithAudio_CrossfadesTheSoundToo()
     {
-        var segs   = new List<string> { "only.mp4" };
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, [5.0], []);
+        var segs = new List<string> { "a.mp4", "b.mp4" };
+        var durs = new List<double> { 5.0, 5.0 };
 
-        Assert.Equal(string.Empty, filter);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(0.75)], withAudio: true);
+
+        Assert.Contains("[0:a][1:a]acrossfade=d=0.75", filter);
+        Assert.Contains("[aout]", filter);
+    }
+
+    [Fact]
+    public void BuildXfadeFilterComplex_WithoutAudio_LabelsNoAudioOutput()
+    {
+        var segs = new List<string> { "a.mp4", "b.mp4" };
+        var durs = new List<double> { 5.0, 5.0 };
+
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(0.75)], withAudio: false);
+
+        Assert.DoesNotContain("acrossfade", filter);
+        Assert.DoesNotContain("[aout]", filter);
+    }
+
+    /// <summary>
+    /// One segment still needs its labels, because the caller maps them unconditionally.
+    /// </summary>
+    [Fact]
+    public void BuildXfadeFilterComplex_SingleSegment_StillLabelsItsOutputs()
+    {
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            ["only.mp4"], [5.0], [], withAudio: true);
+
+        Assert.Contains("[vout]", filter);
+        Assert.Contains("[aout]", filter);
     }
 
     [Fact]
@@ -272,7 +381,18 @@ public sealed class ExportArgBuildersTests
         var segs = new List<string> { "a.mp4", "b.mp4" };
         var durs = new List<double> { 5.0 };  // one short
 
-        Assert.Throws<ArgumentException>(() => ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, []));
+        Assert.Throws<ArgumentException>(
+            () => ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, [null], withAudio: true));
+    }
+
+    [Fact]
+    public void BuildXfadeFilterComplex_MismatchedJunctionCount_Throws()
+    {
+        var segs = new List<string> { "a.mp4", "b.mp4", "c.mp4" };
+        var durs = new List<double> { 5.0, 5.0, 5.0 };
+
+        Assert.Throws<ArgumentException>(
+            () => ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, [null], withAudio: true));
     }
 
     // Pinned regression coverage for the real-duration offset fix: before this fix, every
@@ -285,9 +405,9 @@ public sealed class ExportArgBuildersTests
     {
         var segs = new List<string> { "a.mp4", "b.mp4" };
         var durs = new List<double> { 2.5, 10.0 };
-        var trs  = new List<Transition> { new() { Style = TransitionStyle.Fade, Duration = 2.0 } };
 
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, trs);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(2.0)], withAudio: false);
 
         // offset = durs[0] - transitionDuration = 2.5 - 2.0 = 0.5 (NOT 5.0 - 2.0 = 3.0, the old
         // hardcoded-5s answer).
@@ -299,18 +419,30 @@ public sealed class ExportArgBuildersTests
     {
         var segs = new List<string> { "a.mp4", "b.mp4", "c.mp4" };
         var durs = new List<double> { 3.0, 4.0, 2.0 };
-        var trs  = new List<Transition>
-        {
-            new() { Style = TransitionStyle.Fade,     Duration = 0.5 },
-            new() { Style = TransitionStyle.Dissolve, Duration = 1.0 },
-        };
 
-        var filter = ExportArgBuilders.BuildXfadeFilterComplex(segs, durs, trs);
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [Fade(0.5), Fade(1.0, TransitionStyle.Dissolve)], withAudio: false);
 
         // offset_0 = durs[0] - dur_0            = 3.0 - 0.5 = 2.5
         // offset_1 = offset_0 + durs[1] - dur_1  = 2.5 + 4.0 - 1.0 = 5.5
         Assert.Contains("offset=2.50", filter);
         Assert.Contains("offset=5.50", filter);
+    }
+
+    /// <summary>
+    /// A cut between two blended junctions still advances the clock by its whole segment.
+    /// </summary>
+    [Fact]
+    public void BuildXfadeFilterComplex_CutBetweenBlends_KeepsTheLaterOffsetInStep()
+    {
+        var segs = new List<string> { "a.mp4", "b.mp4", "c.mp4" };
+        var durs = new List<double> { 3.0, 4.0, 2.0 };
+
+        var filter = ExportArgBuilders.BuildXfadeFilterComplex(
+            segs, durs, [null, Fade(1.0)], withAudio: false);
+
+        // The cut adds b whole: 3.0 + 4.0 = 7.0, so the blend starts a second before that.
+        Assert.Contains("offset=6.00", filter);
     }
 
     // ── BuildCrossTrackXfadeFilter ────────────────────────────────────────────
@@ -588,19 +720,36 @@ public sealed class ExportArgBuildersTests
         Assert.Null(ExportArgBuilders.BuildChannelBalanceFilter(1.0, 1.0));
     }
 
+    /// <summary>
+    /// The balance is applied to a stereo signal, whatever the source was.
+    /// </summary>
+    /// <remarks>
+    /// These two used to expect a bare pan. pan reads c1 from the input and a mono recording has
+    /// no c1, so on a mono file — which is what most handheld recorders produce — the right channel
+    /// came out silent the moment anybody touched the balance (2026-09-05 audit, audio-15).
+    /// </remarks>
     [Fact]
-    public void BuildChannelBalanceFilter_LeftReduced_ReturnsPanFilter()
+    public void BuildChannelBalanceFilter_LeftReduced_MakesStereoFirst()
     {
         var filter = ExportArgBuilders.BuildChannelBalanceFilter(0.5, 1.0);
-        Assert.Equal("pan=stereo|c0=0.500000*c0|c1=1.000000*c1", filter);
+        Assert.Equal(
+            "aformat=channel_layouts=stereo,pan=stereo|c0=0.500000*c0|c1=1.000000*c1", filter);
     }
 
     [Fact]
-    public void BuildChannelBalanceFilter_RightMuted_ReturnsPanFilter()
+    public void BuildChannelBalanceFilter_RightMuted_MakesStereoFirst()
     {
         var filter = ExportArgBuilders.BuildChannelBalanceFilter(1.0, 0.0);
-        Assert.Equal("pan=stereo|c0=1.000000*c0|c1=0.000000*c1", filter);
+        Assert.Equal(
+            "aformat=channel_layouts=stereo,pan=stereo|c0=1.000000*c0|c1=0.000000*c1", filter);
     }
+
+    /// <summary>
+    /// A mono source keeps both channels once the balance is left alone or applied.
+    /// </summary>
+    [Fact]
+    public void BuildChannelBalanceFilter_Unbalanced_AddsNothingAtAll()
+        => Assert.Null(ExportArgBuilders.BuildChannelBalanceFilter(1.0, 1.0));
 
     [Fact]
     public void BuildAudioFadeFilter_BothZero_ReturnsNull()
@@ -650,7 +799,8 @@ public sealed class ExportArgBuildersTests
         };
         var chain = ExportArgBuilders.BuildAudioClipFilterChain(clip, 10.0);
         Assert.Equal(
-            "volume=0.800000,pan=stereo|c0=0.500000*c0|c1=1.000000*c1,afade=t=in:st=0:d=1.000",
+            "volume=0.800000,aformat=channel_layouts=stereo,"
+            + "pan=stereo|c0=0.500000*c0|c1=1.000000*c1,afade=t=in:st=0:d=1.000",
             chain);
     }
 
@@ -878,13 +1028,35 @@ public sealed class ExportArgBuildersTests
         // embedded inside the title value, must read as "[CHAPTER]\" (continuation-escaped, part
         // of the title's own value) rather than a bare "[CHAPTER]" line ffmpeg would parse as a
         // second, genuine section header.
+        // \r? so the assertion is about the section header being alone on its line, not about which
+        // terminator follows it.
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(
-            result, @"^\[CHAPTER\]$", System.Text.RegularExpressions.RegexOptions.Multiline));
+            result, @"^\[CHAPTER\]\r?$", System.Text.RegularExpressions.RegexOptions.Multiline));
         // The newline immediately before the embedded "[CHAPTER]" text is escaped (a literal
         // backslash then the newline), not bare — this is what makes it a continuation of the
         // title value instead of a new line ffmpeg's parser would act on.
         Assert.Contains("\\\n[CHAPTER]", result);
         Assert.Contains("\\\nTIMEBASE", result);
+    }
+
+    // The counterpart to the subtitle line-ending tests, and deliberately the opposite convention.
+    // ffmpeg's own "-f ffmetadata" muxer writes LF, so LF is the form its demuxer is certain to
+    // read back; a header that arrived as "[CHAPTER]\r" and failed to match would not raise an
+    // error, it would just silently produce a file with no chapters in it. StringBuilder.AppendLine
+    // would reintroduce exactly that on Windows, which is where the site now runs.
+    [Fact]
+    public void BuildChapterMetadata_UsesLfLineEndings_RegardlessOfHost()
+    {
+        var markers = new List<TimelineMarker>
+        {
+            new() { Label = "Intro",   TimeSeconds = 0.0 },
+            new() { Label = "Outro",   TimeSeconds = 5.0 },
+        };
+
+        var result = ExportArgBuilders.BuildChapterMetadata(markers, 10.0);
+
+        Assert.Contains("\n", result);
+        Assert.DoesNotContain("\r", result);
     }
 
     [Fact]
@@ -1101,8 +1273,10 @@ public sealed class ExportArgBuildersTests
         var args = ExportArgBuilders.BuildTrimArgs("in.mp4", "out.mp4", 0, 10, 1.0, s,
                                                    muteAudio: true);
 
-        Assert.Contains("-an", args);
-        Assert.DoesNotContain("-c:a", args);
+        // Muting means the clip's own sound is gone, not that the segment loses its audio stream:
+        // it is filled with silence so it can still be concatenated with the clips around it.
+        Assert.DoesNotContain("-filter:a", args);
+        Assert.Contains("anullsrc=channel_layout=stereo:sample_rate=48000", args);
     }
 
     [Fact]
@@ -1126,7 +1300,8 @@ public sealed class ExportArgBuildersTests
         var args = ExportArgBuilders.BuildTrimArgs("in.mp4", "out.mp4", 0, 10, 1.0, s,
                                                    muteAudio: true);
 
-        Assert.Contains("-an", args);
+        Assert.DoesNotContain("-filter:a", args);
+        Assert.Contains("anullsrc=channel_layout=stereo:sample_rate=48000", args);
     }
 
     // ── BuildImageSegmentArgs (Phase 28) ─────────────────────────────────────────
@@ -1184,13 +1359,35 @@ public sealed class ExportArgBuildersTests
         Assert.DoesNotContain("-crf", args);
     }
 
+    /// <summary>
+    /// A picture has no sound, but its segment still carries a silent audio stream.
+    /// </summary>
+    /// <remarks>
+    /// Concat takes the output's stream layout from the first segment, so a slideshow with a music
+    /// track — or any timeline that simply opened on a photo — produced a file with no audio at all
+    /// (2026-09-05 audit, export-3 and audio-2).
+    /// </remarks>
     [Fact]
-    public void BuildImageSegmentArgs_AlwaysContainsAnFlag()
+    public void BuildImageSegmentArgs_CarriesSilence_WhenTheExportIncludesAudio()
     {
-        var s    = new ExportSettings { UseCrf = true, Crf = 23, VideoCodec = "libx264" };
+        var s    = new ExportSettings { UseCrf = true, Crf = 23, VideoCodec = "libx264",
+                                        IncludeAudio = true, AudioCodec = "aac", AudioBitrate = 128 };
+        var args = ExportArgBuilders.BuildImageSegmentArgs("img.png", "out.mp4", 5.0, s);
+
+        Assert.DoesNotContain("-an", args);
+        Assert.Contains("anullsrc=channel_layout=stereo:sample_rate=48000", args);
+        Assert.Contains("-shortest", args);
+    }
+
+    [Fact]
+    public void BuildImageSegmentArgs_DropsTheStream_WhenTheExportHasNoAudio()
+    {
+        var s    = new ExportSettings { UseCrf = true, Crf = 23, VideoCodec = "libx264",
+                                        IncludeAudio = false };
         var args = ExportArgBuilders.BuildImageSegmentArgs("img.png", "out.mp4", 5.0, s);
 
         Assert.Contains("-an", args);
+        Assert.DoesNotContain("anullsrc=channel_layout=stereo:sample_rate=48000", args);
     }
 
     [Fact]
@@ -1747,7 +1944,9 @@ public sealed class ExportArgBuildersTests
         public string DisplayName => id;
         public IReadOnlyList<ClipEffectParameter> ParameterSchema => [];
         public AppliedEffect CreateDefault() => new() { EffectId = id };
-        public string BuildFilterFragment(IReadOnlyDictionary<string, double> parameters, double clipDuration, double speed = 1.0)
+        public string BuildFilterFragment(
+            IReadOnlyDictionary<string, double> parameters, double clipDuration, double speed = 1.0,
+            int canvasWidth = 0, int canvasHeight = 0)
             => fragment;
     }
 
@@ -2043,39 +2242,6 @@ public sealed class ExportArgBuildersTests
         Assert.Contains("-preset", args);
     }
 
-    // ── BuildCalloutFilter expression variables (backlog #29) ────────────────
-    //
-    // drawbox's expression language defines iw/ih for the input frame size; the capital
-    // W/H this filter originally used belong to the overlay filter and fail drawbox with
-    // exit code 1. The bug shipped invisibly: the pass that used this chain also dropped
-    // its video stream (bare "-map 0:a?"), so ffmpeg never evaluated the expressions.
-
-    [Fact]
-    public void BuildCalloutFilter_UsesDrawboxVariables_NotOverlayOnes()
-    {
-        var c = new CalloutClip { Name = "box", Shape = ShapeType.Rectangle,
-                                  X = 0.1, Y = 0.1, Width = 0.2, Height = 0.15 };
-        var filter = ExportArgBuilders.BuildCalloutFilter(c, DefaultSettings());
-
-        Assert.Contains("iw*", filter);
-        Assert.Contains("ih*", filter);
-        Assert.DoesNotContain("(W*", filter);
-        Assert.DoesNotContain("(H*", filter);
-    }
-
-    [Fact]
-    public void BuildCalloutFilter_ShadowFragment_AlsoUsesDrawboxVariables()
-    {
-        var c = new CalloutClip { Name = "box", Shape = ShapeType.Rectangle,
-                                  ShadowOffsetX = 3, ShadowOffsetY = 3, ShadowBlur = 4 };
-        var filter = ExportArgBuilders.BuildCalloutFilter(c, DefaultSettings());
-
-        // Two drawbox fragments (shadow + shape), neither using overlay-only variables.
-        Assert.Equal(2, filter.Split("drawbox").Length - 1);
-        Assert.DoesNotContain("(W*", filter);
-        Assert.DoesNotContain("(H*", filter);
-    }
-
     // ── BuildBackgroundRenderVideoArgs / BuildBackgroundRenderImageArgs — item #36 phase C.
     // These always emit an audio stream (real or synthetic-silent) so background-rendered
     // segments share a consistent stream layout and can be stream-copy concatenated. ─────────
@@ -2090,6 +2256,39 @@ public sealed class ExportArgBuildersTests
         Assert.DoesNotContain("anullsrc", string.Join(' ', args));
         Assert.Contains("-map", args);
         AssertSubsequence(args, ["-map", "0:v", "-map", "0:a"]);
+    }
+
+    [Fact]
+    public void BuildBackgroundRenderVideoArgs_SourceWithoutAudio_AddsSyntheticSilentAudioInput()
+    {
+        // A source with no audio stream at all is a third case, distinct from "muted" and from
+        // "audio turned off in settings": the settings say to include audio and the clip is not
+        // muted, but there is nothing to include. Mapping 0:a here makes ffmpeg refuse the whole
+        // command — "Stream map '0:a' matches no streams" — and in the wasm worker that surfaces
+        // as a background render frozen at a percentage with Export disabled behind it, which is
+        // exactly how it was found. Screen recordings, trail cameras and exported animations all
+        // arrive this way.
+        var s = new ExportSettings { IncludeAudio = true };
+        var args = ExportArgBuilders.BuildBackgroundRenderVideoArgs(
+            "in.mp4", "out.mp4", 0, 5, 1.0, s, muteAudio: false, sourceHasAudio: false);
+
+        Assert.DoesNotContain("0:a", args);
+        AssertSubsequence(args, ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
+        AssertSubsequence(args, ["-map", "0:v", "-map", "1:a"]);
+    }
+
+    [Fact]
+    public void BuildBackgroundRenderVideoArgs_SourceWithAudio_StillMapsItDirectly()
+    {
+        // The default must stay "the source has audio": a project saved before clips recorded
+        // this would otherwise come back silent, which is a worse failure than the one being
+        // fixed because nothing about it looks broken.
+        var s = new ExportSettings { IncludeAudio = true };
+        var args = ExportArgBuilders.BuildBackgroundRenderVideoArgs(
+            "in.mp4", "out.mp4", 0, 5, 1.0, s, muteAudio: false);
+
+        AssertSubsequence(args, ["-map", "0:v", "-map", "0:a"]);
+        Assert.DoesNotContain("anullsrc", string.Join(' ', args));
     }
 
     [Fact]

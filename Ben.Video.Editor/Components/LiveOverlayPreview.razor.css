@@ -44,3 +44,21 @@
     inset: 0;
     pointer-events: none;
 }
+
+/* ── Hidden areas ─────────────────────────────────────────────────────────────
+   Shows what the export will obscure. Deliberately not a faithful copy of the
+   render's own filter — the browser's blur is not ffmpeg's — so it carries a
+   visible border saying it is an editing marker rather than the finished
+   picture. */
+.bv-live-overlay-preview__redaction {
+    position: absolute;
+    pointer-events: none;
+    backdrop-filter: blur(14px);
+    outline: 1px dashed rgba(255, 255, 255, 0.75);
+    outline-offset: -1px;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.bv-live-overlay-preview__redaction--pixelate {
+    backdrop-filter: blur(9px) contrast(1.35);
+}

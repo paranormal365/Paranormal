@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Controllers.Public;
+using Ben.Data.WebApi.Services.Redaction;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -33,7 +34,11 @@ public static class CmsEmbed
     public static bool IsEmbed(CmsSectionType type)
         => type is CmsSectionType.EmbeddedInvestigations
                 or CmsSectionType.EmbeddedCases
-                or CmsSectionType.CaseMedia;
+                or CmsSectionType.CaseMedia
+                or CmsSectionType.EventProgramme
+                or CmsSectionType.EventBooking
+                or CmsSectionType.EventGallery
+                or CmsSectionType.EventVenue;
 
     // ── What the group stores ────────────────────────────────────────────────
 
@@ -192,6 +197,12 @@ public static class CmsEmbed
 
     /// <summary>One case as published on a group's own page.</summary>
     /// <remarks><see cref="ClientName"/> is an alias or nothing. There is no field for a real name.</remarks>
+    /// <param name="Report">
+    /// The group's published finding, when they have switched it onto the public page (W-P3), and
+    /// null for every case where they have not. Alongside <paramref name="Summary"/>, not instead
+    /// of it: the summary is the client's account of what happened and the report is the group's
+    /// answer to it.
+    /// </param>
     public sealed record EmbeddedCase(
         Guid Id,
         string Title,
@@ -203,7 +214,8 @@ public static class CmsEmbed
         string? State,
         decimal? Latitude,
         decimal? Longitude,
-        bool LocationIsApproximate);
+        bool LocationIsApproximate,
+        Services.CasePublicReport.PublicReport? Report = null);
 
     /// <summary>
     /// One file from a case, as published on a group's own page.
@@ -245,6 +257,11 @@ public static class CmsEmbed
         BenDataContext db, Guid organizationId, CmsSectionType type, string? contentJson,
         CancellationToken ct)
     {
+        // An event (item 235 phase 11): one stored shape, {"eventId": …}, for all four sections.
+        if (type is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
+                 or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+            return JsonSerializer.Serialize(await ResolveEventAsync(db, organizationId, type, contentJson, ct), Json);
+
         // Case media stores a different shape — one case and its files, not a list of records — so
         // it branches before the shared parse rather than being bent into it. Reading it with the
         // wrong parser would yield an empty selection and silently render nothing.
@@ -280,6 +297,12 @@ public static class CmsEmbed
             .Where(i => settings.IncludeNonPublic || i.Visibility == InvestigationVisibility.Public)
             .ToListAsync(ct);
 
+        // Item 184: work bound to a private-engagement case substitutes real names before it is
+        // embedded — and because this runs inside the resolver, the live page and the
+        // authenticated preview show the same thing.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, rows.Where(r => r.CaseId != null).Select(r => r.CaseId!.Value).Distinct().ToList(), ct);
+
         // Ordered by the group's own arrangement, not by date — they chose the sequence.
         return [.. ids
             .Select(id => rows.FirstOrDefault(r => r.Id == id))
@@ -290,9 +313,15 @@ public static class CmsEmbed
                     ? PublicCoordinates.Approximate(r!.Place?.Latitude, r.Place?.Longitude)
                     : (null, null);
 
+                var roster = r!.CaseId is { } caseId && rosters.TryGetValue(caseId, out var found)
+                    ? found : RedactionRoster.Empty;
+
                 return new EmbeddedInvestigation(
-                    r!.Id, r.Title, r.Notes, r.ScheduledDateTime, r.UrlName,
-                    settings.ShowApproximateLocation ? r.Place?.Name : null,
+                    r!.Id,
+                    CaseProseRedactor.Redact(r.Title, roster)!,
+                    CaseProseRedactor.RedactHtml(r.Notes, roster),
+                    r.ScheduledDateTime, r.UrlName,
+                    settings.ShowApproximateLocation ? CaseProseRedactor.Redact(r.Place?.Name, roster) : null,
                     settings.ShowApproximateLocation ? r.Place?.City : null,
                     settings.ShowApproximateLocation ? r.Place?.State : null,
                     lat, lon,
@@ -311,6 +340,18 @@ public static class CmsEmbed
                      || (c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted)))
             .ToListAsync(ct);
 
+        // Item 184: a private-engagement case's title and summary substitute real names here,
+        // inside the resolver, so the live page and the preview cannot disagree.
+        var rosters = await CaseRedactionRoster.ForCasesAsync(db, rows.Select(r => r.Id).ToList(), ct);
+
+        // W-P3: only cases that are actually public can carry a finding here. IncludeNonPublic
+        // lets a group preview its own unpublished work on its own page; a report switched on for
+        // the public must not ride along with that.
+        var publicCaseIds = rows
+            .Where(r => r.IsPublic && (r.Status == CaseStatus.Public || r.Status == CaseStatus.Haunted))
+            .Select(r => r.Id).ToList();
+        var reports = await Services.CasePublicReport.ForCasesAsync(db, publicCaseIds, rosters, ct);
+
         return [.. ids
             .Select(id => rows.FirstOrDefault(r => r.Id == id))
             .Where(r => r is not null)
@@ -321,14 +362,20 @@ public static class CmsEmbed
                     : (null, null);
 
                 return new EmbeddedCase(
-                    r!.Id, r.Title, r.Description, r.DateCreated, r.UrlName,
+                    r!.Id,
+                    CaseProseRedactor.RedactFor(rosters, r.Id, r.Title)!,
+                    CaseProseRedactor.RedactHtmlFor(rosters, r.Id, r.Description),
+                    r.DateCreated, r.UrlName,
                     // The alias or nothing, through the one helper that decides this — so an embed
                     // and the case's own public page can never disagree about who somebody is.
                     settings.ShowClientName ? PublicClientName.For(r) : null,
                     settings.ShowApproximateLocation ? r.City : null,
                     settings.ShowApproximateLocation ? r.State : null,
                     lat, lon,
-                    LocationIsApproximate: true);
+                    LocationIsApproximate: true,
+                    // W-P3: resolved through the same helper the case's own public page uses, so
+                    // an embed and that page can never disagree about what was released.
+                    Report: reports.GetValueOrDefault(r.Id));
             })];
     }
 
@@ -364,6 +411,10 @@ public static class CmsEmbed
         var publishable = (await CaseMediaPublication.PublishableAsync(db, settings.CaseId, ct))
             .ToDictionary(f => f.UploadFileId);
 
+        // Item 184: captions are the group's own timeline titles, so a private case's captions
+        // substitute names like every other prose surface.
+        var roster = await CaseRedactionRoster.ForCaseAsync(db, settings.CaseId, ct) ?? RedactionRoster.Empty;
+
         return [.. settings.FileIds
             .Distinct()
             .Where(publishable.ContainsKey)
@@ -371,8 +422,102 @@ public static class CmsEmbed
             .Select(f => new PublishedCaseFile(
                 settings.CaseId,
                 f.UploadFileId,
-                settings.ShowCaptions ? f.Context : null,
+                settings.ShowCaptions ? CaseProseRedactor.Redact(f.Context, roster) : null,
                 settings.ShowCaptions ? f.When : null,
                 f.EntryType))];
+    }
+
+    // ── an event on a group's own page (item 235 phase 11) ───────────────────
+
+    /// <summary>
+    /// One of the group's events as a CMS section shows it, resolved live.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Only the group's own event, and only while it is on the public site.</b> A page can be
+    /// published long before or after the event; a section pointing at a draft, a called-off weekend or
+    /// another group's event says it is missing rather than leaking it.</para>
+    ///
+    /// <para><b>Counts, never names</b> in the programme, and the venue's story only where the venue lent
+    /// it or it is the group's own venue — the same rules the event's own page follows.</para>
+    /// </remarks>
+    private static async Task<Ben.Service.Models.Entities.CmsEventSectionRecord> ResolveEventAsync(
+        BenDataContext db, Guid organizationId, CmsSectionType type, string? contentJson, CancellationToken ct)
+    {
+        Guid eventId = Guid.Empty;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(contentJson))
+            {
+                using var doc = JsonDocument.Parse(contentJson);
+                if (doc.RootElement.TryGetProperty("eventId", out var id)) Guid.TryParse(id.GetString(), out eventId);
+            }
+        }
+        catch (JsonException) { }
+
+        var ev = await db.HostedEvents.AsNoTracking()
+            .Include(e => e.Nights).Include(e => e.Organization).Include(e => e.Place)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == organizationId
+                                   && Services.Events.HostedEventStates.OnThePublicSite.Contains(e.LifecycleState), ct);
+        if (ev is null) return new(Missing: true);
+
+        var nights = ev.Nights.Select(n => n.Date.Date).OrderBy(d => d).ToList();
+        var dateLine = nights.Count switch
+        {
+            0 => ev.StartsOn.ToString("ddd MM/dd/yyyy"),
+            1 => nights[0].ToString("ddd MM/dd/yyyy"),
+            _ => $"{nights[0]:ddd MM/dd/yyyy} – {nights[^1]:ddd MM/dd/yyyy}",
+        };
+        var url = $"/o/{ev.Organization.UrlName}/events/{ev.UrlName}";
+        var record = new Ben.Service.Models.Entities.CmsEventSectionRecord(false, ev.Name, url, dateLine, ev.Tagline);
+
+        switch (type)
+        {
+            case CmsSectionType.EventBooking:
+                var closed = Public.PublicHostedEventController.WhyNothingCanBeBooked(ev, DateTime.UtcNow);
+                return record with { BookingSentence = closed, DayPassPrice = ev.DayPassPrice };
+
+            case CmsSectionType.EventProgramme:
+                if (ev.ProgrammePublishedUtc is null) return record with { Programme = [] };
+                var zone = Services.Events.HostedEventCalendarSync.ZoneOf(ev.TimeZoneId);
+                var sessions = await db.HostedEventSessions.AsNoTracking().Include(x => x.PlaceRoom)
+                    .Where(x => x.HostedEventId == ev.Id).OrderBy(x => x.StartsAtUtc).ToListAsync(ct);
+                return record with
+                {
+                    Programme = [.. sessions.Select(x =>
+                    {
+                        var start = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(x.StartsAtUtc, DateTimeKind.Utc), zone);
+                        var end = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(x.EndsAtUtc, DateTimeKind.Utc), zone);
+                        return new Ben.Service.Models.Entities.CmsEventSessionRecord(
+                            x.Title, $"{start:ddd MM/dd h:mm tt}–{end:h:mm tt}", x.PlaceRoom?.Name ?? x.LocationText, x.LedBy,
+                            !x.RequiresSignUp ? "Just come" : x.Capacity is int cap ? $"{x.PlacesTaken} of {cap}" : null,
+                            x.CalledOffUtc is not null);
+                    })],
+                };
+
+            case CmsSectionType.EventGallery:
+                return record with
+                {
+                    Gallery = await db.HostedEventGalleryImages.AsNoTracking()
+                        .Where(g => g.HostedEventId == ev.Id).OrderBy(g => g.SortOrder)
+                        .Select(g => new Ben.Service.Models.Entities.PublicEventImageRecord(g.UploadFileId, g.Caption))
+                        .ToListAsync(ct),
+                };
+
+            default:
+                // The venue: its own profile when the group runs the place, or the lending venue's story when lent.
+                var venue = await db.OrganizationVenueProfiles.AsNoTracking().Include(v => v.Organization)
+                    .FirstOrDefaultAsync(v => v.PlaceId == ev.PlaceId && v.VerifiedUtc != null, ct);
+                var lent = ev.VenueGrantId is Guid grantId && await db.OrganizationVenueGrants.AnyAsync(g => g.Id == grantId && g.RevokedUtc == null && g.AllowHistory, ct);
+                var showsHistory = venue is not null && (venue.OrganizationId == organizationId || lent);
+                var town = string.Join(", ", new[] { ev.Place.City, ev.Place.State }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                return record with
+                {
+                    Venue = new Ben.Service.Models.Entities.CmsEventVenueRecord(
+                        ev.Place.Name ?? "The venue", town.Length > 0 ? town : null,
+                        venue?.Organization.Name,
+                        venue is { IsPublished: true } ? $"/o/{venue.Organization.UrlName}/venues/{venue.PlaceId}" : null,
+                        showsHistory ? venue!.History : null),
+                };
+        }
     }
 }

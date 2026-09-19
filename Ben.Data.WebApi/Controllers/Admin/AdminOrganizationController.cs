@@ -56,6 +56,7 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
         };
 
         db.Organizations.Add(org);
+        await NewOrganizationDefaults.AddAllAsync(db, org, GetCurrentUserIdOrThrow(), ct);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Organization), org.Id, org, GetCurrentUserId(), AppSources.WebApi));
 
@@ -64,5 +65,8 @@ public sealed class AdminOrganizationController : AdminEntityControllerBase<Orga
 }
 
 public sealed record AdminCreateOrganizationRequest(string Name, string UrlName,
+    // Ghost walking tours (2026-08-24): what this group primarily is. It decides the
+    // DEFAULTS the new group starts with — see OrgKindDefaults — and nothing else.
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
     string? PublicPhone = null, string? PublicEmail = null, string? PublicWebsite = null);
 

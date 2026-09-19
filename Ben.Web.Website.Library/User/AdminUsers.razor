@@ -3,6 +3,8 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — Users</PageTitle>
 
@@ -12,21 +14,27 @@
             <h3 class="mb-0">All Users</h3>
         </div>
         <div class="col-auto">
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo("/admin/users/create"))"><BenIcon Name="plus" Class="me-1" />
+            <a href="/admin/users/create" class="btn btn-primary"><BenIcon Name="plus" Class="me-1" />
                 New User
-            </button>
+            </a>
         </div>
     </div>
 
-    <div class="mb-3">
+    @* d-flex, because .form-control is display:block — the max-width kept it narrow but it still
+       claimed the whole line, pushing Search onto a row of its own. *@
+    <div class="mb-3 d-flex align-items-center gap-2">
         <input type="text" class="form-control" placeholder="Search by name or email…" style="max-width:320px;" @bind="@_search" @bind:event="oninput" />
-        <button type="button" class="btn btn-primary ms-2" @onclick="ApplySearch"><BenIcon Name="search" Class="me-1" />Search</button>
+        <button type="button" class="btn btn-primary flex-shrink-0" @onclick="ApplySearch"><BenIcon Name="search" Class="me-1" />Search</button>
         @if (!string.IsNullOrWhiteSpace(_search))
         {
-            <button type="button" class="btn btn-link text-decoration-none ms-1" @onclick="ClearSearch">Clear</button>
+            <button type="button" class="btn btn-link text-decoration-none flex-shrink-0" @onclick="ClearSearch">Clear</button>
         }
     </div>
 
+    @* An empty user grid to a SuperAdmin reads as "this deployment has no accounts", which is
+       never true and sends them looking at the database. *@
+    <BenListState TItem="AppUserRecord" Result="@_usersResult" Loading="@_loading" EmptyText="No user accounts yet" OnRetry="@LoadAsync">
+    <ChildContent>
     <TelerikGrid Data="@_filtered"
                  TItem="AppUserRecord"
                  Pageable="true"
@@ -35,35 +43,94 @@
                  Class="admin-users-grid">
         <GridColumns>
             <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
-            <GridColumn Field="@nameof(AppUserRecord.Email)" Title="Email" />
+            @* Real name replaces the email column, at Ben's request. Email is still searchable —
+               see ApplySearch — so nothing became unfindable, it just stopped taking a column.
+               Accounts created before these fields existed have no name; an em dash says so
+               rather than leaving a cell that looks like a rendering fault. *@
+            <GridColumn Field="@nameof(AppUserRecord.FullName)" Title="Name" Width="200px">
+                <Template>
+                    @{ var u = (AppUserRecord)context; }
+                    @if (u.FullName is { } name)
+                    {
+                        @name
+                    }
+                    else
+                    {
+                        <span class="text-secondary">—</span>
+                    }
+                </Template>
+            </GridColumn>
             <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
                 <Template>
                     @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="80px">
+            @* A tick alone could not tell "has not got round to it" from "was never told how" —
+               the two states that matter when somebody says they never received the email. The
+               sent time is what separates them. *@
+            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="180px">
                 <Template>
-                    @if (((AppUserRecord)context).IsEmailConfirmed)
+                    @{ var u = (AppUserRecord)context; }
+                    @if (u.IsEmailConfirmed)
                     {
-                        <BenIcon Name="check" Class="text-success" />
+                        @* The same mark the person sees on their own profile, so an administrator
+                           and the account holder are never looking at two different vocabularies. *@
+                        <BenProven Label="Confirmed" ShowLabel="false"
+                                   Proved="true"
+                                   On="@u.DateEmailConfirmed" />
+                        @if (u.DateEmailConfirmed is { } confirmed)
+                        {
+                            <span class="text-secondary small ms-1">
+                                @confirmed.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </span>
+                        }
+                    }
+                    else if (u.DateConfirmationSent is { } sent)
+                    {
+                        <span class="text-warning small text-nowrap">
+                            Sent @sent.ToViewerLocalTime(UserState).ToDisplayDate()
+                        </span>
+                    }
+                    else
+                    {
+                        @* The state Ben hit: an account nobody can complete, because no message
+                           ever left. Named rather than left blank — a blank cell is what hid it. *@
+                        <span class="text-danger small text-nowrap">No email sent</span>
                     }
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="200px">
-                <GridCommandButton Command="View"
-                                   Icon="@SvgIcon.Eye"
-                                   OnClick="@((GridCommandEventArgs e) => ViewUser((AppUserRecord)e.Items.First()))">
-                    View
-                </GridCommandButton>
-                <GridCommandButton Command="Impersonate"
-                                   Icon="@SvgIcon.User"
-                                   ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
-                                   OnClick="@((GridCommandEventArgs e) => Impersonate((AppUserRecord)e.Items.First()))">
-                    Impersonate
-                </GridCommandButton>
-            </GridCommandColumn>
+            @* One actions column, three icon buttons, on one line. View used to be a Telerik
+               GridCommandColumn of its own, which read as two separate action columns and left
+               a text button beside two icon ones. Impersonate and delete stayed out of the
+               command column so they can answer to the row they are on; View joined them rather
+               than the other way round. Both refuse on your own account, and a control that is
+               offered and then refuses is the dead-end click items 149 and 150 ruled out: three
+               Playwright tests clicked the first row's delete button and got the refusal, because
+               on a fresh database the SuperAdmin sorts first. Shown disabled rather than hidden,
+               so the row keeps its shape and the tooltip says why. Viewing yourself is allowed,
+               so View is never disabled. *@
+            <GridColumn Title="Actions" Width="150px" Sortable="false" Filterable="false" Context="row">
+                <Template>
+                    @{ var person = (AppUserRecord)row; }
+                    <div class="text-nowrap">
+                        <BenGridAction Icon="eye" Label="View this user" Tone="GridActionTone.Primary" OnClick="@(() => ViewUser(person))" />
+                        @if (person.Id == UserState.UserId)
+                        {
+                            <BenGridAction Icon="user-check" Label="You are signed in as this account" Tone="GridActionTone.Warning" Disabled="true" />
+                            <BenGridAction Icon="trash-2" Label="Delete your own account from your profile" Tone="GridActionTone.Danger" Disabled="true" />
+                        }
+                        else
+                        {
+                            <BenGridAction Icon="user-check" Label="Impersonate this user" Tone="GridActionTone.Warning" OnClick="@(() => Impersonate(person))" />
+                            <BenGridAction Icon="trash-2" Label="Delete this user" Tone="GridActionTone.Danger" OnClick="@(() => DeleteUser(person))" />
+                        }
+                    </div>
+                </Template>
+            </GridColumn>
         </GridColumns>
     </TelerikGrid>
+    </ChildContent>
+    </BenListState>
 
     @if (_errorMessage is not null)
     {
@@ -74,6 +141,13 @@
 @code {
     private IReadOnlyList<AppUserRecord> _users  = [];
     private IReadOnlyList<AppUserRecord> _filtered = [];
+    private LoadResult<AppUserRecord> _usersResult;
+
+    /// <summary>
+    /// True until the list has come back. A result nobody has fetched yet is empty, and without this the page said
+    /// "No user accounts yet" to the SuperAdmin for as long as sign-in and the fetch took.
+    /// </summary>
+    private bool _loading = true;
     private string _search = string.Empty;
     private string? _errorMessage;
 
@@ -81,7 +155,7 @@
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -89,10 +163,18 @@
         if (firstRender)
         {
             if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-            _users    = await AdminClient.GetAllUsersAsync();
-            _filtered = _users;
+            await LoadAsync();
             StateHasChanged();
         }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading     = true;
+        _usersResult = await AdminClient.GetAllUsersAsync();
+        _users       = _usersResult.Items;
+        _filtered    = _users;
+        _loading     = false;
     }
 
     private void ApplySearch()
@@ -119,6 +201,26 @@
 
     private void ViewUser(AppUserRecord user)
         => NavManager.NavigateTo($"/admin/users/{user.Id}");
+
+    /// <summary>
+    /// Opens the delete screen with this account already chosen.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a navigation rather than a confirm dialog. What deleting somebody destroys and
+    /// what it leaves behind is several paragraphs and a dozen counts, and none of it fits in a
+    /// box people click through. Deleting your own account from here is refused by the server too;
+    /// saying so at the click saves the trip.
+    /// </remarks>
+    private void DeleteUser(AppUserRecord user)
+    {
+        if (user.Id == UserState.UserId)
+        {
+            _errorMessage = "Delete your own account from your profile, not from here.";
+            return;
+        }
+        _errorMessage = null;
+        NavManager.NavigateTo($"/admin/delete-user/{user.Id}");
+    }
 
     private async Task Impersonate(AppUserRecord user)
     {

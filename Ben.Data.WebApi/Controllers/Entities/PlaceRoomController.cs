@@ -1,0 +1,295 @@
+using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Ben.Data.WebApi.Services.Access;
+
+namespace Ben.Data.WebApi.Controllers.Entities;
+
+/// <summary>
+/// The rooms a group has named inside a place it runs (item 197).
+/// </summary>
+/// <remarks>
+/// <para>Scoped to the organization AND the place, in the route, because rooms belong to the
+/// group that named them rather than to the place: a <c>Place</c> is shared, and two groups
+/// describing the same building must not be able to edit each other's rooms. The org id in the
+/// route is what every write is checked against, so a room can only ever be reached through the
+/// group that owns it.</para>
+///
+/// <para>Gated on <c>OrganizationSettings</c>, which is the group describing ITSELF — the same
+/// permission that governs its profile and addresses. Naming the rooms of your own hotel is that
+/// kind of act, not case work.</para>
+/// </remarks>
+[ApiController]
+[Route("api/organizations/{orgId:guid}/places/{placeId:guid}/rooms")]
+[Authorize]
+public sealed class PlaceRoomController : BenControllerBase
+{
+    private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    public PlaceRoomController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    { _db = db; _security = security; }
+
+    /// <summary>Owner, administrator or SuperAdmin — the same rule the rest of the app uses.</summary>
+    private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await FileAudienceAccess.IsOrgAdminAsync(db, orgId, GetCurrentUserId(), ct);
+    }
+
+    private async Task<bool> MayEditAsync(Guid orgId, CancellationToken ct)
+        => await IsOrgAdminAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct);
+
+    private async Task<bool> MayReadAsync(Guid orgId, CancellationToken ct)
+        => await IsOrgAdminAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Read, ct);
+
+    /// <summary>Every room this group has named in this place, in the order it arranged them.</summary>
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<PlaceRoomRecord>>> GetAll(
+        Guid orgId, Guid placeId, CancellationToken ct)
+    {
+        if (!await MayReadAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var rooms = await db.PlaceRooms.AsNoTracking()
+            .Where(r => r.OrganizationId == orgId && r.PlaceId == placeId)
+            .OrderBy(r => r.SortOrder).ThenBy(r => r.Name)
+            // Projected by hand rather than through ToRecord because this one runs in SQL, which
+            // is exactly why it is the easy one to leave a field out of — and leaving one out here
+            // is not a display bug. The rooms screen prefills its inline editor from this list and
+            // saves the whole row back, so a field missing from the projection comes back as null
+            // and CLEARS what somebody typed. Capacity, IsBookable and BedNote were absent until
+            // 2026-09-12 and would have wiped every one of them on the first edit.
+            .Select(r => new PlaceRoomRecord(
+                r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive,
+                r.Capacity, r.IsBookable, r.BedNote))
+            .ToListAsync(ct);
+
+        return Ok(rooms);
+    }
+
+    /// <summary>Names a room.</summary>
+    [HttpPost]
+    public async Task<ActionResult<PlaceRoomRecord>> Create(
+        Guid orgId, Guid placeId, [FromBody] SavePlaceRoomRequest request, CancellationToken ct)
+    {
+        if (!await MayEditAsync(orgId, ct)) return Forbid();
+
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("A room needs a name.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.Places.AnyAsync(p => p.Id == placeId, ct)) return NotFound("No such place.");
+
+        // Checked here so the answer is a sentence rather than a unique-index violation, and
+        // checked again by the index because two requests can race past this one.
+        if (await db.PlaceRooms.AnyAsync(r =>
+                r.OrganizationId == orgId && r.PlaceId == placeId && r.Name == name, ct))
+            return Conflict($"This place already has a room called \"{name}\".");
+
+        var userId = GetCurrentUserId();
+        var room = new PlaceRoom
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            PlaceId = placeId,
+            Name = name,
+            Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim(),
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            IsPublic = request.IsPublic,
+            // What a booking needs to know (item 235 phase 2). A new room is NOT bookable unless
+            // asked for, the same say-so-before-it-is-used rule publishing follows: a room becomes
+            // somewhere a guest sleeps because somebody said so, not because it exists.
+            Capacity = request.Capacity is int c && c >= 0 ? c : null,
+            IsBookable = request.IsBookable ?? false,
+            BedNote = string.IsNullOrWhiteSpace(request.BedNote) ? null : request.BedNote.Trim(),
+            // Appended rather than inserted: a new room goes at the end of the list its owner has
+            // arranged, and they can move it.
+            SortOrder = await db.PlaceRooms
+                .Where(r => r.OrganizationId == orgId && r.PlaceId == placeId)
+                .Select(r => (int?)r.SortOrder).MaxAsync(ct) is { } max ? max + 1 : 0,
+            IsActive = true,
+            DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+
+        db.PlaceRooms.Add(room);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException)
+        {
+            // The index caught a race the check above could not.
+            return Conflict($"This place already has a room called \"{name}\".");
+        }
+
+        return Ok(ToRecord(room));
+    }
+
+    /// <summary>Edits a room.</summary>
+    [HttpPut("{roomId:guid}")]
+    public async Task<ActionResult<PlaceRoomRecord>> Update(
+        Guid orgId, Guid placeId, Guid roomId, [FromBody] SavePlaceRoomRequest request, CancellationToken ct)
+    {
+        if (!await MayEditAsync(orgId, ct)) return Forbid();
+
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("A room needs a name.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Matched on all three: a room id alone would let one group edit another's room by
+        // guessing it, since the id is the only thing the caller supplies that is not checked.
+        var room = await db.PlaceRooms.FirstOrDefaultAsync(
+            r => r.Id == roomId && r.OrganizationId == orgId && r.PlaceId == placeId, ct);
+        if (room is null) return NotFound();
+
+        if (await db.PlaceRooms.AnyAsync(r =>
+                r.Id != roomId && r.OrganizationId == orgId && r.PlaceId == placeId && r.Name == name, ct))
+            return Conflict($"This place already has a room called \"{name}\".");
+
+        room.Name = name;
+        room.Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim();
+        room.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        room.IsPublic = request.IsPublic;
+        if (request.SortOrder is { } sort) room.SortOrder = sort;
+        if (request.IsActive is { } active) room.IsActive = active;
+
+        // Null means LEAVE IT ALONE on everything added after the first release, which is why
+        // each clearing is its own explicit flag. The floor-plan screen sends positions and
+        // nothing else; a whole-object save from it would wipe the capacities and bed notes
+        // somebody typed on the list screen, and neither screen would look wrong while doing it.
+        if (request.ClearCapacity) room.Capacity = null;
+        else if (request.Capacity is int cap && cap >= 0) room.Capacity = cap;
+
+        if (request.IsBookable is { } bookable) room.IsBookable = bookable;
+        if (request.BedNote is not null)
+            room.BedNote = string.IsNullOrWhiteSpace(request.BedNote) ? null : request.BedNote.Trim();
+
+        room.DateUpdated = DateTime.UtcNow;
+        room.UpdatedByAppUserId = GetCurrentUserId();
+
+        await db.SaveChangesAsync(ct);
+        return Ok(ToRecord(room));
+    }
+
+    /// <summary>
+    /// Retires a room, or deletes it outright when nothing has been attributed to it yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>A room that has been used is deactivated rather than removed, so anything recorded in
+    /// it still reads afterwards — the same rule equipment and duties follow. Field sessions do not
+    /// attribute to a room row yet, so today this deletes; the branch is kept so that when they do,
+    /// retiring one cannot orphan a night's work.</para>
+    ///
+    /// <para><b>A room on an event's plan is refused, by name</b> (item 235 phase 1). The plan's
+    /// unit points at the room with a NoAction key, so the delete used to reach SQL and come back
+    /// as a 500 — a venue saw "something went wrong" for a room it had itself put on a plan. It is
+    /// a refusal rather than a cascade because taking a room off a plan releases whoever was booked
+    /// into it, which is not something the rooms list should be able to do by accident; and the
+    /// answer names the event so the person knows which plan to open.</para>
+    /// </remarks>
+    [HttpDelete("{roomId:guid}")]
+    public async Task<IActionResult> Delete(Guid orgId, Guid placeId, Guid roomId, CancellationToken ct)
+    {
+        if (!await MayEditAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var room = await db.PlaceRooms.FirstOrDefaultAsync(
+            r => r.Id == roomId && r.OrganizationId == orgId && r.PlaceId == placeId, ct);
+        if (room is null) return NotFound();
+
+        // Oldest plan first, so the event named is the one that put the room on a plan first.
+        // De-duplicated here rather than with Distinct in SQL, which would throw that order away;
+        // a room is on a handful of plans, not thousands.
+        var eventNames = (await db.HostedEventLayoutUnits.AsNoTracking()
+                .Where(u => u.PlaceRoomId == roomId)
+                .OrderBy(u => u.DateCreated)
+                .Select(u => u.HostedEvent.Name)
+                .ToListAsync(ct))
+            .Distinct().ToList();
+        if (eventNames.Count > 0)
+        {
+            var others = eventNames.Count - 1;
+            var plans = others switch
+            {
+                0 => eventNames[0],
+                1 => $"{eventNames[0]} and 1 other event",
+                _ => $"{eventNames[0]} and {others} other events",
+            };
+            return Conflict($"{room.Name} is on the plan of {plans}. Take it off the plan first.");
+        }
+
+        db.PlaceRooms.Remove(room);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    private static PlaceRoomRecord ToRecord(PlaceRoom r) => new(
+        r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive,
+        r.Capacity, r.IsBookable, r.BedNote);
+}
+
+/// <summary>One named space inside a place.</summary>
+/// <param name="Capacity">
+/// How many sleep here, when the venue has said. <b>Null and zero mean different things</b>: null
+/// is "we have not said" and cannot be over-filled; zero is "nobody sleeps in the chapel".
+/// </param>
+/// <param name="IsBookable">
+/// Whether an event may offer it to guests. Separate from <paramref name="IsPublic"/>, which is
+/// about the property's own page: a staff room can be named, attributed to readings and kept off
+/// the page, and still never be somewhere a guest sleeps.
+/// </param>
+/// <param name="BedNote">
+/// What the beds actually are. A number cannot answer "will the two of us have to share a bed",
+/// which is the question guests ask.
+/// </param>
+/// <remarks>
+/// <b>There is no floor-plan position here on purpose.</b> A plan belongs to an event's layout,
+/// not to the venue's description of its building — a seat has no room behind it at all, and two
+/// places to record where a room sits would drift apart the first time one of them was edited.
+/// </remarks>
+public sealed record PlaceRoomRecord(
+    Guid Id,
+    Guid PlaceId,
+    string Name,
+    string? Floor,
+    string? Description,
+    bool IsPublic,
+    int SortOrder,
+    bool IsActive,
+    int? Capacity = null,
+    bool IsBookable = false,
+    string? BedNote = null);
+
+/// <summary>Naming or editing a room. Sort order and active state are optional on an edit.</summary>
+/// <remarks>
+/// Every field added after the first release is optional and <b>null means "leave it alone"</b>,
+/// not "clear it". A screen that edits only what a booking needs must not wipe the descriptions
+/// somebody typed on another one, which is exactly what a whole-object save would do.
+/// </remarks>
+/// <param name="ClearCapacity">
+/// Clears the capacity, because null on <c>Capacity</c> already means "leave it". A venue that
+/// stated a number and wants to go back to "we have not said" has no other way to say so, and "we
+/// have not said" is a real and useful state rather than a gap.
+/// </param>
+public sealed record SavePlaceRoomRequest(
+    string? Name,
+    string? Floor,
+    string? Description,
+    bool IsPublic,
+    int? SortOrder = null,
+    bool? IsActive = null,
+    int? Capacity = null,
+    bool? IsBookable = null,
+    string? BedNote = null,
+    bool ClearCapacity = false);

@@ -765,17 +765,31 @@ public sealed class ClipStoreTests
     }
 
     [Fact]
-    public void AddTransition_SetsTimelinePosition_CentredAtBoundary()
+    /// <summary>
+    /// A transition covers the stretch where both clips play, and pulls the second one back to
+    /// create it.
+    /// </summary>
+    /// <remarks>
+    /// It used to be centred on the junction and moved nothing, which meant the timeline claimed a
+    /// length the render never produced: ffmpeg's xfade output is A + B − d, so every marker,
+    /// overlay and audio clip after the junction sat later than whatever it had been lined up with
+    /// on screen (2026-09-05 audit, transitions-3).
+    /// </remarks>
+    public void AddTransition_CoversTheOverlapItCreates()
     {
         var (store, trackId, clipA, clipB) = CreateStoreWithTwoClips();
-        clipA.TimelinePosition = 0;
-        clipA.Duration         = 5;
 
         store.AddTransition(trackId, clipA.Id, clipB.Id, TransitionStyle.Fade, 2.0);
 
         var t = store.PrimaryVideoTrack.Items.OfType<Transition>().Single();
-        // Expected: fromClip.TimelinePosition + fromClip.Duration - duration/2
-        Assert.Equal(clipA.TimelinePosition + clipA.Duration - 1.0, t.TimelinePosition, precision: 5);
+        var clipAEnd = clipA.TimelinePosition + clipA.TrimmedDuration;
+
+        Assert.Equal(clipAEnd - 2.0, t.TimelinePosition, precision: 5);
+        Assert.Equal(2.0, t.Duration, precision: 5);
+
+        // The second clip moved back to meet it, so the two overlap by exactly the crossfade.
+        Assert.Equal(clipAEnd - 2.0, clipB.TimelinePosition, precision: 5);
+        Assert.Null(store.ValidateAll());
     }
 
     [Fact]
@@ -804,17 +818,22 @@ public sealed class ClipStoreTests
     }
 
     [Fact]
+    /// <summary>
+    /// Changing the length moves the transition's start, because it covers the overlap rather than
+    /// straddling the junction (see AddTransition_CoversTheOverlapItCreates).
+    /// </summary>
     public void UpdateTransition_RecalculatesTimelinePosition()
     {
         var (store, trackId, clipA, clipB) = CreateStoreWithTwoClips();
-        clipA.TimelinePosition = 0;
-        clipA.Duration         = 5;
         store.AddTransition(trackId, clipA.Id, clipB.Id, TransitionStyle.Fade, 1.0);
         var t = store.PrimaryVideoTrack.Items.OfType<Transition>().Single();
 
         store.UpdateTransition(t.Id, TransitionStyle.Dissolve, 2.0);
 
-        Assert.Equal(clipA.TimelinePosition + clipA.Duration - 1.0, t.TimelinePosition, precision: 5);
+        var clipAEnd = clipA.TimelinePosition + clipA.TrimmedDuration;
+        Assert.Equal(clipAEnd - 2.0, t.TimelinePosition, precision: 5);
+        Assert.Equal(clipAEnd - 2.0, clipB.TimelinePosition, precision: 5);
+        Assert.Null(store.ValidateAll());
     }
 
     [Fact]
@@ -922,14 +941,20 @@ public sealed class ClipStoreTests
         var originalDuration = t.Duration;
         var originalPosition = t.TimelinePosition;
 
+        var originalClipBPosition = clipB.TimelinePosition;
+
         store.UpdateTransition(t.Id, TransitionStyle.WipeLeft, 2.0);
         Assert.Equal(TransitionStyle.WipeLeft, t.Style);
 
+        // Two steps now: the style and duration change, and the clip moving to match the longer
+        // overlap it asks for.
+        store.Undo();
         store.Undo();
 
         Assert.Equal(originalStyle, t.Style);
         Assert.Equal(originalDuration, t.Duration, precision: 5);
         Assert.Equal(originalPosition, t.TimelinePosition, precision: 5);
+        Assert.Equal(originalClipBPosition, clipB.TimelinePosition, precision: 5);
     }
 
     [Fact]
@@ -1029,99 +1054,20 @@ public sealed class ClipStoreTests
 
     // ── Cross-track transition management ────────────────────────────────────
 
-    [Fact]
-    public void AddCrossTrackTransition_ComputesOverlapWindow_FromTwoTracks()
-    {
-        var store  = CreateStore(o => { o.Transitions = true; o.MultiTrack = true; });
-        var clipA  = new VideoClip { Name = "a.mp4", TimelinePosition = 0,   Duration = 4 };
-        var clipB  = new VideoClip { Name = "b.mp4", TimelinePosition = 2.5, Duration = 4 };
-        store.AddClip(clipA);
-        var track2 = store.AddVideoTrack();
-        store.AddClipToTrack(track2.Id, clipB);
 
-        store.AddCrossTrackTransition(clipA.Id, clipB.Id, TransitionStyle.Dissolve);
 
-        var transition = store.AllTransitions.Single();
-        Assert.Equal(TransitionStyle.Dissolve, transition.Style);
-        Assert.Equal(clipA.Id, transition.FromClipId);
-        Assert.Equal(clipB.Id, transition.ToClipId);
-        Assert.Equal(2.5, transition.TimelinePosition, precision: 5);
-        Assert.Equal(1.5, transition.Duration, precision: 5); // overlap: 2.5..4.0
-    }
 
-    [Fact]
-    public void AddCrossTrackTransition_OrdersFromToByTrackOrder_RegardlessOfArgumentOrder()
-    {
-        var store  = CreateStore(o => { o.Transitions = true; o.MultiTrack = true; });
-        var clipA  = new VideoClip { Name = "a.mp4", TimelinePosition = 0,   Duration = 4 };
-        var clipB  = new VideoClip { Name = "b.mp4", TimelinePosition = 2.5, Duration = 4 };
-        store.AddClip(clipA);
-        var track2 = store.AddVideoTrack();
-        store.AddClipToTrack(track2.Id, clipB);
 
-        // Pass the higher-track clip first — result should still be from=A (lower track), to=B.
-        store.AddCrossTrackTransition(clipB.Id, clipA.Id);
 
-        var transition = store.AllTransitions.Single();
-        Assert.Equal(clipA.Id, transition.FromClipId);
-        Assert.Equal(clipB.Id, transition.ToClipId);
-    }
-
-    [Fact]
-    public void AddCrossTrackTransition_InsertsOnHigherOrderTrack()
-    {
-        var store  = CreateStore(o => { o.Transitions = true; o.MultiTrack = true; });
-        var clipA  = new VideoClip { Name = "a.mp4", TimelinePosition = 0,   Duration = 4 };
-        var clipB  = new VideoClip { Name = "b.mp4", TimelinePosition = 2.5, Duration = 4 };
-        store.AddClip(clipA);
-        var track2 = store.AddVideoTrack();
-        store.AddClipToTrack(track2.Id, clipB);
-
-        store.AddCrossTrackTransition(clipA.Id, clipB.Id);
-
-        Assert.Single(track2.Items.OfType<Transition>());
-        Assert.Empty(store.PrimaryVideoTrack.Items.OfType<Transition>());
-    }
-
-    [Fact]
-    public void AddCrossTrackTransition_ThrowsWhenClipsDoNotOverlap()
-    {
-        var store  = CreateStore(o => { o.Transitions = true; o.MultiTrack = true; });
-        var clipA  = new VideoClip { Name = "a.mp4", TimelinePosition = 0, Duration = 4 };
-        var clipB  = new VideoClip { Name = "b.mp4", TimelinePosition = 10, Duration = 4 };
-        store.AddClip(clipA);
-        var track2 = store.AddVideoTrack();
-        store.AddClipToTrack(track2.Id, clipB);
-
-        Assert.Throws<ArgumentException>(() => store.AddCrossTrackTransition(clipA.Id, clipB.Id));
-    }
-
-    [Fact]
-    public void AddCrossTrackTransition_ThrowsWhenClipsOnSameTrack()
-    {
-        var (store, _, clipA, clipB) = CreateStoreWithTwoClips();
-
-        Assert.Throws<InvalidOperationException>(() => store.AddCrossTrackTransition(clipA.Id, clipB.Id));
-    }
-
-    [Fact]
-    public void AddCrossTrackTransition_SupportsUndo()
-    {
-        var store  = CreateStore(o => { o.Transitions = true; o.MultiTrack = true; });
-        var clipA  = new VideoClip { Name = "a.mp4", TimelinePosition = 0,   Duration = 4 };
-        var clipB  = new VideoClip { Name = "b.mp4", TimelinePosition = 2.5, Duration = 4 };
-        store.AddClip(clipA);
-        var track2 = store.AddVideoTrack();
-        store.AddClipToTrack(track2.Id, clipB);
-        store.AddCrossTrackTransition(clipA.Id, clipB.Id);
-        Assert.Single(store.AllTransitions);
-
-        store.Undo();
-
-        Assert.Empty(store.AllTransitions);
-    }
 
     // ── Text overlay management ────────────────────────────────────────────
+
+    // The cross-track crossfade tests stood here. AddCrossTrackTransition was retired: what it
+    // produced could not be rendered correctly — the export replaced the first clip's segment with
+    // a merged one longer than the two it replaced, while every later offset stayed measured
+    // against the old length, and the preview never showed it at all (2026-09-05 audit,
+    // transitions-9). Fading a clip up from black or down to it does the job honestly, is already
+    // exported and saved, and is offered on the clip's own right-click menu.
 
     private static TextOverlay MakeOverlay(string text = "Hello", double position = 0, double duration = 5) =>
         new() { Text = text, Name = text, TimelinePosition = position, Duration = duration };
@@ -4063,19 +4009,34 @@ public sealed class ClipStoreTests
     }
 
     [Fact]
-    public void RippleCommitDraggedPosition_ShiftsSubsequentClips()
+    /// <summary>
+    /// A ripple move is a lift and an insert: the clips after it close up, then the ones where it
+    /// lands are pushed on.
+    /// </summary>
+    /// <remarks>
+    /// <para>This used to assert that everything downstream moved by the <b>drag distance</b>, which
+    /// is a different tool — "move this clip and everything after it" — and it fell apart the moment
+    /// the drag went backwards: dragging a clip eighteen seconds earlier moved the clips behind it
+    /// eighteen seconds earlier too, through zero and into negative time. The no-overlap assertion
+    /// added on 2026-09-05 is what surfaced it.</para>
+    ///
+    /// <para>Here: a runs 0–5, b runs 7–10. Lifting a closes b up by a's own length, to 2. Dropping
+    /// a at 3 then pushes b clear again, to 8 — so the two end up adjacent, which is what closing
+    /// the gaps means.</para>
+    /// </remarks>
+    public void RippleCommitDraggedPosition_LiftsAndInserts()
     {
         var store = CreateStore();
         var a = new VideoClip { Name = "a.mp4", Duration = 5, TimelinePosition = 0 };
         var b = new VideoClip { Name = "b.mp4", Duration = 3, TimelinePosition = 7 };
         store.AddClip(a); store.AddClip(b);
 
-        // Simulate drag: a moved from 0 → 3 (delta = +3)
         a.TimelinePosition = 3.0;
         store.RippleCommitDraggedPosition(a.Id, 0.0);
 
-        // b was at 7, delta = +3, so b should shift to 10
-        Assert.Equal(10.0, b.TimelinePosition, 3);
+        Assert.Equal(3.0, a.TimelinePosition, 3);
+        Assert.Equal(8.0, b.TimelinePosition, 3);
+        Assert.Null(store.ValidateAll());
     }
 
     [Fact]
@@ -4088,6 +4049,9 @@ public sealed class ClipStoreTests
 
         a.TimelinePosition = 3.0;
         store.RippleCommitDraggedPosition(a.Id, 0.0);
+
+        // Two steps now: the lift-and-move, and the room made where it landed.
+        store.Undo();
         store.Undo();
 
         Assert.Equal(0.0,  a.TimelinePosition, 3);

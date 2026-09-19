@@ -29,13 +29,35 @@
                    who types and clicks Save without leaving the field would be told the title is
                    missing while looking straight at it. *@
                 <input id="newinvestigationwindow-title-48f3" class="form-control" value="@_title" @oninput="@(e => _title = e.Value?.ToString() ?? "")"
-                       placeholder="Night investigation" />
+                       placeholder="e.g. Night investigation" />
             </div>
 
             <div class="col-md-6">
-                <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">When</label>
-                <input id="newinvestigationwindow-when-60b5" type="datetime-local" class="form-control" value="@_whenText"
-                       @oninput="@(e => _whenText = e.Value?.ToString() ?? "")" />
+                <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">Starts</label>
+                <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-when-60b5" @bind-Value="_when" />
+            </div>
+
+            @* One arrival and one departure, allowed to cross midnight — 3pm until 8am the next
+               morning is one visit. A weekend or a week ticks the box. *@
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="newinvestigationwindow-ends-7c31">Ends (optional)</label>
+                @if (_multiDay)
+                {
+                    <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-ends-7c31" @bind-Value="_end" />
+                }
+                else
+                {
+                    <input id="newinvestigationwindow-ends-7c31" type="time" class="form-control" value="@_endTimeText"
+                           @oninput="@(e => _endTimeText = e.Value?.ToString() ?? "")" />
+                    <div class="form-text">A time at or before the start is the next morning.</div>
+                }
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="newinvestigationwindow-multi-day"
+                           checked="@_multiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="newinvestigationwindow-multi-day">
+                        Runs over more than one day
+                    </label>
+                </div>
             </div>
 
             <div class="col-md-6">
@@ -116,6 +138,10 @@
             </div>
 
             @* ── "Did you mean" ───────────────────────────────────────────────── *@
+            @if (_candidateError is not null)
+            {
+                <div class="alert alert-warning py-2 small mb-2">@_candidateError</div>
+            }
             @if (_candidates.Count > 0)
             {
                 <div class="alert alert-info py-2 small mt-3 mb-0">
@@ -166,16 +192,23 @@
         </label>
         @* Plain select for the same reason as the case-bound form: a dropdown that dropped its
            selection here would silently leave a wider scope in place. *@
+        @* Two rules narrow this list, and neither is offered-then-refused. The place decides
+           whether Public may be chosen; the plan decides whether anything narrower may be. This
+           window knows the kind of place because the person picks it, so it can be exact. *@
+        @{ var mustBePublic = _publicByDefault && _kind == PlaceKind.PublicLocation; }
         <select id="newinvestigationwindow-who-can-see-the-fea9" class="form-select" style="max-width:420px;" value="@_visibility"
                 @onchange="@(e => _visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _visibility)">
-            <option value="@InvestigationVisibility.GroupOnly"
-                    selected="@(_visibility == InvestigationVisibility.GroupOnly)">
-                Just this group
-            </option>
-            <option value="@InvestigationVisibility.PlaceInvestigators"
-                    selected="@(_visibility == InvestigationVisibility.PlaceInvestigators)">
-                Groups who have also investigated this place
-            </option>
+            @if (!mustBePublic)
+            {
+                <option value="@InvestigationVisibility.GroupOnly"
+                        selected="@(_visibility == InvestigationVisibility.GroupOnly)">
+                    Just this group
+                </option>
+                <option value="@InvestigationVisibility.PlaceInvestigators"
+                        selected="@(_visibility == InvestigationVisibility.PlaceInvestigators)">
+                    Groups who have also investigated this place
+                </option>
+            }
             @* Public is not offered at a private home at all. The server refuses it either way;
                leaving it selectable would mean offering a choice that comes back as an error. *@
             @if (_kind != PlaceKind.PrivateResidence)
@@ -186,6 +219,15 @@
                 </option>
             }
         </select>
+
+        @if (mustBePublic)
+        {
+            <div class="form-text" data-testid="investigation-scope-locked">
+                On this account a visit to a public location is shared with everyone. What you find
+                there joins the place's own page.
+                <a href="/pricing">See what each plan includes.</a>
+            </div>
+        }
 
         @if (_visibility == InvestigationVisibility.PlaceInvestigators)
         {
@@ -213,6 +255,15 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>
+    /// A place chosen before the window opened — arriving from that place's own page.
+    /// </summary>
+    /// <remarks>
+    /// Fills the chosen-place banner and settles the kind, so somebody who pressed "Investigate
+    /// here" is not asked for an address they are already looking at.
+    /// </remarks>
+    [Parameter] public Guid? PrechosenPlaceId { get; set; }
+
     /// <summary>Raised after a successful create, so the caller can refresh its list.</summary>
     [Parameter] public EventCallback OnCreated { get; set; }
 
@@ -221,9 +272,13 @@
 
     private string _title = "";
     private string _description = "";
-    private string _whenText = DateTime.Now.AddDays(1).ToString("yyyy-MM-ddTHH:mm");
+    private DateTime? _when = TomorrowToTheMinute();
+    private DateTime? _end;
+    private string _endTimeText = "";
+    private bool   _multiDay;
     private PlaceKind _kind = PlaceKind.PublicLocation;
     private InvestigationVisibility _visibility = InvestigationVisibility.PlaceInvestigators;
+    private bool _publicByDefault;
 
     private string _name = "";
     private string _street = "";
@@ -232,15 +287,59 @@
     private string _zip = "";
 
     private List<PlaceCandidate> _candidates = [];
+    private string? _candidateError;
     private PlaceCandidate? _chosenPlace;
 
     private Timer? _lookupTimer;
     private bool _saving;
     private string? _error;
 
+    /// <summary>
+    /// The end a single-day visit gets from a clock time: at or before the start is the next
+    /// morning. Null whenever nothing usable has been typed — the field is optional.
+    /// </summary>
+    private DateTime? EffectiveEnd()
+    {
+        if (_when is not { } start) return null;
+
+        if (_multiDay)
+            return _end is { } end && end > start ? end : null;
+
+        return TimeSpan.TryParse(_endTimeText, out var timeOfDay)
+            ? Ben.Web.Services.InvestigationWindow.SingleDayEnd(start, timeOfDay)
+            : null;
+    }
+
+    /// <summary>Carries the end across the toggle rather than clearing it.</summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _multiDay) return;
+
+        var carried = EffectiveEnd();
+        _multiDay = on;
+
+        if (on)
+        {
+            _end = carried ?? _when?.AddDays(1);
+            _endTimeText = "";
+        }
+        else
+        {
+            _endTimeText = carried?.ToString("HH:mm") ?? "";
+            _end = null;
+        }
+    }
+
+    private static DateTime TomorrowToTheMinute()
+    {
+        var t = DateTime.Now.AddDays(1);
+        return new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
+    }
+
     private bool CanSave =>
         !string.IsNullOrWhiteSpace(_title)
-        && DateTime.TryParse(_whenText, out _)
+        && _when is not null
         && (_chosenPlace is not null
             || !string.IsNullOrWhiteSpace(_name)
             || !string.IsNullOrWhiteSpace(_street));
@@ -285,9 +384,19 @@
             // No coordinates yet — nothing has geocoded what is being typed. The server treats
             // unknown distance as "no opinion" and matches on the text, which is the whole reason
             // the rule tolerates a missing position.
+            // This list is what stops a second copy of a place being created. Read as "no match
+            // exists" when the search was refused, it invites exactly the duplicate it prevents,
+            // so a refusal says so instead of returning nothing.
             var found = await AdminClient.FindPlaceCandidatesAsync(
                 _street, _city, _state, _zip, _name, latitude: null, longitude: null);
-            _candidates = found.ToList();
+
+            _candidateError = found.Failed
+                ? (found.SessionExpired
+                    ? "You've been signed out, so existing places could not be checked."
+                    : "Existing places could not be checked just now — saving may create a duplicate.")
+                : null;
+
+            _candidates = found.Items.ToList();
         }
         catch
         {
@@ -300,6 +409,44 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Reads the group's plan, because the sharing list depends on it.
+    /// </summary>
+    /// <remarks>
+    /// The window is rendered when it opens, so this runs then. A failure leaves the flag false,
+    /// which offers every scope — the server still refuses what it must, and its sentence reaches
+    /// the error line, so the worst case is a refusal rather than a hidden option.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _publicByDefault = perms?.PublicByDefault ?? false;
+        }
+        catch { _publicByDefault = false; }
+
+        // Arrived from a place's own page, so the place is settled and its kind decides the rest.
+        // Read through the anonymous place endpoint: somebody may investigate a place their group
+        // has never touched, which is the whole reason the button is on that page.
+        if (PrechosenPlaceId is { } prechosen)
+        {
+            try
+            {
+                if (await AdminClient.GetPlaceAsync(prechosen) is { } place)
+                {
+                    _chosenPlace = new PlaceCandidate(
+                        place.Id, place.Name, place.StreetAddress1, place.City, place.State,
+                        place.Kind, DistanceMiles: null, InvestigationCount: 0);
+                    _kind = place.Kind;
+                }
+            }
+            catch { /* the shortcut is a convenience; the form still works by hand */ }
+        }
+
+        KeepScopeLegal();
+    }
+
     private void ChoosePlace(PlaceCandidate candidate)
     {
         _chosenPlace = candidate;
@@ -309,8 +456,7 @@
         // The place decides what kind of location this is, so the sharing options follow it rather
         // than whatever was picked before the place was known.
         _kind = candidate.Kind;
-        if (_kind == PlaceKind.PrivateResidence && _visibility == InvestigationVisibility.Public)
-            _visibility = InvestigationVisibility.GroupOnly;
+        KeepScopeLegal();
     }
 
     private void ClearChosenPlace() => _chosenPlace = null;
@@ -319,11 +465,29 @@
     {
         if (!Enum.TryParse<PlaceKind>(value, out var kind)) return;
         _kind = kind;
+        KeepScopeLegal();
+    }
 
-        // Public is not offered at a private home; silently leaving it selected would send a
-        // request the server refuses.
-        if (_kind == PlaceKind.PrivateResidence && _visibility == InvestigationVisibility.Public)
-            _visibility = InvestigationVisibility.GroupOnly;
+    /// <summary>
+    /// Moves the chosen scope to one the server will accept for this kind of place and this plan.
+    /// </summary>
+    /// <remarks>
+    /// Called whenever the kind changes, from either chooser. A scope left behind by a change of
+    /// place is the one field where quietly keeping the old value could publish something, or be
+    /// refused for a value nobody typed — so it is corrected in one place rather than in two
+    /// half-copies. Both directions matter now: moving to a home takes Public off an unpaid
+    /// account's visit, and moving to a landmark puts it back.
+    /// </remarks>
+    private void KeepScopeLegal()
+    {
+        if (_kind == PlaceKind.PrivateResidence)
+        {
+            if (_visibility == InvestigationVisibility.Public)
+                _visibility = InvestigationVisibility.GroupOnly;
+            return;
+        }
+
+        if (_publicByDefault) _visibility = InvestigationVisibility.Public;
     }
 
     private static string DescribeCandidate(PlaceCandidate candidate)
@@ -350,7 +514,8 @@
         {
             var request = new CreateOrgInvestigationRequest(
                 Title: _title.Trim(),
-                ScheduledDateTime: DateTime.Parse(_whenText).ToUniversalTime(),
+                ScheduledDateTime: _when!.Value.ToUniversalTime(),
+                EndDateTime: EffectiveEnd()?.ToUniversalTime(),
                 Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 PlaceId: _chosenPlace?.Id,
                 // Only sent when no existing place was picked — otherwise the server would be
@@ -366,10 +531,10 @@
                     Kind: _kind),
                 Visibility: _visibility);
 
-            var created = await AdminClient.CreateOrgInvestigationAsync(OrgId, request);
+            var (created, error) = await AdminClient.CreateOrgInvestigationAsync(OrgId, request);
             if (created is null)
             {
-                _error = "That could not be scheduled just now.";
+                _error = error ?? "That could not be scheduled just now.";
                 _saving = false;
                 return;
             }

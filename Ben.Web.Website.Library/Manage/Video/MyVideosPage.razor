@@ -1,4 +1,6 @@
-@page "/my-videos"
+﻿@page "/my-videos"
+@using Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject ProjectService Projects
@@ -7,103 +9,149 @@
 @inject IJSRuntime JSRuntime
 @inject VideoExportPublisher ExportPublisher
 @inject BenToastService Toasts
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
+@using Microsoft.Extensions.Hosting
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
-<PageTitle>My Videos</PageTitle>
+<FeatureGate Flag="@SiteFeatures.VideoEditor">
+    <PageTitle>My Videos</PageTitle>
 
-@if (!_authReady)
-{
-    <BenLoaderOverlay Visible="true" Text="Loading…" />
-    return;
-}
+    @if (!_authReady)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+        return;
+    }
 
-@if (!UserState.IsAuthenticated)
-{
-    <div class="container py-4"><p class="text-muted">You must be signed in to use the video editor.</p></div>
-    return;
-}
-
-<div class="d-flex flex-column" style="height:100vh; overflow:hidden;">
-
-    @* ── Header bar ──────────────────────────────────────────────────────── *@
-    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
-        <h5 class="mb-0 me-auto">My Videos</h5>
-
-        @if (_projects.Count > 0)
-        {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
-        }
-
-        @if (_saving)
-        {
-            <span class="text-muted small">Saving…</span>
-        }
-        else
-        {
-            <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Server</button>
-        }
-    </div>
-
-    @* ── Editor (full remaining height) ─────────────────────────────────── *@
-    <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
-        <VideoEditor OnPublishExport="OnPublishExportAsync" />
-    </div>
-</div>
-
-@* ── Saved Projects dialog ──────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
-    <ChildContent>
-        @if (_loadingList)
-        {
-            <BenLoaderOverlay Visible="true" Text="Loading…" />
-        }
-        else if (_projects.Count == 0)
-        {
-            <p class="text-muted">No projects saved to server yet.</p>
-        }
-        else
-        {
-            <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
-                         Height="360px">
-                <GridColumns>
-                    <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
-                    <GridColumn Title="Saved" Width="170px">
-                        <Template>
-                            @{ var proj = (VideoProjectRecord)context; }
-                            @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                        </Template>
-                    </GridColumn>
-                    <GridColumn Width="160px">
-                        <Template>
-                            @{ var row = (VideoProjectRecord)context; }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row))">Open</button>
-                            <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row))" disabled="@(!(!_publishing))" title="Publish rendered video"><BenIcon Name="upload" /></button>
-                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDeleteAsync(row))"><BenIcon Name="trash-2" /></button>
-                        </Template>
-                    </GridColumn>
-                </GridColumns>
-            </TelerikGrid>
-        }
-    </ChildContent>
-</BenModal>
-
-@* ── Delete confirm dialog ──────────────────────────────────────────────── *@
-<BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
-    <ChildContent>
-        <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
-            <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+    @if (!UserState.IsAuthenticated)
+    {
+        @* A sentence with nothing to click was the whole page: correct, and a dead end
+           (2026-09-05 audit, site-13). *@
+        <div class="container py-4">
+            <p class="text-muted">You must be signed in to use the video editor.</p>
+            <a class="btn btn-primary" href="/login?returnUrl=@Uri.EscapeDataString("/my-videos")">Sign in</a>
+            <p class="text-muted small mt-3 mb-0">
+                There is also a
+                <a href="@StandaloneEditorUrl" target="_blank" rel="noopener">standalone editor</a>
+                that runs entirely on your own computer. It edits and renders without signing in;
+                signing in is what connects it to your uploaded media.
+            </p>
         </div>
-    </ChildContent>
-</BenModal>
+        return;
+    }
 
-@* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
-<InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+    <div class="ben-editor-page">
+
+        @* ── Header bar ──────────────────────────────────────────────────────── *@
+        <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-body" style="flex:0 0 auto;">
+            <h5 class="mb-0 me-auto">My Videos<HelpLink Slug="using-the-video-editor" /></h5>
+
+            @if (_projects.Count > 0)
+            {
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showProjectList = true)"><BenIcon Name="folder" Class="me-1" />Saved Projects (@_projects.Count)</button>
+            }
+
+            @* Phase 12 — the same session, carried to the host that does the work on the person's
+               own machine. Without this the link went to a second sign-in door, which is most of
+               why the standalone editor read as a curiosity rather than as where the work happens. *@
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    disabled="@_openingStandalone"
+                    title="Opens the editor that runs entirely on your computer, already signed in"
+                    @onclick="OpenStandaloneEditorAsync">
+                <BenIcon Name="external-link" Class="me-1" />@(_openingStandalone ? "Opening…" : "Standalone editor")
+            </button>
+
+            @if (_saving)
+            {
+                <span class="text-muted small">Saving…</span>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" @onclick="SaveProjectAsync"><BenIcon Name="save" Class="me-1" />Save to Server</button>
+            }
+        </div>
+
+        @* ── Editor (full remaining height) ─────────────────────────────────── *@
+        <div style="flex:1 1 auto; min-height:0; overflow:hidden;">
+            <VideoEditor OnPublishExport="OnPublishExportAsync"
+                         EnablePostToFeed="@_canPostToFeed"
+                         OnPostToFeed="OnPostToFeedAsync"
+                         ShowDiagnostics="@(UserState.IsSuperAdmin || UserState.IsAdmin)" />
+        </div>
+    </div>
+
+    @* "Post to the feed" confirmation (item 186 F7) — a personal render, no case lineage. *@
+    <FeedPostFromEditorDialog @bind-Visible="_feedDialogVisible"
+                              Exported="_pendingFeedExport"
+                              OnPosted="OnFeedPostedAsync"
+                              OnCancelled="OnFeedCancelled" />
+
+    @* ── Saved Projects dialog ──────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showProjectList" Title="Saved Projects" Size="lg">
+        <ChildContent>
+            @if (_loadingList)
+            {
+                <BenLoaderOverlay Visible="true" Text="Loading…" />
+            }
+            else if (_projectsResult.Failed)
+            {
+                @* Somebody told their saved projects are gone does not go looking for them. *@
+                <BenListState TItem="VideoProjectRecord" Result="@_projectsResult" OnRetry="@LoadProjectListAsync" />
+            }
+            else if (_projects.Count == 0)
+            {
+                <p class="text-muted">No projects saved to server yet.</p>
+            }
+            else
+            {
+                <TelerikGrid Data="@_projects" Pageable="false" Sortable="false"
+                             Height="360px">
+                    <GridColumns>
+                        <GridColumn Field="@nameof(VideoProjectRecord.Name)" Title="Name" />
+                        <GridColumn Title="Saved" Width="170px">
+                            <Template>
+                                @{ var proj = (VideoProjectRecord)context; }
+                                @proj.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Width="160px">
+                            <Template>
+                                @{ var row = (VideoProjectRecord)context; }
+                                <span class="d-flex gap-1 text-nowrap">
+                                <BenGridAction Icon="edit-2" Label="Open" OnClick="@(() => OpenProjectAsync(row))" />
+                                <BenGridAction Icon="upload" Label="Publish rendered video" Tone="GridActionTone.Success" OnClick="@(() => TriggerPublishAsync(row))" Disabled="@_publishing" />
+                                <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDeleteAsync(row))" />
+                                </span>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </ChildContent>
+    </BenModal>
+
+    @* ── Delete confirm dialog ──────────────────────────────────────────────── *@
+    <BenModal @bind-Visible="_showDeleteConfirm" Title="Delete Project" Size="sm">
+        <ChildContent>
+            <p>Delete <strong>@_deleteTarget?.Name</strong>? This cannot be undone.</p>
+                <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _showDeleteConfirm = false)">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+            </div>
+        </ChildContent>
+    </BenModal>
+
+    @* Hidden file input triggered by TriggerPublishAsync — accepts the rendered export from the user's Downloads *@
+    <InputFile id="publish-input-my" OnChange="OnPublishFileSelectedAsync" accept="video/*" style="display:none" />
+</FeatureGate>
 
 @code {
     private List<VideoProjectRecord> _projects = [];
+    private LoadResult<VideoProjectRecord> _projectsResult;
     private bool _loadingList;
     private bool _showProjectList;
     private bool _saving;
@@ -122,12 +170,100 @@
         _authReady = true;
         if (!UserState.IsAuthenticated) return;
         await LoadProjectListAsync();
+        _canPostToFeed = (await AdminClient.GetFeedAsync())?.CanPost == true;
+    }
+
+    // ── "Post to the feed" (item 186 F7) — personal render, no case lineage ──
+    private bool _canPostToFeed;
+    private bool _feedDialogVisible;
+    private ExportedVideo? _pendingFeedExport;
+    private TaskCompletionSource? _feedFlowDone;
+
+    private async Task OnPostToFeedAsync(ExportedVideo exported)
+    {
+        _pendingFeedExport = exported;
+        _feedFlowDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _feedDialogVisible = true;
+        StateHasChanged();
+        await _feedFlowDone.Task;
+    }
+
+    private Task OnFeedPostedAsync(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _pendingFeedExport = null;
+        Toasts.Success("Posted to the feed — it appears once the video clears screening.");
+        _feedFlowDone?.TrySetResult();
+        return Task.CompletedTask;
+    }
+
+    private void OnFeedCancelled()
+    {
+        _pendingFeedExport = null;
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+    }
+
+    // ── "Standalone editor" (phase 12) ────────────────────────────────────────
+
+    private bool _openingStandalone;
+
+    /// <summary>
+    /// Where the standalone editor is, which differs between a development machine and the site.
+    /// </summary>
+    /// <remarks>
+    /// V-6 of the 2026-09-06 evaluation: this was the literal <c>/editors/video/</c>, a path IIS
+    /// mounts in production and nothing serves in development — so the site's one link into the
+    /// standalone editor was a 404 on every machine it was being built on. See
+    /// <see cref="StandaloneEditorAddress"/>.
+    /// </remarks>
+    private string StandaloneEditorUrl => StandaloneEditorAddress.For(
+        HostEnvironment.IsDevelopment(), Configuration["VideoEditor:StandaloneUrl"]);
+
+    /// <summary>
+    /// Opens <c>/editors/video/</c> already signed in, and on the project that is open here.
+    /// </summary>
+    /// <remarks>
+    /// <para>The code goes in the URL's <b>fragment</b>. Browsers never send a fragment to a
+    /// server, so it stays out of access logs and out of any <c>Referer</c> the next page sends.
+    /// It is good once and for a minute, and it is not this circuit's tokens: those stay on the
+    /// server, which is the whole reason they are kept there.</para>
+    ///
+    /// <para>Same tab rather than a new one. A programmatic <c>window.open</c> after an await has
+    /// lost its user gesture and is what popup blockers exist to stop, and leaving this page is
+    /// already guarded — unsaved editor work raises the browser's own "leave site?" prompt.</para>
+    ///
+    /// <para>A refused code is not a dead end: the editor opens anyway, and asks for a sign-in
+    /// like any other visitor.</para>
+    /// </remarks>
+    private async Task OpenStandaloneEditorAsync()
+    {
+        _openingStandalone = true;
+        StateHasChanged();
+
+        string? code = null;
+        try
+        {
+            code = (await AdminClient.GetEditorHandoffCodeAsync())?.Code;
+        }
+        catch
+        {
+            // Nothing to tell the person here: the editor is still reachable, it will just ask
+            // them to sign in.
+        }
+
+        var fragment = new List<string>();
+        if (!string.IsNullOrWhiteSpace(code))          fragment.Add($"handoff={Uri.EscapeDataString(code)}");
+        if (ProjectStore.CurrentServerId is { } server) fragment.Add($"project={server}");
+
+        var url = StandaloneEditorUrl + (fragment.Count > 0 ? "#" + string.Join("&", fragment) : "");
+
+        NavManager.NavigateTo(url, forceLoad: true);
     }
 
     private async Task LoadProjectListAsync()
     {
         _loadingList = true;
-        _projects = (await AdminClient.GetMyVideoProjectsAsync()).ToList();
+        _projectsResult = await AdminClient.GetMyVideoProjectsAsync();
+        _projects       = _projectsResult.Items.ToList();
         _loadingList = false;
     }
 
@@ -160,9 +296,19 @@
         _showProjectList = false;
         try
         {
-            var file = System.Text.Json.JsonSerializer.Deserialize<Ben.Video.Editor.Models.ProjectFile>(
-                record.ProjectJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // ProjectSerializer, not a fresh options object. This used to build its own with only
+            // case-insensitive names and no string-enum converter — and the editor writes every
+            // enum as a string, so opening a server project here always threw and was swallowed by
+            // the catch below, which is why it looked like nothing happened (2026-09-05 audit,
+            // persistence-1).
+            var (file, problem) = Ben.Video.Editor.Services.ProjectSerializer.Parse(record.ProjectJson);
+            if (problem is not null)
+            {
+                // Said out loud rather than swallowed: a project that will not open is worth a
+                // reason, not a shrug.
+                Toasts.Error(problem);
+                return;
+            }
             if (file is not null)
                 await ProjectStore.LoadFromFileAsync(file, record.Name, record.Id);
         }

@@ -119,8 +119,8 @@ else
                 match. Check them in both light and dark.
             </p>
 
-            <label class="form-label">TelerikDatePicker</label>
-            <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="_date" Width="100%" />
+            <label class="form-label" for="styleguide-date">BenDateField (typed; an impossible date is refused with a sentence, and the calendar is TelerikCalendar)</label>
+            <BenDateField Mode="DateEntryMode.Date" Id="styleguide-date" @bind-Value="_date" Width="100%" />
 
             <label class="form-label mt-3">TelerikDropDownList (templated)</label>
             <BenSelect Data="@_options" @bind-Value="_option" Width="100%" />

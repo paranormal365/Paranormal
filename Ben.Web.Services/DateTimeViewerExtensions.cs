@@ -31,36 +31,170 @@ public static class DateTimeViewerExtensions
     public static DateTime NowInViewerTimeZone(this IBenUserState userState) =>
         DateTime.UtcNow.ToViewerLocalTime(userState);
 
+    /// <summary>
+    /// How long ago a stored UTC instant was, in the words somebody would use: "3 minutes ago",
+    /// "yesterday", "last week".
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Paired with an absolute time, never replacing it.</b> Relative time answers "is
+    /// this fresh?" at a glance, which is the question somebody scanning a list actually has, and
+    /// it is useless for "which night was that?". Showing only one of the two makes a reader do
+    /// arithmetic; showing both makes the list readable AND citable.</para>
+    ///
+    /// <para>Computed against UTC now rather than the viewer's clock on purpose: an ELAPSED
+    /// duration is the same number in every timezone, and converting both ends first is a way to
+    /// introduce an offset bug into a subtraction that never needed one.</para>
+    /// </remarks>
+    public static string ToRelativeTime(this DateTime utc, DateTime? nowUtc = null)
+    {
+        var elapsed = (nowUtc ?? DateTime.UtcNow) - DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+
+        // A clock a little ahead of the server should read as "just now", not "in -3 seconds".
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+
+        return elapsed switch
+        {
+            { TotalSeconds: < 45 }  => "just now",
+            { TotalMinutes: < 2 }   => "a minute ago",
+            { TotalMinutes: < 60 }  => $"{(int)elapsed.TotalMinutes} minutes ago",
+            { TotalHours: < 2 }     => "an hour ago",
+            { TotalHours: < 24 }    => $"{(int)elapsed.TotalHours} hours ago",
+            { TotalDays: < 2 }      => "yesterday",
+            { TotalDays: < 7 }      => $"{(int)elapsed.TotalDays} days ago",
+            { TotalDays: < 14 }     => "last week",
+            { TotalDays: < 60 }     => $"{(int)(elapsed.TotalDays / 7)} weeks ago",
+            { TotalDays: < 365 }    => $"{(int)(elapsed.TotalDays / 30)} months ago",
+            _                       => $"{(int)(elapsed.TotalDays / 365)} years ago",
+        };
+    }
+
+    /// <summary>
+    /// The viewer's whole-hour offset from UTC right now — how far to rotate a 24-hour histogram
+    /// built in UTC so its buckets read as the viewer's own hours.
+    /// </summary>
+    /// <remarks>
+    /// Whole hours because the buckets are whole hours. The half-hour zones (India, parts of
+    /// Australia) cannot be represented by rotating hourly buckets at all, and rounding is the
+    /// honest approximation — the alternative is re-bucketing per viewer on the server, which is
+    /// a great deal of machinery for a shape somebody reads to spot "most of this is overnight".
+    /// </remarks>
+    public static int UtcHourOffset(this IBenUserState userState) =>
+        (int)Math.Round(userState.BrowserTimeZone.GetUtcOffset(DateTime.UtcNow).TotalHours);
+
     // ── Display formats ──────────────────────────────────────────────────────
-    // One place decides how a date looks, so pages cannot drift apart the way they had: the same
-    // screens were mixing "yyyy-MM-dd", "d MMM yyyy", "MMM d, yyyy h:mm tt" and "d MMM, HH:mm".
+    // One place decides how a date looks, so pages cannot drift apart the way they had.
+    //
+    // "One place" was not true for a long time, and saying it here did not make it so. A constant
+    // governs only what refers to it, and a Telerik picker or grid column takes a format STRING
+    // attribute — so 74 call sites across 28 files carried their own hand-typed day-first pattern
+    // while these constants sat here saying month-first and looking authoritative. Ben reported it
+    // as day-first a fourth time on 2026-08-21 and was right every time. The call sites now
+    // reference these constants, and DateFormatSourceGuardTests fails the build if a new literal
+    // date format appears anywhere.
+    //
+    // **US format, month first.** This is Ben's stated preference and it is not a style question
+    // to be re-litigated: the site's users, its groups and its cases are all American, and
+    // "08/04/2026" means August 4th to every one of them. These constants were day-first until
+    // 2026-08-21 — a previous session chose that deliberately, commented it "Day first", and wrote
+    // DisplayDateFormatTests to pin it, including a test named Date_IsDayFirst. So the format was
+    // asserted all along; it was asserted wrong, which is worse than unasserted: the suite was
+    // green and actively defending the mistake.
     //
     // These format an already-local value and deliberately do not convert: each call site keeps
     // whatever timezone handling it already had, so this changes appearance only. Pair them with
     // ToViewerLocalTime when the source is UTC.
 
-    /// <summary>Day-first numeric date, used by every grid column and date control.</summary>
-    public const string DatePattern = "dd/MM/yyyy";
+    /// <summary>US month-first numeric date, used by every grid column and date control.</summary>
+    public const string DatePattern = "MM/dd/yyyy";
 
-    /// <summary>Numeric date with a 12-hour clock and seconds.</summary>
-    public const string DateTimePattern = "dd/MM/yyyy hh:mm:ss tt";
+    /// <summary>
+    /// Numeric date and time. No seconds — see <see cref="ToDisplayDateTime(DateTime)"/>.
+    /// </summary>
+    public const string DateTimePattern = "MM/dd/yyyy hh:mm tt";
 
-    /// <summary>Numeric date and time without seconds, where seconds carry no meaning.</summary>
-    public const string DateTimeNoSecondsPattern = "dd/MM/yyyy hh:mm tt";
+    /// <summary>
+    /// The same, with seconds, for the two places a second is evidence rather than noise.
+    /// </summary>
+    public const string DateTimeWithSecondsPattern = "MM/dd/yyyy hh:mm:ss tt";
+
+    /// <summary>
+    /// Kept as the name older call sites use for the no-seconds format, which is now the default.
+    /// </summary>
+    public const string DateTimeNoSecondsPattern = DateTimePattern;
 
     /// <summary>Written-out date for prose: <c>August 4, 2026</c>.</summary>
     public const string LongDatePattern = "MMMM d, yyyy";
 
-    /// <summary>Time on its own, 12-hour with seconds.</summary>
-    public const string TimePattern = "hh:mm:ss tt";
+    /// <summary>Time on its own, 12-hour. No seconds, for the same reason as the date.</summary>
+    public const string TimePattern = "hh:mm tt";
 
-    /// <summary>A date on its own: <c>04/08/2026</c>. Day first.</summary>
+    /// <summary>Time on its own, with seconds. For logs.</summary>
+    public const string TimeWithSecondsPattern = "hh:mm:ss tt";
+
+    /// <summary>
+    /// A date short enough for a chart axis, where thirty of them sit side by side and a slash
+    /// pattern will not fit. Month first, like every other date on the site — an axis is not
+    /// exempt from that just because a charting library draws it.
+    /// </summary>
+    public const string ChartDayPattern = "MMM d";
+
+    /// <summary>
+    /// A date with the month spelled short: <c>Aug 4, 2026</c>. For prose — emails, bylines,
+    /// "published on" lines — where slashes read as data rather than a sentence.
+    /// </summary>
+    public const string MediumDatePattern = "MMM d, yyyy";
+
+    /// <summary>
+    /// The date pattern wrapped for a Telerik <c>DisplayFormat</c>, which wants <c>{0:...}</c>.
+    /// </summary>
+    /// <remarks>
+    /// These exist because the constants above could not reach a grid column or a picker: those
+    /// take a format STRING attribute, so every one of them carried its own hand-typed pattern.
+    /// Seventy-four of them were day-first while the shared constants said month-first, and the
+    /// constants looked authoritative the whole time. A constant only governs what refers to it.
+    /// </remarks>
+    public const string GridDateFormat = "{0:" + DatePattern + "}";
+
+    /// <summary>The date-and-time pattern wrapped for a Telerik <c>DisplayFormat</c>.</summary>
+    public const string GridDateTimeFormat = "{0:" + DateTimeNoSecondsPattern + "}";
+
+    /// <summary>The short month-first label used on chart axes.</summary>
+    public static string ToChartDay(this DateTime local) =>
+        local.ToString(ChartDayPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The same label for a plain day, which is what a daily series actually is.</summary>
+    public static string ToChartDay(this DateOnly day) =>
+        day.ToString(ChartDayPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date on its own: <c>08/04/2026</c>. Month first.</summary>
     public static string ToDisplayDate(this DateTime local) =>
         local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time: <c>04/08/2026 09:30:00 PM</c>.</summary>
+    /// <summary>A date and time: <c>08/04/2026 09:30 PM</c>.</summary>
+    /// <remarks>
+    /// <para><b>No seconds, and that is the default on purpose.</b> Ben reported the seconds three
+    /// separate times — a visit at "01:40:33 PM", an event at "03:00:00 PM", a group created at
+    /// "09:12:47" — and each was fixed where it was noticed, which is how the site came to print
+    /// them in five more places. Nobody types seconds. A picker does not offer them. A number that
+    /// nobody chose and nothing depends on is noise wearing the costume of precision.</para>
+    ///
+    /// <para>The earlier attempt at this added <c>ToDisplayDateTimeNoSeconds</c> beside the
+    /// second-bearing default and asked every future call site to remember which one it wanted.
+    /// Sixty-two of the sixty-five chose wrong, because the shorter name is the one people reach
+    /// for. So the default is now the one almost everybody wants, and the exception has the longer
+    /// name: <see cref="ToDisplayDateTimeWithSeconds(DateTime)"/>, for the audit log and the error
+    /// log, where the gap between two entries is the whole point.</para>
+    /// </remarks>
     public static string ToDisplayDateTime(this DateTime local) =>
         local.ToString(DateTimePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date and time to the second: <c>08/04/2026 09:30:05 PM</c>.</summary>
+    /// <remarks>
+    /// For logs and audit trails only. Everywhere else, see
+    /// <see cref="ToDisplayDateTime(DateTime)"/>.
+    /// </remarks>
+    public static string ToDisplayDateTimeWithSeconds(this DateTime local) =>
+        local.ToString(DateTimeWithSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The same date written out: <c>August 4, 2026</c>. For prose and cards — anywhere the date
@@ -70,14 +204,67 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDateLong(this DateTime local) =>
         local.ToString(LongDatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A time on its own: <c>09:30:00 PM</c>.</summary>
+    /// <summary>A time on its own: <c>09:30 PM</c>. No seconds — see ToDisplayDateTime.</summary>
     public static string ToDisplayTime(this DateTime local) =>
         local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A time on its own, to the second. For logs.</summary>
+    public static string ToDisplayTimeWithSeconds(this DateTime local) =>
+        local.ToString(TimeWithSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A scheduled moment, without seconds.
+    /// </summary>
+    /// <remarks>
+    /// IH-11, Ben's 2026-08-26 sweep: a visit scheduled through a picker that offers no seconds
+    /// was displayed as "12:44:44 PM". The seconds are not a detail, they are noise — nobody
+    /// entered them and they never mean anything. Use these for anything a person SCHEDULED;
+    /// keep the second-precision versions for logs and audit trails, where they do mean
+    /// something.
+    /// </remarks>
+    public static string ToDisplayDateTimeNoSeconds(this DateTime local) =>
+        local.ToString(DateTimeNoSecondsPattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <inheritdoc cref="ToDisplayDateTimeNoSeconds(DateTime)"/>
+    public static string ToDisplayTimeNoSeconds(this DateTime local) =>
+        local.ToString("hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A scheduled window, read the way people say it out loud.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three readings, because an investigation has three shapes:</para>
+    /// <list type="bullet">
+    ///   <item><description>finishes the same evening — <c>09/14/2026 07:00 PM – 11:30 PM</c></description></item>
+    ///   <item><description>runs past midnight — <c>09/14/2026 03:00 PM – 08:00 AM next day</c>,
+    ///   which the site treats as one day: one arrival, one departure</description></item>
+    ///   <item><description>genuinely spans days — <c>09/14/2026 03:00 PM – 09/21/2026 08:00 AM</c></description></item>
+    /// </list>
+    /// <para>Both arguments are already in the viewer's zone. Six places printed the end as a
+    /// bare time, which is right for the first shape and quietly wrong for the other two: a
+    /// week-long visit read as though it had finished that evening.</para>
+    /// </remarks>
+    public static string ToDisplaySpan(this DateTime localStart, DateTime? localEnd)
+    {
+        var start = localStart.ToDisplayDateTime();
+        if (localEnd is not { } end || end <= localStart) return start;
+
+        var days = (end.Date - localStart.Date).Days;
+        return days switch
+        {
+            0 => $"{start} – {end.ToDisplayTime()}",
+            1 => $"{start} – {end.ToDisplayTime()} next day",
+            _ => $"{start} – {end.ToDisplayDateTime()}",
+        };
+    }
 
     /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();
 
     public static string? ToDisplayDateTime(this DateTime? local) => local?.ToDisplayDateTime();
+
+    public static string? ToDisplayDateTimeWithSeconds(this DateTime? local) =>
+        local?.ToDisplayDateTimeWithSeconds();
 
     public static string? ToDisplayDateLong(this DateTime? local) => local?.ToDisplayDateLong();
 }

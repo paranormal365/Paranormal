@@ -61,7 +61,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Acquired</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_acquisitionDate" Width="100%" />
+                <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_acquisitionDate" Width="100%" />
             </div>
         </div>
 
@@ -175,8 +175,8 @@
         _error = null;
 
         if (_categories.Count == 0)
-            _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
-        _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _categories = [.. (await AdminClient.GetEquipmentCategoriesAsync()).Items];
+        _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
 
         if (Item is null)
         {
@@ -206,7 +206,7 @@
             _brandId    = _brands.FirstOrDefault(b => b.Name == Item.BrandName)?.Id;
             await RefreshBrandCoverageAsync();
             if (_brandId is not null)
-                _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+                _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
         }
     }
 
@@ -242,7 +242,7 @@
         StateHasChanged();
         try
         {
-            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+            _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)).Items];
         }
         finally
         {
@@ -254,26 +254,35 @@
     /// Works out which makes have a model in the chosen category, for the picker's labels.
     /// </summary>
     /// <remarks>
-    /// One category-filtered model search, not one call per make: it already returns every model in
-    /// the category carrying its make's id.
+    /// The same endpoint that fills the picker, asked again with the category: the narrowed answer
+    /// IS the coverage set, so the labels follow the server's rule rather than a second copy of it.
+    /// The narrowed list is not shown, because dropping a make leaves a group no route to gear
+    /// whose model is already in the catalog under another category — and nothing here proposes
+    /// a make, so there would be no way back.
     /// </remarks>
     private async Task RefreshBrandCoverageAsync()
     {
         _brandsWithModelsHere = _categoryId is null
             ? []
-            : [.. (await AdminClient.SearchEquipmentModelsAsync(categoryId: _categoryId)).Select(m => m.EquipmentBrandId)];
+            : [.. (await AdminClient.GetEquipmentBrandsAsync(categoryId: _categoryId)).Items.Select(b => b.Id)];
         RebuildBrandOptions();
     }
 
-    /// <summary>With no category chosen there is nothing to be missing, so the names stand alone.</summary>
+    /// <summary>
+    /// With no category chosen there is nothing to be missing, so the names stand alone. With one,
+    /// the makes that make this kind of thing come first.
+    /// </summary>
     private void RebuildBrandOptions()
         => _brandOptions =
         [
-            .. _brands.Select(b => new BrandOption(
-                b.Id,
-                _categoryId is null || _brandsWithModelsHere.Contains(b.Id)
-                    ? b.Name
-                    : $"{b.Name} (no models in this category yet)"))
+            .. _brands
+                .OrderBy(b => _categoryId is null || _brandsWithModelsHere.Contains(b.Id) ? 0 : 1)
+                .ThenBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Select(b => new BrandOption(
+                    b.Id,
+                    _categoryId is null || _brandsWithModelsHere.Contains(b.Id)
+                        ? b.Name
+                        : $"{b.Name} (no models in this category yet)"))
         ];
 
     private async Task SaveAsync()
@@ -291,15 +300,16 @@
             _includeInGlobalCatalog,
             string.IsNullOrWhiteSpace(_websiteUrl) ? null : _websiteUrl.Trim());
 
-        var saved = Item is null
+        var (saved, saveError) = Item is null
             ? await AdminClient.CreateOrgEquipmentAsync(OrgId, request)
-            : await AdminClient.UpdateOrgEquipmentAsync(OrgId, Item.Id, request);
+            : (await AdminClient.UpdateOrgEquipmentAsync(OrgId, Item.Id, request), null);
 
         _busy = false;
 
         if (saved is null)
         {
-            _error = "That couldn't be saved. You may no longer have permission to manage this group's equipment.";
+            _error = saveError
+                ?? "That couldn't be saved. You may no longer have permission to manage this group's equipment.";
             return;
         }
 

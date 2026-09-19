@@ -13,32 +13,8 @@ public class AddressMapHelperTests
 {
     // ── MapGeoJsonHelper ──────────────────────────────────────────────────────
 
-    [Fact]
-    public void GeoJsonHelper_ComputeCircle_ReturnsFeatureCollection()
-    {
-        var geojson = MapGeoJsonHelper.ComputeCircleGeoJson(30.2672, -97.7431, 1.0);
-        Assert.NotNull(geojson);
-        var type = geojson.GetType().GetProperty("type")?.GetValue(geojson) as string;
-        Assert.Equal("FeatureCollection", type);
-    }
-
-    [Fact]
-    public void GeoJsonHelper_ComputeCircle_ContainsFeatures()
-    {
-        var geojson = MapGeoJsonHelper.ComputeCircleGeoJson(30.2672, -97.7431, 1.0);
-        var features = geojson.GetType().GetProperty("features")?.GetValue(geojson);
-        Assert.NotNull(features);
-    }
-
-    [Theory]
-    [InlineData(1.0)]
-    [InlineData(5.0)]
-    [InlineData(0.25)]
-    public void GeoJsonHelper_ComputeCircle_DifferentRadii_NoException(double miles)
-    {
-        var ex = Record.Exception(() => MapGeoJsonHelper.ComputeCircleGeoJson(40.7128, -74.0060, miles));
-        Assert.Null(ex);
-    }
+    // The GeoJSON circle builder went with the Telerik map (item 228, phase 6): the region is
+    // MapKit's own CircleOverlay of a radius in metres. Haversine and ZoomForRadius stay.
 
     [Fact]
     public void GeoJsonHelper_Haversine_AustinToSanAntonio()

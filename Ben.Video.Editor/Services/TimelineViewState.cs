@@ -14,13 +14,24 @@ public sealed class TimelineViewState
     /// <summary>Base pixels rendered per second of timeline at zoom = 1×.</summary>
     public const double BasePxPerSecond = 80.0;
 
-    /// <summary>Assumed frames-per-second used when <see cref="DisplayMode"/> is <see cref="TimelineDisplayMode.Frames"/>.</summary>
+    /// <summary>The frame rate assumed when nothing has said otherwise.</summary>
     public const double DefaultFps = 30.0;
 
     // ── State ─────────────────────────────────────────────────────────────────
 
     /// <summary>Current zoom multiplier. Range is [0.05, 20] to support very long clips.</summary>
     public double ZoomScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// The frame rate the ruler counts in when showing frames.
+    /// </summary>
+    /// <remarks>
+    /// This was a constant 30, so at any other frame rate the ruler counted frames that did not
+    /// exist: a 25 fps project's "frame 300" was really frame 250, and stepping the preview did
+    /// not move the ruler by one (2026-09-05 audit, timeline-17). It follows the session's own
+    /// frame rate now.
+    /// </remarks>
+    public double Fps { get; set; } = DefaultFps;
 
     /// <summary>Current ruler/track label display mode.</summary>
     public TimelineDisplayMode DisplayMode { get; set; } = TimelineDisplayMode.Time;
@@ -83,7 +94,7 @@ public sealed class TimelineViewState
     /// <summary>Formats a tick position according to the current <see cref="DisplayMode"/>.</summary>
     public string FormatTick(double seconds) => DisplayMode switch
     {
-        TimelineDisplayMode.Frames => ((int)Math.Round(seconds * DefaultFps)).ToString(),
+        TimelineDisplayMode.Frames => ((int)Math.Round(seconds * (Fps > 0 ? Fps : DefaultFps))).ToString(),
         _ => FormatTimecode(seconds),
     };
 

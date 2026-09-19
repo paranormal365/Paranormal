@@ -1,24 +1,34 @@
-@* Lazy-loads and renders a file as a base64 data-URL image thumbnail. *@
+@* A file as a small picture.
 
-@inject IBenAdminClient AdminClient
+   The browser fetches it, from a URL. This used to pull the WHOLE file into the server and hand
+   the page a base64 copy — under the name "thumbnail", which is exactly what it was not. In a
+   picker showing a dozen files that is a dozen full-size images in this process's memory, the
+   shape that took the media library to sixteen gigabytes. *@
 
-@if (_loading)
+@using Ben.Web.Services
+@inject IMediaUrlBuilder MediaUrls
+
+@if (FileId == Guid.Empty)
 {
-    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;">
-        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;background:rgba(128,128,128,.12);border-radius:4px;">
+        <span class="text-secondary" style="font-size:0.7rem;">No preview</span>
     </div>
 }
-else if (_dataUrl is not null)
+else if (_failed)
 {
-    <img src="@_dataUrl"
-         style="width:@Width;height:@Height;object-fit:cover;border-radius:4px;"
-         alt="@Alt" />
+    @* A refusal or a missing file, said out loud rather than shown as an empty box. *@
+    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;background:rgba(128,128,128,.12);border-radius:4px;"
+         title="@Alt — this file could not be loaded">
+        <span class="text-danger" style="font-size:0.7rem;">Couldn't load</span>
+    </div>
 }
 else
 {
-    <div style="width:@Width;height:@Height;display:flex;align-items:center;justify-content:center;background:#f0f0f0;border-radius:4px;">
-        <span class="text-secondary" style="font-size:0.7rem;">No preview</span>
-    </div>
+    <img src="@MediaUrls.Thumbnail(FileId)"
+         style="width:@Width;height:@Height;object-fit:cover;border-radius:4px;"
+         alt="@Alt" title="@Alt"
+         loading="lazy" decoding="async"
+         @onerror="@(() => { _failed = true; })" />
 }
 
 @code {
@@ -27,21 +37,7 @@ else
     [Parameter] public string Height { get; set; } = "75px";
     [Parameter] public string? Alt { get; set; }
 
-    private string? _dataUrl;
-    private bool _loading = true;
+    private bool _failed;
 
-    protected override async Task OnParametersSetAsync()
-    {
-        if (FileId == Guid.Empty) { _loading = false; return; }
-
-        _loading = true;
-        _dataUrl = null;
-        StateHasChanged();
-
-        var result = await AdminClient.GetFileDataAsync(FileId);
-        if (result is not null)
-            _dataUrl = $"data:{result.Value.ContentType};base64,{Convert.ToBase64String(result.Value.Data)}";
-
-        _loading = false;
-    }
+    protected override void OnParametersSet() => _failed = false;
 }

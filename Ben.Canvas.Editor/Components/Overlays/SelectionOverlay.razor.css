@@ -1,0 +1,14 @@
+.bc-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 3;
+}
+
+.bc-selection {
+    position: absolute;
+    pointer-events: none;
+}
+
+/* While a gesture runs the script is previewing positions the overlay does not know. */
+.bc-board--gesture .bc-selection { display: none; }

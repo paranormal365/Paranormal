@@ -1,0 +1,77 @@
+namespace Ben.Web.Services.WebApi;
+
+public interface IWebApiIdentityClient
+{
+    Task<WebApiTokenResponse?> LoginAsync(string email, string password, CancellationToken token = default);
+
+    /// <summary>
+    /// Signs in and reports the HTTP status, so a caller can tell a rejected password from a
+    /// refused request. Flattening both to null meant a rate-limited sign-in was reported to the
+    /// user as "Invalid email or password", which is wrong and sends them to reset a password
+    /// that was never the problem.
+    /// </summary>
+    /// <param name="twoFactorCode">A code from the authenticator app, when one is being offered.</param>
+    /// <param name="recoveryCode">One of the printed recovery codes, instead of an app code.</param>
+    Task<LoginAttempt> TryLoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default);
+    Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks for a password-reset email. Always reports success for a well-formed request —
+    /// the endpoint deliberately does not reveal whether the address has an account.
+    /// </summary>
+    /// <returns>False only when the request itself failed (unreachable, rate-limited).</returns>
+    Task<bool> ForgotPasswordAsync(string email, CancellationToken token = default);
+
+    /// <summary>
+    /// Completes a reset with the emailed code. Also how an Entra-born account acquires its
+    /// first password — resetting a password that was never set simply sets one.
+    /// </summary>
+    /// <returns>Null on success, or a sentence to show ("invalid or expired code", the
+    /// password-policy complaint).</returns>
+    Task<string?> ResetPasswordAsync(
+        string email, string resetCode, string newPassword, CancellationToken token = default);
+}
+
+/// <summary>The outcome of one sign-in request: the token when it worked, and the status either way.</summary>
+/// <param name="RetryAfter">
+/// How long the server asked the caller to wait, from its <c>Retry-After</c> header. Only ever set
+/// alongside a 429. A rate-limited person can be shown a countdown instead of a button that is
+/// certain to be refused again — the server already says how long, and throwing that away means
+/// guessing at it or inviting a retry that burns the next window too.
+/// </param>
+public readonly record struct LoginAttempt(
+    WebApiTokenResponse? Token, int StatusCode, string? Detail = null, TimeSpan? RetryAfter = null)
+{
+    /// <summary>The server refused the request rather than the credentials.</summary>
+    public bool WasRateLimited => StatusCode == 429;
+
+    /// <summary>
+    /// The sign-in endpoint was not reached at all — the credentials were never examined.
+    /// </summary>
+    /// <remarks>
+    /// <para>A 404 means the API is not where the site thinks it is; a 5xx or 0 means it is there
+    /// and broken, or unreachable. Neither says anything about the password, and reporting them as
+    /// "invalid email or password" sends somebody to reset a password that was correct — the same
+    /// mistake the rate-limit case was fixed for.</para>
+    ///
+    /// <para>Reproduced deliberately: pointing WebApi:BaseUrl at a path that does not exist made
+    /// sign-in claim the credentials were wrong. On a deployment where the API is mounted under a
+    /// sub-path, that is the first thing an administrator would see (item 126).</para>
+    /// </remarks>
+    public bool WasUnreachable => StatusCode == 0 || StatusCode == 404 || StatusCode >= 500;
+
+    /// <summary>
+    /// The password was right and a second factor is needed.
+    /// </summary>
+    /// <remarks>
+    /// Identity answers this case with a 401 whose problem-detail is the literal string
+    /// <c>RequiresTwoFactor</c> — the same status it uses for a wrong password. Without reading the
+    /// detail, a sign-in that merely needs a code is indistinguishable from one that failed, and
+    /// somebody with 2FA on is told their password is wrong.
+    /// </remarks>
+    public bool RequiresTwoFactor =>
+        StatusCode == 401 && string.Equals(Detail, "RequiresTwoFactor", StringComparison.Ordinal);
+}

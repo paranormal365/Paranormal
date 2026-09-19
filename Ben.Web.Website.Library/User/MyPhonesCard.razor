@@ -1,5 +1,7 @@
 @namespace Ben.Web.Website.Library.User
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <div class="card mb-3">
     <div class="card-body">
@@ -25,7 +27,12 @@
         }
         else
         {
-            @if (_rows.Count == 0 && !_showForm)
+            @if (_rowsResult.Failed)
+            {
+                @* Somebody shown an empty list adds a duplicate of what is already there. *@
+                <BenListState TItem="MyPhoneRecord" Result="@_rowsResult" OnRetry="@LoadAsync" />
+            }
+            else if (_rows.Count == 0 && !_showForm)
             {
                 <p class="text-secondary small fst-italic mt-3 mb-0">No phone numbers yet.</p>
             }
@@ -46,7 +53,7 @@
                         }
                         @if (row.IsCellular)
                         {
-                            <span class="badge bg-light text-dark border ms-1">Mobile</span>
+                            <span class="badge bg-body-secondary text-body-emphasis border ms-1">Mobile</span>
                         }
                         @if (row.IsPublic)
                         {
@@ -72,7 +79,7 @@
                         </div>
                         <div class="col-sm-3">
                             <label class="form-label small mb-1" for="myphonescard-country-180e">Country</label>
-                            <input id="myphonescard-country-180e" class="form-control" maxlength="10" placeholder="US"
+                            <input id="myphonescard-country-180e" class="form-control" maxlength="10" placeholder="e.g. US"
                                    value="@_formCountry"
                                    @oninput="@(e => _formCountry = e.Value?.ToString() ?? string.Empty)" />
                         </div>
@@ -135,6 +142,7 @@
 
 @code {
     private List<MyPhoneRecord> _rows = new();
+    private LoadResult<MyPhoneRecord> _rowsResult;
     private IReadOnlyList<UserPhoneTypeRecord> _types = Array.Empty<UserPhoneTypeRecord>();
     private bool _loading = true;
     private bool _saving;
@@ -153,14 +161,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _types = await AdminClient.GetUserPhoneTypesAsync();
+        _types = (await AdminClient.GetUserPhoneTypesAsync()).Items;
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _rows = await AdminClient.GetMyPhonesAsync();
+        _rowsResult = await AdminClient.GetMyPhonesAsync();
+        _rows       = [.. _rowsResult.Items];
         _loading = false;
     }
 

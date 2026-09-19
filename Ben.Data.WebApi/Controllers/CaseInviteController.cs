@@ -16,10 +16,12 @@ public sealed class CaseInviteController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly UserManager<AppUser> _userManager;
     private readonly IAuditLogService _auditLog;
+    private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
 
-    public CaseInviteController(IDbContextFactory<BenDataContext> db, UserManager<AppUser> userManager, IAuditLogService auditLog)
+    public CaseInviteController(IDbContextFactory<BenDataContext> db, UserManager<AppUser> userManager,
+        IAuditLogService auditLog, Ben.Data.WebApi.Services.UserHandleService handles)
     {
-        _db = db; _userManager = userManager; _auditLog = auditLog;
+        _db = db; _userManager = userManager; _auditLog = auditLog; _handles = handles;
     }
 
     /// <summary>
@@ -76,6 +78,8 @@ public sealed class CaseInviteController : BenControllerBase
             NormalizedUserName = invite.Email.ToUpperInvariant(),
             EmailConfirmed = true, // they proved control of the inbox by opening the invite link
             DisplayName = request.DisplayName.Trim(),
+            // C1: an invited client could not be mentioned until the next restart's backfill.
+            Handle      = await _handles.AllocateAsync(request.DisplayName, invite.Email, ct),
             DateCreated = DateTime.UtcNow,
         };
         var createResult = await _userManager.CreateAsync(user, request.Password);

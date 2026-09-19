@@ -1,5 +1,7 @@
+@using Ben.Video.Core.Services
 @using Ben.Video.Editor.Models.Assets
 @implements IAsyncDisposable
+@inject PlaybackService Playback
 @inject VideoAssetCatalogService AssetCatalog
 @inject ClipStore Clips
 @inject ErrorLogService ErrorLog
@@ -9,12 +11,20 @@
 
     <!-- Search + filter bar -->
     <div class="bv-asset-browser__toolbar">
-        <TelerikTextBox @bind-Value="_search"
+        @* Both re-run the filter. They were two-way bound to fields nothing read again, so the
+           box took what you typed, the dropdown took your choice, and the grid below never
+           changed (2026-09-05 audit, callouts-4). *@
+        <TelerikTextBox Value="@_search"
+                        ValueChanged="@((string v) => { _search = v ?? string.Empty; ApplyFilter(); })"
+                        ValueExpression="@(() => _search)"
+                        DebounceDelay="200"
                         Placeholder="Search assets…"
                         Class="bv-asset-browser__search" />
 
         <TelerikDropDownList Data="@_typeOptions"
-                             @bind-Value="_typeFilter"
+                             Value="@_typeFilter"
+                             ValueChanged="@((VideoAssetType? v) => { _typeFilter = v; ApplyFilter(); })"
+                             ValueExpression="@(() => _typeFilter)"
                              TextField="@nameof(TypeOption.Label)"
                              ValueField="@nameof(TypeOption.Value)"
                              Width="130px" />
@@ -39,7 +49,7 @@
                             <div class="bv-transition-gallery-thumb__a"></div>
                             <div class="bv-transition-gallery-thumb__b"></div>
                         </div>
-                        <div class="bv-transition-gallery-card__name">@style</div>
+                        <div class="bv-transition-gallery-card__name">@TransitionStyleName.For(style)</div>
                     </div>
                 }
             </div>
@@ -186,22 +196,7 @@
         _loading = false;
     }
 
-    private void ApplyFilter()
-    {
-        var q = _search.Trim();
-        IEnumerable<VideoAssetCatalogItem> results = _all;
-
-        if (_typeFilter.HasValue)
-            results = results.Where(a => a.Type == _typeFilter.Value);
-
-        if (!string.IsNullOrWhiteSpace(q))
-            results = results.Where(a =>
-                a.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                (a.Category?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                a.Tags.Any(t => t.Contains(q, StringComparison.OrdinalIgnoreCase)));
-
-        _filtered = results.ToList();
-    }
+    private void ApplyFilter() => _filtered = AssetFilter.Apply(_all, _search, _typeFilter);
 
     private async Task AddToTimelineAsync(VideoAssetCatalogItem item)
     {
@@ -229,16 +224,22 @@
             _downloading.Remove(item.Id);
         }
 
+        // At the playhead, and no longer than the timeline it annotates, like every other way of
+        // adding an overlay. TotalDuration put it after the end of everything — including after
+        // other overlays, so a second one landed five seconds beyond the first (2026-09-05 audit,
+        // callouts-7).
+        var placement = OverlayPlacement.AtPlayhead(Playback.State.TimelineTime, Clips.TotalDuration);
+
         // Add to timeline based on asset type
         if (item.Type == VideoAssetType.Callout && item.ShapeDefinition is not null)
         {
             // Server-defined built-in shape template → create a CalloutClip
-            var def = item.ShapeDefinition;
+            var def     = item.ShapeDefinition;
             var callout = new CalloutClip
             {
                 Name             = item.Name,
-                Duration         = 5.0,
-                TimelinePosition = Clips.TotalDuration,
+                Duration         = placement.Duration,
+                TimelinePosition = placement.Position,
                 Shape            = def.ShapeType,
             };
             // Pre-populate control points from server-defined defaults
@@ -260,9 +261,14 @@
                 AssetFormat      = item.Format,
                 Settings         = item.Settings,
                 ControlPoints    = item.ControlPoints,
-                Duration         = 5.0,
-                TimelinePosition = Clips.TotalDuration,
+                Duration         = placement.Duration,
+                TimelinePosition = placement.Position,
                 OpfsExt          = "." + FormatExt(item.Format),
+                // The artwork's own proportions, so "preserve aspect ratio" has a ratio to
+                // preserve rather than three components each guessing (2026-09-05 audit,
+                // callouts-10). Null where the catalogue does not say.
+                NativeWidth      = item.NativeWidth,
+                NativeHeight     = item.NativeHeight,
             };
             Clips.AddClipArtClip(clip);
         }
@@ -280,7 +286,7 @@
         try
         {
             _dragBridgeModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Ben.Video.Editor/js/clipDragBridge.js");
+                "benImportEditorModule", "js/clipDragBridge.js");
             _dragSourceRef = DotNetObjectReference.Create(this);
             await _dragBridgeModule.InvokeVoidAsync("registerTransitionDragSource", _dragSourceRef);
         }

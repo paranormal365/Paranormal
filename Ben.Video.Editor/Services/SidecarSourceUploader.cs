@@ -19,7 +19,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class SidecarSourceUploader(OPFSService opfs, IJSRuntime js)
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
 
     public async Task EnsureUploadedAsync(
         string baseUrl, string token, Guid clipId, string ext, CancellationToken ct)
@@ -27,7 +27,7 @@ public sealed class SidecarSourceUploader(OPFSService opfs, IJSRuntime js)
         ct.ThrowIfCancellationRequested();
 
         var url = $"{baseUrl}/v1/sources/{clipId:N}?ext={Uri.EscapeDataString(ext)}";
-        var module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        var module = await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         try
         {
             var alreadyCached = await module.InvokeAsync<bool>("headSource", url, token);

@@ -64,6 +64,34 @@ public static class InvestigationAccess
     }
 
     /// <summary>
+    /// Whether <paramref name="userId"/> holds a duty on this visit that confers
+    /// <paramref name="capability"/> (item 160).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Scoped to the visit, and only ever widening.</b> This is asked <i>alongside</i>
+    /// <see cref="CanManageAsync"/>, never instead of it, so the role system (item 156) and the
+    /// duty matrix cannot give two different answers to "may Sarah do this" — either says yes and
+    /// the answer is yes, for this one investigation. A duty can open a door; it can never close
+    /// one the group's roles already opened.</para>
+    ///
+    /// <para>The same shape as the visit lead's manage right: delegated authority that expires
+    /// with the assignment rather than standing rank.</para>
+    /// </remarks>
+    public static Task<bool> HasDutyCapabilityAsync(
+        BenDataContext db, Guid investigationId, Guid userId,
+        InvestigationDutyCapabilities capability, CancellationToken ct)
+    {
+        if (userId == Guid.Empty || capability == InvestigationDutyCapabilities.None)
+            return Task.FromResult(false);
+
+        return db.InvestigationDutyAssignments.AsNoTracking()
+            .AnyAsync(x => x.InvestigationAttendee.InvestigationId == investigationId
+                        && x.InvestigationAttendee.AppUserId == userId
+                        && x.InvestigationDuty.IsActive
+                        && (x.InvestigationDuty.Capabilities & capability) == capability, ct);
+    }
+
+    /// <summary>
     /// The per-row permissions for a whole list, computed in a fixed number of queries.
     /// </summary>
     /// <remarks>
@@ -122,7 +150,12 @@ public static class InvestigationAccess
     /// Owner/Administrator of the group, or an explicit grant of <c>Update</c> on the
     /// <see cref="OrganizationSecurityTable.Investigation"/> table — by direct grant or by role.
     /// </summary>
-    private static async Task<bool> HasOrgAuthorityAsync(
+    /// <summary>
+    /// Authority over the group's investigations as a standing thing: owner, administrator, or a
+    /// role granting Investigation/Update. Distinct from managing one visit, which a lead also
+    /// has — see the override rule in <c>AssignDuty</c> for why the two had to be told apart.
+    /// </summary>
+    public static async Task<bool> HasOrgAuthorityAsync(
         BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
     {
         var membership = await db.OrganizationUserMemberships.AsNoTracking()

@@ -14,6 +14,17 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// One config row per UploadFile (one-to-one). Absent row = component defaults.
 /// Endpoints: GET, PUT (upsert), DELETE.
 /// </summary>
+/// <remarks>
+/// <para><b>Reading and writing are different permissions here.</b> The config is the owner's
+/// saved view of their own recording — zoom, colours, spectrogram, the listening chain. Writing it
+/// asked only whether the caller could <i>view</i> the file, so anyone the recording had been
+/// shared with could overwrite or delete those settings, and the owner would simply find them
+/// changed. Reading had no per-file check at all (2026-09-06 audio walk, finding 9).</para>
+///
+/// <para>PUT and DELETE now need <see cref="FileAudienceAccess.CanManageFileAsync"/> — the same
+/// grant that renames or deletes the file — and GET needs
+/// <see cref="FileAudienceAccess.CanViewFileAsync"/>.</para>
+/// </remarks>
 [ApiController]
 [Authorize]
 [Route("api/upload-files/{fileId:guid}/audio-config")]
@@ -26,6 +37,9 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
     public async Task<ActionResult<UploadFileAudioConfigRecord?>> Get(Guid fileId)
     {
         if (!await FileExistsAsync(fileId)) return NotFound();
+
+        var viewerId = GetCurrentUserIdOrThrow();
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, viewerId, CancellationToken.None)) return Forbid();
 
         var entity = await db.UploadFileAudioConfigs
             .AsNoTracking()
@@ -43,7 +57,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         if (!await FileExistsAsync(fileId)) return NotFound();
 
         var userId = GetCurrentUserIdOrThrow();
-        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, CancellationToken.None)) return Forbid();
+        if (!await CanManageAsync(fileId, userId)) return Forbid();
 
         var existingBefore = await db.UploadFileAudioConfigs.AsNoTracking()
             .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
@@ -69,7 +83,33 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         }
 
         Apply(request, existing);
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (existingBefore is null)
+        {
+            // Two saves raced and both found no row, so both inserted; one hit the one-to-one
+            // unique index and came back as a 500. The editor saves the view automatically as
+            // controls are used, so two changes a second apart are ordinary — this is not a
+            // contended endpoint, it is a normal one (2026-09-06 audio audit, phase 6).
+            //
+            // The other insert won and its row is the one to update. Re-read on a clean context:
+            // this one is holding a failed insert it would try again.
+            db.ChangeTracker.Clear();
+
+            var winner = await db.UploadFileAudioConfigs
+                .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
+            if (winner is null) throw;   // not the race after all
+
+            winner.DateUpdated        = DateTime.UtcNow;
+            winner.UpdatedByAppUserId = userId;
+            Apply(request, winner);
+            await db.SaveChangesAsync();
+
+            return Ok(mapper.Map<UploadFileAudioConfigRecord>(winner));
+        }
 
         if (existingBefore is null)
             _ = TryAuditAsync(auditLog.LogCreateAsync(nameof(UploadFileAudioConfig), existing.Id, existing, userId, AppSources.WebApi));
@@ -87,7 +127,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
     {
         var userId = GetCurrentUserIdOrThrow();
         if (!await FileExistsAsync(fileId)) return NotFound();
-        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, CancellationToken.None)) return Forbid();
+        if (!await CanManageAsync(fileId, userId)) return Forbid();
 
         var entity = await db.UploadFileAudioConfigs
             .FirstOrDefaultAsync(c => c.UploadFileId == fileId);
@@ -105,6 +145,17 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
 
     private async Task<bool> FileExistsAsync(Guid fileId)
         => await db.UploadFiles.AnyAsync(f => f.Id == fileId);
+
+    /// <summary>Whether the caller may change this file — and so the settings that belong to it.</summary>
+    private async Task<bool> CanManageAsync(Guid fileId, Guid userId)
+    {
+        var file = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fileId);
+        if (file is null) return false;
+
+        return await FileAudienceAccess.CanManageFileAsync(
+            db, file, userId, User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin),
+            CancellationToken.None);
+    }
 
     private static void Apply(UpsertAudioConfigRequest req, UploadFileAudioConfig entity)
     {
@@ -137,6 +188,7 @@ public class UploadFileAudioConfigController(BenDataContext db, IMapper mapper, 
         entity.SpectrogramOptionsJson       = req.SpectrogramOptionsJson;
         entity.SpectrogramWindowedOptionsJson = req.SpectrogramWindowedOptionsJson;
         entity.EnvelopeOptionsJson          = req.EnvelopeOptionsJson;
+        entity.EditStateJson                = req.EditStateJson;
         entity.InitialHeight                = req.InitialHeight;
         entity.MinHeight                    = req.MinHeight;
         entity.MaxHeight                    = req.MaxHeight;

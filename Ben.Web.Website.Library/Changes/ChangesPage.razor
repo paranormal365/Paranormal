@@ -1,0 +1,97 @@
+@page "/changes"
+@using Ben.Web.Services.Changelog
+@inject ChangelogService Changelog
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@* What changed, newest first, for anybody — signed in or not.
+
+   Anonymous on purpose. Somebody deciding whether to sign up is exactly the reader who wants to
+   know the place is alive and being worked on, and a changelog behind a sign-in tells them
+   nothing. Nothing on this page is private: the three files it renders carry the rule about what
+   may go into them at the top, where the next person to add a line will read it.
+
+   Rendered from embedded markdown that is written by hand. A changelog generated from commit
+   subjects would be half refactors and deployment notes, and would name files and branches — see
+   ChangelogService for why that decision is the whole point of this feature. *@
+
+<PageTitle>What's new</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="mb-4">
+        <h3 class="mb-1">What's new</h3>
+        <p class="text-secondary mb-0">
+            Everything that has changed in @SiteOptions.Value.Name, newest first.
+            @if (_lastChanged is not null)
+            {
+                <text>Last updated @_lastChanged.Value.ToString("MM/dd/yyyy").</text>
+            }
+        </p>
+    </div>
+
+    @* The filter is a set of links rather than a control, so a chosen stream is a URL somebody
+       can send to somebody else. *@
+    <div class="btn-group mb-4" role="group" aria-label="Which product">
+        <a class="btn btn-sm @(Stream is null ? "btn-primary" : "btn-outline-primary")"
+           href="/changes">Everything</a>
+        @foreach (var stream in Enum.GetValues<ChangelogStream>())
+        {
+            <a class="btn btn-sm @(Stream == stream ? "btn-primary" : "btn-outline-primary")"
+               href="@($"/changes?product={stream.Slug()}")">@stream.Title()</a>
+        }
+    </div>
+
+    @if (Stream is not null)
+    {
+        <p class="text-secondary small">@Stream.Value.Description()</p>
+    }
+
+    @if (_days.Count == 0)
+    {
+        <div class="alert alert-secondary">Nothing recorded here yet.</div>
+    }
+    else
+    {
+        @foreach (var day in _days)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    @* US format sitewide. *@
+                    <span class="fw-semibold">@day.Date.ToString("MM/dd/yyyy")</span>
+                    @* The product is named on every row, not only in the filter: on the combined
+                       list a change to the apps and a change to the website look identical
+                       otherwise, and one of them may be a fortnight from anybody's phone. *@
+                    <span class="badge bg-secondary">@day.Stream.Title()</span>
+                </div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var entry in day.Entries)
+                    {
+                        <li class="list-group-item">@entry</li>
+                    }
+                </ul>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Which product to show, from the query string. Absent means all three.</summary>
+    [SupplyParameterFromQuery(Name = "product")]
+    public string? Product { get; set; }
+
+    private ChangelogStream? Stream =>
+        Enum.GetValues<ChangelogStream>()
+            .Cast<ChangelogStream?>()
+            .FirstOrDefault(s => string.Equals(s!.Value.Slug(), Product,
+                                               StringComparison.OrdinalIgnoreCase));
+
+    private IReadOnlyList<ChangelogDay> _days = [];
+    private DateOnly? _lastChanged;
+
+    // Read on every parameter set rather than in OnInitialized: the product filter is a query
+    // string, and a page that only read it once would keep showing the first list clicked.
+    protected override void OnParametersSet()
+    {
+        _days = Changelog.Days(Stream);
+        _lastChanged = Changelog.LastChanged(Stream);
+    }
+}

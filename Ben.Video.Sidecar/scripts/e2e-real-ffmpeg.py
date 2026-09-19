@@ -7,8 +7,16 @@ against Ben.Video.Sidecar.FakeFfmpeg, which produces no real audio or video, so 
 can see what this script sees.
 
     scripts/fetch-ffmpeg.sh osx-arm64
-    dotnet run --project Ben.Video.Sidecar -- --reset-token     # note port + pairing code
+    BENVIDEO_SIDECAR_HOME=$(mktemp -d) \
+        dotnet run --project Ben.Video.Sidecar -- --reset-token   # note port + pairing code
     python3 scripts/e2e-real-ffmpeg.py <port> <pairing-code>
+
+BENVIDEO_SIDECAR_HOME is not optional advice. The pairing token lives in ONE per-user location,
+so on a machine with the sidecar installed, `--reset-token` resets the INSTALLED one's token —
+the browser that was paired with it then fails to connect, with nothing on screen to say why. The
+variable gives this run its own config and cache and leaves the installed sidecar alone. It also
+works against a published build: point it at the app inside the .app bundle instead of `dotnet
+run`, which is how the osx-arm64 package was verified on 2026-09-05.
 
 Why it exists: phase 162 shipped concat + audio mix as one sidecar job and recorded an explicit
 gap — audio SYNC was unverifiable without real ffmpeg. The first run of this script closed that

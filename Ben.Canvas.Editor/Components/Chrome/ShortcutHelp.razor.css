@@ -1,0 +1,25 @@
+.bc-shortcuts {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .875rem;
+}
+
+.bc-shortcuts th,
+.bc-shortcuts td {
+    padding: .25rem .5rem .25rem 0;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--bc-border);
+}
+
+.bc-shortcuts th { width: 45%; font-weight: 400; }
+
+.bc-shortcuts kbd {
+    padding: .0625rem .375rem;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    background: var(--bc-surface-3);
+    color: var(--bc-text);
+    font-family: inherit;
+    font-size: .8125rem;
+}

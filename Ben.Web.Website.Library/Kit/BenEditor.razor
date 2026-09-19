@@ -1,0 +1,125 @@
+@namespace Ben.Web.Website.Library.Kit
+@implements IAsyncDisposable
+
+@*
+    The site's rich-text box. One wrapper so the font is decided once.
+
+    W-R3 of the 2026-09-06 evaluation: what somebody typed into an investigation request came back
+    in Times New Roman, on a site set in a sans-serif face, and the same happened on the case
+    timeline. Nothing was misconfigured — TelerikEditor defaults to EditMode.Iframe, and an iframe
+    starts from the browser's own defaults with none of the page's stylesheets. Every editor on the
+    site looked like a different application from the page around it.
+
+    EditMode.Div is Telerik's own answer: the editable region is a div in the page, so it inherits
+    the page's typography the way every other input does. The trade is that page CSS now reaches
+    the content — which is the point, and is also what makes the WYSIWYG claim true, since the
+    published article is rendered by that same CSS.
+
+    Parameters declared rather than splatted: TelerikEditor throws on an attribute it does
+    not recognise, so this forwards exactly what call sites pass and nothing else.
+
+    GetCurrentHtmlAsync (2026-09-14) is for forms: read it on submit, because ValueChanged arrives on
+    a debounce and a quick click beats it.
+*@
+
+<div class="ben-editor" @ref="_host">
+    @if (CleanPaste)
+    {
+        <TelerikEditor @ref="_editor"
+                       Value="@Value"
+                       ValueChanged="@ValueChanged"
+                       EditMode="@EditorEditMode.Div"
+                       Height="@Height"
+                       Tools="@Tools">
+            <EditorSettings>
+                @* Pasting from Word, a web page or a PDF brings its styling and its comments; a research page wants the
+                   words and their structure (2026-09-14). Scripts and embeds never come in at all. *@
+                <EditorPasteSettings ConvertMsLists="true"
+                                     RemoveMsClasses="true"
+                                     RemoveMsStyles="true"
+                                     RemoveHtmlComments="true"
+                                     StripTags="@StrippedOnPaste" />
+            </EditorSettings>
+        </TelerikEditor>
+    }
+    else
+    {
+        <TelerikEditor @ref="_editor"
+                       Value="@Value"
+                       ValueChanged="@ValueChanged"
+                       EditMode="@EditorEditMode.Div"
+                       Height="@Height"
+                       Tools="@Tools" />
+    }
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private ElementReference _host;
+    private IJSObjectReference? _module;
+    private TelerikEditor? _editor;
+
+    // Tags unwrapped on paste. Not script, style or object: Telerik 14.1's StripTags removes only the tags themselves (a
+    // regex on "<script>" and "</script>"), keeping what is between them — despite its documentation — so listing them put
+    // a script's code, or the CSS in the <style> block Word puts on the clipboard, into the text as paragraphs (UI test pass
+    // 5.13, 2026-09-14). Left alone, the editor's own parser drops those elements whole, contents and all.
+    private static readonly List<string> StrippedOnPaste = ["iframe", "embed", "form", "link", "meta"];
+
+    /// <summary>Cleans what is pasted: Office classes and styles, comments, and tags that have no place in a page.</summary>
+    [Parameter] public bool CleanPaste { get; set; }
+
+    /// <summary>
+    /// Puts HTML where the cursor is — a link to a file or a web page from a research page's rail (2026-09-14).
+    /// </summary>
+    /// <param name="inline">True for something that belongs inside a line, like a link; false for a paragraph of its own.</param>
+    public async Task InsertHtmlAsync(string html, bool inline = true)
+    {
+        if (_editor is null) return;
+        await _editor.ExecuteAsync(new Telerik.Blazor.Components.Editor.HtmlCommandArgs("insertHtml", html, inline));
+    }
+
+    /// <summary>
+    /// What the editor holds right now, read from the page rather than from the last debounced
+    /// <see cref="ValueChanged"/>.
+    /// </summary>
+    /// <remarks>
+    /// Call it when a form is submitted and use its answer: Telerik tells .NET about typing 100 ms after it stops,
+    /// so a Send or Save pressed inside that window would otherwise act on the value from before the last
+    /// keystrokes (e2e suite, 2026-09-14). Falls back to <see cref="Value"/> when the page cannot be asked — during
+    /// prerender, or after the circuit has gone.
+    /// </remarks>
+    public async Task<string?> GetCurrentHtmlAsync()
+    {
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Kit/BenEditor.razor.js");
+            return await _module.InvokeAsync<string?>("currentHtml", _host) ?? Value;
+        }
+        catch (JSDisconnectedException) { return Value; }
+        catch (InvalidOperationException) { return Value; }   // prerendering: no browser to ask
+    }
+
+    /// <summary>The HTML being edited. Two-way bindable: <c>@bind-Value</c>.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Any CSS height — <c>"200px"</c>, <c>"60vh"</c>.</summary>
+    [Parameter] public string Height { get; set; } = "200px";
+
+    /// <summary>
+    /// The toolbar. Defaults to Telerik's own full set, which is what most call sites want; the
+    /// few that pass a shorter list are places where a heading or a table would be out of place
+    /// (a note on an audio region, a message body).
+    /// </summary>
+    [Parameter] public List<IEditorTool> Tools { get; set; } = Telerik.Blazor.Components.Editor.EditorToolSets.Default;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try { await _module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

@@ -1,0 +1,24 @@
+/* Who is helping (item 235 phase 7).
+
+   A ROW IS A PERSON AND WHAT TO DO ABOUT THEM. Side by side while there is room, stacked when
+   there is not — a venue adds a steward from a phone as often as from a desk, and "Remove" pushed
+   off the edge of the screen is a row somebody cannot act on. */
+
+.staff-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.staff-row__who {
+    min-width: 14rem;
+    flex: 1 1 auto;
+}
+
+.staff-row__acts {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+}

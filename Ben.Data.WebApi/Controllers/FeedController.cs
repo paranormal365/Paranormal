@@ -1,0 +1,1475 @@
+﻿using Ben.Data.Common.Enums;
+using Ben.Data.Common.Helpers;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Data.Common.Interfaces;
+using Ben.Data.WebApi.SeedData;
+using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Feed;
+using Ben.Service.Models.Feed;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Ben.Data.WebApi.Controllers;
+
+/// <summary>
+/// The public feed: anyone may read it, people who belong here may write in it.
+/// </summary>
+/// <remarks>
+/// <para><b>Every route here 404s wholesale when <c>features.public-feed</c> is off</b>, which it
+/// is by default. Not 403 — a disabled feature should not be discoverable by the shape of its
+/// refusal, and "this does not exist here" is the truthful answer for a site whose administrator
+/// has not turned the feed on.</para>
+///
+/// <para><b>Reading is anonymous; writing is not</b> (item 186). The open scroll is the front
+/// door — a visitor who has to sign in before seeing anything has nothing to sign up for — so the
+/// three GETs are <c>[AllowAnonymous]</c> and every write carries <c>[Authorize]</c> of its own.
+/// The read path is otherwise IDENTICAL for both: an anonymous reader is <c>Guid.Empty</c>, whose
+/// follows, reports and authorship simply match nothing, so the per-reader flags come back false
+/// without a second code path to keep in step.</para>
+///
+/// <para>Reports never hide anything by themselves: hiding is an administrator's act, so a group
+/// who dislike a post cannot remove it between them.</para>
+///
+/// <para><b>Storage reuses <c>OrgMessage</c></b> with <c>ChannelType.PublicFeed</c>. That table was
+/// built with a nullable OrganizationId and parent-based threading, which is exactly a feed post
+/// and its replies. A second near-identical table would have meant two places to fix every time
+/// the way a message is written changes.</para>
+/// </remarks>
+[ApiController]
+[Route("api/feed")]
+public sealed class FeedController : BenControllerBase
+{
+    /// <summary>Posts per page. Also the cap a caller may ask for.</summary>
+    private const int PageSize = 25;
+
+    /// <summary>Longest post. Short-form is the point; a wall of text belongs in a publication.</summary>
+    public const int MaxBodyLength = 1000;
+
+    private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly IFileStorageService _fileStorage;
+    private readonly IMediaIngestService _mediaIngest;
+    private readonly IFeedMediaScreener _screener;
+    private readonly FeedLearningService _learning;
+    private readonly ILogger<FeedController> _logger;
+
+    /// <summary>Makes the cards for links in a post once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
+    public FeedController(
+        IDbContextFactory<BenDataContext> db,
+        IFileStorageService fileStorage,
+        IMediaIngestService mediaIngest,
+        IFeedMediaScreener screener,
+        FeedLearningService learning,
+        ILogger<FeedController> logger,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
+    {
+        _previews = previews;
+        _db = db;
+        _fileStorage = fileStorage;
+        _mediaIngest = mediaIngest;
+        _screener = screener;
+        _learning = learning;
+        _logger = logger;
+    }
+
+    /// <summary>What a feed post may carry, by content type.</summary>
+    private static bool IsAllowedMedia(string? contentType)
+        => contentType is not null
+        && (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+         || contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        // An SVG is a document that can carry script, and this is the one upload surface open to
+        // everybody who belongs. Refused by type as well as by extension.
+        && !contentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
+
+    // ── Reading ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A page of the feed, newest first.
+    /// </summary>
+    /// <param name="mode">
+    /// <c>foryou</c> — ranked by <see cref="FeedRanking"/>. <c>all</c> — everybody's posts,
+    /// newest first. <c>following</c> — only people the reader follows, plus their own. Anything
+    /// else reads as <c>all</c>, which keeps every link and client written before ranking existed.
+    /// </param>
+    /// <param name="hashtag">Narrow to one tag. Combines with <paramref name="mode"/>.</param>
+    /// <param name="author">
+    /// One person's posts. Overrides <paramref name="mode"/> — "their posts, followed or not" is
+    /// the only question a profile page asks.
+    /// </param>
+    /// <param name="cursor">From a previous page's <c>NextCursor</c>. Opaque.</param>
+    /// <param name="type">One experience type's posts (item 186 F6). Combines like a hashtag.</param>
+    /// <param name="ct">Cancellation.</param>
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<ActionResult<FeedPageRecord>> GetFeed(
+        [FromQuery] string? mode, [FromQuery] string? hashtag, [FromQuery] string? cursor,
+        CancellationToken ct, [FromQuery] Guid? author = null, [FromQuery] Guid? type = null,
+        [FromQuery] Guid? place = null)
+    {
+        // Guid.Empty for a visitor: they follow nobody and wrote nothing, so every per-reader flag
+        // resolves false through the same queries a signed-in reader uses.
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var query = ExceptBlockedBy(VisibleOrMineAwaiting(db, userId), db, userId);
+
+        if (author is { } authorId)
+        {
+            query = query.Where(m => m.AuthorAppUserId == authorId);
+        }
+        else if (string.Equals(mode, "following", StringComparison.OrdinalIgnoreCase))
+        {
+            // Own posts included. A feed of people you follow that does not contain the thing you
+            // just wrote reads as a bug every single time.
+            var followed = db.UserFollows.AsNoTracking()
+                .Where(f => f.FollowerAppUserId == userId)
+                .Select(f => f.FollowedAppUserId);
+
+            query = query.Where(m => m.AuthorAppUserId == userId || followed.Contains(m.AuthorAppUserId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(hashtag))
+        {
+            var tag = hashtag.TrimStart('#').ToLowerInvariant();
+            query = query.Where(m => m.Hashtags.Any(h => h.Tag == tag));
+        }
+
+        // One experience type's posts (item 186 F6) — the "show me apparition footage" page.
+        // Combines with mode/hashtag the way hashtag does. An unknown id is an empty page, not
+        // an error: the type may have been retired since the link was shared.
+        if (type is { } experienceTypeId)
+        {
+            query = query.Where(m => m.FeedExperienceTypeId == experienceTypeId);
+        }
+
+        // One place's posts (2026-09-17) — the place page's section, and /feed/places/{id}.
+        // Combines like the type and the hashtag do. An unknown id is an empty page rather than an
+        // error: a place can be merged away after somebody shares the link.
+        if (place is { } aboutPlaceId)
+        {
+            query = query.Where(m => m.PlaceId == aboutPlaceId);
+        }
+
+        // Top-level only. Replies are read with the post they answer.
+        query = query.Where(m => m.ParentMessageId == null);
+
+        // ── For You: score a bounded window, then page by offset ─────────────
+        // A keyset cursor cannot work here: the sort key is a score that changes as people like
+        // things, so "everything after post X" has no stable meaning. An offset over a freshly
+        // ranked window does, and the page de-dupes what it has already shown.
+        if (author is null && string.Equals(mode, "foryou", StringComparison.OrdinalIgnoreCase))
+            return Ok(await RankedPageAsync(db, query, userId, cursor, ct));
+
+        if (TryReadCursor(cursor, out var beforeUtc, out var beforeId))
+        {
+            // Composite so a page boundary in the middle of two posts sharing a timestamp neither
+            // repeats one nor skips one — the failure a plain "older than this date" cursor has.
+            query = query.Where(m => m.DateCreated < beforeUtc
+                                  || (m.DateCreated == beforeUtc && m.Id.CompareTo(beforeId) < 0));
+        }
+
+        var page = await query
+            .OrderByDescending(m => m.DateCreated).ThenByDescending(m => m.Id)
+            .Take(PageSize + 1)          // one extra, purely to know whether there is a next page
+            .ToListAsync(ct);
+
+        var hasMore = page.Count > PageSize;
+        if (hasMore) page.RemoveAt(page.Count - 1);
+
+        var posts = await ToRecordsAsync(db, page, userId, ct);
+        var next = hasMore && page.Count > 0 ? WriteCursor(page[^1].DateCreated, page[^1].Id) : null;
+
+        // Asked once per page rather than per post: the answer is about the reader, not the row.
+        var canPost = userId != Guid.Empty
+                   && await FeedParticipation.RefusalAsync(db, userId, ct) is null;
+
+        return Ok(new FeedPageRecord(posts, next, canPost));
+    }
+
+    /// <summary>One post and its replies, oldest reply first.</summary>
+    [HttpGet("posts/{id:guid}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IReadOnlyList<FeedPostRecord>>> GetThread(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        // A blocked author's thread is NotFound for this reader, not a page with a hole where
+        // the root should be — and their replies vanish from other people's threads the same way.
+        var root = await ExceptBlockedBy(VisibleOrMineAwaiting(db, userId), db, userId)
+            .FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (root is null) return NotFound();
+
+        var replies = await ExceptBlockedBy(VisiblePosts(db), db, userId)
+            .Where(m => m.ParentMessageId == id)
+            .OrderBy(m => m.DateCreated).ThenBy(m => m.Id)
+            .ToListAsync(ct);
+
+        // Only a signed-in reader has a bell to clear.
+        if (userId != Guid.Empty) await MarkSeenAsync(db, id, userId, ct);
+
+        return Ok(await ToRecordsAsync(db, [root, .. replies], userId, ct));
+    }
+
+    /// <summary>Somebody's feed profile — their counts, and whether the reader follows them.</summary>
+    [HttpGet("profile/{appUserId:guid}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<FeedProfileRecord>> GetProfile(Guid appUserId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var user = await db.AppUsers.AsNoTracking()
+            .Where(u => u.Id == appUserId)
+            .Select(u => new { u.Id, u.DisplayName, u.Email })
+            .FirstOrDefaultAsync(ct);
+        if (user is null) return NotFound();
+
+        return Ok(new FeedProfileRecord(
+            user.Id,
+            user.DisplayName ?? user.Email ?? "Unknown",
+            await VisiblePosts(db).CountAsync(m => m.AuthorAppUserId == appUserId, ct),
+            await db.UserFollows.AsNoTracking().CountAsync(f => f.FollowedAppUserId == appUserId, ct),
+            await db.UserFollows.AsNoTracking().CountAsync(f => f.FollowerAppUserId == appUserId, ct),
+            await db.UserFollows.AsNoTracking()
+                .AnyAsync(f => f.FollowerAppUserId == userId && f.FollowedAppUserId == appUserId, ct),
+            appUserId == userId));
+    }
+
+    // ── Writing ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Posts, or replies to a post.
+    /// </summary>
+    /// <remarks>
+    /// The mention and hashtag tables are filled here, from the body, by the server. Doing it
+    /// client-side would mean trusting a browser about who gets notified.
+    /// </remarks>
+    [HttpPost("posts")]
+    [Authorize]
+    public async Task<ActionResult<FeedPostRecord>> CreatePost(
+        [FromForm] CreateFeedPostRequest request, IFormFile? media, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        // ── Who may write (item 186 F2, widened for places 2026-09-17) ───────
+        // A post ABOUT a public place asks a different question from a post on the feed's front
+        // page: the front page is the site's conversation and having a voice in it is what
+        // belonging buys, while a public location's record is the free lane's whole purpose and the
+        // person with no group is exactly who fills it. A reply is judged by the thread it joins,
+        // so it takes its parent's place first, below.
+        var aboutPlaceId = request.PlaceId;
+        if (request.ParentMessageId is { } inheritFrom)
+        {
+            aboutPlaceId = await db.OrgMessages.AsNoTracking()
+                .Where(m => m.Id == inheritFrom)
+                .Select(m => m.PlaceId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        if (aboutPlaceId is not null)
+        {
+            if (FeedParticipation.PlaceRefusal(userId) is { } placeRefusal)
+                return BadRequest(placeRefusal);
+        }
+        else if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+        {
+            return BadRequest(refusal);
+        }
+
+        var body = request.Body?.Trim();
+        if (string.IsNullOrWhiteSpace(body)) return BadRequest("A post needs something in it.");
+        if (body.Length > MaxBodyLength)
+            return BadRequest($"A post can be at most {MaxBodyLength} characters.");
+
+        if (request.ParentMessageId is { } parentId)
+        {
+            // Replying to something hidden, or to something that is not a feed post at all, is
+            // refused — otherwise a hidden post keeps growing a thread nobody can see the top of.
+            var parentExists = await VisiblePosts(db).AnyAsync(m => m.Id == parentId, ct);
+            if (!parentExists) return NotFound("That post is no longer there.");
+        }
+
+        // The chosen experience type (item 186 F6) — optional, and validated against the live
+        // taxonomy so a stale client cannot pin a post to a retired or unapproved entry.
+        if (request.ExperienceTypeId is { } chosenTypeId)
+        {
+            var typeOk = await db.ExperienceTypes.AsNoTracking()
+                .AnyAsync(t => t.Id == chosenTypeId && t.IsActive && t.IsApproved, ct);
+            if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
+        }
+
+        // ── The place this post is about (2026-09-17) ────────────────────────
+        // Checked here rather than trusted: the id arrives from a browser, and the two things that
+        // matter about it are whether it exists and whether it is somebody's home. A residence is
+        // refused outright — publishing what happens inside one is theirs to agree to and there is
+        // no mechanism for asking, the same reason an investigation there cannot be made public.
+        //
+        // A reply's place is inherited above and is therefore already known-good, so it is not
+        // re-checked; re-checking would refuse a reply on a thread whose place has since been
+        // merged away, which punishes the wrong person.
+        if (request.PlaceId is { } aboutPlace && request.ParentMessageId is null)
+        {
+            var kind = await db.Places.AsNoTracking()
+                .Where(x => x.Id == aboutPlace)
+                .Select(x => (PlaceKind?)x.Kind)
+                .FirstOrDefaultAsync(ct);
+
+            if (kind is null) return NotFound("That place is no longer there.");
+            if (kind != PlaceKind.PublicLocation)
+                return BadRequest("Posts about somebody's home aren't shared here.");
+        }
+
+        // ── Case lineage (item 186 F7): the editor's "Post to the feed" ──────
+        // A render made from a case carries its case with it. The case's org becomes the
+        // (unclaimed) attribution, and a PRIVATE-ENGAGEMENT case requires the explicit tick —
+        // the one door out of item 184's promise, and it is recorded.
+        Guid? lineageOrgId = null;
+        var lineageNeedsConsent = false;
+        if (request.SourceCaseId is { } sourceCaseId)
+        {
+            if (media is not { Length: > 0 })
+                return BadRequest("A case-derived post carries its render — attach the video.");
+
+            var sourceCase = await db.Cases.AsNoTracking()
+                .Where(c => c.Id == sourceCaseId)
+                .Select(c => new { c.OrganizationId, c.IsPrivateEngagement })
+                .FirstOrDefaultAsync(ct);
+
+            // The author must be able to SEE the case: a member of the org working it, or one
+            // of its clients. One answer ("isn't available") for missing and refused alike, so
+            // this door confirms nothing to a prober.
+            var maySee = sourceCase is not null
+                && (await db.OrganizationUserMemberships.AsNoTracking()
+                        .AnyAsync(m => m.AppUserId == userId && m.IsActive
+                                    && m.OrganizationId == sourceCase.OrganizationId, ct)
+                    || await db.Cases.AsNoTracking()
+                        .AnyAsync(c => c.Id == sourceCaseId
+                                    && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct)
+                    || await db.CaseClientAccesses.AsNoTracking()
+                        .AnyAsync(a => a.CaseId == sourceCaseId && a.AppUserId == userId, ct));
+            if (!maySee) return BadRequest("That case isn't available to post from.");
+
+            if (sourceCase!.IsPrivateEngagement && !request.ConsentToPublishPrivateEngagement)
+                return BadRequest(
+                    "This footage comes from a private engagement. Publishing it needs the "
+                    + "explicit confirmation in the export dialog — nothing goes public without it.");
+
+            lineageOrgId = sourceCase.OrganizationId;
+            lineageNeedsConsent = sourceCase.IsPrivateEngagement;
+        }
+
+        var post = new OrgMessage
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = null,               // a feed post belongs to a person, not a group
+            AuthorAppUserId = userId,
+            ParentMessageId = request.ParentMessageId,
+            ChannelType = OrgMessageChannel.PublicFeed,
+            Body = body,
+            IsPublic = true,
+            FeedExperienceTypeId = request.ExperienceTypeId,
+            CaseId = request.SourceCaseId,
+            // The composer's other tools (item 233). A time in the past is the same as none —
+            // "publish it five minutes ago" means publish it.
+            ScheduledForUtc = request.ScheduledForUtc is { } when && when > DateTime.UtcNow ? when : null,
+            PostedLatitude = request.PostedLatitude,
+            PostedLongitude = request.PostedLongitude,
+            PostedPlaceName = string.IsNullOrWhiteSpace(request.PostedPlaceName)
+                ? null : request.PostedPlaceName.Trim(),
+            // The place it is ABOUT, which for a reply is the thread's rather than anything the
+            // caller sent.
+            PlaceId = aboutPlaceId,
+            AttributedOrganizationId = lineageOrgId,
+            AttributionState = OrgAttributionState.Unclaimed,
+            // A scheduled post is dated the hour it goes up, not the hour it was typed. The feed
+            // is newest-first, so a post written on Monday for Friday would otherwise arrive on
+            // Friday already buried under everything posted since — which is scheduling that does
+            // not work. It also makes the stamp under the post read as the time it appeared,
+            // which is the time a reader means by "when was this posted".
+            DateCreated = request.ScheduledForUtc is { } at && at > DateTime.UtcNow
+                ? at
+                : DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+
+        if (lineageNeedsConsent)
+        {
+            // The recorded agreement — append-only, and it outlives the post (SetNull FK).
+            db.FeedPostConsents.Add(new FeedPostConsent
+            {
+                Id = Guid.NewGuid(),
+                OrgMessageId = post.Id,
+                CaseId = request.SourceCaseId!.Value,
+                AgreedByAppUserId = userId,
+                AgreedUtc = DateTime.UtcNow,
+                WordingVersion = 1,
+            });
+        }
+
+        // ── The photo or video, when there is one (item 186 F4) ──────────────
+        // Through MediaIngestService like every other upload door, so the feed cannot become the
+        // one surface where location data survives. The review state is left at its default,
+        // Pending, which is why nothing rendered here until F5's screening moves it on.
+        if (media is { Length: > 0 })
+        {
+            if (!IsAllowedMedia(media.ContentType))
+                return BadRequest("A post can carry a photo or a video. That file is neither.");
+
+            // Item 217: the one outright refusal. Everything the screener holds goes to a person
+            // — except from an account that has had three confident refusals in a day, which is
+            // no longer somebody whose photo needs a second look. Checked BEFORE ingest, so a
+            // paused account cannot even fill the disk. See FeedMediaAbuse for the rule.
+            if (await FeedMediaAbuse.IsPausedAsync(db, userId, DateTime.UtcNow, ct))
+                return BadRequest(FeedMediaAbuse.PausedMessage);
+
+            var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(media.FileName)}";
+            var storagePath = _fileStorage.UserFilePath(userId, storedName);
+            var uploadFileId = Guid.NewGuid();
+
+            IngestedMedia ingested;
+            try
+            {
+                ingested = await _mediaIngest.IngestAsync(media, storagePath, uploadFileId, ct);
+            }
+            catch (UnreadableImageException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = uploadFileId,
+                UploadFileTypeId = UploadFileTypeSeeder.FeedMediaFileTypeId,
+                AppUserId = userId,
+                FileName = media.FileName,
+                StoredFileName = storedName,
+                ContentType = ingested.ServedContentType,
+                FileSize = ingested.ServedFileSize,
+                StoragePath = storagePath,
+                // False deliberately: the feed's own endpoint decides who may see this, and it
+                // refuses anything unscreened. Public here would route around that.
+                IsPublic = false,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId,
+            });
+            db.UploadFileMetadata.Add(ingested.Metadata);
+
+            post.MediaUploadFileId = uploadFileId;
+
+            // ── Screening (item 186 F5) ──────────────────────────────────────
+            // Fail-closed by construction: the state starts Pending, and only a verdict moves it.
+            // A screener that throws leaves it exactly where it was, so the worst a broken
+            // screener can do is grow a queue — never publish something nobody looked at.
+            post.MediaReviewState = FeedMediaReviewState.Pending;
+            try
+            {
+                var verdict = await _screener.ScreenAsync(storagePath, media.ContentType, ct);
+                post.MediaReviewState = verdict.State;
+                post.MediaReviewNote = verdict.Reason;
+                post.MediaScreenerScore = verdict.Score;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                post.MediaReviewNote = "Screening failed; held for a moderator.";
+            }
+        }
+
+        db.OrgMessages.Add(post);
+
+        // ── The poll, when there is one (item 233) ───────────────────────────
+        if (request.Poll is { } poll)
+        {
+            if (PollRefusal(poll) is { } pollRefusal) return BadRequest(pollRefusal);
+
+            var pollId = Guid.NewGuid();
+            db.MessagePolls.Add(new MessagePoll
+            {
+                Id = pollId,
+                OrgMessageId = post.Id,
+                Question = poll.Question.Trim(),
+                AllowMultiple = poll.AllowMultiple,
+                // Measured from now, on the server's clock, so every reader agrees when it shuts —
+                // the author picked "three days", and an instant is what that has to become.
+                ClosesAtUtc = poll.ClosesInHours is { } hours
+                    ? post.DateCreated.AddHours(hours)
+                    : null,
+                DateCreated = post.DateCreated,
+                CreatedByAppUserId = userId,
+            });
+
+            var order = 0;
+            foreach (var option in poll.Options.Select(o => o.Trim()).Where(o => o.Length > 0))
+            {
+                db.MessagePollOptions.Add(new MessagePollOption
+                {
+                    Id = Guid.NewGuid(),
+                    MessagePollId = pollId,
+                    Text = option,
+                    SortOrder = order++,
+                });
+            }
+        }
+
+        foreach (var tag in FeedTextParser.FindHashtags(body))
+        {
+            db.OrgMessageHashtags.Add(new OrgMessageHashtag
+            {
+                Id = Guid.NewGuid(), OrgMessageId = post.Id, Tag = tag, DateCreated = post.DateCreated,
+            });
+        }
+
+        foreach (var mentionedId in await ResolveMentionsAsync(db, body, ct))
+        {
+            db.OrgMessageMentions.Add(new OrgMessageMention
+            {
+                Id = Guid.NewGuid(), OrgMessageId = post.Id,
+                MentionedAppUserId = mentionedId, DateCreated = post.DateCreated,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        // The cards for the post's links, made in the background (2026-09-14).
+        _previews.WarmFrom(body, html: null, userId);
+
+        // ── Features + category-match score (item 186 F6) ────────────────────
+        // After the save so the extractor reads the committed metadata row. Fails OPEN into an
+        // unscored post: "we could not measure your video" must never become "your post failed".
+        if (post.MediaUploadFileId is not null)
+        {
+            try
+            {
+                await _learning.ScoreAsync(db, post, ct);
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Feature scoring failed for post {PostId}; posted unscored.", post.Id);
+            }
+        }
+
+        var records = await ToRecordsAsync(db, [post], userId, ct);
+        return Ok(records[0]);
+    }
+
+    // ── A post that is still waiting for its hour (item 233) ────────────────
+
+    /// <summary>
+    /// Puts a scheduled post up now.
+    /// </summary>
+    /// <remarks>
+    /// The author's own post only, and only while it is still waiting — once it is up there is
+    /// nothing to release. Its date moves to now for the same reason it was set to the scheduled
+    /// hour in the first place: a feed is newest-first, and a post released today should read as
+    /// today's.
+    /// </remarks>
+    [HttpPost("posts/{id:guid}/publish-now")]
+    [Authorize]
+    public async Task<ActionResult<FeedPostRecord>> PublishNow(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await db.OrgMessages
+            .FirstOrDefaultAsync(m => m.Id == id
+                                   && m.ChannelType == OrgMessageChannel.PublicFeed
+                                   && m.HiddenUtc == null, ct);
+        if (post is null) return NotFound();
+        if (post.AuthorAppUserId != userId) return Forbid();
+        if (post.ScheduledForUtc is not { } when || when <= DateTime.UtcNow)
+            return BadRequest("That post is already up.");
+
+        post.ScheduledForUtc = null;
+        post.DateCreated = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var records = await ToRecordsAsync(db, [post], userId, ct);
+        return Ok(records[0]);
+    }
+
+    /// <summary>
+    /// Calls back a post that has not gone up yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>The one delete on this controller, and deliberately the narrowest one there could be:
+    /// the author's own post, still scheduled, therefore never seen by anybody. Nothing is being
+    /// taken away from a reader, and there are no replies or likes to orphan.</para>
+    ///
+    /// <para>A post that is already up is a different question — it is part of a conversation other
+    /// people joined — and is not answered here.</para>
+    /// </remarks>
+    [HttpDelete("posts/{id:guid}/schedule")]
+    [Authorize]
+    public async Task<IActionResult> CancelScheduled(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await db.OrgMessages
+            .FirstOrDefaultAsync(m => m.Id == id
+                                   && m.ChannelType == OrgMessageChannel.PublicFeed, ct);
+        if (post is null) return NotFound();
+        if (post.AuthorAppUserId != userId) return Forbid();
+        if (post.ScheduledForUtc is not { } when || when <= DateTime.UtcNow)
+            return BadRequest("That post is already up, so it can't be called back.");
+
+        // The rows that hang off a message and would hold the delete: its poll (with its options
+        // and any votes, though a poll nobody has seen has none), its hashtags and its mentions.
+        var pollIds = await db.MessagePolls.Where(p => p.OrgMessageId == post.Id)
+            .Select(p => p.Id).ToListAsync(ct);
+        if (pollIds.Count > 0)
+        {
+            db.MessagePollVotes.RemoveRange(
+                await db.MessagePollVotes.Where(v => pollIds.Contains(v.MessagePollId)).ToListAsync(ct));
+            db.MessagePollOptions.RemoveRange(
+                await db.MessagePollOptions.Where(o => pollIds.Contains(o.MessagePollId)).ToListAsync(ct));
+            db.MessagePolls.RemoveRange(
+                await db.MessagePolls.Where(p => pollIds.Contains(p.Id)).ToListAsync(ct));
+        }
+
+        db.OrgMessageHashtags.RemoveRange(
+            await db.OrgMessageHashtags.Where(h => h.OrgMessageId == post.Id).ToListAsync(ct));
+        db.OrgMessageMentions.RemoveRange(
+            await db.OrgMessageMentions.Where(m => m.OrgMessageId == post.Id).ToListAsync(ct));
+
+        db.OrgMessages.Remove(post);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The author changes their mind about what a post shows (item 186 F6) — usually because
+    /// the mismatch nudge asked.
+    /// </summary>
+    /// <remarks>
+    /// Writes labelled examples on the way through: a Mismatch for the type being left (when the
+    /// nudge fired — leaving a well-matched type teaches nothing) and a Confirmed for the one
+    /// chosen. That is the poster's half of the learning loop.
+    /// </remarks>
+    [HttpPut("posts/{id:guid}/experience-type")]
+    [Authorize]
+    public async Task<ActionResult<FeedPostRecord>> Recategorize(
+        Guid id, [FromBody] RecategorizeFeedPostRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await db.OrgMessages
+            .FirstOrDefaultAsync(m => m.Id == id && m.ChannelType == OrgMessageChannel.PublicFeed
+                                   && m.HiddenUtc == null, ct);
+        if (post is null) return NotFound();
+        if (post.AuthorAppUserId != userId)
+            return BadRequest("Only the author can recategorize a post.");
+
+        if (request.ExperienceTypeId is { } newTypeId)
+        {
+            var typeOk = await db.ExperienceTypes.AsNoTracking()
+                .AnyAsync(t => t.Id == newTypeId && t.IsActive && t.IsApproved, ct);
+            if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
+        }
+
+        var previousTypeId = post.FeedExperienceTypeId;
+        var nudgeHadFired = post.CategoryMatchScore is { } s && s < CategoryMatchScoring.NudgeThreshold;
+
+        if (previousTypeId is { } oldType && oldType != request.ExperienceTypeId && nudgeHadFired)
+            await _learning.AddExampleAsync(db, post.Id, oldType,
+                FeedLabel.Mismatch, FeedLabelSource.PosterCorrection, userId, ct);
+        if (request.ExperienceTypeId is { } confirmedType && confirmedType != previousTypeId)
+            await _learning.AddExampleAsync(db, post.Id, confirmedType,
+                FeedLabel.Confirmed, FeedLabelSource.PosterCorrection, userId, ct);
+
+        post.FeedExperienceTypeId = request.ExperienceTypeId;
+        await _learning.ScoreAsync(db, post, ct);
+        await db.SaveChangesAsync(ct);
+
+        var records = await ToRecordsAsync(db, [post], userId, ct);
+        return Ok(records[0]);
+    }
+
+    /// <summary>Reports a post to the administrators. Idempotent per person.</summary>
+    [HttpPost("posts/{id:guid}/report")]
+    [Authorize]
+    public async Task<IActionResult> ReportPost(
+        Guid id, [FromBody] ReportFeedPostRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        if (!await VisiblePosts(db).AnyAsync(m => m.Id == id, ct)) return NotFound();
+
+        // Reporting twice is not twice the signal. Answering the same way either way also means a
+        // reporter cannot learn whether their first report was already acted on.
+        if (await db.OrgMessageReports.AnyAsync(
+                r => r.OrgMessageId == id && r.ReportedByAppUserId == userId, ct))
+        {
+            return NoContent();
+        }
+
+        db.OrgMessageReports.Add(new OrgMessageReport
+        {
+            Id = Guid.NewGuid(),
+            OrgMessageId = id,
+            ReportedByAppUserId = userId,
+            Reason = request.Reason?.Trim(),
+            Outcome = FeedReportOutcome.Pending,
+            DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The photo or video on a post, for anybody who may read the post.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three conditions, all re-asked here on every request: the feed is on, the post is
+    /// visible (<see cref="VisiblePosts"/> — so hiding a post hides its media with it, at no
+    /// extra cost), and the media has been <b>Approved</b>. Pending and Held both 404.</para>
+    ///
+    /// <para><b>404, not 403.</b> "That exists but you may not see it" is itself a disclosure
+    /// about content a moderator has held, and the honest answer to a request for something
+    /// nobody may see is that there is nothing there.</para>
+    ///
+    /// <para>Serves the SANITIZED copy through <c>ServingPathFor</c>, so the location data that
+    /// came off at ingest cannot leave by this route either.</para>
+    /// </remarks>
+    [HttpGet("posts/{id:guid}/media")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPostMedia(Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await VisiblePosts(db)
+            .Where(m => m.Id == id
+                     && m.MediaUploadFileId != null
+                     && m.MediaReviewState == FeedMediaReviewState.Approved)
+            .Select(m => new { m.MediaUploadFile!.StoragePath, m.MediaUploadFile.ContentType })
+            .FirstOrDefaultAsync(ct);
+
+        // A row with no storage path is a file that never landed — nothing to serve, and the
+        // honest answer is the same 404 as a held one.
+        if (post?.StoragePath is not { Length: > 0 } storagePath) return NotFound();
+
+        // Storage paths are RELATIVE to the configured root ("users/{id}/file.jpg"), so they go
+        // back through the storage service rather than to PhysicalFile. Passing one straight to
+        // the filesystem resolves against the process's working directory and finds nothing —
+        // which is exactly what this did until a live check caught it, while the unit tests passed
+        // because their storage stub hands out absolute temp paths.
+        var servingPath = _mediaIngest.ServingPathFor(storagePath);
+        if (!_fileStorage.Exists(servingPath)) return NotFound();
+
+        return File(await _fileStorage.OpenReadAsync(servingPath, ct),
+                    post.ContentType ?? "application/octet-stream",
+                    enableRangeProcessing: true);
+    }
+
+    // ── Liking ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Likes a post. Idempotent: liking twice is liking once.
+    /// </summary>
+    /// <remarks>
+    /// Participation-gated like posting — a like is a small act of authorship, it lifts what it
+    /// touches in the ranking, and a feed whose scores can be moved by anybody with an email
+    /// address is a feed whose scores mean nothing.
+    /// </remarks>
+    [HttpPost("posts/{id:guid}/like")]
+    [Authorize]
+    public async Task<IActionResult> LikePost(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+            return BadRequest(refusal);
+
+        // A hidden post cannot be liked: VisiblePosts is the one place that knows what "there"
+        // means, and a like on something an administrator removed would resurrect it in the
+        // ranking the moment it came back.
+        if (!await VisiblePosts(db).AnyAsync(m => m.Id == id, ct)) return NotFound();
+
+        if (await db.OrgMessageLikes.AnyAsync(
+                l => l.OrgMessageId == id && l.LikerAppUserId == userId, ct))
+        {
+            return NoContent();
+        }
+
+        db.OrgMessageLikes.Add(new OrgMessageLike
+        {
+            OrgMessageId = id, LikerAppUserId = userId, DateLiked = DateTime.UtcNow,
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Two taps, two circuits, one composite key. The post is liked either way.
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>Takes a like back. Forgiving: unliking what was never liked is a no-op.</summary>
+    [HttpDelete("posts/{id:guid}/like")]
+    [Authorize]
+    public async Task<IActionResult> UnlikePost(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        // Deliberately NOT participation-gated. Taking back something you already did is not
+        // participation, and somebody whose standing lapsed must still be able to undo it.
+        var like = await db.OrgMessageLikes
+            .FirstOrDefaultAsync(l => l.OrgMessageId == id && l.LikerAppUserId == userId, ct);
+
+        if (like is not null)
+        {
+            db.OrgMessageLikes.Remove(like);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return NoContent();
+    }
+
+    // ── Following ────────────────────────────────────────────────────────────
+
+    [HttpPost("follow/{appUserId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> Follow(Guid appUserId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        if (appUserId == userId) return BadRequest("You already read your own posts.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        if (!await db.AppUsers.AsNoTracking().AnyAsync(u => u.Id == appUserId, ct)) return NotFound();
+
+        // Following builds somebody's audience, so it is participation (item 186 F2). Reporting
+        // is not, and is deliberately left open to any signed-in reader.
+        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+            return BadRequest(refusal);
+
+        if (await db.UserFollows.AnyAsync(
+                f => f.FollowerAppUserId == userId && f.FollowedAppUserId == appUserId, ct))
+        {
+            return NoContent();   // already following; saying so twice changes nothing
+        }
+
+        db.UserFollows.Add(new UserFollow
+        {
+            Id = Guid.NewGuid(),
+            FollowerAppUserId = userId,
+            FollowedAppUserId = appUserId,
+            DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    [HttpDelete("follow/{appUserId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> Unfollow(Guid appUserId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var existing = await db.UserFollows
+            .FirstOrDefaultAsync(f => f.FollowerAppUserId == userId && f.FollowedAppUserId == appUserId, ct);
+
+        if (existing is not null)
+        {
+            // Deleted rather than flagged: a soft-deleted follow is a record of who once read whom.
+            db.UserFollows.Remove(existing);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return NoContent();
+    }
+
+    // ── Shared ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Records that this reader has opened a post, which is what clears a mention from their bell.
+    /// </summary>
+    /// <remarks>
+    /// <para>Reuses <c>OrgMessageView</c>, the marker the rest of the messaging system already
+    /// uses. A read flag on the mention itself would be a second record of one fact, and the two
+    /// would drift the first time a post was read by some other route.</para>
+    ///
+    /// <para>Opening a thread is the read signal rather than the post scrolling past in the feed.
+    /// A feed post glimpsed on the way down the page has not been read in any sense worth clearing
+    /// a notification for, and "you were mentioned" is exactly the notification somebody would be
+    /// annoyed to lose without seeing.</para>
+    ///
+    /// <para>Best-effort: a failure here must not take down the read that succeeded. The mention
+    /// simply stays unread and clears next time.</para>
+    /// </remarks>
+    private static async Task MarkSeenAsync(BenDataContext db, Guid postId, Guid readerId, CancellationToken ct)
+    {
+        try
+        {
+            var already = await db.OrgMessageViews
+                .AnyAsync(v => v.OrgMessageId == postId && v.ViewerAppUserId == readerId, ct);
+            if (already) return;
+
+            db.OrgMessageViews.Add(new OrgMessageView
+            {
+                OrgMessageId = postId,
+                ViewerAppUserId = readerId,
+                DateViewed = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Two tabs opening the same post at once; the composite key refuses the second. The
+            // post is marked seen either way, which is the whole point.
+        }
+    }
+
+    /// <summary>
+    /// Whether the feed is switched on for this site.
+    /// </summary>
+    /// <remarks>
+    /// Default <b>off</b>. A new feature that starts on is a feature nobody chose to run.
+    /// </remarks>
+    internal static Task<bool> FeedEnabledAsync(BenDataContext db, CancellationToken ct)
+        => SiteSettingsService.GetBoolAsync(db, SiteSettingKeys.FeaturePublicFeed, whenUnset: false, ct);
+
+    /// <summary>
+    /// Feed posts a reader may see: the right channel, and not hidden.
+    /// </summary>
+    /// <remarks>
+    /// Every read goes through this. Writing the hidden check at each call site is how one query
+    /// eventually forgets it and serves a post an administrator removed.
+    /// </remarks>
+    /// <summary>
+    /// Why this poll cannot be posted, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// Two answers is the floor because one answer is not a question, and six is the ceiling
+    /// because a seventh turns a poll into a survey and a poll card into a scroll. Blank options
+    /// are dropped rather than refused — a composer with six boxes and two filled in is somebody
+    /// asking a two-answer question, not making a mistake.
+    /// </remarks>
+    private static string? PollRefusal(NewPollRequest poll)
+    {
+        if (string.IsNullOrWhiteSpace(poll.Question))
+            return "A poll needs a question.";
+        if (poll.Question.Trim().Length > 300)
+            return "A poll's question can be at most 300 characters.";
+
+        var options = (poll.Options ?? [])
+            .Select(o => o?.Trim() ?? "")
+            .Where(o => o.Length > 0)
+            .ToList();
+
+        if (options.Count < 2) return "A poll needs at least two answers.";
+        if (options.Count > 6) return "A poll takes at most six answers.";
+        if (options.Any(o => o.Length > 120)) return "An answer can be at most 120 characters.";
+        if (options.Distinct(StringComparer.OrdinalIgnoreCase).Count() != options.Count)
+            return "Two of those answers are the same.";
+
+        if (poll.ClosesInHours is { } hours && (hours < 1 || hours > 24 * 14))
+            return "A poll runs between an hour and a fortnight.";
+
+        return null;
+    }
+
+    private static IQueryable<OrgMessage> VisiblePosts(BenDataContext db)
+        => db.OrgMessages.AsNoTracking()
+             .Where(m => m.ChannelType == OrgMessageChannel.PublicFeed
+                      && m.HiddenUtc == null
+                      // A scheduled post is simply not selected until its time comes (item 233).
+                      // Asked here rather than released by a job: a job is a second mechanism that
+                      // can fall behind, and the moment it did every scheduled post would be late
+                      // by however long it was down.
+                      && (m.ScheduledForUtc == null || m.ScheduledForUtc <= DateTime.UtcNow));
+
+    /// <summary>
+    /// The same set, plus this reader's own posts that are still waiting for their hour.
+    /// </summary>
+    /// <remarks>
+    /// A post nobody can see until Friday is one its author must still be able to find, or
+    /// scheduling is a door with nothing behind it — they could neither check what they wrote nor
+    /// call it back. Their own waiting posts are theirs alone: the reader-independent set above is
+    /// what everybody else gets.
+    /// </remarks>
+    private static IQueryable<OrgMessage> VisibleOrMineAwaiting(BenDataContext db, Guid userId)
+        => userId == Guid.Empty
+            ? VisiblePosts(db)
+            : db.OrgMessages.AsNoTracking()
+                 .Where(m => m.ChannelType == OrgMessageChannel.PublicFeed
+                          && m.HiddenUtc == null
+                          && (m.ScheduledForUtc == null
+                           || m.ScheduledForUtc <= DateTime.UtcNow
+                           || m.AuthorAppUserId == userId));
+
+    /// <summary>
+    /// Removes posts whose author this reader has blocked (App Review 1.2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Per-reader, so it cannot live inside <see cref="VisiblePosts"/>, which answers the
+    /// reader-independent half ("is this post public and not hidden"). It composes into the SQL as
+    /// a NOT IN over the reader's block list rather than filtering in memory, because the feed
+    /// pages BEFORE materialising — a post filtered after the Take would silently shorten pages
+    /// and break the cursor.</para>
+    ///
+    /// <para>A visitor blocks nobody, and skipping the subquery entirely for <c>Guid.Empty</c>
+    /// keeps the anonymous path identical to what it was before blocks existed.</para>
+    /// </remarks>
+    private static IQueryable<OrgMessage> ExceptBlockedBy(
+        IQueryable<OrgMessage> query, BenDataContext db, Guid userId)
+    {
+        if (userId == Guid.Empty) return query;
+
+        var blocked = db.UserBlocks.AsNoTracking()
+            .Where(b => b.BlockerAppUserId == userId)
+            .Select(b => b.BlockedAppUserId);
+
+        return query.Where(m => !blocked.Contains(m.AuthorAppUserId));
+    }
+
+    /// <summary>
+    /// The accounts a post's <c>@names</c> refer to.
+    /// </summary>
+    /// <remarks>
+    /// <para>Resolved against <c>AppUser.Handle</c>, exactly. A handle is unique and permanent, so
+    /// <c>@sarahmitchell</c> means one account and goes on meaning that account after she changes
+    /// her display name.</para>
+    ///
+    /// <para>This used to match a normalised display name, because handles did not exist yet — and
+    /// it had to refuse whenever two accounts normalised alike, since notifying the wrong Sarah
+    /// Mitchell is worse than notifying neither. Worse, the answer could <i>change</i> as accounts
+    /// were added: a mention that resolved today would stop resolving the day a second Sarah signed
+    /// up. Handles removed the ambiguity rather than managing it.</para>
+    ///
+    /// <para>An <c>@name</c> nobody holds resolves to nothing and stays plain text, which is what
+    /// the author should see: their typo reached no one.</para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<Guid>> ResolveMentionsAsync(
+        BenDataContext db, string body, CancellationToken ct)
+    {
+        var tokens = FeedTextParser.FindMentions(body)
+            .Select(UserHandle.Normalize)
+            .Where(h => h.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (tokens.Count == 0) return [];
+
+        // One indexed lookup over the handles actually typed, rather than reading every account
+        // and comparing in memory as the display-name version had to.
+        return await db.AppUsers.AsNoTracking()
+            .Where(u => u.Handle != null && tokens.Contains(u.Handle))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>Turns posts into records, resolving names, counts and the reader's own state.</summary>
+    /// <remarks>
+    /// One batch of queries for the whole page rather than a few per post — the N+1 this shape
+    /// exists to avoid is the one that makes a feed slow exactly as it becomes worth reading.
+    /// </remarks>
+    /// <summary>
+    /// The latest posts about one place, for the place's own page.
+    /// </summary>
+    /// <remarks>
+    /// <para>Lives here, on the controller that owns the feed's reading rules, so the place page
+    /// gets the real ones: <see cref="VisibleOrMineAwaiting"/> (hidden posts gone, an unreleased
+    /// scheduled post visible only to its author), <see cref="ExceptBlockedBy"/>, and the same
+    /// record mapper. A page with its own copy of any of those is a page that quietly stops
+    /// agreeing with the feed about who may see what.</para>
+    ///
+    /// <para>Top-level posts only. A reply is read with the post it answers, as in the feed.</para>
+    /// </remarks>
+    internal static async Task<IReadOnlyList<FeedPostRecord>> LatestForPlaceAsync(
+        BenDataContext db, Guid placeId, Guid readerId, int take, CancellationToken ct)
+    {
+        // The feed switch is NOT re-asked here. The place page decides whether to draw the section
+        // at all, and the alternative — this returning empty when the feed is off — would look
+        // like "nobody has posted" rather than "the feed is not on".
+        var posts = await ExceptBlockedBy(VisibleOrMineAwaiting(db, readerId), db, readerId)
+            .Where(m => m.PlaceId == placeId && m.ParentMessageId == null)
+            .OrderByDescending(m => m.DateCreated).ThenByDescending(m => m.Id)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return await ToRecordsAsync(db, posts, readerId, ct);
+    }
+
+    private static async Task<IReadOnlyList<FeedPostRecord>> ToRecordsAsync(
+        BenDataContext db, IReadOnlyList<OrgMessage> posts, Guid readerId, CancellationToken ct)
+    {
+        if (posts.Count == 0) return [];
+
+        var ids = posts.Select(p => p.Id).ToList();
+        var authorIds = posts.Select(p => p.AuthorAppUserId).Distinct().ToList();
+
+        var names = await db.AppUsers.AsNoTracking()
+            .Where(u => authorIds.Contains(u.Id))
+            .Select(u => new { u.Id, Name = u.DisplayName ?? u.Email })
+            .ToDictionaryAsync(u => u.Id, u => u.Name ?? "Unknown", ct);
+
+        var mentions = await db.OrgMessageMentions.AsNoTracking()
+            .Where(m => ids.Contains(m.OrgMessageId))
+            .Select(m => new
+            {
+                m.OrgMessageId,
+                m.MentionedAppUserId,
+                m.MentionedAppUser.Handle,
+                Name = m.MentionedAppUser.DisplayName ?? m.MentionedAppUser.Email,
+            })
+            .ToListAsync(ct);
+
+        var hashtags = await db.OrgMessageHashtags.AsNoTracking()
+            .Where(h => ids.Contains(h.OrgMessageId))
+            .Select(h => new { h.OrgMessageId, h.Tag })
+            .ToListAsync(ct);
+
+        var replyCounts = (await db.OrgMessages.AsNoTracking()
+            .Where(m => m.ParentMessageId != null
+                     && ids.Contains(m.ParentMessageId!.Value)
+                     && m.HiddenUtc == null)
+            .GroupBy(m => m.ParentMessageId!.Value)
+            .Select(g => new { ParentId = g.Key, Count = g.Count() })
+            .ToListAsync(ct))
+            .ToDictionary(x => x.ParentId, x => x.Count);
+
+        // An anonymous reader (Guid.Empty) follows nobody and has reported nothing. The queries
+        // would answer that correctly anyway; skipping them saves two round trips on the page a
+        // visitor is most likely to hit, which is the whole front door.
+        var followed = readerId == Guid.Empty
+            ? []
+            : await db.UserFollows.AsNoTracking()
+                .Where(f => f.FollowerAppUserId == readerId && authorIds.Contains(f.FollowedAppUserId))
+                .Select(f => f.FollowedAppUserId)
+                .ToListAsync(ct);
+
+        var reported = readerId == Guid.Empty
+            ? []
+            // OrgMessageId is nullable since a report can now be about a case instead, so this
+            // asks for the rows that are about a post and unwraps them.
+            : await db.OrgMessageReports.AsNoTracking()
+                .Where(r => r.OrgMessageId != null
+                         && ids.Contains(r.OrgMessageId.Value)
+                         && r.ReportedByAppUserId == readerId)
+                .Select(r => r.OrgMessageId!.Value)
+                .ToListAsync(ct);
+
+        // Counted per page beside the replies, for the reason OrgMessageLike documents: one
+        // source of truth. A cached counter drifts the first time an unlike races a like.
+        var likeCounts = (await db.OrgMessageLikes.AsNoTracking()
+            .Where(l => ids.Contains(l.OrgMessageId))
+            .GroupBy(l => l.OrgMessageId)
+            .Select(g => new { PostId = g.Key, Count = g.Count() })
+            .ToListAsync(ct))
+            .ToDictionary(x => x.PostId, x => x.Count);
+
+        // Content types for the page's media, in one lookup. Read from the stored type rather
+        // than the file name: the extension is whatever the uploader's phone called it, and the
+        // served copy may be a remux with a different one. The nav property is deliberately not
+        // Included — an AsNoTracking query would leave it null and every video would render as
+        // an image, silently.
+        var mediaFileIds = posts.Where(p => p.MediaUploadFileId is not null)
+                                .Select(p => p.MediaUploadFileId!.Value)
+                                .Distinct()
+                                .ToList();
+        var mediaTypes = mediaFileIds.Count == 0
+            ? []
+            : await db.UploadFiles.AsNoTracking()
+                .Where(f => mediaFileIds.Contains(f.Id))
+                .Select(f => new { f.Id, f.ContentType })
+                .ToDictionaryAsync(f => f.Id, f => f.ContentType, ct);
+
+        FeedMediaKind KindOf(OrgMessage post)
+        {
+            if (post.MediaUploadFileId is not { } fileId) return FeedMediaKind.None;
+            var type = mediaTypes.GetValueOrDefault(fileId);
+            return type?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true
+                ? FeedMediaKind.Video
+                : FeedMediaKind.Image;
+        }
+
+        var liked = readerId == Guid.Empty
+            ? []
+            : await db.OrgMessageLikes.AsNoTracking()
+                .Where(l => ids.Contains(l.OrgMessageId) && l.LikerAppUserId == readerId)
+                .Select(l => l.OrgMessageId)
+                .ToListAsync(ct);
+
+        // Type names for the page's chips (item 186 F6), one lookup. Resolved at read so a
+        // taxonomy rename shows everywhere immediately.
+        var typeIds = posts.Where(p => p.FeedExperienceTypeId is not null)
+                           .Select(p => p.FeedExperienceTypeId!.Value)
+                           .Distinct()
+                           .ToList();
+        var typeNames = typeIds.Count == 0
+            ? []
+            : await db.ExperienceTypes.AsNoTracking()
+                .Where(t => typeIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Name })
+                .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
+        // Attributed groups (item 186 F7) — looked up ONLY for Claimed posts, so an unclaimed
+        // or declined attribution has no name in the payload to leak. Absence is structural.
+        var claimedOrgIds = posts
+            .Where(p => p.AttributionState == OrgAttributionState.Claimed
+                     && p.AttributedOrganizationId is not null)
+            .Select(p => p.AttributedOrganizationId!.Value)
+            .Distinct()
+            .ToList();
+        var claimedOrgs = claimedOrgIds.Count == 0
+            ? []
+            : await db.Organizations.AsNoTracking()
+                .Where(o => claimedOrgIds.Contains(o.Id))
+                .Select(o => new { o.Id, o.Name, o.UrlName })
+                .ToDictionaryAsync(o => o.Id, o => (o.Name, o.UrlName), ct);
+
+        // Names for the places posts are about, in one lookup and resolved at read so a rename
+        // shows everywhere at once. A place with no name — an ordinary address somebody recorded —
+        // falls back to its town, because "at (unnamed)" tells a reader nothing.
+        var aboutPlaceIds = posts.Where(p => p.PlaceId is not null)
+                                 .Select(p => p.PlaceId!.Value)
+                                 .Distinct()
+                                 .ToList();
+        var aboutPlaceNames = aboutPlaceIds.Count == 0
+            ? []
+            : await db.Places.AsNoTracking()
+                .Where(x => aboutPlaceIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Name, x.City, x.State })
+                .ToDictionaryAsync(
+                    x => x.Id,
+                    x => string.IsNullOrWhiteSpace(x.Name)
+                        ? string.Join(", ", new[] { x.City, x.State }
+                            .Where(part => !string.IsNullOrWhiteSpace(part)))
+                        : x.Name!,
+                    ct);
+
+        // Polls, for the handful of posts that carry one. Counted per page like the likes and the
+        // replies: a per-row query is the N+1 that makes a feed slow exactly as it gets popular.
+        var postIds = posts.Select(p => p.Id).ToList();
+        var polls = await db.MessagePolls.AsNoTracking()
+            .Where(x => postIds.Contains(x.OrgMessageId))
+            .Select(x => new { x.Id, x.OrgMessageId })
+            .ToListAsync(ct);
+
+        var pollRecords = new Dictionary<Guid, MessagePollRecord>();
+        foreach (var poll in polls)
+        {
+            if (await MessagePollController.ReadAsync(db, poll.Id, readerId, ct) is { } record)
+                pollRecords[poll.OrgMessageId] = record;
+        }
+
+        return posts.Select(p => new FeedPostRecord(
+            p.Id,
+            p.AuthorAppUserId,
+            names.GetValueOrDefault(p.AuthorAppUserId, "Unknown"),
+            p.ParentMessageId,
+            p.Body,
+            p.DateCreated,
+            replyCounts.GetValueOrDefault(p.Id),
+            mentions.Where(m => m.OrgMessageId == p.Id)
+                    .Select(m => new FeedMentionRecord(
+                        m.MentionedAppUserId, m.Handle ?? string.Empty, m.Name ?? "Unknown"))
+                    .ToList(),
+            hashtags.Where(h => h.OrgMessageId == p.Id).Select(h => h.Tag).ToList(),
+            followed.Contains(p.AuthorAppUserId),
+            // Never "own post" for a visitor: Guid.Empty is nobody, and an author id could not be
+            // Guid.Empty anyway, but saying so here keeps the intent legible.
+            readerId != Guid.Empty && p.AuthorAppUserId == readerId,
+            reported.Contains(p.Id),
+            likeCounts.GetValueOrDefault(p.Id),
+            liked.Contains(p.Id),
+            // The id is never emitted — a reader gets the post's own media route or nothing, so
+            // there is no file id to try against the general file endpoints.
+            p.MediaUploadFileId is not null && p.MediaReviewState == FeedMediaReviewState.Approved,
+            // Only the AUTHOR is told their media is waiting. To anybody else the post simply has
+            // no media: "somebody uploaded something that has not cleared" is a fact about content
+            // nobody may see, and there is no reason for a stranger to learn it.
+            p.MediaUploadFileId is not null
+                && p.MediaReviewState == FeedMediaReviewState.Pending
+                && readerId != Guid.Empty
+                && p.AuthorAppUserId == readerId,
+            // Likewise the kind: an unapproved post reports None, so not even "there is a video
+            // here somewhere" escapes.
+            p.MediaReviewState == FeedMediaReviewState.Approved ? KindOf(p) : FeedMediaKind.None,
+            p.FeedExperienceTypeId,
+            p.FeedExperienceTypeId is { } feedType ? typeNames.GetValueOrDefault(feedType) : null,
+            // AUTHOR-ONLY, like the awaiting-review note and for the same reason: the nudge
+            // helps the author fix a label; shown to anyone else it is an asterisk on them.
+            readerId != Guid.Empty
+                && p.AuthorAppUserId == readerId
+                && p.CategoryMatchScore is { } matchScore
+                && matchScore < CategoryMatchScoring.NudgeThreshold,
+            // Attribution renders ONLY when the group claimed it (item 186 F7).
+            p.AttributionState == OrgAttributionState.Claimed && p.AttributedOrganizationId is { } claimedOrg
+                ? claimedOrgs.GetValueOrDefault(claimedOrg).Name : null,
+            p.AttributionState == OrgAttributionState.Claimed && p.AttributedOrganizationId is { } claimedOrg2
+                ? claimedOrgs.GetValueOrDefault(claimedOrg2).UrlName : null,
+            p.AttributionState == OrgAttributionState.Claimed,
+            // A person with the role decided, as opposed to the automatic screener.
+            p.MediaReviewedByAppUserId is not null
+                && p.MediaReviewState == FeedMediaReviewState.Approved,
+            pollRecords.GetValueOrDefault(p.Id),
+            p.PostedLatitude,
+            p.PostedLongitude,
+            p.PostedPlaceName,
+            p.PlaceId,
+            p.PlaceId is { } aboutPlace
+                ? aboutPlaceNames.GetValueOrDefault(aboutPlace) is { Length: > 0 } named
+                    ? named : null
+                : null,
+            // AUTHOR-ONLY, and only while it is still in the future: an unreleased post is one
+            // only its author can see at all, and they need to see that they scheduled it.
+            readerId != Guid.Empty && p.AuthorAppUserId == readerId ? p.ScheduledForUtc : null))
+            .ToList();
+    }
+
+    /// <summary>
+    /// A page of the ranked feed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Bounded window, not the whole table.</b> Only the most recent
+    /// <see cref="RankingWindowSize"/> posts from the last <see cref="RankingWindowDays"/> days are
+    /// candidates. Scoring is per-row work, so an unbounded window would get slower every day the
+    /// site succeeded — and nothing older than the window could win on score anyway, because
+    /// gravity has already pushed it below anything from this month.</para>
+    ///
+    /// <para>Two queries: one for the window's engagement counts, one for the page's bodies. The
+    /// counts are grouped in SQL rather than loaded and counted here.</para>
+    /// </remarks>
+    private static async Task<FeedPageRecord> RankedPageAsync(
+        BenDataContext db, IQueryable<OrgMessage> query, Guid userId, string? cursor,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var since = now.AddDays(-RankingWindowDays);
+
+        var window = await query
+            .Where(m => m.DateCreated >= since)
+            .OrderByDescending(m => m.DateCreated).ThenByDescending(m => m.Id)
+            .Take(RankingWindowSize)
+            .Select(m => new
+            {
+                m.Id,
+                m.DateCreated,
+                Likes = m.Likes.Count,
+                Replies = m.Replies.Count(r => r.HiddenUtc == null),
+                m.CategoryMatchScore,
+                GroupVerified = m.AttributionState == OrgAttributionState.Claimed,
+                ModeratorReviewed = m.MediaReviewedByAppUserId != null
+                                 && m.MediaReviewState == FeedMediaReviewState.Approved,
+            })
+            .ToListAsync(ct);
+
+        var ranked = FeedRanking.Rank(
+            window.Select(w => new RankableFeedPost(
+                w.Id, w.DateCreated, w.Likes, w.Replies, w.CategoryMatchScore,
+                w.GroupVerified, w.ModeratorReviewed)), now);
+
+        var offset = ReadOffsetCursor(cursor);
+        var pageIds = ranked.Skip(offset).Take(PageSize).Select(p => p.Id).ToList();
+        var hasMore = ranked.Count > offset + pageIds.Count;
+
+        // Fetched by id, then put back into ranked order — a WHERE IN says nothing about sequence.
+        var posts = await db.OrgMessages.AsNoTracking()
+            .Where(m => pageIds.Contains(m.Id))
+            .ToListAsync(ct);
+        var byId = posts.ToDictionary(p => p.Id);
+        var ordered = pageIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+
+        var records = await ToRecordsAsync(db, ordered, userId, ct);
+        var canPost = userId != Guid.Empty
+                   && await FeedParticipation.RefusalAsync(db, userId, ct) is null;
+
+        return new FeedPageRecord(
+            records, hasMore ? WriteOffsetCursor(offset + pageIds.Count) : null, canPost);
+    }
+
+    /// <summary>How far back For You looks. Gravity has buried anything older regardless.</summary>
+    private const int RankingWindowDays = 30;
+
+    /// <summary>How many candidates are scored. Per-row work, so it is capped.</summary>
+    private const int RankingWindowSize = 500;
+
+    // ── Cursor ───────────────────────────────────────────────────────────────
+    // Timestamp plus id, because two posts can share a timestamp and a date-only cursor either
+    // repeats one across the page boundary or skips it. Opaque to callers by contract, so the
+    // format can change; not encrypted, because it encodes nothing a reader could not already see.
+
+    /// <summary>
+    /// The For You cursor: an offset into a freshly ranked window, prefixed so it can never be
+    /// mistaken for a keyset cursor by whichever branch reads it next.
+    /// </summary>
+    private static string WriteOffsetCursor(int offset)
+        => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"f:{offset}"));
+
+    /// <summary>Reads a For You cursor. Anything unreadable is page one — never an error.</summary>
+    private static int ReadOffsetCursor(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor)) return 0;
+
+        try
+        {
+            var text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            return text.StartsWith("f:", StringComparison.Ordinal)
+                && int.TryParse(text[2..], out var offset)
+                && offset >= 0
+                    ? offset
+                    : 0;
+        }
+        catch (FormatException)
+        {
+            return 0;
+        }
+    }
+
+    private static string WriteCursor(DateTime dateCreated, Guid id)
+        => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{dateCreated.Ticks}:{id}"));
+
+    private static bool TryReadCursor(string? cursor, out DateTime beforeUtc, out Guid beforeId)
+    {
+        beforeUtc = default;
+        beforeId = default;
+        if (string.IsNullOrWhiteSpace(cursor)) return false;
+
+        try
+        {
+            var parts = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor)).Split(':', 2);
+            if (parts.Length != 2) return false;
+            if (!long.TryParse(parts[0], out var ticks)) return false;
+            if (!Guid.TryParse(parts[1], out beforeId)) return false;
+
+            beforeUtc = new DateTime(ticks, DateTimeKind.Utc);
+            return true;
+        }
+        catch (FormatException)
+        {
+            // A malformed cursor reads as no cursor — the first page. Better than a 500 for
+            // somebody who edited a URL.
+            return false;
+        }
+    }
+}

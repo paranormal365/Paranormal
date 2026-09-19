@@ -91,7 +91,7 @@ public class EquipmentCatalogControllerTests
             await db.SaveChangesAsync();
         }
 
-        var result = await BuildPublic(w.Factory).GetBrands(null, default);
+        var result = await BuildPublic(w.Factory).GetBrands(null, null, default);
         var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Single(brands);
         Assert.Equal("Approved Co", brands.Single().Name);
@@ -108,10 +108,105 @@ public class EquipmentCatalogControllerTests
             await db.SaveChangesAsync();
         }
 
-        var result = await BuildAuthed(w.Factory, ProposerId).GetBrands(null, default);
+        var result = await BuildAuthed(w.Factory, ProposerId).GetBrands(null, null, default);
         var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Single(brands);
         Assert.Equal("My Pending Co", brands.Single().Name);
+    }
+
+    // ── Narrowing makes by category (2026-09-04 sweep) ───────────────────────
+    //
+    // The add-equipment form asks category, then make, then model. Only the model list filtered,
+    // so choosing "Audio Recorder" still offered tripod and radio makes and the second question
+    // disagreed with the first. A category lives on the model, so the answer is "makes with a
+    // model in that category".
+
+    /// <summary>Seeds a make with one approved model in <paramref name="categoryId"/>.</summary>
+    private static async Task<Guid> SeedBrandWithModelAsync(
+        TestDbFactoryWrapper w, string brandName, Guid categoryId)
+    {
+        var brandId = Guid.NewGuid();
+        await using var db = await w.Factory.CreateDbContextAsync();
+        db.EquipmentBrands.Add(new EquipmentBrand
+        {
+            Id = brandId, Name = brandName, IsApproved = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+        });
+        db.EquipmentModels.Add(new EquipmentModel
+        {
+            Id = Guid.NewGuid(), EquipmentBrandId = brandId, EquipmentCategoryId = categoryId,
+            Name = $"{brandName} One", IsApproved = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId,
+        });
+        await db.SaveChangesAsync();
+        return brandId;
+    }
+
+    [Fact]
+    public async Task GetBrands_ForACategory_OnlyReturnsMakesThatMakeOne()
+    {
+        var w = await SeedAsync();
+        var recorders = await SeedCategoryAsync(w);
+        var tripods = Guid.NewGuid();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentCategories.Add(new EquipmentCategory
+            { Id = tripods, Name = "Tripods & Mounts", SortOrder = 2, IsActive = true,
+              DateCreated = DateTime.UtcNow, CreatedByAppUserId = AdminId });
+            await db.SaveChangesAsync();
+        }
+        await SeedBrandWithModelAsync(w, "Zoom", recorders);
+        await SeedBrandWithModelAsync(w, "Manfrotto", tripods);
+
+        var result = await BuildPublic(w.Factory).GetBrands(null, recorders, default);
+        var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal("Zoom", Assert.Single(brands).Name);
+    }
+
+    [Fact]
+    public async Task GetBrands_WithNoCategory_StillReturnsEveryMake()
+    {
+        var w = await SeedAsync();
+        var recorders = await SeedCategoryAsync(w);
+        await SeedBrandWithModelAsync(w, "Zoom", recorders);
+        await SeedBrandWithModelAsync(w, "Manfrotto", Guid.NewGuid());
+
+        var result = await BuildPublic(w.Factory).GetBrands(null, null, default);
+        var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(2, brands.Count());
+    }
+
+    /// <summary>
+    /// A make somebody just proposed has no models yet, so a category filter would hide the entry
+    /// from the very form it was proposed on. That reads as the site losing their work.
+    /// </summary>
+    [Fact]
+    public async Task GetBrands_ForACategory_KeepsTheCallersOwnPendingMake()
+    {
+        var w = await SeedAsync();
+        var recorders = await SeedCategoryAsync(w);
+        await SeedBrandWithModelAsync(w, "Zoom", recorders);
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.EquipmentBrands.Add(new EquipmentBrand
+            {
+                Id = Guid.NewGuid(), Name = "Homemade Rig", IsApproved = false,
+                ProposedByAppUserId = ProposerId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ProposerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildAuthed(w.Factory, ProposerId).GetBrands(null, recorders, default);
+        var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+
+        Assert.Contains(brands, b => b.Name == "Homemade Rig");
+        Assert.Contains(brands, b => b.Name == "Zoom");
     }
 
     [Fact]
@@ -185,7 +280,7 @@ public class EquipmentCatalogControllerTests
         var approveResult = await BuildAdmin(w.Factory).ApproveBrand(brandId, default);
         Assert.True(((EquipmentBrandRecord)((OkObjectResult)approveResult.Result!).Value!).IsApproved);
 
-        var publicResult = await BuildPublic(w.Factory).GetBrands(null, default);
+        var publicResult = await BuildPublic(w.Factory).GetBrands(null, null, default);
         var brands = Assert.IsAssignableFrom<IEnumerable<EquipmentBrandRecord>>(Assert.IsType<OkObjectResult>(publicResult.Result).Value);
         Assert.Single(brands);
     }

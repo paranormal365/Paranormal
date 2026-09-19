@@ -33,9 +33,44 @@ async function getExportsDir() {
 
 /** Returns true when OPFS is available in this browser. */
 export async function opfsIsAvailable() {
-    return typeof navigator !== 'undefined'
-        && 'storage' in navigator
-        && typeof navigator.storage.getDirectory === 'function';
+    if (typeof navigator === 'undefined'
+        || !('storage' in navigator)
+        || typeof navigator.storage.getDirectory !== 'function') {
+        return false;
+    }
+
+    // Having the storage is not the same as being able to write to it. Every write here goes
+    // through createWritable(), which Safari did not implement on the main thread until version
+    // 26 — so this check said yes, each write then threw, and the person's media was never
+    // persisted. Nothing surfaced that: the editor worked until the page was reloaded, at which
+    // point every clip came back missing (2026-09-05 audit, the completeness critic's browser-
+    // support item).
+    //
+    // Probed once rather than asserted from a feature list, because the prototype exists in some
+    // builds where the call still fails.
+    if (_writableProbe === null) _writableProbe = probeWritable();
+    return await _writableProbe;
+}
+
+let _writableProbe = null;
+
+async function probeWritable() {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const name = `.bv-write-probe-${Math.random().toString(36).slice(2)}`;
+        const fh   = await root.getFileHandle(name, { create: true });
+
+        try {
+            const wr = await fh.createWritable();
+            await wr.close();
+            return true;
+        } finally {
+            try { await root.removeEntry(name); } catch { /* nothing to tidy */ }
+        }
+    } catch (err) {
+        console.warn('[opfs] storage is present but not writable here:', err);
+        return false;
+    }
 }
 
 /**
@@ -95,11 +130,123 @@ export async function opfsReadAsFile(clipId, ext) {
 }
 
 /**
+ * Size, and — when the file is small enough to be worth it — a SHA-256 of a stored clip.
+ *
+ * This is what makes a project portable. A clip records where its media came from so the editor
+ * can fetch it again on another machine, and these two are how it tells that what came back is the
+ * same file rather than something that has since replaced it (2026-09-05 audit, F14).
+ *
+ * The ceiling is not an optimisation. crypto.subtle.digest has no streaming form, so hashing means
+ * holding the whole file in memory at once, and the footage this editor is built for runs to
+ * hundreds of megabytes on a single browser thread. Above the ceiling the hash is simply null, and
+ * the size check stands on its own — "not taken" must never read as "did not match".
+ *
+ * @param {string} clipId
+ * @param {string} ext
+ * @param {number} maxHashBytes files at or under this size are hashed; larger ones are not
+ * @returns {Promise<{size: number, hash: string|null}|null>} null when there is no such file
+ */
+export async function opfsFingerprint(clipId, ext, maxHashBytes) {
+    let file;
+    try {
+        const dir = await getClipsDir();
+        const fh  = await dir.getFileHandle(`${clipId}${ext}`);
+        file = await fh.getFile();
+    } catch {
+        return null;
+    }
+
+    let hash = null;
+    if (file.size > 0 && file.size <= maxHashBytes) {
+        try {
+            const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+            hash = Array.from(new Uint8Array(digest))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        } catch {
+            // No hash rather than no fingerprint: crypto.subtle is unavailable over plain http on
+            // some browsers, and the size check is still worth having there.
+            hash = null;
+        }
+    }
+
+    return { size: file.size, hash };
+}
+
+/**
  * List all files in the bv-clips/ OPFS directory.
  * Returns an array of { clipId, ext, sizeBytes } objects.
  * clipId is the filename without extension (the Guid string).
  * @returns {Promise<Array<{clipId: string, ext: string, sizeBytes: number}>>}
  */
+/**
+ * How much of the browser's storage this site is using, and how much it is allowed.
+ *
+ * Nothing read this. Every import writes a copy of the file into that storage, nothing ever freed
+ * one, and the first anybody knew about the quota was a save that failed (2026-09-05 audit,
+ * media-2). Returns nulls where the browser declines to say, which some do.
+ */
+export async function opfsEstimate() {
+    try {
+        if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return { usage: null, quota: null };
+        const { usage, quota } = await navigator.storage.estimate();
+        return { usage: usage ?? null, quota: quota ?? null };
+    } catch {
+        return { usage: null, quota: null };
+    }
+}
+
+/**
+ * Streams a URL straight into storage, without the bytes ever entering .NET.
+ *
+ * Under Blazor Server the alternative pulls the file into the server's memory, copies it again
+ * into a byte array, and ships it to the browser over the circuit — three copies of a file the
+ * browser could fetch itself, with a 2 GB ceiling from an int cast along the way (2026-09-05
+ * audit, site-2 and media-6).
+ *
+ * Reports progress against Content-Length when the server sends one. Returns the bytes written, or
+ * -1 with a reason, so the caller can fall back rather than treating a failure as an empty file.
+ */
+export async function opfsDownloadToClip(url, clipId, ext, dotnet, progressMethod) {
+    try {
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) return { bytes: -1, error: `HTTP ${response.status}` };
+
+        const total = Number(response.headers.get('content-length')) || 0;
+
+        const dir = await getClipsDir();
+        const fh  = await dir.getFileHandle(`${clipId}${ext}`, { create: true });
+        const wr  = await fh.createWritable();
+
+        const reader = response.body.getReader();
+        let written = 0;
+        let lastReported = -1;
+
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            await wr.write(value);
+            written += value.byteLength;
+
+            if (total > 0 && dotnet && progressMethod) {
+                // Whole percents only: a callback per chunk would cost more in interop than the
+                // download itself on a fast connection.
+                const percent = Math.floor((written / total) * 100);
+                if (percent !== lastReported) {
+                    lastReported = percent;
+                    try { dotnet.invokeMethodAsync(progressMethod, written / total); } catch { }
+                }
+            }
+        }
+
+        await wr.close();
+        return { bytes: written, error: null };
+    } catch (err) {
+        return { bytes: -1, error: String(err && err.message ? err.message : err) };
+    }
+}
+
 export async function opfsListClips() {
     try {
         const dir = await getClipsDir();

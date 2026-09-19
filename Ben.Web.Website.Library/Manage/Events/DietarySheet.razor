@@ -1,0 +1,147 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@using Ben.Service.Models.Entities
+
+@* One kitchen sheet — the three numbers, the tally, and the people (item 235 phase 5).
+
+   A COMPONENT BECAUSE IT IS PRINTED MANY TIMES. The whole event is one of these and each night is
+   another, and a sheet that read differently depending on which button produced it would be a
+   sheet a cook could not trust.
+
+   THE THREE NUMBERS ARE NOT DECORATION. "Eight notes" means nothing on its own: eight out of
+   twelve is most of the room and eight out of two hundred is a footnote, and the people nobody
+   named are the ones a kitchen gets caught by. *@
+
+<div class="card mb-3 kitchen-sheet">
+    <div class="card-header">
+        <div class="fw-semibold">@Heading</div>
+        <div class="small text-secondary">
+            @* The event's name only when the heading is not already it: a night's sheet needs to
+               say which weekend it belongs to, and the whole event's does not need to say it
+               twice. *@
+            @if (Event is { } ev)
+            {
+                @if (ev.Name != Heading)
+                {
+                    <text>@ev.Name · </text>
+                }
+                <text>@ev.PlaceLabel · </text>
+            }
+            @(Record.IncludesRequests
+                ? "Counting confirmed parties and everybody still waiting on you."
+                : "Counting confirmed parties only.")
+        </div>
+    </div>
+
+    <div class="card-body">
+
+        @* ── the three numbers ───────────────────────────────────────────── *@
+        <div class="row g-2 mb-3 kitchen-numbers">
+            <div class="col-4">
+                <div class="border rounded p-2 text-center">
+                    <div class="h4 mb-0" id="kitchen-expected">@Record.PeopleExpected</div>
+                    <div class="small text-secondary">people expected</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="border rounded p-2 text-center">
+                    <div class="h4 mb-0" id="kitchen-with-notes">@Record.PeopleWithNotes</div>
+                    <div class="small text-secondary">told us something</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="border rounded p-2 text-center @(Record.PeopleUnnamed > 0 ? "border-warning" : null)">
+                    <div class="h4 mb-0" id="kitchen-unnamed">@Record.PeopleUnnamed</div>
+                    <div class="small text-secondary">nobody named</div>
+                </div>
+            </div>
+        </div>
+
+        @if (Record.PeopleUnnamed > 0)
+        {
+            @* Said out loud rather than left as a number, because it is the one thing on this
+               sheet that a cook cannot see by reading further down it. *@
+            <p class="small mb-3">
+                @(Record.PeopleUnnamed == 1
+                    ? "One of those people was counted in a party size nobody put a name to, so nothing is known about them either way."
+                    : $"{Record.PeopleUnnamed} of those people were counted in party sizes nobody put names to, so nothing is known about them either way.")
+            </p>
+        }
+
+        @* ── how many of each ────────────────────────────────────────────── *@
+        @if (Record.Tally.Count == 0)
+        {
+            <p class="text-secondary mb-0">
+                Nobody has told us about anything they cannot eat.
+            </p>
+        }
+        else
+        {
+            <div class="fw-semibold mb-1">How many of each</div>
+            <ul class="list-unstyled mb-3 kitchen-tally">
+                @foreach (var line in Record.Tally)
+                {
+                    <li>
+                        <span class="badge bg-secondary me-1">@line.People</span>
+                        @line.Notes
+                    </li>
+                }
+            </ul>
+            <p class="small text-secondary d-print-none">
+                Counted on the words as typed, and on nothing cleverer. “No nuts” and “nut allergy”
+                are one thing to a cook and two lines here — a tally that guessed would eventually
+                merge two that are not the same.
+            </p>
+
+            @* ── and who they are ────────────────────────────────────────── *@
+            <div class="fw-semibold mb-1">Who</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 kitchen-people">
+                    <thead>
+                        <tr>
+                            <th scope="col">Guest</th>
+                            <th scope="col">Cannot eat</th>
+                            <th scope="col">Booked by</th>
+                            <th scope="col">Here</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Record.Lines)
+                        {
+                            <tr>
+                                <td>@line.GuestName</td>
+                                <td class="fw-semibold">@line.Notes</td>
+                                <td>
+                                    @line.LeadName
+                                    <BookingStatusBadge Status="@line.Status" />
+                                </td>
+                                <td class="small text-nowrap">
+                                    @(line.Nights.Count == 0
+                                        ? "for the day"
+                                        : string.Join(", ", line.Nights.Select(n => n.ToString("MM/dd"))))
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>What this sheet is of — the event, or one night of it.</summary>
+    [Parameter, EditorRequired] public string Heading { get; set; } = "";
+
+    [Parameter, EditorRequired] public HostedEventDietaryRecord Record { get; set; } = null!;
+
+    /// <summary>
+    /// The event, for the line under the heading.
+    /// </summary>
+    /// <remarks>
+    /// A printed page that does not say which event and which venue it is from is a page somebody
+    /// cooks the wrong weekend from. Optional only because the sheet renders before the event has
+    /// come back.
+    /// </remarks>
+    [Parameter] public HostedEventRecord? Event { get; set; }
+}

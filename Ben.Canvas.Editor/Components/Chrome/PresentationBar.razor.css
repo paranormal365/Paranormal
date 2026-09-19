@@ -1,0 +1,80 @@
+/*
+    The presenting bar: one small group of controls at the bottom, over the board.
+
+    Deliberately not a toolbar across the top. The card being shown is the point, and a full-width
+    bar takes a strip of the room's attention for the whole talk.
+*/
+
+.bc-present {
+    position: absolute;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    z-index: 40;
+
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    max-width: min(92vw, 40rem);
+    padding: .375rem;
+    border: 1px solid var(--bc-border);
+    border-radius: 999px;
+    background: var(--bc-surface-1);
+    box-shadow: var(--bc-node-shadow-lifted);
+}
+
+/* 44px: the smallest thing a thumb hits, and a presenter is often standing up. */
+.bc-present__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--bc-text);
+}
+
+.bc-present__button:hover:not(:disabled) {
+    background: var(--bc-surface-2);
+}
+
+.bc-present__button:disabled {
+    opacity: .4;
+}
+
+.bc-present__button:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 2px;
+}
+
+.bc-present__stop {
+    color: var(--bc-text-muted);
+}
+
+.bc-present__where {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    min-width: 0;
+    padding: 0 .5rem;
+}
+
+.bc-present__count {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--bc-text-muted);
+}
+
+.bc-present__title {
+    min-width: 0;
+    max-width: 22rem;
+    color: var(--bc-text);
+}
+
+/* A phone has no room for the card's name beside the counter and the four buttons. */
+@media (max-width: 40rem) {
+    .bc-present__title { display: none; }
+}

@@ -19,3 +19,13 @@
 @using Ben.Video.Editor.Services
 @using Ben.Web.Website.Library
 @using Ben.Web.Website.Library.Kit
+@* Shared, for components whose nested types are named from C# — ApexChart.ChartSeries. Markup
+   resolves components by folder without this; the code block does not. *@
+@using Ben.Web.Website.Library.Shared
+@* HelpLink and AudioFilePreview are used across sibling folders. They resolved and rendered
+   without these usings, but every call site outside their own folder raised RZ10012 — 46 of
+   them, drowning the build output any real warning would have to be noticed in. *@
+@using Ben.Web.Website.Library.Help
+@using Ben.Web.Website.Library.Manage.Audio
+@* LoadResult, for surfaces that distinguish "couldn't load" from "nothing here" — see item 120. *@
+@using Ben.Web.Services.WebApi

@@ -17,6 +17,95 @@ public record OrgCalendarEventTypeRecord
     public Guid? UpdatedByAppUserId { get; init; }
 }
 
+/// <summary>One rung of a group's member-title ladder (item 157). A title is seniority, never
+/// permission — nothing may read it to decide access.</summary>
+public record OrganizationMemberLevelRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public required string Name { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+
+    /// <summary>
+    /// The roles this title suggests — what assigning it will OFFER to grant (step 5).
+    /// </summary>
+    /// <remarks>
+    /// Carried on the list so the members screen can say what a title usually carries without a
+    /// call per rung. It is a suggestion and nothing else: no permission check anywhere reads it.
+    /// </remarks>
+    public IReadOnlyList<Guid> SuggestedRoleIds { get; init; } = [];
+    public DateTime DateCreated { get; init; }
+    public DateTime? DateUpdated { get; init; }
+}
+
+/// <summary>Create/update body for a ladder rung.</summary>
+public sealed record UpsertMemberLevelRequest(string Name, int SortOrder, bool IsActive);
+
+/// <summary>One investigation duty (item 158) — a job handed out per visit, never a permission.</summary>
+public record InvestigationDutyRecord
+{
+    public Guid Id { get; init; }
+    public Guid OrganizationId { get; init; }
+    public required string Name { get; init; }
+    public int SortOrder { get; init; }
+    public bool IsActive { get; init; }
+    public bool IsSingleHolder { get; init; }
+    public Guid? MinimumMemberLevelId { get; init; }
+    public string? MinimumMemberLevelName { get; init; }
+
+    /// <summary>What holding this duty confers on the visit it is assigned for (item 160).</summary>
+    public Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities { get; init; }
+
+    /// <summary>Whether eligibility is a rule rather than advice for this duty (item 160).</summary>
+    public bool IsEnforced { get; init; }
+}
+
+/// <summary>
+/// The whole title-by-duty eligibility matrix for one group (item 160): the rungs across the top,
+/// the duties down the side, and which cells are ticked.
+/// </summary>
+/// <remarks>
+/// Sent as one object because it is edited as one grid. A duty whose <c>OpenToTitleIds</c> is
+/// empty has never been set and is still answered by its minimum title — the screen says so rather
+/// than showing an empty row that looks like "nobody may hold this".
+/// </remarks>
+public sealed record DutyEligibilityMatrix(
+    IReadOnlyList<DutyMatrixTitle> Titles,
+    IReadOnlyList<DutyMatrixRow> Duties);
+
+/// <summary>One rung of the ladder, lowest first.</summary>
+public sealed record DutyMatrixTitle(Guid Id, string Name, int SortOrder);
+
+/// <summary>One duty and the titles it is open to.</summary>
+public sealed record DutyMatrixRow(
+    Guid Id,
+    string Name,
+    int SortOrder,
+    bool IsSingleHolder,
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities,
+    bool IsEnforced,
+    IReadOnlyList<Guid> OpenToTitleIds,
+    Guid? MinimumMemberLevelId,
+    string? MinimumMemberLevelName);
+
+/// <summary>
+/// Sets one duty's row of the matrix: the whole set of titles it is open to, and what it confers.
+/// </summary>
+/// <remarks>
+/// A set rather than a delta, for the reason the site roles screen gives: what is ticked when the
+/// grid is saved is what the group ends up with, and a delta would need the screen and the server
+/// to agree about a starting point they cannot both see.
+/// </remarks>
+public sealed record SetDutyEligibilityRequest(
+    IReadOnlyList<Guid> TitleIds,
+    Ben.Data.Common.Enums.InvestigationDutyCapabilities Capabilities,
+    bool IsEnforced = false);
+
+/// <summary>Create/update body for an investigation duty.</summary>
+public sealed record UpsertInvestigationDutyRequest(
+    string Name, int SortOrder, bool IsActive, bool IsSingleHolder, Guid? MinimumMemberLevelId);
+
 public record OrgCalendarEventRecord
 {
     public Guid Id { get; init; }
@@ -61,13 +150,52 @@ public record OrgCalendarEventRecord
     /// <summary>The readable slug this event is public at, or null while it is private.</summary>
     public string? UrlName { get; init; }
 
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+
+    /// <summary>The tour this date runs, when it is a tour business's date.</summary>
+    public Guid? TourId { get; init; }
+
+    /// <summary>That tour's name, so a calendar row need not look it up.</summary>
+    public string? TourName { get; init; }
+
+    /// <summary>
+    /// Who is leading this date.
+    /// </summary>
+    /// <remarks>
+    /// Per date rather than per tour because a tour led by two people is not the same person each
+    /// night, and the guest mail names and pictures whoever will actually be there.
+    /// </remarks>
+    public IReadOnlyList<EventGuideRecord> Guides { get; init; } = [];
+
+    /// <summary>
+    /// The IANA zone this event happens in, when somebody has said. Null reads as UTC in public.
+    /// </summary>
+    public string? TimeZoneId { get; init; }
+
     public string? RecurrenceRule { get; init; }
+    /// <summary>
+    /// How many PLACES are held on this date (item 234), not how many rows there are.
+    /// </summary>
+    /// <remarks>
+    /// A sign-up may hold several places. Every row written before seats existed holds exactly
+    /// one, so this equals what it counted before.
+    /// </remarks>
     public int AttendeeCount { get; init; }
+
+    /// <summary>Sign-ups waiting on the business to decide. Zero on every non-tour date.</summary>
+    public int SeatsWaiting { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
 }
+
+/// <summary>One guide on one date (item 233).</summary>
+public sealed record EventGuideRecord(
+    Guid AppUserId,
+    string DisplayName,
+    string? Handle,
+    Guid? PhotoUploadFileId);
 
 public record OrgCalendarEventAttendeeRecord
 {
@@ -80,4 +208,24 @@ public record OrgCalendarEventAttendeeRecord
     public DateTime? DateRsvp { get; init; }
     public DateTime DateCreated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
+
+    // ── A seat on a tour date (item 234) ────────────────────────────────────
+
+    /// <summary>Where the sign-up has got to. Null on every event that is not a tour date.</summary>
+    public TourSeatStatus? SeatStatus { get; init; }
+
+    /// <summary>How many places it holds. One unless somebody asked for more.</summary>
+    public int Seats { get; init; } = 1;
+
+    /// <summary>When the business approved or turned it down.</summary>
+    public DateTime? SeatDecidedUtc { get; init; }
+
+    /// <summary>Who decided, so "the business approved it" is a person with a name.</summary>
+    public Guid? SeatDecidedByAppUserId { get; init; }
+
+    /// <summary>When the guest said back that they know. Optional, always.</summary>
+    public DateTime? GuestAcknowledgedUtc { get; init; }
+
+    /// <summary>Their address, so a business can reach somebody it has just approved.</summary>
+    public string? Email { get; init; }
 }

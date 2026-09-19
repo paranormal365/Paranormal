@@ -18,7 +18,7 @@ public sealed class GoogleFontService : IAsyncDisposable
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
 
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/googleFontsInterop.js";
+    private const string ModulePath = "js/googleFontsInterop.js";
 
     public GoogleFontService(IJSRuntime js)
     {
@@ -40,7 +40,7 @@ public sealed class GoogleFontService : IAsyncDisposable
 
     private async ValueTask<IJSObjectReference> GetModuleAsync()
     {
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         return _module;
     }
 

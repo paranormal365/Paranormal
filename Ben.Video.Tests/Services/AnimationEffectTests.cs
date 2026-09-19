@@ -138,7 +138,8 @@ public sealed class AnimationEffectTests
     public void ZoomIn_ProducesZoompanFilter()
     {
         var fx   = new VideoZoomIn();
-        var frag = fx.BuildFilterFragment(P(("duration", 2.0), ("start_zoom", 1.5), ("easing", 2)), 10.0);
+        var frag = fx.BuildFilterFragment(
+            P(("duration", 2.0), ("start_zoom", 1.5), ("easing", 2)), 10.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("zoompan", frag);
     }
@@ -147,7 +148,8 @@ public sealed class AnimationEffectTests
     public void ZoomOut_ProducesZoompanFilter()
     {
         var fx   = new VideoZoomOut();
-        var frag = fx.BuildFilterFragment(P(("duration", 2.0), ("end_zoom", 1.5), ("easing", 1)), 10.0);
+        var frag = fx.BuildFilterFragment(
+            P(("duration", 2.0), ("end_zoom", 1.5), ("easing", 1)), 10.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("zoompan", frag);
     }
@@ -158,7 +160,8 @@ public sealed class AnimationEffectTests
     public void KenBurns_ProducesFilterForAllDirections(int dir)
     {
         var fx   = new VideoKenBurns();
-        var frag = fx.BuildFilterFragment(P(("duration", 5.0), ("zoom", 1.3), ("direction", dir)), 10.0);
+        var frag = fx.BuildFilterFragment(
+            P(("duration", 5.0), ("zoom", 1.3), ("direction", dir)), 10.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("zoompan", frag);
     }
@@ -261,7 +264,8 @@ public sealed class AnimationEffectTests
     public void ImageZoomIn_ProducesZoompanFilter()
     {
         var fx   = new Ben.Video.Editor.Plugins.Image.ZoomInEffect();
-        var frag = fx.BuildFilterFragment(P(("start_zoom", 1.5), ("easing", 2)), 5.0);
+        var frag = fx.BuildFilterFragment(
+            P(("start_zoom", 1.5), ("easing", 2)), 5.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("zoompan", frag);
     }
@@ -270,7 +274,8 @@ public sealed class AnimationEffectTests
     public void ImagePulse_ProducesZoompanWithSin()
     {
         var fx   = new PulseEffect();
-        var frag = fx.BuildFilterFragment(P(("max_zoom", 1.1), ("cycles", 2.0)), 5.0);
+        var frag = fx.BuildFilterFragment(
+            P(("max_zoom", 1.1), ("cycles", 2.0)), 5.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("abs(sin(", frag);
     }
@@ -279,9 +284,85 @@ public sealed class AnimationEffectTests
     public void ImageKenBurns_ProducesZoompanFilter()
     {
         var fx   = new Ben.Video.Editor.Plugins.Image.KenBurnsEffect();
-        var frag = fx.BuildFilterFragment(P(("zoom", 1.3), ("direction", 0)), 5.0);
+        var frag = fx.BuildFilterFragment(
+            P(("zoom", 1.3), ("direction", 0)), 5.0, 1.0, 1920, 1080);
         Assert.NotEmpty(frag);
         Assert.Contains("zoompan", frag);
+    }
+
+    // ── What made every zoom effect fail on export (2026-09-05 audit, motion-8) ──
+
+    /// <summary>
+    /// The seven zoom effects, each with the frame size they will run against.
+    /// </summary>
+    public static TheoryData<IClipEffect, IReadOnlyDictionary<string, double>> ZoomEffects() => new()
+    {
+        { new VideoZoomIn(),  P(("duration", 2.0), ("start_zoom", 1.5), ("easing", 2)) },
+        { new VideoZoomOut(), P(("duration", 2.0), ("end_zoom", 1.5),   ("easing", 1)) },
+        { new VideoKenBurns(), P(("duration", 5.0), ("zoom", 1.3), ("direction", 0)) },
+        { new Ben.Video.Editor.Plugins.Image.ZoomInEffect(),  P(("start_zoom", 1.5), ("easing", 2)) },
+        { new Ben.Video.Editor.Plugins.Image.ZoomOutEffect(), P(("end_zoom", 1.5),   ("easing", 1)) },
+        { new Ben.Video.Editor.Plugins.Image.KenBurnsEffect(), P(("zoom", 1.3), ("direction", 0)) },
+        { new PulseEffect(), P(("max_zoom", 1.1), ("cycles", 2.0)) },
+    };
+
+    /// <summary>
+    /// Every zoom expression was written against <c>on/fps</c>, and <c>fps</c> is not a variable
+    /// zoompan defines. An expression naming it does not evaluate, so none of these effects did
+    /// anything on export.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ZoomEffects))]
+    public void A_zoom_effect_uses_a_clock_zoompan_actually_publishes(
+        IClipEffect fx, IReadOnlyDictionary<string, double> p)
+    {
+        var frag = fx.BuildFilterFragment(p, 10.0, 1.0, 1920, 1080);
+
+        Assert.NotEmpty(frag);
+        Assert.DoesNotContain("fps", frag);
+        Assert.Contains(ZoompanFragment.TimeVariable, frag);
+    }
+
+    /// <summary>
+    /// <c>s</c> takes a literal size, not an expression, so <c>s=iw+"x"+ih</c> was never something
+    /// ffmpeg could parse.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ZoomEffects))]
+    public void A_zoom_effect_states_its_output_size_as_a_literal(
+        IClipEffect fx, IReadOnlyDictionary<string, double> p)
+    {
+        var frag = fx.BuildFilterFragment(p, 10.0, 1.0, 1920, 1080);
+
+        Assert.Contains(":s=1920x1080", frag);
+        Assert.DoesNotContain("iw+", frag);
+    }
+
+    /// <summary>
+    /// <c>d</c> is how many output frames each input frame is held for. Set to the whole effect's
+    /// frame count — which is what these did — it repeats every frame hundreds of times.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ZoomEffects))]
+    public void A_zoom_effect_emits_one_frame_per_frame(
+        IClipEffect fx, IReadOnlyDictionary<string, double> p)
+    {
+        var frag = fx.BuildFilterFragment(p, 10.0, 1.0, 1920, 1080);
+
+        Assert.Contains(":d=1:", frag);
+    }
+
+    /// <summary>
+    /// Without a size zoompan quietly resizes the frame to 1280x720, and a segment of the wrong
+    /// size breaks the concat that joins the whole export rather than just this one effect. Doing
+    /// nothing is the safer answer.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ZoomEffects))]
+    public void A_zoom_effect_with_no_known_canvas_does_nothing(
+        IClipEffect fx, IReadOnlyDictionary<string, double> p)
+    {
+        Assert.Empty(fx.BuildFilterFragment(p, 10.0, 1.0, 0, 0));
     }
 
     // ── Phase 43: ColorHelper + FadeFromColor / FadeToColor ───────────────────

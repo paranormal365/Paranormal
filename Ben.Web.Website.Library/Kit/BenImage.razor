@@ -1,0 +1,52 @@
+@*
+    An image that disappears cleanly when it cannot be loaded.
+
+    IH-06, Ben's 2026-08-26 production sweep: a logo or avatar whose bytes are missing rendered as
+    the browser's broken-glyph icon with its alt text spilling out of a round frame and shifting
+    the card. Organizations with NO image set already rendered cleanly — so the gap was never the
+    empty path, it was the failure path, which nothing handled.
+
+    That failure path is not exotic. It fires for a deleted blob, a permissions refusal, a file
+    the server does not have (which is exactly what ishaunted.com does today for anything uploaded
+    in dev), or a slow CDN. Now that images are fetched by the BROWSER rather than inlined by the
+    server, it is the browser's error to handle — and this is where it is handled.
+
+    Falls back to whatever `Fallback` renders, or to nothing at all, which is what most callers
+    want: the same picture as "no image set".
+*@
+
+@if (!_failed && !string.IsNullOrWhiteSpace(Src))
+{
+    <img src="@Src" alt="@Alt" title="@(Title ?? Alt)"
+         class="@Class" style="@Style"
+         loading="@(Eager ? "eager" : "lazy")" decoding="async"
+         @onerror="@(() => _failed = true)" />
+}
+else if (Fallback is not null)
+{
+    @Fallback
+}
+
+@code {
+    [Parameter, EditorRequired] public string? Src { get; set; }
+    [Parameter] public string? Alt { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    /// <summary>Shown when the image fails, or when there is no source. Nothing, by default.</summary>
+    [Parameter] public RenderFragment? Fallback { get; set; }
+
+    /// <summary>For images above the fold, where lazy loading only delays them.</summary>
+    [Parameter] public bool Eager { get; set; }
+
+    private bool _failed;
+
+    /// <summary>A new source deserves a fresh attempt — otherwise one failure poisons the slot.</summary>
+    protected override void OnParametersSet()
+    {
+        if (_lastSrc != Src) { _failed = false; _lastSrc = Src; }
+    }
+
+    private string? _lastSrc;
+}

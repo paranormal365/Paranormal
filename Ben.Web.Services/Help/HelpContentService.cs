@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -45,9 +45,9 @@ public sealed class HelpContentService
     }
 
     /// <summary>Every document this reader may see, grouped into sections in display order.</summary>
-    public IReadOnlyList<HelpSection> SectionsFor(HelpViewer viewer)
+    public IReadOnlyList<HelpSection> SectionsFor(HelpViewer viewer, Func<string, bool>? featureOn = null)
         => _documents.Value
-            .Where(d => viewer.CanSee(d.Audience))
+            .Where(d => viewer.CanSee(d.Audience) && FeatureAllows(d, featureOn))
             .GroupBy(d => d.Section)
             .OrderBy(g => g.Min(d => d.Order))
             .Select(g => new HelpSection(g.Key, g.OrderBy(d => d.Order).ThenBy(d => d.Title).ToList()))
@@ -61,12 +61,22 @@ public sealed class HelpContentService
     /// that exists would let anyone enumerate the app-administration topics by guessing slugs,
     /// which is a small leak but a free one to avoid.
     /// </remarks>
-    public HelpDocument? Find(string slug, HelpViewer viewer)
+    public HelpDocument? Find(string slug, HelpViewer viewer, Func<string, bool>? featureOn = null)
     {
         var doc = _documents.Value.FirstOrDefault(
             d => string.Equals(d.Slug, slug, StringComparison.OrdinalIgnoreCase));
-        return doc is not null && viewer.CanSee(doc.Audience) ? doc : null;
+        return doc is not null && viewer.CanSee(doc.Audience) && FeatureAllows(doc, featureOn) ? doc : null;
     }
+
+    /// <summary>
+    /// A document that names a feature is shown only while that feature is on, so a help topic
+    /// never advertises a page that answers "not found" - found 2026-09-03, when Reading
+    /// Publications sat on the public Help index while Publications was switched off. Both pages
+    /// that show help pass the site's feature switch. A caller with no switch to ask (the tests, the
+    /// PDF build) sees the whole catalogue, which is what a catalogue check wants.
+    /// </summary>
+    private static bool FeatureAllows(HelpDocument doc, Func<string, bool>? featureOn)
+        => doc.Feature is null || featureOn is null || featureOn(doc.Feature);
 
     /// <summary>Renders a document's markdown to HTML.</summary>
     /// <remarks>
@@ -261,6 +271,7 @@ public sealed class HelpContentService
                         // open. A typo in front matter must never publish an internal document.
                         : HelpAudience.AppAdministrator,
             Order:    int.TryParse(fields.GetValueOrDefault("order"), out var o) ? o : 500,
-            Markdown: body);
+            Markdown: body,
+            Feature:  fields.TryGetValue("feature", out var feature) && !string.IsNullOrWhiteSpace(feature) ? feature : null);
     }
 }

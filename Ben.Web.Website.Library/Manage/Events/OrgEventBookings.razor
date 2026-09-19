@@ -1,0 +1,704 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/bookings"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Plans
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Who is coming, and what the venue still has to decide (item 235 phase 5).
+
+   WAITING ON YOU COMES FIRST, ALWAYS. A booking board that opens on a list of everybody is a
+   board somebody has to search before they can work; this one opens on the decisions nobody has
+   made yet, in the order they will stop being decidable. Everything else is below it.
+
+   THE COUNTDOWN IS THE POINT. On an event where guests pick their own places, a hold that lapses
+   is a decision the clock took instead of the host. So the queue says how long is left, ticking,
+   and offers another day rather than making somebody choose between confirming a party they have
+   not thought about and losing them. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Bookings — {n}" : "Bookings")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-3">
+        Bookings
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="board-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="board-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventBookingBoardRecord" Result="_board" Loading="_loading"
+                  LoadingText="Loading the bookings…" OnRetry="LoadAsync">
+        <ChildContent Context="board">
+
+            @* ── Waiting on you ──────────────────────────────────────────── *@
+            <div class="card mb-3 @(Queue(board).Count > 0 ? "border-warning" : null)" id="board-queue">
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <span>
+                        @(Queue(board).Count == 0
+                            ? "Nothing waiting on you"
+                            : $"Waiting on you ({Queue(board).Count})")
+                    </span>
+                    @if (board.LapsedHolds > 0)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                id="board-release-lapsed" disabled="@_busy"
+                                @onclick="ReleaseLapsedAsync">
+                            Give back @board.LapsedHolds lapsed
+                            @(board.LapsedHolds == 1 ? "hold" : "holds") now
+                        </button>
+                    }
+                </div>
+
+                @if (Queue(board).Count == 0)
+                {
+                    <div class="card-body text-secondary">
+                        Everybody who has asked has an answer. New requests appear here.
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var booking in Queue(board))
+                        {
+                            var party = booking;
+                            <li class="list-group-item board-row">
+                                <div class="board-row__who">
+                                    <div class="fw-semibold">
+                                        @party.LeadName
+                                        <span class="text-secondary fw-normal">
+                                            · @party.PartySize @(party.PartySize == 1 ? "person" : "people")
+                                        </span>
+                                    </div>
+                                    <div class="small text-secondary">@WhatTheyWant(party)</div>
+                                    @if (party.Note is { Length: > 0 } said)
+                                    {
+                                        <div class="small fst-italic">“@said”</div>
+                                    }
+                                    @if (Countdown(party) is { } left)
+                                    {
+                                        <div class="small @(left.Urgent ? "text-danger" : "text-warning")">
+                                            <BenIcon Name="clock" Class="me-1" />@left.Words
+                                        </div>
+                                    }
+                                    @if (party.CancellationRequestedUtc is not null)
+                                    {
+                                        <div class="small text-danger">
+                                            <BenIcon Name="alert-circle" Class="me-1" />
+                                            They have asked to get out of this one.
+                                            @if (party.CancellationReason is { Length: > 0 } why)
+                                            {
+                                                <text>“@why”</text>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="board-row__acts">
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            id="@($"confirm-{party.Id}")" disabled="@_busy"
+                                            @onclick="() => OpenSheet(party)">
+                                        Confirm…
+                                    </button>
+                                    @if (party.Status is HostedEventBookingStatus.Held)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                id="@($"extend-{party.Id}")" disabled="@_busy"
+                                                @onclick="() => ExtendAsync(party)">
+                                            Give them longer
+                                        </button>
+                                    }
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            id="@($"turn-down-{party.Id}")" disabled="@_busy"
+                                            @onclick="() => TurnDownAsync(party)">
+                                        Turn down
+                                    </button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            @* ── The house, one night at a time ──────────────────────────── *@
+            @if (board.Units.Count > 0 && Nights(board).Count > 0)
+            {
+                <div class="card mb-3" id="board-plan">
+                    <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <span class="fw-semibold">The house</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Which night">
+                            @foreach (var night in Nights(board))
+                            {
+                                var pick = night;
+                                <button type="button"
+                                        id="@($"night-{pick.Id}")"
+                                        class="btn @(pick.Id == ChosenNight(board) ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => _night = pick.Id">
+                                    @pick.Date.ToString("ddd MM/dd")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (_plan is { } plan)
+                        {
+                            <BenPlan Model="@plan" Mode="PlanMode.Read"
+                                     Occupancy="@OccupancyFor(board)"
+                                     AriaLabel="What is taken tonight" />
+                        }
+                        @if (DayPassesTonight(board) is { } passes)
+                        {
+                            <p class="small text-secondary mt-2 mb-0" id="board-day-passes">
+                                @passes
+                            </p>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* ── Everybody ───────────────────────────────────────────────── *@
+            <div class="card mb-3" id="board-everyone">
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <span>Everybody (@board.Bookings.Count)</span>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @* Everybody as a spreadsheet (phase 12): who, how to reach them, which nights,
+                           and whether they came. *@
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="board-export"
+                                disabled="@_exporting" @onclick="ExportAsync">
+                            <BenIcon Name="download" Class="me-1" />@(_exporting ? "Preparing…" : "Download as a spreadsheet")
+                        </button>
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="@($"/organizations/{OrgId}/events/{EventId}/dietary")">
+                            <BenIcon Name="clipboard" Class="me-1" />What the kitchen needs
+                        </a>
+
+                        @* Both of these were promised in the venue's own help chapter — "there is
+                           Invite by email: you type their address and we send them a link", and
+                           "make the booking against an account instead" — and neither had a
+                           control anywhere (2026-09-17 audit). The endpoints and the client
+                           methods both shipped; only the buttons were missing, so a host reading
+                           the help could not do what it told them to. *@
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                id="board-invite-guest" disabled="@_busy"
+                                @onclick="@(() => { _inviteError = null; _inviteSent = null; _inviteVisible = true; })">
+                            <BenIcon Name="mail" Class="me-1" />Invite by email
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                id="board-book-on-behalf" disabled="@_busy"
+                                @onclick="@(() => { _behalfError = null; _behalfVisible = true; })">
+                            <BenIcon Name="user-plus" Class="me-1" />Book somebody in
+                        </button>
+                    </div>
+                </div>
+
+                @if (board.Bookings.Count == 0)
+                {
+                    <div class="card-body text-secondary">
+                        Nobody has booked yet. When somebody does, they appear here.
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var booking in board.Bookings.OrderBy(b => b.LeadName))
+                        {
+                            var party = booking;
+                            <li class="list-group-item board-row">
+                                <div class="board-row__who">
+                                    <div class="fw-semibold">
+                                        @party.LeadName
+                                        <BookingStatusBadge Status="@party.Status" Class="ms-1" />
+                                        <BenBandChip Band="@party.Band" Class="ms-1" />
+                                    </div>
+                                    <div class="small text-secondary">@WhatTheyWant(party)</div>
+                                </div>
+                                <div class="board-row__acts">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            id="@($"open-{party.Id}")" disabled="@_busy"
+                                            @onclick="() => OpenSheet(party)">
+                                        Open
+                                    </button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            @* ── Writing to everybody (phase 17a) ──────────────────────────── *@
+            <EventAnnouncementCard OrgId="@OrgId" EventId="@EventId" Nights="@(_event?.Nights ?? [])" />
+        </ChildContent>
+    </BenItemState>
+</div>
+
+<BookingDecisionSheet @bind-Visible="_sheetOpen"
+                      OrgId="@OrgId" EventId="@EventId"
+                      Booking="@_chosen"
+                      Board="@_board.Item"
+                      Bands="@_bands"
+                      OnDecided="OnDecidedAsync" />
+
+@* ── Inviting somebody with no account, and booking somebody in (2026-09-17 audit) ──────
+   The help chapter describes both and neither existed. Kept as two dialogs because they are two
+   different promises: an invitation holds NOTHING until the person clicks, and a booking on
+   behalf holds a room now. Saying so on the screen is the part that stops a host believing they
+   have reserved something they have not — which is the same reason the invite RESPONSE carries no
+   booking shape. *@
+<BenModal @bind-Visible="@_inviteVisible" Title="Invite somebody by email">
+    <ChildContent>
+        <p class="text-secondary small">
+            We send them a link. Clicking it proves the address, makes them an account without a
+            password, and puts a <strong>day-pass request</strong> on this board for you to confirm.
+        </p>
+        <div class="alert alert-info py-2 small">
+            <strong>Nothing is held until they click.</strong> No room and no day pass is reserved
+            by the invitation. If you need a room held now, use <em>Book somebody in</em> instead.
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="invite-guest-email">Their email address</label>
+            <input id="invite-guest-email" type="email" class="form-control" maxlength="256"
+                   value="@_inviteEmail"
+                   @oninput="@(e => { _inviteEmail = e.Value?.ToString() ?? string.Empty; _inviteError = null; })" />
+        </div>
+        <div class="row">
+            <div class="col-sm-8 mb-3">
+                <label class="form-label fw-semibold" for="invite-guest-name">Their name <span class="text-secondary small">(optional)</span></label>
+                <input id="invite-guest-name" class="form-control" maxlength="200" value="@_inviteName"
+                       @oninput="@(e => _inviteName = e.Value?.ToString() ?? string.Empty)" />
+            </div>
+            <div class="col-sm-4 mb-3">
+                <label class="form-label fw-semibold" for="invite-guest-party">How many</label>
+                <input id="invite-guest-party" type="number" class="form-control" min="1" max="50" step="1"
+                       @bind="@_invitePartySize" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @if (_inviteError is not null)
+        {
+            <div class="alert alert-danger" data-testid="invite-guest-error">@_inviteError</div>
+        }
+        @if (_inviteSent is not null)
+        {
+            <div class="alert alert-success" data-testid="invite-guest-sent">@_inviteSent</div>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" disabled="@_busy"
+                    @onclick="@(() => _inviteVisible = false)">Close</button>
+            <button type="button" class="btn btn-primary" id="invite-guest-send"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_inviteEmail))"
+                    @onclick="SendGuestInviteAsync">
+                @(_busy ? "Sending…" : "Send the invitation")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+<BenModal @bind-Visible="@_behalfVisible" Title="Book somebody in">
+    <ChildContent>
+        <p class="text-secondary small">
+            For somebody on the phone. This holds a place now, against the email address you give —
+            an existing account if there is one, a new passwordless one if not.
+        </p>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="behalf-email">Their email address</label>
+            <input id="behalf-email" type="email" class="form-control" maxlength="256" value="@_behalfEmail"
+                   @oninput="@(e => { _behalfEmail = e.Value?.ToString() ?? string.Empty; _behalfError = null; })" />
+        </div>
+        <div class="row">
+            <div class="col-sm-8 mb-3">
+                <label class="form-label fw-semibold" for="behalf-name">Their name <span class="text-secondary small">(optional)</span></label>
+                <input id="behalf-name" class="form-control" maxlength="200" value="@_behalfName"
+                       @oninput="@(e => _behalfName = e.Value?.ToString() ?? string.Empty)" />
+            </div>
+            <div class="col-sm-4 mb-3">
+                <label class="form-label fw-semibold" for="behalf-party">How many</label>
+                <input id="behalf-party" type="number" class="form-control" min="1" max="50" step="1"
+                       @bind="@_behalfPartySize" @bind:event="oninput" />
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="behalf-note">Note <span class="text-secondary small">(optional)</span></label>
+            <input id="behalf-note" class="form-control" maxlength="500" value="@_behalfNote"
+                   @oninput="@(e => _behalfNote = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+
+        @* A day pass, deliberately. Sleeping over means choosing rooms night by night, which is
+           the picker on the event's own page — the help says the same thing, and a host who needs
+           that moves them into a room afterwards. *@
+        <div class="alert alert-info py-2 small">
+            This asks for a <strong>day pass</strong>. For somebody staying over, move them into a
+            room once they are on the board.
+        </div>
+
+        @if (_behalfError is not null)
+        {
+            <div class="alert alert-danger" data-testid="behalf-error">@_behalfError</div>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" disabled="@_busy"
+                    @onclick="@(() => _behalfVisible = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" id="behalf-create"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_behalfEmail))"
+                    @onclick="CreateBookingOnBehalfAsync">
+                @(_busy ? "Booking…" : "Put them on the board")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _exporting;
+
+    /// <summary>Hands the organizer the bookings as a spreadsheet file.</summary>
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        var file = await AdminClient.DownloadHostedEventBookingsCsvAsync(OrgId, EventId);
+        _exporting = false;
+        if (file is null) return;
+
+        await JS.InvokeVoidAsync("downloadFileFromBase64",
+            Convert.ToBase64String(file.Value.Data), "text/csv", file.Value.FileName);
+    }
+
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    // ── Inviting a guest, and booking one in (2026-09-17 audit) ──────────────
+    //
+    // The endpoints and the client methods both shipped; nothing called them, and the venue's help
+    // chapter described both in detail. So a host read "there is Invite by email" and had nowhere
+    // to type an address.
+
+    private bool _inviteVisible;
+    private string _inviteEmail = string.Empty;
+    private string _inviteName = string.Empty;
+    private int _invitePartySize = 1;
+    private string? _inviteError;
+    private string? _inviteSent;
+
+    private bool _behalfVisible;
+    private string _behalfEmail = string.Empty;
+    private string _behalfName = string.Empty;
+    private string _behalfNote = string.Empty;
+    private int _behalfPartySize = 1;
+    private string? _behalfError;
+
+    /// <summary>
+    /// Sends the invitation, and says so without pretending anything is held.
+    /// </summary>
+    /// <remarks>
+    /// The board is NOT reloaded on success, because nothing has changed on it: an invitation
+    /// reserves no room and no day pass until the person clicks. Reloading would suggest
+    /// otherwise, which is the exact thing the response record refuses to do by carrying no
+    /// booking.
+    /// </remarks>
+    private async Task SendGuestInviteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_inviteEmail)) return;
+
+        _busy = true;
+        _inviteError = null;
+        _inviteSent = null;
+        try
+        {
+            var (result, error) = await AdminClient.InviteEventGuestAsync(
+                OrgId, EventId,
+                new InviteHostedEventGuestRequest(
+                    _inviteEmail.Trim(),
+                    string.IsNullOrWhiteSpace(_inviteName) ? null : _inviteName.Trim(),
+                    Math.Clamp(_invitePartySize, 1, 50)));
+
+            if (result is null) { _inviteError = error ?? "The invitation could not be sent."; return; }
+
+            _inviteSent = $"Sent to {_inviteEmail.Trim()}. Nothing is held until they click it.";
+            _inviteEmail = string.Empty;
+            _inviteName = string.Empty;
+            _invitePartySize = 1;
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>Puts somebody on the board now, against an account made if it has to be.</summary>
+    private async Task CreateBookingOnBehalfAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_behalfEmail)) return;
+
+        _busy = true;
+        _behalfError = null;
+        try
+        {
+            var (result, error) = await AdminClient.CreateEventBookingOnBehalfAsync(
+                OrgId, EventId,
+                new CreateHostedEventBookingOnBehalfRequest(
+                    LeadAppUserId: null,
+                    LeadEmail: _behalfEmail.Trim(),
+                    LeadName: string.IsNullOrWhiteSpace(_behalfName) ? null : _behalfName.Trim(),
+                    Kind: HostedEventBookingKind.DayPass,
+                    PartySize: Math.Clamp(_behalfPartySize, 1, 50),
+                    Note: string.IsNullOrWhiteSpace(_behalfNote) ? null : _behalfNote.Trim()));
+
+            if (result is null) { _behalfError = error ?? "That booking could not be made."; return; }
+
+            _behalfVisible = false;
+            _behalfEmail = string.Empty;
+            _behalfName = string.Empty;
+            _behalfNote = string.Empty;
+            _behalfPartySize = 1;
+
+            // This one DID change the board.
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventBookingBoardRecord> _board;
+    private IReadOnlyList<HostedEventBandRecord> _bands = [];
+    private PlanModel? _plan;
+    private Guid? _night;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private bool _sheetOpen;
+    private HostedEventBookingRecord? _chosen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and the page then
+        // says the bookings could not be loaded rather than that the reader is not allowed them.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _board = await AdminClient.GetEventBookingBoardAsync(OrgId, EventId);
+
+        // The venue's bands, for giving one out by hand from the sheet. A refusal here hides the
+        // picker rather than failing the board: somebody who may decide bookings but not see the
+        // bands has nothing to choose from, and the rest of the board is still theirs.
+        var bands = await AdminClient.GetEventBandsAsync(OrgId, EventId);
+        _bands = bands.Item?.Bands ?? [];
+
+        if (_board.Item is { } board)
+        {
+            // The plan drawn from the board's own units, so what a host sees here and what the
+            // designer drew can never be two different arrangements.
+            _plan = PlanModel.From(
+                board.Units.Any(u => u.PlaceRoomId is not null)
+                    ? HostedEventLayoutKind.Rooms
+                    : HostedEventLayoutKind.Seats,
+                board.Units);
+            if (_night is null && Nights(board).Count > 0) _night = Nights(board)[0].Id;
+        }
+
+        _loading = false;
+    }
+
+    // ── the queue ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everything nobody has answered, soonest deadline first.
+    /// </summary>
+    /// <remarks>
+    /// <para>Holds before requests, and inside those by when they run out, because a hold has a
+    /// clock on it and a request does not. A queue in arrival order would bury the one decision
+    /// that is about to be taken out of the host's hands.</para>
+    ///
+    /// <para>A confirmed party asking to get out is in here too: it is a decision waiting on
+    /// somebody, which is what this list is.</para>
+    /// </remarks>
+    private static IReadOnlyList<HostedEventBookingRecord> Queue(HostedEventBookingBoardRecord board)
+        => [.. board.Bookings
+            .Where(b => b.Status is HostedEventBookingStatus.Requested
+                                 or HostedEventBookingStatus.Held
+                     || b.CancellationRequestedUtc is not null
+                        && b.Status == HostedEventBookingStatus.Confirmed)
+            .OrderBy(b => b.HoldExpiresUtc ?? DateTime.MaxValue)
+            .ThenBy(b => b.DateCreated)];
+
+    /// <summary>How long is left on a hold, in words, and whether it is nearly gone.</summary>
+    /// <remarks>
+    /// Rendered from the server's instant rather than counted down in JavaScript. A number that
+    /// ticks needs a timer per row and a re-render per second on a Blazor Server circuit; a host
+    /// refreshing the page is the ordinary thing here, and "in about an hour" is as actionable as
+    /// "59:47".
+    /// </remarks>
+    private static (string Words, bool Urgent)? Countdown(HostedEventBookingRecord booking)
+    {
+        if (booking.Status != HostedEventBookingStatus.Held
+            || booking.HoldExpiresUtc is not { } at) return null;
+
+        var left = at - DateTime.UtcNow;
+
+        if (left <= TimeSpan.Zero)
+            return ("Their hold has run out — the places go back on the next sweep.", true);
+        if (left < TimeSpan.FromHours(1))
+            return ($"Their hold runs out in {left.TotalMinutes:0} minutes.", true);
+        if (left < TimeSpan.FromDays(1))
+            return ($"Their hold runs out in about {left.TotalHours:0} hours.", false);
+
+        return ($"Their hold runs out in {left.TotalDays:0} days.", false);
+    }
+
+    private static string WhatTheyWant(HostedEventBookingRecord booking)
+        => booking.Kind == HostedEventBookingKind.DayPass
+            ? $"For the day · {Where(booking)}"
+            : Where(booking);
+
+    private static string Where(HostedEventBookingRecord booking)
+        => booking.Nights.Count == 0
+            ? "No dates chosen"
+            : string.Join(", ", booking.Nights.Select(
+                n => $"{n.Date:ddd MM/dd} · {n.UnitName}"));
+
+    // ── the house ────────────────────────────────────────────────────────────
+
+    private static IReadOnlyList<(Guid Id, DateTime Date)> Nights(HostedEventBookingBoardRecord board)
+        => [.. board.UnitNights
+            .Select(n => (Id: n.HostedEventNightId, n.Date))
+            .Distinct()
+            .OrderBy(n => n.Date)];
+
+    private Guid? ChosenNight(HostedEventBookingBoardRecord board)
+        => _night ?? (Nights(board).Count > 0 ? Nights(board)[0].Id : null);
+
+    /// <summary>What every square is on the night being shown.</summary>
+    /// <remarks>
+    /// Held is drawn hatched and confirmed solid, because "somebody is deciding about this" and
+    /// "this is settled" are different facts to a host looking at their own house.
+    /// </remarks>
+    private IReadOnlyDictionary<Guid, HostedEventPlanCellState> OccupancyFor(HostedEventBookingBoardRecord board)
+    {
+        var tonight = ChosenNight(board);
+        var byUnit = new Dictionary<Guid, HostedEventPlanCellState>();
+        if (_plan is not { } plan || tonight is not { } nightId) return byUnit;
+
+        foreach (var cell in board.UnitNights.Where(n => n.HostedEventNightId == nightId))
+        {
+            var unit = plan.Units.FirstOrDefault(u => u.Id == cell.HostedEventLayoutUnitId);
+            if (unit is null) continue;
+
+            byUnit[unit.Key] = cell switch
+            {
+                { NotOffered: { Length: > 0 } } => HostedEventPlanCellState.Blocked,
+                { Pending: true } => HostedEventPlanCellState.Pending,
+                { Taken: > 0 } => HostedEventPlanCellState.Taken,
+                _ => HostedEventPlanCellState.Free,
+            };
+        }
+
+        return byUnit;
+    }
+
+    private string? DayPassesTonight(HostedEventBookingBoardRecord board)
+    {
+        if (board.DayPassNights is not { Count: > 0 } nights) return null;
+        if (ChosenNight(board) is not { } tonight) return null;
+
+        var here = nights.FirstOrDefault(n => n.HostedEventNightId == tonight);
+        if (here is null) return null;
+
+        var asked = here.Asked > 0 ? $", and {here.Asked} more have asked" : "";
+        return $"{here.Taken} coming for the day{asked}.";
+    }
+
+    // ── acting on one party ──────────────────────────────────────────────────
+
+    private void OpenSheet(HostedEventBookingRecord booking)
+    {
+        _chosen = booking;
+        _sheetOpen = true;
+    }
+
+    private async Task OnDecidedAsync(string what)
+    {
+        _sheetOpen = false;
+        _note = what;
+        _error = null;
+        await LoadAsync();
+    }
+
+    private async Task ExtendAsync(HostedEventBookingRecord booking)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.ExtendEventHoldAsync(OrgId, EventId, booking.Id);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be extended just now."; return; }
+
+        _note = $"{saved.LeadName} has longer to hear from you.";
+        await LoadAsync();
+    }
+
+    private async Task TurnDownAsync(HostedEventBookingRecord booking)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.TurnDownEventBookingAsync(
+            OrgId, EventId, booking.Id, decisionNote: null);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be turned down just now."; return; }
+
+        _note = $"{saved.LeadName} has been told, and their places are back.";
+        await LoadAsync();
+    }
+
+    private async Task ReleaseLapsedAsync()
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (board, error) = await AdminClient.ReleaseLapsedHoldsAsync(OrgId, EventId);
+        _busy = false;
+
+        if (board is null) { _error = error ?? "Those couldn't be given back just now."; return; }
+
+        _note = "The lapsed holds are back, and the guests have been told.";
+        await LoadAsync();
+    }
+}

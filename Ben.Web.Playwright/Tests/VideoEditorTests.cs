@@ -15,6 +15,18 @@ public class VideoEditorTests : BenTestBase
 {
     private static string EditorUrl => $"{BaseUrl}/video-editor";
 
+    /// <summary>
+    /// The editor ships behind a switch, and this suite runs against deployments where it is off.
+    /// </summary>
+    /// <remarks>
+    /// Every test here asserts the editor's SHELL renders. With the feature off the route does not
+    /// exist at all, so each one fails on a page that is behaving exactly as configured — six
+    /// failures that say nothing and hide the ones that would.
+    /// </remarks>
+    [SetUp]
+    public async Task SkipWhenTheEditorIsSwitchedOff()
+        => await SkipIfFeatureOffAsync("features.video-editor");
+
     // ── Auth guard ────────────────────────────────────────────────────────────
 
     [Test]
@@ -64,14 +76,28 @@ public class VideoEditorTests : BenTestBase
         await Expect(editorDiv).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
+    /// <summary>
+    /// <c>/video-editor</c> takes you to My Videos, and keeps working as an address.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert the page title was "Video Editor". The 2026-09-05 audit (site-9) retired
+    /// that page: it mounted the editor with no height-constrained ancestor, had no header, no
+    /// project list and no link from anywhere on the site, and My Videos does the same job
+    /// properly. What is left is a redirect, kept because the address is in the help, in people's
+    /// bookmarks and in this suite — so the redirect, not the title, is the contract worth holding.
+    /// </remarks>
     [Test]
-    public async Task VideoEditorPage_Authenticated_PageTitleIsVideoEditor()
+    public async Task VideoEditorPage_Authenticated_TakesYouToMyVideos()
     {
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync($"{BaseUrl}/video-editor");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
 
-        await Expect(Page).ToHaveTitleAsync(new System.Text.RegularExpressions.Regex("Video Editor", System.Text.RegularExpressions.RegexOptions.IgnoreCase), new() { Timeout = 10_000 });
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/my-videos"),
+            new() { Timeout = 15_000 });
+        await Expect(Page).ToHaveTitleAsync(
+            new System.Text.RegularExpressions.Regex("My Videos", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+            new() { Timeout = 10_000 });
     }
 
     [Test]
@@ -95,9 +121,10 @@ public class VideoEditorTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/video-editor");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // The Toolbar component renders inside .bv-editor; look for its root element.
-        var toolbar = Page.Locator(".bv-editor .bv-toolbar, .bv-editor [class*='toolbar']");
-        await Expect(toolbar.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        // The exact class the Toolbar component renders. The [class*='toolbar'] fallback that
+        // used to sit beside it matched Telerik's own k-toolbar too, so this passed whether or not
+        // the editor's toolbar was there at all (2026-09-05 audit, F19).
+        await Expect(Page.Locator(".bv-editor .bv-toolbar")).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     [Test]
@@ -107,8 +134,7 @@ public class VideoEditorTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/video-editor");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var timeline = Page.Locator(".bv-editor .bv-timeline, .bv-editor [class*='timeline']");
-        await Expect(timeline.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.Locator(".bv-editor .bv-timeline")).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     [Test]
@@ -118,8 +144,7 @@ public class VideoEditorTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/video-editor");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var preview = Page.Locator(".bv-editor .bv-preview, .bv-editor video, .bv-editor [class*='preview']");
-        await Expect(preview.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.Locator(".bv-editor .bv-preview")).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     // ── ffmpeg loading state ──────────────────────────────────────────────────
@@ -151,14 +176,16 @@ public class VideoEditorTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/video-editor");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // The editor renders an ffmpeg state indicator in the toolbar.
-        // We verify the element exists, not that ffmpeg has finished loading.
-        var ffmpegStatus = Page.Locator("[class*='ffmpeg'], [class*='bv-ffmpeg']");
-        // Non-fatal: ffmpeg element may not exist if still mounting
-        if (await ffmpegStatus.CountAsync() > 0)
-            await Expect(ffmpegStatus.First).ToBeAttachedAsync(new() { Timeout = 5_000 });
-        else
-            Assert.Pass("ffmpeg status element not present yet — editor still initialising.");
+        // The engine's state chip, by the class it actually has: .bv-toolbar__status with a
+        // .bv-status--<state> modifier (Toolbar.razor, FfmpegStatusPresentation). The old locator
+        // looked for a class containing "ffmpeg", which no element in the editor has, and then
+        // Assert.Pass()ed when it found nothing — so the test could never fail (2026-09-05 audit,
+        // F19). Before Initialize is pressed the chip reads "Not loaded", which is the state this
+        // asserts: present and readable, not that the engine has started.
+        var status = Page.Locator(".bv-editor .bv-toolbar__status");
+        await Expect(status).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        Assert.That(await status.InnerTextAsync(), Is.Not.Empty,
+            "The engine status chip is rendered but says nothing.");
     }
 
     // ── SuperAdmin access ─────────────────────────────────────────────────────

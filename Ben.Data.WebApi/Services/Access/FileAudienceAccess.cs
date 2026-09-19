@@ -94,6 +94,24 @@ public static class FileAudienceAccess
     }
 
     /// <summary>
+    /// Whether <paramref name="userId"/> may change or delete <paramref name="file"/>: its owning
+    /// person, or — once it has been handed to a group (item 180 Phase B) — an Owner or
+    /// Administrator of that group, or SuperAdmin. The former owner is deliberately NOT in this
+    /// list: "the person stops being the owner" means exactly that.
+    /// </summary>
+    public static async Task<bool> CanManageFileAsync(
+        BenDataContext db, UploadFile file, Guid userId, bool isSuperAdmin, CancellationToken ct)
+    {
+        if (isSuperAdmin) return true;
+        if (file.AppUserId is { } owner) return owner == userId;
+        if (file.OwnerOrganizationId is { } org)
+            return await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == org && m.AppUserId == userId && m.IsActive
+                            && m.Role <= OrganizationMemberRole.Administrator, ct);
+        return false;
+    }
+
+    /// <summary>
     /// True if <paramref name="userId"/> can see <paramref name="uploadFileId"/> at all — the same
     /// visibility union <see cref="Ben.Data.WebApi.Controllers.Entities.MediaLibraryController.GetFiles"/> computes across the whole
     /// library, scoped down to one file. Broader than <see cref="GetMembershipAsync"/>: also covers
@@ -109,6 +127,12 @@ public static class FileAudienceAccess
 
         if (file.AppUserId == userId) return true;
         if (file.IsPublic) return true;
+
+        // A file handed to a group (item 180 Phase B) is the group's: any active member sees it,
+        // the same rule as the group's Files tab.
+        if (file.OwnerOrganizationId is { } ownerOrg && await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == ownerOrg && m.AppUserId == userId && m.IsActive, ct))
+            return true;
 
         if (await db.UploadFileShares.AsNoTracking().AnyAsync(s =>
                 s.UploadFileId == uploadFileId && s.IsActive &&
@@ -126,6 +150,27 @@ public static class FileAudienceAccess
             .Where(m => m.AppUserId == userId && m.IsActive)
             .Select(m => m.OrganizationId).ToListAsync(ct);
         if (orgIds.Count == 0) return false;
+
+        // Request-review materials (Ben, 2026-08-26): everything a client attached to their
+        // request "should be available for review for any group being offered to take on the
+        // investigation" — the photos ARE the evidence a group votes on. So a file attached to a
+        // ClientRequest is viewable by active members of any org holding a live application for
+        // it. Live means not Rejected/Cancelled: a group that declined, or lost the race, loses
+        // the door along with the application. Checked BEFORE the case-ownership branch below,
+        // whose caseIds short-circuit returns false for a group that owns no cases yet — which
+        // is precisely the group deciding whether to take its first one; the first draft of this
+        // clause sat after that return and the flow test caught it never being reached.
+        // Membership rather than a grant, deliberately: this query is the whole gate for raw
+        // bytes, and grant resolution (direct + role + tier) cannot be composed into it without
+        // duplicating OrganizationSecurityService; the review PAGE gates on Case.Read, and this
+        // clause only backs the previews on it.
+        if (await db.ClientRequestFiles.AsNoTracking()
+                .AnyAsync(rf => rf.UploadFileId == uploadFileId &&
+                    rf.ClientRequest.OrganizationApplications.Any(a =>
+                        a.Status != ClientOrgRequestStatus.Rejected &&
+                        a.Status != ClientOrgRequestStatus.Cancelled &&
+                        orgIds.Contains(a.OrganizationId)), ct))
+            return true;
 
         var caseIds = await db.Cases.AsNoTracking()
             .Where(c => orgIds.Contains(c.OrganizationId))
@@ -172,6 +217,22 @@ public static class FileAudienceAccess
         return await db.OrganizationUserMemberships.AsNoTracking()
             .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
     }
+
+    /// <summary>
+    /// True if <paramref name="userId"/>'s active membership of <paramref name="organizationId"/> is a
+    /// <see cref="OrganizationMemberRole.Viewer"/> one.
+    /// </summary>
+    /// <remarks>
+    /// A Viewer reads a group's work and changes none of it (Ben, 2026-09-14: "make viewers read-only"). Writes open to
+    /// every member — calendar events, investigations and their attendance and findings, group messages, timeline entries,
+    /// request statuses and votes, place contacts — ask this after their own gate. Grant-checked writes are covered in
+    /// <c>OrganizationSecurityService.HasAccessAsync</c>. Callers do their own SuperAdmin bypass first.
+    /// </remarks>
+    public static Task<bool> IsOrgViewerAsync(
+        BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
+        => db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive
+                        && m.Role == OrganizationMemberRole.Viewer, ct);
 }
 
 /// <summary>Snapshot of which audiences a user currently belongs to for one file.</summary>

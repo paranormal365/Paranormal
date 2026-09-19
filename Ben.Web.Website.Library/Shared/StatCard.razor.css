@@ -1,0 +1,26 @@
+/* A linked card has to look clickable without becoming loud — these sit four in a row above the
+   charts, so a heavy hover would turn the top of the dashboard into a row of buttons. Border and
+   a small lift only, and the number itself picks up the link colour so the affordance reads even
+   for someone who never hovers. */
+
+.stat-link {
+    display: block;
+    transition: border-color .12s ease, transform .12s ease;
+}
+
+.stat-link:hover,
+.stat-link:focus-visible {
+    border-color: var(--bs-primary);
+    transform: translateY(-1px);
+}
+
+/* Keyboard users get the browser's own ring rather than a hand-rolled one. */
+.stat-link:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-link { transition: none; }
+    .stat-link:hover, .stat-link:focus-visible { transform: none; }
+}

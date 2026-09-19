@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Redaction;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -21,13 +22,120 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class CaseController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public CaseController(IDbContextFactory<BenDataContext> db, IMapper mapper)
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    private readonly Services.ClientStatusMailer _clientMail;
+
+    public CaseController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.RequestReviewNotifier reviewNotifier,
+        Services.ClientStatusMailer clientMail,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
+        _sanitizer = sanitizer;
+        _clientMail = clientMail;
         _db = db;
         _mapper = mapper;
+        _limits = limits;
+        _security = security;
+        _reviewNotifier = reviewNotifier;
+    }
+
+    private readonly Services.RequestReviewNotifier _reviewNotifier;
+
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    /// <summary>
+    /// A case description as it is stored: sanitized HTML, or null when the editor held nothing.
+    /// </summary>
+    /// <remarks>
+    /// The description has always been rendered as markup — on the case, and on the public case page once
+    /// published — but it was stored exactly as sent. Beta feedback (2026-09-14) gave it a formatting editor on
+    /// Edit Case and New Case, which made the gap plain: nothing between a request body and a MarkupString on a
+    /// public page. An emptied editor still sends <c>&lt;p&gt;&lt;/p&gt;</c>, which is no description at all.
+    /// </remarks>
+    public static string? CleanDescription(string? html, Services.ICmsMarkupSanitizer sanitizer)
+    {
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(html)) return null;
+        var clean = sanitizer.SanitizeHtml(html).Trim();
+        return Ben.Data.Common.Text.PlainTextHtml.HasText(clean) ? clean : null;
+    }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
+    /// <summary>
+    /// Admin-or-role, the Phase B shape (item 156): the historical admin gate stays exactly as
+    /// it was, and a custom-role grant on the named table now ALSO opens the door. Purely
+    /// additive — nobody loses anything, and a Case Manager Role or Client Manager Role becomes
+    /// real. Owner/Administrator/SuperAdmin still pass through HasAccessAsync's own bypass, but
+    /// the explicit admin check is kept in front so this reads as what it is: the old rule OR
+    /// the new one.
+    /// </summary>
+    private async Task<bool> IsAdminOrHasAsync(
+        Guid orgId, OrganizationSecurityTable table, OrganizationSecurityAction action, CancellationToken ct)
+        => await IsOrgAdminOrSuperAsync(orgId, ct)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId, table, action, ct);
+
+    /// <summary>
+    /// The subscription cap on concurrent work. Closed and later statuses do not count —
+    /// capping total history would let a group's own past lock them out, and asking somebody
+    /// to delete last year's investigation to start this year's is data loss, not a plan prompt.
+    /// </summary>
+    private async Task<string?> WhyNotAnotherOpenCaseAsync(
+        BenDataContext db, Guid orgId, CancellationToken ct)
+    {
+        var open = await db.Cases.CountAsync(c =>
+            c.OrganizationId == orgId && c.Status <= CaseStatus.Summarized, ct);
+
+        if (await _limits.WhyNotOneMoreAsync(
+                orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenCases, open, ct) is { } ceiling)
+        {
+            return ceiling;
+        }
+
+        return await WhyNotAnotherCaseThisPeriodAsync(db, orgId, ct);
+    }
+
+    /// <summary>
+    /// The subscription ALLOWANCE on new work — cases started since the billing period began.
+    /// </summary>
+    /// <remarks>
+    /// <para>A different question from the cap above, and both apply. The ceiling asks how many
+    /// are open right now, so closing one makes room. This asks how many were STARTED this
+    /// period, so closing one makes no room until the period turns over — which is the whole
+    /// point on a plan that sells a rate of work rather than a stock of it.</para>
+    ///
+    /// <para>Counted on <c>DateCreated</c> rather than <c>DateCaseOpened</c>: the latter is a
+    /// fact about the haunting somebody can type, and an allowance keyed to a date the person
+    /// being metered chooses is not a limit.</para>
+    ///
+    /// <para>No billing period means nothing meters it — the guard's own fail-open rule, and the
+    /// reason a group with no subscription never meets this.</para>
+    /// </remarks>
+    private async Task<string?> WhyNotAnotherCaseThisPeriodAsync(
+        BenDataContext db, Guid orgId, CancellationToken ct)
+    {
+        if (await _limits.AllowanceWindowAsync(orgId, ct) is not { } window) return null;
+
+        var startedThisPeriod = await db.Cases.CountAsync(c =>
+            c.OrganizationId == orgId
+            && c.DateCreated >= window.Start && c.DateCreated < window.End, ct);
+
+        return await _limits.WhyNotOneMoreAsync(
+            orgId, Ben.Data.Common.Enums.SubscriptionLimit.CasesPerPeriod, startedThisPeriod, ct);
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────
@@ -38,6 +146,7 @@ public sealed class CaseController : BenControllerBase
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var cases = await db.Cases.AsNoTracking()
+            .Include(c => c.CaseManagerAppUser)   // the record's manager name maps from this navigation (as GetById)
             .Where(c => c.OrganizationId == orgId)
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
@@ -51,6 +160,10 @@ public sealed class CaseController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.CaseManagerAppUser)
+            // The place's name, for the banner that sends somebody to its page. Same reasoning as
+            // the manager navigation above: the record maps a name off it, so a query without it
+            // answers null and the page draws a blank where a name belongs (W-A9).
+            .Include(x => x.Place)
             .FirstOrDefaultAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct);
         return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
     }
@@ -68,6 +181,51 @@ public sealed class CaseController : BenControllerBase
     /// <para>404 when the case has no originating request, which is normal: cases can be raised
     /// internally rather than from a client submission.</para>
     /// </remarks>
+    /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The answer to a question nobody could answer.</b> <c>FeedPostConsent</c> is
+    /// append-only and its entity doc states its purpose plainly: "When a client asks 'who put
+    /// this footage up', this row is the answer." The 2026-09-17 audit found the whole table
+    /// write-only — the only other references in the tree are two purges. So the record existed,
+    /// was correct, outlived the post on purpose, and could not be read by anybody.</para>
+    ///
+    /// <para><b>Answered to the group, not to the client.</b> A client asks the group and the group
+    /// answers; naming which member published it directly to a client is a disclosure decision
+    /// nobody has taken, and this endpoint deliberately does not take it either. Case.Read is the
+    /// gate, the same as the client request beside it.</para>
+    ///
+    /// <para>The consent survives the post being hidden or deleted, so <c>PostExists</c> is part
+    /// of the answer rather than a filter: "somebody agreed and then took it down" and "nobody
+    /// ever agreed" are different facts.</para>
+    /// </remarks>
+    [HttpGet("{caseId:guid}/feed-consents")]
+    public async Task<ActionResult<IReadOnlyList<CaseFeedConsentRecord>>> GetFeedConsents(
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Both ids, for the same reason the client request above matches both.
+        if (!await db.Cases.AsNoTracking().AnyAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct))
+            return NotFound("Case not found.");
+
+        return Ok(await db.FeedPostConsents.AsNoTracking()
+            .Where(c => c.CaseId == caseId)
+            .OrderByDescending(c => c.AgreedUtc)
+            .Select(c => new CaseFeedConsentRecord(
+                c.Id,
+                c.AgreedByAppUserId,
+                c.AgreedByAppUser.DisplayName ?? "Somebody",
+                c.AgreedUtc,
+                c.WordingVersion,
+                c.OrgMessageId,
+                c.OrgMessageId != null))
+            .ToListAsync(ct));
+    }
+
     [HttpGet("{caseId:guid}/client-request")]
     public async Task<ActionResult<CaseClientRequestRecord>> GetClientRequest(
         Guid orgId, Guid caseId, CancellationToken ct)
@@ -115,23 +273,126 @@ public sealed class CaseController : BenControllerBase
         return request is null ? NotFound("The originating request no longer exists.") : Ok(request);
     }
 
+    /// <summary>
+    /// Would this title leak the client's identity onto the public case page? (item 176)
+    /// </summary>
+    /// <remarks>
+    /// <para>Advisory only — the UI warns and lets the org publish anyway, because a surname is
+    /// also a place name and only they know which their title means. Server-side because the
+    /// client's real name deliberately never reaches the org-facing records
+    /// (<see cref="CaseClientRequestRecord"/> has no name fields); the check runs where the name
+    /// lives and returns only the sentence. Same gate as <see cref="GetClientRequest"/> — a
+    /// member who may read the case may already read the client's request.</para>
+    /// <para>Empty list when the title is clean or the case has no client — both mean
+    /// "nothing to warn about".</para>
+    /// </remarks>
+    [HttpGet("{caseId:guid}/publish-leak-check")]
+    public async Task<ActionResult<IReadOnlyList<string>>> PublishLeakCheck(
+        Guid orgId, Guid caseId, [FromQuery] string? title, [FromQuery] string? pseudonym, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var caseRow = await db.Cases.AsNoTracking()
+            .Where(x => x.Id == caseId && x.OrganizationId == orgId)
+            .Select(x => new { x.ClientRequestId, x.StreetAddress1 })
+            .FirstOrDefaultAsync(ct);
+        if (caseRow is null) return NotFound("Case not found.");
+
+        string?[] names = [];
+        if (caseRow.ClientRequestId is { } requestId)
+        {
+            var client = await db.ClientRequests.AsNoTracking()
+                .Where(r => r.Id == requestId)
+                .Select(r => new { r.AppUser.FirstName, r.AppUser.LastName, r.AppUser.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            if (client is not null) names = [client.FirstName, client.LastName, client.DisplayName];
+        }
+
+        return Ok(PublicTitleLeakCheck.Check(title, pseudonym, names, caseRow.StreetAddress1));
+    }
+
+    /// <summary>
+    /// Applies this case's privacy protections after the fact (item 182) — for a group that took
+    /// the case on a plan without them and has since upgraded.
+    /// </summary>
+    /// <remarks>
+    /// Gated on Update, not Read: it changes the case. The response is a report rather than a
+    /// bare 204, because the useful part is what it could NOT do — prose naming the client, which
+    /// it deliberately finds instead of rewriting, and the fact that publication cannot be undone.
+    /// </remarks>
+    [HttpPost("{caseId:guid}/apply-privacy")]
+    public async Task<ActionResult<CasePrivacyRetrofitResult>> ApplyPrivacy(
+        [FromServices] CasePrivacyRetrofit retrofit,
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var result = await retrofit.ApplyAsync(db, orgId, caseId, GetCurrentUserId(), ct);
+        return result is null ? NotFound("Case not found.") : Ok(result);
+    }
+
     // ── Create (internally proposed) ──────────────────────────────────────────
 
     [HttpPost]
     public async Task<ActionResult<CaseRecord>> Create(
         Guid orgId, [FromBody] CreateCaseRequest request, CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Create, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        // A personal organization used to be refused a case here outright ("a solo plan does not
+        // take client work"). That gate was keyed on IsPersonal — a fact about the record — when
+        // what it meant to ask was what the account pays. Ben settled it on 2026-09-17: paid work
+        // may be private, unpaid work at a public place is public. So a solo investigator opens
+        // cases like anybody else, and the plan decides how public they are, below.
+
+        if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
+
+        // Ben, 2026-09-17: "I proposed a case, but I should be able to accept it as it was created
+        // by me... so, unless I say it is up to a group decision, it should be accepted. In this
+        // case, it is a new public location."
+        //
+        // Every case anyone opened here started Proposed and stayed there until somebody edited it,
+        // which is the right shape for work a client asked for and the wrong one for a place the
+        // group picked itself: it was proposed to nobody, and the person who wrote it down was the
+        // person entitled to accept it. So it is accepted on the way in, unless the writer says the
+        // group should decide, or cannot accept a case at all — accepting is a status change, and
+        // a status change is Update.
+        var mayAccept = await IsAdminOrHasAsync(
+            orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct);
+        var status = request.PutToTheGroup || !mayAccept ? CaseStatus.Proposed : CaseStatus.Accepted;
+
+        // Ben, 2026-09-17: "Everything a solo person submits is going to be public by default…
+        // if paid, they can make their work private."
+        //
+        // WHAT THIS FLAG DOES AND DOES NOT DO. Setting it here records the intention, and nothing
+        // else: every reader of a public case pairs it with a status of Public or Haunted, so a
+        // case opened today is no more readable by a stranger than it was before. Publication stays
+        // the deliberate act it has always been — the status change — which is the same line the
+        // field archive draws, and for the same reason: publishing as a side effect would put work
+        // nobody has looked at in front of everybody. What the flag buys is that the box arrives
+        // ticked and, per Update below, cannot be unticked on an account that pays nothing.
+        //
+        // Two readers did NOT pair it with the status, and both were fixed alongside this rather
+        // than left for the default to walk into: the contribute door on field sessions (which
+        // would have let anyone upload to a brand-new case's visits) and the count on a group's
+        // public page (which would have overstated it).
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
 
         var entity = new Case
         {
             Id                 = Guid.NewGuid(),
             OrganizationId     = orgId,
-            Status             = CaseStatus.Proposed,
+            Status             = status,
+            // Decided below, once the place is known: a case at somebody's home is never swept up
+            // by the free lane's rule, and the place is what says whether it is one.
+            IsPublic           = false,
             Title              = request.Title.Trim(),
-            Description        = request.Description?.Trim(),
+            Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
             StreetAddress2     = request.StreetAddress2?.Trim(),
             City               = request.City.Trim(),
@@ -148,6 +409,23 @@ public sealed class CaseController : BenControllerBase
         entity.CaseYear     = yr;
         entity.OrgCaseNumber = num;
         db.Cases.Add(entity);
+
+        // ── The shared place this case is about (2026-09-17) ──────────────────
+        // Before the publication decision, because the decision depends on it. Binding a residence
+        // here is also what designates the case private-lane work, so this may refuse the whole
+        // create — which is right: the alternative is a case that exists at a home the group's plan
+        // does not cover.
+        var placement = await Services.Places.CasePlacement.ApplyAsync(
+            db, entity, request.PlaceId, request.NewPlace, userId, ct);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        // Public from the start on an account that pays nothing, and only at a public location.
+        // A residence is the paid lane whatever the plan says, and a case with no place named has
+        // nothing to say it is public — so it is not.
+        entity.IsPublic = publicByDefault
+                       && !entity.IsPrivateEngagement
+                       && placement.Place?.Kind == PlaceKind.PublicLocation;
+
         await db.SaveChangesAsync(ct);
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = entity.Id },
             _mapper.Map<CaseRecord>(entity));
@@ -165,7 +443,7 @@ public sealed class CaseController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var apps = await db.ClientRequestOrganizations
             .AsNoTracking()
-            .Include(a => a.ClientRequest)
+            .Include(a => a.ClientRequest).ThenInclude(r => r.AppUser)
             .Where(a => a.OrganizationId == orgId &&
                 (a.Status == ClientOrgRequestStatus.Pending ||
                  a.Status == ClientOrgRequestStatus.Viewed ||
@@ -185,6 +463,7 @@ public sealed class CaseController : BenControllerBase
             Latitude        = a.ClientRequest.Latitude,
             Longitude       = a.ClientRequest.Longitude,
             Status          = a.Status,
+            ClientEmailConfirmed = a.ClientRequest.AppUser?.EmailConfirmed ?? true,
         });
         return Ok(records);
     }
@@ -195,6 +474,7 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid clientRequestId, [FromBody] UpdateRequestStatusRequest request, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         if (request.Status is not ClientOrgRequestStatus.Viewed and not ClientOrgRequestStatus.UnderReview)
             return BadRequest("Only Viewed and UnderReview statuses may be set via this endpoint.");
 
@@ -204,10 +484,20 @@ public sealed class CaseController : BenControllerBase
         if (application is null) return NotFound();
 
         // Only advance the status — never move backward
+        var becameUnderReview = request.Status == ClientOrgRequestStatus.UnderReview
+                             && application.Status != ClientOrgRequestStatus.UnderReview
+                             && (int)request.Status > (int)application.Status;
         if ((int)request.Status > (int)application.Status)
             application.Status = request.Status;
 
         await db.SaveChangesAsync(ct);
+
+        // Under Review is the group deciding together, so the moment it is chosen the eligible
+        // members are messaged with a link to the review page — everything the client submitted,
+        // and the ballot. Only on the TRANSITION: re-saving the same status must not re-spam.
+        if (becameUnderReview)
+            await _reviewNotifier.SendReviewOpenedAsync(orgId, clientRequestId, GetCurrentUserId(), ct);
+
         return NoContent();
     }
 
@@ -215,7 +505,7 @@ public sealed class CaseController : BenControllerBase
     [HttpPost("decline-request/{clientRequestId:guid}")]
     public async Task<ActionResult> DeclineClientRequest(Guid orgId, Guid clientRequestId, CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.ClientRequest, OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var application = await db.ClientRequestOrganizations
@@ -258,9 +548,18 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid clientRequestId, [FromBody] AcceptClientRequestAsCaseRequest request,
         CancellationToken ct)
     {
-        if (!await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.ClientRequest, OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        // The cap applies to accepting a request too — it opens a case just as surely as creating
+        // one, and a cap only on the other door would simply move the traffic.
+        if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
+
+        // Item 184: a client's case is private-lane work by definition — somebody's home, with
+        // the privacy machinery attached — and taking it on is what the paid plan governs.
+        if (await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPrivate)
+            return BadRequest(noPrivate);
 
         // Validate the org application exists and is pending
         var application = await db.ClientRequestOrganizations
@@ -272,6 +571,15 @@ public sealed class CaseController : BenControllerBase
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
 
+        // Ben, 2026-08-26: any group who accepts first wins. This check answers the common case
+        // politely; the unique filtered index UX_ClientRequestOrganizations_OneAcceptedPerRequest
+        // is the referee for the genuine race, where two accepts land between each other's check
+        // and save — the second save fails on the index rather than creating a second case.
+        if (await db.ClientRequestOrganizations.AsNoTracking()
+                .AnyAsync(a => a.ClientRequestId == clientRequestId
+                            && a.Status == ClientOrgRequestStatus.Accepted, ct))
+            return BadRequest("Another group has already accepted this request.");
+
         var clientReq = application.ClientRequest;
         var now       = DateTime.UtcNow;
 
@@ -280,24 +588,31 @@ public sealed class CaseController : BenControllerBase
         application.DateResponded        = now;
         application.RespondedByAppUserId = userId == Guid.Empty ? null : userId;
 
-        // Cancel all other pending applications for this request
+        // Cancel every other live application for this request. Viewed and UnderReview count:
+        // this only matched Pending before, so a group mid-vote at another table kept a live
+        // application to a request that was already someone's case — and was never told.
         var otherApps = await db.ClientRequestOrganizations
             .Where(a => a.ClientRequestId == clientRequestId
                      && a.OrganizationId != orgId
-                     && a.Status == ClientOrgRequestStatus.Pending)
+                     && (a.Status == ClientOrgRequestStatus.Pending
+                      || a.Status == ClientOrgRequestStatus.Viewed
+                      || a.Status == ClientOrgRequestStatus.UnderReview))
             .ToListAsync(ct);
         foreach (var a in otherApps) { a.Status = ClientOrgRequestStatus.Cancelled; a.DateResponded = now; }
 
         clientReq.Status = ClientRequestStatus.Assigned;
 
-        // Derive title: "{Surname}, {City} {State}" — case manager can rename later
-        var clientName = await db.AppUsers.AsNoTracking()
-            .Where(u => u.Id == clientReq.AppUserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct);
-        var surname    = ExtractSurname(clientName);
-        var caseTitle  = string.IsNullOrWhiteSpace(request.Title)
-            ? $"{surname}, {clientReq.City} {clientReq.State}"
+        // W-A6 (site evaluation 2026-09-06): the title used to be built from the client's
+        // SURNAME — "Evaluator, Nashville TN" — which put a private person's real name on the one
+        // field that becomes the public page's heading and, until phase 1 fixed the slug, its
+        // web address too. The leak warning then had to catch at publish time what this had
+        // written at accept time, and a group that never noticed shipped the name.
+        //
+        // The town alone is the honest default: it says what the case is about and identifies
+        // nothing. A group that wants a name types one, and the pseudonym field is where a
+        // publishable one belongs.
+        var caseTitle = string.IsNullOrWhiteSpace(request.Title)
+            ? $"{clientReq.City}, {clientReq.State}"
             : request.Title.Trim();
 
         var newCase = new Case
@@ -317,6 +632,8 @@ public sealed class CaseController : BenControllerBase
             Country               = clientReq.Country,
             Latitude              = clientReq.Latitude,
             Longitude             = clientReq.Longitude,
+            // Born from a client request, so born private-lane (item 184, designation setter a).
+            IsPrivateEngagement   = true,
             DateCaseOpened        = now,
             DateCreated           = now,
             CreatedByAppUserId    = userId,
@@ -342,6 +659,23 @@ public sealed class CaseController : BenControllerBase
         if (transaction is not null)
             await transaction.CommitAsync(ct);
 
+        // Messages go out only after the acceptance is real — a "you have a group" about a
+        // transaction that then rolled back would be worse than a late one (the lapse job
+        // learned this first). Failures here must not un-accept the case: the client's group
+        // exists either way, so message trouble is logged by the mail path, not surfaced as a 500.
+        var acceptingOrgName = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == orgId).Select(o => o.Name).FirstAsync(ct);
+        var contactName = request.CaseManagerAppUserId is { } mgrId
+            ? await db.AppUsers.AsNoTracking().Where(u => u.Id == mgrId)
+                .Select(u => u.DisplayName).FirstOrDefaultAsync(ct)
+            : null;
+
+        await _reviewNotifier.SendNoLongerAvailableAsync(
+            otherApps.Select(a => a.OrganizationId).Distinct().ToList(),
+            clientRequestId, userId, ct);
+        await _reviewNotifier.SendClientAcceptedAsync(
+            clientReq.AppUserId, newCase.Id, acceptingOrgName, contactName, userId, ct);
+
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = newCase.Id },
             _mapper.Map<CaseRecord>(newCase));
     }
@@ -359,12 +693,45 @@ public sealed class CaseController : BenControllerBase
 
         // Case manager can update their own case; org admin/super can update any
         bool isCaseManager = entity.CaseManagerAppUserId == userId;
-        if (!isCaseManager && !await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+        if (!isCaseManager && !await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        // ── Item 184: the plan a group holds TODAY governs what it may publish today ──
+        // Making a private-engagement case public is publication of private-lane work; gated at
+        // the flip, never on a case that is already public (grandfathered until it lapses).
+        if (request.IsPublic && !entity.IsPublic && entity.IsPrivateEngagement)
+        {
+            if (await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPublish)
+                return BadRequest(noPublish);
+        }
+
+        // ── 2026-09-17: an account that pays nothing cannot take a public case private ──
+        // The other half of Ben's rule. Asked only at the moment the flag would go OFF, so a case
+        // that is already private stays private and nothing in hand is disturbed — the same
+        // grandfathering the member cap uses. A private-engagement case is exempt: that is the paid
+        // lane, its designation is what says so, and nobody's home is published for want of a
+        // subscription.
+        if (!request.IsPublic && entity.IsPublic && !entity.IsPrivateEngagement)
+        {
+            if (await Services.Billing.PaidPlan.WhyCannotKeepCasePrivateAsync(db, orgId, ct) is { } mustStay)
+                return BadRequest(mustStay);
+        }
+
+        // Manual designation (setter c). Setting it needs the plan; CLEARING it is free to the
+        // people allowed to edit the case at all — recorded as open question 5 for Ben.
+        if (request.IsPrivateEngagement is { } designation && designation != entity.IsPrivateEngagement)
+        {
+            if (designation && await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noDesignate)
+                return BadRequest(noDesignate);
+            entity.IsPrivateEngagement = designation;
+        }
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
-        entity.Description          = request.Description?.Trim();
+        entity.Description          = CleanDescription(request.Description, _sanitizer);
+        var previousStatus = entity.Status;
         entity.Status               = request.Status;
         entity.PublicPseudonym      = request.PublicPseudonym?.Trim();
+        // Republishing consumes the lapse memory: the banner offered the click, this is it.
+        if (request.IsPublic && !entity.IsPublic) entity.WasPublicBeforeLapse = null;
         entity.IsPublic             = request.IsPublic;
         entity.CaseManagerAppUserId = request.CaseManagerAppUserId;
         if (request.Status is CaseStatus.Closed or CaseStatus.Haunted or CaseStatus.Public && entity.DateCaseClosed is null)
@@ -376,6 +743,17 @@ public sealed class CaseController : BenControllerBase
             return BadRequest(refusal);
 
         await db.SaveChangesAsync(ct);
+        // Item 206: the client hears the same sentence the site now shows.
+        await _clientMail.CaseStatusChangedAsync(db, entity, previousStatus, ct);
+
+        // W-A9 (site evaluation 2026-09-06): the case is loaded WITHOUT its manager navigation —
+        // it does not need it to save — and the record's CaseManagerDisplayName is mapped from
+        // exactly that navigation. So every save answered with a null name, and the page, which
+        // takes the response as the new truth, redrew its header as "Case Manager: Unassigned"
+        // over a case that had just been assigned one. It read correctly only after a fresh load,
+        // which is what made it look like the save had failed. Reloaded with the navigation so
+        // the answer says who it is.
+        await db.Entry(entity).Reference(c => c.CaseManagerAppUser).LoadAsync(ct);
         return Ok(_mapper.Map<CaseRecord>(entity));
     }
 
@@ -408,7 +786,16 @@ public sealed class CaseController : BenControllerBase
                  + "public web address. Give it a name that doesn't identify the property — "
                  + "\"The Mill House Investigation\", for instance — before publishing it.";
 
-        var candidate = UrlSlug.From(entity.Title)
+        // The slug is built from the PUBLIC title, not the private one. The public page already
+        // replaces the client's name with their alias or the pseudonym (CaseProseRedactor), but
+        // the address was sliced from the raw title — so "Evaluator, Nashville TN" published as
+        // "the-westside-family-nashville-tn" on the page and /cases/evaluator-nashville-tn in
+        // the URL, carrying the surname the pseudonym exists to hide (2026-09-06 evaluation,
+        // finding W-P1). Redact first; a title that is nothing but the name falls back to the
+        // reference, which is what the seeded cases use.
+        var roster      = await CaseRedactionRoster.ForCaseAsync(db, entity.Id, ct) ?? RedactionRoster.Empty;
+        var publicTitle = CaseProseRedactor.Redact(entity.Title, roster);
+        var candidate   = UrlSlug.From(publicTitle)
                         ?? $"case-{entity.CaseYear}-{entity.OrgCaseNumber:D3}";
 
         entity.UrlName = await UrlSlug.MakeUniqueAsync(candidate, async slug =>
@@ -445,7 +832,10 @@ public sealed class CaseController : BenControllerBase
             .Include(e => e.AuthorAppUser)
             .Include(e => e.ExperienceTypes)
             .Include(e => e.Files).ThenInclude(f => f.UploadFile)
-            .Where(e => e.CaseId == caseId);
+            // ClientOnly is history the client declined to carry into this organization after a
+            // move (item 84) — the one visibility an org never sees, breaking the cumulative rule
+            // by design.
+            .Where(e => e.CaseId == caseId && e.Visibility != CaseTimelineVisibility.ClientOnly);
 
         if (investigationId is { } invId)
             query = query.Where(e => e.InvestigationId == invId);
@@ -460,7 +850,10 @@ public sealed class CaseController : BenControllerBase
             .ThenBy(e => e.DateCreated)
             .ThenBy(e => e.Id)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
+        var rows = _mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries).ToList();
+
+
+        return Ok(rows);
     }
 
     [HttpPost("{caseId:guid}/timeline")]
@@ -468,10 +861,14 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid caseId, [FromBody] UpsertTimelineEntryRequest request, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
             return NotFound();
+
+        // Item 84: a lapsed group reads everything and adds nothing — timeline entries included.
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var entry = new CaseTimelineEntry
         {
@@ -525,6 +922,12 @@ public sealed class CaseController : BenControllerBase
 
         // Author or org admin can edit
         if (entry.AuthorAppUserId != userId && !await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
+
+        // A published board picture stays inside the case (canvas plan R22): it shows the names
+        // and addresses the board held, so an entry carrying one never becomes Public.
+        if (request.Visibility == Ben.Data.Common.Enums.CaseTimelineVisibility.Public
+            && await Services.BoardSnapshots.EntryHoldsOneAsync(db, entry.Id, ct))
+            return BadRequest(Services.BoardSnapshots.StaysInsideTheCase);
 
         entry.EntryType          = request.EntryType;
         entry.EventDateTime      = request.EventDateTime;
@@ -584,16 +987,10 @@ public sealed class CaseController : BenControllerBase
         return (year, max + 1);
     }
 
-    /// <summary>
-    /// Extracts a display-friendly surname from a DisplayName.
-    /// "John Smith" → "Smith", "AverageBen" → "AverageBen"
-    /// </summary>
-    private static string ExtractSurname(string? displayName)
-    {
-        if (string.IsNullOrWhiteSpace(displayName)) return "Unknown";
-        var parts = displayName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length > 1 ? parts[^1] : parts[0];
-    }
+    // ExtractSurname was here. It built the default case title out of the client's surname, which
+    // is how "Evaluator, Nashville TN" reached the field that becomes a public page's heading
+    // (W-A6, site evaluation 2026-09-06). Removed rather than left unused: a helper whose only
+    // purpose was that default is an invitation to reinstate it.
 
     // ── Auto-generate CMS pages ───────────────────────────────────────────────
 
@@ -632,15 +1029,12 @@ public sealed class CaseController : BenControllerBase
 
     // ── Auth helpers ──────────────────────────────────────────────────────────
 
+    // Item 156 Phase D: reading cases answers to HasAccessAsync(Case, Read) — SuperAdmin,
+    // owner/admin, the area gate, and the grants (grandfather bridge included) in one place.
     private async Task<bool> CanReadAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return false;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
 
     private async Task<bool> IsOrgAdminOrSuperAsync(Guid orgId, CancellationToken ct)
     {
@@ -666,7 +1060,21 @@ public sealed record CreateCaseRequest(
     string ZipCode,
     string? Country,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    // Ben, 2026-09-17: "unless I say it is up to a group decision, it should be accepted."
+    // Trailing and defaulted, so the shipped iPhone app and every existing caller keep their
+    // meaning — false is what they have always effectively asked for.
+    bool PutToTheGroup = false,
+    // ── The shared place this case is about (2026-09-17) ────────────────────────────────────
+    // Name one that already exists, or describe a new one; both optional, and in practice
+    // exclusive. A case that names neither is unplaced, exactly as every case was before today —
+    // see CasePlacement for why nothing is derived from the case's own address.
+    //
+    // NewPlace.Kind is the "what kind of location is this" answer, and it matters twice: a
+    // residence designates the case private-lane work permanently, and a public location is what
+    // makes an unpaid account's case public. The New Case page requires it.
+    Guid? PlaceId = null,
+    Services.Places.NewPlaceRequest? NewPlace = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
@@ -678,7 +1086,9 @@ public sealed record UpdateCaseRequest(
     Ben.Data.Common.Enums.CaseStatus Status,
     string? PublicPseudonym,
     bool IsPublic,
-    Guid? CaseManagerAppUserId);
+    Guid? CaseManagerAppUserId,
+    // Item 184: null = leave the designation alone (what every pre-184 caller sends).
+    bool? IsPrivateEngagement = null);
 
 public sealed record UpsertTimelineEntryRequest(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,

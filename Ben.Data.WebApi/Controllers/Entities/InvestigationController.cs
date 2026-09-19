@@ -19,11 +19,30 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class InvestigationController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public InvestigationController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    private readonly Services.ClientStatusMailer _clientMail;
+
+    public InvestigationController(
+        IDbContextFactory<BenDataContext> db, IMapper mapper,
+        Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ClientStatusMailer clientMail)
+    {
+        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security; }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvestigationRecord>>> GetAll(
@@ -68,15 +87,40 @@ public sealed class InvestigationController : BenControllerBase
         });
     }
 
+    /// <summary>
+    /// Why this start and end cannot be a visit, or null.
+    /// </summary>
+    /// <remarks>
+    /// An investigation may run past midnight — arriving at 3pm and leaving at 8am is one visit —
+    /// and it may run for a week. What it may not do is end before it starts. Nothing checked
+    /// that until 2026-09-09, and the calendar event built from it inherited the same reversed
+    /// window without complaint.
+    /// </remarks>
+    private static string? WhyNotThisWindow(UpsertInvestigationRequest request)
+        => request.EndDateTime is { } end && end <= request.ScheduledDateTime
+            ? "The end has to come after the start."
+            : null;
+
     [HttpPost]
     public async Task<ActionResult<InvestigationRecord>> Create(
         Guid orgId, Guid caseId, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+        if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct))
             return NotFound("Case not found.");
+
+        // The subscription cap on concurrent investigations. Completed and cancelled ones do not
+        // count — same reasoning as open cases: history must not lock a group out of new work.
+        var open = await db.Investigations.CountAsync(i =>
+            i.OrganizationId == orgId
+            && (i.Status == InvestigationStatus.Scheduled || i.Status == InvestigationStatus.InProgress), ct);
+        if (await _limits.WhyNotOneMoreAsync(
+                orgId, Ben.Data.Common.Enums.SubscriptionLimit.OpenInvestigations, open, ct) is { } capped)
+            return BadRequest(capped);
 
         var entity = new Investigation
         {
@@ -103,10 +147,25 @@ public sealed class InvestigationController : BenControllerBase
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
         if (placement.Error is not null) return BadRequest(placement.Error);
 
-        // The sharing scope follows the place unless the caller states one. A case-bound visit is
-        // at somebody's home more often than not, so the cautious default is also the common one.
-        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+        // The sharing scope follows the place unless the caller states one, and the plan decides
+        // where "follows the place" starts: an account that pays nothing shares what it finds at a
+        // public location with everyone (Ben, 2026-09-17). A case-bound visit is at somebody's home
+        // more often than not, and a home is untouched by the plan rule — the cautious default is
+        // still the common one.
+        //
+        // This replaces a solo-plan check that asked whether the ORGANIZATION was personal. It was
+        // the wrong question (see PersonalOrganizations), and it was asked here and not by the flat
+        // door in OrgInvestigationsController — so the same visit was refused or allowed depending
+        // on which screen scheduled it. Both doors now call the same overload.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
+
+        entity.Visibility = request.Visibility
+            ?? InvestigationVisibilityFilter.DefaultFor(placement.Place, publicByDefault);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string newSlugRefusal)
@@ -131,6 +190,9 @@ public sealed class InvestigationController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        // Item 206: a visit on the calendar is news the client gets by mail.
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitScheduledAsync(db, caseForMail, entity, ct);
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
@@ -145,6 +207,8 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+        if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
@@ -160,6 +224,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.Title               = request.Title.Trim();
         entity.Description         = request.Description?.Trim();
         entity.Location            = request.Location?.Trim();
+        var previouslyAt = entity.ScheduledDateTime;
         entity.ScheduledDateTime   = request.ScheduledDateTime;
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
@@ -177,13 +242,25 @@ public sealed class InvestigationController : BenControllerBase
         // Only changed when the caller says so: an edit that says nothing about sharing should not
         // silently re-derive a scope somebody may have deliberately narrowed.
         if (request.Visibility is { } requested) entity.Visibility = requested;
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+
+        // Judged on the value the row will actually carry, whether this edit typed it or not:
+        // moving a visit from a home to a landmark is how an unpaid account's group-only scope
+        // becomes a scope the plan does not allow, without anybody touching the dropdown.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
             return BadRequest(slugRefusal);
 
         await db.SaveChangesAsync(ct);
+        if (previouslyAt != entity.ScheduledDateTime
+            && await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitRescheduledAsync(db, caseForMail, entity, previouslyAt, ct);   // item 206
         var loaded = await db.Investigations.AsNoTracking()
             .Include(i => i.Attendees)
             .FirstAsync(i => i.Id == entity.Id, ct);
@@ -197,6 +274,7 @@ public sealed class InvestigationController : BenControllerBase
     public async Task<IActionResult> Delete(Guid orgId, Guid caseId, Guid id, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
@@ -213,6 +291,21 @@ public sealed class InvestigationController : BenControllerBase
             .ToListAsync(ct);
         foreach (var e in binderEntries) e.InvestigationId = null;
 
+        // Field sessions recorded on this visit cascade away with it — but a case report may be
+        // CITING one, and a report quietly losing its evidence is worse than a delete that does
+        // not happen. (The database would refuse this anyway; without the check it arrives as a
+        // 500 the person deleting cannot act on.)
+        var citedSessions = await db.CaseReportSectionFieldSessions
+            .CountAsync(f => f.FieldSessionUpload.InvestigationId == id, ct);
+        if (citedSessions > 0)
+        {
+            return Conflict(
+                $"A case report cites {citedSessions} field session"
+                + (citedSessions == 1 ? "" : "s")
+                + " recorded during this investigation. Remove the citation from the report first, "
+                + "then delete the investigation.");
+        }
+
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -224,6 +317,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
@@ -246,12 +340,14 @@ public sealed class InvestigationController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The investigation scheduled for <strong>{investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}</strong> has been cancelled by the organisation.",
+            Body = $"The investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt} has been cancelled by the organisation.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient = false, IsReadByOrg = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync(ct);
+        if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
+            await _clientMail.VisitCancelledAsync(db, caseForMail, investigation, ct);   // item 206
         return NoContent();
     }
 
@@ -276,6 +372,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, [FromBody] AddInvestigationAttendeeRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
@@ -302,6 +399,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, Guid attendeeId, [FromBody] UpdateAttendanceRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
@@ -349,6 +447,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
@@ -361,13 +460,12 @@ public sealed class InvestigationController : BenControllerBase
         return NoContent();
     }
 
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Investigation,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     /// <summary>
     /// Whether the caller may change this particular investigation. See
@@ -425,6 +523,11 @@ public sealed class InvestigationController : BenControllerBase
 /// </summary>
 [ApiController]
 [Route("api/evidence-votes")]
+// Behind the voting switch, like PublicCaseVoteController and UploadFileVoteController. This one
+// was missed (2026-09-17 audit): the widget dutifully hid itself while both halves of the
+// endpoint — the [AllowAnonymous] summary AND the signed-in read and cast — kept answering, so a
+// site whose admin page said Voting was Off still took votes from anything holding a URL.
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureVoting)]
 public sealed class EvidenceVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

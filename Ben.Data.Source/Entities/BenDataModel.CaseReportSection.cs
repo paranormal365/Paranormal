@@ -21,5 +21,9 @@ namespace Ben.Data.Source.Entities
         public virtual CaseReport CaseReport { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual ICollection<CaseReportSectionFile> Files { get; set; } = new List<CaseReportSectionFile>();
+
+        /// <summary>Field sessions this section cites — see <see cref="CaseReportSectionFieldSession"/>.</summary>
+        public virtual ICollection<CaseReportSectionFieldSession> FieldSessions { get; set; }
+            = new List<CaseReportSectionFieldSession>();
     }
 }

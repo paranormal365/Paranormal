@@ -12,8 +12,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("CaseReports")]
 public class InvestigationReportTests : BenTestBase
 {
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Client-side: published reports card ────────────────────────────────────
 
@@ -32,7 +30,7 @@ public class InvestigationReportTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         // Reports card should appear since we have a seeded published report
-        var reportTitle = Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false });
+        var reportTitle = Page.GetByText("Initial Assessment — Belmont Blvd residence", new() { Exact = false });
         await Expect(reportTitle).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
@@ -51,7 +49,7 @@ public class InvestigationReportTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         // Wait for the reports section to render
-        await Expect(Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false }))
+        await Expect(Page.GetByText("Initial Assessment — Belmont Blvd residence", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         // PDF button should be present
@@ -65,7 +63,7 @@ public class InvestigationReportTests : BenTestBase
     public async Task OrgCaseDetail_ReportsTab_IsVisible()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
         // Reports tab should be present as the 6th tab
@@ -78,7 +76,7 @@ public class InvestigationReportTests : BenTestBase
     public async Task OrgCaseDetail_ReportsTab_ShowsSeededPublishedReport()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
         var reportsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Reports" })
@@ -86,7 +84,7 @@ public class InvestigationReportTests : BenTestBase
         await reportsTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var reportTitle = Page.GetByText("Initial Assessment — Park Residence", new() { Exact = false });
+        var reportTitle = Page.GetByText("Initial Assessment — Belmont Blvd residence", new() { Exact = false });
         await Expect(reportTitle).ToBeVisibleAsync(new() { Timeout = 12_000 });
     }
 }

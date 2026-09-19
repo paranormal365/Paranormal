@@ -1,0 +1,333 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/layout"
+@namespace Ben.Web.Website.Library.Manage.Events
+@implements IDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Plans
+@using Ben.Web.Website.Library.Manage.Icon
+@using Microsoft.AspNetCore.Components.Routing
+
+@* The plan: what this event allocates, and where each of it sits (item 235 phase 2).
+
+   A page of its own rather than a card on the event page. Arranging four hundred seats is the
+   largest single thing a venue does on this site, it wants the whole width, and it is the one
+   screen somebody comes back to twice — which is what the "pages over windows" rule is for.
+
+   THE PAGE OWNS LOADING AND SAVING; THE DESIGNER OWNS THE ARRANGING. That split is why the
+   designer is in the Kit: the booking board and the guest's picker will draw the same plan from
+   completely different fetches, and a component that fetched its own data could only ever have
+   served this one page. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Plan — {n}" : "Plan")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        The plan
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+
+    <p class="text-secondary small mb-3">
+        @Explanation
+    </p>
+
+    <BenItemState TItem="HostedEventLayoutRecord" Result="_layout" Loading="_loading"
+                  LoadingText="Loading the plan…" OnRetry="LoadAsync">
+        <ChildContent Context="layout">
+            @if (_model is { } model)
+            {
+                @if (model.Units.Count == 0 && _layout.Item?.Units.Count == 0 && _earlier.Count > 0)
+                {
+                    @* WHAT THE VENUE REMEMBERS (phase 12). An empty plan at a building somebody has laid
+                       out before starts from that, not from nothing. Loaded unsaved, so it is looked at
+                       before it becomes this event's. *@
+                    <div class="card mb-3" id="layout-earlier">
+                        <div class="card-header fw-semibold">Start from a plan used at this venue before</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var plan in _earlier)
+                            {
+                                var thisPlan = plan;
+                                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="fw-semibold">@thisPlan.EventName</div>
+                                        <div class="small text-secondary">
+                                            @thisPlan.OrganizationName · @thisPlan.StartsOn.ToString("MM/dd/yyyy") ·
+                                            @thisPlan.Units @(thisPlan.Kind == HostedEventLayoutKind.Seats ? "seats" : "rooms")
+                                            @if (thisPlan.FromTheVenue) { <span class="badge text-bg-secondary ms-1">The venue's plan</span> }
+                                            @if (!thisPlan.Ours) { <text> · prices and notes are not copied</text> }
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" disabled="@_busy"
+                                            id="@($"layout-start-from-{thisPlan.HostedEventId:N}")"
+                                            @onclick="() => StartFromAsync(thisPlan)">Start from this plan</button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <BenPlanDesigner Model="@model"
+                                 Rooms="@_rooms"
+                                 Busy="@_busy"
+                                 Error="@_error"
+                                 Refused="@_refused"
+                                 AllowKindChange="@(_event?.LifecycleState is HostedEventLifecycleState.Draft)"
+                                 OnSave="SaveAsync" />
+
+                @if (!string.IsNullOrWhiteSpace(_note))
+                {
+                    <p class="text-success small mt-2" id="layout-note">@_note</p>
+                }
+
+                @if (model.Kind == HostedEventLayoutKind.Rooms && _roomsRefused)
+                {
+                    @* The tray being empty has two completely different causes and a venue must
+                       not be left guessing which. *@
+                    <div class="alert alert-warning mt-3 py-2" id="layout-rooms-error" role="alert">
+                        The venue's rooms could not be read just now, so the list to place from is
+                        empty. That is this page failing to reach the server, not a venue with no
+                        rooms.
+                    </div>
+                }
+                else if (model.Kind == HostedEventLayoutKind.Rooms && _rooms.Count == 0)
+                {
+                    <div class="alert alert-info mt-3 py-2" id="layout-no-rooms" role="alert">
+                        This venue has no rooms marked bookable yet, so there is nothing to place.
+                        @if (_event is { } ev)
+                        {
+                            <a href="@($"/organizations/{OrgId}/places/{ev.PlaceId}/rooms")">
+                                Describe its rooms
+                            </a>
+
+                            <text>, tick <em>Bookable</em> on the ones guests may stay in, and come
+                            back here.</text>
+                        }
+                    </div>
+                }
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+<BenConfirmDialog @bind-Visible="_confirmLeave"
+                  Title="Leave without saving?"
+                  Message="This plan has changes that have not been saved. Leaving loses them."
+                  ConfirmText="Leave" CancelText="Stay here" Destructive="true"
+                  OnConfirm="LeaveAnyway" OnCancel="StayHere" />
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventLayoutRecord> _layout;
+    private PlanModel? _model;
+    private IReadOnlyList<PlanRoomOption> _rooms = [];
+    private IReadOnlyList<EarlierPlanRecord> _earlier = [];
+    private bool _roomsRefused;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _note;
+    private IReadOnlySet<Guid>? _refused;
+
+    private IDisposable? _navigationGuard;
+    private bool _confirmLeave;
+    private bool _leaving;
+    private string? _leavingTo;
+
+    private string Explanation => _model?.Kind switch
+    {
+        HostedEventLayoutKind.Seats =>
+            "Add the rows, then say what each section is called and what it costs. Guests pick "
+            + "their own seats on this plan, and prices are shown to them and never charged here.",
+        _ =>
+            "Place the rooms this event is offering. Only rooms the venue has marked bookable can "
+            + "be offered, and prices are shown to guests and never charged here.",
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and the page then
+        // says the plan could not be loaded rather than that the reader is not allowed it.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Registered only once the circuit is interactive: a handler attached during prerender
+        // never fires, and one attached twice fires twice.
+        _navigationGuard ??= NavManager.RegisterLocationChangingHandler(OnLeavingAsync);
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _refused = null;
+
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _layout = await AdminClient.GetEventLayoutAsync(OrgId, EventId);
+
+        if (_layout.Item is { } layout)
+        {
+            _model = PlanModel.From(layout.Kind, layout.Units);
+            await LoadRoomsAsync(layout.Kind);
+
+            _earlier = layout.Units.Count == 0
+                ? (await AdminClient.GetEarlierPlansAsync(OrgId, EventId)).Items
+                : [];
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// The venue's own rooms, for the tray. Only on a Rooms plan — a theatre has no bedrooms.
+    /// </summary>
+    private async Task LoadRoomsAsync(HostedEventLayoutKind kind)
+    {
+        _rooms = [];
+        _roomsRefused = false;
+
+        if (kind != HostedEventLayoutKind.Rooms || _event is not { } ev) return;
+
+        // The rooms this plan may place — the group's own, and the venue's when a venue on this site
+        // lent them (item 235 phase 9). Not the group's rooms at the place: at somebody else's hotel
+        // those are the wrong list.
+        var rooms = await AdminClient.GetOfferableRoomsAsync(OrgId, EventId);
+        if (rooms.Failed)
+        {
+            // A refusal here is not "this venue has no rooms", and the page says which it is.
+            _roomsRefused = true;
+            return;
+        }
+
+        _rooms =
+        [
+            .. rooms.Items
+                .Where(r => r.IsBookable && r.IsActive)
+                .OrderBy(r => r.SortOrder)
+                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new PlanRoomOption(r.Id, r.Name, r.Floor, r.Capacity, r.BedNote))
+        ];
+    }
+
+    private async Task StartFromAsync(EarlierPlanRecord plan)
+    {
+        if (_model is not { } model) return;
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var loaded = await AdminClient.GetEarlierPlanUnitsAsync(OrgId, EventId, plan.HostedEventId);
+        _busy = false;
+        if (loaded.Item is not { } earlier) { _error = "That plan couldn't be read just now."; return; }
+
+        if (!model.StartFrom(earlier.Kind, PlanModel.From(earlier.Kind, earlier.Units).Units))
+        {
+            _error = "This plan already has something on it.";
+            return;
+        }
+
+        await LoadRoomsAsync(earlier.Kind);
+        _note = $"Started from {plan.EventName}. Check it, then save."
+              + (earlier.RoomsLeftOut > 0
+                  ? $" {earlier.RoomsLeftOut} {(earlier.RoomsLeftOut == 1 ? "room was" : "rooms were")} left out because this event can't offer {(earlier.RoomsLeftOut == 1 ? "it" : "them")}."
+                  : "");
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_model is not { } model || _busy) return;
+
+        _busy = true;
+        _error = null;
+        _note = null;
+        _refused = null;
+
+        var (saved, error, conflict) =
+            await AdminClient.SetEventLayoutAsync(OrgId, EventId,
+                new SetHostedEventLayoutRequest(model.Kind, model.ToChoices()));
+
+        if (saved is { } result)
+        {
+            // Taken from what came BACK, not from what went out: the server assigns ids to new
+            // units and resolves a room's name, and a screen that kept its own copy would send a
+            // create for the same seat again on the next save.
+            model.Saved(PlanModel.From(result.Kind, result.Units).Units);
+            _note = result.Units.Count == 0
+                ? "Saved. Nothing is on the plan, so this event offers day passes only."
+                : $"Saved. {result.Units.Count} on the plan.";
+
+            await LoadRoomsAsync(result.Kind);
+        }
+        else if (conflict is { } refusal)
+        {
+            // The sentence for the person, the ids for the plan. Both, or the sentence names two
+            // seats out of four hundred and leaves somebody hunting for row C.
+            _error = refusal.Sentence;
+            _refused = model.KeysFor(refusal.UnitIds).ToHashSet();
+        }
+        else
+        {
+            _error = error ?? "The plan could not be saved. Nothing has changed.";
+        }
+
+        _busy = false;
+    }
+
+    // ── leaving with work in it ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Stops a stray click throwing away an afternoon's arranging.
+    /// </summary>
+    /// <remarks>
+    /// The browser's own beforeunload covers closing the tab; this covers everything inside the
+    /// app, which is where the click actually happens — the breadcrumb back to the event, or the
+    /// group's own menu.
+    /// </remarks>
+    private ValueTask OnLeavingAsync(LocationChangingContext context)
+    {
+        if (_leaving || _model?.IsDirty != true) return ValueTask.CompletedTask;
+
+        context.PreventNavigation();
+        _leavingTo = context.TargetLocation;
+        _confirmLeave = true;
+        StateHasChanged();
+        return ValueTask.CompletedTask;
+    }
+
+    private void LeaveAnyway()
+    {
+        _confirmLeave = false;
+        _leaving = true;
+        if (_leavingTo is { Length: > 0 } target) NavManager.NavigateTo(target);
+    }
+
+    private void StayHere()
+    {
+        _confirmLeave = false;
+        _leavingTo = null;
+    }
+
+    public void Dispose() => _navigationGuard?.Dispose();
+}

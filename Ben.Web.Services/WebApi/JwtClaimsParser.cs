@@ -11,12 +11,12 @@ public static class JwtClaimsParser
     /// Decodes the JWT payload and returns the user ID (sub claim) plus which app-wide roles
     /// the token carries. Returns defaults on any error.
     /// </summary>
-    public static (Guid? UserId, bool IsSuperAdmin, bool IsAdmin) ParseClaims(string token)
+    public static (Guid? UserId, bool IsSuperAdmin, bool IsAdmin, bool IsModerator) ParseClaims(string token)
     {
         try
         {
             var parts = token.Split('.');
-            if (parts.Length < 2) return (null, false, false);
+            if (parts.Length < 2) return (null, false, false, false);
 
             // Convert Base64URL → standard Base64, then add padding
             var raw    = parts[1].Replace('-', '+').Replace('_', '/');
@@ -39,11 +39,15 @@ public static class JwtClaimsParser
 
             return (userId,
                     roles.Contains(RoleNames.SuperAdmin),
-                    roles.Contains(RoleNames.Admin));
+                    roles.Contains(RoleNames.Admin),
+                    // SuperAdmin moderates implicitly, matching ModeratorHandler on the server —
+                    // two answers to "may this person moderate" would eventually disagree, and
+                    // the visible symptom would be a menu item that leads to a 403.
+                    roles.Contains(RoleNames.Moderator) || roles.Contains(RoleNames.SuperAdmin));
         }
         catch
         {
-            return (null, false, false);
+            return (null, false, false, false);
         }
     }
 }

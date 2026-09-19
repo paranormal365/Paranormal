@@ -1,0 +1,73 @@
+@namespace Ben.Web.Website.Library.Client
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    A client's own case, at the top of Home (client test pass P.2, 2026-09-14).
+
+    A person who is only a client gets the visitor's hero on Home — the member desk was group work that was never theirs
+    (W-S5). But the hero said "Connect with paranormal investigation groups near you" to somebody whose group had already
+    taken their case and booked a visit, and nothing on the page mentioned either. This names the case, its state and the
+    next visit, and opens it. Nothing at all when they have no case, and nothing when the list cannot be read: My Cases is
+    one click away and says why, and Home is not the place for an error about it.
+*@
+
+@if (_cases is { Count: > 0 })
+{
+    <div class="container-fluid px-3 pt-3" style="max-width:1000px;" data-testid="client-case-strip">
+        <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-2">
+            <h3 class="h5 mb-0">@(_cases.Count == 1 ? "Your case" : "Your cases")</h3>
+            <a href="/my-cases" class="small">My Cases</a>
+        </div>
+        <div class="row g-3">
+            @foreach (var c in _cases.Take(3))
+            {
+                <div class="col-12 @(_cases.Count > 1 ? "col-md-6 col-lg-4" : "")">
+                    <a class="card h-100 text-decoration-none text-reset" href="/my-cases/@c.CaseId">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="font-monospace text-muted small">@c.CaseReference</span>
+                                <span class="badge @c.Status.BadgeClass()">@c.Status.Label()</span>
+                            </div>
+                            <div class="fw-semibold">@c.Title</div>
+                            @if (c.NextInvestigationDate is { } next)
+                            {
+                                <div class="small mt-1 text-primary fw-semibold d-flex align-items-center gap-1">
+                                    <BenIcon Name="calendar" />
+                                    <span>Next visit: @next.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()</span>
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(c.CaseManagerDisplayName))
+                            {
+                                <div class="small text-secondary mt-1">Your contact: @c.CaseManagerDisplayName</div>
+                            }
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<ClientCaseListItem>? _cases;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+        try
+        {
+            var result = await AdminClient.GetMyCasesAsync();
+            if (!result.Failed) _cases = result.Items.ToList();
+        }
+        catch
+        {
+            // See the note above: Home says nothing rather than an error about a list that has its own page.
+        }
+    }
+}

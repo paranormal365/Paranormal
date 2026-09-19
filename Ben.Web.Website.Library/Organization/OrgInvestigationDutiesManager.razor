@@ -1,0 +1,161 @@
+@namespace Ben.Web.Website.Library.Organization
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+
+@*
+    The group's investigation duties (item 158): the jobs handed out per visit. Duties grant
+    nothing — the one write-through is the Lead Investigator duty flipping the visit's lead flag.
+    A duty may carry a minimum title from the ladder (item 157); that is eligibility for being
+    handed the duty, soft-enforced at assignment, never a permission.
+*@
+
+<div class="mt-4">
+    <h6 class="mb-1 fw-semibold">Investigation duties<HelpLink Slug="organization-administration" Anchor="investigation-duties" /></h6>
+    <p class="text-secondary small mb-2">
+        The jobs handed out for each visit — lead, equipment, evidence. A duty can ask for a
+        minimum title; the organizer can still assign past it deliberately.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2 small">@_error</div>
+    }
+
+    <BenListState TItem="OrgInvestigationDutyItem" Result="@_result" Loading="@_loading"
+                  LoadingText="Loading duties…"
+                  EmptyText="No duties yet — add the first below."
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <ul class="list-group mb-2" style="max-width:640px;">
+                @foreach (var duty in _duties.OrderBy(d => d.SortOrder))
+                {
+                    <li class="list-group-item d-flex align-items-center gap-2 py-2 flex-wrap">
+                        @if (_editingId == duty.Id)
+                        {
+                            <input class="form-control form-control-sm" style="max-width:180px;"
+                                   id="duty-edit-name" value="@_formName"
+                                   @oninput="@(e => _formName = e.Value?.ToString() ?? "")" />
+                            <div class="form-check form-check-inline mb-0">
+                                <input type="checkbox" class="form-check-input" id="duty-edit-single"
+                                       checked="@_formSingle"
+                                       @onchange="@(e => _formSingle = e.Value is true)" />
+                                <label class="form-check-label small" for="duty-edit-single">one holder</label>
+                            </div>
+                            <select class="form-select form-select-sm" style="max-width:180px;"
+                                    value="@(_formMinLevelId?.ToString() ?? "")"
+                                    @onchange="@(e => _formMinLevelId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                <option value="">no minimum title</option>
+                                @foreach (var level in _levels)
+                                {
+                                    <option value="@level.Id" selected="@(level.Id == _formMinLevelId)">@level.Name +</option>
+                                }
+                            </select>
+                            <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SaveEditAsync(duty))">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _editingId = null)">Cancel</button>
+                        }
+                        else
+                        {
+                            <span class="fw-semibold flex-grow-1 @(duty.IsActive ? "" : "text-decoration-line-through text-secondary")">@duty.Name</span>
+                            @if (duty.IsSingleHolder)
+                            {
+                                <span class="badge bg-secondary" title="One holder at a time">solo</span>
+                            }
+                            @if (duty.MinimumMemberLevelName is not null)
+                            {
+                                <span class="badge bg-secondary" title="Minimum title to be handed this duty">@duty.MinimumMemberLevelName+</span>
+                            }
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => BeginEdit(duty))">Edit</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => DeleteAsync(duty))">Delete</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </ChildContent>
+    </BenListState>
+
+    <div class="d-flex gap-2 align-items-center" style="max-width:640px;">
+        <input class="form-control form-control-sm" placeholder="New duty, e.g. Audio"
+               id="duty-new-name" value="@_newName"
+               @oninput="@(e => _newName = e.Value?.ToString() ?? "")" />
+        <button type="button" class="btn btn-primary btn-sm text-nowrap"
+                disabled="@(string.IsNullOrWhiteSpace(_newName))"
+                @onclick="AddAsync">Add duty</button>
+    </div>
+    <p class="text-secondary mt-1 mb-0" style="font-size:.75rem;">
+        Deleting a duty removes it from any visits it was assigned on.
+    </p>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private IReadOnlyList<OrgInvestigationDutyItem> _duties = [];
+    private IReadOnlyList<OrgMemberLevelItem> _levels = [];
+    private LoadResult<OrgInvestigationDutyItem> _result;
+    private bool _loading = true;
+    private string? _error;
+    private string _newName = "";
+    private Guid? _editingId;
+    private string _formName = "";
+    private bool _formSingle;
+    private Guid? _formMinLevelId;
+    private Guid _loadedForOrg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrgId == Guid.Empty || OrgId == _loadedForOrg) return;
+        _loadedForOrg = OrgId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetInvestigationDutiesAsync(OrgId);
+        _duties = _result.Items;
+        _levels = (await AdminClient.GetMemberLevelsAsync(OrgId)).Items.Where(l => l.IsActive).ToList();
+        _loading = false;
+    }
+
+    private async Task AddAsync()
+    {
+        _error = null;
+        var next = _duties.Count == 0 ? 1 : _duties.Max(d => d.SortOrder) + 1;
+        var created = await AdminClient.CreateInvestigationDutyAsync(
+            OrgId, _newName.Trim(), next, isActive: true, isSingleHolder: false, minimumLevelId: null);
+        if (created is null) { _error = "That duty couldn't be added."; return; }
+        _newName = "";
+        await LoadAsync();
+    }
+
+    private void BeginEdit(OrgInvestigationDutyItem duty)
+    {
+        _editingId = duty.Id;
+        _formName = duty.Name;
+        _formSingle = duty.IsSingleHolder;
+        _formMinLevelId = duty.MinimumMemberLevelId;
+    }
+
+    private async Task SaveEditAsync(OrgInvestigationDutyItem duty)
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_formName)) { _error = "A duty needs a name."; return; }
+        var updated = await AdminClient.UpdateInvestigationDutyAsync(
+            OrgId, duty.Id, _formName.Trim(), duty.SortOrder, duty.IsActive, _formSingle, _formMinLevelId);
+        if (updated is null) { _error = "That change couldn't be saved."; return; }
+        _editingId = null;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(OrgInvestigationDutyItem duty)
+    {
+        _error = null;
+        if (!await AdminClient.DeleteInvestigationDutyAsync(OrgId, duty.Id))
+        {
+            _error = "That duty couldn't be deleted.";
+            return;
+        }
+        await LoadAsync();
+    }
+}

@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -24,9 +25,12 @@ public interface IBenPlatformClient
     /// </summary>
     Task<NotificationSummaryResponse?> GetNotificationSummaryAsync(CancellationToken token = default);
 
+    /// <summary>The member's desk — next investigation, open cases, unread, gear out — in one call (item 204).</summary>
+    Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default);
+
     /// <summary>Platform messages addressed to the current user, newest first.</summary>
     /// <param name="unreadOnly">Restrict to messages never opened.</param>
-    Task<List<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
+    Task<LoadResult<MyMessageRecord>> GetMyMessagesAsync(bool unreadOnly = false, CancellationToken token = default);
 
     /// <summary>Marks one of the current user's messages read. <paramref name="id"/> is the record's Id.</summary>
     Task<bool> MarkMyMessageReadAsync(Guid id, CancellationToken token = default);
@@ -35,11 +39,42 @@ public interface IBenPlatformClient
     Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default);
 
     /// <summary>Pending file-permission requests awaiting the current user, with names resolved.</summary>
-    Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
+    Task<LoadResult<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default);
+
+    // ── Rate limits (item 199) ────────────────────────────────────────────────
+    /// <summary>What each rate limit has refused, worst first (SuperAdmin).</summary>
+    Task<LoadResult<RateLimitRefusalRecord>> GetRateLimitRefusalsAsync(CancellationToken token = default);
+
+    /// <summary>How this machine is configured to send mail. No secrets.</summary>
+    Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default);
+
+    // ── The outbox (item 239; wired 2026-09-17) ──────────────────────────────
+    //
+    // Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+    // question — I signed up and got nothing — in five seconds instead of not at all" answered it
+    // in zero, because no page read it.
+
+    /// <summary>Every letter the site has meant to send lately, and what became of it.</summary>
+    /// <param name="state">"failed", "waiting", "accepted", or null for all.</param>
+    Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default);
+
+    /// <summary>Puts one given-up letter back in the queue.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default);
+
+    /// <summary>Puts every given-up letter back in the queue — the button after fixing the relay.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(CancellationToken token = default);
+
+    /// <summary>Sends one real test message and reports what the server said.</summary>
+    Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
+
+    /// <summary>Re-arms the one-time notice for a limit, so the next burst sends a fresh message.</summary>
+    Task<bool> ReArmRateLimitNoticeAsync(string policyName, CancellationToken token = default);
 
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
     /// <summary>Recorded sidecar install/pair events, newest first (SuperAdmin).</summary>
-    Task<IReadOnlyList<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);
+    Task<LoadResult<SidecarInstallLogRecord>> GetSidecarTelemetryAsync(int take = 200, CancellationToken token = default);
 
     /// <summary>Distinct-install counts and a per-version breakdown (SuperAdmin).</summary>
     Task<SidecarTelemetrySummaryRecord?> GetSidecarTelemetrySummaryAsync(CancellationToken token = default);
@@ -47,15 +82,24 @@ public interface IBenPlatformClient
     // ── Audit Log ─────────────────────────────────────────────────────────────
 
     Task<AuditLogPagedResponse?> GetAuditLogsAsync(int page = 1, int pageSize = 50, string? entityType = null, int? action = null, Guid? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
-    Task<IReadOnlyList<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
+    Task<LoadResult<string>> GetAuditLogEntityTypesAsync(CancellationToken token = default);
     Task<bool> SendAuditLogMessageAsync(SendAuditLogMessageRequest request, CancellationToken token = default);
+
+    // ── Error Log (Serilog) ───────────────────────────────────────────────────
+    // Easily confused with the audit log above, and worth keeping apart: that one records what
+    // people deliberately did and is kept for years; this one records what broke and is pruned on
+    // a retention window.
+
+    Task<ErrorLogPagedResponse?> GetErrorLogsAsync(int page = 1, int pageSize = 50, string? search = null, string? source = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken token = default);
+    Task<ErrorLogSummary?> GetErrorLogSummaryAsync(CancellationToken token = default);
+    Task<LoadResult<string>> GetErrorLogSourcesAsync(CancellationToken token = default);
 
     // ── Generic Lookup Types ──────────────────────────────────────────────────
     // Covers UserAddressType, UserEmailType, UserPhoneType, UserLinkType, UserNoteType,
     // UserMessageType, and the five Org equivalents — all share the same schema.
 
     /// <summary>Returns all rows for a lookup-type table at the given admin API route.</summary>
-    Task<IReadOnlyList<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
+    Task<LoadResult<LookupTypeAdminRecord>> GetLookupTypesAsync(string route, CancellationToken token = default);
 
     /// <summary>Creates a new row in a lookup-type table.</summary>
     Task<LookupTypeAdminRecord?> CreateLookupTypeAsync(string route, LookupTypeUpsertRequest request, CancellationToken token = default);
@@ -70,6 +114,116 @@ public interface IBenPlatformClient
 
     /// <summary>The site's published contact details, for the contact page. Anonymous.</summary>
     Task<SiteContactInfo?> GetSiteContactAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Which sections of the site are switched on. Anonymous, because the navigation and the
+    /// route guards need the answer before anyone has signed in. Read through
+    /// <c>SiteFeaturesProvider</c> rather than called directly — it caches.
+    /// </summary>
+    Task<SiteFeaturesInfo?> GetSiteFeaturesAsync(CancellationToken token = default);
+
+    // ── Dashboard statistics ──────────────────────────────────────────────────
+
+    /// <summary>Headline counts for the administrator's dashboard. SuperAdmin.</summary>
+    Task<AdminStatsSummary?> GetAdminStatsSummaryAsync(CancellationToken token = default);
+
+    /// <summary>The dashboard's charts over a window of days. SuperAdmin.</summary>
+    Task<AdminStatsCharts?> GetAdminStatsChartsAsync(int days = 30, CancellationToken token = default);
+
+    /// <summary>
+    /// Who has been signing in over a window of days, and anything odd about how. SuperAdmin.
+    /// </summary>
+    /// <remarks>The one dashboard call that names accounts — see AdminStatsController.</remarks>
+    Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default);
+
+    /// <summary>
+    /// Reports a published field session's media, hiding it until a moderator looks.
+    /// </summary>
+    /// <remarks>
+    /// Requires an account on purpose: one flag hides, so an anonymous version would let anybody
+    /// erase the archive's pictures. The page shows the control to everyone and asks a visitor to
+    /// sign in, rather than hiding a refusal the server would give anyway.
+    /// </remarks>
+    Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
+        Guid fieldSessionId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// Absolute URL for one approved archive recording's bytes — the API origin, not the site's,
+    /// which is the trap every raw /api href falls into on the split deployment.
+    /// </summary>
+    string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId);
+
+    /// <summary>
+    /// What deleting a group would destroy. SuperAdmin, and changes nothing.
+    /// </summary>
+    Task<OrganizationPurgePreview?> GetOrganizationPurgePreviewAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a group and everything belonging to it. SuperAdmin, and irreversible.
+    /// </summary>
+    /// <param name="confirmName">The group's exact name, typed back by the administrator.</param>
+    Task<(OrganizationPurgePreview? Removed, string? Error)> PurgeOrganizationAsync(
+        Guid organizationId, string confirmName, CancellationToken token = default);
+
+    /// <summary>
+    /// What deleting a person would destroy, and what it would leave. SuperAdmin; changes nothing.
+    /// </summary>
+    Task<AppUserPurgePreview?> GetAppUserPurgePreviewAsync(
+        Guid userId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a person: destroys what is only theirs, strips them out of what stays.
+    /// </summary>
+    /// <param name="userId">The account to delete.</param>
+    /// <param name="confirmName">The person's exact display name, typed back.</param>
+    /// <param name="token">Cancellation.</param>
+    /// <remarks>
+    /// The error sentence is the server's own. "You are deleting the last SuperAdmin", "type the
+    /// name exactly" and "delete your own account from your profile" are three different problems,
+    /// and one status code cannot tell them apart.
+    /// </remarks>
+    Task<(AppUserPurgeResult? Result, string? Error)> PurgeAppUserAsync(
+        Guid userId, string confirmName, CancellationToken token = default);
+
+    /// <summary>
+    /// What deleting a case would destroy, and what it would leave. SuperAdmin; changes nothing.
+    /// </summary>
+    Task<CasePurgePreview?> GetCasePurgePreviewAsync(
+        Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a case and everything that exists only because of it (item 183). Irreversible, and
+    /// the only route to deleting a case anywhere in the product.
+    /// </summary>
+    /// <param name="caseId">The case to delete.</param>
+    /// <param name="confirmTitle">The case's exact title, typed back.</param>
+    /// <param name="token">Cancellation.</param>
+    Task<(CasePurgeResult? Result, string? Error)> PurgeCaseAsync(
+        Guid caseId, string confirmTitle, CancellationToken token = default);
+
+    /// <summary>
+    /// What the place's archive says about one of your own field sessions.
+    /// </summary>
+    /// <remarks>Null when the session is not yours, has no place, or the place is not public.</remarks>
+    Task<SessionInsightsRecord?> GetSessionInsightsAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    /// <summary>One group's own numbers. Visible to that group's active members.</summary>
+    Task<OrgStatsSummary?> GetOrgStatsAsync(Guid organizationId, CancellationToken token = default);
+
+    // ── Group-ad review + public placements (item 166 W3) ────────────────────
+    Task<WebApi.LoadResult<AdminOrganizationAdRecord>> GetAdminOrgAdsAsync(CancellationToken token = default);
+    Task<(bool Ok, string? Error)> ApproveOrgAdAsync(Guid adId, CancellationToken token = default);
+    Task<(bool Ok, string? Error)> RejectOrgAdAsync(Guid adId, string reason, CancellationToken token = default);
+    Task<WebApi.LoadResult<PromotedGroupCard>> GetPromotedGroupsAnonymousAsync(
+        int take = 3, CancellationToken token = default,
+        double? lat = null, double? lon = null);
+
+    /// <summary>Tour names the caller has dismissed (item 166) — nothing listed auto-launches.</summary>
+    Task<WebApi.LoadResult<string>> GetMyDismissedToursAsync(CancellationToken token = default);
+    /// <summary>Dismisses one tour; completed says seen-through vs skipped. Idempotent.</summary>
+    Task DismissTourAsync(string tourName, bool completed, CancellationToken token = default);
 
     /// <summary>Issued when the contact form renders; proves later how long it was on screen.</summary>
     Task<SupportFormTokenResponse?> GetSupportFormTokenAsync(CancellationToken token = default);
@@ -87,7 +241,7 @@ public interface IBenPlatformClient
     Task<SupportTicketPage?> GetSupportTicketsAsync(SupportTicketStatus? status = null, SupportTicketTopic? topic = null, string? search = null, int page = 1, int pageSize = 25, CancellationToken token = default);
 
     /// <summary>One ticket's full thread, internal notes included.</summary>
-    Task<IReadOnlyList<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
+    Task<LoadResult<SupportTicketReplyRecord>> GetSupportTicketRepliesAsync(Guid id, CancellationToken token = default);
 
     /// <summary>Replies to the sender, or leaves an internal note.</summary>
     Task<bool> AddSupportTicketReplyAsync(Guid id, AddSupportTicketReplyRequest request, CancellationToken token = default);
@@ -97,19 +251,21 @@ public interface IBenPlatformClient
 
     // ── Messaging ─────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgMessageRecord>> GetOrgInboxAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgMessageRecord>> GetOrgSentAsync(Guid orgId, CancellationToken token = default);
     Task<OrgMessageRecord?> GetOrgMessageAsync(Guid orgId, Guid messageId, CancellationToken token = default);
     Task<OrgMessageRecord?> SendOrgMessageAsync(Guid orgId, SendOrgMessageRequest request, CancellationToken token = default);
 
     // ── Calendar ──────────────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrgCalendarEventTypeRecord>> GetCalendarEventTypesAsync(Guid orgId, CancellationToken token = default);
 
     // ── Sitewide settings (SuperAdmin) ───────────────────────────────────────
 
     /// <summary>Every sitewide setting, including ones never yet given a value.</summary>
-    Task<List<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default);
+
+    /// <summary>Site settings, distinguishing "could not load" from "there are none".</summary>
+    Task<WebApi.LoadResult<SiteSettingRecord>> GetSiteSettingsAsync(CancellationToken token = default);
 
     /// <summary>Sets one sitewide setting. An empty value clears it.</summary>
     Task<SiteSettingRecord?> SetSiteSettingAsync(
@@ -133,10 +289,11 @@ public interface IBenPlatformClient
     Task<bool> DetachOccurrenceFileAsync(Guid caseId, Guid entryId, Guid fileId, CancellationToken token = default);
 
     /// <summary>Returns all case messages visible to the client (marks org messages read).</summary>
-    Task<IReadOnlyList<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
+    Task<LoadResult<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the client to the org on this case.</summary>
-    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the client's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Client cancels a scheduled investigation (422 if outside cancellation window).</summary>
     Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default);
@@ -144,13 +301,13 @@ public interface IBenPlatformClient
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
     /// <summary>Returns all approved, active categories with their types (public — no auth).</summary>
-    Task<IReadOnlyList<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
+    Task<LoadResult<ExperienceCategoryWithTypesResponse>> GetExperienceTaxonomyAsync(CancellationToken token = default);
 
     /// <summary>SuperAdmin: all categories including pending/inactive.</summary>
-    Task<IReadOnlyList<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
+    Task<LoadResult<ExperienceCategoryRecord>> GetAllExperienceCategoriesAsync(CancellationToken token = default);
 
     /// <summary>SuperAdmin: all types for a category including pending/inactive.</summary>
-    Task<IReadOnlyList<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
+    Task<LoadResult<ExperienceTypeRecord>> GetAllExperienceTypesAsync(Guid categoryId, CancellationToken token = default);
 
     Task<ExperienceCategoryRecord?> CreateExperienceCategoryAsync(UpsertExperienceCategoryRequest request, CancellationToken token = default);
     Task<ExperienceCategoryRecord?> UpdateExperienceCategoryAsync(Guid id, UpsertExperienceCategoryRequest request, CancellationToken token = default);
@@ -158,7 +315,19 @@ public interface IBenPlatformClient
     Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default);
 
     Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default);
-    Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Renames a type, or comes back with the merge it would take to use that name.
+    /// </summary>
+    /// <remarks>
+    /// The server answers a name clash with a 409 carrying a <see cref="TaxonomyMergeOffer"/> —
+    /// "that name already exists; merging moves everything across and cannot be undone". The
+    /// adapter discarded it and the page said "Save failed", so the offer was written, sent, and
+    /// never seen; the endpoint that ACCEPTS it had no caller at all (2026-09-17 audit).
+    /// </remarks>
+    Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+
+    /// <summary>Folds one experience type into another in the same category. Not undoable.</summary>
+    Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default);
     Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
     Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 
@@ -203,4 +372,14 @@ public interface IBenPlatformClient
     Task<NearbyResults?> GetNearbyAsync(
         double latitude, double longitude, double radiusMiles, string? query = null,
         CancellationToken token = default);
+
+    // ── Merging groups (item 110) ─────────────────────────────────────────────
+
+    /// <summary>What merging one group into another WOULD do — mutation-free. SuperAdmin.</summary>
+    Task<(Ben.Service.Models.Admin.MergePreview? Result, string? Error)> PreviewOrgMergeAsync(
+        Guid baseId, Guid mergedId, CancellationToken token = default);
+
+    /// <summary>Performs the merge. Null on success, otherwise the refusal sentence.</summary>
+    Task<string?> MergeOrganizationsAsync(
+        Ben.Service.Models.Admin.OrganizationMergeRequest request, CancellationToken token = default);
 }

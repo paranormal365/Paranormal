@@ -51,7 +51,7 @@ public sealed class FfmpegServiceConcurrencyTests
         public GatedFakeModule Module { get; } = new();
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
-            => identifier == "import"
+            => identifier == "benImportEditorModule"
                 ? ValueTask.FromResult((TValue)(object)Module)
                 : throw new NotSupportedException($"unexpected top-level invoke: {identifier}");
 

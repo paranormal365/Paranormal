@@ -80,6 +80,38 @@
     padding: 1rem;
 }
 
+/* ── Server-tab scope selector (item 91) ────────────────────────────────── */
+/* Sits above every state of the list — including the empty one, so a scope that matches nothing
+   can still be changed. Wraps rather than scrolls: the panel is often narrow, and a selector that
+   scrolls sideways is a selector nobody finds the third dropdown in. */
+.bv-browser__scope {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    padding: .4rem .5rem;
+    border-bottom: 1px solid var(--bv-border);
+    background: var(--bv-panel-bg);
+}
+
+.bv-browser__scope-select {
+    flex: 1 1 8rem;
+    min-width: 0;          /* or a long case title stretches the row instead of truncating */
+    max-width: 100%;
+    padding: .2rem .35rem;
+    font-size: .75rem;
+    color: var(--bv-text);
+    background: var(--bv-surface-1);
+    border: 1px solid var(--bv-border);
+    border-radius: 3px;
+}
+
+/* The editor's own accent first, the host's Kendo primary as the fallback — the other order paints
+   navy text on the dark ground, which is why a test enforces it. */
+.bv-browser__scope-select:focus-visible {
+    outline: 2px solid var(--bv-accent, var(--kendo-color-primary));
+    outline-offset: -1px;
+}
+
 /* ── Empty state ────────────────────────────────────────────────────────── */
 .bv-browser__empty {
     display: flex;
@@ -165,7 +197,10 @@
 .bv-clip-card__thumb-placeholder {
     position: relative;
     font-size: 1.25rem;
-    color: #444;
+    /* The tile behind it is #111 in both themes, so this needs a fixed light colour rather than a
+       dark one: #444 on #111 measured 1.94:1, and the play glyph is the only thing saying the tile
+       is a video at all while its thumbnail is still being made (2026-09-18 audit). */
+    color: #9aa4ad;
 }
 
 /* On-demand preview trigger for Server-tab video rows — hidden until hover, matches the
@@ -258,6 +293,39 @@
        is glance-able status, not an action — stays visible regardless of .bv-clip-card__actions'
        own opacity:0 default so the user can tell at a glance what they already have locally. */
     opacity: 1 !important;
+    gap: .25rem;
+}
+
+/* The word beside the tick. V-2: the tick alone said "something happened" and its only
+   explanation was a hover title, so somebody who had just watched a download finish went looking
+   in the bins and found nothing. The next step is a second click; this says so. */
+.bv-clip-card__cached-label {
+    font-size: .625rem;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--kendo-color-success, #4caf50);
+}
+
+/* Owner and case, under the file size on a Server-tab card (V-3). Dimmer than the size, and
+   clipped rather than wrapped: it identifies a row at a glance, and the full text is in its
+   title. */
+.bv-clip-card__provenance {
+    font-size: .625rem;
+    line-height: 1.2;
+    color: var(--kendo-color-subtle, #9aa0a6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* V-4: a bin card whose bytes are not here. The words already say so; this makes the card
+   findable in a grid of twenty without reading every line. */
+/* --bv-attention, not the raw warning colour. The theme mixes that one toward the body colour for
+   exactly this reason — see its definition — because the flat amber measures 2.49:1 on a light
+   page, and "media missing" is the line telling somebody their clip will not render
+   (2026-09-19). */
+.bv-clip-card__meta--missing {
+    color: var(--bv-attention, var(--kendo-color-warning, #f0ad4e));
 }
 
 /* ── Error banner ───────────────────────────────────────────────────────── */
@@ -383,16 +451,68 @@
 }
 
 /* ── Library tab ────────────────────────────────────────────────────────────── */
-.bv-browser__tabs {
-    flex: 1;
+/* TelerikTabStrip's root does not carry this component's Blazor scope attribute, so a plain
+   `.bv-browser__tabs {}` compiles to a selector that can never match and silently does nothing —
+   the same trap the side panel's own tab strip fell into. It has to be reached through `::deep`
+   from `.bv-browser`, which is an authored element and does carry the attribute.
+
+   Without it the tab strip kept its default flex:0 1 auto, so it was as tall as its tab headers
+   and its content box came out one pixel high with overflow:hidden. Every card in the media bin
+   was in the page, and none of it could be seen: importing a picture looked like nothing had
+   happened at all. */
+.bv-browser ::deep .bv-browser__tabs {
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
 
-.bv-browser__local,
-.bv-browser__library {
-    flex: 1;
+/* And the tab's own content box is display:block by default, which means whatever is inside it
+   ignores flex sizing and grows to its content instead of scrolling. */
+.bv-browser ::deep .bv-browser__tabs .k-tabstrip-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.bv-browser ::deep .bv-browser__local,
+.bv-browser ::deep .bv-browser__library {
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
 }
 
+
+/* Cancelled is not an error: somebody asked for it. Muted rather than red. */
+.bv-import-badge--cancelled  { color: var(--bv-text-muted); border-color: var(--bv-border); }
+
+/* How much of the browser's storage the imported media takes. Quiet: it is a fact worth having to
+   hand, not a warning (2026-09-05 audit, media-2). */
+.bv-browser__storage {
+    margin-left: auto;
+    margin-right: .5rem;
+    font-size: .68rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    white-space: nowrap;
+    cursor: default;
+}
+
+/* A refused library, with the host's own way in beneath it. Neither an error nor an empty state:
+   there is something the person can do, and both of the old treatments described a situation that
+   was not true (2026-09-05 audit, F11 and site-11). */
+.bv-browser__signin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .6rem;
+    padding: 1.25rem .75rem;
+    text-align: center;
+    font-size: .8rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-browser__signin p { margin: 0; line-height: 1.5; }

@@ -33,11 +33,26 @@ public class RequestStatusProgressionTests : BenTestBase
     public async Task OrgRequests_Tab_RendersWithRequestCards()
     {
         await NavigateToRequestsTabAsync();
+
+        // The panel loads its rows over the circuit AFTER the tab opens, so reading the body
+        // straight away catches the tab's own render and none of its content. NetworkIdle does
+        // not help — Blazor Server's data never was an HTTP request — which is what
+        // WaitUntilLoadedAsync exists for.
+        await WaitUntilLoadedAsync();
+
+        // A RETRYING expectation, not a one-shot InnerText. Under the full suite's load the panel
+        // takes longer to arrive than it does alone, and reading the body once catches the tab's
+        // own render and none of its content — which is how this passed 12/12 in isolation and
+        // still failed in the full run.
+        await Expect(Main.GetByText("Submitted", new() { Exact = false })
+                .Or(Main.GetByText("Viewed", new() { Exact = false }))
+                .Or(Main.GetByText("Under Review", new() { Exact = false }))
+                .Or(Main.GetByText("No pending", new() { Exact = false }))
+                .First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
-        // Should show either request cards or empty state
-        Assert.That(body, Does.Contain("Submitted").Or.Contain("Viewed").Or.Contain("Under Review")
-                       .Or.Contain("No pending"), "Expected status labels or empty state.");
     }
 
     [Test]
@@ -125,18 +140,21 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_SubmittedTo_ShowsProgressionSteps()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Find a submitted request (status badge = "Submitted")
-        var submittedCard = Page.GetByText("Submitted", new() { Exact = false }).First;
-        if (!await submittedCard.IsVisibleAsync())
+        // The status BADGE exactly, not any text containing "Submitted": every card carries a
+        // "Submitted {date}" line, so the loose match found that on an Accepted card, clicked a
+        // request with no Submitted To section, and reported the section broken. In the reseeded
+        // data Daniel's request is Accepted, which is exactly when the loose match lies.
+        var submittedBadge = Page.Locator(".badge", new() { HasTextString = "Submitted" }).First;
+        if (!await submittedBadge.IsVisibleAsync())
         {
-            Assert.Pass("No submitted requests for Daniel Park — may only have Draft.");
+            Assert.Pass("No submitted requests for Daniel Park — may only have Draft/Accepted.");
             return;
         }
-        await Page.Locator(".card").Filter(new() { HasText = "Submitted" }).First.ClickAsync();
+        await Page.Locator(".card").Filter(new() { Has = submittedBadge }).First.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Submitted To card should appear
@@ -147,7 +165,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_AssignedRequest_ShowsViewMyCaseLink()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -169,7 +187,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task ClientRequestDetail_AssignedRequest_ViewMyCaseLinkNavigatesToCase()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-requests");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -198,7 +216,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_EditOccurrence_DialogPreFilled()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
@@ -219,16 +237,21 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_StatusBadge_Visible()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;
         if (!await card.IsVisibleAsync()) { Assert.Pass("No cases seeded."); return; }
 
-        // Case status badge should be visible on the list card
-        var badge = Page.GetByText("Accepted", new() { Exact = false })
-                        .Or(Page.GetByText("Active", new() { Exact = false }))
-                        .Or(Page.GetByText("Public", new() { Exact = false }))
+        // Case status badge should be visible on the list card.
+        //
+        // Scoped to Main, and "Public" is matched exactly: the old page-wide substring match on
+        // "Public" found the sidebar's "Publications" link first in DOM order — present but
+        // hidden inside the collapsed Community group — and .First on a hidden element reported
+        // the badge missing while four of them sat rendered in the list.
+        var badge = Main.GetByText("Accepted", new() { Exact = false })
+                        .Or(Main.GetByText("Active", new() { Exact = false }))
+                        .Or(Main.GetByText("Public", new() { Exact = true }))
                         .First;
         await Expect(badge).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
@@ -236,7 +259,7 @@ public class RequestStatusProgressionTests : BenTestBase
     [Test]
     public async Task MyCaseDetail_CaseManager_ShownWhenAssigned()
     {
-        await LoginAsync("daniel.park@benco.dev", "D@niel!Park2026");
+        await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var card = Page.Locator(".card").First;

@@ -19,8 +19,17 @@ public sealed class CaseNoteController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
-    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper)
-    { _db = db; _mapper = mapper; }
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper, Services.Billing.SubscriptionLimitGuard limits,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ICmsMarkupSanitizer sanitizer)
+    { _db = db; _mapper = mapper; _limits = limits; _security = security; _sanitizer = sanitizer; }
+
+    /// <summary>Note bodies are stored and returned as sanitized HTML (beta feedback, 2026-09-14) — see CaseNoteBodies.</summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseNoteRecord>>> GetAll(
@@ -34,19 +43,23 @@ public sealed class CaseNoteController : BenControllerBase
             .OrderByDescending(n => n.IsPinned)
             .ThenByDescending(n => n.DateCreated)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseNoteRecord>>(notes));
+        // Converted as read as well as when saved: a note written as plain text before 2026-09-14 that the one-time
+        // conversion has not reached yet is still drawn safely, with its line breaks.
+        return Ok(_mapper.Map<IEnumerable<CaseNoteRecord>>(notes)
+            .Select(n => n with { Body = Services.CaseNoteBodies.ToHtml(n.Body, _sanitizer) }));
     }
 
     [HttpPost]
     public async Task<ActionResult<CaseNoteRecord>> Create(
         Guid orgId, Guid caseId, [FromBody] UpsertCaseNoteRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
             return NotFound("Case not found.");
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Body is required.");
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(request.Body)) return BadRequest("Write something in the note first.");
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var note = new CaseNote
         {
@@ -54,7 +67,7 @@ public sealed class CaseNoteController : BenControllerBase
             CaseId             = caseId,
             AuthorAppUserId    = userId,
             Title              = request.Title?.Trim(),
-            Body               = request.Body.Trim(),
+            Body               = Services.CaseNoteBodies.ToHtml(request.Body, _sanitizer),
             IsPinned           = request.IsPinned,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -71,7 +84,7 @@ public sealed class CaseNoteController : BenControllerBase
     public async Task<ActionResult<CaseNoteRecord>> Update(
         Guid orgId, Guid caseId, Guid noteId, [FromBody] UpsertCaseNoteRequest request, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var note = await db.CaseNotes.Include(n => n.AuthorAppUser)
@@ -82,9 +95,9 @@ public sealed class CaseNoteController : BenControllerBase
         bool isAuthor = note.AuthorAppUserId == userId;
         if (!isAuthor && !await IsOrgAdminAsync(orgId, ct)) return Forbid();
 
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Body is required.");
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(request.Body)) return BadRequest("Write something in the note first.");
         note.Title              = request.Title?.Trim();
-        note.Body               = request.Body.Trim();
+        note.Body               = Services.CaseNoteBodies.ToHtml(request.Body, _sanitizer);
         note.IsPinned           = request.IsPinned;
         note.DateUpdated        = DateTime.UtcNow;
         note.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
@@ -96,7 +109,7 @@ public sealed class CaseNoteController : BenControllerBase
     public async Task<IActionResult> Delete(
         Guid orgId, Guid caseId, Guid noteId, CancellationToken ct)
     {
-        if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var note = await db.CaseNotes
@@ -111,14 +124,30 @@ public sealed class CaseNoteController : BenControllerBase
         return NoContent();
     }
 
+    // Item 156 Phase D: bare membership stopped being the rule here — see CaseFileController.
+    /// <summary>
+    /// May the caller take this action on this case's notes?
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Create, update and delete used to ask for Case.READ</b> — through a helper called
+    /// <c>IsOrgMemberAsync</c>, which is neither what it asked nor what it meant. Anybody who
+    /// could see a case could rewrite and destroy its notes.</para>
+    ///
+    /// <para>That was survivable while every member was auto-granted case read anyway. It is not
+    /// survivable now: Ben ended the grandfathering on 2026-08-26, so a read grant is a
+    /// deliberate act and has to mean READ. Owners and administrators still pass above this.</para>
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
+
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return false;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await FileAudienceAccess.IsOrgMemberAsync(db, orgId, userId, ct);
-    }
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(GetCurrentUserId(), orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
     private async Task<bool> IsOrgAdminAsync(Guid orgId, CancellationToken ct)
     {

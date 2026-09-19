@@ -42,11 +42,12 @@ Site administrators can see equipment records, as they can everywhere else in th
 Choose a category first, then the make, then the model, then give it a name you will recognise in
 a list, like "my backup recorder".
 
-The category narrows the models, not the makes. Every make stays on the list on purpose: the first
-person to own a FLIR audio recorder has to be able to choose FLIR and add the model under it. Makes
-with nothing in the category you picked say so — *FLIR (no models in this category yet)* — and if
-you pick one anyway, the model list tells you it is empty and points at adding the model, rather
-than sitting there blank with no explanation.
+The category sorts the makes rather than cutting them. Makes that already have something in the
+category you picked come first; the rest follow, each saying so — *FLIR (no models in this category
+yet)*. Every make stays on the list on purpose, because the first person to own a FLIR audio
+recorder has to be able to choose FLIR and add the model under it. Pick one of the labelled makes
+and the model list says it is empty and points at the box that adds one, rather than sitting there
+blank with no explanation.
 
 ## When you don't know the make or model
 
@@ -159,7 +160,8 @@ are readable only by group Administrators and site administrators.
 ![The public equipment catalog](/help/media/your-equipment/catalog.png)
 *The catalog lists makes and models, and — on its second tab — the gear people have chosen to list. It never names an owner.*
 
-The equipment catalogue — **Equipment** in the menu — is public: anyone can browse it, including
+The equipment catalogue — **Equipment → Catalogue** in the menu, or just **Equipment** if you are
+not signed in — is public: anyone can browse it, including
 visitors who are not signed in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.
 *Gear people own* lists individual pieces whose owners chose to list them. Neither half ever
 carries who owns anything or any serial number.
@@ -238,7 +240,8 @@ lenders deciding that person's next request; what borrowers write is shown, unat
 borrowers considering asking. The full rules are in
 [Borrowing Equipment](/help/borrowing-equipment#feedback-after-a-loan).
 
-A group's **Administrators and Owner** can open **Equipment feedback** from the group's page. It
+A group's **Administrators and Owner** get an **Equipment feedback** link on the group's Equipment
+tab; nobody else is shown it, because nobody else can open the page. It
 lists everything left about the group's gear and its members' loans, naming both sides, and anything
 that crosses a line can be removed. That page exists so a complaint can be acted on — it is the one
 place in the app where feedback is attributed on both ends.

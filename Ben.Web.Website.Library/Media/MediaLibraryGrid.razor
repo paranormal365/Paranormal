@@ -5,6 +5,9 @@
 @using Ben.Web.Website.Library.Organization.Cases
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
   Reusable cross-scope media grid/list. Standalone browse mode (PickerMode="false") or an
@@ -50,6 +53,11 @@
     {
         <div class="alert alert-danger">@_error</div>
     }
+    else if (_allFilesResult.Failed)
+    {
+        @* An empty media library sends somebody off to re-upload files they already have. *@
+        <BenListState TItem="UploadFileRecord" Result="@_allFilesResult" OnRetry="@LoadAsync" />
+    }
     else if (!_filteredFiles.Any())
     {
         <div class="text-secondary small py-4 text-center">No media files found.</div>
@@ -70,17 +78,38 @@
                             {
                                 <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
                             }
-                            <div class="d-flex align-items-center justify-content-center" style="min-height:96px;">
+                            @* A TILE, not a gap. Every card gets the same frame whatever it
+                               holds, so "this file has no preview" and "this page is broken" stop
+                               looking identical — which is exactly what a row of one-pixel test
+                               images made them look like. *@
+                            <div class="d-flex align-items-center justify-content-center rounded overflow-hidden"
+                                 style="height:96px;background:rgba(128,128,128,.10);">
                                 @RenderThumbnail(file)
                             </div>
-                            <div class="small text-truncate fw-semibold" title="@file.FileName">@file.FileName</div>
+                            @{ var outcome = OutcomeFor(file); }
+                            @* A missing file is marked ON THE NAME, which is the part somebody
+                               reads and the part they would quote when reporting it. *@
+                            <div class="small text-truncate fw-semibold @(outcome == MediaPreviewOutcome.Unavailable ? "border border-danger rounded px-1 text-danger" : "")"
+                                 data-testid="@(outcome == MediaPreviewOutcome.Unavailable ? "file-name-missing" : "file-name")"
+                                 title="@(outcome == MediaPreviewOutcome.Unavailable ? $"{file.FileName} — this file could not be loaded from storage" : file.FileName)">
+                                @file.FileName
+                            </div>
+                            @if (outcome is MediaPreviewOutcome.Unavailable or MediaPreviewOutcome.NotPreviewable)
+                            {
+                                <div class="@(outcome == MediaPreviewOutcome.Unavailable ? "text-danger" : "text-secondary")"
+                                     style="font-size:.68rem;line-height:1.2;" data-testid="preview-note">
+                                    @(outcome == MediaPreviewOutcome.Unavailable
+                                        ? "The file is recorded here but its contents couldn't be loaded."
+                                        : "This kind of file can't be shown in the page — download it to open it.")
+                                </div>
+                            }
                             <div class="text-secondary" style="font-size:.72rem;">
                                 @FormatSize(file.FileSize) · @file.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                             </div>
                             @if (ShowVoting)
                             {
                                 <div @onclick:stopPropagation="true">
-                                    <EvidenceVoteWidget UploadFileId="@file.Id" />
+                                    <EvidenceVoteWidget UploadFileId="@file.Id" Compact="true" />
                                 </div>
                             }
                             @if (!PickerMode)
@@ -129,7 +158,7 @@
                     <GridColumn Title="Voting" Width="260px">
                         <Template>
                             @{ var row3 = (UploadFileRecord)context; }
-                            <EvidenceVoteWidget UploadFileId="@row3.Id" />
+                            <EvidenceVoteWidget UploadFileId="@row3.Id" Compact="true" />
                         </Template>
                     </GridColumn>
                 }
@@ -138,9 +167,7 @@
                     <GridColumn Title="" Width="140px">
                         <Template>
                             @{ var row4 = (UploadFileRecord)context; }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDetail(row4))"><BenIcon Name="message-square" Class="me-1" />
-                                Comments
-                            </button>
+                            <BenGridAction Icon="message-square" Label="Comments" OnClick="@(() => OpenDetail(row4))" />
                         </Template>
                     </GridColumn>
                 }
@@ -199,6 +226,7 @@
     [Parameter] public int PageSize { get; set; } = 24;
 
     private List<UploadFileRecord> _allFiles = [];
+    private LoadResult<UploadFileRecord> _allFilesResult;
     private bool _loading = true;
     private string? _error;
     private int _page = 1;
@@ -230,7 +258,7 @@
     {
         _loading = true;
         _error = null;
-        try { _allFiles = (await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes)).ToList(); }
+        try { _allFilesResult = await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes); _allFiles = _allFilesResult.Items.ToList(); }
         catch { _error = "Failed to load media files."; }
         _loading = false;
     }
@@ -277,23 +305,107 @@
     {
         if (_isImage(file))
         {
-            <UserMediaPreview FileId="@file.Id" FileName="@file.FileName" ContentType="@file.ContentType" FileSize="@file.FileSize" />
+            @* The BROWSER fetches a shrunken copy, straight from the API.
+               
+               This used to pull the whole file through the circuit and hand it over as a base64
+               data URL — for every card, on every render. A page holding an 11 MB photograph and
+               a couple of 32 MB videos put the website process into gigabytes and eventually
+               out of memory, which is why the library "wasn't displaying": it was drowning, not
+               broken. The thumbnail endpoint exists for exactly this and says so in its own
+               remarks; this grid simply never used it. The browser also caches these, which the
+               data URLs could never do.
+
+               Through /media/… rather than straight at the API: the browser holds no bearer
+               token, so a direct link 401s on anything that is not public — and the card would
+               then call a perfectly good file broken. *@
+            <img src="@MediaUrls.Thumbnail(file.Id)"
+                 alt="@file.FileName" title="@file.FileName"
+                 loading="lazy" decoding="async"
+                 style="width:100%;height:100%;object-fit:contain;border-radius:4px;image-rendering:pixelated;"
+                 @onload="@(() => RecordOutcome(file.Id, MediaPreviewOutcome.Shown))"
+                 @onerror="@(() => RecordOutcome(file.Id, MediaPreviewOutcome.Unavailable))" />
         }
-        else if (_previewLoaded.Contains(file.Id))
+        else if (_isAudio(file) && _previewLoaded.Contains(file.Id))
         {
-            <UserMediaPreview FileId="@file.Id" FileName="@file.FileName" ContentType="@file.ContentType" FileSize="@file.FileSize" />
+            @* A waveform, drawn from a URL the BROWSER fetches.
+               
+               WaveSurfer streams the audio itself, so the file never passes through the server's
+               memory. The previous shape — fetch the bytes server-side, base64 them into the
+               page — cost the website a copy of every recording on the page, and a library of
+               them took the process to sixteen gigabytes and killed it. A grid must never hold
+               its files in memory to draw them. *@
+            <div class="w-100" @onclick:stopPropagation="true">
+                <AudioFilePreview FileId="@file.Id" FileName="@file.FileName"
+                                  ContentType="@file.ContentType" FileSize="@file.FileSize"
+                                  SourceUrl="@MediaUrls.Download(file.Id)"
+                                  OnOutcome="@(o => RecordOutcome(file.Id, o))" />
+            </div>
+        }
+        else if (_isAudio(file))
+        {
+            @* On demand, not on sight.
+            
+               A page holds two dozen cards, and drawing every waveform at once fires two dozen
+               fetches in the same instant — enough to trip the API's own rate limit (600/min,
+               shared by everything this site asks for) and return 429s that the card would then
+               report as broken recordings. One tap is cheaper than a page that lies. *@
+            <div class="d-flex flex-column align-items-center gap-1" @onclick:stopPropagation="true">
+                <TelerikSvgIcon Icon="@SvgIcon.FileAudio" />
+                <button type="button" class="btn btn-secondary btn-sm" data-testid="show-waveform"
+                        @onclick="@(() => { _previewLoaded.Add(file.Id); RecordOutcome(file.Id, MediaPreviewOutcome.Shown); })">Waveform</button>
+            </div>
+        }
+        else if (_isVideo(file) && _previewLoaded.Contains(file.Id))
+        {
+            @* Same rule: the browser streams it, the server never holds it. `preload="metadata"`
+               fetches a few kilobytes of header rather than the whole film. *@
+            <video controls preload="metadata" class="w-100" style="max-height:96px;"
+                   src="@MediaUrls.Download(file.Id)"
+                   @onclick:stopPropagation="true"></video>
+        }
+        else if (_isVideo(file))
+        {
+            <div class="d-flex flex-column align-items-center gap-1" @onclick:stopPropagation="true">
+                <TelerikSvgIcon Icon="@SvgIcon.FileVideo" />
+                <button type="button" class="btn btn-secondary btn-sm"
+                        @onclick="@(() => { _previewLoaded.Add(file.Id); RecordOutcome(file.Id, MediaPreviewOutcome.Shown); })">Preview</button>
+            </div>
         }
         else
         {
-            <div class="d-flex flex-column align-items-center gap-1" @onclick:stopPropagation="true">
-                <TelerikSvgIcon Icon="@(_isVideo(file) ? SvgIcon.FileVideo : _isAudio(file) ? SvgIcon.FileAudio : SvgIcon.File)" />
-                @if (_isVideo(file) || _isAudio(file))
-                {
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => { _previewLoaded.Add(file.Id); })">Preview</button>
-                }
+            @* Everything else — a .json, a .zip. Said in words rather than shown as an anonymous
+               icon that reads as a failure. Nothing is fetched: there is nothing to draw. *@
+            <div class="d-flex flex-column align-items-center justify-content-center text-center gap-1 p-1"
+                 data-testid="preview-none" title="@file.FileName">
+                <span class="text-secondary" style="font-size:1.1rem;line-height:1;">&#128196;</span>
+                <span class="text-secondary" style="font-size:.68rem;line-height:1.1;">No preview for this type</span>
             </div>
+            @RecordOutcomeInline(file.Id, MediaPreviewOutcome.NotPreviewable)
         }
     };
+
+    private readonly Dictionary<Guid, MediaPreviewOutcome> _outcomes = [];
+
+    private MediaPreviewOutcome OutcomeFor(UploadFileRecord file)
+        => _outcomes.TryGetValue(file.Id, out var o) ? o : MediaPreviewOutcome.Loading;
+
+    /// <summary>Records an outcome that is known at render time, without re-rendering.</summary>
+    /// <remarks>
+    /// Calling <see cref="RecordOutcome"/> during a render would ask for another render from
+    /// inside one. Nothing needs to change on screen here — the tile has already drawn what it is
+    /// going to draw — so the value is simply stored for the note underneath.
+    /// </remarks>
+    private RenderFragment RecordOutcomeInline(Guid fileId, MediaPreviewOutcome outcome) => __builder =>
+    {
+        _outcomes[fileId] = outcome;
+    };
+
+    private void RecordOutcome(Guid fileId, MediaPreviewOutcome outcome)
+    {
+        if (_outcomes.TryGetValue(fileId, out var existing) && existing == outcome) return;
+        _outcomes[fileId] = outcome;
+        StateHasChanged();
+    }
 
     private static string FormatSize(long bytes) => bytes switch
     {

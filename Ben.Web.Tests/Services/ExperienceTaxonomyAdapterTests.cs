@@ -31,27 +31,30 @@ public class ExperienceTaxonomyAdapterTests
         {
             new(new ExperienceCategoryRecord { Name = "Audible" }, [])
         };
-        api.Setup(x => x.GetAsync<IReadOnlyList<ExperienceCategoryWithTypesResponse>>(
+        api.Setup(x => x.GetListAsync<ExperienceCategoryWithTypesResponse>(
                 "/api/experience-categories/with-types", It.IsAny<CancellationToken>()))
-           .ReturnsAsync(data);
+           .ReturnsAsync(LoadResult<ExperienceCategoryWithTypesResponse>.Ok(data));
 
         var result = await Build(api).GetExperienceTaxonomyAsync();
 
-        Assert.Single(result);
-        Assert.Equal("Audible", result[0].Category.Name);
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("Audible", result.Items[0].Category.Name);
     }
 
     [Fact]
-    public async Task GetExperienceTaxonomyAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetExperienceTaxonomyAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<ExperienceCategoryWithTypesResponse>>(
+        api.Setup(x => x.GetListAsync<ExperienceCategoryWithTypesResponse>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<ExperienceCategoryWithTypesResponse>)null!);
+           .ReturnsAsync(LoadResult<ExperienceCategoryWithTypesResponse>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetExperienceTaxonomyAsync();
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     // ── GetAllExperienceCategoriesAsync ───────────────────────────────────────
@@ -61,15 +64,16 @@ public class ExperienceTaxonomyAdapterTests
     {
         var api  = ApiMock();
         var data = new List<ExperienceCategoryRecord> { new() { Name = "Visual" } };
-        api.Setup(x => x.GetAsync<IReadOnlyList<ExperienceCategoryRecord>>(
+        api.Setup(x => x.GetListAsync<ExperienceCategoryRecord>(
                 "/api/admin/experience-categories", It.IsAny<CancellationToken>()))
-           .ReturnsAsync(data);
+           .ReturnsAsync(LoadResult<ExperienceCategoryRecord>.Ok(data));
 
         var result = await Build(api).GetAllExperienceCategoriesAsync();
 
-        Assert.Single(result);
-        Assert.Equal("Visual", result[0].Name);
-        api.Verify(x => x.GetAsync<IReadOnlyList<ExperienceCategoryRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("Visual", result.Items[0].Name);
+        api.Verify(x => x.GetListAsync<ExperienceCategoryRecord>(
             "/api/admin/experience-categories", It.IsAny<CancellationToken>()), Times.Once);
     }
 

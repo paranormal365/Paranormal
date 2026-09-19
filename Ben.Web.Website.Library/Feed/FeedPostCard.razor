@@ -1,0 +1,370 @@
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenUserState UserState
+@inject IBenAdminClient Feed
+
+@*
+    One post in the feed.
+
+    The author's name links to their feed profile, the body is linkified by FeedText, and the
+    footer carries the actions a reader has: reply, follow, report.
+
+    Report is offered once. After that the control says so rather than disappearing — a control
+    that vanishes leaves somebody wondering whether their report registered, and inviting a second
+    one would only be refused.
+
+    A visitor who is not signed in gets neither control (item 186). Both endpoints are
+    [Authorize]d, so offering the button would be offering a 401 — and the join card at the top of
+    the feed already explains what an account is for. Reading needs no account; acting does.
+
+    CanAct arrives from the page rather than being read here. The pages await auth resolution
+    before claiming anything about the reader; a card reading the state for itself would answer
+    from whatever was true at prerender and never revise it — which is exactly what
+    AuthReadyPrerenderGuardTests exists to stop, and what it caught when this did read it.
+*@
+
+<article class="card mb-2 bv-feed-post">
+    <div class="card-body py-3">
+
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            @* The face (item 186 F9) — the same viewer-aware avatar machinery as everywhere
+               else (items 162/163), so consent and defaults are decided server-side. *@
+            <Ben.Web.Website.Library.Shared.UserAvatar AppUserId="@Post.AuthorAppUserId"
+                                                       DisplayName="@Post.AuthorDisplayName"
+                                                       Size="36" />
+            <a href="@($"/feed/people/{Post.AuthorAppUserId}")" class="fw-semibold text-decoration-none">
+                @Post.AuthorDisplayName
+            </a>
+            <span class="text-secondary small">
+                @Post.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
+            </span>
+
+            @if (!Post.IsOwnPost && ShowFollow && CanAct)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0 ms-auto"
+                        @onclick="() => OnFollowToggled.InvokeAsync(Post)">
+                    @(Post.AuthorIsFollowedByCurrentUser ? "Following" : "Follow")
+                </button>
+            }
+        </div>
+
+        <div class="bv-feed-post__body">
+            <FeedText Body="@Post.Body" Mentions="@Post.Mentions" />
+        </div>
+
+        @* The poll, under the words it belongs to. Handed over whole rather than by id: the feed
+           already read it for this page, and asking again per card is the N+1 that makes a feed
+           slow exactly as it gets popular. *@
+        @if (Post.Poll is { } poll)
+        {
+            <div class="mt-2">
+                <BenPoll Poll="@poll" />
+            </div>
+        }
+
+        @* The category chip (item 186 F6): what the author says this shows, linking to the
+           type's page. Rendered for everybody — the NUDGE below is author-only, the label is not.
+           Beside it, the F7 marks: the claimed group's name (ONLY when claimed — the record
+           carries nothing otherwise) and the badges that vouch for the footage. *@
+        @if (Post.ExperienceTypeName is not null || Post.GroupVerified || Post.ModeratorReviewed)
+        {
+            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap small">
+                @if (Post.ExperienceTypeName is not null)
+                {
+                    <a href="@($"/feed/types/{Post.ExperienceTypeId}")"
+                       class="badge rounded-pill bg-body-secondary text-body-emphasis text-decoration-none bv-feed-category">
+                        @Post.ExperienceTypeName
+                    </a>
+                }
+                @if (Post.AttributedOrgName is not null)
+                {
+                    <a href="@($"/o/{Post.AttributedOrgUrlName}")"
+                       class="text-decoration-none bv-feed-attribution"
+                       title="The group whose investigation this came from">
+                        @Post.AttributedOrgName
+                    </a>
+                }
+                @if (Post.GroupVerified)
+                {
+                    <span class="badge rounded-pill text-bg-success bv-feed-badge"
+                          title="The group that worked this case vouches the footage is what it says">
+                        Group verified
+                    </span>
+                }
+                @if (Post.ModeratorReviewed)
+                {
+                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis bv-feed-badge"
+                          title="A site moderator reviewed this media">
+                        Moderator reviewed
+                    </span>
+                }
+            </div>
+        }
+
+        @* The photo or video (item 186 F4). Served from the post's own route, which refuses
+           anything unscreened — so there is no file id here to try against the general file
+           endpoints, and a held photo simply has no URL. *@
+        @if (Post.HasMedia)
+        {
+            <div class="mt-2 bv-feed-post__media">
+                @if (Post.MediaKind == FeedMediaKind.Video)
+                {
+                    <video src="@MediaUrl" controls preload="metadata" playsinline
+                           class="w-100 rounded" style="max-height:32rem;background:#000;"></video>
+                }
+                else
+                {
+                    @* No lazy loading: this is a scrolling feed, and an image that starts loading
+                       when it is already on screen is an image that arrives late. *@
+                    <img src="@MediaUrl" alt="" class="w-100 rounded" style="max-height:32rem;object-fit:contain;" />
+                }
+            </div>
+        }
+        else if (Post.MediaAwaitingReview && Post.IsOwnPost)
+        {
+            @* Only to the author, and said as a wait rather than a failure: their upload worked,
+               and "we are checking it" is the truth. Nobody else is told a post has media at all. *@
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-2"
+                 id="feed-media-pending">
+                <BenIcon Name="clock" />
+                <span>Your photo is being checked before it appears.</span>
+            </div>
+        }
+
+        @* The mismatch nudge (item 186 F6). AUTHOR-ONLY, like the pending note, and phrased as
+           help rather than accusation: an honest mislabel is the common case. Never blocks —
+           the post is already up. One click opens the same picker the composer uses. *@
+        @if (Post.CategoryMatchDegraded && Post.IsOwnPost && CanAct)
+        {
+            <div class="mt-2 small d-flex align-items-center gap-2 flex-wrap alert alert-light border py-2 mb-0"
+                 id="feed-category-nudge">
+                <BenIcon Name="tag" />
+                <span>This doesn't look like <strong>@Post.ExperienceTypeName</strong> to us — want to recategorize?</span>
+                <button type="button" class="btn btn-link btn-sm p-0"
+                        @onclick="() => _recategorizing = !_recategorizing">
+                    @(_recategorizing ? "Never mind" : "Change category")
+                </button>
+            </div>
+            @if (_recategorizing)
+            {
+                <div class="mt-2" id="feed-category-repick">
+                    @if (_taxonomyFailed)
+                    {
+                        @* The refusal, said rather than spun forever on "Loading…". *@
+                        <span class="small text-danger">Categories couldn't load — try again shortly.</span>
+                    }
+                    else if (_taxonomy is null)
+                    {
+                        <span class="small text-secondary">Loading categories…</span>
+                    }
+                    else
+                    {
+                        <select class="form-select form-select-sm" @onchange="RecategorizeAsync">
+                            <option value="">No category</option>
+                            @foreach (var group in _taxonomy)
+                            {
+                                <optgroup label="@group.Category.Name">
+                                    @foreach (var type in group.Types)
+                                    {
+                                        <option value="@type.Id" selected="@(type.Id == Post.ExperienceTypeId)">
+                                            @type.Name
+                                        </option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    }
+                    @if (_recategorizeError is not null)
+                    {
+                        <div class="small text-danger mt-1">@_recategorizeError</div>
+                    }
+                </div>
+            }
+        }
+
+        @* Where it was written, when the author chose to say so (item 233, Ben 2026-09-11).
+           The map is a still, not a canvas: a feed of twenty posts must not be twenty live maps,
+           and the point is "roughly there", which a pin on a small square says. *@
+        @if (Post.PostedPlaceName is { } place && Post.PostedLatitude is { } lat && Post.PostedLongitude is { } lon)
+        {
+            <div class="bv-feed-post__place mt-2">
+                <a class="bv-feed-post__placemap"
+                   href="@($"https://maps.apple.com/?ll={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&q={Uri.EscapeDataString(place)}")"
+                   target="_blank" rel="noopener noreferrer"
+                   title="@($"Open {place} in Maps")" aria-label="@($"Open {place} in Maps")">
+                    <BenIcon Name="map-pin" />
+                </a>
+                <span class="small text-secondary">said at <strong>@place</strong></span>
+            </div>
+        }
+
+        @* What the post is ABOUT, when it was written on a place's page (2026-09-17). Distinct
+           from "said at" above, which is where the author was standing — somebody writes up
+           Cragfont at home, and a card that conflated the two would claim they were there. Shown
+           wherever the card appears, so a post read on the front page still says which place it
+           belongs to and links back to it. *@
+        @if (Post.PlaceId is { } aboutPlaceId && Post.AboutPlaceName is { } aboutPlaceName)
+        {
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-1"
+                 data-testid="feed-post-about-place">
+                <BenIcon Name="map-pin" />
+                <span>at <a href="@($"/places/{aboutPlaceId}")">@aboutPlaceName</a></span>
+            </div>
+        }
+
+        @* AUTHOR-ONLY, like the media-pending note: a post waiting for its hour is on the page
+           only for the person who scheduled it, and they should be told when it goes up. *@
+        @if (Post.ScheduledForUtc is { } goesUp && Post.IsOwnPost)
+        {
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-2 flex-wrap"
+                 id="feed-post-scheduled">
+                <BenIcon Name="clock" />
+                <span>
+                    Goes up @goesUp.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                    at @goesUp.ToViewerLocalTime(UserState).ToString("h:mm tt") — only you can see it until then
+                </span>
+                @* Both doors, because a scheduled post nobody else can see would otherwise be one
+                   the author could neither release nor call back. *@
+                <button type="button" class="btn btn-link btn-sm p-0" disabled="@_scheduleBusy"
+                        @onclick="PublishNowAsync">Post it now</button>
+                <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_scheduleBusy"
+                        @onclick="CancelScheduledAsync">Cancel it</button>
+            </div>
+            @if (_scheduleError is not null)
+            {
+                <div class="small text-danger" id="feed-post-scheduled-error">@_scheduleError</div>
+            }
+        }
+
+        <div class="d-flex align-items-center gap-3 mt-2 small">
+            @* The like. A visitor sees the count and a link to join rather than a dead control:
+               the number is the social proof, and the invitation is the point of showing it. *@
+            @if (CanAct)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none bv-feed-like"
+                        title="@(Post.LikedByCurrentUser ? "You liked this" : "Like this post")"
+                        aria-pressed="@(Post.LikedByCurrentUser ? "true" : "false")"
+                        @onclick="() => OnLikeToggled.InvokeAsync(Post)">
+                    <span aria-hidden="true">@(Post.LikedByCurrentUser ? "♥" : "♡")</span>
+                    <span class="visually-hidden">@(Post.LikedByCurrentUser ? "Unlike" : "Like")</span>
+                    @if (Post.LikeCount > 0) { <span class="ms-1">@Post.LikeCount</span> }
+                </button>
+            }
+            else if (Post.LikeCount > 0)
+            {
+                <a href="/signup" class="text-decoration-none text-secondary bv-feed-like"
+                   title="Sign in to like posts">
+                    <span aria-hidden="true">♡</span> <span class="ms-1">@Post.LikeCount</span>
+                </a>
+            }
+
+            <a href="@($"/feed/{Post.Id}")" class="text-decoration-none text-secondary">
+                @(Post.ReplyCount == 1 ? "1 reply" : $"{Post.ReplyCount} replies")
+            </a>
+
+            @if (!Post.IsOwnPost && CanAct)
+            {
+                @if (Post.ReportedByCurrentUser)
+                {
+                    <span class="text-secondary">Reported</span>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-link btn-sm p-0 text-secondary"
+                            @onclick="() => OnReportRequested.InvokeAsync(Post)">
+                        Report
+                    </button>
+                }
+            }
+        </div>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public FeedPostRecord Post { get; set; } = default!;
+
+    /// <summary>Hidden on a profile page, where one follow button at the top says it better.</summary>
+    [Parameter] public bool ShowFollow { get; set; } = true;
+
+    [Parameter] public EventCallback<FeedPostRecord> OnLikeToggled { get; set; }
+    [Parameter] public EventCallback<FeedPostRecord> OnFollowToggled { get; set; }
+    [Parameter] public EventCallback<FeedPostRecord> OnReportRequested { get; set; }
+
+    /// <summary>
+    /// Whether this reader may act on a post — follow or report. False for a visitor, and false
+    /// until the page knows, so a control never appears before the page can honour it.
+    /// </summary>
+    [Parameter] public bool CanAct { get; set; }
+
+    /// <summary>Where the post's media is served from. Only ever asked for when HasMedia.</summary>
+    private string MediaUrl => Feed.GetFeedMediaUrl(Post.Id);
+
+    /// <summary>Raised with the re-read post after a recategorize, so the page swaps it in.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnRecategorized { get; set; }
+
+    /// <summary>Raised when a waiting post was called back, so the page drops it.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnScheduledCancelled { get; set; }
+
+    private bool _recategorizing;
+    private string? _recategorizeError;
+    private bool _scheduleBusy;
+    private string? _scheduleError;
+
+    /// <summary>Releases a waiting post, and hands the page the version that is now up.</summary>
+    private async Task PublishNowAsync()
+    {
+        _scheduleBusy = true;
+        _scheduleError = null;
+        try
+        {
+            var released = await Feed.PublishScheduledNowAsync(Post.Id);
+            if (released is null) _scheduleError = "That couldn't be posted just now. Try again shortly.";
+            else await OnRecategorized.InvokeAsync(released);
+        }
+        finally { _scheduleBusy = false; }
+    }
+
+    /// <summary>Calls a waiting post back. Nobody has seen it, so there is nothing to explain away.</summary>
+    private async Task CancelScheduledAsync()
+    {
+        _scheduleBusy = true;
+        _scheduleError = null;
+        try
+        {
+            if (await Feed.CancelScheduledPostAsync(Post.Id)) await OnScheduledCancelled.InvokeAsync(Post);
+            else _scheduleError = "That couldn't be called back just now. Try again shortly.";
+        }
+        finally { _scheduleBusy = false; }
+    }
+    private IReadOnlyList<ExperienceCategoryWithTypesResponse>? _taxonomy;
+    private bool _taxonomyFailed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The picker's options, fetched only when the nudge is actually showing.
+        if (Post.CategoryMatchDegraded && Post.IsOwnPost && _taxonomy is null)
+        {
+            var taxonomy = await Feed.GetExperienceTaxonomyAsync();
+            _taxonomyFailed = taxonomy.Failed;
+            _taxonomy = taxonomy.Failed ? null : taxonomy.Items;
+        }
+    }
+
+    private async Task RecategorizeAsync(ChangeEventArgs e)
+    {
+        _recategorizeError = null;
+        Guid? typeId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+        var (post, error) = await Feed.RecategorizeAsync(Post.Id, typeId);
+        if (post is null)
+        {
+            // The server's sentence where it wrote one — never a silently ignored refusal.
+            _recategorizeError = error ?? "Couldn't change the category. Try again in a moment.";
+            return;
+        }
+
+        _recategorizing = false;
+        await OnRecategorized.InvokeAsync(post);
+    }
+}

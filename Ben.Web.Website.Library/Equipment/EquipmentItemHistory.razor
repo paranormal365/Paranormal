@@ -2,6 +2,8 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @* One piece of gear's whole story — loans, renewals, service and faults in one column. The server
    writes each line, so this and any other surface describing the same event say the same thing. *@
@@ -9,6 +11,10 @@
 @if (_loading)
 {
     <p class="text-secondary small mb-0">Loading history…</p>
+}
+else if (_entriesResult.Failed)
+{
+    <BenListState TItem="EquipmentHistoryEntryRecord" Result="@_entriesResult" OnRetry="@OnParametersSetAsync" />
 }
 else if (_entries.Count == 0)
 {
@@ -45,6 +51,7 @@ else
 
     private List<EquipmentHistoryEntryRecord> _entries = [];
     private bool _loading = true;
+    private LoadResult<EquipmentHistoryEntryRecord> _entriesResult;
     private Guid _loadedFor;
 
     private static string KindLabel(EquipmentHistoryKind kind) => kind switch
@@ -71,7 +78,8 @@ else
         _loadedFor = ItemId;
 
         _loading = true;
-        _entries = [.. await AdminClient.GetEquipmentItemHistoryAsync(ItemId)];
+        _entriesResult = await AdminClient.GetEquipmentItemHistoryAsync(ItemId);
+        _entries       = [.. _entriesResult.Items];
         _loading = false;
     }
 }

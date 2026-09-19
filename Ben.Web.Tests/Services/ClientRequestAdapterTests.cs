@@ -32,28 +32,40 @@ public class ClientRequestAdapterTests
     {
         var api  = ApiMock();
         var data = new List<ClientRequestRecord> { MakeRecord() };
-        api.Setup(x => x.GetAsync<IReadOnlyList<ClientRequestRecord>>(
+        api.Setup(x => x.GetListAsync<ClientRequestRecord>(
                 "/api/client-requests/my", It.IsAny<CancellationToken>()))
-           .ReturnsAsync(data);
+           .ReturnsAsync(LoadResult<ClientRequestRecord>.Ok(data));
 
         var result = await Build(api).GetMyClientRequestsAsync();
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<ClientRequestRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<ClientRequestRecord>(
             "/api/client-requests/my", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// Refused, not empty. "You haven't submitted a request yet" to somebody who has is how a
+    /// client ends up submitting the same request twice.
+    /// </summary>
+    /// <remarks>
+    /// The assertion used to be <c>Assert.Empty</c>, which made this a green test defending item
+    /// 120's bug rather than one that would have caught it.
+    /// </remarks>
     [Fact]
-    public async Task GetMyClientRequestsAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetMyClientRequestsAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<ClientRequestRecord>>(
+        api.Setup(x => x.GetListAsync<ClientRequestRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<ClientRequestRecord>?)null);
+           .ReturnsAsync(LoadResult<ClientRequestRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetMyClientRequestsAsync();
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+        Assert.Empty(result.Items);
     }
 
     // ── GetClientRequestAsync ─────────────────────────────────────────────────
@@ -186,28 +198,35 @@ public class ClientRequestAdapterTests
             new() { Id = Guid.NewGuid(), OrganizationId = Guid.NewGuid(),
                     ClientRequestId = id, Status = ClientOrgRequestStatus.Pending },
         };
-        api.Setup(x => x.GetAsync<IReadOnlyList<ClientRequestOrganizationRecord>>(
+        api.Setup(x => x.GetListAsync<ClientRequestOrganizationRecord>(
                 $"/api/client-requests/{id}/organizations", It.IsAny<CancellationToken>()))
-           .ReturnsAsync(data);
+           .ReturnsAsync(LoadResult<ClientRequestOrganizationRecord>.Ok(data));
 
         var result = await Build(api).GetClientRequestOrgsAsync(id);
 
-        Assert.Single(result);
-        Assert.Equal(ClientOrgRequestStatus.Pending, result[0].Status);
-        api.Verify(x => x.GetAsync<IReadOnlyList<ClientRequestOrganizationRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal(ClientOrgRequestStatus.Pending, result.Items[0].Status);
+        api.Verify(x => x.GetListAsync<ClientRequestOrganizationRecord>(
             $"/api/client-requests/{id}/organizations", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// Which groups a request went to, refused. Read as "none", it makes a submitted request look
+    /// like one that went nowhere.
+    /// </summary>
     [Fact]
-    public async Task GetClientRequestOrgsAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetClientRequestOrgsAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<ClientRequestOrganizationRecord>>(
+        api.Setup(x => x.GetListAsync<ClientRequestOrganizationRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<ClientRequestOrganizationRecord>?)null);
+           .ReturnsAsync(LoadResult<ClientRequestOrganizationRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetClientRequestOrgsAsync(Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 }

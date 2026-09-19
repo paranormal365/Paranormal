@@ -16,4 +16,37 @@ public static class AuthPolicyNames
     /// policy always denies rather than the request crashing on an unregistered scheme.
     /// </summary>
     public const string EntraOnly = "EntraOnly";
+
+    /// <summary>
+    /// Requires the caller to hold either app-wide administration role
+    /// (<see cref="RoleNames.SuperAdmin"/> or <see cref="RoleNames.Admin"/>), resolved the same
+    /// way the SuperAdmin policy resolves its role — by claim for a local Identity bearer token,
+    /// or by database lookup for an Entra JWT.
+    /// </summary>
+    /// <remarks>
+    /// Exists so an endpoint that accepts both roles can still go through a policy.
+    /// <c>[Authorize(Roles = "SuperAdmin,Admin")]</c> cannot: a bare Roles attribute names no
+    /// authentication scheme, so it re-authenticates with the default one only, and an Entra
+    /// caller is not merely refused but comes back as unauthenticated — a 401 where a 403 was
+    /// meant. See the note on the SuperAdmin policy in <c>Ben.Data.WebApi/Program.cs</c>.
+    /// </remarks>
+    public const string AppAdministrator = "AppAdministrator";
+
+    /// <summary>
+    /// Requires the caller to be able to moderate: <see cref="RoleNames.Moderator"/>, or
+    /// <see cref="RoleNames.SuperAdmin"/> implicitly (item 186 F5).
+    /// </summary>
+    /// <remarks>
+    /// A policy rather than a Roles attribute for the reason spelled out on
+    /// <see cref="AppAdministrator"/>: a bare Roles attribute pins no scheme, so an Entra caller
+    /// comes back unauthenticated rather than unauthorized.
+    /// </remarks>
+    public const string Moderator = "Moderator";
+
+    /// <summary>
+    /// The Microsoft Entra JWT bearer scheme, registered in <c>Program.cs</c> only when Entra is
+    /// configured. Shared so an endpoint that must authenticate it explicitly — an anonymous one,
+    /// which the default scheme alone cannot see — names the same string the registration does.
+    /// </summary>
+    public const string EntraScheme = "Entra";
 }

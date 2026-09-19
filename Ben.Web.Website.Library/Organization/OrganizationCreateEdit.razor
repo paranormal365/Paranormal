@@ -11,9 +11,9 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+            <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")"><BenIcon Name="arrow-left" Class="me-1" />
                 Back to Organizations
-            </button>
+            </a>
             <h3 class="d-inline-block ms-3 mb-0">@(IsEditMode ? "Edit Organization" : "New Organization")</h3>
         </div>
     </div>
@@ -33,7 +33,7 @@
 
             <div class="col-12">
                 <label class="form-label fw-semibold" for="organizationcreateedit-name-c1c9">Name <span class="text-danger">*</span></label>
-                <input id="organizationcreateedit-name-c1c9" type="text" class="form-control" placeholder="My Organization" @bind="@_form.Name" @bind:event="oninput" />
+                <input id="organizationcreateedit-name-c1c9" type="text" class="form-control" placeholder="e.g. My Organization" @bind="@_form.Name" @bind:event="oninput" />
             </div>
 
             <div class="col-12">
@@ -61,9 +61,9 @@
                 <button type="button" class="btn btn-primary" @onclick="Save" disabled="@(!(!_isSaving))"><BenIcon Name="save" Class="me-1" />
                     @(_isSaving ? "Saving…" : "Save")
                 </button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo("/organizations"))">
+                <a href="/organizations" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")">
                     Cancel
-                </button>
+                </a>
             </div>
 
         </div>
@@ -85,7 +85,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
             return;
         }
 
@@ -142,7 +142,7 @@
 
         if (IsEditMode)
         {
-            var updated = await AdminClient.UpdateOrganizationAsync(
+            var (updated, saveError) = await AdminClient.UpdateOrganizationAsync(
                 OrgId!.Value,
                 new AdminUpdateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant(),
                     PublicPhone: _form.PublicPhone?.Trim(),
@@ -154,11 +154,12 @@
             if (updated is not null)
                 NavManager.NavigateTo("/organizations");
             else
-                _errorMessage = "Save failed. You may not have permission to edit this organization.";
+                _errorMessage = saveError
+                    ?? "Save failed. You may not have permission to edit this organization.";
         }
         else
         {
-            var created = await AdminClient.CreateOrganizationAsync(
+            var (created, createError) = await AdminClient.CreateOrganizationAsync(
                 new AdminCreateOrganizationRequest(_form.Name.Trim(), _form.UrlName.Trim().ToLowerInvariant(),
                     PublicPhone: _form.PublicPhone?.Trim(),
                     PublicEmail: _form.PublicEmail?.Trim(),
@@ -169,7 +170,7 @@
             if (created is not null)
                 NavManager.NavigateTo("/organizations");
             else
-                _errorMessage = "Create failed. The URL name may already be in use.";
+                _errorMessage = createError ?? "Create failed. The URL name may already be in use.";
         }
     }
 

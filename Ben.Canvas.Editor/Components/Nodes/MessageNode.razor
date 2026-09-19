@@ -1,0 +1,52 @@
+@*
+    A message box: who said it, when, and what, with light formatting.
+
+    The HTML shown here is safe because every read of a board passes it through Core's allow-list, and the
+    editor below can only produce allowed tags. Anything else that writes MessageData.Html must run it
+    through PasteHtmlAllowList.Normalize before storing it.
+*@
+@inherits BlockRendererBase
+@using Telerik.Blazor
+@using EditorTools = Telerik.Blazor.Components.Editor
+
+<div class="bc-msg">
+    <div class="bc-msg__meta">
+        <span class="bc-msg__avatar" aria-hidden="true">@Initials(Message.Author)</span>
+        <span class="bc-msg__author">@(string.IsNullOrWhiteSpace(Message.Author) ? "Unknown" : Message.Author)</span>
+        @if (Message.TimestampUtc != default)
+        {
+            <time class="bc-msg__time" datetime="@Message.TimestampUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture)"
+                  title="@BcDateFormat.MessageTime(Message.TimestampUtc, TimeSpan.Zero)">@(BcRelativeTime.Format(DateTime.UtcNow - Message.TimestampUtc) ?? BcDateFormat.Date(DateOnly.FromDateTime(Message.TimestampUtc)))</time>
+        }
+    </div>
+    @if (Editing)
+    {
+        <label class="bc-field" for="@($"bc-msg-author-{Node.Id:N}")"><span class="bc-field__label">From</span>
+            <input @ref="FirstField" id="@($"bc-msg-author-{Node.Id:N}")" class="form-control form-control-sm" @bind="Message.Author" @bind:event="oninput" />
+        </label>
+        <div class="bc-msg__editor">
+            <TelerikEditor @bind-Value="Message.Html" EditMode="EditorEditMode.Div" Tools="Tools" Height="100%" AriaLabel="Message text" DebounceDelay="0" />
+        </div>
+    }
+    else
+    {
+        <div class="bc-msg__body">@((MarkupString)PasteHtmlAllowList.Normalize(Message.Html))</div>
+    }
+</div>
+
+@code {
+    private static readonly List<IEditorTool> Tools =
+    [
+        new EditorTools.Bold(), new EditorTools.Italic(), new EditorTools.Underline(),
+        new EditorTools.UnorderedList(), new EditorTools.CreateLink(),
+    ];
+
+    private MessageData Message => Data as MessageData ?? new MessageData();
+
+    internal static string Initials(string? author)
+    {
+        var words = (author ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return "?";
+        return string.Concat(words.Take(2).Select(w => char.ToUpperInvariant(w[0])));
+    }
+}

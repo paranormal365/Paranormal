@@ -61,7 +61,7 @@ public class OrgInvestigationsControllerTests
 
     private static OrgInvestigationsController Build(
         IDbContextFactory<BenDataContext> factory, Guid? asUser = null)
-        => new(factory, Mapper(), new Mock<IAuditLogService>().Object)
+        => new(factory, Mapper(), new Mock<IAuditLogService>().Object, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory))
         {
             ControllerContext = new ControllerContext
             {
@@ -89,6 +89,7 @@ public class OrgInvestigationsControllerTests
             Role = OrganizationMemberRole.Member, IsActive = true, DateCreated = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, OrgId, TestSeeds.CaseWork);
         return factory;
     }
 
@@ -373,6 +374,14 @@ public class OrgInvestigationsControllerTests
             });
             await db.SaveChangesAsync();
         }
+        // Read for everyone; Create for the CREATOR alone, as a direct grant. The first pass
+        // bridged CaseWork to every member, which handed the bystander Update too — and the
+        // whole point here is that seeing an investigation and being offered its Edit button
+        // are different things.
+        await TestSeeds.BridgeAsync(factory, OrgId);
+        await TestSeeds.GrantAsync(factory, OrgId, MemberId,
+            OrganizationSecurityTable.Investigation,
+            OrganizationSecurityAction.Read | OrganizationSecurityAction.Create);
 
         // Created by MemberId.
         await Build(factory).Create(OrgId, Request(
@@ -403,5 +412,107 @@ public class OrgInvestigationsControllerTests
         Assert.Equal(OrgId, calEvent.OrganizationId);
         Assert.Null(calEvent.CaseId);
         Assert.Equal(calEvent.Id, (await db.Investigations.SingleAsync()).OrgCalendarEventId);
+    }
+
+    // ── The map viewport (2026-09-09) ────────────────────────────────────────
+    //
+    // The Investigations tab used to hand its map whatever the grid had already loaded, so panning
+    // moved the view over a set that never changed. The bounded endpoint is shaped after the Field
+    // Kit's: all four bounds or none, corners normalised, a cap, and the count of what matched.
+
+    private static async Task<Guid> AddPlacedInvestigationAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, string title,
+        decimal lat, decimal lon)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var id = Guid.NewGuid();
+        db.Investigations.Add(new Investigation
+        {
+            Id = id, OrganizationId = orgId, Title = title,
+            ScheduledDateTime = DateTime.UtcNow.AddDays(3),
+            Latitude = lat, Longitude = lon,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task<IDbContextFactory<BenDataContext>> SeedTwoCitiesAsync()
+    {
+        var factory = await SeedAsync();
+        await AddPlacedInvestigationAsync(factory, OrgId, "Nashville visit",  36.16m, -86.78m);
+        await AddPlacedInvestigationAsync(factory, OrgId, "Louisville visit", 38.25m, -85.75m);
+        return factory;
+    }
+
+    private static OrgInvestigationMapPage Page(ActionResult<OrgInvestigationMapPage> result)
+        => Assert.IsType<OrgInvestigationMapPage>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+    [Fact]
+    public async Task The_map_without_bounds_answers_every_placed_visit()
+    {
+        var page = Page(await Build(await SeedTwoCitiesAsync())
+            .GetMapPoints(OrgId, null, null, null, null, default));
+
+        Assert.Equal(2, page.Total);
+        Assert.Equal(2, page.Points.Count);
+    }
+
+    [Fact]
+    public async Task The_map_with_bounds_answers_only_what_is_in_view()
+    {
+        var page = Page(await Build(await SeedTwoCitiesAsync())
+            .GetMapPoints(OrgId, north: 36.5, south: 35.8, east: -86.4, west: -87.2, default));
+
+        Assert.Equal("Nashville visit", Assert.Single(page.Points).Title);
+    }
+
+    [Fact]
+    public async Task Corners_handed_over_backwards_still_mean_the_same_box()
+    {
+        var page = Page(await Build(await SeedTwoCitiesAsync())
+            .GetMapPoints(OrgId, north: 35.8, south: 36.5, east: -87.2, west: -86.4, default));
+
+        Assert.Equal("Nashville visit", Assert.Single(page.Points).Title);
+    }
+
+    [Fact]
+    public async Task Three_of_the_four_bounds_is_refused_rather_than_guessed()
+    {
+        var result = await Build(await SeedTwoCitiesAsync())
+            .GetMapPoints(OrgId, north: 36.5, south: 35.8, east: -86.4, west: null, default);
+
+        Assert.Equal("Give all four bounds, or none.",
+            Assert.IsType<BadRequestObjectResult>(result.Result).Value);
+    }
+
+    [Fact]
+    public async Task A_visit_with_no_coordinates_is_never_a_pin()
+    {
+        var factory = await SeedTwoCitiesAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Investigations.Add(new Investigation
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, Title = "Nowhere in particular",
+                ScheduledDateTime = DateTime.UtcNow.AddDays(1),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var page = Page(await Build(factory).GetMapPoints(OrgId, null, null, null, null, default));
+
+        Assert.Equal(2, page.Total);
+        Assert.DoesNotContain(page.Points, p => p.Title == "Nowhere in particular");
+    }
+
+    [Fact]
+    public async Task A_non_member_is_refused_the_map_as_well_as_the_grid()
+    {
+        var result = await Build(await SeedTwoCitiesAsync(), asUser: Guid.NewGuid())
+            .GetMapPoints(OrgId, null, null, null, null, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
     }
 }

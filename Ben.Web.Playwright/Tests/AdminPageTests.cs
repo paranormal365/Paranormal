@@ -32,6 +32,28 @@ public class AdminPageTests : BenTestBase
         ("/admin/equipment-taxonomy", "Equipment"),
         ("/admin/video-assets",       "Clipart"),   // the route and the heading differ
         ("/admin/sidecar-telemetry",  "Sidecar"),
+        ("/admin/rate-limits",        "Rate Limits"),
+        // The Billing trio (items 85/84). Price Bands earns its place the hard way: its first
+        // production load killed the circuit, because the healthy price list answers the
+        // validation call with an empty 204 the HTTP client then threw on. Only a real browser
+        // ever runs OnInitializedAsync — every curl-level check passed.
+        ("/admin/subscription-tiers",  "Price Bands"),
+        ("/admin/coupons",             "Coupons"),
+        ("/admin/org-subscriptions",   "Subscriptions"),
+        // The money trail + merge (items 168/110, 2026-08-23).
+        ("/admin/billing-ledger",      "Ledger"),
+        ("/admin/tax-rates",           "Tax Rates"),
+        ("/admin/referrals",           "Referrals"),
+        ("/admin/merge-groups",        "Merge Groups"),
+        ("/admin/place-duplicates",    "Duplicate places"),
+        ("/admin/member-seats",        "Member Seats"),
+        ("/admin/org-ads",             "Group ads"),
+        // Deleting a person (2026-09-04). It belongs in this list for exactly the reason the list
+        // exists: only a SuperAdmin can open it, so nobody else would ever find it broken.
+        ("/admin/delete-user",         "Delete a person"),
+        // Item 235. Only a SuperAdmin can open it, and it is the only screen that can refund a
+        // credit — so if it breaks, nobody else would ever find out.
+        ("/admin/event-credits",       "Event Credits"),
     };
 
     [Test]

@@ -1,6 +1,6 @@
 namespace Ben.Web.Services.WebApi;
 
-public sealed class WebApiAuthService : IWebApiAuthService
+public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Client.External.IExternalSignInAdopter
 {
     private readonly IWebApiIdentityClient _identityClient;
     private readonly IWebApiClient _apiClient;
@@ -16,15 +16,21 @@ public sealed class WebApiAuthService : IWebApiAuthService
     /// <inheritdoc />
     public LoginFailure? LastLoginFailure { get; private set; }
 
-    public async Task<bool> LoginAsync(string email, string password, CancellationToken token = default)
+    public async Task<bool> LoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default)
     {
-        var attempt = await _identityClient.TryLoginAsync(email, password, token);
+        var attempt = await _identityClient.TryLoginAsync(email, password, twoFactorCode, recoveryCode, token);
         var response = attempt.Token;
         if (response is null || string.IsNullOrWhiteSpace(response.AccessToken))
         {
-            LastLoginFailure = attempt.WasRateLimited
-                ? LoginFailure.RateLimited
-                : LoginFailure.InvalidCredentials;
+            // Three refusals arrive as the same status and mean entirely different things to the
+            // person: wait, enter your code, or go and confirm your email. Collapsing them into
+            // "invalid email or password" sends two of those three somewhere useless. The ladder
+            // itself lives in LoginFailureMapping (item 225) so the desktop client cannot come to
+            // a different conclusion about the same 401.
+            LastLoginFailure = LoginFailureMapping.From(attempt);
             return false;
         }
 
@@ -44,6 +50,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
             {
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 _tokenStore.IsAdmin = me.IsAdmin;
+                _tokenStore.IsModerator = me.IsModerator;
                 _tokenStore.UserId = me.UserId;
             }
         }
@@ -51,6 +58,36 @@ public sealed class WebApiAuthService : IWebApiAuthService
 
         _tokenStore.NotifyStateChanged();
         return true;
+    }
+
+    /// <inheritdoc />
+    public async Task AdoptExternalSignInAsync(WebApiTokenResponse response, CancellationToken token = default)
+    {
+        LastLoginFailure = null;
+
+        ApplyTokenResponse(response);
+
+        // Not an Entra session: this one is our own bearer token, and it IS persisted the way a
+        // password sign-in is. Saying otherwise would drop it on the next page load.
+        _tokenStore.IsEntraSession = false;
+
+        // Roles never come from the token — Identity's are opaque. Same call the password path
+        // makes, and for the same reason: without it an administrator looks like an ordinary member.
+        try
+        {
+            var me = await _apiClient.GetAsync<MeResult>("/api/me", token);
+            if (me is not null)
+            {
+                _tokenStore.UserId = me.UserId;
+                _tokenStore.UserEmail = me.Email;
+                _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
+                _tokenStore.IsAdmin = me.IsAdmin;
+                _tokenStore.IsModerator = me.IsModerator;
+            }
+        }
+        catch { /* non-fatal — the session still works, roles stay false */ }
+
+        _tokenStore.NotifyStateChanged();
     }
 
     public async Task<bool> RefreshIfNeededAsync(CancellationToken token = default)
@@ -80,6 +117,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.UserId = null;
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
+        _tokenStore.IsModerator = false;
         _tokenStore.IsImpersonating = false;
         _tokenStore.OriginalAccessToken = null;
         _tokenStore.OriginalRefreshToken = null;
@@ -99,6 +137,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         _tokenStore.OriginalRefreshToken = _tokenStore.RefreshToken;
         _tokenStore.OriginalUserId = _tokenStore.UserId;
         _tokenStore.OriginalUserEmail = _tokenStore.UserEmail;
+        _tokenStore.OriginalUserDisplayName = _tokenStore.UserDisplayName;
 
         // Apply impersonated user's token
         ApplyTokenResponse(response);
@@ -108,16 +147,36 @@ public sealed class WebApiAuthService : IWebApiAuthService
         return true;
     }
 
-    public async Task StopImpersonatingAsync(CancellationToken token = default)
+    /// <summary>
+    /// Returns to the SuperAdmin's own identity, and reports whether it came back intact.
+    /// </summary>
+    /// <remarks>
+    /// <para>The token swap itself cannot fail — it is local state, and <c>IsImpersonating</c> is
+    /// cleared unconditionally below, so nobody is ever left carrying the impersonated identity.
+    /// What CAN fail is the <c>/api/me</c> round trip that re-reads the roles, and the comment
+    /// there records the consequence: the SuperAdmin comes back stripped of Administration access
+    /// until they sign out and in again.</para>
+    ///
+    /// <para>That used to be silent, and the caller navigated to <c>/admin/users</c> regardless —
+    /// a page that then refuses them (2026-09-17 audit). The bool is so the caller can say so.
+    /// False means "you are yourself again, but your roles could not be confirmed".</para>
+    /// </remarks>
+    public async Task<bool> StopImpersonatingAsync(CancellationToken token = default)
     {
-        if (!_tokenStore.IsImpersonating) return;
+        if (!_tokenStore.IsImpersonating) return true;
+
+        var rolesRestored = true;
 
         _tokenStore.AccessToken = _tokenStore.OriginalAccessToken;
         _tokenStore.RefreshToken = _tokenStore.OriginalRefreshToken;
         _tokenStore.UserEmail = _tokenStore.OriginalUserEmail;
+        // The header's avatar reads this; without the restore it kept showing the impersonated
+        // person's initials after Return to SuperAdmin (item 159).
+        _tokenStore.UserDisplayName = _tokenStore.OriginalUserDisplayName;
         _tokenStore.UserId = _tokenStore.OriginalUserId;
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
+        _tokenStore.IsModerator = false;
 
         // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
         // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
@@ -129,14 +188,16 @@ public sealed class WebApiAuthService : IWebApiAuthService
             try
             {
                 var me = await _apiClient.GetAsync<MeResult>("/api/me", token);
-                if (me is not null)
+                if (me is null) rolesRestored = false;
+                else
                 {
                     _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                     _tokenStore.IsAdmin = me.IsAdmin;
+                    _tokenStore.IsModerator = me.IsModerator;
                     _tokenStore.UserId = me.UserId;
                 }
             }
-            catch { /* non-fatal — IsSuperAdmin stays false */ }
+            catch { rolesRestored = false; }
         }
 
         _tokenStore.IsImpersonating = false;
@@ -148,6 +209,7 @@ public sealed class WebApiAuthService : IWebApiAuthService
         // Restore expiry from the re-applied token (unknown, set to now so refresh triggers)
         _tokenStore.AccessTokenExpiresAtUtc = DateTimeOffset.UtcNow;
         _tokenStore.NotifyStateChanged();
+        return rolesRestored;
     }
 
     private void ApplyTokenResponse(WebApiTokenResponse response)
@@ -158,13 +220,14 @@ public sealed class WebApiAuthService : IWebApiAuthService
 
         // Note: JwtClaimsParser cannot extract claims from opaque Identity API tokens.
         // UserId and IsSuperAdmin are set via /api/me after login instead.
-        var (userId, isSuperAdmin, isAdmin) = JwtClaimsParser.ParseClaims(response.AccessToken);
+        var (userId, isSuperAdmin, isAdmin, isModerator) = JwtClaimsParser.ParseClaims(response.AccessToken);
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
         _tokenStore.IsAdmin = isAdmin;
+        _tokenStore.IsModerator = isModerator;
     }
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>
-internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);
+internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false);
 

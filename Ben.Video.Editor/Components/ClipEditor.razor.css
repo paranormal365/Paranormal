@@ -94,3 +94,9 @@
 .bv-clip-editor__actions .k-button {
     flex: 1;
 }
+
+/* Set In / Set Out sit together as one pair of actions, not two unrelated buttons. */
+.bv-clip-editor__marks {
+    display: flex;
+    gap: .35rem;
+}

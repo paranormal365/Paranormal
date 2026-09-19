@@ -1,0 +1,84 @@
+@page "/logout"
+@page "/signout"
+
+@inject IBenUserState UserState
+@inject IWebApiAuthService AuthService
+
+@*
+    The address people type.
+
+    Signing out has always worked from the profile menu, and /logout answered "Page not found" —
+    which reads as the site being broken at the moment somebody is trying to leave it, usually on
+    a shared machine. It is the most guessable URL on the site and it was the only one nobody had
+    written (2026-09-04 sweep).
+
+    It asks rather than acting on arrival. A GET that ends a session can be fired by anything that
+    can put a URL on a page — an image tag in a message is enough — and while a Blazor page needs
+    its circuit before it does anything, "the framework happens to save us" is not the reason to
+    rely on. One button is a small price for a door that cannot be pushed from outside.
+
+    It waits for AuthReady before deciding which of the three things to say. Auth state is restored
+    from storage after the first render, so a page that reads it immediately sees "signed out" for
+    everybody — which this page did on its first run, telling a signed-in person they were already
+    out while their own groups were listed in the sidebar beside it.
+*@
+
+<PageTitle>Sign out</PageTitle>
+
+<div class="container py-5" style="max-width:480px;">
+    <div class="card">
+        <div class="card-body text-center">
+            @if (!_ready)
+            {
+                <BenLoaderOverlay Visible="true" Text="Checking…" />
+            }
+            else if (_signedOut)
+            {
+                <h1 class="h4 mb-3">You're signed out</h1>
+                <p class="text-secondary">Your session on this device has ended.</p>
+                <a class="btn btn-primary" href="/login">Sign in again</a>
+            }
+            else if (UserState.IsAuthenticated)
+            {
+                <h1 class="h4 mb-3">Sign out?</h1>
+                <p class="text-secondary">
+                    This ends your session on this device. Anything you have saved stays where it is.
+                </p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button type="button" class="btn btn-danger" @onclick="SignOut">Sign out</button>
+                    @* An anchor, not a button: it only navigates, so it should work before the
+                       circuit connects and be openable in a new tab. The repo guard says so. *@
+                    <a class="btn btn-outline-secondary" href="/">Cancel</a>
+                </div>
+            }
+            else
+            {
+                @* Said plainly rather than bounced to the sign-in form: somebody who typed this
+                   address wanted to know they were out, and a login page is not an answer to
+                   that question. *@
+                <h1 class="h4 mb-3">You're already signed out</h1>
+                <p class="text-secondary">There is no session on this device to end.</p>
+                <a class="btn btn-primary" href="/login">Sign in</a>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _ready;
+    private bool _signedOut;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private void SignOut()
+    {
+        AuthService.Logout();
+        _signedOut = true;
+    }
+}

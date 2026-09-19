@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -20,4 +20,11 @@
          reference both — each host registers only its own library assembly with the router. -->
     <ProjectReference Include="..\Ben.Web.Website.Library\Ben.Web.Website.Library.csproj" />
   </ItemGroup>
+
+  <!-- Same arrangement Ben.Web.Website.Library uses: a couple of internals exist so a test can see
+       what a diagnostic would otherwise have to be made public for. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ben.Web.Tests" />
+  </ItemGroup>
+
 </Project>

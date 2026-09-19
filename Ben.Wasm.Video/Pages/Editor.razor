@@ -1,6 +1,96 @@
-@page "/"
+﻿@page "/"
 @page "/editor"
+@using Ben.Wasm.Video.Services
+@implements IDisposable
+@inject AccountInfoService Account
+@inject TokenStore Tokens
+@inject WasmVideoExportPublisher Publisher
+@inject EditorHandoffService Handoff
+@inject Ben.Video.Editor.Services.ProjectStore Projects
+@using Ben.Video.Editor.Models
 
 <PageTitle>Video Editor</PageTitle>
 
-<VideoEditor />
+@*
+    ShowDiagnostics is passed explicitly rather than left to the registered default, because this
+    host now has an answer to give. It asks the WebApi's /api/me whether the signed-in account
+    administers the platform or a group — sign-in here yields tokens, not claims, so there is
+    nothing on the client to read.
+
+    It starts false and only ever becomes true, so the panel is hidden while the answer is in
+    flight and stays hidden if the question cannot be asked at all. Signing out hides it again on
+    the next answer.
+*@
+@*
+    OnPublishExport is what makes a server destination exist at all: the editor offers one only
+    when the host supplies a handler, and this page supplied none — so every export went straight
+    to the downloads folder while the sign-in page promised that signing in lets you publish
+    finished renders (2026-09-05 audit, F12).
+
+    EnablePublish is separate from that. The destination is offered whether or not somebody is
+    signed in, disabled with a reason when they are not, because hiding it reads as the editor
+    being unable to publish rather than as a sign-in away.
+*@
+<VideoEditor ShowDiagnostics="@_showDiagnostics"
+             OnPublishExport="PublishAsync"
+             EnablePublish="@Tokens.IsAuthenticated"
+             PublishUnavailableReasonText="Sign in to upload this to your media library."
+             HostStatusContent="@SignInChip" />
+
+@code {
+    private RenderFragment SignInChip => __builder =>
+    {
+        <SignInChip />
+    };
+}
+
+@code {
+    private bool _showDiagnostics;
+
+    /// <summary>
+    /// Sends a finished render to the server, letting every failure through.
+    /// </summary>
+    /// <remarks>
+    /// The editor's destination prompt catches, stays open and keeps "Save to my machine"
+    /// available. Returning normally tells it the video is safely on the server, at which point it
+    /// discards the only remaining copy — so swallowing anything here loses somebody's render.
+    /// </remarks>
+    private async Task PublishAsync(ExportedVideo exported) => await Publisher.PublishAsync(exported);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tokens.Changed += OnTokensChanged;
+
+        // Before anything asks whether we are signed in. The link the site hands out carries a
+        // one-minute code, and exchanging it here means the editor comes up already signed in
+        // instead of flashing a sign-in prompt at somebody who signed in on the site five seconds
+        // ago (phase 12).
+        //
+        // The project it names is left for the editor to open once it has finished restoring,
+        // because that restore would otherwise replace it. See ProjectStore.PendingServerProjectId.
+        Projects.PendingServerProjectId = await Handoff.ApplyAsync();
+
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Re-asks when the signed-in account changes.
+    /// </summary>
+    /// <remarks>
+    /// Sign-in happens on another page and this one is not re-created, so without this an
+    /// administrator who signed in after landing here would keep the answer from when they were
+    /// signed out. The event fires on sign-out too, which is the direction that matters.
+    /// </remarks>
+    private void OnTokensChanged() => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        var isAdministrator = await Account.IsAdministratorAsync();
+        if (isAdministrator == _showDiagnostics) return;
+
+        _showDiagnostics = isAdministrator;
+        StateHasChanged();
+    }
+
+    public void Dispose() => Tokens.Changed -= OnTokensChanged;
+}

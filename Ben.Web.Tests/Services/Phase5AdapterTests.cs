@@ -28,27 +28,40 @@ public class Phase5AdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        api.Setup(x => x.GetListAsync<InvestigationRecord>(
                 InvBase(orgId, caseId), It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), CaseId = caseId, Title = "Night Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }]);
+           .ReturnsAsync(LoadResult<InvestigationRecord>.Ok(
+               [new() { Id = Guid.NewGuid(), CaseId = caseId, Title = "Night Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }]));
 
         var result = await Build(api).GetInvestigationsAsync(orgId, caseId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<InvestigationRecord>(
             InvBase(orgId, caseId), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A refused investigation list is not a case with no investigations planned.
+    /// </summary>
+    /// <remarks>
+    /// The assertion was <c>Assert.Empty</c> — a green test defending the bug. On a case page it
+    /// reads as "nobody has scheduled anything", which is the answer a client is most likely to
+    /// act on and the one hardest for them to check.
+    /// </remarks>
     [Fact]
-    public async Task GetInvestigationsAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetInvestigationsAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<InvestigationRecord>>(
+        api.Setup(x => x.GetListAsync<InvestigationRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<InvestigationRecord>?)null);
+           .ReturnsAsync(LoadResult<InvestigationRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetInvestigationsAsync(Guid.NewGuid(), Guid.NewGuid());
-        Assert.Empty(result);
+
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     // ── CreateInvestigationAsync ──────────────────────────────────────────────
@@ -59,17 +72,19 @@ public class Phase5AdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Post,
                 InvBase(orgId, caseId),
                 It.IsAny<UpsertInvestigationRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new InvestigationRecord { Id = Guid.NewGuid(), CaseId = caseId, Title = "Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow });
+           .ReturnsAsync((new InvestigationRecord { Id = Guid.NewGuid(), CaseId = caseId, Title = "Inv", Status = InvestigationStatus.Scheduled, ScheduledDateTime = DateTime.UtcNow }, null));
 
         var req = new UpsertInvestigationRequest("Inv", null, null, DateTime.UtcNow, null, InvestigationStatus.Scheduled, null, null);
-        var result = await Build(api).CreateInvestigationAsync(orgId, caseId, req);
+        var (result, _) = await Build(api).CreateInvestigationAsync(orgId, caseId, req);
 
         Assert.NotNull(result);
-        api.Verify(x => x.PostAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Post,
             InvBase(orgId, caseId), req, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -82,14 +97,15 @@ public class Phase5AdapterTests
         var caseId = Guid.NewGuid();
         var invId  = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PutAsync<UpsertInvestigationRequest, InvestigationRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertInvestigationRequest, InvestigationRecord>(
+                HttpMethod.Put,
                 $"{InvBase(orgId, caseId)}/{invId}",
                 It.IsAny<UpsertInvestigationRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new InvestigationRecord { Id = invId, CaseId = caseId, Title = "Updated", Status = InvestigationStatus.Completed, ScheduledDateTime = DateTime.UtcNow });
+           .ReturnsAsync((new InvestigationRecord { Id = invId, CaseId = caseId, Title = "Updated", Status = InvestigationStatus.Completed, ScheduledDateTime = DateTime.UtcNow }, null));
 
         var req = new UpsertInvestigationRequest("Updated", null, null, DateTime.UtcNow, null, InvestigationStatus.Completed, "<p>Done.</p>", null);
-        var result = await Build(api).UpdateInvestigationAsync(orgId, caseId, invId, req);
+        var (result, _) = await Build(api).UpdateInvestigationAsync(orgId, caseId, invId, req);
 
         Assert.Equal(InvestigationStatus.Completed, result!.Status);
     }

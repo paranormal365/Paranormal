@@ -30,6 +30,7 @@ public class NotificationStateTests
     {
         public bool IsAuthenticated { get; set; } = true;
         public bool IsSuperAdmin => false;
+        public bool IsModerator => false;
         public bool IsAdmin => false;
         public bool IsImpersonating => false;
         public string? UserEmail => "test@benco.dev";
@@ -47,7 +48,8 @@ public class NotificationStateTests
         new(new NotificationBucket(orgMessages, DateTime.UtcNow),
             NotificationBucket.Empty, NotificationBucket.Empty,
             NotificationBucket.Empty, NotificationBucket.Empty,
-            NotificationBucket.Empty, NotificationBucket.Empty);
+            NotificationBucket.Empty, NotificationBucket.Empty,
+            NotificationBucket.Empty);
 
     private static (NotificationState State, Mock<IBenAdminClient> Client, FakeUserState User, TestNavigationManager Nav)
         Build(NotificationSummaryResponse? returns = null)

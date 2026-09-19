@@ -1,0 +1,114 @@
+@*
+    Every message body on the site renders through here.
+
+    Before this, three surfaces each did their own thing: the org message view dropped raw HTML in
+    with MarkupString, the message list ran a private regex to strip tags for its snippet, and the
+    case thread printed plain text. Three renderers means three places to change when the way a
+    message is written changes — and the next change is exactly that: @mentions and #hashtags need
+    linkifying, once, everywhere, rather than three times with three sets of edge cases.
+
+    So this is deliberately the only place that decides what a message body looks like.
+
+    On sanitisation: org message bodies are authored in a rich-text editor and stored as HTML, and
+    are rendered here as HTML. That is not new — it is what the message view already did — but it
+    is worth naming, because this component is where a sanitiser belongs when one is added rather
+    than at each call site.
+*@
+
+@if (Snippet)
+{
+    <text>@PlainText()</text>
+}
+else if (Html)
+{
+    @((MarkupString)Body)
+
+    @* A link written in the formatting editor gets its card too (2026-09-14). *@
+    @if (ShowPreview && FirstUrl is { } htmlUrl)
+    {
+        <Ben.Web.Website.Library.Kit.BenLinkPreview Url="@htmlUrl" />
+    }
+}
+else
+{
+    @* Plain text, with line breaks honoured. A case message typed across three lines should read
+       as three lines rather than one run-on paragraph.
+
+       Links are picked out of it by the same segmenter the feed uses, so an address is a link
+       wherever a body is shown, and the card goes under the message the way iMessage does it
+       (Ben, 2026-09-11). Still never rendered as markup: each run is emitted as Razor content, so
+       the framework encodes it — assembling a string and casting it to MarkupString would not, and
+       would hand every sender an injection point. *@
+    <div style="white-space:pre-wrap;">
+        @foreach (var segment in Ben.Data.Common.Helpers.FeedTextSegmenter.Segment(Body))
+        {
+            if (segment.Kind == Ben.Data.Common.Helpers.FeedSegmentKind.Url)
+            {
+                <a href="@segment.Value" target="_blank" rel="noopener noreferrer nofollow">@segment.Text</a>
+            }
+            else
+            {
+                @segment.Text
+            }
+        }
+    </div>
+
+    @if (ShowPreview && FirstUrl is { } url)
+    {
+        <Ben.Web.Website.Library.Kit.BenLinkPreview Url="@url" />
+    }
+}
+
+@code {
+    /// <summary>The message body as stored.</summary>
+    [Parameter, EditorRequired] public string Body { get; set; } = string.Empty;
+
+    /// <summary>True when <see cref="Body"/> holds HTML rather than plain text.</summary>
+    [Parameter] public bool Html { get; set; }
+
+    /// <summary>Render as a one-line preview: tags removed, whitespace collapsed.</summary>
+    [Parameter] public bool Snippet { get; set; }
+
+    /// <summary>How many characters a snippet keeps before it is cut.</summary>
+    [Parameter] public int SnippetLength { get; set; } = 200;
+
+    /// <summary>
+    /// Whether a link in the body gets a card under it.
+    /// </summary>
+    /// <remarks>
+    /// On for a message being read, off wherever a body is a line in a list — a card in a list of
+    /// one-line previews makes every row three lines tall and the list stops being a list.
+    /// </remarks>
+    [Parameter] public bool ShowPreview { get; set; } = true;
+
+    /// <summary>
+    /// The first address in the body, or null. Only the first: a message with four links gets one
+    /// card, because five cards under one sentence is not a preview, it is a directory.
+    /// </summary>
+    private string? FirstUrl => Ben.Data.Common.Helpers.PostLinks
+        .In(Html ? null : Body, Html ? Body : null, max: 1)
+        .FirstOrDefault();
+
+    /// <summary>
+    /// The body as readable text, for previews.
+    /// </summary>
+    /// <remarks>
+    /// Tag-stripping by regex, which is wrong in general and adequate here: the input is our own
+    /// editor's output, the result is truncated to a line of preview text, and it is never
+    /// rendered as markup — it goes into the DOM as a string. A parser would be the right tool if
+    /// this answer were ever trusted for anything.
+    /// </remarks>
+    private string PlainText()
+    {
+        if (string.IsNullOrWhiteSpace(Body)) return string.Empty;
+
+        var text = Html
+            ? System.Text.RegularExpressions.Regex.Replace(Body, "<[^>]+>", " ")
+            : Body;
+
+        text = System.Net.WebUtility.HtmlDecode(text);
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+
+        return text.Length <= SnippetLength ? text : text[..SnippetLength].TrimEnd() + "…";
+    }
+}

@@ -1,0 +1,22 @@
+/* The kitchen's sheet, on screen and on paper (item 235 phase 5).
+
+   ONE NIGHT, ONE PAGE. A cook works one service at a time and pins up the sheet for it; a
+   three-night weekend printed as one continuous document is a document somebody has to read
+   twice to find tonight in. The theme's own print rules already drop the header, the nav and
+   the button groups, so all this file adds is where the paper tears. */
+
+.kitchen-page {
+    break-after: page;
+}
+
+.kitchen-page:last-child {
+    break-after: auto;
+}
+
+@media print {
+    /* Nothing in a sheet should be split across two pages: a table that breaks between a guest's
+       name and their allergy has put the two halves of one fact on different bits of paper. */
+    .kitchen-page {
+        break-inside: avoid;
+    }
+}

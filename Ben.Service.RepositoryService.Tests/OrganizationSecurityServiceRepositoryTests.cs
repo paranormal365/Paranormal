@@ -349,6 +349,173 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.Equal("Test Org", result[0].Name);
     }
 
+    // ── The tier area gate (item 156 Phase D) ─────────────────────────────────
+
+    /// <summary>Gives the member a role holding one grant, and pins the org to a tier whose
+    /// checklist includes exactly <paramref name="included"/>.</summary>
+    private static async Task<Guid> GrantWithTierAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid ownerId, Guid memberId,
+        DataTable table, DataAction actions, params OrganizationPermissionArea[] included)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var membership = await db.OrganizationUserMemberships
+            .FirstAsync(m => m.OrganizationId == orgId && m.AppUserId == memberId);
+
+        var role = new OrganizationRole
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, Name = "R", IsActive = true, SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        };
+        db.OrganizationRoles.Add(role);
+        db.OrganizationRolePermissions.Add(new OrganizationRolePermission
+        {
+            Id = Guid.NewGuid(), OrganizationRoleId = role.Id, TableName = table, Actions = actions,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership
+        {
+            Id = Guid.NewGuid(), OrganizationRoleId = role.Id, OrganizationUserMembershipId = membership.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+
+        var tier = new SubscriptionTier
+        {
+            Id = Guid.NewGuid(), Name = "T", MinMembers = 1, SortOrder = 1, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        };
+        db.SubscriptionTiers.Add(tier);
+        foreach (var area in included)
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tier.Id, Area = area,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, SubscriptionTierId = tier.Id,
+            Status = SubscriptionStatus.Active,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return tier.Id;
+    }
+
+    [Fact]
+    public async Task A_grant_in_an_included_area_works_and_in_an_excluded_one_stops()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+        var tierId = await GrantWithTierAsync(factory, orgId, ownerId, memberId,
+            DataTable.Equipment, DataAction.Create,
+            OrganizationPermissionArea.Equipment);
+
+        var svc = CreateService(factory);
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+
+        // The plan narrows: Equipment leaves the checklist. The grant is stored untouched and
+        // simply stops applying (decision D4) …
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.SubscriptionTierPermissionAreas
+                .FirstAsync(a => a.SubscriptionTierId == tierId && a.Area == OrganizationPermissionArea.Equipment);
+            db.SubscriptionTierPermissionAreas.Remove(row);
+            // Another area stays, so the checklist is CONFIGURED-and-excluding rather than empty.
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tierId, Area = OrganizationPermissionArea.Cases,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.False(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+
+        // … and resumes the moment the area returns.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+            {
+                SubscriptionTierId = tierId, Area = OrganizationPermissionArea.Equipment,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.True(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+    }
+
+    [Fact]
+    public async Task The_owner_is_never_narrowed_by_the_plan()
+    {
+        // A plan decides what ROLES may do, never what the owner may do (decision D2's bypass
+        // sits in front of the gate on purpose).
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+        await GrantWithTierAsync(factory, orgId, ownerId, memberId,
+            DataTable.Equipment, DataAction.Create,
+            OrganizationPermissionArea.Cases);   // Equipment deliberately excluded
+
+        var svc = CreateService(factory);
+        Assert.True(await svc.HasAccessAsync(ownerId, orgId, DataTable.Equipment, DataAction.Create));
+        Assert.False(await svc.HasAccessAsync(memberId, orgId, DataTable.Equipment, DataAction.Create));
+    }
+
+    // ── GetMembershipOrganizationsAsync (item 159) ────────────────────────────
+
+    [Fact]
+    public async Task MembershipOrganizations_ForSuperAdmin_AreOnlyTheirOwnMemberships()
+    {
+        // The sidebar's list answers "your groups". GetOrganizationsForUserAsync expands to every
+        // organization for a SuperAdmin — right for an admin screen, and exactly the wrong thing
+        // to render under Home. This method must never inherit that expansion.
+        var factory = CreateFactory();
+        var (orgId, _, _) = await SeedOrgAsync(factory);
+        var superAdmin = await SeedSuperAdminAsync(factory);
+
+        // A second org the SuperAdmin does NOT belong to.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization
+            {
+                Id = Guid.NewGuid(), Name = "Elsewhere", UrlName = "elsewhere",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = superAdmin
+            });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = superAdmin,
+                Role = MemberRole.Member, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = superAdmin
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var svc = CreateService(factory);
+
+        var mine = await svc.GetMembershipOrganizationsAsync(superAdmin);
+        Assert.Single(mine);
+        Assert.Equal(orgId, mine[0].Id);
+
+        // The admin expansion still exists and still differs — the two answers are different on purpose.
+        var all = await svc.GetOrganizationsForUserAsync(superAdmin);
+        Assert.True(all.Count > mine.Count);
+    }
+
+    [Fact]
+    public async Task MembershipOrganizations_ExcludeInactiveMemberships()
+    {
+        var factory = CreateFactory();
+        var (orgId, ownerId, memberId) = await SeedOrgAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var m = await db.OrganizationUserMemberships.FirstAsync(x => x.AppUserId == memberId);
+            m.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var svc = CreateService(factory);
+        Assert.Empty(await svc.GetMembershipOrganizationsAsync(memberId));
+        Assert.Single(await svc.GetMembershipOrganizationsAsync(ownerId));
+    }
+
     // ── RegisterOrganizationAsync ─────────────────────────────────────────────
 
     [Fact]
@@ -377,6 +544,51 @@ public class OrganizationSecurityServiceRepositoryTests
         Assert.NotNull(membership);
         Assert.Equal(MemberRole.Owner, membership.Role);
         Assert.True(membership.IsActive);
+
+        // A new group's calendar must be usable from the first moment: registration stamps the
+        // default event types (OrgCalendarDefaults), same as both SuperAdmin create doors.
+        var eventTypes = await verify.OrgCalendarEventTypes
+            .Where(t => t.OrganizationId == org.Id)
+            .OrderBy(t => t.SortOrder)
+            .Select(t => t.Name)
+            .ToListAsync();
+
+        Assert.Equal(["Investigation", "Public Event", "Meeting", "Training", "Fundraiser"], eventTypes);
+
+        // …and the member-title ladder (item 157), for the same reason: a founder's group must
+        // be usable from the first moment, and an empty ladder is a feature they cannot find.
+        var ladder = await verify.OrganizationMemberLevels
+            .Where(l => l.OrganizationId == org.Id)
+            .OrderBy(l => l.SortOrder)
+            .Select(l => l.Name)
+            .ToListAsync();
+
+        Assert.Equal(
+            ["Associate", "Junior Investigator", "Investigator", "Senior Investigator", "Lead Investigator"],
+            ladder);
+
+        // …and the duty list (item 158) — same reasoning again.
+        var duties = await verify.InvestigationDuties
+            .Where(d => d.OrganizationId == org.Id)
+            .OrderBy(d => d.SortOrder)
+            .Select(d => d.Name)
+            .ToListAsync();
+
+        Assert.Equal(["Lead Investigator", "Equipment", "Equipment Assist", "Evidence Collection", "Documentation"], duties);
+
+        // …and the eight default permission roles (item 156 Phase C; the Investigator Role
+        // joined the defaults in 564f332d), every name carrying the "… Role" suffix that keeps
+        // titles and roles unconfusable.
+        var roles = await verify.OrganizationRoles
+            .Where(r => r.OrganizationId == org.Id)
+            .OrderBy(r => r.SortOrder)
+            .Select(r => r.Name)
+            .ToListAsync();
+
+        Assert.Equal(
+            ["Investigator Role", "Case Manager Role", "Equipment Manager Role", "CMS Manager Role",
+             "Client Manager Role", "Content Manager Role", "Historian Role", "Secretary Role"],
+            roles);
     }
 
     [Fact]

@@ -1,0 +1,164 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/keep"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* Keeping what matters from an event before its files are removed (item 235 phase 12).
+
+   Ben: "allow the organizer the ability to pick from a list to download and just zip up whatever they pick
+   into a .zip file for them."
+
+   A LINK, NOT A FILE PASSED THROUGH THE PAGE. A zip of a weekend's photos can be gigabytes; it streams from
+   the server to the browser like any download, and this page only builds the address. Up to 100 at a time
+   keeps that address a sensible length. *@
+
+<PageTitle>@(_keep?.Name is { Length: > 0 } n ? $"Keep the files — {n}" : "Keep the files")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_keep is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}/after")">After the event</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">Keep the files <HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the event…" />
+    }
+    else if (_keep is null)
+    {
+        <div class="alert alert-warning" id="keep-missing">This event couldn't be read, or you can't take its files.</div>
+    }
+    else
+    {
+        var k = _keep;
+        <p class="text-secondary small mb-3" id="keep-when">
+            @if (k.ClearedUtc is { } cleared)
+            {
+                <text>This event's files, gallery and room photo links were removed on @cleared.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy").</text>
+            }
+            else if (k.ClearsOn is { } on)
+            {
+                <text>This event's files, gallery pictures and the links to photos in its room are removed on <strong>@on.ToString("MM/dd/yyyy")</strong>.
+                Pick what you want and download it as one zip. Guests keep their own photos.</text>
+            }
+            else
+            {
+                <text>Pick what you want and download it as one zip.</text>
+            }
+        </p>
+
+        @if (k.Items.Count == 0)
+        {
+            <div class="alert alert-light border" id="keep-empty">There is nothing to take away.</div>
+        }
+        else
+        {
+            @Group("Files", "file", "keep-files")
+            @Group("Gallery pictures", "picture", "keep-pictures")
+            @Group("Photos from the room", "photo", "keep-photos")
+
+            <div class="keep-bar d-flex flex-wrap align-items-center gap-2 mt-3" id="keep-bar">
+                <span class="me-auto small" id="keep-count">
+                    @_chosen.Count chosen · @Megabytes(ChosenBytes())
+                    @if (_chosen.Count > MaxInOneZip)
+                    {
+                        <span class="text-warning ms-1">— up to @MaxInOneZip at a time</span>
+                    }
+                </span>
+                @if (_chosen.Count is > 0 and <= MaxInOneZip)
+                {
+                    <a class="btn btn-primary" id="keep-download" href="@MediaUrls.EventKeepZip(OrgId, EventId, _chosen)">
+                        Download as a zip
+                    </a>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary" id="keep-download" disabled>Download as a zip</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private const int MaxInOneZip = 100;
+
+    private HostedEventKeepRecord? _keep;
+    private bool _loading = true;
+    private readonly HashSet<Guid> _chosen = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _keep = (await AdminClient.GetHostedEventKeepAsync(OrgId, EventId)).Item;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private RenderFragment Group(string title, string kind, string id) => __builder =>
+    {
+        var items = _keep?.Items.Where(i => i.Kind == kind).ToList() ?? [];
+        if (items.Count == 0) return;
+
+        var all = items.All(i => _chosen.Contains(i.UploadFileId));
+        <div class="card mb-3" id="@id">
+            <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <span class="fw-semibold">@title (@items.Count)</span>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="@($"{id}-all")" checked="@all"
+                           @onchange="e => ChooseAll(items, e.Value is true)" />
+                    <label class="form-check-label small" for="@($"{id}-all")">All of these</label>
+                </div>
+            </div>
+            <ul class="list-group list-group-flush">
+                @foreach (var item in items)
+                {
+                    var thisOne = item;
+                    <li class="list-group-item">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input keep-item" type="checkbox" id="@($"keep-{thisOne.UploadFileId:N}")"
+                                   checked="@_chosen.Contains(thisOne.UploadFileId)"
+                                   @onchange="e => Choose(thisOne.UploadFileId, e.Value is true)" />
+                            <label class="form-check-label d-flex flex-wrap gap-2" for="@($"keep-{thisOne.UploadFileId:N}")" style="overflow-wrap:anywhere;">
+                                <span>@thisOne.Name</span>
+                                <span class="text-secondary small">@Megabytes(thisOne.Size)@(thisOne.By is { Length: > 0 } by ? $" · {by}" : "")</span>
+                            </label>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </div>
+    };
+
+    private void Choose(Guid id, bool on)
+    {
+        if (on) _chosen.Add(id); else _chosen.Remove(id);
+    }
+
+    private void ChooseAll(IEnumerable<HostedEventKeepItemRecord> items, bool on)
+    {
+        foreach (var item in items) Choose(item.UploadFileId, on);
+    }
+
+    private long ChosenBytes() => _keep?.Items.Where(i => _chosen.Contains(i.UploadFileId)).Sum(i => i.Size) ?? 0;
+
+    private static string Megabytes(long bytes)
+        => bytes < 1024 * 1024 ? $"{Math.Max(1, bytes / 1024)} KB" : $"{bytes / (1024.0 * 1024.0):0.#} MB";
+}

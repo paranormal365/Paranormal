@@ -31,21 +31,99 @@ public sealed class WebApiClient : IWebApiClient
         return req;
     }
 
+    /// <inheritdoc />
     public async Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => (await GetItemAsync<TResponse>(relativeUrl, token)).Item;
+
+    /// <inheritdoc />
+    public Task<ItemResult<TResponse>> GetItemAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => SendItemAsync<TResponse>(Auth(HttpMethod.Get, relativeUrl), token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<TResponse>> GetAnonymousItemAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => SendItemAsync<TResponse>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+
+    /// <summary>
+    /// The body every single-object GET shares — the counterpart to <see cref="SendListAsync{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two untyped entry points above it (<c>GetAsync</c>, <c>GetAnonymousAsync</c>) are
+    /// now thin wrappers that drop the outcome and keep the value. That is on purpose: it makes the
+    /// ~90 existing call sites behave exactly as they did, while every one of them silently gains
+    /// the <c>HttpRequestException</c> catch they never had. An unreachable API used to throw
+    /// straight out of <c>OnInitializedAsync</c> and kill the circuit; the list path has caught this
+    /// since item 120 and the object path never did.</para>
+    /// </remarks>
+    private Task<ItemResult<T>> SendItemAsync<T>(HttpRequestMessage request, CancellationToken token)
+        => ApiResponseMapper.ReadItemAsync<T>(_httpClient, request, token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default)
+        => SendListAsync<T>(Auth(HttpMethod.Get, relativeUrl), token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<T>> GetAnonymousListAsync<T>(string relativeUrl, CancellationToken token = default)
+        => SendListAsync<T>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+
+    /// <summary>
+    /// The body both list fetches share. One implementation on purpose: the authenticated and
+    /// anonymous paths differ by a single header, and the whole value of <see cref="LoadResult{T}"/>
+    /// is that failure is reported identically wherever it happens.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous surfaces need this as much as signed-in ones. A public group page whose fetch is
+    /// refused shows a visitor an organisation with nothing in it, and the visitor has no account,
+    /// no error and no reason to try again — the one audience least able to tell a broken page from
+    /// an empty one.
+    /// </remarks>
+    private Task<LoadResult<T>> SendListAsync<T>(HttpRequestMessage request, CancellationToken token)
+        => ApiResponseMapper.ReadListAsync<T>(_httpClient, request, token);
+
+    /// <inheritdoc />
+    public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
+        => (await GetAnonymousItemAsync<TResponse>(relativeUrl, token)).Item;
+
+    /// <inheritdoc />
+    public async Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
+        string relativeUrl, TRequest payload, CancellationToken token = default)
     {
-        using var req = Auth(HttpMethod.Get, relativeUrl);
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
         using var response = await _httpClient.SendAsync(req, token);
-        if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+
+        try
+        {
+            return await BodyOrDefaultAsync<TResponse>(response, token);
+        }
+        catch (Exception)
+        {
+            // A 500 or a proxy error page is not the typed body this expects. Null leaves the
+            // caller to show its own generic message, which is the right outcome for a failure
+            // the server did not describe.
+            return default;
+        }
     }
 
-    public async Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
-        if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
-    }
+    /// <summary>
+    /// A success response's body, or <c>default</c> when there is none.
+    /// </summary>
+    /// <remarks>
+    /// <para>A 204 carries no body and <c>ReadFromJsonAsync</c> THROWS on an empty stream, so every
+    /// void endpoint (<c>return NoContent()</c>) — and every <c>Ok(null)</c>, which the framework
+    /// turns into a 204 — reaches this. Three methods already knew; four did not, and the rule was
+    /// being restated rather than shared.</para>
+    ///
+    /// <para>What the fourth one cost: <c>CompleteMyOnboardingAsync</c> posts to a 204 endpoint, the
+    /// throw was swallowed by the page's own catch, and the first-run wizard was never stamped as
+    /// answered. Every account created on the live site was therefore asked to set itself up again
+    /// on every visit, and no amount of clicking Skip could stop it. Found on 2026-09-09 while
+    /// checking what App Review's demo account would see.</para>
+    /// </remarks>
+    private static async Task<TResponse?> BodyOrDefaultAsync<TResponse>(
+        HttpResponseMessage response, CancellationToken token)
+        => response.StatusCode == System.Net.HttpStatusCode.NoContent
+           || response.Content.Headers.ContentLength == 0
+            ? default
+            : await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
 
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
@@ -53,7 +131,7 @@ public sealed class WebApiClient : IWebApiClient
         req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     /// <inheritdoc />
@@ -65,7 +143,19 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
 
         if (response.IsSuccessStatusCode)
+        {
+            // A 204 carries no body, and ReadFromJsonAsync THROWS on an empty stream. Because
+            // nothing between here and the button catches it, that exception escaped the page's
+            // click handler and left the busy flag set — the Change-password panel sat on
+            // "Saving…" for ever while the password had in fact been changed. Every void endpoint
+            // (`return NoContent()`) reaches this line, so the guard belongs here and not in the
+            // dozen call sites. SendItemAsync already learned this; see the note there.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null);
+
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+        }
 
         var body = await response.Content.ReadAsStringAsync(token);
 
@@ -81,6 +171,26 @@ public sealed class WebApiClient : IWebApiClient
     }
 
     /// <inheritdoc />
+    public async Task<(TResponse? Result, string? Error, int Status)> SendWithStatusAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest? payload, CancellationToken token = default)
+    {
+        using var req = Auth(method, relativeUrl);
+        if (payload is not null) req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        var status = (int)response.StatusCode;
+
+        if (response.IsSuccessStatusCode)
+            return (await BodyOrDefaultAsync<TResponse>(response, token), null, status);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null, status);
+    }
+
+    /// <inheritdoc />
     public async Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
         string relativeUrl, TRequest payload, CancellationToken token = default)
     {
@@ -89,7 +199,14 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
 
         if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync above.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, default);
+
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), default);
+        }
 
         if (response.StatusCode != System.Net.HttpStatusCode.Conflict)
             return (default, default);
@@ -107,12 +224,61 @@ public sealed class WebApiClient : IWebApiClient
         }
     }
 
+    /// <inheritdoc />
+    public async Task<(TResponse? Result, string? Error, TConflict? Conflict)> SendExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(method, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync above.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null, default);
+
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null, default);
+        }
+
+        // Read once, as text. Trying the JSON reader first and the string reader second would read
+        // the same stream twice, and the second read of an unbuffered response is empty.
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // Our own 409 carries the typed shape. One from a proxy or a framework filter does not,
+            // and must not crash the page — it falls through to the prose test below, where an
+            // HTML page is dropped and a plain sentence is kept.
+            try
+            {
+                var conflict = System.Text.Json.JsonSerializer.Deserialize<TConflict>(body, WebJson);
+                if (conflict is not null) return (default, null, conflict);
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        // The same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence, a
+        // framework error is a ProblemDetails blob or an HTML page.
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null, default);
+    }
+
+    /// <summary>What <c>ReadFromJsonAsync</c> uses when nothing is passed: the web defaults.</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions WebJson
+        = new(System.Text.Json.JsonSerializerDefaults.Web);
+
     public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     public async Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
@@ -122,13 +288,31 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <inheritdoc />
+    public async Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
+        string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+        if (response.IsSuccessStatusCode) return (true, null);
+
+        // The same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence.
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (false, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
         req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
+        return await BodyOrDefaultAsync<TResponse>(response, token);
     }
 
     public async Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default)
@@ -136,6 +320,28 @@ public sealed class WebApiClient : IWebApiClient
         using var req = Auth(HttpMethod.Delete, relativeUrl);
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
+    }
+
+    /// <inheritdoc />
+    public async Task<(bool Deleted, string? Error)> DeleteExpectingReasonAsync(
+        string relativeUrl, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Delete, relativeUrl);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode) return (true, null);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        // Same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence, a
+        // framework error is a ProblemDetails blob or an HTML page, and showing either to a
+        // person is worse than saying nothing useful.
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (false, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
     }
 
     public async Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
@@ -154,24 +360,16 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
-    {
-        var users = await GetAsync<List<AppUserRecord>>("/api/app-users", token);
-        return users ?? [];
-    }
+    public Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
+        => GetListAsync<AppUserRecord>("/api/app-users", token);
 
-    public async Task<IReadOnlyList<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
-    {
-        var organizations = await GetAsync<List<OrganizationSummaryResponse>>("/api/security/organizations/mine", token);
-        return organizations ?? [];
-    }
+    public Task<LoadResult<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
+        => GetListAsync<OrganizationSummaryResponse>("/api/security/organizations/mine", token);
 
-    public async Task<IReadOnlyList<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default)
-    {
-        var encodedQuery = Uri.EscapeDataString(query ?? string.Empty);
+    public Task<LoadResult<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default)
+    {        var encodedQuery = Uri.EscapeDataString(query ?? string.Empty);
         var relativeUrl = $"/api/security/organizations/users/search?q={encodedQuery}&skip={skip}&take={take}";
-        var users = await GetAsync<List<UserSearchResultResponse>>(relativeUrl, token);
-        return users ?? [];
+        return GetListAsync<UserSearchResultResponse>(relativeUrl, token);
     }
 
     public Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default)
@@ -191,11 +389,23 @@ public sealed class WebApiClient : IWebApiClient
         return PostAsync<CheckOrganizationAccessRequest, bool?>(relativeUrl, request, token);
     }
 
-    public async Task<IReadOnlyList<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default)
+    /// <summary>
+    /// The group's roster — who belongs and in what role.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Reads <c>/roster</c>, not <c>/security/users</c>.</b> They return the same shape,
+    /// but the security one is the endpoint behind *managing* access and requires Owner or
+    /// Administrator. Every caller of this method wants the list — the Members tab, the case and
+    /// investigation team pickers, the role editor — and only the last of those is an
+    /// administrator's screen.</para>
+    ///
+    /// <para>Pointed at the manage endpoint, an ordinary member's own roster came back refused,
+    /// and the <c>?? []</c> below turned that into "this group has no members". Item 109.</para>
+    /// </remarks>
+    public Task<LoadResult<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default)
     {
-        var relativeUrl = $"/api/organizations/{organizationId}/security/users";
-        var users = await GetAsync<List<OrganizationUserMembershipResponse>>(relativeUrl, token);
-        return users ?? [];
+        var relativeUrl = $"/api/organizations/{organizationId}/roster";
+        return GetListAsync<OrganizationUserMembershipResponse>(relativeUrl, token);
     }
 
     public Task<OrganizationUserMembershipResponse?> UpsertOrganizationMembershipAsync(Guid organizationId, Guid targetUserId, UpsertOrganizationMembershipRequest request, CancellationToken token = default)
@@ -210,25 +420,16 @@ public sealed class WebApiClient : IWebApiClient
         return PutAsync<SetOrganizationGrantRequest, OrganizationAccessGrantResponse>(relativeUrl, request, token);
     }
 
-    public async Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
-    {
-        var entries = await GetAsync<List<OrgUserDirectoryEntryResponse>>($"/api/organizations/{organizationId}/user-directory", token);
-        return entries ?? [];
-    }
+    public Task<LoadResult<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+        => GetListAsync<OrgUserDirectoryEntryResponse>($"/api/organizations/{organizationId}/user-directory", token);
 
     // ── Upload File Types ────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileTypeRecord>>("/api/upload-file-types", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default)
+        => GetListAsync<UploadFileTypeRecord>("/api/upload-file-types", token);
 
     // ── Upload Files ─────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>("/api/upload-files", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>("/api/upload-files", token);
 
     public async Task<UploadFileRecord?> UploadFileAsync(MultipartFormDataContent content, CancellationToken token = default)
     {
@@ -237,6 +438,26 @@ public sealed class WebApiClient : IWebApiClient
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<UploadFileRecord>(cancellationToken: token);
+    }
+
+    public async Task<(ChunkedUploadSessionRecord? Session, string? Error)> StartChunkedUploadAsync(
+        StartChunkedUploadRequest request, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, "/api/chunked-uploads");
+        req.Content = System.Net.Http.Json.JsonContent.Create(request);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<ChunkedUploadSessionRecord>(cancellationToken: token), null);
+
+        // The server refuses in sentences — a size limit that names the number, an extension
+        // policy that names the type. Keep them; a null here degrades to a generic failure.
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+        return (null, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
     }
 
     public async Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
@@ -248,11 +469,53 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
 
+    /// <summary>
+    /// Multipart upload that keeps the server's refusal sentence — the item-84 read-only refusal
+    /// arrives on file uploads too, and a null that discards "your subscription has ended" leaves
+    /// somebody staring at a generic failure while the real answer was one sentence long.
+    /// </summary>
+    public async Task<(TResponse? Result, string? Error)> PostMultipartExpectingReasonAsync<TResponse>(
+        string relativeUrl, MultipartFormDataContent content, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, relativeUrl);
+        req.Content = content;
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync: an upload endpoint that answers
+            // NoContent would otherwise throw here, inside whatever handler started the upload.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null);
+
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default)
         => PutAsync<UpdateUploadFileRequest, UploadFileRecord>($"/api/upload-files/{id}", request, token);
 
     public Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{id}", token);
+
+    // ── Upload File — delete-and-reassign (item 180 Phase B) ────────────────────
+    public Task<FileUsageRecord?> GetUploadFileUsageAsync(Guid id, CancellationToken token = default)
+        => GetAsync<FileUsageRecord>($"/api/upload-files/{id}/usage", token);
+
+    public Task<DeleteEverywhereResult?> DeleteUploadFileEverywhereAsync(Guid id, CancellationToken token = default)
+        => PostAsync<object, DeleteEverywhereResult>($"/api/upload-files/{id}/delete-everywhere", new { }, token);
+
+    public Task<UploadFileRecord?> ReassignUploadFileAsync(Guid id, Guid organizationId, CancellationToken token = default)
+        => PostAsync<ReassignUploadFileRequest, UploadFileRecord>($"/api/upload-files/{id}/reassign", new ReassignUploadFileRequest(organizationId), token);
 
     // ── Upload File — Replace (item #6 phase 3) ─────────────────────────────────
     public Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default)
@@ -290,15 +553,18 @@ public sealed class WebApiClient : IWebApiClient
     public Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
         => PutAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>($"/api/upload-files/{fileId}/audio-config", request, token);
 
+    /// <inheritdoc />
+    public Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<UpsertAudioConfigRequest, UploadFileAudioConfigRecord>(
+            HttpMethod.Put, $"/api/upload-files/{fileId}/audio-config", request, token);
+
     public Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-config", token);
 
     // ── Region Notes ──────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRegionNoteRecord>>($"/api/upload-files/{fileId}/region-notes", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", token);
 
     public Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default)
         => PostAsync<CreateRegionNoteRequest, UploadFileRegionNoteRecord>($"/api/upload-files/{fileId}/region-notes", request, token);
@@ -310,11 +576,8 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-files/{fileId}/region-notes/{noteId}", token);
 
     // ── File Comments (item #6 phase 2) ───────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileCommentRecord>>($"/api/upload-files/{fileId}/comments", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", token);
 
     public Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default)
         => PostAsync<CreateFileCommentRequest, UploadFileCommentRecord>($"/api/upload-files/{fileId}/comments", request, token);
@@ -332,11 +595,8 @@ public sealed class WebApiClient : IWebApiClient
         => PutAsync<FileCommentSettingsRecord, FileCommentSettingsRecord>($"/api/upload-files/{fileId}/comments/settings", request, token);
 
     // ── Audio Markers (EVP) ──────────────────────────────────────────────────
-    public async Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<AudioMarkerRecord>>($"/api/upload-files/{fileId}/audio-markers", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", token);
 
     public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
         => PostAsync<CreateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", request, token);
@@ -347,37 +607,59 @@ public sealed class WebApiClient : IWebApiClient
     public Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default)
         => DeleteAsync($"/api/upload-files/{fileId}/audio-markers/{markerId}", token);
 
-    public async Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
+    public async Task<IReadOnlyList<AudioMarkerRecord>?> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default)
     {
         var result = await PostAsync<BulkCreateAudioCandidatesRequest, List<AudioMarkerRecord>>(
             $"/api/upload-files/{fileId}/audio-markers/candidates", request, token);
-        return result ?? [];
+
+        // Null means the replace did not happen. Returning an empty list would say the file now
+        // has no candidates, which is a claim about the recording rather than about the request.
+        return result is null ? null : (IReadOnlyList<AudioMarkerRecord>)result;
     }
 
     public Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default)
         => PutAsync<ReviewAudioMarkerRequest, AudioMarkerRecord>(
             $"/api/upload-files/{fileId}/audio-markers/{markerId}/review", request, token);
 
-    public async Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+    /// <summary>
+    /// Runs the EVP detector over a file and returns what it marked, or null if it did not run.
+    /// </summary>
+    /// <remarks>
+    /// <b>Null, not an empty list.</b> "The scan found nothing" and "the scan did not happen" are
+    /// different answers, and on this site the first one is a finding somebody may act on — it is
+    /// the whole point of the feature. Handing back an empty list on a refused or failed request
+    /// reports a clean recording that was never examined.
+    /// </remarks>
+    public async Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
     {
         var result = await PostAsync<EvpDetectionOptions?, List<AudioMarkerRecord>>(
             $"/api/upload-files/{fileId}/audio-markers/scan?sensitivity={sensitivity}", options, token);
-        return result ?? [];
+
+        return result;
     }
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);
 
+    /// <inheritdoc />
+    public Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<ClipAudioRequest, UploadFileRecord>(
+            HttpMethod.Post, $"/api/upload-files/{fileId}/clip", request, token);
+
     // ── Audio Edit (destructive) ─────────────────────────────────────────────
     public Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default)
         => PostAsync<AudioEditRequest, UploadFileRecord>($"/api/upload-files/{fileId}/audio-edit", request, token);
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/{fileId}/clips", token);
-        return result ?? [];
-    }
+    /// <inheritdoc />
+    public Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<AudioEditRequest, UploadFileRecord>(
+            HttpMethod.Post, $"/api/upload-files/{fileId}/audio-edit", request, token);
+
+    public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>($"/api/upload-files/{fileId}/clips", token);
 
     public async Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default)
     {
@@ -402,17 +684,11 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-files/{fileId}/votes/my-vote", token);
 
     // ── Org Sharing ──────────────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileOrgShareResponse>>($"/api/upload-files/{fileId}/shares", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFileOrgShareResponse>($"/api/upload-files/{fileId}/shares", token);
 
-    public async Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFileRecord>>($"/api/upload-files/org/{orgId}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default)
+        => GetListAsync<UploadFileRecord>($"/api/upload-files/org/{orgId}", token);
 
     public Task<UploadFileOrgShareResponse?> ShareFileWithOrgAsync(Guid fileId, ShareFileWithOrgRequest request, CancellationToken token = default)
         => PostAsync<ShareFileWithOrgRequest, UploadFileOrgShareResponse>($"/api/upload-files/{fileId}/shares", request, token);
@@ -424,17 +700,11 @@ public sealed class WebApiClient : IWebApiClient
         => DeleteAsync($"/api/upload-file-shares/{shareId}", token);
 
     // ── Permission Requests ──────────────────────────────────────────────────
-    public async Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFilePermissionRequestResponse>>($"/api/upload-files/{fileId}/permission-requests", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default)
+        => GetListAsync<UploadFilePermissionRequestResponse>($"/api/upload-files/{fileId}/permission-requests", token);
 
-    public async Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default)
-    {
-        var result = await GetAsync<List<UploadFilePermissionRequestResponse>>($"/api/upload-file-permission-requests/pending-for/{reviewerUserId}", token);
-        return result ?? [];
-    }
+    public Task<LoadResult<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default)
+        => GetListAsync<UploadFilePermissionRequestResponse>($"/api/upload-file-permission-requests/pending-for/{reviewerUserId}", token);
 
     public Task<UploadFilePermissionRequestResponse?> SubmitPermissionRequestAsync(Guid fileId, SubmitPermissionRequestRequest request, CancellationToken token = default)
         => PostAsync<SubmitPermissionRequestRequest, UploadFilePermissionRequestResponse>($"/api/upload-files/{fileId}/permission-requests", request, token);
@@ -458,12 +728,61 @@ public sealed class WebApiClient : IWebApiClient
         return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
     }
 
-    public async Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
+    public async Task<EntraLinkOutcome> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default)
     {
         using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/link", entraAccessToken);
         req.Content = JsonContent.Create(request);
-        using var response = await _httpClient.SendAsync(req, token);
-        return response.IsSuccessStatusCode;
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(req, token);
+        }
+        catch (HttpRequestException)
+        {
+            return new EntraLinkOutcome(false, Message: "Couldn't reach the server. Nothing was linked.");
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode) return EntraLinkOutcome.Ok;
+
+            // A 401 is /login's problem-detail - the SAME four words the Apple link and the password
+            // form use - so the failure mapping is shared rather than copied. A 409 still carries a
+            // sentence of its own.
+            var body = await response.Content.ReadAsStringAsync(token);
+            var detail = ReadJsonString(body, "detail");
+            if (detail is not null)
+            {
+                var failure = LoginFailureMapping.From(new LoginAttempt(null, (int)response.StatusCode, detail));
+                return new EntraLinkOutcome(false, failure == LoginFailure.RequiresTwoFactor, failure switch
+                {
+                    LoginFailure.RequiresTwoFactor => "That account uses two-step verification. Enter the code from your authenticator app.",
+                    LoginFailure.EmailNotConfirmed => "That account's email address hasn't been confirmed yet. Use the link we sent, or ask for another.",
+                    LoginFailure.LockedOut => "That account is locked after too many attempts. Waiting is the only thing that helps.",
+                    LoginFailure.InvalidCredentials => "Invalid email or password.",
+                    _ => "That sign-in was refused without a reason. Try again - and if it keeps happening, it isn't your password.",
+                });
+            }
+
+            return new EntraLinkOutcome(false, false, ReadJsonString(body, "message"));
+        }
+    }
+
+    /// <summary>One string-valued property out of a small JSON body, or null. Never throws.</summary>
+    private static string? ReadJsonString(string body, string property)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty(property, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Like <see cref="Auth"/>, but attaches an explicitly-supplied bearer token instead

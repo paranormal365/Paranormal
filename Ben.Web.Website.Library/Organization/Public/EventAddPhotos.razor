@@ -1,0 +1,185 @@
+@page "/events/{EventId:guid}/photos"
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@* Adding photos from a phone during an event (item 235 phase 11 — Ben, 2026-09-13: "a link on the
+   site where a user could upload photos taken during the event").
+
+   ONE BIG BUTTON. Somebody standing in a dark corridor with a phone wants to choose pictures and
+   press send, not read a form; the phone's own chooser offers the camera or the library.
+
+   THE SAME RULES AS THE ROOM, because these are room posts: the event's people, a confirmed guest
+   when the organizers allow guests' photos, and every picture stays the person's own unless they
+   tick the box that sends it on. *@
+
+<PageTitle>Add photos</PageTitle>
+
+<div class="container py-3" style="max-width:560px;">
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (!UserState.IsAuthenticated)
+    {
+        <h1 class="h4">Add photos</h1>
+        <p>Sign in to add photos to the event.</p>
+        <a class="btn btn-primary" href="@($"/login?returnUrl=/events/{EventId}/photos")">Sign in</a>
+    }
+    else if (_room.Item is not { } room)
+    {
+        <h1 class="h4">Add photos</h1>
+        <p class="text-secondary" id="add-photos-refused">
+            Adding photos is for the people at this event. If you have asked for a place, you can add photos once the
+            venue confirms it.
+        </p>
+    }
+    else if (!room.CanAddPhotos)
+    {
+        <h1 class="h4">Add photos</h1>
+        <p class="text-secondary" id="add-photos-not-now">
+            @(room.WhyNotPost ?? "The organizers have kept photos to the event's team.")
+        </p>
+    }
+    else
+    {
+        <h1 class="h4 mb-1">Add photos</h1>
+        <p class="text-secondary small">They go into the event's room, and onto the photo wall the organizers show at the venue. They stay yours.</p>
+
+        <label class="btn btn-primary btn-lg w-100 mb-3" for="add-photos-input" style="min-height:3.5rem;">
+            Choose photos or videos
+        </label>
+        <InputFile id="add-photos-input" class="visually-hidden" multiple accept="image/*,video/*" OnChange="Picked" />
+
+        @if (_picked.Count > 0)
+        {
+            <p class="mb-2" id="add-photos-picked">@(_picked.Count == 1 ? "1 chosen" : $"{_picked.Count} chosen")</p>
+
+            <label class="form-label small" for="add-photos-caption">Say something about them (optional)</label>
+            <input class="form-control mb-2" id="add-photos-caption" maxlength="1000" @bind="_caption" />
+
+            @if (room.NeedsPhotoConsent)
+            {
+                <div class="border rounded p-3 mb-3" id="add-photos-notice">
+                    <p class="mb-2">@room.PhotoNotice</p>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="add-photos-agree" @bind="_agree" />
+                        <label class="form-check-label" for="add-photos-agree">I agree</label>
+                    </div>
+                </div>
+            }
+
+            @if (room.HostNames.Count > 0)
+            {
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="add-photos-send" @bind="_sendToHosts" />
+                    <label class="form-check-label" for="add-photos-send">
+                        Also send them to @string.Join(" and ", room.HostNames) — they stay yours
+                    </label>
+                </div>
+            }
+
+            <button type="button" class="btn btn-success btn-lg w-100" id="add-photos-send-button"
+                    disabled="@(_busy || (room.NeedsPhotoConsent && !_agree))" @onclick="SendAsync" style="min-height:3.5rem;">
+                @(_busy ? $"Adding {_done + 1} of {_picked.Count}…" : "Add them")
+            </button>
+        }
+
+        @if (_result is { Length: > 0 })
+        {
+            <div class="alert alert-success mt-3" role="status" id="add-photos-done">@_result</div>
+        }
+        @foreach (var problem in _problems)
+        {
+            <div class="alert alert-danger py-2 mt-2" role="alert">@problem</div>
+        }
+
+        @if (room.CanSeeWall)
+        {
+            <div class="d-flex gap-3 mt-4 small">
+                <a href="@($"/events/{EventId}/wall")">Photo wall</a>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid EventId { get; set; }
+
+    /// <summary>The most one press sends. Beyond this a phone's upload is better done in two goes.</summary>
+    private const int MaxAtOnce = 20;
+
+    private ItemResult<EventRoomRecord> _room;
+    private bool _loading = true;
+    private bool _busy;
+    private List<IBrowserFile> _picked = [];
+    private string? _caption;
+    private bool _sendToHosts;
+    private bool _agree;
+    private int _done;
+    private string? _result;
+    private readonly List<string> _problems = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+
+        if (UserState.IsAuthenticated) _room = await AdminClient.GetEventRoomAsync(EventId);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void Picked(InputFileChangeEventArgs e)
+    {
+        _result = null;
+        _problems.Clear();
+        _picked = [.. e.GetMultipleFiles(MaxAtOnce)];
+        if (e.FileCount > MaxAtOnce) _problems.Add($"Only the first {MaxAtOnce} were chosen. Add the rest in another go.");
+    }
+
+    private async Task SendAsync()
+    {
+        _busy = true;
+        _done = 0;
+        _problems.Clear();
+        var added = 0;
+
+        foreach (var file in _picked)
+        {
+            using var content = new MultipartFormDataContent();
+            // The words go on the first only, so a batch reads as one caption and not twenty copies of it.
+            content.Add(new StringContent(added == 0 ? _caption ?? "" : ""), "body");
+            content.Add(new StringContent(_sendToHosts ? "true" : "false"), "sendToHosts");
+            content.Add(new StringContent(_agree ? "true" : "false"), "agreeToShow");
+            var stream = new StreamContent(file.OpenReadStream(200L * 1024 * 1024));
+            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+            content.Add(stream, "media", file.Name);
+
+            var (room, error) = await AdminClient.PostToEventRoomAsync(EventId, content);
+            if (room is null) _problems.Add($"{file.Name}: {error ?? "couldn't be added."}");
+            else added++;
+
+            _done++;
+            StateHasChanged();
+        }
+
+        _busy = false;
+        _picked = [];
+        if (added > 0) _room = await AdminClient.GetEventRoomAsync(EventId);
+        _caption = null;
+        _result = added switch
+        {
+            0 => null,
+            1 => "Added. It's in the room and on the photo wall.",
+            _ => $"Added {added}. They're in the room and on the photo wall.",
+        };
+    }
+}

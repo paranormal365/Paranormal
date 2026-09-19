@@ -21,31 +21,47 @@ public class AudioScrubModeTests : BenTestBase
 
     private async Task<bool> NavigateToTghCaseFilesTabAsync()
     {
-        await LoginAsync(UserEmail, UserPassword); // Sarah — TGH org member
-        await Page.GotoAsync($"{BaseUrl}/organizations");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await LoginAsync(UserEmail, UserPassword); // Sarah — TGH administrator
 
-        var tgh = Page.GetByText("Tennessee Ghost Hunters", new() { Exact = false });
-        if (!await tgh.IsVisibleAsync()) return false;
-        await tgh.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Through the maintained helpers, not a hand-rolled walk: the old version clicked the
+        // organisation's *name*, which is a plain grid cell on this site and navigates nowhere —
+        // the exact trap OpenOrganizationAsync exists to avoid. The walk then stalled waiting for
+        // a Cases tab on a page it had never left.
+        // OpenOrgCaseAsync, not a hand-rolled walk to the case. This looked for a LINK containing
+        // "Belmont"; the case list renders a card with its own Open button and no such link, so the
+        // lookup found nothing, the helper returned false, and both tests in this fixture
+        // Assert.Ignore'd on every run — reported as skipped, which nobody reads as broken. They
+        // had never once exercised the drag mode they are named for (2026-09-06 audio audit,
+        // phase 6).
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
 
-        var casesLink = Page.GetByRole(AriaRole.Link, new() { Name = "Cases" })
-                            .Or(Main.GetByText("Cases", new() { Exact = true })).First;
-        await casesLink.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var caseItem = Page.GetByText("Park", new() { Exact = false }).First;
-        if (!await caseItem.IsVisibleAsync()) return false;
-        await caseItem.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true })
-                           .Or(Main.GetByText("Files", new() { Exact = true })).First;
-        await filesTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // The upload input is display:none behind its "Upload File" label, and OpenTabAsync waits
+        // for the expected element to be VISIBLE — so this waited on a hidden input and timed out on
+        // a Files tab that had opened perfectly. Found by the 2026-09-06 audio walk, the first time
+        // this test ran under the harness at all.
+        await OpenTabAsync("Files", Main.GetByText("Upload File", new() { Exact = false }).First);
+        await Expect(Page.Locator("#case-file-upload")).ToBeAttachedAsync(new() { Timeout = 15_000 });
         return true;
     }
+
+    /// <summary>
+    /// The card for the file this test just uploaded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Scoped to OUR file, not to the first one on the page</b> (2026-09-17). Both helpers
+    /// below used <c>.First</c> — <c>[id^='ws-']</c> and <c>[id^='afp-']</c> — and this fixture
+    /// uploads a fresh copy of the MP3 on every run into a case that keeps its files, because the
+    /// e2e database persists between runs. With one player on the page <c>.First</c> is the right
+    /// one by luck; after a few runs it is somebody else's file, which may not have decoded, and
+    /// the right-click lands on something with no "Open Full View" on it.</para>
+    ///
+    /// <para>That is why this test passed on its own and failed in the full suite, in both
+    /// directions, on two branches — it was reading the wrong element, not reporting a defect. The
+    /// wrapper id is a fresh GUID per component instance, so the file's own card is the only
+    /// stable handle.</para>
+    /// </remarks>
+    private ILocator OurFileCard =>
+        Main.Locator(".card", new() { HasText = "test-audio" }).Last;
 
     /// <summary>Uploads the fixture MP3 and waits for its compact waveform preview to render.</summary>
     private async Task<bool> UploadTestAudioAsync()
@@ -54,7 +70,10 @@ public class AudioScrubModeTests : BenTestBase
 
         // Upload (SignalR round-trip) + fetch-back + client-side decode for a ~7MB file
         // can take a while — generous timeout to avoid flaking on a slow CI runner.
-        var waveform = Page.Locator("[id^='ws-']").First;
+        //
+        // .Last of our own cards: the newest upload is the one at the bottom, and every earlier
+        // run left one behind.
+        var waveform = OurFileCard.Locator("[id^='ws-']").First;
         try { await Expect(waveform).ToBeVisibleAsync(new() { Timeout = 45_000 }); }
         catch { return false; }
         return true;
@@ -63,7 +82,9 @@ public class AudioScrubModeTests : BenTestBase
     /// <summary>Right-clicks the compact preview and opens the full-view modal.</summary>
     private async Task OpenFullViewAsync()
     {
-        var wrapper = Page.Locator("[id^='afp-']").First;
+        var wrapper = OurFileCard.Locator("[id^='afp-']").First;
+        await Expect(wrapper).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
         await wrapper.ClickAsync(new() { Button = MouseButton.Right });
         await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
         await Page.WaitForTimeoutAsync(300); // modal open animation
@@ -74,12 +95,17 @@ public class AudioScrubModeTests : BenTestBase
     {
         if (!await NavigateToTghCaseFilesTabAsync())
         {
-            Assert.Pass("TGH org not visible; seed data may differ.");
+            // A precondition of the environment, not a result: Ignore leaves the run honest
+            // about what was not exercised. Assert.Pass reported a green test for a browser that
+            // never reached the page (2026-09-05 audit, F19).
+            Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
         if (!await UploadTestAudioAsync())
         {
-            Assert.Pass("Audio upload/preview did not render in time — skipping.");
+            // Not a precondition: uploading the file and getting a player is the behaviour under
+            // test, so failing to do it is a failure.
+            Assert.Fail("Audio upload/preview did not render in time.");
             return;
         }
 
@@ -104,12 +130,17 @@ public class AudioScrubModeTests : BenTestBase
     {
         if (!await NavigateToTghCaseFilesTabAsync())
         {
-            Assert.Pass("TGH org not visible; seed data may differ.");
+            // A precondition of the environment, not a result: Ignore leaves the run honest
+            // about what was not exercised. Assert.Pass reported a green test for a browser that
+            // never reached the page (2026-09-05 audit, F19).
+            Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
         if (!await UploadTestAudioAsync())
         {
-            Assert.Pass("Audio upload/preview did not render in time — skipping.");
+            // Not a precondition: uploading the file and getting a player is the behaviour under
+            // test, so failing to do it is a failure.
+            Assert.Fail("Audio upload/preview did not render in time.");
             return;
         }
 

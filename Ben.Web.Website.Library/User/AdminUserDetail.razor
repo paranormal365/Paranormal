@@ -31,6 +31,12 @@ else
             <div class="col">
                 <button type="button" class="btn btn-link text-decoration-none" @onclick="@(() => NavManager.NavigateTo("/admin/users"))"><BenIcon Name="arrow-left" Class="me-1" />Back to Users</button>
                 <h3 class="d-inline-block ms-3 mb-0">@(_detail.User.DisplayName ?? _detail.User.Email)</h3>
+                @* Site roles, beside the name: the one fact about a person an administrator
+                   opening this record most often came to check (item 216). *@
+                @foreach (var role in _detail.Roles)
+                {
+                    <span class="badge text-bg-secondary ms-2 align-middle" data-testid="site-role-badge">@role</span>
+                }
             </div>
             <div class="col-auto">
                 <button type="button" class="btn btn-warning" @onclick="ImpersonateUser"><BenIcon Name="user" Class="me-1" />Impersonate</button>
@@ -63,21 +69,28 @@ else
                     </div>
                     <div class="col-12 d-flex flex-wrap gap-4 mt-1">
                         <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsEmailConfirmed" /> Email Confirmed</label>
-                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsTwoFactorEnabled" /> 2FA Enabled</label>
+                        @* Two-step sign-in is the account holder's own choice and is not editable
+                           here — see AdminAppUserController. Shown as status because it is worth
+                           knowing when somebody writes in unable to sign in. *@
+                        <span class="d-flex align-items-center gap-2 text-secondary">
+                            <BenIcon Name="@(_edit.IsTwoFactorEnabled ? "shield" : "shield-off")" />
+                            Two-step sign-in: <strong>@(_edit.IsTwoFactorEnabled ? "on" : "off")</strong>
+                            <span class="small">(theirs to change)</span>
+                        </span>
                         <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsLockoutEnabled" /> Lockout Enabled</label>
                     </div>
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateCreated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateUpdated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="dd/MM/yyyy hh:mm tt" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.LockoutEnd" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>
@@ -103,15 +116,25 @@ else
                         <GridColumn Field="@nameof(UserAddressAdminRecord.State)" Title="State" Width="80px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="220px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.MapMarker"
-                                OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))">Map</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Directions"
-                                OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))">Directions</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
+                        @* Edit + Map + Directions + a Delete icon. *@
+                        <GridCommandColumn Width="172px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Show on a map"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="map" /></GridCommandButton>
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Directions"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="navigation" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -127,11 +150,16 @@ else
                         <GridColumn Field="@nameof(UserEmailAdminRecord.EmailAddress)" Title="Email" />
                         <GridColumn Field="@nameof(UserEmailAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
                         <GridColumn Field="@nameof(UserEmailAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -148,11 +176,16 @@ else
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsCellular)" Title="Cell" Width="70px" />
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -168,12 +201,21 @@ else
                         <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.DisplayText)" Title="Label" Width="120px" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((UserLinkAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((UserLinkAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -189,11 +231,16 @@ else
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="150px" />
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -210,17 +257,21 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((OrganizationUserMembershipAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((OrganizationUserMembershipAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
                             <Template>
                                 @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                             </Template>
                         </GridColumn>
-                        <GridCommandColumn Width="80px">
-                            <GridCommandButton Icon="@SvgIcon.Eye"
-                                OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))">
-                                View
-                            </GridCommandButton>
+                        <GridCommandColumn Width="72px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))"
+                                Title="View the group"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="eye" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -250,21 +301,80 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
+                        <GridCommandColumn Width="100px">
                             @{ var fc = (UploadFileAdminRecord)context; }
                             @if (fc.ContentType.StartsWith("image/"))
                             {
-                                <GridCommandButton Icon="@SvgIcon.Pencil"
-                                    Size="@ThemeConstants.Button.Size.Small"
-                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))">
-                                    Edit
-                                </GridCommandButton>
+                                <GridCommandButton Size="@ThemeConstants.Button.Size.Small"
+                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))"
+                                    Title="Edit image"
+                                    Class="ben-grid-action"
+                                    FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
                             }
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
+            </BenTab>
+
+            @* ── Site Roles (item 216) ───────────────────────────────────── *@
+            <BenTab Title="Site Roles" Id="site-roles">
+                <div class="mt-3" style="max-width:640px" data-testid="site-roles-panel">
+                    <p class="text-secondary small">
+                        Site roles apply across the whole site, not to one group. A person's role
+                        inside a group is set on the group's Members page, not here.
+                    </p>
+
+                    @if (_availableRoles.Count == 0)
+                    {
+                        <p class="text-secondary">
+                            No site roles are defined. Create them under <strong>Administration → Site Roles</strong> first.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2">
+                            @foreach (var role in _availableRoles)
+                            {
+                                var name = role;
+                                var locked = IsOwnSuperAdmin(name);
+                                var inputId = $"site-role-{name.ToLowerInvariant()}";
+                                <div class="form-check">
+                                    <input id="@inputId" type="checkbox" class="form-check-input"
+                                           checked="@_roleSelection.GetValueOrDefault(name)"
+                                           disabled="@(locked || _isSavingRoles)"
+                                           @onchange="@(e => _roleSelection[name] = e.Value is true)" />
+                                    <label class="form-check-label" for="@inputId">
+                                        <strong>@name</strong>
+                                        <span class="text-secondary"> — @DescribeRole(name)</span>
+                                        @if (locked)
+                                        {
+                                            <span class="text-secondary small d-block">This is you. Another SuperAdmin has to remove it.</span>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex align-items-center gap-3 mt-3">
+                            <button type="button" class="btn btn-primary" @onclick="SaveRoles" disabled="@_isSavingRoles">
+                                @(_isSavingRoles ? "Saving…" : "Save Roles")
+                            </button>
+                            <span class="text-secondary small">
+                                Takes effect the next time they sign in; their current sessions end within the hour.
+                            </span>
+                        </div>
+                    }
+
+                    @if (_rolesError is not null)
+                    {
+                        <div class="alert alert-danger py-2 mt-3 mb-0">@_rolesError</div>
+                    }
+                </div>
             </BenTab>
 
         </BenTabs>
@@ -533,6 +643,12 @@ else
     private string? _errorMessage;
     private string? _successMessage;
 
+    // Site roles (item 216): every role the site defines, and which of them are ticked.
+    private List<string> _availableRoles = [];
+    private Dictionary<string, bool> _roleSelection = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isSavingRoles;
+    private string? _rolesError;
+
     // Type lists (for dropdowns)
     private IReadOnlyList<UserAddressTypeRecord> _addressTypes = [];
     private IReadOnlyList<UserEmailTypeRecord>   _emailTypes   = [];
@@ -599,17 +715,26 @@ else
         _edit = EditModel.From(_detail.User);
 
         // Pre-load type lists for dropdowns
-        _addressTypes    = await AdminClient.GetUserAddressTypesAsync();
-        _emailTypes      = await AdminClient.GetUserEmailTypesAsync();
-        _phoneTypes      = await AdminClient.GetUserPhoneTypesAsync();
-        _linkTypes       = await AdminClient.GetUserLinkTypesAsync();
-        _noteTypes       = await AdminClient.GetUserNoteTypesAsync();
-        _uploadFileTypes = await AdminClient.GetPublicFileTypesAsync();
+        _addressTypes    = (await AdminClient.GetUserAddressTypesAsync()).Items;
+        _emailTypes      = (await AdminClient.GetUserEmailTypesAsync()).Items;
+        _phoneTypes      = (await AdminClient.GetUserPhoneTypesAsync()).Items;
+        _linkTypes       = (await AdminClient.GetUserLinkTypesAsync()).Items;
+        _noteTypes       = (await AdminClient.GetUserNoteTypesAsync()).Items;
+        _uploadFileTypes = (await AdminClient.GetPublicFileTypesAsync()).Items;
+
+        // Every role the site defines, so a role created under Site Roles is assignable here
+        // without a code change — the seeded three are just the ones with a description.
+        _availableRoles = (await AdminClient.GetRolesAsync()).Items
+            .Select(r => r.Role.Name ?? string.Empty)
+            .Where(n => n.Length > 0)
+            .OrderBy(n => RoleOrder(n)).ThenBy(n => n)
+            .ToList();
+        ResetRoleSelection();
 
         // Build org-name lookup for the Memberships tab
         try
         {
-            var orgs = await AdminClient.GetOrganizationsAsync();
+            var orgs = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgNames = orgs.ToDictionary(o => o.Id, o => o.Name);
         }
         catch { /* non-critical — memberships tab falls back to ID */ }
@@ -649,6 +774,69 @@ else
         if (updated is not null) { _detail = _detail with { User = updated }; _successMessage = "Profile saved."; }
         else _errorMessage = "Save failed.";
     }
+
+    // ── Site roles (item 216) ─────────────────────────────────────────────────
+
+    private void ResetRoleSelection()
+    {
+        _roleSelection = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var role in _availableRoles)
+            _roleSelection[role] = _detail?.Roles.Contains(role, StringComparer.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>
+    /// The checkbox is locked rather than merely refused on save: a SuperAdmin unticking
+    /// themselves and then reading a refusal has learned the rule the slow way.
+    /// </summary>
+    private bool IsOwnSuperAdmin(string role)
+        => string.Equals(role, Ben.Data.Common.Constants.RoleNames.SuperAdmin, StringComparison.OrdinalIgnoreCase)
+           && UserState.UserId == UserId
+           && _detail?.Roles.Contains(role, StringComparer.OrdinalIgnoreCase) == true;
+
+    private async Task SaveRoles()
+    {
+        if (_detail is null) return;
+        _isSavingRoles = true; _rolesError = null; _successMessage = null;
+
+        var wanted = _roleSelection.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+        var (saved, error) = await AdminClient.SetUserRolesAsync(UserId, wanted);
+
+        _isSavingRoles = false;
+        if (saved is null)
+        {
+            // The server's own words. This used to name the two SuperAdmin rules whatever had actually gone wrong, so
+            // a save refused for any other reason — a role the site does not define, a session that had ended — read as
+            // a rule about SuperAdmin that had nothing to do with it (Ben, 2026-09-15).
+            _rolesError = error ?? "The roles were not saved, and the server did not say why. Try again in a moment.";
+            return;
+        }
+
+        _detail = _detail with { Roles = saved.Roles };
+        ResetRoleSelection();
+        _successMessage = saved.Roles.Count == 0
+            ? "Site roles saved: none."
+            : $"Site roles saved: {string.Join(", ", saved.Roles)}.";
+    }
+
+    /// <summary>
+    /// What each role actually grants, in the words RoleNames uses — so the checkbox says what
+    /// ticking it does rather than leaving the administrator to guess from the name.
+    /// </summary>
+    private static string DescribeRole(string role) => role.ToLowerInvariant() switch
+    {
+        "superadmin" => "everything: every administration page, impersonation, billing, and this screen.",
+        "admin"      => "sees the administration help documents. Grants nothing else yet.",
+        "moderator"  => "reviews what people post: the feed's report queue and media awaiting review. Nothing else.",
+        _            => "a custom role. It grants nothing unless the site's code checks for it by name.",
+    };
+
+    private static int RoleOrder(string role) => role.ToLowerInvariant() switch
+    {
+        "superadmin" => 0,
+        "admin"      => 1,
+        "moderator"  => 2,
+        _            => 3,
+    };
 
     private async Task ImpersonateUser()
     {
@@ -824,7 +1012,7 @@ else
 
     private void ViewOrganization(OrganizationUserMembershipAdminRecord m)
     {
-        var returnUrl = Uri.EscapeDataString(NavManager.Uri);
+        var returnUrl = Uri.EscapeDataString("/" + NavManager.ToBaseRelativePath(NavManager.Uri));
         NavManager.NavigateTo($"/organizations/{m.OrganizationId}?returnUrl={returnUrl}");
     }
 
@@ -935,27 +1123,27 @@ else
             switch (_addTypeFor)
             {
                 case "address":
-                    _addressTypes = await AdminClient.GetUserAddressTypesAsync();
+                    _addressTypes = (await AdminClient.GetUserAddressTypesAsync()).Items;
                     var newAddr = _addressTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newAddr is not null) _addr.TypeId = newAddr.Id;
                     break;
                 case "email":
-                    _emailTypes = await AdminClient.GetUserEmailTypesAsync();
+                    _emailTypes = (await AdminClient.GetUserEmailTypesAsync()).Items;
                     var newEml = _emailTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newEml is not null) _eml.TypeId = newEml.Id;
                     break;
                 case "phone":
-                    _phoneTypes = await AdminClient.GetUserPhoneTypesAsync();
+                    _phoneTypes = (await AdminClient.GetUserPhoneTypesAsync()).Items;
                     var newPhn = _phoneTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newPhn is not null) _phn.TypeId = newPhn.Id;
                     break;
                 case "link":
-                    _linkTypes = await AdminClient.GetUserLinkTypesAsync();
+                    _linkTypes = (await AdminClient.GetUserLinkTypesAsync()).Items;
                     var newLnk = _linkTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newLnk is not null) _lnk.TypeId = newLnk.Id;
                     break;
                 case "note":
-                    _noteTypes = await AdminClient.GetUserNoteTypesAsync();
+                    _noteTypes = (await AdminClient.GetUserNoteTypesAsync()).Items;
                     var newNte = _noteTypes.FirstOrDefault(t => t.Name == _newTypeName.Trim());
                     if (newNte is not null) _nte.TypeId = newNte.Id;
                     break;

@@ -4,6 +4,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>SuperAdmin — File Types</PageTitle>
 
@@ -27,6 +29,11 @@
     }
     else
     {
+        @* An empty file-type grid reads as a deployment with no types configured, which sends
+           somebody to re-seed a table that is already full. *@
+        <BenListState TItem="AdminFileTypeWithExtensionsResponse" Result="@_typesResult"
+                      EmptyText="No file types are configured yet" OnRetry="@LoadAsync">
+        <ChildContent>
         <TelerikGrid Data="@_types"
                      TItem="AdminFileTypeWithExtensionsResponse"
                      Sortable="true"
@@ -63,26 +70,29 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="220px">
+                @* Edit + Extensions + Delete, all with labels — 220px cut Delete in half. *@
+                <GridCommandColumn Width="136px">
                     <GridCommandButton Command="Edit"
-                                       Icon="@SvgIcon.Pencil"
-                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
-                        Edit
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((AdminFileTypeWithExtensionsResponse)e.Items.First()))"
+                                       Title="Edit"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                     <GridCommandButton Command="Extensions"
-                                       Icon="@SvgIcon.FileWrench"
-                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
-                        Extensions
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => OpenExtensions((AdminFileTypeWithExtensionsResponse)e.Items.First()))"
+                                       Title="Extensions"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="list" /></GridCommandButton>
                     <GridCommandButton Command="Delete"
-                                       Icon="@SvgIcon.Trash"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((AdminFileTypeWithExtensionsResponse)e.Items.First()))">
-                        Delete
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => ConfirmDelete((AdminFileTypeWithExtensionsResponse)e.Items.First()))"
+                                       Title="Delete"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
+        </ChildContent>
+        </BenListState>
     }
 </div>
 
@@ -235,6 +245,7 @@
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
     private IReadOnlyList<AdminFileTypeWithExtensionsResponse> _types = [];
+    private LoadResult<AdminFileTypeWithExtensionsResponse> _typesResult;
     private bool _loading = true;
     private string? _error;
 
@@ -264,7 +275,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
         {
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
             return;
         }
 
@@ -277,7 +288,8 @@
         _error = null;
         try
         {
-            _types = await AdminClient.GetFileTypesWithExtensionsAsync();
+            _typesResult = await AdminClient.GetFileTypesWithExtensionsAsync();
+            _types       = _typesResult.Items;
         }
         catch (Exception ex)
         {

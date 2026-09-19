@@ -16,7 +16,7 @@ public class CaseManagerAssignmentTests : BenTestBase
     private async Task NavigateToTghCaseDetail()
     {
         await LoginAsync(UserEmail, UserPassword); // Sarah
-        if (!await OpenOrgCaseAsync("Tennessee Ghost Hunters", "Park"))
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH case not in the seed data; nothing to assert against.");
     }
 
@@ -26,7 +26,7 @@ public class CaseManagerAssignmentTests : BenTestBase
     public async Task CaseList_ShowsManagerOrUnassigned()
     {
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenOrganizationAsync("Tennessee Ghost Hunters"))
+        if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Pass("TGH org not in the seed data.");
         await OpenTabAsync("Cases", Main.GetByText("Manager:", new() { Exact = false })
                                         .Or(Main.GetByText("No cases", new() { Exact = false })));
@@ -61,17 +61,16 @@ public class CaseManagerAssignmentTests : BenTestBase
         Assert.That(body.Contains("Case Manager:"), Is.True, "Expected 'Case Manager:' in header.");
     }
 
-    // ── CaseDetail: edit dialog shows manager dropdown ────────────────────────
+    // ── Edit Case page shows the manager dropdown (a dialog until 2026-09-14) ──────
 
     [Test]
     public async Task EditCaseDialog_HasCaseManagerDropdown()
     {
         await NavigateToTghCaseDetail();
 
-        var editBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
+        var editBtn = Page.Locator("#case-edit");
         await Expect(editBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await editBtn.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(editBtn, @"/cases/[0-9a-f\-]+/edit$");
 
         // 'Case Manager' label should appear in the dialog
         // Exact, and the label specifically: a loose match also picks up the case header's
@@ -85,12 +84,10 @@ public class CaseManagerAssignmentTests : BenTestBase
     {
         await NavigateToTghCaseDetail();
 
-        var editBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
-        await editBtn.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
 
-        // Wait for the dropdown to populate with org members (loaded lazily)
-        await Page.WaitForTimeoutAsync(800);
+        // The members list arrives after the form: a second option (after "Unassigned") is a member.
+        await Expect(Page.Locator("#case-edit-manager option").Nth(1)).ToBeAttachedAsync(new() { Timeout = 15_000 });
 
         // Exact, and the label specifically: a loose match also picks up the case header's
         // "Case Manager: Sarah Mitchell", and two matches is a strict-mode violation.
@@ -100,6 +97,6 @@ public class CaseManagerAssignmentTests : BenTestBase
         // The dropdown should be present and interactable
         var body = await Page.InnerTextAsync("body");
         Assert.That(body.Contains("Case Manager"), Is.True,
-            "Expected Case Manager dropdown in edit dialog.");
+            "Expected the Case Manager dropdown on the Edit Case page.");
     }
 }

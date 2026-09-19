@@ -22,11 +22,14 @@ public sealed class OrganizationAreaOfOperationController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
+
     public OrganizationAreaOfOperationController(
-        IDbContextFactory<BenDataContext> db, IMapper mapper)
+        IDbContextFactory<BenDataContext> db, IMapper mapper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _mapper = mapper;
+        _security = security;
     }
 
     /// <summary>Returns the area of operation including private coordinates (org admin / SuperAdmin only).</summary>
@@ -125,19 +128,20 @@ public sealed class OrganizationAreaOfOperationController : BenControllerBase
 
     // ── Auth helpers ──────────────────────────────────────────────────────────
 
-    private async Task<bool> IsOrgAdminOrSuperAsync(Guid orgId, CancellationToken ct)
-    {
-        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
-        var userId = GetCurrentUserId();
-        if (userId == Guid.Empty) return false;
-        await using var db = await _db.CreateDbContextAsync(ct);
-        return await db.OrganizationUserMemberships.AnyAsync(
-            m => m.OrganizationId == orgId
-              && m.AppUserId == userId
-              && m.IsActive
-              && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator),
-            ct);
-    }
+    /// <summary>Owner or administrator of this group, or a site administrator.</summary>
+    /// <remarks>
+    /// <para>Where a group will travel to is a commitment the group makes, not a task it delegates,
+    /// so this stays owner-or-admin rather than becoming a grantable area — the deliberate answer
+    /// to case 2 of step 2's checklist, not an omission.</para>
+    ///
+    /// <para>The query behind it was hand-written here, and identically in three other
+    /// controllers, each spelling the same comparison a little differently. It is asked of the
+    /// security service now: one implementation, one place a mistake can live.</para>
+    /// </remarks>
+    private Task<bool> IsOrgAdminOrSuperAsync(Guid orgId, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.IsOwnerOrAdminAsync(GetCurrentUserId(), orgId, ct);
 }
 
 // ── Request records ───────────────────────────────────────────────────────────

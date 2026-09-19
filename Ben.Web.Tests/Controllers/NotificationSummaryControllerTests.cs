@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.RepositoryService.GenericInterfaces;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Controllers;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
@@ -150,9 +151,10 @@ public class NotificationSummaryControllerTests
 
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var m1 = AddOrgMessage(db, Older);
-            var m2 = AddOrgMessage(db, Newer);
-            var m3 = AddOrgMessage(db, Newer);
+            var orgId = AddOrg(db);
+            var m1 = AddOrgMessage(db, Older, orgId);
+            var m2 = AddOrgMessage(db, Newer, orgId);
+            var m3 = AddOrgMessage(db, Newer, orgId);
 
             db.OrgMessageRecipients.AddRange(
                 new OrgMessageRecipient { Id = Guid.NewGuid(), OrgMessageId = m1, RecipientAppUserId = me,    DateRead = null },
@@ -360,7 +362,9 @@ public class NotificationSummaryControllerTests
 
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var m = AddOrgMessage(db, Newer);
+            // The message needs a group: an org-less unread has no surface that can show it,
+            // so item 173 deliberately keeps it OFF the bell rather than in a count nothing opens.
+            var m = AddOrgMessage(db, Newer, AddOrg(db));
             db.OrgMessageRecipients.Add(new OrgMessageRecipient
             {
                 Id = Guid.NewGuid(), OrgMessageId = m, RecipientAppUserId = me, DateRead = null
@@ -380,12 +384,24 @@ public class NotificationSummaryControllerTests
 
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
-    private static Guid AddOrgMessage(BenDataContext db, DateTime at)
+    private static Guid AddOrg(BenDataContext db, string name = "Org")
+    {
+        var id = Guid.NewGuid();
+        db.Organizations.Add(new Organization
+        {
+            Id = id, Name = name, UrlName = $"org-{id:N}",
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        return id;
+    }
+
+    private static Guid AddOrgMessage(BenDataContext db, DateTime at, Guid? orgId = null)
     {
         var id = Guid.NewGuid();
         db.OrgMessages.Add(new OrgMessage
         {
             Id = id, AuthorAppUserId = Guid.NewGuid(), Body = "hello",
+            OrganizationId = orgId,
             ChannelType = OrgMessageChannel.OrgBroadcast,
             DateCreated = at, CreatedByAppUserId = Guid.NewGuid(),
         });
@@ -532,5 +548,565 @@ public class NotificationSummaryControllerTests
         }
 
         Assert.Equal(0, (await GetSummaryAsync(factory, userId)).InvestigationInvites.Count);
+    }
+
+    // ── Item 173: per-group breakdowns — each row opens exactly what it counts ──
+
+    [Fact]
+    public async Task OrgMessages_BreakdownSlicesPerGroup_AndTheAggregateIsTheirSum()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        Guid orgA = default, orgB = default;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            orgA = AddOrg(db, "Alpha");
+            orgB = AddOrg(db, "Beta");
+            foreach (var (org, when) in new[] { (orgA, Older), (orgA, Newer), (orgB, Newer) })
+            {
+                var m = AddOrgMessage(db, when, org);
+                db.OrgMessageRecipients.Add(new OrgMessageRecipient
+                {
+                    Id = Guid.NewGuid(), OrgMessageId = m, RecipientAppUserId = me, DateRead = null
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, me);
+
+        var slices = summary.OrgMessagesByOrg!;
+        Assert.Equal(2, slices.Count);
+        var alpha = Assert.Single(slices, x => x.OrganizationId == orgA);
+        Assert.Equal("Alpha", alpha.OrganizationName);
+        Assert.Equal(2, alpha.Count);
+        Assert.Equal(Older, alpha.OldestUnreadUtc);
+        var beta = Assert.Single(slices, x => x.OrganizationId == orgB);
+        Assert.Equal(1, beta.Count);
+
+        // The bell's number is the sum of the rows underneath it — never more, never less.
+        Assert.Equal(3, summary.OrgMessages.Count);
+        Assert.Equal(slices.Sum(x => x.Count), summary.OrgMessages.Count);
+    }
+
+    [Fact]
+    public async Task CaseMessagesAsOrgMember_BreakdownSlicesPerCase()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        Guid orgA = default, orgB = default;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            orgA = AddOrg(db, "Alpha");
+            orgB = AddOrg(db, "Beta");
+            foreach (var org in new[] { orgA, orgB })
+                db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+                {
+                    Id = Guid.NewGuid(), OrganizationId = org, AppUserId = me, IsActive = true,
+                    Role = OrganizationMemberRole.Owner,   // the bypass keeps routing out of the way
+                    DateCreated = Older, CreatedByAppUserId = me,
+                });
+
+            var caseA = AddCase(db, orgA);
+            var caseB = AddCase(db, orgB);
+            db.CaseMessages.AddRange(
+                NewCaseMessage(caseA, CaseMessageSide.Client, isReadByOrg: false, at: Older),
+                NewCaseMessage(caseA, CaseMessageSide.Client, isReadByOrg: false, at: Newer),
+                NewCaseMessage(caseB, CaseMessageSide.Client, isReadByOrg: false, at: Newer));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, me);
+
+        // One row per CASE (Ben: "show the cases"), each carrying its group's name, and the
+        // aggregate is still the fold of the slices.
+        var slices = summary.CaseMessagesAsOrgMemberByCase!;
+        Assert.Equal(2, slices.Count);
+        var sliceA = Assert.Single(slices, x => x.OrganizationId == orgA);
+        Assert.Equal(2, sliceA.Count);
+        Assert.Equal("Case", sliceA.CaseTitle);
+        Assert.Equal("Alpha", sliceA.OrganizationName);
+        Assert.Equal(1, Assert.Single(slices, x => x.OrganizationId == orgB).Count);
+        Assert.Equal(3, summary.CaseMessagesAsOrgMember.Count);
+        Assert.Equal(slices.Sum(x => x.Count), summary.CaseMessagesAsOrgMember.Count);
+    }
+
+    // ── item 186 F3: feed activity ────────────────────────────────────────────
+
+    /// <summary>Turns the feed on and puts two people in the database.</summary>
+    private static async Task<(IDbContextFactory<BenDataContext> Factory, Guid Author, Guid Other)>
+        SeedFeedAsync()
+    {
+        var factory = CreateFactory();
+        Guid author = Guid.NewGuid(), other = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser
+        {
+            Id = author, UserName = "a@t.com", NormalizedUserName = "A@T.COM",
+            Email = "a@t.com", NormalizedEmail = "A@T.COM", DateCreated = DateTime.UtcNow,
+        });
+        db.Users.Add(new AppUser
+        {
+            Id = other, UserName = "b@t.com", NormalizedUserName = "B@T.COM",
+            Email = "b@t.com", NormalizedEmail = "B@T.COM", DateCreated = DateTime.UtcNow,
+        });
+        db.SiteSettings.Add(new SiteSetting
+        {
+            Id = Guid.NewGuid(), Key = SiteSettingKeys.FeaturePublicFeed, Value = "true",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = author,
+        });
+        await db.SaveChangesAsync();
+        return (factory, author, other);
+    }
+
+    private static OrgMessage FeedPost(Guid authorId, Guid? parentId = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        AuthorAppUserId = authorId,
+        ParentMessageId = parentId,
+        ChannelType = OrgMessageChannel.PublicFeed,
+        Body = parentId is null ? "A post." : "An answer.",
+        IsPublic = true,
+        DateCreated = DateTime.UtcNow,
+        CreatedByAppUserId = authorId,
+    };
+
+    /// <summary>
+    /// Somebody answering your post is activity worth a badge (item 186 F3).
+    /// </summary>
+    /// <remarks>
+    /// Before F3 the bucket counted mentions only, so the most ordinary thing that can happen on
+    /// a feed — being replied to — reached nobody.
+    /// </remarks>
+    [Fact]
+    public async Task AReplyToYourPostCountsAsFeedActivity()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(other, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, author);
+        Assert.Equal(1, summary.FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task YourOwnReplyToYourOwnPostIsNotActivity()
+    {
+        var (factory, author, _) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(author, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task OpeningTheThreadClearsTheReply()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+        Guid rootId;
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            rootId = root.Id;
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(FeedPost(other, root.Id));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+
+        // The same marker a mention is cleared by: the view recorded against the ROOT post.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrgMessageViews.Add(new OrgMessageView
+            {
+                OrgMessageId = rootId, ViewerAppUserId = author, DateViewed = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    [Fact]
+    public async Task AHiddenReplyIsWithdrawnFromTheBadge()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            var reply = FeedPost(other, root.Id);
+            reply.HiddenUtc = DateTime.UtcNow;
+            db.OrgMessages.Add(root);
+            db.OrgMessages.Add(reply);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    /// <summary>
+    /// A like is applause, not a message: deliberately NOT on the badge.
+    /// </summary>
+    /// <remarks>
+    /// A badge that ticks on every like is a badge nobody reads by the end of the week, which
+    /// would cost the mentions their meaning too — they share the bucket.
+    /// </remarks>
+    [Fact]
+    public async Task ALikeIsNotActivity()
+    {
+        var (factory, author, other) = await SeedFeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var root = FeedPost(author);
+            db.OrgMessages.Add(root);
+            await db.SaveChangesAsync();
+
+            db.OrgMessageLikes.Add(new OrgMessageLike
+            {
+                OrgMessageId = root.Id, LikerAppUserId = other, DateLiked = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, author)).FeedMentions.Count);
+    }
+
+    // ── Tour seats (item 234) ────────────────────────────────────────────────
+    //
+    // Two directions, two buckets. A business has people waiting on a decision; a guest has a
+    // decision waiting to be read. The four properties worth pinning are the four ways a bell
+    // like this goes wrong: nagging somebody who cannot act, nagging about a night that has
+    // already happened, never clearing, and counting the guest's own request as work for them.
+
+    /// <summary>A tour date on an org, with one sign-up in the state asked for.</summary>
+    /// <summary>
+    /// A tour date and one sign-up on it.
+    /// </summary>
+    /// <remarks>
+    /// The night is dated from <c>DateTime.UtcNow</c> rather than from this class's fixed
+    /// constants: the endpoint asks whether the walk is still to come, and a constant written in
+    /// August stopped being in the future in September.
+    /// </remarks>
+    private static (Guid OrgId, Guid EventId, Guid AttendeeId) AddTourSeat(
+        BenDataContext db, Guid guestId, TourSeatStatus status,
+        DateTime startsAt, DateTime? decidedAt = null, DateTime? acknowledgedAt = null,
+        Guid? orgId = null)
+    {
+        var org = orgId ?? AddOrg(db, "Printers Alley Walks");
+        var tourId = Guid.NewGuid();
+        db.Tours.Add(new Tour
+        {
+            Id = tourId, OrganizationId = org, Name = "Printers Alley Ghost Walk",
+            UrlName = $"walk-{tourId:N}", TimeZoneId = "America/Chicago",
+            DateCreated = Older, CreatedByAppUserId = guestId,
+        });
+
+        var eventId = Guid.NewGuid();
+        db.OrgCalendarEvents.Add(new OrgCalendarEvent
+        {
+            Id = eventId, OrganizationId = org, TourId = tourId, Title = "Saturday walk",
+            IsPublic = true, StartDateTime = startsAt, EndDateTime = startsAt.AddMinutes(90),
+            DateCreated = Older, CreatedByAppUserId = guestId,
+        });
+
+        var attendeeId = Guid.NewGuid();
+        db.OrgCalendarEventAttendees.Add(new OrgCalendarEventAttendee
+        {
+            Id = attendeeId, OrgCalendarEventId = eventId, AppUserId = guestId,
+            RsvpStatus = status == TourSeatStatus.Reserved ? RsvpStatus.Accepted : RsvpStatus.Invited,
+            SeatStatus = status, Seats = 2,
+            SeatDecidedUtc = decidedAt, GuestAcknowledgedUtc = acknowledgedAt,
+            DateRsvp = Older, DateCreated = Older, CreatedByAppUserId = guestId,
+        });
+
+        return (org, eventId, attendeeId);
+    }
+
+    private static void AddMembership(
+        BenDataContext db, Guid orgId, Guid userId, OrganizationMemberRole role)
+        => db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = userId, IsActive = true,
+            Role = role, DateCreated = Older, CreatedByAppUserId = userId,
+        });
+
+    [Fact]
+    public async Task A_business_is_told_how_many_sign_ups_are_waiting_on_it()
+    {
+        var owner = Guid.NewGuid();
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var (orgId, _, _) = AddTourSeat(db, guest, TourSeatStatus.Requested, DateTime.UtcNow.AddDays(30));
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, owner);
+        Assert.Equal(1, summary.TourSeatsToDecide?.Count);
+    }
+
+    [Fact]
+    public async Task An_ordinary_member_is_not_nagged_about_a_queue_they_cannot_work()
+    {
+        // A bell that rings for something somebody cannot act on is a bell people learn to
+        // ignore. The badge on the date itself is still there for anyone with the calendar grant.
+        var member = Guid.NewGuid();
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var (orgId, _, _) = AddTourSeat(db, guest, TourSeatStatus.Requested, DateTime.UtcNow.AddDays(30));
+            AddMembership(db, orgId, member, OrganizationMemberRole.Member);
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, member);
+        Assert.Equal(0, summary.TourSeatsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_night_that_has_already_happened_is_not_a_decision_anybody_still_needs()
+    {
+        var owner = Guid.NewGuid();
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            // Started in 2026-08; "now" is well past it.
+            var (orgId, _, _) = AddTourSeat(db, guest, TourSeatStatus.Requested, Older);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, owner)).TourSeatsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_guest_is_told_their_seat_has_been_answered()
+    {
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            AddTourSeat(db, guest, TourSeatStatus.Reserved, DateTime.UtcNow.AddDays(30), decidedAt: Newer);
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, guest);
+        Assert.Equal(1, summary.MyTourSeats?.Count);
+        // Dated by the DECISION: "waiting since" means since somebody answered them, not since
+        // they asked.
+        Assert.Equal(Newer, summary.MyTourSeats?.OldestUnreadUtc);
+    }
+
+    [Fact]
+    public async Task A_turned_down_seat_is_told_about_too()
+    {
+        // Being refused is exactly the answer somebody needs to see. Only counting approvals
+        // would leave a guest waiting on a bell that never rings.
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            AddTourSeat(db, guest, TourSeatStatus.TurnedDown, DateTime.UtcNow.AddDays(30), decidedAt: Newer);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetSummaryAsync(factory, guest)).MyTourSeats?.Count);
+    }
+
+    [Fact]
+    public async Task Saying_got_it_clears_it()
+    {
+        // Which is the whole reason that optional button is worth having.
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            AddTourSeat(db, guest, TourSeatStatus.Reserved, DateTime.UtcNow.AddDays(30),
+                decidedAt: Newer, acknowledgedAt: Newer);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, guest)).MyTourSeats?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_request_nobody_has_answered_is_not_the_guests_own_work()
+    {
+        // The guest's bucket is for DECISIONS. A request they made themselves is not something
+        // waiting on them, and counting it would ring their bell about their own typing.
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            AddTourSeat(db, guest, TourSeatStatus.Requested, DateTime.UtcNow.AddDays(30));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, guest)).MyTourSeats?.Count ?? 0);
+    }
+
+    // ── Hosted-event bookings: holds and who decides (item 235 phase 8) ─────────
+
+    private static Guid AddHostedEvent(BenDataContext db, Guid orgId)
+    {
+        var id = Guid.NewGuid();
+        var placeId = Guid.NewGuid();
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "The Thomas House Hotel",
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.HostedEvents.Add(new HostedEvent
+        {
+            Id = id, OrganizationId = orgId, PlaceId = placeId,
+            Name = "Halloween Lock-In", UrlName = $"lock-in-{id:N}",
+            StartsOn = DateTime.UtcNow.Date.AddDays(30), EndsOn = DateTime.UtcNow.Date.AddDays(31),
+            LifecycleState = HostedEventLifecycleState.Published,
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        return id;
+    }
+
+    private static void AddBooking(
+        BenDataContext db, Guid eventId, Guid leadId, HostedEventBookingStatus status,
+        DateTime? holdExpiresUtc = null, DateTime? decidedUtc = null)
+        => db.HostedEventBookings.Add(new HostedEventBooking
+        {
+            Id = Guid.NewGuid(), HostedEventId = eventId, LeadAppUserId = leadId,
+            PartySize = 2, Kind = HostedEventBookingKind.DayPass, Status = status,
+            HoldExpiresUtc = holdExpiresUtc, DecidedUtc = decidedUtc,
+            DateCreated = Older, CreatedByAppUserId = leadId,
+        });
+
+    [Fact]
+    public async Task A_hold_is_waiting_on_the_venue_and_one_about_to_lapse_gets_its_own_row()
+    {
+        // The bell used to count requests only, so a Pick-mode weekend — where every booking
+        // starts as a hold — could fill with guests waiting and never ring once.
+        var owner = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            var eventId = AddHostedEvent(db, orgId);
+
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Requested);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddDays(2));
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddHours(3));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, owner);
+
+        Assert.Equal(2, summary.EventBookingsToDecide?.Count);
+        Assert.Equal(1, summary.EventHoldsLapsing?.Count);
+        // Each booking once on the bell: the lapsing hold is not ALSO in the queue's number.
+        Assert.Equal(3, summary.TotalCount);
+    }
+
+    [Fact]
+    public async Task A_steward_handed_Decides_is_told_and_one_handed_only_the_door_is_not()
+    {
+        var decides = Guid.NewGuid();
+        var door = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            var eventId = AddHostedEvent(db, orgId);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Requested);
+
+            db.HostedEventStaff.AddRange(
+                new HostedEventStaff
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, AppUserId = decides,
+                    Decides = true, DateConfirmed = Older,
+                    DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+                },
+                new HostedEventStaff
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, AppUserId = door,
+                    RunsTheDoor = true, DateConfirmed = Older,
+                    DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+                });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetSummaryAsync(factory, decides)).EventBookingsToDecide?.Count);
+        Assert.Equal(0, (await GetSummaryAsync(factory, door)).EventBookingsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_deciders_own_booking_is_not_a_decision_waiting_on_them()
+    {
+        var owner = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            var eventId = AddHostedEvent(db, orgId);
+            AddBooking(db, eventId, owner, HostedEventBookingStatus.Requested);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, owner)).EventBookingsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_guests_hold_is_not_an_answer_but_its_lapsing_is_worth_a_row()
+    {
+        // "A venue answered you" for seats the guest picked themselves, a minute ago, is a bell
+        // announcing something nobody did.
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddBooking(db, AddHostedEvent(db, orgId), guest, HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddHours(5));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, guest);
+        Assert.Equal(0, summary.MyEventBookings?.Count ?? 0);
+        Assert.Equal(1, summary.MyEventHoldLapsing?.Count);
     }
 }

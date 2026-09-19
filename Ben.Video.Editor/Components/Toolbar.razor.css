@@ -24,9 +24,24 @@
     flex-shrink: 0;
 }
 
-@container bv-toolbar-row (max-width: 1100px) {
+/* The bar's own content is a little over 1000px before anything collapses, and the ToolBar's
+   overflow menu cannot take the template items (project name, status, Sign in) — so with the
+   badges (300px) and the mark still in the row at 1280px, those items were drawn under them
+   (measured 2026-09-16: 1032px of items in a 912px bar). The badges are the first thing to go,
+   well before the row is tight; below that the mark goes and the project name gives up width. */
+@container bv-toolbar-row (max-width: 1400px) {
     .bv-toolbar__badges {
         display: none;
+    }
+}
+
+@container bv-toolbar-row (max-width: 1100px) {
+    .bv-toolbar__mark {
+        display: none;
+    }
+
+    .bv-toolbar__proj-name {
+        max-width: 110px;
     }
 }
 
@@ -39,15 +54,7 @@
     min-width: 0;
 }
 
-.bv-toolbar__title {
-    flex-shrink: 0;
-    font-size: .9375rem;
-    font-weight: 600;
-    letter-spacing: .02em;
-    color: var(--bv-accent, var(--kendo-color-primary));
-    white-space: nowrap;
-    margin-right: .25rem;
-}
+/* .bv-toolbar__title removed with the wordmark — the mark now sits at the end of the bar. */
 
 /* pushes feature badges + status to the right */
 .bv-toolbar__spacer {
@@ -92,6 +99,14 @@
     font-weight: 500;
     background: transparent;
     border: 1px solid transparent;
+    /* Capped so a long error message cannot push the action buttons out of the bar. The chip lives
+       in a ToolBarTemplateItem, which never collapses into the "…" popup, so whatever width it
+       takes is taken from the buttons beside it — that is how "Error: RuntimeError: memory access
+       out of bounds" managed to squeeze the primary row (2026-09-05 audit, F1). The full text
+       stays available in the title attribute. */
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bv-status--idle        { color: var(--bv-text-muted); border-color: var(--bv-border); }
@@ -100,8 +115,18 @@
     border-color: var(--bv-attention);
     animation: bv-status-pulse 1.4s ease-in-out infinite;
 }
-.bv-status--ready       { color: #4caf89; border-color: #4caf89; }
+.bv-status--ready       { color: var(--bv-ok, #4caf89); border-color: var(--bv-ok, #4caf89); }
 .bv-status--error       { color: #e06c75; border-color: #e06c75; }
+
+/* A stuck engine used to be visible only on the diagnostics chip, which most people never see, so
+   it looked exactly like a slow one — forever (2026-09-05 audit, F7). Filled and still, not
+   pulsing: a pulse says "working on it", which is the opposite of what this means. */
+.bv-status--wedged {
+    color: var(--kendo-color-warning, #d3b04c);
+    border-color: var(--kendo-color-warning, #d3b04c);
+    background: color-mix(in srgb, var(--kendo-color-warning, #d3b04c) 20%, transparent);
+    font-weight: 600;
+}
 
 /* Item #71 — both busy shapes (a real Processing exec, and a lighter worker call caught by
    FfmpegStatusPresentation.IsBusyButNotProcessing) collapse to this single "busy" modifier so they
@@ -125,7 +150,9 @@
 
 /* ── Progress bar ───────────────────────────────────────────────────────── */
 .bv-toolbar__progress {
-    width: 120px;
+    /* Same reasoning as the status chip's max-width: this bar appears only while work is running,
+       which is exactly when the toolbar was collapsing. 80px still reads as a progress bar. */
+    width: 80px;
     height: 6px;
 }
 
@@ -205,3 +232,65 @@
     border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
 }
 
+
+/* ── The mark ────────────────────────────────────────────────────────────────
+   Drawn as a mask rather than an <img> so it takes its colour from the theme: the artwork is a
+   near-white ghost, which would vanish on a light page. One file, both themes.
+
+   Sized in em and pushed to the end of the bar. align-self keeps it from stretching the row —
+   the height of this bar belongs to the buttons, not to the logo. */
+.bv-toolbar__mark {
+    margin-left: auto;
+    align-self: center;
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 1.35rem;
+    background-color: var(--bv-text-muted);
+    /* Relative, and relative to the *bundle* rather than to this file. Scoped component CSS is
+       collected into _content/Ben.Video.Editor/Ben.Video.Editor.<hash>.bundle.scp.css — in both
+       hosts, since the site's own stylesheet only @imports that bundle and an imported sheet
+       resolves its URLs against itself. So the base here is the library's folder, and the asset
+       sits at img/ghost.svg inside it.
+
+       Not '../img/…': that lands on _content/img/…, one segment short, which is a 404 and a mask
+       that silently paints nothing. Not '/_content/…' either — that is correct only when the app
+       is served from the root of its origin, and the deployed editor is not. */
+    -webkit-mask: url('img/ghost.svg') center / contain no-repeat;
+    mask: url('img/ghost.svg') center / contain no-repeat;
+    opacity: .85;
+}
+
+/* ── Icon-only in the bar, labelled in the menu ──────────────────────────────
+   The Assets toggle and Save to server are the only toolbar buttons that may collapse into the
+   "…" menu — every other button sets Overflow="Never" and stays put (2026-09-05 audit, F1). In the menu they rendered as
+   bare icons, which is a list of guesses; a tooltip does not help there, because a menu is read
+   rather than hovered.
+
+   They now carry a label, hidden here and shown in the menu: the overflow popup renders outside
+   this toolbar — in a container appended to the body — so a rule anchored to the bar cannot
+   reach it, and the menu keeps its copy of the label.
+
+   ::deep is required. The span holding the text is rendered by Telerik, not by this file, so it
+   never receives this component's isolation attribute and an ordinary descendant selector
+   silently matches nothing. */
+.bv-toolbar ::deep .bv-icon-only .k-button-text {
+    display: none;
+}
+
+/* The unsaved mark, beside the name rather than inside it. As part of the input's value it became
+   part of the name the moment anybody renamed the project (2026-09-05 audit, persistence-5). */
+.bv-toolbar__proj-dirty {
+    margin-left: .15rem;
+    color: var(--kendo-color-warning, #d3b04c);
+    font-weight: 700;
+    line-height: 1;
+    cursor: default;
+}
+
+/* A button that will do nothing has to look like it: the Success-coloured Export kept almost
+   its full green when disabled, and read as a working button (2026-09-16). */
+.bv-toolbar ::deep .k-toolbar .k-button.k-disabled,
+.bv-toolbar ::deep .k-toolbar .k-button:disabled {
+    opacity: .45;
+    filter: saturate(.6);
+}

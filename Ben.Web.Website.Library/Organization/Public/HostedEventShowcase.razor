@@ -1,0 +1,64 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject IMediaUrlBuilder MediaUrls
+
+@* The top of an event's public page, dressed (item 235 phase 11): the host's pictures as a slideshow,
+   how long until the first night, and — on a phone — an "Ask for a place" that stays at the bottom
+   of the screen while somebody scrolls through the programme deciding.
+
+   Nothing here is shown when there is nothing to show: no pictures means no slideshow, and an event
+   that has started or is called off has no countdown and no ask button. *@
+
+@if (Hosted.Gallery is { Count: > 0 } gallery)
+{
+    <div class="card mb-3 overflow-hidden" id="hosted-gallery">
+        @if (gallery.Count == 1)
+        {
+            <img src="@MediaUrls.EventPhoto(gallery[0].UploadFileId)" alt="@(gallery[0].Caption ?? Hosted.Name)"
+                 style="width:100%;max-height:420px;object-fit:cover;" />
+        }
+        else
+        {
+            <BenSlideshow Slides="@Slides(gallery)" Height="380px" />
+        }
+    </div>
+}
+
+@if (DaysToGo is int days)
+{
+    <p class="mb-3" id="hosted-countdown">
+        <span class="badge bg-primary-subtle text-primary-emphasis fs-6">
+            @(days switch { 0 => "Starts today", 1 => "Starts tomorrow", _ => $"Starts in {days} days" })
+        </span>
+    </p>
+}
+
+@if (ShowAsk)
+{
+    <a class="btn btn-primary btn-lg d-md-none hosted-sticky-ask" href="#event-act" id="hosted-sticky-ask">
+        Ask for a place
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public PublicHostedEventRecord Hosted { get; set; } = null!;
+
+    private int? DaysToGo
+    {
+        get
+        {
+            if (Hosted.IsCancelled) return null;
+            var first = Hosted.Nights.Count > 0 ? Hosted.Nights.Min(n => n.Date).Date : Hosted.StartsOn.Date;
+            var today = DateTime.UtcNow.Date;
+            return first >= today ? (first - today).Days : null;
+        }
+    }
+
+    private bool ShowAsk => Hosted.IsTakingBookings && !Hosted.IsCancelled;
+
+    private IReadOnlyList<BenSlide> Slides(IReadOnlyList<PublicEventImageRecord> gallery)
+        => [.. gallery.Select(g => new BenSlide(MediaUrls.EventPhoto(g.UploadFileId), g.Caption,
+               Credit: $"From {Hosted.OrganizationName}", AltText: g.Caption ?? Hosted.Name))];
+}

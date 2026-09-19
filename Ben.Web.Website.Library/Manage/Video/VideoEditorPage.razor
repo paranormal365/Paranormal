@@ -1,56 +1,29 @@
 @page "/video-editor"
-@using Microsoft.Extensions.Options
 
-@inject IOptions<VideoEditorOptions> EditorOptions
-@inject IBenUserState UserState
-@inject VideoExportPublisher ExportPublisher
+@inject NavigationManager Nav
+@using Ben.Web.Services
 
-<PageTitle>Video Editor</PageTitle>
+@*
+    The old third host for the editor.
 
-@* Auth state is not known during prerender, and this page used to read IsAuthenticated straight
-   away — so arriving here signed in showed "You must be signed in" and stayed that way, because
-   nothing re-rendered when auth resolved. Wait for AuthReady first, the same as every other
-   auth-gated page. *@
-@if (!_authResolved)
-{
-    <p class="text-muted">Loading…</p>
-}
-else if (!UserState.IsAuthenticated)
-{
-    <p class="text-muted">You must be signed in to use the video editor.</p>
-}
-else
-{
-    <VideoEditor OnPublishExport="OnPublishExportAsync" />
-}
+    This page mounted <VideoEditor> straight into page flow, with no height-constrained ancestor —
+    the editor asks for height:100%, which against an auto-height <main> resolves to auto, so it
+    sized itself to its content instead of to the window. It had no header, no project list and no
+    link from anywhere on the site; the two pages people actually reach, My Videos and a case's
+    Video tab, do the same job properly. Keeping a worse copy of a page alive costs a bug in three
+    places every time the editor changes (2026-09-05 audit, site-9).
+
+    It redirects rather than 404s because the address is in help, in bookmarks and in this repo's
+    own test suite. The FeatureGate stays so a site with the editor switched off still says so
+    instead of bouncing people to a page that will refuse them.
+*@
+
+<FeatureGate Flag="@SiteFeatures.VideoEditor">
+    <PageTitle>Video Editor</PageTitle>
+    <p class="text-muted">Taking you to My Videos…</p>
+</FeatureGate>
 
 @code {
-    /// <summary>False until AuthReady has been awaited; see the guard above.</summary>
-    private bool _authResolved;
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        _authResolved = true;
-    }
-
-    /// <summary>Server project id from an earlier publish this session, so a second export in the
-    /// same session updates that project rather than creating another row.</summary>
-    private Guid? _publishedProjectId;
-
-    /// <summary>
-    /// Sends a finished render to the server as a personal (non-case) video project. This page has
-    /// no project list of its own, so there is nothing to refresh afterwards — MyVideosPage is
-    /// where the result shows up.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately no try/catch: the editor's destination prompt uses the exception to keep itself
-    /// open and leave "Save to my machine" available. Catching here would report success and let
-    /// the editor discard the render.
-    /// </remarks>
-    private async Task OnPublishExportAsync(ExportedVideo exported)
-    {
-        var result = await ExportPublisher.PublishAsync(exported, caseId: null, _publishedProjectId);
-        _publishedProjectId = result.ProjectId;
-    }
+    protected override void OnInitialized()
+        => Nav.NavigateTo("/my-videos", replace: true);
 }

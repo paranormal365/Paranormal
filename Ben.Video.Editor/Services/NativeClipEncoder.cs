@@ -25,12 +25,24 @@ public sealed class NativeClipEncoder(
     SidecarSegmentClient segmentClient,
     ErrorLogService errorLog)
 {
-    public Task<byte[]?> TryEncodeVideoSegmentAsync(VideoClip clip, ExportSettings settings, CancellationToken ct)
+    /// <param name="canvasWidth">
+    /// The export canvas, so a segment encoded by the sidecar lands on the same one a segment
+    /// encoded in the browser does. Zero falls back to reading the settings, which cannot answer
+    /// "source resolution".
+    /// </param>
+    /// <param name="canvasHeight"><inheritdoc cref="canvasWidth" path="/summary"/></param>
+    public Task<byte[]?> TryEncodeVideoSegmentAsync(
+        VideoClip clip, ExportSettings settings, CancellationToken ct,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         if (clip.OpfsExt is not { } ext) return Task.FromResult<byte[]?>(null);
 
         var quality = ToExportQualityDto(settings);
         if (quality is null) return Task.FromResult<byte[]?>(null);
+
+        var (vw, vh) = canvasWidth > 0 && canvasHeight > 0
+            ? (canvasWidth, canvasHeight)
+            : ExportService.ParseResolution(settings.Resolution);
 
         var spec = new SegmentRenderSpec(
             Kind: SegmentKind.Video,
@@ -43,11 +55,13 @@ public sealed class NativeClipEncoder(
             Speed: clip.Speed,
             MuteAudio: clip.MuteAudio,
             Gain: clip.Volume,
-            // Matches ExportService.TrimSegmentsAsync's own BuildTrimArgs call exactly: no
-            // scale/pad at trim time for video clips (0 = ExportArgBuilders' "skip it" sentinel)
-            // — the composite stage scales later, unchanged, still in wasm.
-            OutputWidth: 0,
-            OutputHeight: 0,
+            // The same canvas ExportService.TrimSegmentsAsync gives its own BuildTrimArgs call.
+            // This used to pass 0 and say it matched, and it no longer did: a sidecar-encoded
+            // segment stayed at the source's resolution while a browser-encoded one was scaled to
+            // the export canvas, so which of the two ran decided what size the segment came out —
+            // and concat joins them (2026-09-05 audit, export-4).
+            OutputWidth: vw,
+            OutputHeight: vh,
             Effects: SidecarDtoMapping.ToDto(clip.Effects),
             AppliedEffects: [.. clip.AppliedEffects.Select(SidecarDtoMapping.ToDto)],
             VolumeAutomation: [.. clip.VolumeAutomation.Select(k => new VolumeKeyframeDto(k.Position, k.Volume))],
@@ -56,14 +70,20 @@ public sealed class NativeClipEncoder(
         return TryRunAsync(clip.Id, ext, spec, ct);
     }
 
-    public Task<byte[]?> TryEncodeImageSegmentAsync(ImageClip clip, ExportSettings settings, CancellationToken ct)
+    /// <param name="canvasWidth"><inheritdoc cref="TryEncodeVideoSegmentAsync" path="/param[@name='canvasWidth']"/></param>
+    /// <param name="canvasHeight"><inheritdoc cref="TryEncodeVideoSegmentAsync" path="/param[@name='canvasWidth']"/></param>
+    public Task<byte[]?> TryEncodeImageSegmentAsync(
+        ImageClip clip, ExportSettings settings, CancellationToken ct,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         if (clip.OpfsExt is not { } ext) return Task.FromResult<byte[]?>(null);
 
         var quality = ToExportQualityDto(settings);
         if (quality is null) return Task.FromResult<byte[]?>(null);
 
-        var (imgOutW, imgOutH) = ExportService.ParseResolution(settings.Resolution);
+        var (imgOutW, imgOutH) = canvasWidth > 0 && canvasHeight > 0
+            ? (canvasWidth, canvasHeight)
+            : ExportService.ParseResolution(settings.Resolution);
 
         var spec = new SegmentRenderSpec(
             Kind: SegmentKind.Image,

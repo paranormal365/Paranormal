@@ -29,6 +29,26 @@ namespace Ben.Web.Tests.Controllers;
 /// </remarks>
 public sealed class PublicEventAttendanceTests
 {
+    /// <summary>
+    /// The hosted-event mailer, with nothing behind it.
+    /// </summary>
+    /// <remarks>
+    /// Injected per-action from item 235 phase 6: a link clicked for a HOSTED event records a
+    /// request for a day pass, and the guest is written to saying that nothing is held yet.
+    /// Unconfigured here, so these tests go on testing the confirmation rather than the post.
+    /// </remarks>
+    private static Ben.Data.WebApi.Services.Events.EventGuestMailer NoHostedMail()
+    {
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(false);
+
+        return new Ben.Data.WebApi.Services.Events.EventGuestMailer(
+            email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                Ben.Data.WebApi.Services.Events.EventGuestMailer>.Instance);
+    }
+
     private static readonly Guid OrgId = Guid.NewGuid();
     private static readonly Guid ExistingUserId = Guid.NewGuid();
     private const string ExistingEmail = "already@here.test";
@@ -62,6 +82,10 @@ public sealed class PublicEventAttendanceTests
             NullLogger<UserManager<AppUser>>.Instance);
     }
 
+    private static Ben.Data.WebApi.Services.EmailLinkAccounts Accounts(IDbContextFactory<BenDataContext> factory)
+        => new(UserManagerFor(factory), new Ben.Data.WebApi.Services.UserHandleService(factory),
+               NullLogger<Ben.Data.WebApi.Services.EmailLinkAccounts>.Instance);
+
     private static PublicEventAttendanceController Build(
         IDbContextFactory<BenDataContext> factory, IEmailService? email = null)
     {
@@ -70,7 +94,9 @@ public sealed class PublicEventAttendanceTests
         return new PublicEventAttendanceController(
             factory, mail, UserManagerFor(factory),
             Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
-            NullLogger<PublicEventAttendanceController>.Instance)
+            NullLogger<PublicEventAttendanceController>.Instance,
+            new Ben.Data.WebApi.Services.UserHandleService(factory),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -130,6 +156,165 @@ public sealed class PublicEventAttendanceTests
 
         await db.SaveChangesAsync();
         return new World(factory, publicId, privateId);
+    }
+
+    /// <summary>
+    /// A crowd may sign up; a mailer may not (item 199).
+    /// </summary>
+    /// <remarks>
+    /// <para>The per-caller rate limit cannot separate these two: thirty guests on the venue's
+    /// wifi and one attacker with an address list arrive from the same NAT'd address. So the
+    /// per-caller limit is deliberately generous for this endpoint and the real bound is per
+    /// event, which is what these exercise.</para>
+    ///
+    /// <para>The floor is what applies here, because the seeded event states no capacity — which
+    /// is also the common case in production and therefore the one worth testing.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_crowd_of_new_guests_is_not_refused()
+    {
+        var w = await SeedAsync();
+
+        // Ninety guests: three sessions of thirty, the night Ben described.
+        for (var i = 0; i < 90; i++)
+        {
+            var result = await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"guest{i}@example.com", $"Guest {i}"), default);
+
+            Assert.IsType<OkResult>(result);
+        }
+    }
+
+    /// <summary>Past the ceiling, a new address is refused rather than mailed.</summary>
+    [Fact]
+    public async Task An_event_stops_issuing_invitations_once_it_is_being_used_as_a_mailer()
+    {
+        var w = await SeedAsync();
+
+        for (var i = 0; i < PublicEventAttendanceController.InviteCeilingFloor; i++)
+            await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"bulk{i}@example.com", null), default);
+
+        var refused = await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("one-too-many@example.com", null), default);
+
+        Assert.IsType<ConflictObjectResult>(refused);
+    }
+
+    /// <summary>
+    /// Somebody asking again for their own link is never the person the ceiling refuses.
+    /// </summary>
+    /// <remarks>
+    /// The guest whose first email went to spam is the most likely person to re-request, and
+    /// refusing them at the meeting point would be the exact failure this whole change exists to
+    /// prevent. Only new addresses count toward the ceiling.
+    /// </remarks>
+    [Fact]
+    public async Task A_guest_may_always_ask_again_for_their_own_link()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("late@example.com", "Late"), default);
+
+        for (var i = 0; i < PublicEventAttendanceController.InviteCeilingFloor; i++)
+            await Build(w.Factory).RequestAttendance(
+                w.EventId, new RequestEventAttendanceRequest($"bulk{i}@example.com", null), default);
+
+        // The event is now at its ceiling, and this address already has a row.
+        var again = await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("late@example.com", "Late"), default);
+
+        Assert.IsType<OkResult>(again);
+    }
+
+    /// <summary>
+    /// A guide's link still works after sign-ups close; a guest's own link does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>This pair is the walk-up feature. Confirmation re-checks the closing time, so without
+    /// the organiser exemption a guide could send a link to the group who turned up late and it
+    /// would be refused at the moment they used it — the guest would have paid, walked, and still
+    /// lost the photograph they took, which is the exact failure the late-arrival grace exists to
+    /// prevent.</para>
+    ///
+    /// <para>The negative half matters as much: latitude that applied to every link would just be
+    /// "sign-ups never close", and the closing rule is also what stops somebody signing up to last
+    /// week's event to reach the evidence submitted to it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task An_organiser_link_confirms_after_sign_ups_close()
+    {
+        var w = await SeedAsync();
+        var guide = Guid.NewGuid();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("walkup@example.com", "Walk Up"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            // The guide vouches for them, and the night is now well over.
+            var invite = await db.EventAttendanceInvites.FirstAsync(i => i.Email == "walkup@example.com");
+            invite.InvitedByAppUserId = guide;
+
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.StartDateTime = DateTime.UtcNow.AddHours(-6);
+            ev.EndDateTime   = DateTime.UtcNow.AddHours(-3);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "walkup@example.com"), NoHostedMail(), Accounts(w.Factory), default);
+
+        Assert.IsNotType<ConflictObjectResult>(result.Result);
+    }
+
+    /// <summary>The same night, the same closing time, a link nobody vouched for: refused.</summary>
+    [Fact]
+    public async Task A_self_service_link_does_not_confirm_after_sign_ups_close()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("selfserve@example.com", "Self Serve"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.StartDateTime = DateTime.UtcNow.AddHours(-6);
+            ev.EndDateTime   = DateTime.UtcNow.AddHours(-3);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "selfserve@example.com"), NoHostedMail(), Accounts(w.Factory), default);
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// A guide's link also gets past a full house, because capacity is the organiser's own number.
+    /// </summary>
+    [Fact]
+    public async Task An_organiser_link_confirms_past_a_full_house()
+    {
+        var w = await SeedAsync();
+
+        await Build(w.Factory).RequestAttendance(
+            w.EventId, new RequestEventAttendanceRequest("extra@example.com", "One More"), default);
+
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var invite = await db.EventAttendanceInvites.FirstAsync(i => i.Email == "extra@example.com");
+            invite.InvitedByAppUserId = Guid.NewGuid();
+
+            // Capacity of zero: full by definition, whoever turns up.
+            var ev = await db.OrgCalendarEvents.FirstAsync(e => e.Id == w.EventId);
+            ev.AttendeeCapacity = 0;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "extra@example.com"), NoHostedMail(), Accounts(w.Factory), default);
+
+        Assert.IsNotType<ConflictObjectResult>(result.Result);
     }
 
     private static async Task<string> TokenFor(World w, string email)
@@ -224,7 +409,7 @@ public sealed class PublicEventAttendanceTests
         await Build(w.Factory).RequestAttendance(
             w.EventId, new RequestEventAttendanceRequest(StrangerEmail, "A Stranger"), default);
 
-        var result = await Build(w.Factory).Confirm(await TokenFor(w, StrangerEmail), default);
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, StrangerEmail), NoHostedMail(), Accounts(w.Factory), default);
         Assert.IsType<EventAttendanceConfirmation>(Assert.IsType<OkObjectResult>(result.Result).Value);
 
         await using var db = await w.Factory.CreateDbContextAsync();
@@ -235,6 +420,9 @@ public sealed class PublicEventAttendanceTests
         Assert.True(user.EmailConfirmed);
         // No password: they never invented one, and are not being asked to.
         Assert.Null(user.PasswordHash);
+        // C1 (site evaluation 2026-09-06): a guest with a null @name is invisible to every
+        // mention until a restart's backfill runs — which is no use to the group that met them.
+        Assert.False(string.IsNullOrWhiteSpace(user.Handle));
 
         var attendee = await db.OrgCalendarEventAttendees.SingleAsync();
         Assert.Equal(user.Id, attendee.AppUserId);
@@ -251,7 +439,7 @@ public sealed class PublicEventAttendanceTests
         await Build(w.Factory).RequestAttendance(
             w.EventId, new RequestEventAttendanceRequest(ExistingEmail, null), default);
 
-        await Build(w.Factory).Confirm(await TokenFor(w, ExistingEmail), default);
+        await Build(w.Factory).Confirm(await TokenFor(w, ExistingEmail), NoHostedMail(), Accounts(w.Factory), default);
 
         await using var db = await w.Factory.CreateDbContextAsync();
         Assert.Single(await db.Users.Where(u => u.Email == ExistingEmail).ToListAsync());
@@ -270,8 +458,8 @@ public sealed class PublicEventAttendanceTests
             w.EventId, new RequestEventAttendanceRequest(StrangerEmail, null), default);
 
         var token = await TokenFor(w, StrangerEmail);
-        Assert.IsType<OkObjectResult>((await Build(w.Factory).Confirm(token, default)).Result);
-        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, default)).Result);
+        Assert.IsType<OkObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
+        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
     }
 
     [Fact]
@@ -289,7 +477,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, default)).Result);
+        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
         Assert.IsType<NotFoundResult>((await Build(w.Factory).GetInvite(token, default)).Result);
     }
 
@@ -319,7 +507,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        Assert.IsType<ConflictObjectResult>((await Build(w.Factory).Confirm(token, default)).Result);
+        Assert.IsType<ConflictObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
     }
 
     [Fact]

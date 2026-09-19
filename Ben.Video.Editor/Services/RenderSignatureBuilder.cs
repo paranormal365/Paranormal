@@ -26,6 +26,7 @@ public static class RenderSignatureBuilder
         sb.Append(previewWidth).Append('x').Append(previewHeight).Append('|');
         AppendEffects(sb, clip.Effects);
         AppendAppliedEffects(sb, clip.AppliedEffects);
+        AppendTransform(sb, clip.Transform);
         AppendVolumeAutomation(sb, clip.Volume, clip.VolumeAutomation);
         return Hash(sb.ToString());
     }
@@ -40,7 +41,34 @@ public static class RenderSignatureBuilder
         sb.Append(previewWidth).Append('x').Append(previewHeight).Append('|');
         AppendEffects(sb, clip.Effects);
         AppendAppliedEffects(sb, clip.AppliedEffects);
+        AppendTransform(sb, clip.Transform);
         return Hash(sb.ToString());
+    }
+
+    /// <summary>
+    /// A clip's placement, because the preview encodes the crop and the turn into its segment.
+    /// </summary>
+    /// <remarks>
+    /// Without this the cache hands back the segment encoded before the crop was drawn, so the
+    /// preview keeps showing the uncropped picture however many times it is refreshed (found on
+    /// screen while verifying phase 8).
+    /// </remarks>
+    private static void AppendTransform(StringBuilder sb, ClipTransform? transform)
+    {
+        if (transform is null) { sb.Append("noxform|"); return; }
+
+        sb.Append("xform(")
+          .Append(transform.X.ToString("R")).Append(',')
+          .Append(transform.Y.ToString("R")).Append(',')
+          .Append(transform.Width.ToString("R")).Append(',')
+          .Append(transform.Height.ToString("R")).Append(',')
+          .Append(transform.Rotation.ToString("R")).Append(',')
+          .Append(transform.Opacity.ToString("R")).Append(',')
+          .Append(transform.CropLeft.ToString("R")).Append(',')
+          .Append(transform.CropTop.ToString("R")).Append(',')
+          .Append(transform.CropRight.ToString("R")).Append(',')
+          .Append(transform.CropBottom.ToString("R"))
+          .Append(")|");
     }
 
     private static void AppendEffects(StringBuilder sb, ClipEffects effects)

@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -20,6 +22,10 @@
     @if (_entries is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading timeline…" />
+    }
+    else if (_entriesResult.Failed)
+    {
+        <BenListState TItem="CaseTimelineEntryRecord" Result="@_entriesResult" OnRetry="@LoadAsync" />
     }
     else if (_entries.Count == 0)
     {
@@ -57,12 +63,14 @@
             </div>
         }
 
-        <div class="timeline d-flex flex-column gap-3">
+        @* Not the template's "timeline" class: SmartAdmin draws a 2px rule down .timeline::before, which showed only in the
+           gaps between these cards — a column of stray marks like text cursors (UI test pass, 2026-09-14). *@
+        <div class="case-timeline d-flex flex-column gap-3">
             @foreach (var row in RenderedRows())
             {
                 var e = row.Entry;
                 var moment = row.Moment;
-                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-light" : "")">
+                <div class="card @(e.Visibility == CaseTimelineVisibility.OrgOnly ? "border-0 bg-body-tertiary" : "")">
                     <div class="card-body">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div class="flex-grow-1">
@@ -105,7 +113,7 @@
                                     <div class="mt-1 d-flex gap-1 flex-wrap">
                                         @foreach (var typeId in e.ExperienceTypeIds)
                                         {
-                                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                            <span class="badge bg-body-secondary text-body-emphasis border" style="font-size:0.7rem;">
                                                 @(_expTypeNames.GetValueOrDefault(typeId, typeId.ToString()[..8]))
                                             </span>
                                         }
@@ -148,8 +156,11 @@
                                 }
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                @if (!e.IsReadOnly && MayChange(e))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -169,7 +180,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Date/Time (optional)</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EventDateTime" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="casetimeline-title-optional-5b26">Title (optional)</label>
@@ -177,27 +188,37 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold">Description</label>
-                <TelerikEditor @bind-Value="@_form.Body" Height="180px"
+                <BenEditor @bind-Value="@_form.Body" Height="180px"
                                Tools="@_editorTools" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold">Experience Types (optional)</label>
+                @* W-A11 (site evaluation 2026-09-06): a fieldset with a legend, so the group has a
+                   name a screen reader can announce. The heading used to be a bare <label> with
+                   nothing to point at, which named nothing. *@
+                <fieldset class="border-0 p-0 m-0">
+                <legend class="form-label fw-semibold" style="font-size:1rem;">Experience Types (optional)</legend>
                 <div class="d-flex flex-wrap gap-2 p-2 border rounded" style="max-height:160px;overflow-y:auto;">
                     @foreach (var cat in _taxonomy)
                     {
-                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass">
+                        <div class="w-100 fw-semibold text-secondary small @cat.Category.ColorClass.ToThemeSafeColorClass()">
                             @cat.Category.Name
                         </div>
                         @foreach (var t in cat.Types)
                         {
                             var typeId = t.Id;
                             var isSelected = _form.ExperienceTypeIds.Contains(typeId);
-                            <div class="d-flex align-items-center gap-1 border rounded px-2 py-1"
-                                 style="cursor:pointer;font-size:0.82rem;"
-                                 @onclick="@(() => ToggleType(typeId))">
-                                <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
-                                @t.Name
-                            </div>
+                            @* A real <label> around a real checkbox (W-A11). It used to be a
+                               DISABLED checkbox inside a clickable div: the whole group announced
+                               as a row of unnamed "checkbox, on" controls, and a disabled input
+                               cannot be tabbed to at all, so the only way to choose an experience
+                               type was with a mouse. The label names the box, the box takes focus
+                               and the space bar, and the chip is still clickable anywhere. *@
+                            <label class="d-flex align-items-center gap-1 border rounded px-2 py-1 mb-0"
+                                   style="cursor:pointer;font-size:0.82rem;">
+                                <input type="checkbox" class="form-check-input" checked="@isSelected"
+                                       @onchange="@(() => ToggleType(typeId))" />
+                                <span>@t.Name</span>
+                            </label>
                         }
 
                         @* Nothing in the list fits? Add it. The new type is usable straight away —
@@ -255,6 +276,7 @@
                     A type you add is available immediately and is flagged for site administrators
                     to review.
                 </div>
+                </fieldset>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="casetimeline-who-can-see-this-4780">Who can see this</label>
@@ -303,6 +325,7 @@
     [Parameter] public Guid CaseId { get; set; }
 
     private List<CaseTimelineEntryRecord>? _entries;
+    private LoadResult<CaseTimelineEntryRecord> _entriesResult;
     private string? _error;
     private bool _isBusy;
     private CaseTimelineEntryType? _typeFilter;
@@ -340,15 +363,22 @@
             await _imageEditor.OpenAsync();
     }
 
+    // Research stays as a filter: entries written as research before 2026-09-14 still exist. Instrument
+    // reading was never filterable at all, which left a whole kind of entry impossible to pick out.
     private static readonly CaseTimelineEntryType?[] _typeFilters =
         [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,
-         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.ResearchNote];
+         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.InstrumentReading, CaseTimelineEntryType.ResearchNote];
 
-    private static readonly List<EntryTypeOption> _entryTypeOptions = Enum
-        .GetValues<CaseTimelineEntryType>()
+    // What a new entry may be: every kind, Research included again since 2026-09-16 (see
+    // CaseTimelineEntryTypes.Pickable for why it left and came back).
+    private static readonly List<EntryTypeOption> _entryTypeOptions = CaseTimelineEntryTypes.Pickable
         .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
         .ToList();
 
+    /// <summary>
+    /// The Type list for the dialog. Editing an entry that is already research keeps Research in the list, so
+    /// the picker shows the entry's real kind instead of silently turning it into something else on save.
+    /// </summary>
     private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
     [
         new Telerik.Blazor.Components.Editor.EditorButtonGroup(
@@ -420,10 +450,22 @@
     private Guid? _investigationFilter;
     private List<InvestigationRecord> _investigations = [];
 
+    /// <summary>Whether this person is a group admin here, who may change anybody's entry.</summary>
+    private bool _isOrgAdmin;
+
+    /// <summary>
+    /// An entry's author or a group admin may change it — the server's rule. Everybody was offered Edit and Delete on every
+    /// entry, so a member could open a client's report, change it, and be refused at Save; a refused Delete closed its
+    /// question and left the entry there without a word (member test pass M.3, 2026-09-14).
+    /// </summary>
+    private bool MayChange(CaseTimelineEntryRecord e) => _isOrgAdmin || e.AuthorAppUserId == UserState.UserId;
+
     protected override async Task OnParametersSetAsync()
     {
+        _isOrgAdmin = UserState.IsSuperAdmin
+            || (await AdminClient.GetOrganizationsAsync()).Items.Any(o => o.Id == OrgId && o.CanEdit);
         await LoadAsync();
-        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
             .SelectMany(c => c.Types)
             .ToDictionary(t => t.Id, t => t.Name);
@@ -431,19 +473,31 @@
 
     private async Task LoadAsync()
     {
-        try { _entries = (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId)).ToList(); }
-        catch { _error = "Failed to load timeline."; }
+        try
+        {
+            _entriesResult = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId);
+            _entries       = _entriesResult.Items.ToList();
+        }
+        catch
+        {
+            _error         = "Failed to load timeline.";
+            _entriesResult = LoadResult<CaseTimelineEntryRecord>.Failure();
+            _entries     ??= [];
+        }
 
         // Only needed to label the filter chips. Failing here shouldn't break the timeline — the
         // chips just don't appear.
-        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
         catch { _investigations = []; }
     }
 
     private void OpenAddDialog()
     {
         _editEntry = null;
-        _form      = new();
+        // A new entry starts at the current minute, the viewer's own time: an empty Telerik date box rebuilds the whole
+        // date the first time a segment is stepped (2026-09-09). It stays optional — clearing it is still allowed.
+        var now = UserState.NowInViewerTimeZone();
+        _form      = new() { EventDateTime = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0) };
         _dialogError = null;
         _showDialog  = true;
     }
@@ -454,7 +508,10 @@
         _form        = new EntryFormModel
         {
             EntryType          = entry.EntryType,
-            EventDateTime      = entry.EventDateTime,
+            // Stored in UTC, shown on the cards in the viewer's time — so the picker is filled in the viewer's time too, and
+            // saving converts back. The dialog used to show and save UTC: an entry typed as 9:00 PM appeared on its card as
+            // 4:00 PM, and editing one showed a time five hours from the card beside it (UI test pass, 2026-09-14).
+            EventDateTime      = entry.EventDateTime?.ToViewerLocalTime(UserState),
             Title              = entry.Title ?? "",
             Body               = entry.Body ?? "",
             Visibility         = entry.Visibility,
@@ -563,7 +620,7 @@
 
     private async Task ReloadTaxonomyAsync()
     {
-        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).ToList();
+        _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
             .SelectMany(c => c.Types)
             .ToDictionary(t => t.Id, t => t.Name);
@@ -582,19 +639,20 @@
         {
             var req = new UpsertTimelineEntryRequest(
                 EntryType:         _form.EntryType,
-                EventDateTime:     _form.EventDateTime,
+                EventDateTime:     _form.EventDateTime?.ToUtcFromViewerLocal(UserState),
                 Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
                 Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
                 Visibility:        _form.Visibility,
                 ExperienceTypeIds: _form.ExperienceTypeIds.ToList());
 
             CaseTimelineEntryRecord? result;
+            string? error = null;
             if (_editEntry is null)
-                result = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
+                (result, error) = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId, req);
             else
                 result = await AdminClient.UpdateCaseTimelineEntryAsync(OrgId, CaseId, _editEntry.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else { CloseDialog(); await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
@@ -613,22 +671,22 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
+            var deleted = await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
             _showDeleteConfirm = false;
+            if (!deleted) _error = "The entry could not be deleted. Only its author or a group admin can delete it.";
             await LoadAsync();
         }
         catch { _error = "Delete failed."; }
         finally { _isBusy = false; }
     }
 
-    internal static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
-    {
-        CaseTimelineEntryType.ClientReport     => "Client Report",
-        CaseTimelineEntryType.InvestigatorNote => "Investigator Note",
-        CaseTimelineEntryType.Evidence         => "Evidence",
-        CaseTimelineEntryType.ResearchNote     => "Research",
-        _                                      => t.ToString(),
-    };
+    /// <summary>
+    /// One helper for every screen (W-A11). This used to be a switch ending in <c>t.ToString()</c>,
+    /// and <c>InstrumentReading</c> was never added to it — so the Type list offered that raw
+    /// identifier to a person as something to pick.
+    /// </summary>
+    internal static string EntryTypeLabel(CaseTimelineEntryType t)
+        => CaseTimelineEntryTypes.DisplayName(t);
 
     // ── Visibility (C2) ───────────────────────────────────────────────────────
     // Three tiers replace a checkbox that could only mean "public or not", which forced a choice

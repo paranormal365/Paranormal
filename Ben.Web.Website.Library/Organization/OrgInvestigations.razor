@@ -3,6 +3,9 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 @*
    Every investigation the group has run, mapped and listed. The point of the screen is the two
@@ -18,8 +21,16 @@
         </p>
     </div>
     <div class="d-flex align-items-center gap-1">
-        <button type="button" class="btn btn-primary" @onclick="@(() => _creating = true)"><BenIcon Name="plus" Class="me-1" />Schedule an investigation</button>
-        <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
+        @* IH-03: the same Investigations.Create grant the POST checks. A member who cannot
+           schedule is not shown the door to a refusal — this button was ungated while the
+           server accepted Investigation.READ, so a read-only member could schedule visits. *@
+        @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                         Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+        {
+            <button type="button" class="btn btn-primary" @onclick="@(() => _creating = true)"><BenIcon Name="plus" Class="me-1" />Schedule an investigation</button>
+            @* Beside the button it explains; without the button it was a lone "?" at the edge (member test pass M.8). *@
+            <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
+        }
     </div>
 </div>
 
@@ -39,6 +50,11 @@
 {
     <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
 }
+else if (_rowsResult.Failed)
+{
+    @* "No investigations" to a group that has some is the answer they will plan around. *@
+    <BenListState TItem="OrgInvestigationRow" Result="@_rowsResult" OnRetry="@LoadAsync" />
+}
 else if (_rows.Count == 0)
 {
     <div class="card">
@@ -52,9 +68,27 @@ else if (_rows.Count == 0)
 else
 {
     @* ── Map ──────────────────────────────────────────────────────────────── *@
-    @if (_pins.Any(p => p.Latitude.HasValue))
+    @* Once the map has had something to show it stays, and a pan that finds nothing says so in
+       the footer. Taking it away would move the page under the person's hands mid-gesture. *@
+    @if (_mapShown)
     {
-        <InvestigationsMap Pins="@_pins" Height="380px" OnPinClicked="@GoToInvestigation" />
+        <InvestigationsMap Pins="@_pins" Height="380px" OnPinClicked="@GoToInvestigation"
+                           OnViewportChanged="@OnViewportChanged" />
+        <span hidden data-testid="org-map-bounded-loads">@_boundedLoads</span>
+        <div class="text-muted small mt-1 d-flex flex-wrap gap-3" data-testid="org-map-footer">
+            @if (_pins.Count == 0)
+            {
+                <span data-testid="org-map-empty-view">No investigations in this view.</span>
+            }
+            else if (_mapTotal > _pins.Count)
+            {
+                @* Said out loud rather than left as a shorter map: a partial picture nobody is
+                   told about is worse than a smaller one they can reason about. *@
+                <span data-testid="org-map-capped">
+                    Showing the most recent @_pins.Count of @_mapTotal in view — zoom in to see the rest.
+                </span>
+            }
+        </div>
     }
 
     @* An investigation the map could not place is easy to lose: the pin simply is not drawn, and
@@ -105,6 +139,14 @@ else
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>Row to highlight, scroll to, and open the team for, on arrival. This is where a
+    /// click on a case-less investigation lands (there is no case page to open), so the row has
+    /// to be unmissable — highlighted, on screen, and already expanded.</summary>
+    [Parameter] public Guid? FocusInvestigationId { get; set; }
+
+    private Guid? _focused;
+    private bool _scrollPending;
+
     private List<OrgInvestigationRow> _rows = [];
     private List<InvestigationMapPin> _pins = [];
     private List<OrgInvestigationRow> _upcoming = [];
@@ -112,6 +154,19 @@ else
     private List<OrgInvestigationRow> _unplaceable = [];
 
     private bool _loading = true;
+
+    /// <summary>How many pins the bounds actually held, which may exceed the ones drawn.</summary>
+    private int _mapTotal;
+
+    /// <summary>Counts bounded loads. Hidden on the page so a test can prove a pan asked again.</summary>
+    private int _boundedLoads;
+
+    /// <summary>Once shown, the map stays — see the comment beside it in the markup.</summary>
+    private bool _mapShown;
+
+    private CancellationTokenSource? _viewportLoad;
+
+    private LoadResult<OrgInvestigationRow> _rowsResult;
     private bool _creating;
 
     /// <summary>Which row has its team open, if any. One at a time — each roster polls.</summary>
@@ -126,6 +181,52 @@ else
         await LoadAsync();
     }
 
+    private MyOrgPermissionsItem? _perms;
+
+    /// <summary>
+    /// Re-asks for the pins inside the new view, once the gesture has settled.
+    /// </summary>
+    /// <remarks>
+    /// <para>Debounced and cancellable, because a pan raises this repeatedly and an answer that
+    /// arrives after the person has moved on describes somewhere the map no longer is — drawing it
+    /// would shift pins under their cursor.</para>
+    ///
+    /// <para>A failed load leaves the pins alone rather than emptying the map: "nothing here" and
+    /// "we could not ask" look identical to a reader, and only one of them is true.</para>
+    /// </remarks>
+    private async Task OnViewportChanged(MapViewport viewport)
+    {
+        _viewportLoad?.Cancel();
+        var cts = _viewportLoad = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+
+            var page = await AdminClient.GetOrgInvestigationMapAsync(
+                OrgId,
+                new MapBounds(viewport.North, viewport.South, viewport.East, viewport.West),
+                cts.Token);
+
+            if (cts.IsCancellationRequested || page.Failed || page.Item is null) return;
+
+            _pins = page.Item.Points
+                .Select(pt => new InvestigationMapPin(
+                    pt.Id, pt.Title, pt.Latitude, pt.Longitude, pt.IsPast,
+                    IsPublicPlace: pt.PlaceKind is null
+                        ? null
+                        : pt.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
+                .ToList();
+            _mapTotal = page.Item.Total;
+            _boundedLoads++;
+            StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a later gesture — nothing to draw
+        }
+    }
+
     private async Task LoadAsync()
     {
         _loading = true;
@@ -133,7 +234,10 @@ else
 
         try
         {
-            _rows = (await AdminClient.GetOrgInvestigationsAsync(OrgId)).ToList();
+            _rowsResult = await AdminClient.GetOrgInvestigationsAsync(OrgId);
+            _rows       = _rowsResult.Items.ToList();
+            // Null on failure means the schedule button stays hidden — the safe direction.
+            try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); } catch { _perms = null; }
         }
         catch
         {
@@ -149,10 +253,46 @@ else
 
         _unplaceable = _rows.Where(r => r.Latitude is null || r.Longitude is null).ToList();
 
+        // The first draw comes from the rows already loaded, so the map is never blank while a
+        // second request is in flight. Every pan after that asks the server for what is in view.
         _pins = _rows.Select(r => new InvestigationMapPin(
-            r.Id, r.Title, r.Latitude, r.Longitude, IsPast: r.ScheduledDateTime < now)).ToList();
+            r.Id, r.Title, r.Latitude, r.Longitude,
+            IsPast: r.ScheduledDateTime < now,
+            // Null stays null: a visit with no place on file is an unknown, and the map says so
+            // by looking exactly as it always did.
+            IsPublicPlace: r.PlaceKind is null
+                ? null
+                : r.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)).ToList();
+        _mapTotal = _pins.Count;
+        if (_pins.Any(p => p.Latitude.HasValue)) _mapShown = true;
+
+        if (FocusInvestigationId is { } focus && _rows.Any(r => r.Id == focus))
+            FocusRow(focus);
 
         _loading = false;
+    }
+
+    /// <summary>Highlights a row, opens its team, and queues a scroll to it on the next render.</summary>
+    private void FocusRow(Guid id)
+    {
+        _focused = id;
+        _openTeam = id;
+        _scrollPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollPending || _loading) return;
+        _scrollPending = false;
+
+        try
+        {
+            await using var dom = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", $"inv-row-{_focused}");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { /* The highlight still marks the row; scrolling is a courtesy. */ }
     }
 
     /// <summary>
@@ -170,10 +310,16 @@ else
         if (row is null) return;
 
         // A case-bound visit belongs on its case's Investigations tab, which is where the binder
-        // and the editing dialog live. A case-less one still has no detail page of its own — its
-        // team is reachable here, via Team, rather than through a link that would 404.
+        // and the editing dialog live. A case-less one has no detail page of its own, so the
+        // click shows it HERE — highlighted, scrolled to, team open. A click must always show
+        // something; silently returning here is the bug Ben reported on 2026-08-22.
         if (row.CaseId is { } caseId)
+        {
             NavManager.NavigateTo($"/organizations/{OrgId}/cases/{caseId}?tab=investigations");
+            return;
+        }
+
+        FocusRow(id);
     }
 
     private static string WhereText(OrgInvestigationRow row)
@@ -212,9 +358,9 @@ else
             <tbody>
                 @foreach (var row in rows)
                 {
-                    <tr>
+                    <tr id="inv-row-@row.Id" class="@(row.Id == _focused ? "table-active" : null)">
                         <td class="text-nowrap">
-                            @row.ScheduledDateTime.ToLocalTime().ToDisplayDateTime()
+                            @row.ScheduledDateTime.ToLocalTime().ToDisplaySpan(row.EndDateTime?.ToLocalTime())
                         </td>
                         <td>
                             @row.Title

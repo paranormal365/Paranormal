@@ -13,13 +13,13 @@
 
     <AdminPageHeader Title="All Investigations" Subtitle="Every scheduled investigation across every organization." />
 
-    @if (_investigations is null)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading investigations…" />
-    }
-    else
-    {
-        <TelerikGrid Data="@_investigations"
+    @* A refused cross-org list used to render as an empty grid — the same untruth that left
+       both admin pages blank on the deployment for a day (items 120, 126). *@
+    <BenListState TItem="AdminInvestigationSummaryRecord" Result="@_investigations" Loading="@_loading"
+                  LoadingText="Loading investigations…"
+                  EmptyText="No investigations anywhere yet."
+                  OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_investigations.Items"
                      TItem="AdminInvestigationSummaryRecord"
                      Sortable="true"
                      FilterMode="@GridFilterMode.FilterRow"
@@ -36,31 +36,38 @@
                         @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="90px">
-                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminInvestigationSummaryRecord)e.Items.First()))">
-                        Open
-                    </GridCommandButton>
+                <GridCommandColumn Width="72px">
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminInvestigationSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>
-    }
+    </BenListState>
 </div>
 
 @code {
-    private IReadOnlyList<AdminInvestigationSummaryRecord>? _investigations;
+    private LoadResult<AdminInvestigationSummaryRecord> _investigations;
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
         _investigations = await AdminClient.GetAllInvestigationsAsync();
+        _loading = false;
         StateHasChanged();
     }
 

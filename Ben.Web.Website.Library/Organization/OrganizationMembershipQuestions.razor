@@ -3,6 +3,8 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
 <PageTitle>Membership Questions</PageTitle>
 
@@ -21,6 +23,11 @@
     @if (_questions is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading questions…" />
+    }
+    else if (_questionsResult.Failed)
+    {
+        @* A group shown no questions writes them again, and applicants answer two sets. *@
+        <BenListState TItem="OrganizationMembershipQuestionRecord" Result="@_questionsResult" OnRetry="@LoadAsync" />
     }
     else if (_questions.Count == 0)
     {
@@ -41,7 +48,7 @@
                                 <span class="badge @(q.IsRequired ? "bg-danger" : "bg-secondary")">
                                     @(q.IsRequired ? "Required" : "Optional")
                                 </span>
-                                @if (!q.IsActive) { <span class="badge bg-light text-dark border">Inactive</span> }
+                                @if (!q.IsActive) { <span class="badge bg-body-secondary text-body-emphasis border">Inactive</span> }
                                 <small class="text-secondary">#@q.SortOrder</small>
                             </div>
                             <span>@q.QuestionText</span>
@@ -112,6 +119,7 @@
     [Parameter] public Guid OrgId { get; set; }
 
     private List<OrganizationMembershipQuestionRecord>? _questions;
+    private LoadResult<OrganizationMembershipQuestionRecord> _questionsResult;
     private string? _error;
     private bool _isBusy;
     private bool _showDialog;
@@ -131,7 +139,7 @@
 
     private async Task LoadAsync()
     {
-        try { _questions = (await AdminClient.GetMembershipQuestionsAsync(OrgId)).ToList(); }
+        try { _questionsResult = await AdminClient.GetMembershipQuestionsAsync(OrgId); _questions = _questionsResult.Items.ToList(); }
         catch { _error = "Failed to load questions."; }
     }
 

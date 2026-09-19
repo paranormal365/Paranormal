@@ -1,0 +1,72 @@
+@*
+    A row action in a grid: an icon, with its words as the tooltip and the accessible name.
+
+    Ben, 2026-09-14: "When able, don't use text in buttons in a grid. Use icon buttons with a
+    tooltip." Text buttons made every Actions column a paragraph — three or four verbs side by side
+    widened the column, and a narrow one wrapped them (item 139). An icon per verb keeps a row one
+    line tall at any width.
+
+    The Label does three jobs at once, so they cannot drift apart: `title` is what the site-wide
+    TelerikTooltip in MainLayout shows (it targets `.ben-grid-action[title]`), the browser's own
+    tooltip if that script is not there yet, and `aria-label` is what a screen reader says and what
+    a test finds with GetByRole(Button, Name). There is deliberately no visible text slot.
+
+    For a GridCommandButton, don't use this — give the command button a BenIcon child plus Title and
+    Class="ben-grid-action"; it gets the same tooltip and the same square, and Title is its accessible
+    name. Not AriaLabel there: an attribute Telerik does not expect takes the circuit down (item 112).
+*@
+
+@if (Href is not null && !Disabled)
+{
+    <a href="@Href" class="@CssClass" title="@Label" aria-label="@Label" @attributes="Extra">
+        <BenIcon Name="@Icon" />
+    </a>
+}
+else if (Disabled)
+{
+    @* A disabled button gets no pointer events, so a tooltip on it never opens — and the reason it
+       is disabled ("You are signed in as this account") is exactly what the person needs to read.
+       The words go on a focusable wrapper instead, Bootstrap's own answer to the same problem. *@
+    <span class="ben-grid-action-tip" tabindex="0" title="@Label">
+        <button type="button" class="@CssClass" aria-label="@Label" disabled @attributes="Extra">
+            <BenIcon Name="@Icon" />
+        </button>
+    </span>
+}
+else
+{
+    <button type="button" class="@CssClass" title="@Label" aria-label="@Label"
+            @onclick="OnClick" @attributes="Extra">
+        <BenIcon Name="@Icon" />
+    </button>
+}
+
+@code {
+    /// <summary>Feather sprite name, e.g. "edit-2", "trash-2".</summary>
+    [Parameter, EditorRequired] public string Icon { get; set; } = "circle";
+
+    /// <summary>The verb, in the words a person would use: "Edit", "Delete this file".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+
+    /// <summary>When set, renders a link instead of a button — for actions that go somewhere.</summary>
+    [Parameter] public string? Href { get; set; }
+
+    [Parameter] public GridActionTone Tone { get; set; } = GridActionTone.Neutral;
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>For <c>id</c> and <c>data-testid</c>.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? Extra { get; set; }
+
+    private string CssClass => $"btn btn-sm ben-grid-action {Tone switch
+    {
+        GridActionTone.Danger  => "btn-outline-danger",
+        GridActionTone.Success => "btn-outline-success",
+        GridActionTone.Primary => "btn-outline-primary",
+        GridActionTone.Warning => "btn-outline-warning",
+        _                      => "btn-outline-secondary",
+    }}";
+}

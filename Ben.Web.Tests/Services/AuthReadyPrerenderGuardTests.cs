@@ -98,4 +98,58 @@ public sealed class AuthReadyPrerenderGuardTests
             + "UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) instead:\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// The inverse hazard (item #103): reading auth state without ever waiting for it to resolve.
+    /// </summary>
+    /// <remarks>
+    /// <para>Auth resolves asynchronously after the circuit connects. A component that reads
+    /// <c>UserState.IsAuthenticated</c> and never follows that resolution renders the anonymous
+    /// variant to a signed-in user on a hard navigation and stays that way — no crash, no log,
+    /// just vote buttons that read "sign in to vote" for someone who is signed in. Six components
+    /// shipped that way; the worst skipped loading the viewer's own votes entirely.</para>
+    ///
+    /// <para>A file passes by containing any of the recognised follow-the-answer tokens:
+    /// <c>WaitUntilAuthReadyAsync</c>, a direct <c>.AuthReady</c> await (pages), a
+    /// <c>StateChanged +=</c> subscription, or <c>EnsureStartedAsync</c> — NotificationState's
+    /// startup, which performs the wait internally for the bell.</para>
+    /// </remarks>
+    [Fact]
+    public void Every_reader_of_auth_state_follows_its_resolution()
+    {
+        var root = RepoRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        var files = new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }
+            .Select(p => Path.Combine(root.FullName, p))
+            .Where(Directory.Exists)
+            .SelectMany(p => Directory.EnumerateFiles(p, "*.razor", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"));
+
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            scanned++;
+
+            if (!text.Contains("UserState.IsAuthenticated", StringComparison.Ordinal)) continue;
+
+            var follows =
+                text.Contains("WaitUntilAuthReadyAsync", StringComparison.Ordinal) ||
+                text.Contains(".AuthReady", StringComparison.Ordinal) ||
+                text.Contains("StateChanged +=", StringComparison.Ordinal) ||
+                text.Contains("EnsureStartedAsync", StringComparison.Ordinal);
+
+            if (!follows) offenders.Add(Path.GetFileName(file));
+        }
+
+        Assert.True(scanned > 0, "No .razor files were scanned — has the layout moved?");
+        Assert.True(offenders.Count == 0,
+            "These files read UserState.IsAuthenticated but never follow auth resolution, so on a "
+            + "hard navigation they can show a signed-in user the anonymous variant forever. Await "
+            + "UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) (then reload or "
+            + "StateHasChanged), or subscribe to StateChanged:\n  "
+            + string.Join("\n  ", offenders));
+    }
 }

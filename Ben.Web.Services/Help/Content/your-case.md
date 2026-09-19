@@ -13,7 +13,9 @@ order: 30
 
 **My Cases** lists every case you are part of, whether you opened it or were invited onto it by
 someone else. Opening one shows the calendar, everything logged so far, files, and your message
-thread with the investigators.
+thread with the investigators. Messages can be formatted with bold, italics, lists and links, using the
+small toolbar above the box, and the investigators' messages arrive the same way. In the iPhone
+app, messages show as plain text.
 
 ## Logging an occurrence
 
@@ -42,3 +44,38 @@ anything you prefer. Set it on your case page under **How You're Named Publicly*
 
 Your investigators always see your real name. They cannot work a case while blind to who reported
 it, so the alias applies to public pages and shared documents only.
+
+On a private case — yours is one, because it came from your request — the protection goes
+further than the name slot: if an investigator's written report or a timeline entry mentions you
+by name, the public copy substitutes your chosen name (or a neutral phrase like "the client")
+automatically. What they wrote is preserved for the investigation; what the public reads does
+not carry your name.
+
+## If your case is paused
+
+A paused case means the organization's subscription ended — nothing more. **Nothing you reported
+or they collected has been lost**, and all of it stays readable to you. If the group renews, the
+case resumes exactly where it left off. If your case had a public page, it comes off the public
+site while the subscription is lapsed — your privacy does not depend on the group's billing.
+
+You can also **move your case to a different organization**, right from the banner on the case
+page. Pick a group, and choose what they will be able to see:
+
+- the **history** collected so far — reports, notes, evidence
+- the **investigations** the previous group ran
+
+If a month passes with the case still paused, the platform sends you a reminder that the move is
+available — you never have to wait on a group that is not coming back.
+
+Anything you don't share stays with the original case — visible to you, never to the new group,
+and nothing is deleted either way. The findings belong to the original group *and* to you, which
+is why this is your choice alone; the original group is not asked. The new group answers your
+request, and you hear their answer either way. Until they do, you can withdraw the request.
+
+## You'll hear by email
+
+When your case changes status — accepted, active, being written up, closed — or when the group
+schedules, moves or cancels a visit, an email goes to your confirmed address saying the same thing
+your case page says, with a button that opens the case. Times in the email are given in UTC; the
+page shows them in your own time zone. If your address isn't confirmed yet, no mail is sent until
+it is.

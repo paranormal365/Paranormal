@@ -25,18 +25,32 @@ public class ScheduleProposalControllerTests
         return new PooledDbContextFactory<BenDataContext>(options);
     }
 
-    private static ScheduleProposalController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static ScheduleProposalController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId,
+        bool isSuperAdmin = false)
     {
-        var ctrl = new ScheduleProposalController(factory);
+        var ctrl = new ScheduleProposalController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), Ben.Web.Tests.TestMailer.Quiet());
+        List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer", ClaimTypes.NameIdentifier, ClaimTypes.Role))
             }
         };
         return ctrl;
+    }
+
+    [Fact]
+    public async Task GetAll_SuperAdminNonMember_IsNotForbidden()
+    {
+        // Same bypass rule as CaseFileController — see its SuperAdmin test for the 2026-08-22 bug.
+        var (factory, orgId, caseId, _) = await SeedBasicCase();
+        var ctrl = BuildController(factory, Guid.NewGuid(), isSuperAdmin: true);
+
+        var result = await ctrl.GetAll(orgId, caseId, default);
+
+        Assert.IsNotType<ForbidResult>(result.Result);
     }
 
     private static async Task<(IDbContextFactory<BenDataContext>, Guid orgId, Guid caseId, Guid userId)> SeedBasicCase()
@@ -61,6 +75,7 @@ public class ScheduleProposalControllerTests
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
         await db.SaveChangesAsync();
+        await TestSeeds.BridgeAsync(factory, orgId, TestSeeds.CaseWork);
         return (factory, orgId, caseId, userId);
     }
 
@@ -145,6 +160,7 @@ public class ScheduleProposalControllerTests
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership { Id = Guid.NewGuid(), OrganizationId = attackerOrgId, AppUserId = attackerId, Role = OrganizationMemberRole.Manager, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = attackerId });
             await db.SaveChangesAsync();
         }
+        await TestSeeds.BridgeAsync(factory, attackerOrgId, TestSeeds.CaseWork);
         var attacker = BuildController(factory, attackerId);
 
         Assert.IsType<NotFoundResult>((await attacker.GetAll(attackerOrgId, victimCaseId, CancellationToken.None)).Result);

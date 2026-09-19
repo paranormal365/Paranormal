@@ -39,6 +39,24 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Guid? PlaceId { get; set; }
 
+        /// <summary>
+        /// Whether this is PRIVATE-ENGAGEMENT work — somebody's home, somebody's client — as
+        /// opposed to the free lane's public places (item 184). Set at birth for cases born from
+        /// a client request, when a residence place is bound to one of its investigations, or
+        /// manually by the org. The flag is what the display-time name redaction and the
+        /// paid-plan gates key off; deriving it per render would join Place and ClientRequest on
+        /// every anonymous request.
+        /// </summary>
+        public bool IsPrivateEngagement { get; set; }
+
+        /// <summary>
+        /// Set when a subscription lapse unpublished this case (item 185), the
+        /// <c>StatusBeforePause</c> pattern: null = lapse never touched it. Renewal does not
+        /// auto-republish — the case page offers a one-click republish off this flag, because
+        /// publication should be a person's decision twice, not a billing event's once.
+        /// </summary>
+        public bool? WasPublicBeforeLapse { get; set; }
+
         public virtual Place? Place { get; set; }
     }
 }

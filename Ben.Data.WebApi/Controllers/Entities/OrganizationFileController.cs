@@ -57,12 +57,31 @@ public sealed class OrganizationFileController : ControllerBase
         var userId = CurrentUserId();
         if (userId is null) return Unauthorized();
         var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Reading the list is open to any active member of the group; the writes below stay
+        // permission-gated.
+        //
+        // It used to require OrganizationFiles/Read through the security service, which returns
+        // false for a plain Member on every table — so the Files tab, which the hub shows to every
+        // member, was refused for everyone below Administrator. And because the website's API
+        // client turns a non-2xx into an empty list, the refusal rendered as "No records
+        // available": a member with a group handbook sitting on the server was told their group
+        // had no files at all. Item 109; the same shape as the phase 5 messaging faults, and
+        // invisible from every seat the test suite used to sign in from.
         if (!isSuperAdmin)
         {
-            var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
-            if (!ok) return Forbid();
+            var isActiveMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId.Value && m.IsActive, ct);
+
+            if (!isActiveMember)
+            {
+                var ok = await _security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Read, ct);
+                if (!ok) return Forbid();
+            }
         }
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         var files = await WithIncludes(db.OrganizationFiles)
             .Where(f => f.OrganizationId == orgId)
             .OrderBy(f => f.SortOrder).ThenBy(f => f.FileName)
@@ -113,7 +132,8 @@ public sealed class OrganizationFileController : ControllerBase
         else if (file.FileData is { Length: > 0 })
             stream = new MemoryStream(file.FileData);
         if (stream is null) return NotFound("File data not found in storage.");
-        return File(stream, file.ContentType, file.FileName);
+        // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+        return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
     }
 
     // POST /api/organizations/{orgId}/files  (direct upload)
@@ -165,6 +185,47 @@ public sealed class OrganizationFileController : ControllerBase
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(OrganizationFile), orgFile.Id, orgFile, userId.Value, AppSources.WebApi));
         var created = await WithIncludes(db.OrganizationFiles).AsNoTracking().FirstAsync(f => f.Id == orgFile.Id, ct);
         return CreatedAtAction(nameof(GetAll), new { orgId }, _mapper.Map<OrganizationFileRecord>(created));
+    }
+
+    // GET /api/organizations/{orgId}/files/shareable-user-files
+    /// <summary>
+    /// The user files this group could take a copy of (item 175) — exactly the set
+    /// <see cref="CopyFromUser"/> would accept: public files, and files their owners shared
+    /// with this group. Feeds the content picker that replaced the paste-a-Guid dialog.
+    /// </summary>
+    /// <remarks>Gated like the copy itself (OrganizationFiles Create): browsing the candidates
+    /// is preparation for the copy, and someone the copy would refuse has no business with the
+    /// list. Owner names come through the display name only.</remarks>
+    [HttpGet("shareable-user-files")]
+    public async Task<ActionResult<IEnumerable<ShareableUserFileRecord>>> GetShareableUserFiles(
+        Guid orgId, CancellationToken ct)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!User.IsInRole(RoleNames.SuperAdmin))
+        {
+            var ok = await _security.HasAccessAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationFiles, OrganizationSecurityAction.Create, ct);
+            if (!ok) return Forbid();
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var candidates = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.IsPublic
+                     || db.UploadFileOrganizationShares.Any(sh =>
+                            sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive))
+            .OrderByDescending(f => db.UploadFileOrganizationShares.Any(sh =>
+                sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive))
+            .ThenByDescending(f => f.DateCreated)
+            .Select(f => new ShareableUserFileRecord(
+                f.Id, f.FileName, f.ContentType, f.FileSize, f.Description,
+                f.AppUser!.DisplayName, f.DateCreated,
+                db.UploadFileOrganizationShares.Any(sh =>
+                    sh.UploadFileId == f.Id && sh.OrganizationId == orgId && sh.IsActive)))
+            .ToListAsync(ct);
+
+        return Ok(candidates);
     }
 
     // POST /api/organizations/{orgId}/files/copy-from-user/{uploadFileId}
@@ -360,5 +421,12 @@ public sealed class OrganizationFileController : ControllerBase
 public sealed record OrgFileUploadRequest(IFormFile? File, Guid UploadFileTypeId, string? Description, bool IsPublic, int SortOrder);
 public sealed record OrgFileUpdateRequest(string? Description, int SortOrder);
 public sealed record CopyFromUserRequest(string? Description, bool PublishImmediately = false);
+
+/// <summary>One candidate for the share-from-user picker (item 175). SharedWithOrganization
+/// distinguishes "their owner offered it to this group" from "public to everyone" — the
+/// picker's Source facet.</summary>
+public sealed record ShareableUserFileRecord(
+    Guid Id, string FileName, string ContentType, long FileSize, string? Description,
+    string? OwnerDisplayName, DateTime DateCreated, bool SharedWithOrganization);
 public sealed record OrgFileCopyResult(OrganizationFileRecord File, bool CanPublishImmediately, bool PublishedImmediately);
 public sealed record PublishOrgFileRequest(bool IsPublic);

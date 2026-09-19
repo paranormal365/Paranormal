@@ -49,7 +49,10 @@ if [[ ! -x "$PROJECT_DIR/ffmpeg/$RID/ffmpeg" ]]; then
   exit 1
 fi
 
-rm -rf "$DIST"
+# Only this platform's outputs — dist/ is shared with the Windows build, and wiping it wholesale
+# silently deleted a BenVideoSidecar-win-x64.zip that had been built minutes earlier. Each script
+# owns its own artifacts and nothing else.
+rm -rf "$APP" "$DIST/BenVideoSidecar-$RID.pkg" "$DIST/BenVideoSidecar-$RID" "$DIST/BenVideoSidecar-$RID.zip"
 mkdir -p "$APP/Contents/MacOS"
 
 echo "==> dotnet publish (self-contained, so the target machine needs no .NET runtime)"

@@ -28,6 +28,11 @@ public sealed class SidecarOptions
         "http://localhost:5000", "https://localhost:5001",
         "http://localhost:5078",  "https://localhost:7050",  // Ben.Web.WebApp dev defaults
         "http://localhost:5180",                             // Ben.Wasm.Video dev default
+
+        // Production. Without these the sidecar refuses every request from the deployed editor,
+        // and it refuses them the same way it refuses a wrong pairing code — a 403 that reads to
+        // the user as "the code did not work", with a healthy sidecar sitting right there.
+        "https://ishaunted.com", "https://www.ishaunted.com",
     ];
 
     /// <summary>Default cap on the source cache (OPFS clip uploads), in bytes. LRU-evicted.</summary>
@@ -44,6 +49,16 @@ public sealed class SidecarOptions
 
     /// <summary>How long a finished/failed job's workspace and result stay available before
     /// automatic cleanup, if the browser never calls <c>DELETE /v1/jobs/{id}</c>.</summary>
+    /// <summary>
+    /// How long the sidecar may sit with nothing asked of it before it stops.
+    /// </summary>
+    /// <remarks>
+    /// Zero or less keeps it running for ever, which is what a machine that renders for several
+    /// people at once would want. Fifteen minutes is the desktop default — see IdleShutdownPolicy
+    /// for why it is not shorter, and the LaunchAgent's Sockets key for how it comes back.
+    /// </remarks>
+    public TimeSpan IdleTimeout { get; set; } = Lifetime.IdleShutdownPolicy.DefaultIdleTimeout;
+
     public TimeSpan JobRetention { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>Wall-clock limit for a single ffmpeg invocation before it's killed.</summary>

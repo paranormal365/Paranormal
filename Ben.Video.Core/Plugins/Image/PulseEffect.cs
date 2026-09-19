@@ -24,7 +24,8 @@ public sealed class PulseEffect : IClipEffect
     };
 
     public string BuildFilterFragment(
-        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0)
+        IReadOnlyDictionary<string, double> p, double clipDuration, double speed = 1.0,
+        int canvasWidth = 0, int canvasHeight = 0)
     {
         var ic      = System.Globalization.CultureInfo.InvariantCulture;
         var maxZ    = p.GetValueOrDefault("max_zoom", 1.1);
@@ -32,13 +33,15 @@ public sealed class PulseEffect : IClipEffect
         var d       = clipDuration;
         if (d <= 0 || maxZ <= 1.0) return string.Empty;
 
-        var frames  = (int)Math.Ceiling(d * 25);
-        var mzStr   = maxZ.ToString("F3", ic);
-        var dStr    = d.ToString("F3", ic);
-        var cycStr  = cycles.ToString("F2", ic);
+        var mzStr  = maxZ.ToString("F3", ic);
+        var dStr   = d.ToString("F3", ic);
+        var cycStr = cycles.ToString("F2", ic);
 
-        // zoom oscillates 1 ↔ maxZ using abs(sin)
-        var zExpr = $"1+({mzStr}-1)*abs(sin({cycStr}*3.14159*on/fps/{dStr}))";
-        return $"zoompan=z='{zExpr}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={frames}:s=iw+\"x\"+ih";
+        // zoom oscillates 1 ↔ maxZ using abs(sin), against zoompan's own output clock
+        var zExpr = $"1+({mzStr}-1)*abs(sin({cycStr}*3.14159*{ZoompanFragment.TimeVariable}/{dStr}))";
+
+        return ZoompanFragment.Build(
+            zExpr, ZoompanFragment.CentredX, ZoompanFragment.CentredY,
+            canvasWidth, canvasHeight);
     }
 }

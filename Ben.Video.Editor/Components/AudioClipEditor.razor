@@ -168,6 +168,44 @@
             </TelerikButton>
         </div>
 
+        @* ── Cleaning up the recording ────────────────────────────────────
+           A recording made in a house at two in the morning is mostly room tone, fridge hum and
+           the recorder's own noise floor. The editor had no audio effects at all
+           (2026-09-05 audit, audio-25). *@
+        <div class="bv-audio-editor__section">Clean up</div>
+
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label">
+                Reduce hiss (@(_noiseReduction <= 0 ? "off" : (_noiseReduction * 100).ToString("F0") + "%"))
+            </label>
+            <TelerikSlider Value="@_noiseReduction"
+                           ValueChanged="@((double v) => { _noiseReduction = v; ApplyCleanup(); })"
+                           ValueExpression="@(() => _noiseReduction)"
+                           Min="0.0" Max="1.0" SmallStep="0.05" LargeStep="0.25"
+                           Orientation="@SliderOrientation.Horizontal"
+                           LabelTemplate="@SliderLabelTemplates.Endpoints(0.0, 1.0, 0.25)"
+                           Class="bv-audio-editor__slider" />
+        </div>
+
+        <div class="bv-audio-editor__field">
+            <label class="bv-audio-editor__label"
+                   title="Bring this clip to a common loudness, so a reel cut from several recordings does not need the volume changing between clips">
+                Even out the level
+            </label>
+            <TelerikCheckBox Value="@_normalise"
+                             ValueChanged="@((bool v) => { _normalise = v; ApplyCleanup(); })"
+                             ValueExpression="@(() => _normalise)" />
+        </div>
+
+        <div class="bv-audio-editor__field bv-audio-editor__field--row">
+            <label class="bv-audio-editor__label" title="Silence this clip without losing the level it is set to">
+                Mute this clip
+            </label>
+            <TelerikCheckBox Value="@_muted"
+                             ValueChanged="@((bool v) => { _muted = v; Clips.SetClipMuted(Clip!.Id, v); })"
+                             ValueExpression="@(() => _muted)" />
+        </div>
+
         <!-- ── Fade In ──────────────────────────────────────────────────── -->
         <div class="bv-audio-editor__field">
             <label class="bv-audio-editor__label">Fade In (@FormatTime(_fadeIn))</label>
@@ -243,18 +281,40 @@
     private double _fadeIn;
     private double _fadeOut;
     private double _splitAt;
+    private double _noiseReduction;
+    private bool   _normalise;
+    private bool   _muted;
 
     // ── Derived ─────────────────────────────────────────────────────────────
 
     private double TrimmedDuration => _trimEnd - _trimStart;
-    private double MaxFade         => Clip is not null ? Math.Max(0.1, Clip.Duration / 2.0) : 30.0;
+
+    /// <summary>The longest fade this clip can take.</summary>
+    /// <remarks>
+    /// Half the clip's own length, not half the source's. A ten-second excerpt of a three-minute
+    /// recording offered a ninety-second fade (2026-09-05 audit, audio-16).
+    /// </remarks>
+    private double MaxFade => Clip is not null ? Math.Max(0.1, Clip.TrimmedDuration / 2.0) : 30.0;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The clip currently loaded into the fields below, so a re-render does not overwrite them.
+    /// </summary>
+    /// <remarks>
+    /// This panel holds edited-but-not-yet-applied values, and it re-renders whenever its parent
+    /// does — which during playback is several times a second. Reloading unconditionally meant a
+    /// slider dragged while anything was playing snapped straight back (2026-09-05 audit,
+    /// audio-14). The same fix the title panel got, for the same reason.
+    /// </remarks>
+    private Guid? _loadedClipId;
+
     protected override void OnParametersSet()
     {
-        if (Clip is null) return;
+        if (Clip is null) { _loadedClipId = null; return; }
+        if (Clip.Id == _loadedClipId) return;
 
+        _loadedClipId = Clip.Id;
         _trimStart    = Clip.StartTrim;
         _trimEnd      = Clip.EndTrim > Clip.StartTrim ? Clip.EndTrim : Clip.Duration;
         _volume       = Clip.Volume;
@@ -263,9 +323,19 @@
         _fadeIn       = Clip.FadeInSeconds;
         _fadeOut      = Clip.FadeOutSeconds;
         _splitAt      = 0;
+        _noiseReduction = Clip.NoiseReduction;
+        _normalise      = Clip.Normalise;
+        _muted          = Clip.MuteAudio;
     }
 
     // ── Handlers ─────────────────────────────────────────────────────────────
+
+    /// <summary>Records the cleanup settings, undoably.</summary>
+    private void ApplyCleanup()
+    {
+        if (Clip is null) return;
+        Clips.SetAudioCleanup(Clip.Id, _noiseReduction, _normalise);
+    }
 
     private void ApplyTrim()
     {

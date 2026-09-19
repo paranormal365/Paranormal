@@ -1,0 +1,231 @@
+using Ben.Data.Source.Services;
+using Ben.Data.Common.Enums;
+using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services.Billing;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace Ben.Data.WebApi.SeedData;
+
+/// <summary>
+/// Seeds the platform's default price bands so a fresh deployment can price an organization.
+/// </summary>
+/// <remarks>
+/// <para>Without rows here, <c>SubscriptionTierResolver</c> refuses to price anybody and every
+/// organization is unbilled — the silent failure the resolver exists to prevent. The same
+/// "dead on arrival for every existing deployment" reasoning as the taxonomy seeders.</para>
+///
+/// <para><b>Seeds once, then leaves the rows alone.</b> These are prices, and prices get edited by
+/// a SuperAdmin. A seeder that reasserted them on every startup would silently undo a real price
+/// change on the next restart — so it fills an empty table and never touches a populated one.</para>
+///
+/// <para>The bands started as item 85's worked example — 1–3 free, 4–10 at $15. The free band is
+/// gone (Ben, 2026-09-05: "an individual can be free... a group cannot"): a band priced at nothing
+/// is a subscription that costs nothing, and holding one reads as paid to every gate that asks. A
+/// group is free by having no subscription at all, so the ladder now starts paid at one member and
+/// ends with an unbounded band, which the resolver requires so a group cannot outgrow the list.</para>
+///
+/// <para>Each band gets a monthly and a yearly price, the yearly one set to ten months — "two
+/// months free", which is the discount people recognise.</para>
+///
+/// <para>These are the numbers a fresh database starts with, not the ones ishaunted.com charges:
+/// the seeder fills an empty table and never touches a populated one, so a live ladder that still
+/// carries a free band has to be corrected on the price-bands screen. The editor says so — see
+/// <c>SubscriptionTierResolver.WhyGroupsCanStillBeFree</c>.</para>
+/// </remarks>
+internal static class SubscriptionTierSeeder
+{
+    /// <summary>Yearly costs this many months. Ten is "two months free".</summary>
+    private const int YearlyMonthsCharged = 10;
+
+    /// <remarks>
+    /// <para><b>Free is the first band and the default</b> (Ben, 2026-09-18). It was removed on
+    /// 2026-09-05 on the reasoning that "a group is free by having no subscription at all", which
+    /// is true of how a group PAYS and false of how it is GATED: <c>TierAreaResolution</c> resolves
+    /// a group with no subscription by looking for a band priced at nothing, and when it finds none
+    /// it returns null and every capability check <b>fails open</b>. The live site ran that way for
+    /// weeks — every group holding private-residence casework, case transfers, metadata stripping
+    /// and event hosting while paying nothing (2026-09-17 audit, round four). A fresh database must
+    /// not start in that state.</para>
+    ///
+    /// <para><b>One person, and the paid ladder starts at two</b>, which is the rule
+    /// <c>PaidPlan.WhyCannotAddMemberAsync</c> already enforces: "One person is free; working with
+    /// other people is the paid part." The free band cannot be wider than 1–1 without pushing every
+    /// band above it along, and it must start at 1 or <c>Validate</c> refuses the whole list.</para>
+    ///
+    /// <para>Priced at zero and therefore not sellable — <c>OrganizationCheckoutController.Start</c>
+    /// refuses a list price of zero, so this is a reference band rather than a product, and
+    /// <c>BillableUnits</c> prices a group that wants to BUY at the cheapest band actually sold.</para>
+    /// </remarks>
+    private static readonly (string Name, int Min, int? Max, decimal Monthly, int Sort)[] Bands =
+    [
+        ("Free",         1,    1,   0m, 0),
+        ("Small group",  2,   10,  15m, 1),
+        ("Large group", 11, null,  40m, 2),
+    ];
+
+    internal static async Task SeedAsync(IServiceProvider services, IConfiguration config)
+    {
+        var ownerEmail = config["SeedData:SuperAdmin:Email"];
+        if (string.IsNullOrWhiteSpace(ownerEmail)) return;
+
+        using var scope = services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var dbFactory   = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BenDataContext>>();
+
+        var owner = await userManager.FindByEmailAsync(ownerEmail);
+        if (owner is null) return;
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        // ── Permission areas (item 156 Phase A): every tier starts ALL-INCLUSIVE ──
+        // BEFORE the tiers-exist early return, because it backfills databases whose tiers
+        // predate the areas table. Zero behavior change is the phase's contract: all-checked
+        // gates nothing, and differentiation is a choice Ben makes by UNchecking. Per-tier
+        // gate: a tier with ANY area rows has been edited (or seeded) and is left entirely
+        // alone, so an unchecked box never grows back.
+        {
+            var existingTiers = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
+            var tiersWithAreas = await db.SubscriptionTierPermissionAreas.AsNoTracking()
+                .Select(a => a.SubscriptionTierId).Distinct().ToListAsync();
+            var bareTiers = existingTiers.Where(t => !tiersWithAreas.Contains(t.Id)).ToList();
+            if (bareTiers.Count > 0)
+            {
+                var seedNow = DateTime.UtcNow;
+                foreach (var tier in bareTiers)
+                foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                {
+                    db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+                    {
+                        SubscriptionTierId = tier.Id,
+                        Area = area,
+                        DateCreated = seedNow,
+                        CreatedByAppUserId = tier.CreatedByAppUserId,
+                    });
+                }
+                await db.SaveChangesAsync();
+                Console.WriteLine($"[SubscriptionTierSeeder] Seeded all permission areas for {bareTiers.Count} tier(s).");
+            }
+        }
+
+
+        // Populated already — including deliberately emptied — is left as it is. See remarks.
+        if (await db.SubscriptionTiers.AnyAsync()) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var (name, min, max, monthly, sort) in Bands)
+        {
+            var tier = new SubscriptionTier
+            {
+                Id                 = Guid.NewGuid(),
+                Name               = name,
+                MinMembers         = min,
+                MaxMembers         = max,
+                SortOrder          = sort,
+                IsActive           = true,
+                DateCreated        = now,
+                CreatedByAppUserId = owner.Id,
+            };
+
+            tier.Prices.Add(NewPrice(tier, BillingInterval.Monthly, monthly, now, owner.Id));
+
+            if (monthly > 0)
+                tier.Prices.Add(NewPrice(
+                    tier, BillingInterval.Yearly, monthly * YearlyMonthsCharged, now, owner.Id));
+
+            db.SubscriptionTiers.Add(tier);
+        }
+
+        await db.SaveChangesAsync();
+
+        // The resolver's own rules, checked against what was just written rather than assumed —
+        // a seeder that plants an unusable price list is worse than one that plants nothing.
+        // The tiers this run just created get their all-inclusive checklist too.
+        {
+            var justCreated = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
+            var seedNow2 = DateTime.UtcNow;
+            foreach (var tier in justCreated)
+            foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+            {
+                db.SubscriptionTierPermissionAreas.Add(new SubscriptionTierPermissionArea
+                {
+                    SubscriptionTierId = tier.Id, Area = area,
+                    DateCreated = seedNow2, CreatedByAppUserId = tier.CreatedByAppUserId,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // ── What the free tier does NOT include ──────────────────────────────
+        //
+        // Ben's tier shape, 2026-08-26 (item 188): the free lane is PUBLIC work — public cases,
+        // public files, public results — and what a paid plan buys is PRIVACY, which is also what
+        // a paying client is actually buying. So the free tier excludes private-residence and
+        // client casework; every paid tier includes it.
+        //
+        // Capabilities fail OPEN — only an explicit exclusion row refuses — so before this,
+        // nothing was seeded and a free group could take on private client work. Ben's 2026-08-26
+        // production sweep noticed the wider version of that: a free organization held the same
+        // nine permission areas as a $40/month one, with only the numeric limits separating them.
+        //
+        // Written only when the free tier has NO capability rows of its own. A SuperAdmin who has
+        // deliberately configured that tier owns it from then on; a seeder that overwrote their
+        // choice on every restart would be worse than one that never ran.
+        //
+        // A fresh database seeds a free band again (Ben, 2026-09-18 — see the Bands remarks), so
+        // this now runs on a new database as well as on the ones that already had one. Both need
+        // it: a free band with no exclusion rows includes everything, because capabilities fail
+        // open, which is the hole this whole paragraph exists to close.
+        {
+            var freeTier = await db.SubscriptionTiers.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Name == "Free");
+
+            if (freeTier is not null)
+            {
+                var alreadyConfigured = await db.SubscriptionTierExcludedCapabilities.AsNoTracking()
+                    .AnyAsync(c => c.SubscriptionTierId == freeTier.Id);
+
+                if (!alreadyConfigured)
+                {
+                    var capNow = DateTime.UtcNow;
+                    foreach (var capability in new[]
+                             {
+                                 Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases,
+                                 // Already Ben's rule from item 167, seeded here rather than left
+                                 // to be set by hand on every fresh environment.
+                                 Ben.Data.Common.Enums.TierCapability.CaseTransfers,
+                             })
+                    {
+                        db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+                        {
+                            SubscriptionTierId = freeTier.Id,
+                            Capability         = capability,
+                            DateCreated        = capNow,
+                            CreatedByAppUserId = owner.Id,
+                        });
+                    }
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
+
+        var seeded = await db.SubscriptionTiers.AsNoTracking().ToListAsync();
+        if (SubscriptionTierResolver.Validate(seeded) is { } problem)
+            throw new InvalidOperationException($"Seeded subscription tiers are not usable: {problem}");
+
+    }
+
+    private static SubscriptionTierPrice NewPrice(
+        SubscriptionTier tier, BillingInterval interval, decimal price, DateTime now, Guid ownerId) =>
+        new()
+        {
+            Id                 = Guid.NewGuid(),
+            SubscriptionTierId = tier.Id,
+            Interval           = interval,
+            Price              = price,
+            IsActive           = true,
+            DateCreated        = now,
+            CreatedByAppUserId = ownerId,
+        };
+}

@@ -51,6 +51,15 @@ namespace Ben.Data.Source.Entities
         public string? SpectrogramWindowedOptionsJson { get; set; }
         public string? EnvelopeOptionsJson { get; set; }
 
+        // ── The listening chain (JSON, null = the component's own defaults) ───
+        //
+        // The equaliser, the high- and low-pass filters, the compressor and the noise gate: what
+        // somebody set up to HEAR a recording more clearly. None of it changes the file. It has no
+        // column of its own because there are fourteen numbers and they will grow; one JSON column
+        // is the shape that does not need a migration every time a filter is added
+        // (2026-09-06 audio audit, phase 5b).
+        public string? EditStateJson { get; set; }
+
         // ── Component layout ──────────────────────────────────────────────────
         public string InitialHeight { get; set; } = "200px";
         public string MinHeight { get; set; } = "80px";

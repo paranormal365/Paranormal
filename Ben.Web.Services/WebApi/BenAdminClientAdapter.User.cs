@@ -26,8 +26,8 @@ public sealed partial class BenAdminClientAdapter
         UpdateMyProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<UpdateMyProfileRequest, MyProfileRecord>("/api/me/profile", request, token);
 
-    public async Task<List<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<AppUserPhotoRecord>>("/api/me/photos", token) ?? [];
+    public Task<LoadResult<AppUserPhotoRecord>> GetMyPhotosAsync(CancellationToken token = default)
+        => _api.GetListAsync<AppUserPhotoRecord>("/api/me/photos", token);
 
     public Task<AppUserPhotoRecord?> SetMyPhotoAsync(
         SetMyPhotoRequest request, CancellationToken token = default)
@@ -50,13 +50,13 @@ public sealed partial class BenAdminClientAdapter
     public async Task<int> MarkAllMyMessagesReadAsync(CancellationToken token = default)
         => await _api.PutAsync<object?, int>("/api/me/messages/read-all", null, token);
 
-    public async Task<List<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<PendingPermissionRequestRecord>>("/api/me/permission-requests/pending", token) ?? [];
+    public Task<LoadResult<PendingPermissionRequestRecord>> GetPendingPermissionRequestsForMeAsync(CancellationToken token = default)
+        => _api.GetListAsync<PendingPermissionRequestRecord>("/api/me/permission-requests/pending", token);
 
     // ── My contact info ────────────────────────────────────────────────────────
 
-    public async Task<List<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<MyEmailRecord>>("/api/me/emails", token) ?? [];
+    public Task<LoadResult<MyEmailRecord>> GetMyEmailsAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyEmailRecord>("/api/me/emails", token);
 
     public Task<MyEmailRecord?> CreateMyEmailAsync(UpsertMyEmailRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertMyEmailRequest, MyEmailRecord>("/api/me/emails", request, token);
@@ -70,8 +70,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<SendValidationResponse?> SendMyEmailValidationAsync(Guid id, CancellationToken token = default)
         => _api.PostAsync<object?, SendValidationResponse>($"/api/me/emails/{id}/send-validation", null, token);
 
-    public async Task<List<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<MyPhoneRecord>>("/api/me/phones", token) ?? [];
+    public Task<LoadResult<MyPhoneRecord>> GetMyPhonesAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyPhoneRecord>("/api/me/phones", token);
 
     public Task<MyPhoneRecord?> CreateMyPhoneAsync(UpsertMyPhoneRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertMyPhoneRequest, MyPhoneRecord>("/api/me/phones", request, token);
@@ -82,8 +82,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteMyPhoneAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/me/phones/{id}", token);
 
-    public async Task<List<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<MyAddressRecord>>("/api/me/addresses", token) ?? [];
+    public Task<LoadResult<MyAddressRecord>> GetMyAddressesAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyAddressRecord>("/api/me/addresses", token);
 
     public Task<MyAddressRecord?> CreateMyAddressAsync(UpsertMyAddressRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertMyAddressRequest, MyAddressRecord>("/api/me/addresses", request, token);
@@ -94,8 +94,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteMyAddressAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/me/addresses/{id}", token);
 
-    public async Task<List<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default)
-        => await _api.GetAsync<List<MyLinkRecord>>("/api/me/links", token) ?? [];
+    public Task<LoadResult<MyLinkRecord>> GetMyLinksAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyLinkRecord>("/api/me/links", token);
 
     public Task<MyLinkRecord?> CreateMyLinkAsync(UpsertMyLinkRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertMyLinkRequest, MyLinkRecord>("/api/me/links", request, token);
@@ -120,42 +120,64 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
-        => await _api.GetUsersAsync(token);
+    public Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
+        => _api.GetUsersAsync(token);
 
-    public async Task<IReadOnlyList<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
+    public async Task<LoadResult<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
     {
+        // Map, not Ok(Select(…)): reshaping by hand drops SessionExpired and the reason with it.
         var entries = await _api.GetOrgUserDirectoryAsync(organizationId, token);
-        return entries.Select(e => new OrgUserDirectoryItem(e.Id, e.DisplayName)).ToList();
+        return entries.Map(e => new OrgUserDirectoryItem(e.Id, e.DisplayName));
     }
 
     public Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default)
         => _api.GetAsync<AppUserDetailAdminRecord>($"/api/admin/app-users/{userId}/detail", token);
 
-    public Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default)
-        => _api.PostAsync<AdminCreateUserRequest, AppUserAdminRecord>("/api/admin/app-users", request, token);
+    public Task<(AppUserAdminRecord? Result, string? Error)> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminCreateUserRequest, AppUserAdminRecord>(HttpMethod.Post, "/api/admin/app-users", request, token);
 
     public Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<AdminUpdateUserProfileRequest, AppUserAdminRecord>($"/api/admin/app-users/{userId}/profile", request, token);
 
+    public async Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default)
+    {
+        var (result, error, status) = await _api.SendWithStatusAsync<AdminSetUserRolesRequest, AppUserRolesAdminRecord>(
+            HttpMethod.Put, $"/api/admin/app-users/{userId}/roles", new AdminSetUserRolesRequest(roles), token);
+
+        if (result is not null) return (result, null);
+
+        // A refusal we wrote arrives as a sentence. The two that never carry one are worth naming rather than
+        // reporting as silence: a session that has ended reads as "nothing happened" otherwise.
+        return (null, error ?? status switch
+        {
+            401 => "Your session has ended. Sign in again, then set the roles.",
+            403 => "Only a SuperAdmin can change site roles.",
+            404 => "That account no longer exists.",
+            // Anything else is the server failing rather than refusing. Naming the code is the difference between
+            // "try again" and knowing to look in the error log — which is where a 500 has already written itself.
+            0   => "The request did not reach the server. Check the connection and try again.",
+            _   => $"The roles were not saved: the server answered {status}. Administration → System → Error Log has the detail.",
+        });
+    }
+
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
 
-    public Task StopImpersonatingAsync(CancellationToken token = default)
+    public Task<bool> StopImpersonatingAsync(CancellationToken token = default)
         => _auth.StopImpersonatingAsync(token);
 
     // ── User sub-entity type lists ────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default)
-        => (await _api.GetAsync<List<UserAddressTypeRecord>>("/api/user-address-types", token)) ?? [];
-    public async Task<IReadOnlyList<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default)
-        => (await _api.GetAsync<List<UserEmailTypeRecord>>("/api/user-email-types", token)) ?? [];
-    public async Task<IReadOnlyList<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default)
-        => (await _api.GetAsync<List<UserPhoneTypeRecord>>("/api/user-phone-types", token)) ?? [];
-    public async Task<IReadOnlyList<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default)
-        => (await _api.GetAsync<List<UserLinkTypeRecord>>("/api/user-link-types", token)) ?? [];
-    public async Task<IReadOnlyList<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default)
-        => (await _api.GetAsync<List<UserNoteTypeRecord>>("/api/user-note-types", token)) ?? [];
+    public Task<LoadResult<UserAddressTypeRecord>> GetUserAddressTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<UserAddressTypeRecord>("/api/user-address-types", token);
+    public Task<LoadResult<UserEmailTypeRecord>> GetUserEmailTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<UserEmailTypeRecord>("/api/user-email-types", token);
+    public Task<LoadResult<UserPhoneTypeRecord>> GetUserPhoneTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<UserPhoneTypeRecord>("/api/user-phone-types", token);
+    public Task<LoadResult<UserLinkTypeRecord>> GetUserLinkTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<UserLinkTypeRecord>("/api/user-link-types", token);
+    public Task<LoadResult<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default)
+        => _api.GetListAsync<UserNoteTypeRecord>("/api/user-note-types", token);
 
     // ── User sub-entity type creation ─────────────────────────────────────────
 
@@ -280,4 +302,12 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> DeleteUserNoteAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/user-notes/{id}", token);
+
+    public async Task<bool?> GetMyOnboardingStateAsync(CancellationToken token = default)
+        => (await _api.GetAsync<OnboardingStateItem>("/api/me/onboarding", token))?.Onboarded;
+
+    public async Task CompleteMyOnboardingAsync(CancellationToken token = default)
+        => await _api.PostAsync<object, object>("/api/me/onboarding/complete", new { }, token);
+
+    private sealed record OnboardingStateItem(bool Onboarded);
 }

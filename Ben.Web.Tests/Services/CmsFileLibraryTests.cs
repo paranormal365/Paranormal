@@ -35,13 +35,14 @@ public class CmsFileLibraryTests
         };
 
         apiMock.Setup(x => x.GetOrgSharedFilesAsync(orgId, It.IsAny<CancellationToken>()))
-               .ReturnsAsync(files);
+               .ReturnsAsync(LoadResult<UploadFileRecord>.Ok(files));
 
         var adapter = Build(apiMock);
         var result  = await adapter.GetOrgSharedFilesAsync(orgId);
 
-        Assert.Single(result);
-        Assert.Equal("logo.png", result[0].FileName);
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("logo.png", result.Items[0].FileName);
         apiMock.Verify(x => x.GetOrgSharedFilesAsync(orgId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -50,12 +51,12 @@ public class CmsFileLibraryTests
     {
         var apiMock = ApiMock();
         apiMock.Setup(x => x.GetOrgSharedFilesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-               .ReturnsAsync((IReadOnlyList<UploadFileRecord>)null!);
+               .ReturnsAsync(LoadResult<UploadFileRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var adapter = Build(apiMock);
         var result  = await adapter.GetOrgSharedFilesAsync(Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     // ── GetFileDataAsync ──────────────────────────────────────────────────────
@@ -103,13 +104,14 @@ public class CmsFileLibraryTests
         };
 
         apiMock.Setup(x => x.GetUploadFileTypesAsync(It.IsAny<CancellationToken>()))
-               .ReturnsAsync(types);
+               .ReturnsAsync(LoadResult<UploadFileTypeRecord>.Ok(types));
 
         var adapter = Build(apiMock);
         var result  = await adapter.GetPublicFileTypesAsync();
 
-        Assert.Single(result);
-        Assert.Equal("Images", result[0].Name);
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        Assert.Equal("Images", result.Items[0].Name);
     }
 
     // ── UploadImageAsync ──────────────────────────────────────────────────────

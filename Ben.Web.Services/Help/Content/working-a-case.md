@@ -11,6 +11,44 @@ Every case belongs to a group, and the group's own page is where its cases are l
 ![A group's page, with its cases listed](/help/media/working-a-case/org-hub.png)
 *Open a group from Organizations, then its Cases tab, to reach any case it is working.*
 
+## Taking on a request — reviewing and voting
+
+Client requests arrive under **Pending Requests** on the group's Cases screen. When any are
+waiting, the button turns yellow and shows how many. The status buttons above the list work the
+same way: a status with cases in it shows its count in that status's colour, so new proposals and
+active cases stand out. Every request
+shows **Review & vote**, which opens everything the client submitted — their description, the
+location, and any files they attached: photos, recordings, documents. Every group the client
+sent the request to sees the same materials while it decides.
+
+Marking a request **Under Review** tells your group it is decision time: everyone who can read
+the group's cases gets an internal message with a link to the review page, where they vote
+**Take it** or **Pass**, with an optional comment. The vote is advisory — it does not accept
+the case by itself. Whoever holds the accept permission decides, with the tally in front of
+them.
+
+**Review & vote stays on the card** the whole time a request is open, including while it is
+Under Review — which is exactly when there is something to vote on. If you arrive at the review
+page before anybody has opened voting, **Mark Under Review** is there on the ballot itself.
+
+**Who gets the message, and who can vote,** is everyone who can read the group's cases. That is
+the Investigator Role or something wider — see *What new members start with* in
+[Group administration](/help/organization-administration). A member with no role hears nothing
+about the request and cannot open it.
+
+**The first group to accept wins.** The moment any group accepts, the other groups reviewing
+the same request are messaged that it is no longer available, and their review pages close. The
+client is told they have a group — and who their contact person is, when a case manager was
+chosen at accept time.
+
+If your group is not going to take a request, decline it promptly — the client is waiting, and
+declining lets them offer it elsewhere without re-writing it.
+
+**The case title** you are offered when you accept is the client's town — "Nashville, TN" — not
+their name. Type whatever your group wants instead; just remember the title becomes the heading
+on the case's public page if you ever publish it, so a real name belongs in the **pseudonym**
+field rather than here.
+
 ## The case tabs
 
 ![A case with its tabs](/help/media/working-a-case/case-detail.png)
@@ -22,11 +60,70 @@ Every case belongs to a group, and the group's own page is where its cases are l
 **Overview** carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.
 
-**Timeline** is the working record. Every entry has a visibility: internal to the group, shared
-with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
+**Edit Case**, at the top of the case, opens a page of its own. The description takes the wide
+column, with room for a line or several paragraphs and a short toolbar for bold, italics, lists
+and links. The status, the public pseudonym, **Make Public**, the private-engagement setting and
+the case manager sit beside it. On a phone they follow it, below. If you have made changes and try
+to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
+same editor for its description.
+
+### Which place the case is about
+
+A case names the **place** it concerns, and that is what connects it to everybody else's work at
+the same location. As you type the address, any place already on file that looks like a match is
+suggested. Pick **Use this place** and the case joins it; carry on typing and a new place is created
+instead. The suggestion is only ever a suggestion — two flats at one address are two places, and
+only you know which this is.
+
+Then say **what kind of place** it is, which has no default because both answers matter:
+
+- **Public location** — a landmark, a business, anywhere that is not somebody's home. Its page
+  gathers every group's work there and anyone may add to it.
+- **Private residence** — somebody's home. Findings stay with your group, and this is
+  private-engagement work, which needs a plan that covers it.
+
+**Open Case** stays greyed out until you have answered. Once the case exists, a line at the top of
+it names the place, says how many other groups have investigated there, and links to its page.
+
+![Naming the place on a new case](/help/media/working-a-case/new-case-place.png)
+*The place already on file is offered as you type; **Use this place** joins it. The kind of place has
+no default.*
+
+Coming the other way works too: a public place's own page offers **Open a case here**, which brings
+you to this form with the place already settled.
+
+If your group has no plan, a case you open is **public from the start** and the **Make Public** box
+cannot be unticked: work at a public location is public on a free account, and the Edit Case page
+says so beside the box. A case at somebody's home is not affected, and neither is any case that was
+already private. See [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+A case you open yourself is **accepted** as you open it. That is usually what you want for a place
+your group picked itself: it was proposed to nobody, and you are the person who would have accepted
+it. If the decision really is the group's, tick **Let the group decide whether to take this on** and
+the case waits as **Proposed** until somebody accepts it. The box only appears if you may change a
+case's status; anyone else opens a case as a proposal, as before. A case a client asked for is
+untouched by this — it arrives as a request and is accepted or declined the usual way.
+
+![The Edit Case page](/help/media/working-a-case/edit-case.png)
+*Edit Case: the description in the wide column, status and publishing beside it.*
+
+**Timeline** is the working record. Entries are client reports, investigator notes, evidence,
+instrument readings and research. Every entry has a visibility: internal to the group,
+shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.
 
 **Investigations** covers scheduled visits, attendees and RSVPs, and each visit's binder.
+
+**Notes** are the group's own working notes, never shown to the client. A note can be formatted — bold,
+italics, lists and links — and pinned to the top. Notes written before formatting arrived keep their
+line breaks.
+
+**Files** is the case's evidence. **Upload File** takes photographs, audio, video and documents, and
+you can choose several at once. Each file is named as soon as you pick it, with a bar that fills as
+it goes up, so a long recording is something you can watch rather than a page that sits still —
+which is the point, because a night's video takes a while on a home connection. If one is refused,
+the reason appears beside it. **Attach from Library** adds a file the group already holds without a
+second copy. Video and audio play where they sit, and you can drag through them.
 
 ## Binders
 
@@ -38,6 +135,372 @@ store. Filter the timeline by investigation to see just that visit.
 
 Readings recorded during a visit go in as **Instrument Reading** entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.
+
+## Research boards
+
+The case's **Research** tab lists its boards. A board is a space to think on: cards, notes, pictures,
+files, recordings, links and maps, laid out and joined up the way the thinking actually went. It is
+where you write up what a deed, an obituary, a newspaper archive or a walk round a cemetery told you.
+
+**New board** asks what to start from, then opens the board editor on this case, already signed in.
+**Open** returns to one.
+
+### Something to start from
+
+A blank board is the right start for some things and a cold start for others, so **New board** offers
+five:
+
+| | |
+|---|---|
+| **Blank board** | nothing on it. What New board always did. |
+| **Moodboard** | four coloured sections — feel, places, sound, references — and a cluster of themes joined to a middle one. For the atmosphere of a place before the facts of it. |
+| **Research plan** | what to ask, where to look, a four-square of what is worth doing, and a grid of four weeks. For deciding what to do next. |
+| **Family tree** | names in boxes joined at right angles, with a photo frame above every name and a legend saying what the lines mean. |
+| **Presentation deck** | four slide frames with room for a heading and points. Present it straight away; the frames are the slides. |
+
+**Everything on a template is yours.** Move it, rename it, recolour it, delete it. It is a head start,
+not a form, and nothing on it is treated differently from something you put there yourself.
+
+![Choosing what a new board starts from](/help/media/working-a-case/board-templates.png)
+*New board: five things to start from, and one line each on what you would get.*
+
+**The family tree's photo frames start empty**, and empty is finished. Paste or drop a photograph into
+one, or put any picture you like there instead, or leave them all blank and let the names do the work.
+The lines join the **names** rather than the frames, so going without a photograph moves nothing.
+
+![The family tree template, as it opens](/help/media/working-a-case/board-family-tree.png)
+*The family tree as it opens: names, right-angled lines, a small photo frame above each name, and a
+legend saying what the lines mean.*
+
+![A case's research boards](/help/media/working-a-case/research-boards.png)
+*The Research tab: the boards on this case, who wrote each one, and whether it has been published.*
+
+### Putting things on a board
+
+**Add** on the left offers a card, a note, a message, a map, a picture or a link. Double-click an
+empty part of the board to drop a note where you clicked.
+
+**Paste anywhere.** The board reads what you pasted and makes the right thing from it: a web address
+becomes a link card with the page's title and picture, a photo becomes a picture, a recording becomes
+something that plays where it sits, a document becomes a file, a street address becomes a map of that
+place, and anything else becomes a note. Whatever you paste lands on clear ground rather than on top
+of what is already there.
+
+**Drop files on the board** and the same happens — and they are added to the case's **Files** at the
+same time, so a photograph only ever exists once. A file that arrived this way is marked **Research**
+in the Files tab, so you can tell which of the case's files the boards are built from — useful when a
+camera or a scanner named them and you want to go back and give them names that say what they are.
+
+**The case files button** (the folder, on the left) reaches the other way. It opens **From the case**,
+which has two tabs:
+
+- **Files** — what the case already holds, so a photograph from last week's visit goes straight onto
+  the board without finding it on your computer and sending it a second time.
+- **What the client wrote** — every message the client has sent on this case. Pick one and their words
+  land on the board with their name and the day they wrote them, so the reason you are reading about a
+  house is on the board beside what you found. Only the client's side is offered; what the group wrote
+  back is the group's own thinking, and the board is where that is done.
+
+### Kinds of card
+
+Research is mostly not evidence, so a card can be any of six kinds, each asking for what that kind of
+thing needs:
+
+| Kind | What it is for |
+|---|---|
+| **Evidence** | something recorded — a description, the date, what kind it is, and whether it is verified. |
+| **Historical note** | what happened here before anybody was recording: what, when, where, and where you read it. |
+| **Article** | a piece of writing — news, a book, a journal, a website or a broadcast — with its author and what it says. |
+| **Experience** | what somebody felt, heard or saw with nothing recording: what, which sense, who, where in the place, and when. |
+| **Quote** | somebody's words, who said them, when, and where the quote comes from. |
+| **Person** | a witness, a client, a neighbour or an owner: their connection to the place and what they describe. |
+
+Pick the kind while editing a card, at the top of its form. Changing your mind keeps what you have
+already typed: a field the new kind does not ask for waits in the card, and comes back if you change
+back. **No card asks for a telephone number or an address for a person**, because a board can be
+published to the case — how to reach somebody belongs on the case itself.
+
+**When** is written rather than picked from a calendar on every kind but Evidence, so "the 1920s",
+"before the fire" and "1887" can all be said plainly.
+
+A card's heading shows its title. Until you give it one, the heading is the kind of card it is —
+*Quote*, *Person* — rather than the word "Card", which every card would share.
+
+### Grids and shapes
+
+Not everything worth putting on a board is a card.
+
+**A table** is for anything that reads across: a list of owners and the years they held a house, four
+weeks of who is doing what, a set of readings. It starts as a header row and one row beneath, two
+columns wide. Click a cell and type; **Tab** moves along and out of the last cell into a new row.
+While a table is selected, the buttons above it add and remove rows and columns, and the first row can
+be turned off when the grid has no headings.
+
+**A shape** is a box, a circle or a diamond with a word or two in it, for the things a card would
+overdress: a theme, a question, a step in a process, a label on a region of the board. Pick which
+shape while it is selected.
+
+### Colour, panels and fills
+
+Every block takes one of six colours, chosen while it is selected. Two switches change how that colour
+is used:
+
+| | |
+|---|---|
+| **Filled with its colour** | the whole block takes the colour rather than a stripe down its edge. Good for shapes and for the one card that matters most; harder to read for a card with a lot of words in it. |
+| **Draw as a panel** | on a group: the area is filled and titled rather than outlined, so it reads as a section of the board instead of a ring round some cards. |
+
+Both are kept when the board is published, so a reader sees the board you laid out.
+
+### One card after another
+
+Select a card and four small **+** handles appear, one on each side. That is how a train of thought
+gets laid down:
+
+| | |
+|---|---|
+| **Click a handle** | the next card appears on that side, already joined by an arrow, ready to type in. |
+| **Drag a handle onto empty board** | the same card, where you let go. |
+| **Drag a handle onto another card** | joins those two instead of making a new one. |
+| **Ctrl+Shift and an arrow key** | the same as clicking that side's handle. |
+
+The new card is the same kind, size and colour as the one it grew from, and one **Undo** takes back
+both the card and its arrow.
+
+![Growing the next card from a side handle](/help/media/working-a-case/board-grow.png)
+*A card's four handles, and the card one of them made — joined, and waiting for words.*
+
+![Growing a card, then presenting the board](/help/media/working-a-case/board-grow-and-present.gif)
+*A handle makes the next card, one Undo takes it back, and the board is presented a card at a time.*
+
+### What a line says
+
+Select a line and it can be told what it means:
+
+| | |
+|---|---|
+| **Route** | *Curve* is the default. *Straight* is the shortest way between two blocks. *Elbow* turns right angles, which is what a family tree or an org chart needs. |
+| **Ends** | an arrow, a diamond, a dot or nothing, chosen for each end separately. A diamond at both ends and no arrow reads as "these two are joined", with neither one first. |
+| **Line** | solid or dashed. Dashed is for a weaker claim: a maybe, a sibling, a link somebody has not confirmed. |
+| **Label** | a few words along the middle of the line. |
+| **Icon** | one or two characters in a small badge on the line, for marking several lines as the same kind of thing at a glance. |
+
+None of this means anything to the site — a dashed line is not a lesser record — so say what your
+lines mean somewhere on the board. The family tree template comes with a legend for exactly that
+reason.
+
+### Drafts and publishing
+
+**A new board is yours alone.** Nobody else on the case sees it, or knows it exists, until you
+publish it — research is thought about before it is evidence. The board saves itself on your own
+machine as you work, and **Save to case** puts it on the server.
+
+**Publish** shows it to everyone who can read the case, and adds a picture of the whole board to the
+case's files. Carry on afterwards and your changes are yours again until you publish once more; the
+group keeps reading the published version in the meantime, and the list says *published, and written
+on since*.
+
+### A card that opens another board
+
+One board fills up. The **book** button on the left puts down a card that opens another board on this
+case — a family tree on one, the newspaper articles on another, and a card on each that reaches the
+other. Pick the board, and optionally one card on it to arrive at.
+
+**The header shows the way you came.** Follow a link and the boards you came through appear before the
+title, oldest first: *Family tree / Newspapers / **Deeds***. Click any of them to go back to that one —
+not just the last. The path is only ever what you actually walked, so following a link back to where
+you started adds a stop rather than removing one, and going back clears everything after the stop you
+picked.
+
+**Only published boards can be linked to**, and the picker says so: a card pointing at somebody's
+draft would be a way to read it through a board they had published. This has two consequences worth
+knowing:
+
+- A board that has a link on it **cannot be published** until the board it points at is published.
+  You are told which one.
+- If the board you linked to is **deleted or unpublished**, the card stays where it is and says so
+  when it is clicked. Nothing on your board is silently rewritten by something happening on somebody
+  else's.
+
+**If the card you pointed at is gone** but the board is still there, the link opens that board without
+trying to find it, rather than refusing. The card you picked is a place to land, not a promise.
+
+### Presenting a board
+
+**Present** (the play button, top right) walks the board a card at a time, full screen, with
+everything else dimmed. It is for the meeting where the case gets talked through.
+
+There is nothing to prepare: **the cards are the slides**. The order comes from the board itself —
+
+1. if you have drawn **groups** round parts of the board, those are the slides, in the order they sit;
+2. otherwise **the arrows** decide: a chain of joined cards is walked from its start to its end;
+3. anything left over reads **down the page**, top to bottom.
+
+So growing one card out of another with the side handles builds the running order as you think.
+
+| | |
+|---|---|
+| **Right arrow**, space, Page Down | next card |
+| **Left arrow**, Page Up, backspace | previous card |
+| **Home** / **End** | first / last card |
+| **Escape** | stop presenting |
+
+Select a card before pressing Present and the walk starts there. Presenting changes nothing on the
+board, so somebody who can only read a case can still be the one driving the meeting.
+
+![Presenting a board](/help/media/working-a-case/board-presenting.png)
+*Presenting: one card, everything else dimmed, and where you are in the deck.*
+
+### Link cards
+
+A link card shows the page's title, description, site and picture. The picture is a small copy kept on
+our own storage, so reading a card never sends anybody to the other site. We fetch the page once, when
+somebody signed in adds the link, and never for somebody who is only reading. Some addresses cannot be
+fetched — a private network, a page that is not a web page, a site too slow to answer — and those
+cards show the address instead.
+
+The picture on a link card is **our own copy**, kept when the card was first made, so a board keeps
+its pictures after it is published and shows them to whoever reads it, and a card does not go blank
+because the other site moved its image. A board you are working on without signing in shows the
+address alone unless somebody has used that link before: reading a stranger's page is something the
+server only does for somebody signed in.
+
+The same cards appear under links in group messages, case messages and feed posts.
+
+### Map boxes
+
+A map box starts empty, and never takes the case's address: the place on it is the one you choose.
+Write the address in the box and press **Find** (or just press Enter) and the map goes there — a town,
+a street address, or a cemetery by name. What you wrote stays as the box's label whether or not the
+address is found, and you can always type coordinates instead. Pasting an address straight onto the
+board makes a map of it the same way; when nobody can find the place, you get your words as a note.
+A published board draws a map box as its address rather than as map tiles, because map imagery may not
+be kept.
+
+**Any block with an address in it can become a map.** Right-click a card, a note, a message or a
+picture's caption and, when there is an address written in it, the menu offers **Make a map**. The map
+appears next to the block, located and labelled with that address, and the block keeps what it says —
+a Person card is still wanted after the map exists. If nobody can find the address you are told, and
+nothing is added.
+
+### On a phone
+
+The board works on a phone: **Add** and **Paste** sit along the bottom, pinch to zoom, drag to pan,
+and press and hold a card for the rest of its actions.
+
+## Showing your finding on your public page
+
+A report is written for your client, and by default that is the only person who ever sees it. If
+you want the world to read what you concluded, tick **Show this on our public case page** on the
+report, beside the summary and conclusion it publishes.
+
+**What goes out is those two fields and nothing else.** Not the sections, not the evidence files,
+not the field sessions you cited. Those carry the working detail of an investigation inside
+somebody's home; the summary and the conclusion are the parts you wrote to be read.
+
+**Three things have to be true** before a visitor sees any of it, and none of them implies another:
+
+| | |
+|---|---|
+| The report is **published** | Publishing delivers it to your client. That is a separate decision from showing it to the world. |
+| The case is **public** | Making a case public releases the case. That says nothing about a document written for its owner. |
+| This box is **ticked** | Per report. You can untick it at any time and the page stops showing it immediately. |
+
+**Check for the client's details** beside the box reads your summary and conclusion and warns you
+if they contain the client's name or their street — the same check the case title gets. It is
+advice, not a refusal: a surname is often a place name too, and only you know which yours means.
+
+On a **private engagement**, names in the summary are substituted on the way out exactly as they
+are in the title and the timeline. You write in plain language and the public copy does the
+substituting, every time it is read.
+
+The finding appears on the case's own public page under *What we found*, directly beneath your
+client's account of what happened. It is also available to the **cases** block in the page builder,
+so it can sit on any page you build.
+
+## Correcting a report your client already has
+
+A published report stays editable, and it should — a date is wrong, a name is misspelled, a
+paragraph reads badly. What matters is that your client finds out.
+
+Edit and save as usual. The report then shows **Edited since published** beside its status, and a
+**Re-publish** button appears next to it. Re-publishing posts a fresh note on the case message
+board saying the report has been *updated*, so the person reading it knows the copy on their case
+page is not the one they were first sent.
+
+Until you re-publish, nothing tells them. Your client reads the report from their case page, so
+your edits are already in front of them — which is exactly why the note matters. Re-publish when
+you have changed anything a reader would care about, and leave it alone for a typo nobody would
+notice.
+
+## Putting field sessions in the final report
+
+Sessions recorded in the iPhone and iPad app land on the site whole — the readings, the marks, the
+positions, the room labels and the recordings, exactly as the device wrote them. The report is
+what your client is actually handed, so a report section can point at those sessions.
+
+On the case's **Reports** tab, open a report and add a section of type **Field Sessions**. Choose
+**Add field session** and you get every session uploaded against this case's investigations, newest
+first: where it was, who recorded it, how long it ran, and how much it holds. **Cite** attaches it;
+**Play back** opens the session's own playback page, where the trace, the map and the recordings
+run together on one clock.
+
+A citation is a reference, never a copy. The session stays where it was uploaded and keeps its own
+per-file checksums, so what the client reads and what the instruments recorded cannot drift apart.
+Removing a citation removes the reference only — nothing is deleted.
+
+What the PDF says about each cited session:
+
+- Where it was, in the words the operator used on the device
+- When it started and ended — or that it was **interrupted**, when the phone died mid-session and
+  there is no honest end time
+- Who recorded it, or plainly that nobody was signed in on the device
+- The device model, the number of readings and the number of marks
+- Every recording that belongs to it, flagged if its checksum did not match on arrival
+
+If the picker is empty, no sessions have been uploaded for this case's investigations yet. Sessions
+recorded without picking an investigation belong to the account that recorded them and are not
+anybody's case material until somebody attaches them.
+
+## Sending a session to somebody with no account
+
+A client wants to see what was recorded in their house. A producer wants to decide whether a night
+is worth a crew. Neither is going to make an account to look at one thing once, and emailing the
+files means the group has no expiry, no way to take it back, and no idea whether anyone opened it.
+
+So open the session with **Play back** and use **Share this session** on that page.
+
+You choose four things:
+
+- **The whole session, or one recording.** A link to a single recording reaches that recording and
+  nothing else — the rest of the night is not even listed.
+- **How long it lasts**, from one day to thirty. There is no "forever": a link with no end date is
+  a public web address with extra steps.
+- **Who it's for** — a note only you see, so five links are five decisions rather than five
+  identical rows.
+- **Whether to include where the readings were taken.** This is **off** unless you turn it on. A
+  location recorded indoors is the building's street address, and there is rarely a reason a
+  producer needs it. With it off, the recipient's page says plainly that the locations were not
+  shared, so nobody mistakes an empty map for a night with no signal.
+
+Copy the link and send it however you like. Whoever opens it sees the readings, the trace and the
+recordings, and nothing else — no case, no group, no other session, and no way further into the
+site.
+
+### Withdrawing one, and seeing who looked
+
+The same panel lists every link you have made. **Withdraw** kills one immediately, in every inbox
+it was ever pasted into — the next click gets nothing. Each row shows how many times it was opened
+and when it was last opened, which is usually the question you actually have.
+
+Withdrawn and expired links stay in the list rather than disappearing. *Was this ever shared, and
+when did that stop* is worth being able to answer later, most of all if something turns up
+somewhere it should not have.
+
+**Who may make one:** the person who uploaded the session, or an active member of the group running
+its investigation. Being able to *read* a session is not the same as being able to hand it to
+strangers, so somebody who only attended a public investigation cannot share other people's
+recordings.
 
 ## Entries at the same time
 
@@ -52,7 +515,13 @@ lists: what is coming up, and what has already happened. Case-bound visits and o
 case sit together, because they are the same kind of work.
 
 Visits at the same spot share a single marker with a count on it — the same place accumulating
-visits over the years is the normal case, not an oddity.
+visits over the years is the normal case, not an oddity. Spots that only overlap at the zoom you
+are looking at gather into a count as well; zoom in and they separate. A landmark anyone can
+visit is drawn in blue and says so when you select it; a visit that has already happened is
+dimmed.
+
+![The group's investigations map](/help/media/working-a-case/investigations-map.png)
+*Two visits to the Bell Witch Cave, on one pin.*
 
 **If something is missing from the map**, look just beneath it. An investigation whose location
 could not be found on the map is listed there with the reason, rather than quietly leaving the map
@@ -63,12 +532,32 @@ investigation rather than by rank: the person who scheduled it, the case manager
 leading that particular visit, group owners and administrators, and anyone the group has
 specifically granted the investigations permission.
 
+## How long a visit runs
+
+Every investigation has a start and, if you want it, an end. **Starts** is a date and a time.
+**Ends** is a time, because the ordinary visit is one arrival and one departure — and it is
+allowed to cross midnight. Arriving at 3:00 PM and leaving at 8:00 AM is a single-day
+investigation: an end at or before the start is read as the next morning.
+
+For anything longer — a weekend, a week — tick **Runs over more than one day** and the end
+becomes a date and a time of its own. The visit then reads with both dates wherever it appears,
+so nobody mistakes a week on site for an evening.
+
+The end may not come before the start. Say so and the form refuses rather than booking a visit
+that finishes before anyone arrives.
+
+The same applies to **Propose Dates**, where you offer a client a choice of windows.
+
 ## Scheduling a visit with no case
 
 **Schedule an investigation** on the group's Investigations tab books a visit that belongs to no
 client case — a landmark, a public building, or the group's own outing. Everything else about it
 works the same way: it appears on the map, the team can check in, and the findings are shared under
 the same rules.
+
+Because there is no case behind it, there is no case page either — so wherever you click one of
+these (your My Investigations list, your profile's map, the group's map), you land here, on the
+group's Investigations tab, with that visit highlighted and its team panel open.
 
 Describe where it is, and the form will tell you if the system already knows the place:
 
@@ -82,6 +571,39 @@ created. The suggestion is only ever offered; nothing is merged behind your back
 A place is only suggested when the address matches **and** it is within about a tenth of a mile.
 Both have to agree, because an address alone cannot tell two flats apart and a map position alone
 would suggest the house next door.
+
+## Duties — who's doing what tonight
+
+Every visit has jobs: somebody leads, somebody owns the equipment, somebody collects the
+evidence at the end. The roster's **Who's doing what** panel makes those explicit — each duty is
+a row, each holder a badge, and a duty nobody holds shows **Unfilled**, which is the gap to
+close before the night of.
+
+Duties belong to one visit only. They are not titles (a junior investigator can lead a small
+visit) and they are not roles (holding Equipment tonight grants no standing permission). The one
+duty with teeth is **Lead Investigator**: the visit's lead can edit the investigation, exactly
+as before — handing that duty to someone is the same act as naming them lead.
+
+Your group defines its own duty list under **Settings → Investigation duties**, and a duty can
+ask for a **minimum title** from the ladder. That ask is soft: assigning someone below it shows
+a warning with an **Assign anyway** button, because the senior calls in sick and the capable
+junior steps up. The exception is recorded, so it was a decision rather than an accident — the
+holder's badge carries a small ⚠.
+
+## Who the client talks to
+
+Every case answers "who do I talk to" with a name. On the case's **Details** column, **Points of
+contact** lists the members the client sees on their side of the case, and their messages are
+what land in those members' notifications. Choose contacts with the button there — the case
+manager and group admins can save the choice.
+
+Messages with the client, on the case's **Messages** tab, can be formatted with bold, italics,
+lists and links. The client sees the formatting on the website; the iPhone app shows the same words
+as plain text.
+
+With no explicit contact chosen, the **case manager stands in** automatically, marked as such.
+Clearing everyone returns to that fallback; the client's view is never blank while the case has
+a manager.
 
 ## Arriving on site
 
@@ -171,6 +693,107 @@ Investigations at a **private residence cannot be made public**. Publishing what
 somebody's home is theirs to agree to, and there is no way to ask them yet, so the option is
 withheld rather than offered without the consent behind it.
 
+## Private engagements
+
+Some cases are somebody's home. The platform calls those **private engagements**, and treats them
+differently on every public surface. A case becomes one in three ways:
+
+- it came from a **client request** — a family asked for help, so the case is born private;
+- an investigation on it is placed at a **private residence** — the moment the place is bound,
+  the case is designated;
+- someone ticks **Private engagement** in Edit Case.
+
+The designation never comes off by itself. Clearing it is a deliberate choice in Edit Case, for
+the rare case that was marked private by mistake.
+
+### Write real names freely — the public copy substitutes
+
+Inside your group, work the case in plain language: reports, timeline entries and notes can name
+the client and the household exactly as people speak. On a private engagement, the platform
+replaces those names **at the moment a public page renders** — the stored text is never touched,
+so nothing you wrote changes and nothing needs editing before publication.
+
+Who becomes what:
+
+- **The client** is replaced by the alias they chose themselves, or your group's pseudonym for
+  the case, or — when neither is set — "the family" (if two or more people live at the property)
+  or "the client".
+- **Each person on the case's People list** is replaced by their **Public label** if you set one
+  ("the lady of the house"), or a label read from their relationship ("a family member",
+  "a neighbor", "the homeowner"), or simply "a resident" or "a witness".
+
+The Public label field lives in the person's entry on the case. A short noun phrase works best —
+it is dropped into the middle of sentences.
+
+### What the substitution does not do
+
+It replaces **the names on the case** — the client's, and the people you listed. It cannot know
+about a nickname nobody recorded, a name inside a photograph, or a voice on a recording. It also
+matches whole words only: "the Parkers" is not "Park", so a family nickname derived from the
+name survives unless you add the person. The pre-publication check still reads your case label
+and pseudonym and warns when either carries the client's name.
+
+### Private engagements and your plan
+
+Taking on private-residence work — accepting a client request, placing an investigation at a
+residence, accepting a private case transferred in — and **publishing** a private case both
+require a plan that includes private-residence cases. The Pricing page says which plans do. Two
+things are never gated: work already in hand (a case your group already holds keeps working,
+whatever your plan), and a client moving their own case — their move is only ever limited by the
+destination group's plan, not yours.
+
+### If your subscription lapses
+
+When a paid period ends without renewal, published private engagements come off the public site
+along with the pause of open work. Nothing is deleted: the case remembers it was public, and once
+the plan is renewed its page shows a one-click **Republish** banner. Public-place cases —
+landmarks, businesses — are untouched by billing and stay published. Both renewal warnings say
+all of this before it happens.
+
+## Applying privacy protections to an older case
+
+If your group took a case on before you had the protections — or before your plan included them —
+**Apply privacy protections** in Edit Case brings that case up to date in one action. It:
+
+- makes the case private, if it was not already;
+- removes the exact coordinates of the property, leaving the address in your own records where
+  your investigators still need it;
+- cleans the location data out of every file on the case that has not been cleaned already,
+  rebuilding each from the original, which was kept untouched for exactly this reason.
+
+Then it tells you two things it did **not** do.
+
+**It does not rewrite anybody's words.** If your client's name appears in a report, a timeline
+entry or the case label, it lists every place and leaves the text exactly as written. An account
+of a night belongs to the person who wrote it, and a find-and-replace through it can change what
+a sentence means or break a quotation. Edit the ones that should read as the pseudonym instead.
+
+**It cannot undo publication.** If the case was public, the report says so plainly. Anything a
+visitor already read, a search engine already indexed, or somebody already saved is out, and
+making the case private now stops it going further rather than calling it back. That is worth
+knowing before you tell a client the problem is solved.
+
+## The case label when a case goes public
+
+A case reaches the public through **Edit Case** — set the status and tick **Make Public** — and
+the pseudonym then stands in for the client's name everywhere the site writes it. Everywhere
+except one place: the **case label**, which is free text your group typed, often in the
+"surname, city" habit that is perfect for private files and wrong for a public page.
+
+So the dialog checks, as you work. Tick **Make Public**, or leave the label or the pseudonym
+after editing it, and if what is about to go public contains the client's name or the street
+address you are told there and then — beside the tickbox, before you save. It names exactly what
+would leak and suggests naming the place instead: "The Hargrove Farmhouse", not "Hargrove,
+Franklin TN".
+
+It is a warning, not a refusal. A surname is also sometimes a street or a town, and only you know
+which your label means — so the first Save stops and shows it once more, and the second publishes
+the label as written.
+
+The same save reads the pseudonym itself. "The Park Family" as the pseudonym for the Parks is a
+disguise made of the thing it hides — if the pseudonym contains the client's real name, you will
+be told before it publishes.
+
 ## Place pages
 
 Clicking the location on the Investigations tab opens that **place** — every visit recorded there,
@@ -184,3 +807,129 @@ rows show their sharing setting: how another group chose to share something is t
 
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
+
+![A place's page](/help/media/working-a-case/place-page.png)
+*One location, and every group's work at it: your visits, what others shared, the cases published
+here, the posts, and the field archive.*
+
+### Your groups' cases here
+
+Signed in, a place also shows **your groups' cases here** — every case one of your groups has at
+this location, whatever its status, published or not. That is the question worth asking on arrival:
+do we already have a case here? The published list below cannot answer it, because the answer is
+usually a case nobody published. Other groups' unpublished cases are not shown: having one is
+itself something they have not shared.
+
+### Cases written up here
+
+A place also lists the **cases** groups have published about it, with the year each was opened and
+whose case it was. Only published cases appear — a case has to be both marked public and have a
+status saying it is published — and a client's real name is never shown, exactly as on the case's
+own public page. Visitors see this list too.
+
+This is the other half of naming a place on a case: your case appears on the place's page when you
+publish it, and everybody else's is already there to read before you start.
+
+### Posts about this place
+
+A public location also carries **posts** — short notes and photographs from anybody signed in, not
+only from groups. They are feed posts that name the place, so they are screened, reportable and
+hideable exactly like anything else on the feed, and they appear on the feed as well with a link
+back here. See [Posting about a place](the-feed#posting-about-a-place). A private residence has no
+posts and offers no box.
+
+### The field archive
+
+Below the investigations, a place shows its **field archive** — sessions that individual people
+have published there, from the phone app. These are not your group's work and not tied to any
+case: somebody went somewhere public, recorded, and chose to share the readings.
+
+Each row shows who recorded, when, roughly where they stood, how many readings the session holds,
+and how many moments they flagged. That last number is the one worth reading across rows. A spike
+that eleven of twelve visitors flagged on the same stairs is a feature of the building; one that
+appears once is noise. Comparing visits is the only way to tell, and it is the only place on this
+site — or anywhere else we know of — where you can.
+
+Phones differ, and so do their magnetometers, so the device is listed too. Compare with that in
+mind, and remember the reading is a DC magnetic field, not the AC field a K-II style meter
+responds to.
+
+Anyone can flag a session whose photos or audio should not be public; doing so hides that media
+straight away until a moderator has looked. The readings stay visible, because a magnetic-field
+number cannot be objectionable.
+
+## Group messages
+
+The **Messages** tab on your group is its internal mail. It is not the same thing as the message
+board on a case, which the client can read — nothing here is visible outside the group.
+
+Messages arrive in folders down the left, with a count of what is unread in each:
+
+| Folder | What is in it |
+|---|---|
+| Inbox | Everything addressed to you, of any kind. |
+| Sent | What you have written. |
+| Broadcasts | Announcements to the whole group. |
+| Direct | Messages to named people. |
+| Case teams | Messages tied to a particular case. |
+| Public | Messages anyone in the group can read. |
+
+Unread messages are shown in bold. Clicking one opens it below the list, and marks it read.
+
+### Writing one
+
+**Compose** asks first who the message is for. Broadcast and Public go to the group as a whole and
+need no addressing. **Direct message** and **Case team** ask you to tick the people you mean, from
+the group's own member list — and you have to tick at least one, because a direct message with
+nobody on it goes nowhere.
+
+The subject is optional. The body is not.
+
+**Mark as encrypted / private** flags a message as sensitive. It is a marking on the message, for
+the people reading it — it is not a second password, and it does not hide the message from anyone
+who could otherwise open it.
+
+
+## Closing a case, and why you cannot delete one
+
+Set the status to **Closed** in **Edit Case** when the work is finished. The case stays exactly
+where it is, in your case list and in your history, and can be reopened by changing the status
+again. Closing is the end of the work, not the end of the record.
+
+There is no Delete, and that is deliberate rather than an oversight. A case is the record of real
+work, usually done for a client who asked for it and sometimes paid for it, and a record that can
+be erased by whoever is looking at it is not much of a record. Timeline entries, files and notes
+can each be removed on their own; the case they belong to cannot.
+
+**Opened one by mistake, or opened the same one twice?** That is the case closing cannot fix, so
+[ask us to remove it](/contact). A site administrator can delete a case outright, and will see
+exactly what that would destroy before doing it — including a warning if the case has a client.
+Anything anyone recorded on their phone survives regardless: a field session belongs to the
+person who made it and goes back to them.
+
+## Incoming cases
+
+When another group — or a client moving their own paused case — asks your group to take a case
+over, it appears at the top of your **Cases** page as *Incoming cases*, with Accept and Decline
+right there. For a client-proposed move, the card says what you will be able to see of the
+previous group's work: the client decides whether their collected history and past investigations
+travel with the case, and that choice is theirs, not the previous group's. Accepting gives the
+case a fresh number in your group and makes it active again; the client is told either way.
+
+**Case transfers follow your plan.** A group whose plan doesn't include case transfers can
+neither send a case to another group nor accept one in — both ends are checked, so a case also
+can't be handed *to* such a group. The refusal says exactly that when it applies, existing cases
+are never affected, and declining an incoming transfer is always allowed. A client moving their
+own paused case is never blocked by their current group's plan — only the destination's plan
+matters for their move. The Pricing page shows what each plan includes.
+
+## Evidence from people who attended a public event
+
+Anyone who attended one of your public events can offer what they captured — audio, photos, video
+— from the event's own page. Nothing they send goes into your record automatically: submissions
+wait in **Evidence from your public events** on your group's Calendar tab until a member accepts
+or declines one. Declining asks for a reason, and the submitter is told either way.
+
+Accepting puts the file into that event's **public** record, credited to the attendee — that is
+the bargain a public investigation makes, and submitters are told so before they send anything.
+Anything you decline stays private to the person who sent it.

@@ -1,0 +1,87 @@
+/*
+    A group's published investigations.
+
+    The cards were Bootstrap's default with a View Details button in the footer, which makes a
+    reader aim at a small target for the only thing the card does. The whole card is the link now,
+    and what it says is ordered the way somebody scans it: the reference, then what it was called,
+    then where, then when.
+*/
+
+.case-card {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    height: 100%;
+    padding: .85rem 1rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.case-card:hover,
+.case-card:focus-visible {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1.2rem rgba(0, 0, 0, .2);
+}
+
+/* A case the group concluded IS haunted — the rarest thing on the page and the reason somebody is
+   reading it. A left edge rather than a full border: a box outlined in yellow reads as a warning,
+   which is the opposite of what this means. */
+.case-card--haunted {
+    border-left: 3px solid var(--bs-warning);
+}
+
+.case-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .15rem;
+}
+
+.case-card__ref {
+    font-family: var(--bs-font-monospace, monospace);
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+}
+
+/* Bootstrap's badge classes carry the colour; the shape is ours, to match the pills elsewhere. */
+.case-card__status {
+    padding: .1rem .5rem;
+    border-radius: 1rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+}
+
+.case-card__title {
+    font-size: 1.05rem;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.case-card__where {
+    font-size: .82rem;
+    color: var(--bs-secondary-color);
+}
+
+.case-card__when {
+    margin-top: .2rem;
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .case-card {
+        transition: none;
+    }
+
+    .case-card:hover,
+    .case-card:focus-visible {
+        transform: none;
+    }
+}

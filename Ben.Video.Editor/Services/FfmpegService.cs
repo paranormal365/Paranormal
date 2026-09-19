@@ -9,7 +9,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class FfmpegService : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/ffmpegInterop.js";
+    private const string ModulePath = "js/ffmpegInterop.js";
 
     private readonly IJSRuntime _js;
     private readonly ErrorLogService _errorLog;
@@ -133,7 +133,7 @@ public sealed class FfmpegService : IAsyncDisposable
                 SetState(FfmpegState.LoadingCore);
                 _logTail.Clear();
 
-                _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+                _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
                 _selfRef ??= DotNetObjectReference.Create(this);
 
                 var multiThread = await _module.InvokeAsync<bool>("isMultiThreadSupported");
@@ -155,6 +155,9 @@ public sealed class FfmpegService : IAsyncDisposable
     /// escape hatch a future Reset button depends on).</summary>
     public async Task TerminateAsync()
     {
+        LastFailureKind = WorkerFailureKind.Recoverable;
+        _watchdog.CommandFinished();
+
         if (_module is not null)
         {
             await InvokeTracedAsync("terminate", () => _module.InvokeVoidAsync("terminate").AsTask());
@@ -164,6 +167,18 @@ public sealed class FfmpegService : IAsyncDisposable
         _memFsLedger.Clear();
         SetState(FfmpegState.Idle);
     }
+
+    /// <summary>
+    /// Tears the engine down and clears the wedge, so a fresh <see cref="LoadAsync"/> can run.
+    /// </summary>
+    /// <remarks>
+    /// The wedge flag never clears itself, and a wedged command holds the worker lock forever, so
+    /// this deliberately goes around the lock the same way <see cref="TerminateAsync"/> does. It is
+    /// the escape hatch the toolbar's restart button depends on — before it existed the only
+    /// control that mentioned a wedge was the diagnostics chip, which most people never see
+    /// (2026-09-05 audit, F7).
+    /// </remarks>
+    public Task ResetWorkerAsync() => TerminateAsync();
 
     // ─── JS Callbacks ────────────────────────────────────────────────────────
 
@@ -560,14 +575,47 @@ public sealed class FfmpegService : IAsyncDisposable
     /// The output file is written to MEMFS and can be read back with <see cref="ReadFileAsync"/>.
     /// Uses <c>-vn -acodec copy</c> for a fast lossless copy when the source already has a compatible audio stream.
     /// </summary>
-    public Task ExtractAudioAsync(string inputName, string outputName) => WithLockAsync(requireReady: true, async () =>
+    /// <param name="start">Where in the source to start, in seconds. Null takes it from the top.</param>
+    /// <param name="end">Where to stop. Null runs to the end of the file.</param>
+    /// <param name="speed">
+    /// The picture's speed multiplier, so detached sound stays with the pictures it came from.
+    /// </param>
+    /// <remarks>
+    /// The trim and the speed used to be ignored: "Separate Audio" pulled the whole source stream
+    /// out and gave the new clip the trimmed length, so a head-trimmed clip's sound was out of step
+    /// with its own picture from the first frame, and a slowed clip's sound played at the original
+    /// speed underneath it (2026-09-05 audit, audio-8).
+    /// </remarks>
+    public Task ExtractAudioAsync(
+        string inputName, string outputName,
+        double? start = null, double? end = null, double speed = 1.0) =>
+        WithLockAsync(requireReady: true, async () =>
     {
         SetState(FfmpegState.Processing);
         try
         {
+            var ic   = System.Globalization.CultureInfo.InvariantCulture;
+            var args = new List<string>();
+
+            // Before -i, so the decoder skips rather than the filter graph seeing the discarded
+            // head — the same rule the export's own trim follows.
+            if (start is > 0)          args.AddRange(["-ss", start.Value.ToString("F3", ic)]);
+            if (end is { } e && e > (start ?? 0)) args.AddRange(["-to", e.ToString("F3", ic)]);
+
+            args.AddRange(["-i", inputName, "-vn"]);
+
+            // Changing the speed means re-encoding; leaving it alone means a lossless copy, which
+            // is what this has always done and is much faster.
+            if (Math.Abs(speed - 1.0) > 0.001)
+                args.AddRange(["-filter:a", ExportArgBuilders.BuildAtempoChain(speed), "-c:a", "aac"]);
+            else
+                args.AddRange(["-acodec", "copy"]);
+
+            args.AddRange(["-y", outputName]);
+
             // ExecCoreAsync, not the public ExecAsync — this method already holds _workerLock,
             // which is non-reentrant; calling the public ExecAsync here would deadlock forever.
-            await ExecCoreAsync(["-i", inputName, "-vn", "-acodec", "copy", "-y", outputName]);
+            await ExecCoreAsync([.. args]);
             SetState(FfmpegState.Ready);
         }
         catch (Exception ex)
@@ -699,6 +747,10 @@ public sealed class FfmpegService : IAsyncDisposable
         // here, so a command that starts right after one that finished at 100% would briefly —
         // or, if it stalls, indefinitely — show a stale 100%/whatever% instead of 0%).
         if (state == FfmpegState.Processing) ProgressPercent = 0;
+
+        // Reaching Ready means the engine is alive again, whatever it last died of.
+        if (state == FfmpegState.Ready) LastFailureKind = WorkerFailureKind.Recoverable;
+
         State = state;
         OnStateChanged?.Invoke();
     }
@@ -770,9 +822,21 @@ public sealed class FfmpegService : IAsyncDisposable
     /// try/catch around a call site still runs exactly as before. Diagnostics-only; no behavior
     /// change to the happy or failure path.
     /// </summary>
+    /// <summary>
+    /// The worker call currently in flight, and when it started — null when nothing is running.
+    /// </summary>
+    /// <remarks>
+    /// The operation trace records calls when they <i>finish</i>, so a call that never comes back
+    /// leaves no trace at all: the panel shows the last thing that completed and says nothing
+    /// about what the editor is actually waiting on. That is precisely the state worth reporting,
+    /// and it was invisible while diagnosing a preview render that stopped advancing.
+    /// </remarks>
+    public (string Operation, DateTime StartedAtUtc)? InFlight { get; private set; }
+
     private async Task<T> InvokeTracedAsync<T>(string operation, Func<Task<T>> invoke)
     {
         var startedAt = DateTime.UtcNow;
+        InFlight = (operation, startedAt);
         try
         {
             var result = await invoke();
@@ -784,12 +848,17 @@ public sealed class FfmpegService : IAsyncDisposable
             RecordOperation(operation, startedAt, success: false);
             throw;
         }
+        finally
+        {
+            InFlight = null;
+        }
     }
 
     /// <summary>Void-returning counterpart to <see cref="InvokeTracedAsync{T}"/>.</summary>
     private async Task InvokeTracedAsync(string operation, Func<Task> invoke)
     {
         var startedAt = DateTime.UtcNow;
+        InFlight = (operation, startedAt);
         try
         {
             await invoke();
@@ -800,17 +869,46 @@ public sealed class FfmpegService : IAsyncDisposable
             RecordOperation(operation, startedAt, success: false);
             throw;
         }
+        finally
+        {
+            InFlight = null;
+        }
     }
 
     /// <summary>Shared failure-path bookkeeping for the ~9 call sites that previously each
     /// duplicated <c>LastError = ex.Message; SetState(FfmpegState.Error); throw;</c> — same
     /// behavior, plus now surfaced to <see cref="ErrorLogService"/> (previously invisible: it
     /// wasn't injected into this service at all).</summary>
+    /// <summary>
+    /// What kind of failure the engine last hit, so the editor can tell a bad command from a
+    /// trapped instance from a full heap.
+    /// </summary>
+    public WorkerFailureKind LastFailureKind { get; private set; } = WorkerFailureKind.Recoverable;
+
+    /// <summary>
+    /// Fires when the engine has stopped and nothing else will run on it until it is reloaded.
+    /// </summary>
+    /// <remarks>
+    /// Every failure used to leave the state at Error and say nothing, so after a crash the editor
+    /// went quiet: the preview stopped refreshing, exports refused to start, and the only clue was
+    /// a status chip most people never look at (2026-09-05 audit, F7). This is the signal that
+    /// lets the editor restart the engine and say so.
+    /// </remarks>
+    public event Action<WorkerFailureKind>? OnWorkerCrashed;
+
     private void RecordFailure(string operation, Exception ex)
     {
         LastError = ex.Message;
         _errorLog.Log($"FfmpegService.{operation}", ex);
+
+        // The message alone is often too thin to classify — a trap surfaces as a bare
+        // "RuntimeError" from JS interop — so the engine's own recent log is read alongside it.
+        LastFailureKind = WorkerFailureClassifier.Classify($"{ex.Message}\n{BuildLogTailText()}");
+
         SetState(FfmpegState.Error);
+
+        if (WorkerFailureClassifier.NeedsReload(LastFailureKind))
+            OnWorkerCrashed?.Invoke(LastFailureKind);
     }
 
     public async ValueTask DisposeAsync()
@@ -831,7 +929,15 @@ public sealed class FfmpegService : IAsyncDisposable
 }
 
 /// <summary>Metadata returned by ffprobe for a video stream.</summary>
-public sealed record VideoMetadata(double Duration, int Width, int Height);
+/// <summary>
+/// What a probe learned about a media file.
+/// </summary>
+/// <param name="HasAudio">
+/// Whether the file carries an audio stream. Defaults to true so a probe that predates this — a
+/// saved project, or a sidecar that has not been updated — keeps the behaviour it had rather than
+/// suddenly silencing clips that do have sound.
+/// </param>
+public sealed record VideoMetadata(double Duration, int Width, int Height, bool HasAudio = true);
 
 /// <summary>One worker command's outcome, as recorded in <see cref="FfmpegService.OperationTrace"/>
 /// (item #59-#65 flakiness investigation, phase 141).</summary>

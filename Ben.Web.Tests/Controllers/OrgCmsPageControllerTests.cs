@@ -47,7 +47,7 @@ public class OrgCmsPageControllerTests
         // The real sanitizer, not a mock: template application runs markup through it, and a mock
         // that passed everything through would make the sanitization test prove nothing.
         var ctrl = new OrgCmsPageController(factory, mapper.Object, security.Object,
-            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
         ctrl.ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = principal ?? Anonymous() } };
         return ctrl;

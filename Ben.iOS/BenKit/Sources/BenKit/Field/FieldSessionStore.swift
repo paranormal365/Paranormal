@@ -1,0 +1,803 @@
+import Foundation
+import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// The field sessions on this device, and the one that is recording right now.
+///
+/// Lives in `AppDependencies` rather than being made per-screen like the other stores, because a
+/// recording session has to outlive whatever screen started it: somebody starts a session, walks
+/// to another room, checks the feed, and comes back — the session was never watching the screen.
+@Observable
+@MainActor
+public final class FieldSessionStore {
+
+    /// A store that could not open its database says so. It does not crash, and it does not
+    /// pretend to be empty — an empty list would tell somebody their sessions were gone.
+    public enum State: Equatable, Sendable {
+        case ready
+        case unavailable(reason: String)
+    }
+
+    public private(set) var state: State = .ready
+    public private(set) var sessions: [FieldSessionSummary] = []
+
+    /// What the last attempt to open a `.ben` had to say, for a screen to show. Set from
+    /// wherever a bundle arrives — the Files app, AirDrop, a download — because none of those
+    /// places is a screen of this app's own.
+    public var importProblem: String?
+    /// The session currently recording, if any.
+    public private(set) var activeSessionId: UUID?
+    /// The live instruments of that session — nil when nothing is recording.
+    public private(set) var active: ActiveFieldSession?
+
+    /// How the store builds the instruments. Injected so a test can hand it scripted streams
+    /// and the app can hand it either the real sensors or the fake ones.
+    private var makeSensors: @Sendable () -> SensorSuite = { SensorSuite() }
+
+    private let database: FieldSessionDatabase?
+    public let files: SessionFileStore
+    private let deviceModel: String
+    private let now: @Sendable () -> Date
+
+    private var context: ModelContext? {
+        database.map { ModelContext($0.container) }
+    }
+
+    public init(database: FieldSessionDatabase?,
+                files: SessionFileStore,
+                deviceModel: String,
+                unavailableReason: String? = nil,
+                sensors: @escaping @Sendable () -> SensorSuite = { SensorSuite() },
+                now: @escaping @Sendable () -> Date = Date.init) {
+        self.makeSensors = sensors
+        self.database = database
+        self.files = files
+        self.deviceModel = deviceModel
+        self.now = now
+        if let unavailableReason {
+            state = .unavailable(reason: unavailableReason)
+        } else if database == nil {
+            state = .unavailable(reason: "Field sessions can't be stored on this device.")
+        }
+    }
+
+    /// Builds the real store, degrading to an explained refusal rather than throwing into a
+    /// crash if the database will not open.
+    public static func live(sensors: @escaping @Sendable () -> SensorSuite,
+                            now: @escaping @Sendable () -> Date = Date.init) -> FieldSessionStore {
+        let model = DeviceModel.identifier()
+        do {
+            return FieldSessionStore(database: try .onDisk(),
+                                     files: try .applicationSupport(),
+                                     deviceModel: model, sensors: sensors, now: now)
+        } catch {
+            let fallback = SessionFileStore(
+                root: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("FieldSessions", isDirectory: true))
+            return FieldSessionStore(
+                database: nil, files: fallback, deviceModel: model,
+                unavailableReason: "Field sessions can't be stored on this device: \(error.localizedDescription)",
+                sensors: sensors, now: now)
+        }
+    }
+
+    // ── The running session ───────────────────────────────────────────────────
+
+    /// Brings the instruments up for a session and starts reading them.
+    /// `channels` defaults to what the session was SET UP with, not to the app's defaults: a
+    /// session opened for video and left running must come back with video, and passing
+    /// `.default` here is how the picker's choice used to be thrown away on the next launch.
+    public func activate(_ id: UUID, policy: SamplingPolicy = .default,
+                         channels: CaptureChannels? = nil) async {
+        guard active?.sessionId != id else { return }
+        await active?.end()
+
+        guard let summary = summary(for: id) else { return }
+        let channels = channels ?? summary.channels
+        let log = ReadingLog(fileURL: files.readingLogURL(for: id))
+        let sensors = makeSensors()
+        let engine = FieldSessionEngine(sessionId: id, log: log, sensors: sensors,
+                                        policy: policy, channels: channels, now: now)
+        let session = ActiveFieldSession(sessionId: id, startedAt: summary.startedAt,
+                                         engine: engine, sensors: sensors, files: files,
+                                         policy: policy, channels: channels, now: now)
+        active = session
+        activeSessionId = id
+        await session.begin()
+    }
+
+    /// Stops the instruments and records what the session ended up holding.
+    public func deactivate() async {
+        guard let session = active else { return }
+        let id = session.sessionId
+
+        // END FIRST, then read what the session holds. Ending closes any open recording, and
+        // closing it ADDS a capture — so reading the list beforehand persisted everything
+        // except the recording somebody had just been making.
+        await session.end()
+
+        let markers = session.markers
+        let captures = session.captures
+        let readings = session.readingCount
+        active = nil
+
+        guard let context else { return }
+        if let row = try? fetch(id, in: context) {
+            row.readingCount = readings
+            row.markerCount = markers.count
+            row.captureCount = captures.count
+            row.baselineEmfMicrotesla = session.baselines.magneticMicrotesla
+            row.baselineSoundDbfs = session.baselines.soundDbfs
+            // Switching video on at 2am is a decision about this session, not about this launch.
+            row.channels = session.channels
+            for capture in captures where !row.captures.contains(where: { $0.id == capture.id }) {
+                let stored = FieldCapture(
+                    id: capture.id, at: capture.at, kind: capture.kind,
+                    relativePath: capture.relativePath, byteCount: capture.byteCount,
+                    durationSeconds: capture.durationSeconds,
+                    latitude: capture.latitude, longitude: capture.longitude,
+                    headingDegrees: capture.headingDegrees, room: capture.room)
+                // Insert BEFORE wiring the relationship: SwiftData is unreliable about an
+                // inverse set on an object the context has not yet adopted, and the row simply
+                // does not come back.
+                context.insert(stored)
+                stored.session = row
+            }
+            for marker in markers where !row.markers.contains(where: { $0.id == marker.id }) {
+                let stored = FieldMarker(
+                    id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    audioFilename: marker.audioFilename,
+                    audioOffsetSeconds: marker.audioOffsetSeconds,
+                    emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
+                    latitude: marker.latitude, longitude: marker.longitude,
+                    room: marker.room)
+                context.insert(stored)
+                stored.session = row
+            }
+            try? context.save()
+        }
+        load()
+    }
+
+    // ── Reading ───────────────────────────────────────────────────────────────
+
+    public func load() {
+        guard let context else { return }
+        let descriptor = FetchDescriptor<FieldSession>(
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+        do {
+            sessions = try context.fetch(descriptor).map(FieldSessionSummary.init)
+            // Pending counts as open: a session set up and never started still resumes.
+            activeSessionId = sessions.first(where: \.isOpen)?.id
+        } catch {
+            state = .unavailable(reason: "Your sessions couldn't be read: \(error.localizedDescription)")
+        }
+    }
+
+    /// Everything a finished session needs to be replayed: what was marked, what was captured,
+    /// and the base levels it was measured against.
+    public func replayData(for id: UUID) -> ReplaySource? {
+        guard let context, let session = try? fetch(id, in: context) else { return nil }
+
+        let markers = session.markers
+            .sorted { $0.at < $1.at }
+            .map { marker in
+                FieldMarkerRecord(
+                    id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    room: marker.room,
+                    magneticMicrotesla: marker.emfMicrotesla, soundDbfs: marker.soundDbfs,
+                    latitude: marker.latitude, longitude: marker.longitude,
+                    audioFilename: marker.audioFilename,
+                    audioOffsetSeconds: marker.audioOffsetSeconds)
+            }
+
+        // Only timed media can sit on a timeline. A photo is an instant, not a stretch, so it
+        // is a pin on the track rather than something the playhead runs through.
+        let media = session.captures
+            .filter { $0.kind != .photo }
+            .compactMap { capture -> MediaSegment? in
+                guard let duration = capture.durationSeconds, duration > 0 else { return nil }
+                return MediaSegment(id: capture.id, kind: capture.kind,
+                                    relativePath: capture.relativePath,
+                                    startedAt: capture.at, duration: duration)
+            }
+            .sorted { $0.startedAt < $1.startedAt }
+
+        // Photos, and anything timed whose length could not be read. Ben, 2026-09-16: a session holding ten seconds
+        // of video said nothing had been recorded, because a clip with no duration cannot sit on a track and was
+        // then in no list at all. It is pinned at the moment it was taken instead of disappearing.
+        let stills = session.captures
+            .filter { $0.kind == .photo || ($0.durationSeconds ?? 0) <= 0 }
+            .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
+                               relativePath: $0.relativePath,
+                               latitude: $0.latitude, longitude: $0.longitude,
+                               isRepresentative: $0.isRepresentative, room: $0.room,
+                               byteCount: $0.byteCount) }
+            .sorted { $0.at < $1.at }
+
+        return ReplaySource(
+            sessionId: id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            markers: markers,
+            media: media,
+            stills: stills,
+            baselines: Baselines(magneticMicrotesla: session.baselineEmfMicrotesla,
+                                 soundDbfs: session.baselineSoundDbfs),
+            log: ReadingLog(fileURL: files.readingLogURL(for: id)))
+    }
+
+    /// Where a session happened, as best the recording knows.
+    ///
+    /// Readings, markers and captures are all location-stamped while a session runs, so the first
+    /// one carrying coordinates answers "where was this" without opening the reading log. Nil when
+    /// location was declined or unavailable — an ordinary session, whose owner is then asked to
+    /// name the place rather than being shown suggestions for somewhere they never were.
+    public func coordinates(for id: UUID) -> (latitude: Double, longitude: Double)? {
+        guard let context, let session = try? fetch(id, in: context) else { return nil }
+
+        for capture in session.captures.sorted(by: { $0.at < $1.at }) {
+            if let lat = capture.latitude, let lon = capture.longitude { return (lat, lon) }
+        }
+        for marker in session.markers.sorted(by: { $0.at < $1.at }) {
+            if let lat = marker.latitude, let lon = marker.longitude { return (lat, lon) }
+        }
+        return nil
+    }
+
+    /// Everything captured in a session, for choosing what to hand over.
+    public func captures(for id: UUID) -> [CaptureMark] {
+        guard let context, let session = try? fetch(id, in: context) else { return [] }
+        return session.captures
+            .sorted { $0.at < $1.at }
+            .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
+                               relativePath: $0.relativePath,
+                               latitude: $0.latitude, longitude: $0.longitude,
+                               isRepresentative: $0.isRepresentative, room: $0.room,
+                               byteCount: $0.byteCount) }
+    }
+
+    /// Writes a Device Data Format v1 bundle for a session, carrying the chosen files.
+    ///
+    /// - Parameter recordedByAccountId: whoever is signed in, when somebody is. The store does not
+    ///   know; the screen does.
+    ///
+    /// The seal carries the account and the device here exactly as an upload's does. It did not:
+    /// the exported bundle sealed with neither, and the exported bundle is the one that gets
+    /// AirDropped — the very case the device id exists for, so a phone handed one can say it was
+    /// recorded somewhere else. A session imported from another device keeps the id it arrived
+    /// with rather than being re-stamped as this phone's work.
+    public func export(_ id: UUID, includedMedia: [String],
+                       policy: SamplingPolicy = .default,
+                       recordedByAccountId: UUID? = nil) async throws -> DeviceDataExporter.Result {
+        guard let context, let session = try? fetch(id, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+
+        let request = DeviceDataExporter.Request(
+            sessionId: id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            locationLabel: session.locationLabel,
+            deviceModel: session.deviceModel,
+            timezone: session.timezoneIdentifier,
+            batteryPercentAtStart: session.batteryPercentAtStart,
+            trigger: policy.trigger(),
+            includedMedia: includedMedia,
+            recordedByAccountId: session.recordedByAccountId ?? recordedByAccountId,
+            deviceId: session.sourceDeviceId ?? DeviceModel.vendorIdentifier())
+
+        // Into the scratch directory, not the session's own: the bundle is a copy made to be
+        // handed over, and the session keeps everything it had.
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exports", isDirectory: true)
+        return try await DeviceDataExporter(files: files).export(
+            request, log: ReadingLog(fileURL: files.readingLogURL(for: id)), to: directory)
+    }
+
+    // ── Bringing a session in from a .ben ─────────────────────────────────────
+
+    /// What an import came to.
+    public struct BundleImport: Sendable, Equatable {
+        public var id: UUID
+        public var title: String
+        public var readingCount: Int
+        public var captureCount: Int
+        /// Whether the seal says another device recorded it.
+        public var wasRecordedElsewhere: Bool
+    }
+
+    /// Opens a `.ben` and makes it a session on this device — the same rows, the same readings
+    /// log and the same media files a night recorded here leaves behind, so it plays here exactly
+    /// as it played there.
+    ///
+    /// Ben, 2026-09-16: "someone else can share their .ben file with another person on the
+    /// iphone and the other person can view it like they had recorded it themselves", and "be
+    /// able to play it back as if they recorded the .ben file on their own device."
+    ///
+    /// - Parameter thisDeviceId: this device's own vendor id, so the session can say whether it
+    ///   was recorded here or handed over.
+    /// - Parameter serverSessionId: set when the bundle was pulled from the server, so the session
+    ///   already knows it is up there and does not offer to send it again.
+    ///
+    /// All or nothing: a failure part way through removes what was written, so a half-imported
+    /// session never appears in the list.
+    @discardableResult
+    public func importBundle(at url: URL, thisDeviceId: String?,
+                             serverSessionId: UUID? = nil) async throws -> BundleImport {
+        guard let context else { throw FieldSessionError.unavailable }
+
+        let opened = try SessionImporter.open(url)
+        let id = opened.sessionId
+        if let existing = try? fetch(id, in: context) {
+            throw FieldSessionError.alreadyOnThisPhone(existing.locationLabel?.nilIfEmpty ?? "Field session")
+        }
+
+        try files.createDirectories(for: id)
+        do {
+            // The recordings, copied straight out of the archive into the session's own folder.
+            var extracted: [String: URL] = [:]
+            for entry in opened.media {
+                let destination = files.fileURL(for: id, relativePath: entry.path)
+                try opened.reader.extract(entry, to: destination)
+                extracted[entry.path] = destination
+            }
+            try SessionImporter.verify(opened, extracted: extracted)
+
+            // The readings, one line each, exactly as a session recorded here writes them.
+            let log = ReadingLog(fileURL: files.readingLogURL(for: id))
+            for reading in opened.envelope.readings { try await log.append(reading) }
+            try await log.close()
+
+            let rebuilt = SessionImporter.rebuild(from: opened.envelope.readings)
+
+            // A clip whose reading carried no length gets it from the file — the same rule the
+            // capture bar applies when the camera hands one over.
+            var captures = rebuilt.captures
+            for index in captures.indices
+            where captures[index].kind != .photo && captures[index].durationSeconds == nil {
+                guard let file = extracted[captures[index].relativePath],
+                      let seconds = await SessionImporter.duration(of: file) else { continue }
+                captures[index].durationSeconds = seconds
+                captures[index].at = captures[index].at.addingTimeInterval(-seconds)
+            }
+
+            let facts = opened.envelope.session
+            let row = FieldSession(
+                id: id,
+                startedAt: facts.startedAt,
+                locationLabel: facts.locationLabel?.nilIfEmpty,
+                batteryPercentAtStart: facts.batteryPercentAtStart,
+                deviceModel: opened.envelope.device.model,
+                timezoneIdentifier: facts.timezone ?? TimeZone.current.identifier)
+            row.endedAt = facts.endedAt
+            row.outcome = .ended
+            row.readingCount = opened.envelope.readings.count
+            row.markerCount = rebuilt.markers.count
+            row.captureCount = captures.count
+            row.baselineEmfMicrotesla = rebuilt.baselines.magneticMicrotesla
+            row.baselineSoundDbfs = rebuilt.baselines.soundDbfs
+            row.importedAt = now()
+            row.sourceDeviceId = opened.seal?.deviceId
+            row.recordedByAccountId = opened.seal?.recordedByAccountId ?? facts.recordedByAccountId
+            if let serverSessionId {
+                row.serverSessionId = serverSessionId
+                row.uploadedAt = now()
+            }
+            context.insert(row)
+
+            for marker in rebuilt.markers {
+                let stored = FieldMarker(
+                    id: marker.id, at: marker.at, kind: marker.kind, note: marker.note,
+                    audioFilename: marker.audioFilename,
+                    audioOffsetSeconds: marker.audioOffsetSeconds,
+                    emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
+                    latitude: marker.latitude, longitude: marker.longitude, room: marker.room)
+                context.insert(stored)
+                stored.session = row
+            }
+            for capture in captures {
+                let size = extracted[capture.relativePath].flatMap {
+                    (try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? NSNumber)?.int64Value
+                } ?? 0
+                let stored = FieldCapture(
+                    at: capture.at, kind: capture.kind, relativePath: capture.relativePath,
+                    byteCount: size, durationSeconds: capture.durationSeconds,
+                    latitude: capture.latitude, longitude: capture.longitude,
+                    headingDegrees: capture.headingDegrees, room: capture.room)
+                // A file the bundle carried is on the server too when the bundle came from there.
+                if serverSessionId != nil, extracted[capture.relativePath] != nil { stored.uploadedAt = now() }
+                context.insert(stored)
+                stored.session = row
+            }
+            try context.save()
+        } catch {
+            // Nothing half-done is left behind: the folder goes, and the row was never saved.
+            try? files.delete(sessionId: id)
+            context.rollback()
+            // A reader's reason is a fragment meant to follow "That isn't a session file this app
+            // can open:" — so it is put after exactly that, rather than shown on its own.
+            if let reader = error as? ZipReaderError {
+                throw FieldSessionError.notASessionBundle(reader.errorDescription ?? "it could not be read.")
+            }
+            throw error
+        }
+
+        load()
+        let summary = summary(for: id)
+        return BundleImport(
+            id: id,
+            title: summary?.title ?? opened.title,
+            readingCount: opened.envelope.readings.count,
+            captureCount: summary?.captureCount ?? 0,
+            wasRecordedElsewhere: summary?.wasRecordedElsewhere(thisDeviceId: thisDeviceId) ?? true)
+    }
+
+    // ── Uploading, and what may be deleted afterwards ─────────────────────────
+
+    /// Records that a session's document reached the server.
+    public func markUploaded(_ id: UUID, serverSessionId: UUID) {
+        guard let context, let session = try? fetch(id, in: context) else { return }
+        session.serverSessionId = serverSessionId
+        session.uploadedAt = now()
+        try? context.save()
+        load()
+    }
+
+    /// Records that one file reached the server — or why it did not.
+    public func markFileUploaded(_ captureId: UUID, in sessionId: UUID, problem: String? = nil) {
+        guard let context, let session = try? fetch(sessionId, in: context),
+              let capture = session.captures.first(where: { $0.id == captureId })
+        else { return }
+        capture.uploadedAt = problem == nil ? now() : nil
+        capture.uploadProblem = problem
+        try? context.save()
+        load()
+    }
+
+    /// True when the document AND every file this session holds are on the server — which is the
+    /// only condition under which deleting the local copies loses nothing.
+    public func isFullyUploaded(_ id: UUID) -> Bool {
+        guard let context, let session = try? fetch(id, in: context) else { return false }
+        guard session.uploadedAt != nil else { return false }
+        return session.captures.allSatisfy { $0.uploadedAt != nil }
+    }
+
+    /// Deletes the recorded FILES while keeping the session, its readings and its marks.
+    ///
+    /// This is the "free up the phone" path, and it is deliberately not the same as deleting the
+    /// session: the readings are small, and losing the trace of the night to reclaim video space
+    /// would be a bad trade nobody asked for.
+    public func deleteLocalMedia(for id: UUID) throws {
+        guard let context, let session = try? fetch(id, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+        for capture in session.captures {
+            let url = files.fileURL(for: id, relativePath: capture.relativePath)
+            try? FileManager.default.removeItem(at: url)
+        }
+        // The rows stay: a capture that was made and has since been cleared off the device is a
+        // fact worth keeping, and the file may still exist on the server.
+        try context.save()
+        load()
+    }
+
+    /// Deletes one capture — its row and its bytes. For the ones somebody simply does not want.
+    public func deleteCapture(_ captureId: UUID, in sessionId: UUID) throws {
+        guard let context, let session = try? fetch(sessionId, in: context),
+              let capture = session.captures.first(where: { $0.id == captureId })
+        else { return }
+
+        try? FileManager.default.removeItem(
+            at: files.fileURL(for: sessionId, relativePath: capture.relativePath))
+        context.delete(capture)
+        session.captureCount = max(0, session.captureCount - 1)
+        try context.save()
+        load()
+    }
+
+    /// Chooses the picture that represents the property for this session.
+    ///
+    /// One at a time: picking a second replaces the first, because "which photo represents this
+    /// place" has one answer. Passing the same one again clears it, so a choice can be undone
+    /// without having to pick something else instead.
+    public func setRepresentative(_ captureId: UUID?, in sessionId: UUID) throws {
+        guard let context, let session = try? fetch(sessionId, in: context) else {
+            throw FieldSessionError.unavailable
+        }
+        let alreadyChosen = session.captures.first { $0.isRepresentative }?.id
+        for capture in session.captures {
+            capture.isRepresentative = capture.id == captureId && alreadyChosen != captureId
+        }
+        try context.save()
+        load()
+    }
+
+    public func representative(for sessionId: UUID) -> CaptureMark? {
+        captures(for: sessionId).first { mark in
+            guard let context, let session = try? fetch(sessionId, in: context) else { return false }
+            return session.captures.first { $0.id == mark.id }?.isRepresentative == true
+        }
+    }
+
+    /// Whether a capture's bytes are still on this device.
+    public func hasLocalFile(_ relativePath: String, in sessionId: UUID) -> Bool {
+        FileManager.default.fileExists(
+            atPath: files.fileURL(for: sessionId, relativePath: relativePath).path)
+    }
+
+    /// The instruments this store was built with — the screens ask it what the device can do.
+    public func sensors() -> SensorSuite { makeSensors() }
+
+    public func summary(for id: UUID) -> FieldSessionSummary? {
+        sessions.first { $0.id == id }
+    }
+
+    // ── Writing ───────────────────────────────────────────────────────────────
+
+    /// Starts a session. The directory and log exist before the row does, so a session that
+    /// appears in the list always has somewhere to write.
+    @discardableResult
+    public func startSession(locationLabel: String?,
+                             investigationId: UUID? = nil,
+                             investigationTitle: String? = nil,
+                             batteryPercent: Double? = nil,
+                             channels: CaptureChannels = .default) throws -> UUID {
+        guard let context else { throw FieldSessionError.unavailable }
+
+        let id = UUID()
+        try files.createDirectories(for: id)
+
+        let session = FieldSession(
+            id: id,
+            startedAt: now(),
+            locationLabel: locationLabel?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            investigationId: investigationId,
+            investigationTitle: investigationTitle,
+            batteryPercentAtStart: batteryPercent,
+            deviceModel: deviceModel,
+            channels: channels)
+        context.insert(session)
+        try context.save()
+
+        activeSessionId = id
+        load()
+        return id
+    }
+
+    /// Start, pressed on the live screen: the moment the session's clock begins.
+    ///
+    /// `startedAt` is REWRITTEN here rather than kept from creation. Everything downstream — the
+    /// trimmer's track, the export's span, the media clock, the report's readout — measures from
+    /// it, and a session set up for ten minutes before Start would otherwise carry ten minutes of
+    /// empty timeline in front of its first reading.
+    public func beginRecording(_ id: UUID) async throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { throw FieldSessionError.sessionMissing }
+
+        // A double tap is not two starts. It is not a failure either — the session is already running, which is what
+        // was asked for — but the screen may not know: a row left at `recording` with instruments that never started
+        // is exactly the "I hit start and nothing happens" Ben reported on 2026-09-16, so the live session is brought
+        // up to match. Every other state is refused out loud rather than silently.
+        if session.outcome == .recording {
+            if active?.sessionId == id, active?.isRecording != true {
+                await active?.startSession(at: session.startedAt)
+            }
+            return
+        }
+        guard session.outcome == .pending else { throw FieldSessionError.cannotStart(session.outcome) }
+        let at = now()
+        session.startedAt = at
+        session.outcome = .recording
+        try context.save()
+        if active?.sessionId == id { await active?.startSession(at: at) }
+        load()
+    }
+
+    public func endSession(_ id: UUID) async throws {
+        if active?.sessionId == id { await deactivate() }
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { return }
+        session.endedAt = now()
+        session.outcome = .ended
+        try context.save()
+        if activeSessionId == id { activeSessionId = nil }
+        load()
+    }
+
+    /// At launch: a session still marked `recording` means the app went away mid-session — the
+    /// phone died, the system reclaimed memory, somebody force-quit. Its log is recovered, and
+    /// it is closed as INTERRUPTED with no `endedAt`, because the honest answer to "when did it
+    /// stop" is that nobody knows. Pretending it ended at relaunch would invent a fact.
+    public func recoverInterruptedSessions() async {
+        guard let context else { return }
+        let descriptor = FetchDescriptor<FieldSession>(
+            predicate: #Predicate { $0.outcomeRaw == "recording" })
+        guard let stranded = try? context.fetch(descriptor), !stranded.isEmpty else {
+            load(); return
+        }
+
+        for session in stranded {
+            let log = ReadingLog(fileURL: files.readingLogURL(for: session.id))
+            let survived = (try? await log.recover()) ?? session.readingCount
+            session.readingCount = survived
+            session.outcome = .interrupted
+        }
+        try? context.save()
+        activeSessionId = nil
+        load()
+    }
+
+    public func rename(_ id: UUID, locationLabel: String?) throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { return }
+        session.locationLabel = locationLabel?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        try context.save()
+        load()
+    }
+
+    /// Links a session to one of the user's investigations after the fact — the common case,
+    /// since in the field you rarely stop to pick from a list.
+    public func link(_ id: UUID, investigationId: UUID?, investigationTitle: String?) throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { return }
+        session.investigationId = investigationId
+        session.investigationTitle = investigationTitle
+        try context.save()
+        load()
+    }
+
+    /// Deletes the row AND the files. A session that vanished from the list while its recordings
+    /// stayed on disk would quietly fill the phone.
+    public func delete(_ id: UUID) throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        if let session = try fetch(id, in: context) { context.delete(session) }
+        try context.save()
+        try? files.delete(sessionId: id)
+        if activeSessionId == id { activeSessionId = nil }
+        load()
+    }
+
+    private func fetch(_ id: UUID, in context: ModelContext) throws -> FieldSession? {
+        try context.fetch(FetchDescriptor<FieldSession>(
+            predicate: #Predicate { $0.id == id })).first
+    }
+}
+
+/// A photo, as a moment on the timeline.
+public struct CaptureMark: Sendable, Equatable, Identifiable {
+    public var id: UUID
+    public var at: Date
+    public var kind: CaptureKind
+    public var relativePath: String
+    public var latitude: Double?
+    public var longitude: Double?
+    /// The picture chosen to represent the property, if this is it.
+    public var isRepresentative: Bool
+    /// The room the operator said they were in when this was captured.
+    public var room: String?
+    /// What the file weighs on the phone, so an upload can be weighed before it is attempted
+    /// rather than after it has run for twenty minutes.
+    public var byteCount: Int64
+
+    public init(id: UUID, at: Date, kind: CaptureKind, relativePath: String,
+                latitude: Double? = nil, longitude: Double? = nil,
+                isRepresentative: Bool = false, room: String? = nil,
+                byteCount: Int64 = 0) {
+        self.id = id
+        self.at = at
+        self.kind = kind
+        self.relativePath = relativePath
+        self.latitude = latitude
+        self.longitude = longitude
+        self.isRepresentative = isRepresentative
+        self.room = room
+        self.byteCount = byteCount
+    }
+}
+
+/// Everything needed to replay one finished session.
+public struct ReplaySource: Sendable {
+    public var sessionId: UUID
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var markers: [FieldMarkerRecord]
+    public var media: [MediaSegment]
+    public var stills: [CaptureMark]
+    public var baselines: Baselines
+    public var log: ReadingLog
+}
+
+public enum FieldSessionError: Error, LocalizedError, Equatable {
+    case unavailable
+
+    /// Start was pressed on a session that is not waiting to start.
+    ///
+    /// Ben, 2026-09-16: "I can set the base, but when I hit start, nothing happens." Start returned quietly whenever
+    /// the row was not `pending` — which is what a session left behind by a crash looks like, since recovery closes
+    /// it as interrupted. Nothing was said, and the bar sat on "not started" for ever.
+    case cannotStart(FieldSessionOutcome)
+
+    /// Start was pressed on a session this device no longer has.
+    case sessionMissing
+
+    /// A `.ben` was opened whose session this device already holds.
+    case alreadyOnThisPhone(String)
+
+    /// A file was opened that is not a session bundle, with the reader's reason.
+    case notASessionBundle(String)
+
+    /// The bundle's seal no longer describes its contents: bytes lost in transit, or changed.
+    case bundleTampered
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable: "Field sessions can't be stored on this device."
+        case .sessionMissing: "That session isn't on this phone any more."
+        case .alreadyOnThisPhone(let title):
+            "\"\(title)\" is already on this phone. Delete that copy first if you want this one instead."
+        case .notASessionBundle(let reason):
+            "That isn't a session file this app can open: \(reason)"
+        case .bundleTampered:
+            "This file doesn't match its own seal — some of it was lost or changed on the way here. "
+            + "Ask for it to be sent again."
+        case .cannotStart(let outcome):
+            switch outcome {
+            case .recording: "This session is already running."
+            case .ended: "This session has already finished. Start a new one."
+            case .interrupted:
+                "This session was interrupted — the app closed while it was running — so it cannot be started again. "
+                + "Start a new one; nothing recorded is lost."
+            case .pending: "This session could not be started."
+            }
+        }
+    }
+}
+
+/// The hardware identifier — `iPhone17,1`. It is what `device.model` carries in an exported
+/// bundle, because "iPhone" would not let anyone assess a reading for known quirks, and every
+/// meter has some.
+public enum DeviceModel {
+    public static func identifier() -> String {
+        var info = utsname()
+        uname(&info)
+        let machine = withUnsafeBytes(of: &info.machine) { raw in
+            raw.prefix { $0 != 0 }.map { CChar(bitPattern: $0) }
+        }
+        let text = String(cString: machine + [0])
+        return text.isEmpty ? "unknown" : text
+    }
+
+    /// Apple's identifier for this app on this device — what a sealed bundle carries to say which
+    /// device recorded it.
+    ///
+    /// Ben, 2026-09-16: "Maybe the apple assigned ID and if they sign up for an account on our
+    /// site after recording a session, we could tell it was them who recorded it when they upload
+    /// it." `identifierForVendor` is the one Apple hands out without asking anybody for anything:
+    /// no permission prompt, no tracking consent, and no relationship to the advertising id.
+    ///
+    /// **A device, not a person, and best-effort at that.** Apple resets it once every app from
+    /// this vendor is removed from the device, and two people sharing a phone share it. Good for
+    /// "this was recorded on your own phone" and for noticing that an imported bundle was NOT;
+    /// never good for "only you could have recorded this".
+    ///
+    /// Nil where there is no such thing — the test host, a Mac — rather than inventing one.
+    ///
+    /// Main-actor because UIDevice is: reading it is cheap and always happens on the way into a
+    /// send, so hopping for it costs nothing and pretending otherwise is a data race.
+    @MainActor
+    public static func vendorIdentifier() -> String? {
+        #if canImport(UIKit)
+        return UIDevice.current.identifierForVendor?.uuidString
+        #else
+        return nil
+        #endif
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}

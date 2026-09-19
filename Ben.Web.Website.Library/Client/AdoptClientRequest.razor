@@ -1,0 +1,186 @@
+@page "/my-requests/adopt/{Id:guid}"
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Was this you?</PageTitle>
+
+@*
+    Where the "somebody asked for an investigation using your address" email lands (site
+    evaluation 2026-09-06, phase 1).
+
+    The request was made from the signed-out wizard by somebody who typed an email that already
+    had an account. Nothing was written to that account and nothing was sent to any group: an
+    anonymous caller must not be able to put requests on a stranger's account. So the request
+    waits here until its owner says whether it is theirs.
+
+    Two gates, both on the server: signed in as the address the request named, and holding the
+    secret from the link. Either missing and the page has nothing to show — deliberately the same
+    "not available" for a wrong key, a wrong account, an expired row and a row that never existed,
+    so the link cannot be used to learn anything.
+*@
+
+<div class="container py-4" style="max-width:640px;">
+    @if (!_loaded)
+    {
+        <BenLoaderOverlay Visible="true" Text="Looking for that request…" />
+    }
+    else if (_pending is null)
+    {
+        <div class="card">
+            <div class="card-body">
+                <h1 class="h5 mb-3">That request isn't available</h1>
+                <p class="text-secondary mb-3">
+                    The link may have expired, it may already have been used, or it may have been
+                    meant for a different account. Requests wait two weeks.
+                </p>
+                <p class="text-secondary small mb-3">
+                    Signed in as somebody else? Sign out and open the link again with the account
+                    the email was sent to.
+                </p>
+                <a class="btn btn-secondary" href="/my-requests">Go to my requests</a>
+            </div>
+        </div>
+    }
+    else if (_done is { } message)
+    {
+        <div class="card border-success">
+            <div class="card-body text-center py-5">
+                <div class="mb-3" style="font-size:2rem;">✓</div>
+                <p class="text-secondary mb-4">@message</p>
+                <a class="btn btn-primary" href="/my-requests">My requests</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <h1 class="h5 mb-1">Was this you?</h1>
+                <p class="text-secondary mb-3">
+                    Somebody asked for an investigation using your email address. Nothing has been
+                    sent to any group yet, and nothing has been added to your account.
+                </p>
+
+                <dl class="row mb-3">
+                    <dt class="col-sm-3">Name given</dt>
+                    <dd class="col-sm-9">@_pending.DisplayName</dd>
+
+                    <dt class="col-sm-3">Address</dt>
+                    <dd class="col-sm-9">
+                        @_pending.StreetAddress1@(string.IsNullOrWhiteSpace(_pending.StreetAddress2) ? "" : $", {_pending.StreetAddress2}")<br />
+                        @_pending.City, @_pending.State @_pending.ZipCode
+                    </dd>
+
+                    @if (_pending.OrganizationNames.Count > 0)
+                    {
+                        <dt class="col-sm-3">For</dt>
+                        <dd class="col-sm-9">@string.Join(", ", _pending.OrganizationNames)</dd>
+                    }
+
+                    <dt class="col-sm-3">Written</dt>
+                    <dd class="col-sm-9">@_pending.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</dd>
+                </dl>
+
+                @* What they wrote is not shown until they say it is theirs: if it is not, a
+                   stranger's account of what happens in their house is not this reader's to have. *@
+                <p class="text-secondary small">
+                    What was written about the activity is kept until you say this is yours.
+                </p>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="btn btn-primary" id="adopt-yes"
+                            @onclick="AdoptAsync" disabled="@_busy">
+                        <BenIcon Name="check" Class="me-1" />
+                        @(_busy ? "Working…" : "Yes, this is mine")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="adopt-no"
+                            @onclick="DiscardAsync" disabled="@_busy">
+                        This wasn't me — discard it
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    /// <summary>The secret from the emailed link. Without it the server shows nothing.</summary>
+    [SupplyParameterFromQuery(Name = "key")] private string? Key { get; set; }
+
+    private PendingClientRequestRecord? _pending;
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private string? _done;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Signing in is the first gate, and the return URL brings them straight back here with
+        // the key intact — asking somebody to find the email again would lose most of them.
+        if (!UserState.IsAuthenticated)
+        {
+            var here = new Uri(NavManager.Uri).PathAndQuery;
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(here)}");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Key))
+        {
+            try { _pending = await AdminClient.GetPendingClientRequestAsync(Id, Key!); }
+            catch { /* null reads as "not available", which is what the page says */ }
+        }
+
+        _loaded = true;
+        StateHasChanged();
+    }
+
+    private async Task AdoptAsync()
+    {
+        if (_busy || Key is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await AdminClient.AdoptPendingClientRequestAsync(Id, Key);
+            if (created is null)
+            {
+                _error = "Couldn't add that request to your account. Please try again.";
+                return;
+            }
+            NavManager.NavigateTo($"/my-requests/{created.Id}");
+        }
+        catch { _error = "Couldn't add that request to your account. Please try again."; }
+        finally { _busy = false; }
+    }
+
+    private async Task DiscardAsync()
+    {
+        if (_busy || Key is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (await AdminClient.DiscardPendingClientRequestAsync(Id, Key))
+                _done = "That request has been discarded. Your account has not changed.";
+            else
+                _error = "Couldn't discard that request. Please try again.";
+        }
+        catch { _error = "Couldn't discard that request. Please try again."; }
+        finally { _busy = false; }
+    }
+}

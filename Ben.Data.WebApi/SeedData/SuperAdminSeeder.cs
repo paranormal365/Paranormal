@@ -13,12 +13,21 @@ internal static class SuperAdminSeeder
         var displayName = config["SeedData:SuperAdmin:DisplayName"];
         var password = config["SeedData:SuperAdmin:Password"];
 
+        // Legal name and birth year come from config like everything else about this account.
+        // Without them the name backfill would split the display name — and a display name like
+        // "AverageBen" yields "AverageBen" with no surname, which is not who anybody is.
+        var firstName = config["SeedData:SuperAdmin:FirstName"];
+        var lastName  = config["SeedData:SuperAdmin:LastName"];
+        var birthYear = config.GetValue<int?>("SeedData:SuperAdmin:BirthYear");
+
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password) || password == "REPLACE_ME_WITH_YOUR_PASSWORD")
             return; // Not configured — skip silently
 
         using var scope = services.CreateScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+
+        await RepairRoleLookupNamesAsync(scope.ServiceProvider);
 
         // Ensure SuperAdmin role exists
         if (!await roleManager.RoleExistsAsync(RoleNames.SuperAdmin))
@@ -38,6 +47,16 @@ internal static class SuperAdminSeeder
                 throw new InvalidOperationException($"Failed to create role '{RoleNames.Admin}': {string.Join(", ", adminRoleResult.Errors.Select(e => e.Description))}");
         }
 
+        // Ensure the Moderator role exists (item 186 F5). Nobody is seeded into it, for the same
+        // reason as Admin: it exists so a SuperAdmin can assign it, and so a check against it is
+        // answering a real question rather than testing for a role no database row backs.
+        if (!await roleManager.RoleExistsAsync(RoleNames.Moderator))
+        {
+            var moderatorRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Moderator));
+            if (!moderatorRoleResult.Succeeded)
+                throw new InvalidOperationException($"Failed to create role '{RoleNames.Moderator}': {string.Join(", ", moderatorRoleResult.Errors.Select(e => e.Description))}");
+        }
+
         // Ensure SuperAdmin user exists
         var user = await userManager.FindByEmailAsync(email);
         if (user is null)
@@ -47,6 +66,10 @@ internal static class SuperAdminSeeder
                 UserName = email,
                 Email = email,
                 DisplayName = displayName,
+                DateOnboarded = DateTime.UtcNow, // seeded = established; no first-run wizard
+                FirstName   = firstName,
+                LastName    = lastName,
+                BirthYear   = birthYear,
                 EmailConfirmed = true,
                 DateCreated = DateTime.UtcNow
             };
@@ -56,6 +79,35 @@ internal static class SuperAdminSeeder
                 throw new InvalidOperationException($"Failed to create SuperAdmin user: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
         }
 
+        // Fill in a legal name the account predates, without ever overwriting one already set.
+        //
+        // The seeder only supplies these on create, so an account that existed before the columns
+        // did would otherwise be left to UserNameBackfillService — which splits the display name,
+        // and "AverageBen" splits into a first name of "AverageBen" and no surname. That is not
+        // anybody's name. Config knows better, so config wins where the field is still empty.
+        //
+        // Only where empty: a name the person has since corrected on their profile is theirs, and
+        // a seeder that re-imposed config on every restart would undo that silently.
+        var needsName = string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(firstName);
+        var needsBirthYear = user.BirthYear is null && birthYear is not null;
+        // Same fill-where-empty rule for onboarding: the seeded admin account never needs the
+        // first-run wizard, and after a database rebuild an unstamped account is redirected to
+        // /onboarding on every navigation.
+        var needsOnboarded = user.DateOnboarded is null;
+
+        if (needsName || needsBirthYear || needsOnboarded)
+        {
+            if (needsName)
+            {
+                user.FirstName = firstName;
+                user.LastName  = lastName;
+            }
+            if (needsBirthYear) user.BirthYear = birthYear;
+            if (needsOnboarded) user.DateOnboarded = DateTime.UtcNow;
+
+            await userManager.UpdateAsync(user);
+        }
+
         // Ensure user is in SuperAdmin role
         if (!await userManager.IsInRoleAsync(user, RoleNames.SuperAdmin))
         {
@@ -63,5 +115,20 @@ internal static class SuperAdminSeeder
             if (!addRoleResult.Succeeded)
                 throw new InvalidOperationException($"Failed to assign role '{RoleNames.SuperAdmin}': {string.Join(", ", addRoleResult.Errors.Select(e => e.Description))}");
         }
+    }
+
+    /// <summary>Repairs role rows whose lookup name is missing — see <see cref="RoleLookupNames"/>.</summary>
+    private static async Task RepairRoleLookupNamesAsync(IServiceProvider services)
+    {
+        var factory = services.GetService<IDbContextFactory<BenDataContext>>();
+        if (factory is null) return;
+
+        await using var db = await factory.CreateDbContextAsync();
+        var repaired = await RoleLookupNames.RepairAsync(db);
+        if (repaired.Count == 0) return;
+
+        services.GetService<ILoggerFactory>()?.CreateLogger("RoleLookupNames")
+            .LogWarning("Repaired the lookup name on {Count} role row(s): {Roles}. Role changes on these would have "
+                      + "thrown rather than saved.", repaired.Count, string.Join(", ", repaired));
     }
 }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,6 +23,9 @@
          served raw to anyone who guesses its name, which would hand out the app-administration
          documents past their audience gate. -->
     <EmbeddedResource Include="Help\Content\*.md" />
+    <!-- The public changelog, embedded for the same reason: a file under wwwroot is served raw,
+         and these are rendered through the site so the audience and the shape stay ours. -->
+    <EmbeddedResource Include="Changelog\Content\*.md" />
     <!-- Screenshots for the administrator documents, for the same reason. These are inlined as
          data URIs at render time rather than served: an <img> carries no bearer token, so an
          authorised image endpoint would 401 for precisely the readers allowed to see it. The
@@ -33,6 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ben.Data.Common\Ben.Data.Common.csproj" />
+    <ProjectReference Include="..\Ben.Data.WebApi.Client\Ben.Data.WebApi.Client.csproj" />
     <ProjectReference Include="..\Ben.Service.Models\Ben.Service.Models.csproj" />
     <!-- VideoExportPublisher, BenMediaLibraryProvider and SidecarPairingReporter implement
          Ben.Video.Editor service contracts. -->

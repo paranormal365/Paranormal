@@ -127,7 +127,7 @@
             </div>
             <div class="col-md-6 mb-3">
                 <label class="form-label fw-semibold">When did you get it?</label>
-                <TelerikDatePicker Format="dd/MM/yyyy" @bind-Value="@_acquisitionDate" Width="100%" />
+                <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_acquisitionDate" Width="100%" />
             </div>
         </div>
 
@@ -321,7 +321,7 @@
         _loadedForItemId = key;
 
         _error = null;
-        _categories = [.. await AdminClient.GetEquipmentCategoriesAsync()];
+        _categories = [.. (await AdminClient.GetEquipmentCategoriesAsync()).Items];
 
         if (Item is null)
         {
@@ -346,13 +346,15 @@
             _loanAudience           = Item.LoanAudience;
 
             // Resolve the item's model back to its category/brand so the pickers open populated.
-            var model = (await AdminClient.SearchEquipmentModelsAsync()).FirstOrDefault(m => m.Id == Item.EquipmentModelId);
+            // Prefills the category/brand pickers from the item's model. A failed lookup leaves
+            // them unset, which the person can simply choose again.
+            var model = (await AdminClient.SearchEquipmentModelsAsync()).Items.FirstOrDefault(m => m.Id == Item.EquipmentModelId);
             _categoryId = model?.EquipmentCategoryId;
             _brandId    = model?.EquipmentBrandId;
             _modelId    = Item.EquipmentModelId;
             await ReloadBrandsAsync();
             if (_brandId is not null && _categoryId is not null)
-                _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+                _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
         }
 
         _newBrandName = string.Empty;
@@ -385,7 +387,7 @@
         StateHasChanged();
         try
         {
-            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+            _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)).Items];
         }
         finally
         {
@@ -397,11 +399,16 @@
     /// Reloads the makes, and works out which of them have a model in the chosen category.
     /// </summary>
     /// <remarks>
-    /// One extra call rather than one per make: the category-filtered model search already returns
-    /// every model in the category carrying its make's id, so the coverage set falls out of a list
-    /// the catalog produces in a single query. Both endpoints apply the same visibility rule —
-    /// approved, plus this caller's own pending proposals — so a make somebody proposed a model
-    /// under a moment ago is labelled as having one, and the two lists cannot disagree.
+    /// Two calls to the same endpoint: every make, and the makes narrowed to this category. The
+    /// narrowed list is the coverage set, so the labels agree with the server's own rule instead
+    /// of a second idea of it living in the browser — including the carve-out that keeps a make
+    /// the caller proposed themselves, which has no models yet by definition.
+    ///
+    /// The unnarrowed list is the one shown. The narrowing endpoint DROPS a make with nothing in
+    /// the category, and dropping it is what made the form a dead end: the catalog refuses "FLIR"
+    /// as a probable duplicate of the FLIR it is hiding, so the first person to own a FLIR audio
+    /// recorder could neither choose the make nor add it. The make stays, labelled, and sorts
+    /// below the ones that do make this kind of thing.
     /// </remarks>
     private async Task ReloadBrandsAsync()
     {
@@ -415,11 +422,10 @@
         StateHasChanged();
         try
         {
-            _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _brands = [.. (await AdminClient.GetEquipmentBrandsAsync()).Items];
             _brandsWithModelsHere =
             [
-                .. (await AdminClient.SearchEquipmentModelsAsync(categoryId: _categoryId))
-                    .Select(m => m.EquipmentBrandId)
+                .. (await AdminClient.GetEquipmentBrandsAsync(categoryId: _categoryId)).Items.Select(b => b.Id)
             ];
             RebuildBrandOptions();
         }
@@ -429,12 +435,19 @@
         }
     }
 
+    /// <summary>
+    /// Builds the make picker's rows: the ones that make this kind of thing first, then the rest,
+    /// each saying why it is down there.
+    /// </summary>
     private void RebuildBrandOptions()
         => _brandOptions =
         [
-            .. _brands.Select(b => new BrandOption(
-                b.Id,
-                _brandsWithModelsHere.Contains(b.Id) ? b.Name : $"{b.Name} (no models in this category yet)"))
+            .. _brands
+                .OrderBy(b => _brandsWithModelsHere.Contains(b.Id) ? 0 : 1)
+                .ThenBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Select(b => new BrandOption(
+                    b.Id,
+                    _brandsWithModelsHere.Contains(b.Id) ? b.Name : $"{b.Name} (no models in this category yet)"))
         ];
 
     /// <summary>
@@ -496,7 +509,7 @@
         }
         else
         {
-            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+            _models = [.. (await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)).Items];
             _newModelName = string.Empty;
             _modelId = created.Id;
 

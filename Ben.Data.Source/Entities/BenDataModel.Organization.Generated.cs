@@ -9,7 +9,91 @@ namespace Ben.Data.Source.Entities
         public string UrlName { get; set; } = null!;
 
         /// <summary>When true, registered users may submit membership applications to join this organization.</summary>
+        /// <summary>
+        /// What this organization primarily is (ghost walking tours, 2026-08-24). Chosen when
+        /// the group is created, where it decides the DEFAULTS a new group starts with; after
+        /// that it is a label for discovery, never a gate on any feature.
+        /// </summary>
+        public Ben.Data.Common.Enums.OrganizationKind Kind { get; set; }
+
+        /// <summary>
+        /// This group runs public walking tours, whatever kind it primarily is.
+        /// </summary>
+        /// <remarks>
+        /// True by default for a <see cref="Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour"/>,
+        /// and separately settable by an investigation group that also runs tours — plenty do,
+        /// and none of them should have to register a second group to be found for it. The
+        /// finder's "walking tours" filter matches on THIS, not on Kind, so a group that does
+        /// both appears in both places while its badge still says what it mainly is.
+        /// </remarks>
+        public bool RunsPublicTours { get; set; }
+
+        /// <summary>
+        /// True when this organization exists only to carry one person's own subscription, and is
+        /// not a group anybody joins.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Why an organization at all for somebody who has no group.</b> Everything a
+        /// paid solo tier sells is org-scoped: cases, subscriptions, privacy, private-residence
+        /// work. Giving the solo investigator a hidden organization means all of it works with no
+        /// second implementation, rather than a parallel account-level version of each that could
+        /// drift from the group one.</para>
+        ///
+        /// <para><b>A flag, not an <see cref="Ben.Data.Common.Enums.OrganizationKind"/>.</b> That
+        /// enum's own contract is that a kind is "a starting point and a label, never a gate", and
+        /// hiding an organization is exactly a gate. Overloading it would have cost no migration
+        /// and quietly contradicted the rule every other reader of Kind relies on.</para>
+        ///
+        /// <para><b>What it changes is visibility, nothing else.</b> A personal organization is a
+        /// real organization in every other respect. It is excluded from the places that present
+        /// groups to be found or joined, because a person who bought a solo plan did not create a
+        /// group and must not turn up in a directory as one — that would publish the fact that
+        /// they subscribed, under their own name. See <c>PersonalOrganizations</c>, which owns the
+        /// filter.</para>
+        /// </remarks>
+        public bool IsPersonal { get; set; }
+
+        /// <summary>
+        /// True when this group exists but should not appear in any public directory.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Different from <see cref="IsPersonal"/> in what it means, identical in what it
+        /// does.</b> A personal organization is one person's subscription and was never a group; an
+        /// unlisted one is a real group that has chosen not to be found. Both are excluded from the
+        /// same places for the same reason — they are not offering themselves to strangers — so
+        /// both are answered by one filter rather than two that could drift.</para>
+        ///
+        /// <para><b>It hides the group from directories, not from its own members.</b> Everything
+        /// inside works unchanged: the roster, cases, investigations, its public page for anybody
+        /// given the link. What stops is appearing in search, browse, nearby results and promoted
+        /// cards — the surfaces whose job is to introduce strangers to groups.</para>
+        ///
+        /// <para>Ben, 2026-08-31: the immediate need is the account App Review signs into, which
+        /// exists to get the iOS app approved and has no business turning up in a directory of
+        /// real groups. Built as a setting rather than a one-off because a group that does not
+        /// want to be found is an ordinary thing to want.</para>
+        /// </remarks>
+        public bool IsUnlisted { get; set; }
+
         public bool IsAcceptingApplications { get; set; }
+
+        /// <summary>
+        /// The functional role a person is given when they become a member of this group
+        /// (site evaluation 2026-09-06, W-M1). Null means none, which is what every group did
+        /// before the setting existed.
+        /// </summary>
+        /// <remarks>
+        /// <para>Membership rank alone opens nothing below Administrator: <c>HasAccessAsync</c>
+        /// waves Owner and Administrator through and then requires a functional role or a direct
+        /// grant. So a new Member or Viewer could be named on a visit roster, see the case listed
+        /// on their desk, and be refused by the case API when they clicked it.</para>
+        ///
+        /// <para>Applied only when the membership is CREATED, and only to ranks that do not
+        /// already bypass. Changing this does not reach back into memberships that already exist —
+        /// a setting that silently re-permissioned the whole roster would be a worse surprise than
+        /// the one it fixes.</para>
+        /// </remarks>
+        public Guid? DefaultMemberRoleId { get; set; }
 
         /// <summary>When true, the public can submit investigation requests to this organization.</summary>
         public bool IsAcceptingClients { get; set; }
@@ -41,6 +125,7 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual OrganizationAreaOfOperation? AreaOfOperation { get; set; }
+        public virtual OrganizationRole? DefaultMemberRole { get; set; }
         public virtual ICollection<OrganizationAddress> OrganizationAddresses { get; set; } = new List<OrganizationAddress>();
         public virtual ICollection<OrganizationEmail> OrganizationEmails { get; set; } = new List<OrganizationEmail>();
         public virtual ICollection<OrganizationPhone> OrganizationPhones { get; set; } = new List<OrganizationPhone>();

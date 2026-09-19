@@ -2,6 +2,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -14,12 +16,28 @@
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">Cases</h3>
         <div class="d-flex gap-2">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))"><BenIcon Name="inbox" Class="me-1" />
-                Pending Requests @(_pendingCount > 0 ? $"({_pendingCount})" : "")
+            @* Beta feedback, 2026-09-14: requests waiting for an answer have to be seen. The button goes
+               yellow when anything waits and carries the count as a badge; with nothing waiting it stays
+               a quiet outline so the colour keeps meaning something. *@
+            <button type="button" class="btn @(_pendingCount > 0 ? "btn-warning" : "btn-outline-secondary")"
+                    data-testid="pending-requests"
+                    aria-label="@(_pendingCount switch { 0 => "Pending requests, none waiting", 1 => "Pending requests, 1 waiting", var n => $"Pending requests, {n} waiting" })"
+                    @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))"><BenIcon Name="inbox" Class="me-1" />
+                Pending Requests
+                @if (_pendingCount > 0)
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis ms-1" data-testid="pending-count">@_pendingCount</span>
+                }
             </button>
-            <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))"><BenIcon Name="plus" Class="me-1" />
-                New Case
-            </button>
+            @* IH-03 step 2: the button now answers to the same grant the server checks on
+               POST — a Case Manager gets it, a member with no grant does not see an action that
+               would 403. Offering it and refusing it is the shape this whole arc is about. *@
+            @if (_perms?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Create) == true)
+            {
+                <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/new"))" data-testid="new-case"><BenIcon Name="plus" Class="me-1" />
+                    New Case
+                </button>
+            }
         </div>
     </div>
 
@@ -28,9 +46,59 @@
         <div class="alert alert-danger">@_error</div>
     }
 
+    @if (_incoming.Count > 0)
+    {
+        @* Cases other groups — or their clients — have asked this one to take (item 84). Above
+           the list because it needs an answer, and until recently there was NO surface at all
+           for the receiving side of a transfer: the request sat in a table only the sender
+           could see. *@
+        <div class="card border-primary mb-4">
+            <div class="card-header"><strong>Incoming cases</strong> — waiting on your answer</div>
+            <div class="card-body">
+                @foreach (var t in _incoming)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom">
+                        <div class="me-auto">
+                            <strong>@t.CaseTitle</strong>
+                            <span class="text-secondary">— @t.City, @t.State</span>
+                            <div class="small text-secondary">
+                                @(t.ProposedByClient
+                                    ? $"The client is moving this case from {t.FromOrganizationName}."
+                                    : $"Proposed by {t.FromOrganizationName}.")
+                                @if (t.ProposedByClient)
+                                {
+                                    <span>
+                                        You'd see: @(t.ShareHistory ? "their history" : "no prior history"),
+                                        @(t.ShareInvestigations ? "past investigations" : "no past investigations").
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(t.Reason))
+                            {
+                                <div class="small">"@t.Reason"</div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-success btn-sm" disabled="@_incomingBusy"
+                                @onclick="() => AnswerIncomingAsync(t, accept: true)">Accept</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_incomingBusy"
+                                @onclick="() => AnswerIncomingAsync(t, accept: false)">Decline</button>
+                    </div>
+                }
+                @if (_incomingError is not null)
+                {
+                    <div class="alert alert-danger py-2 mt-2 mb-0">@_incomingError</div>
+                }
+            </div>
+        </div>
+    }
+
     @if (_cases is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading cases…" />
+    }
+    else if (_casesResult.Failed)
+    {
+        <BenListState TItem="CaseRecord" Result="@_casesResult" OnRetry="@LoadAsync" />
     }
     else if (_cases.Count == 0)
     {
@@ -45,14 +113,22 @@
     {
         @* ── Filters ─────────────────────────────────────────────────────── *@
         <div class="d-flex gap-2 flex-wrap mb-3">
+            @* A status with cases in it shows its count in the status's own colour — the same colour as
+               the badge on each case below — so Proposed and Active stand out at a glance and an empty
+               status stays grey (beta feedback, 2026-09-14). *@
             @foreach (var status in _filterOptions)
             {
                 var s = status;
-                <button type="button" class="btn @((_activeFilter == s ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _activeFilter = s)">
-                    @(s is null ? "All" : s.Value.Label())
-                    <span class="badge bg-white text-dark ms-1">
-                        @(s is null ? _cases.Count : _cases.Count(c => c.Status == s))
-                    </span>
+                var count = s is null ? _cases.Count : _cases.Count(c => c.Status == s);
+                var label = s is null ? "All" : s.Value.Label();
+                var countClass = s is not null && count > 0 ? s.Value.BadgeClass() : "bg-body-secondary text-body-emphasis border";
+                <button type="button" class="btn @(_activeFilter == s ? "btn-secondary" : "btn-outline-secondary") btn-sm"
+                        aria-pressed="@(_activeFilter == s ? "true" : "false")"
+                        aria-label="@($"{label}, {count} {(count == 1 ? "case" : "cases")}")"
+                        data-testid="@($"case-filter-{(s is null ? "all" : s.Value.ToString().ToLowerInvariant())}")"
+                        @onclick="@(() => _activeFilter = s)">
+                    @label
+                    <span class="badge @countClass ms-1" data-testid="case-filter-count">@count</span>
                 </button>
             }
         </div>
@@ -104,6 +180,7 @@
     [Parameter] public bool EmbeddedMode  { get; set; }
 
     private List<CaseRecord>? _cases;
+    private LoadResult<CaseRecord> _casesResult;
     private string? _orgName;
     private string? _error;
     private CaseStatus? _activeFilter;
@@ -111,7 +188,7 @@
 
     private static readonly CaseStatus?[] _filterOptions =
         [null, CaseStatus.Proposed, CaseStatus.Accepted, CaseStatus.Active,
-         CaseStatus.Summarized, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
+         CaseStatus.Summarized, CaseStatus.Paused, CaseStatus.Public, CaseStatus.Haunted, CaseStatus.Closed];
 
     private IEnumerable<CaseRecord> FilteredCases =>
         _activeFilter is null ? _cases! : _cases!.Where(c => c.Status == _activeFilter);
@@ -120,18 +197,70 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private List<IncomingTransferRecord> _incoming = [];
+    private bool _incomingBusy;
+    private string? _incomingError;
+
+    private async Task AnswerIncomingAsync(IncomingTransferRecord t, bool accept)
+    {
+        _incomingBusy = true;
+        _incomingError = null;
+
+        // Declining without a word helps nobody — the platform relays the reason to whoever
+        // asked, so a bare decline gets a serviceable default sentence.
+        var (result, error) = await AdminClient.RespondCaseTransferAsync(
+            OrgId, t.CaseId, t.LogId, accept,
+            accept ? null : "The group is unable to take this case on at the moment.");
+
+        _incomingBusy = false;
+
+        if (result is null)
+        {
+            _incomingError = error ?? "That couldn't be recorded — it may already have been answered.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>What this viewer may do with cases in this group.</summary>
+    /// <remarks>
+    /// Null until it arrives, and <see cref="MyOrgPermissionsItem.May"/> answers NO for anything
+    /// the server did not mention — so a button appears once it is known to be usable, never
+    /// hopefully.
+    /// </remarks>
+    private MyOrgPermissionsItem? _perms;
+
+    private async Task LoadAsync()
+    {
+        _error = null;
         try
         {
-            _cases = (await AdminClient.GetOrgCasesAsync(OrgId)).ToList();
+            // Fetched alongside the list, not per button: one round trip answers every
+            // affordance on this screen, and the service caches it for the rest of the request.
+            try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+            catch { _perms = null; }   // unknown means the buttons stay hidden, not hopeful
+
+            _casesResult = await AdminClient.GetOrgCasesAsync(OrgId);
+            _cases       = _casesResult.Items.ToList();
+            _incoming    = [.. (await AdminClient.GetIncomingTransfersAsync(OrgId)).Items];
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
             // Deliberately quiet: this is the count on a "pending requests" badge. If it can't
             // be fetched the badge simply doesn't appear, which is the same thing the user sees
             // when there is nothing pending — and failing the whole case list over a decoration
             // would be worse than omitting it.
-            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Count; } catch { }
+            try { _pendingCount = (await AdminClient.GetOrgPendingRequestsAsync(OrgId)).Items.Count; } catch { }
         }
-        catch { _error = "Failed to load cases."; }
+        catch
+        {
+            _error       = "Failed to load cases.";
+            _casesResult = LoadResult<CaseRecord>.Failure();
+            _cases     ??= [];
+        }
         StateHasChanged();
     }
 

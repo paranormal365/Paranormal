@@ -40,7 +40,9 @@ public sealed class EquipmentItemDetailController : BenControllerBase
     public async Task<ActionResult<EquipmentItemDetailRecord>> GetItem(Guid id, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
-        var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
+        // [AllowAnonymous] endpoint, so the claim check alone misses an Entra session and shows
+        // an admin the visitor's view of the item. Item 140.
+        var isSuperAdmin = await CallerIsSuperAdminAsync();
 
         await using var db = await _db.CreateDbContextAsync(ct);
         var item = await db.EquipmentItems.AsNoTracking()

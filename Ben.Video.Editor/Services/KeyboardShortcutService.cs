@@ -13,7 +13,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class KeyboardShortcutService : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/keyboardInterop.js";
+    private const string ModulePath = "js/keyboardInterop.js";
 
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
@@ -36,7 +36,7 @@ public sealed class KeyboardShortcutService : IAsyncDisposable
         _target = target;
         try
         {
-            _module  ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            _module  ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
             _selfRef ??= DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("register", _selfRef);
         }

@@ -277,6 +277,9 @@ For a full end-to-end production setup walkthrough see the [Production Deploymen
 | [WebApp-WebApi-Integration-Guide.md](./ProjectNotes/WebApp-WebApi-Integration-Guide.md) | Complete integration reference: DI, models, HTTP methods, CRUD, AutoMapper, error handling |
 | [SESSION-SUMMARY-2026-07-10.md](./ProjectNotes/SESSION-SUMMARY-2026-07-10.md) | Day 3 milestone summary: OpenAPI fix, port config, CORS, auth flow |
 | [Project-Analysis/](./ProjectNotes/Project-Analysis/) | Per-project analysis — classes, interfaces, enums, services |
+| [FeatureHistory/](./ProjectNotes/FeatureHistory/) | **One document per feature branch** — what was built, why that way, what was rejected, what was left out. The `README-*.md` files that used to fill this directory live here (moved 2026-09-12). |
+| [Future-Improvements.md](./ProjectNotes/Future-Improvements.md) | The numbered backlog, and the record of what each item became |
+| [DailyLogs/](./ProjectNotes/DailyLogs/) | What happened on a given day, across whatever branches were open |
 
 ---
 

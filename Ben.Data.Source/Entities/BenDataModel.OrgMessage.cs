@@ -35,8 +35,89 @@ namespace Ben.Data.Source.Entities
         /// <summary>Scopes the message to a specific case team. Null = not case-scoped.</summary>
         public Guid? CaseId { get; set; }
 
+        /// <summary>
+        /// The event whose room this was posted in, for <c>ChannelType = EventRoom</c> (item 235 phase 11).
+        /// </summary>
+        /// <remarks>
+        /// <b>No <see cref="OrganizationId"/> on a room message.</b> A room belongs to an event, not to
+        /// the group's inbox, and giving it the group's id would put a guest's photo of the stairs in the
+        /// group's internal mail.
+        /// </remarks>
+        public Guid? HostedEventId { get; set; }
+
         /// <summary>Total view count — incremented each time a recipient opens the message.</summary>
         public int ViewCount { get; set; }
+
+        /// <summary>
+        /// When an administrator hid this post from the public feed. Null means visible.
+        /// </summary>
+        /// <remarks>
+        /// <para>Hidden rather than deleted, and the distinction is deliberate. A deleted post
+        /// takes its replies, its reports and the record of the decision with it, so the next
+        /// administrator asking "what happened here" finds nothing. Hiding keeps all of that and
+        /// removes the post from every feed query.</para>
+        ///
+        /// <para>Only ever set by an administrator resolving a report — a pile of reports never
+        /// hides anything on its own. See <see cref="OrgMessageReport"/>.</para>
+        /// </remarks>
+        public DateTime? HiddenUtc { get; set; }
+
+        /// <summary>Which administrator hid it.</summary>
+        public Guid? HiddenByAppUserId { get; set; }
+
+        /// <summary>
+        /// When this was written to appear, or null to appear at once (item 233, Ben 2026-09-11).
+        /// </summary>
+        /// <remarks>
+        /// <para>Read by every query that shows messages rather than released by a job: a post
+        /// whose time has not come is simply not selected. A job would be a second mechanism that
+        /// can fall behind, and the moment it did the post would be late by however long the job
+        /// was down.</para>
+        ///
+        /// <para>It does not hide anything from its author. Somebody who scheduled a post needs to
+        /// see that they did, which is the difference between scheduling and losing it.</para>
+        /// </remarks>
+        public DateTime? ScheduledForUtc { get; set; }
+
+        /// <summary>
+        /// Where this was written, when the author chose to say so.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-11: "Tag the current location where the message is being created — which
+        /// would mark it on a super small map alongside the message and add a 'said at {location}'."
+        /// Always the author's own choice and never taken silently: a location attached to a
+        /// message without being asked for is somebody's whereabouts published on their behalf.
+        /// </remarks>
+        public decimal? PostedLatitude { get; set; }
+        public decimal? PostedLongitude { get; set; }
+
+        /// <summary>What that place is called, as the geocoder named it. Shown; never derived from.</summary>
+        public string? PostedPlaceName { get; set; }
+
+        /// <summary>
+        /// The shared <see cref="Place"/> this post is ABOUT, for a post made on a place's page.
+        /// </summary>
+        /// <remarks>
+        /// <para>Ben, 2026-09-17: a public location should be "actually public for adding files,
+        /// messages etc". This is that, and it is one nullable column rather than a comment table
+        /// of its own — which means a post about a place inherits everything a feed post already
+        /// has: the media screener, the day-long upload pause after repeated refusals, reporting,
+        /// hiding, likes, replies, the moderator queues and the phone app's reader. A second table
+        /// would have been a second moderation story, and the second one is always the one nobody
+        /// finishes.</para>
+        ///
+        /// <para><b>Different from <see cref="PostedLatitude"/> and <see cref="PostedPlaceName"/>,
+        /// which are about the AUTHOR.</b> Those say where somebody was standing when they wrote
+        /// it — their whereabouts, volunteered. This says what the post is about, which is not the
+        /// same thing and is usually not the same place: somebody writes up Cragfont at home.</para>
+        ///
+        /// <para>Only ever a <c>PlaceKind.PublicLocation</c>. Posting about somebody's home is
+        /// theirs to agree to and there is no mechanism for asking, so the write door refuses a
+        /// residence outright.</para>
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        public virtual Place? Place { get; set; }
 
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
@@ -47,10 +128,101 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser AuthorAppUser { get; set; } = null!;
         public virtual OrgMessage? ParentMessage { get; set; }
         public virtual Case? Case { get; set; }
+        public virtual HostedEvent? HostedEvent { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual AppUser? HiddenByAppUser { get; set; }
         public virtual ICollection<OrgMessage> Replies { get; set; } = new List<OrgMessage>();
         public virtual ICollection<OrgMessageRecipient> Recipients { get; set; } = new List<OrgMessageRecipient>();
         public virtual ICollection<OrgMessageView> Views { get; set; } = new List<OrgMessageView>();
+
+        /// <summary>
+        /// One photo or video carried by a feed post (item 186 F4). Null for a text post.
+        /// </summary>
+        public Guid? MediaUploadFileId { get; set; }
+
+        /// <summary>
+        /// Whether that media may be shown. <b>Pending by default, and Pending is never served.</b>
+        /// </summary>
+        /// <remarks>
+        /// Fail-closed by the data model: see <see cref="Ben.Data.Common.Enums.FeedMediaReviewState"/>.
+        /// Meaningless when <see cref="MediaUploadFileId"/> is null, and left at its default there.
+        /// </remarks>
+        public Ben.Data.Common.Enums.FeedMediaReviewState MediaReviewState { get; set; }
+
+        /// <summary>
+        /// What the screener or the moderator said about it. For the queue, never for the poster.
+        /// </summary>
+        /// <remarks>
+        /// Telling somebody exactly which check their upload tripped is telling them exactly how
+        /// to dress the next one.
+        /// </remarks>
+        public string? MediaReviewNote { get; set; }
+
+        /// <summary>
+        /// The screener's NSFW probability for this media, 0–1, when a classifier looked; null
+        /// under manual screening or before anything has (item 217).
+        /// </summary>
+        /// <remarks>
+        /// Kept as a number rather than parsed out of <see cref="MediaReviewNote"/> because the
+        /// spam rule counts confident refusals per author, and a rule that greps note text is a
+        /// rule that silently stops working the day the wording changes.
+        /// </remarks>
+        public double? MediaScreenerScore { get; set; }
+
+        /// <summary>Who decided, when a person did. Null when a screener decided, or nobody has.</summary>
+        public Guid? MediaReviewedByAppUserId { get; set; }
+
+        /// <summary>When the decision was made.</summary>
+        public DateTime? MediaReviewedUtc { get; set; }
+
+        /// <summary>The file itself.</summary>
+        public virtual UploadFile? MediaUploadFile { get; set; }
+
+        /// <summary>
+        /// What the author says this post shows, from the platform's experience taxonomy
+        /// (item 186 F6). Null for chatter — a category is encouraged for media, never required.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately the SAME taxonomy cases and evidence use, not a feed-only list: every
+        /// judgment about whether content matches its type (<see cref="FeedLabelledExample"/>)
+        /// then accumulates against the taxonomy of record.
+        /// </remarks>
+        public Guid? FeedExperienceTypeId { get; set; }
+
+        /// <summary>
+        /// How well the media's measured features fit the chosen type, 0–1, scored at post time
+        /// (and re-scored on recategorize). Null when unscored: no media, no type, or no
+        /// features. A low score NUDGES the author and gently lowers ranking — it never blocks
+        /// and is never shown to other readers.
+        /// </summary>
+        public double? CategoryMatchScore { get; set; }
+
+        public virtual ExperienceType? FeedExperienceType { get; set; }
+
+        /// <summary>The post's measured media facts. Null until extracted (or for text posts).</summary>
+        public virtual FeedMediaFeatureSet? MediaFeatures { get; set; }
+
+        /// <summary>
+        /// The group whose case this post's render came from (item 186 F7). Null for a post with
+        /// no case lineage. Whether the group's name actually SHOWS is
+        /// <see cref="AttributionState"/>'s call, never this field's presence.
+        /// </summary>
+        public Guid? AttributedOrganizationId { get; set; }
+
+        /// <summary>Unclaimed by default — no link renders until the group claims it.</summary>
+        public Ben.Data.Common.Enums.OrgAttributionState AttributionState { get; set; }
+
+        /// <summary>Who at the group decided, and when. Null while Unclaimed.</summary>
+        public Guid? AttributionDecidedByAppUserId { get; set; }
+        public DateTime? AttributionDecidedUtc { get; set; }
+
+        public virtual Organization? AttributedOrganization { get; set; }
+
+        /// <summary>Feed likes (item 186 F3). Empty for every non-feed message.</summary>
+        public virtual ICollection<OrgMessageLike> Likes { get; set; } = new List<OrgMessageLike>();
+        public virtual ICollection<OrgMessageMention> Mentions { get; set; } = new List<OrgMessageMention>();
+        public virtual ICollection<OrgMessageHashtag> Hashtags { get; set; } = new List<OrgMessageHashtag>();
+        public virtual ICollection<OrgMessageReport> Reports { get; set; } = new List<OrgMessageReport>();
     }
 }

@@ -17,7 +17,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// anything scoped to one organization belongs in that org's settings.
 /// </remarks>
 [ApiController]
-[Authorize(Roles = RoleNames.SuperAdmin)]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 [Route("api/admin/site-settings")]
 public sealed class AdminSiteSettingController : BenControllerBase
 {
@@ -35,7 +35,12 @@ public sealed class AdminSiteSettingController : BenControllerBase
     public async Task<ActionResult<IEnumerable<SiteSettingRecord>>> GetAll(CancellationToken ct)
     {
         var rows = await _settings.GetAllAsync(ct);
-        return Ok(rows.Select(ToRecord));
+        // In the order the page shows them — by section, then within it — so the page has no
+        // ordering of its own to get wrong.
+        return Ok(rows
+            .OrderBy(r => SiteSettingKeys.DisplayOrder(r.Key).Section)
+            .ThenBy(r => SiteSettingKeys.DisplayOrder(r.Key).Within)
+            .Select(ToRecord));
     }
 
     /// <summary>Sets one setting. An empty value clears it.</summary>
@@ -65,6 +70,30 @@ public sealed class AdminSiteSettingController : BenControllerBase
     }
 
     private static SiteSettingRecord ToRecord(SiteSetting s)
-        => new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
-               s.DateUpdated ?? s.DateCreated, SiteSettingKeys.MultiLineKeys.Contains(s.Key));
+    {
+        var (group, blurb) = SiteSettingKeys.GroupFor(s.Key);
+        return new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
+                   s.DateUpdated ?? s.DateCreated,
+                   SiteSettingKeys.MultiLineKeys.Contains(s.Key),
+                   SiteSettingKeys.BooleanKeys.Contains(s.Key),
+                   DefaultWhenUnset(s.Key),
+                   group, blurb);
+    }
+
+    /// <summary>
+    /// What an unset on/off setting actually does. Feature flags carry their own declared
+    /// defaults; self-registration has always been allowed and must keep reading that way.
+    /// </summary>
+    private static bool DefaultWhenUnset(string key)
+        => key == SiteSettingKeys.AllowOrganizationSelfRegistration
+        // Item 233: the same reasoning. Tour businesses could sign up before the switch existed,
+        // so a site that never touches it must keep letting them.
+        || key == SiteSettingKeys.AllowTourBusinessSignUps
+        // Item 235: same reasoning again. A site that has never touched this setting must keep
+        // selling credits, or introducing the switch would close the only door a group without a
+        // plan has.
+        || key == SiteSettingKeys.EventCreditsEnabled
+        // Beta feedback 2026-09-14: plans have been on sale since 2026-08-30; the switch must not stop that.
+        || key == SiteSettingKeys.PlanPurchasesEnabled
+        || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }

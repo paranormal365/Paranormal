@@ -70,7 +70,18 @@
     /* "Needs your attention, but nothing is wrong" — the sidecar and diagnostics chips. Mixed
        toward the body colour for the same reason as --bv-accent: the raw amber measured 1.5:1
        against a light page, which is a chip you cannot read. */
-    --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 60%, var(--bs-body-color, #dee2e6) 40%);
+    /* 40/60, not 60/40. The first attempt at this mix fixed the worst of it — the raw amber was
+       1.5:1 on a light page — but stopped at 60% warning, which measures 3.97:1 on white and
+       3.77:1 on the #f8f9fa panels: still under the 4.5:1 small text needs, and still the colour
+       of the sidecar chip and of the line saying a clip's media is missing. At 40% it is 4.98:1
+       and 4.72:1 in the day theme, 9.10:1 and 7.86:1 at night (2026-09-19). */
+    --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 40%, var(--bs-body-color, #dee2e6) 60%);
+
+    /* "Working, nothing to do" — the engine-ready chip. Same trap as --bv-attention one line up:
+       the raw green measured 2.55:1 against a light page, so the word telling you the renderer is
+       ready was the least readable thing in the toolbar. Mixed toward the body colour so it darkens
+       on a light page and stays comfortably clear of the dark one (2026-09-18 audit). */
+    --bv-ok:            color-mix(in srgb, #4caf89 45%, var(--bs-body-color, #dee2e6) 55%);
 
     /* ── Tokens the components ask for but nothing ever defined ─────────────
        Each of these is the fallback half of a var(--kendo-…, var(--bv-…)) pair, so it only
@@ -110,11 +121,55 @@
     --kendo-color-subtle-text:      var(--bs-secondary-color, rgba(222, 226, 230, .75));
     --kendo-color-subtle:           var(--bs-secondary-color, rgba(222, 226, 230, .75));
     --kendo-color-base-subtle:      var(--bs-secondary-bg, #343a40);
+
 }
 
 /* The editor fills its host: its own root paints the ground, and the page behind
    it must not show a different one through the gaps. */
 .bv-editor {
     background-color: var(--bv-surface-1);
+    color: var(--bv-text);
+}
+
+/* ── The toolbar's overflow menu must outrank the floating panels ────────────
+   Kendo puts popups at 10002 and windows at 11500, so the Media & Properties window — docked to
+   the right, directly under the "…" button at the right end of the bar — painted over the menu
+   that button opens. Hit-testing each item landed on the window's title bar and tab strip
+   instead: the menu was not merely half-hidden, it was unclickable, and at narrow widths it is
+   the editor's only route to Preview, Export, Undo and Redo.
+
+   A menu the user just opened should win over a panel that was already sitting there; it closes
+   on the next outside click either way. 11600 clears the window layer with room to spare — an
+   earlier attempt at 10050 looked reasonable and changed nothing, because the number to beat is
+   the window's 11500 rather than the 10003 the panel happened to be showing at the time. The
+   container's z-index is written inline by Telerik, so !important is what it takes to overrule
+   it. */
+.k-animation-container:has(.k-toolbar-popup) {
+    z-index: 11600 !important;
+}
+
+
+/* ── Tab labels ─────────────────────────────────────────────────────────────
+   An unselected tab reads as muted, and the selected one as the brightest thing in the strip. That
+   is how every editor of this kind draws a tab strip, and it is not what we were drawing.
+
+   Kendo colours an unselected tab with --kendo-color-primary-on-surface, a token it derives from
+   --kendo-color-primary for a LIGHT surface. Primary here is the site's navy #37508a, so the Media
+   tab was navy on a near-black panel — measured 1.63:1, against 11:1 for the selected tab beside
+   it. It was never disabled and it worked when clicked; it simply could not be read. Found by
+   looking at the editor, 2026-09-18.
+
+   Set here rather than by redefining the token, because the token's name promises "primary" and
+   something else may want it: what is wrong is the tab, and only the tab is changed. Scoped to
+   .bv-editor so the site's own tab strips are untouched. */
+.bv-editor .k-tabstrip-items-wrapper .k-tabstrip-item,
+.bv-editor .k-tabstrip-items-wrapper .k-item {
+    color: var(--bv-text-muted);
+}
+
+.bv-editor .k-tabstrip-items-wrapper .k-tabstrip-item.k-active,
+.bv-editor .k-tabstrip-items-wrapper .k-item.k-active,
+.bv-editor .k-tabstrip-items-wrapper .k-tabstrip-item:hover,
+.bv-editor .k-tabstrip-items-wrapper .k-item:hover {
     color: var(--bv-text);
 }

@@ -13,6 +13,7 @@ This folder contains all project documentation.
 | [Notes.md](./Notes.md) | Ongoing cross-day notes: integration config, client patterns, Docker |
 | [Media-Editor-Phase.md](./Media-Editor-Phase.md) | Future phases: image editor (Pixlr-style), enhanced audio editor, Ben.Video full integration plan |
 | [Future-Improvements.md](./Future-Improvements.md) | Backlog of unscoped feature ideas — resubmit-on-withdraw, SuperAdmin visibility, client case log, ID→name/link UI convention, universal media library |
+| [Audit-2026-09-17.md](./Audit-2026-09-17.md) | Start-to-end audit of every user type, and the twelve fixes — mostly server capabilities with no entrance. Also lists what was deliberately left to Ben |
 | [Security-Guide.md](./Security-Guide.md) | Ben.Service.Security — enums, models, service interface, usage patterns |
 | [Telerik-SvgIcon-Reference.md](./Telerik-SvgIcon-Reference.md) | Full list of real `SvgIcon.*` names (reflected from the DLL) — check before guessing an icon name |
 | [WebApp-WebApi-Integration-Guide.md](./WebApp-WebApi-Integration-Guide.md) | Complete WebApp ↔ WebApi integration reference |

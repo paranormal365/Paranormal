@@ -8,26 +8,35 @@
 @inject IBenUserState UserState
 @inject NotificationState Notifications
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@* For IconPickerDialog.ResolveTelerikIcon — a stored "t:" icon names a Telerik icon, the same
+   convention the admin grid that chose it reads. Without this using, Razor emits the component
+   reference as literal markup with no error. *@
+@using Ben.Web.Website.Library.Manage.Icon
 
 <PageTitle>Notifications</PageTitle>
 
 <div class="container py-3" style="max-width:900px;">
 
     <div class="d-flex align-items-center justify-content-between mb-3">
-        <h3 class="mb-0">Notifications</h3>
+        <h3 class="mb-0">Notifications<HelpLink Slug="getting-started" Anchor="notifications" /></h3>
         <button type="button" class="btn btn-outline-secondary" @onclick="RefreshAllAsync"><BenIcon Name="rotate-ccw" Class="me-1" />Refresh</button>
     </div>
 
     @* ── Waiting on you ───────────────────────────────────────────────────── *@
     <h6 class="text-secondary text-uppercase small mb-2">Waiting on you</h6>
-    @if (_summary.TotalCount == 0)
+    @* W-CL3: the same list the bell and the sidebar badge read, so "nothing is waiting" and the
+       rows below it can never disagree. See NotificationRows. *@
+    @if (_rows.Count == 0)
     {
         <div class="alert alert-light border">You're all caught up — nothing is waiting on you.</div>
     }
     else
     {
         <div class="list-group mb-4">
-            @foreach (var row in SummaryRows())
+            @foreach (var row in _rows)
             {
                 <button type="button"
                         class="list-group-item list-group-item-action d-flex align-items-center gap-3"
@@ -82,6 +91,9 @@
         </div>
     }
 
+    @* ── How often a venue's bookings are written about (item 235 phase 8) ── *@
+    <EventBookingAlertSettings />
+
     @* ── Platform messages ────────────────────────────────────────────────── *@
     <div class="d-flex align-items-center justify-content-between mb-2">
         <h6 class="text-secondary text-uppercase small mb-0">Messages</h6>
@@ -95,64 +107,109 @@
     {
         <div class="text-secondary small">Loading…</div>
     }
+    @* The list is edited in place when a message is marked read, so the failure is branched on
+       rather than wrapping the list — a wrapped BenListState would keep reporting the load's own
+       emptiness. "No messages." to somebody who has been written to is the whole of item 120. *@
+    else if (_messagesResult.Failed)
+    {
+        <BenListState TItem="MyMessageRecord" Result="@_messagesResult" OnRetry="@LoadDetailAsync" />
+    }
     else if (_messages.Count == 0)
     {
         <div class="alert alert-light border">No messages.</div>
     }
     else
     {
-        <div class="list-group">
-            @foreach (var msg in _messages)
-            {
-                <button type="button"
-                        class="list-group-item list-group-item-action d-flex align-items-center gap-3"
-                        @onclick="@(() => OpenMessageAsync(msg))">
-                    <span class="flex-grow-1 text-start">
-                        <span class="d-block @(msg.ReadUtc is null ? "fw-bold" : "")">
-                            @(string.IsNullOrWhiteSpace(msg.Subject) ? "(no subject)" : msg.Subject)
-                        </span>
-                        <span class="d-block text-secondary small">
-                            @msg.TypeName · @SenderLabel(msg) ·
-                            @msg.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                        </span>
-                    </span>
-                    @if (msg.ReadUtc is null)
+        @* The same rows as a group's inbox. Platform messages are mail — a sender, a subject, a
+           body — so they read as mail here too, rather than as a second list style someone has to
+           learn. The two sections above stay list-groups on purpose: they are actions waiting on a
+           decision, not correspondence, and a mail row has nowhere to put an Approve button. *@
+        <div class="card">
+            <div class="card-body p-0">
+                <ul class="notification">
+                    @foreach (var m in _messages)
                     {
-                        <span class="badge rounded-pill bg-primary">New</span>
+                        var msg = m;
+                        <MailRow Sender="@SenderLabel(msg)"
+                                 Subject="@msg.Subject"
+                                 Body="@msg.Body"
+                                 BodyIsHtml="true"
+                                 When="@msg.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()"
+                                 Unread="@(msg.ReadUtc is null)"
+                                 Selected="@(_openMessage?.Id == msg.Id)"
+                                 OnOpen="@(() => OpenMessageAsync(msg))">
+                            <Badge>
+                                @* The icon and colour a SuperAdmin assigned to this message type.
+                                   Both have always been computed and sent and never rendered
+                                   (2026-09-17 audit) — they showed only back in the admin grid
+                                   where they were chosen, so the recipient saw the plain grey
+                                   badge whatever anybody picked.
+
+                                   The colour is a stored Bootstrap class, so it replaces the
+                                   default pair rather than joining it; a blank one keeps the
+                                   default. A "t:" icon names a Telerik icon, the same convention
+                                   the admin grid reads. *@
+                                <span class="badge @(string.IsNullOrWhiteSpace(msg.TypeColorClass)
+                                                        ? "bg-secondary-subtle text-secondary-emphasis"
+                                                        : msg.TypeColorClass)">
+                                    @if (!string.IsNullOrWhiteSpace(msg.TypeIconClass))
+                                    {
+                                        @if (msg.TypeIconClass.StartsWith("t:"))
+                                        {
+                                            var ico = IconPickerDialog.ResolveTelerikIcon(msg.TypeIconClass);
+                                            @if (ico is not null)
+                                            {
+                                                <TelerikSvgIcon Icon="@ico" />
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <i class="@msg.TypeIconClass me-1"></i>
+                                        }
+                                    }
+                                    @msg.TypeName
+                                </span>
+                            </Badge>
+                        </MailRow>
                     }
-                </button>
-            }
+                </ul>
+            </div>
         </div>
+
+        @* Read below the list, not in a dialog — the same shape a group's inbox uses, and it keeps
+           the list in view while reading. *@
+        @if (_openMessage is not null)
+        {
+            <div class="card mt-3" id="notification-open-message">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-2 mb-2">
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">@(string.IsNullOrWhiteSpace(_openMessage.Subject) ? "(no subject)" : _openMessage.Subject)</h5>
+                            <div class="text-secondary small">
+                                From: @SenderLabel(_openMessage)
+                                · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                · <span class="badge bg-secondary-subtle text-secondary-emphasis">@_openMessage.TypeName</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                @onclick="@(() => _openMessage = null)">Close</button>
+                    </div>
+                    <div class="border-top pt-3">
+                        <MessageBody Body="@_openMessage.Body" Html="true" />
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
-@* ── Message dialog ───────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showMessage" Title="@(_openMessage?.Subject ?? "Message")" Size="lg">
-    <ChildContent>
-        @if (_openMessage is not null)
-        {
-            <div class="mb-2 text-secondary small">
-                <strong>From:</strong> @SenderLabel(_openMessage)
-                · @_openMessage.TypeName
-                · @_openMessage.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
-            </div>
-            <div class="border-top pt-3">@((MarkupString)_openMessage.Body)</div>
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showMessage = false)">Close</button>
-        </div>
-    </ChildContent>
-</BenModal>
-
 @code {
-    private NotificationSummaryResponse _summary = NotificationSummaryResponse.Empty;
     private List<MyMessageRecord> _messages = [];
+    private LoadResult<MyMessageRecord> _messagesResult;
+    private LoadResult<PendingPermissionRequestRecord> _pendingRequestsResult;
     private List<PendingPermissionRequestRecord> _pendingRequests = [];
 
     private MyMessageRecord? _openMessage;
-    private bool  _showMessage;
     private bool  _loadingMessages = true;
     private bool  _markingAll;
     private Guid? _reviewingId;
@@ -164,16 +221,27 @@
 
         Notifications.Changed += OnNotificationsChanged;
         await Notifications.EnsureStartedAsync(RendererInfo.IsInteractive);
-        _summary = Notifications.Current;
+        SetSummary(Notifications.Current);
 
         await LoadDetailAsync();
     }
 
     private void OnNotificationsChanged() => InvokeAsync(() =>
     {
-        _summary = Notifications.Current;
+        SetSummary(Notifications.Current);
         StateHasChanged();
     });
+
+    /// <summary>
+    /// The rows this page shows, and therefore the number it stands over (W-CL3).
+    /// </summary>
+    /// <remarks>
+    /// The page used to keep the summary and read <c>TotalCount</c> off it to decide whether to
+    /// say "you're all caught up", then render a list built separately — so it could say
+    /// something was waiting and show nothing. It now holds only the rows.
+    /// </remarks>
+    private void SetSummary(NotificationSummaryResponse summary) =>
+        _rows = NotificationRows.For(summary);
 
     private async Task LoadDetailAsync()
     {
@@ -183,11 +251,14 @@
             var messagesTask = AdminClient.GetMyMessagesAsync();
             var requestsTask = AdminClient.GetPendingPermissionRequestsForMeAsync();
             await Task.WhenAll(messagesTask, requestsTask);
-            _messages        = await messagesTask;
-            _pendingRequests = await requestsTask;
+            _messagesResult  = await messagesTask;
+            _messages        = _messagesResult.Items.ToList();
+            _pendingRequestsResult = await requestsTask;
+            _pendingRequests       = [.. _pendingRequestsResult.Items];
         }
         catch
         {
+            _messagesResult  = LoadResult<MyMessageRecord>.Failure();
             _messages        = [];
             _pendingRequests = [];
         }
@@ -204,17 +275,37 @@
         await LoadDetailAsync();
     }
 
+    /// <summary>Set when a message is opened, so the page scrolls to where it is read.</summary>
+    /// <remarks>
+    /// The reading pane is below the list. With a hundred messages that is several screens down, and opening one looked
+    /// like a click that did nothing (UI test pass, 2026-09-14).
+    /// </remarks>
+    private bool _scrollToOpenPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToOpenPending || _openMessage is null) return;
+        _scrollToOpenPending = false;
+        try
+        {
+            await using var dom = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", "notification-open-message", "start");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { /* The message is on the page; scrolling to it is a courtesy. */ }
+    }
+
     private async Task OpenMessageAsync(MyMessageRecord msg)
     {
         _openMessage = msg;
-        _showMessage = true;
+        _scrollToOpenPending = true;
 
         if (msg.ReadUtc is not null) return;
 
         if (await AdminClient.MarkMyMessageReadAsync(msg.Id))
         {
-            // Patch locally instead of refetching the list — the dialog is already showing this
-            // message, and a refetch would reorder nothing but cost a round trip.
+            // Patch locally instead of refetching the list — the reading pane is already showing
+            // this message, and a refetch would reorder nothing but cost a round trip.
             var index = _messages.IndexOf(msg);
             if (index >= 0) _messages[index] = msg with { ReadUtc = DateTime.UtcNow };
             await Notifications.RefreshAsync(force: true);
@@ -251,43 +342,13 @@
     }
 
     /// <summary>
-    /// The non-empty buckets, each with somewhere to go. Buckets with nothing in them are dropped
-    /// rather than shown as zeroes — this page is a to-do list, not a dashboard.
+    /// What is waiting, from the one shared list (W-CL3). Recomputed whenever the summary does.
     /// </summary>
-    private IEnumerable<SummaryRow> SummaryRows()
-    {
-        var s = _summary;
-
-        if (s.CaseMessagesAsClient.Count > 0)
-            yield return new("Replies on your cases",
-                $"From the group handling your case · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsClient.OldestUnreadUtc)}",
-                "folder", "/my-cases", s.CaseMessagesAsClient);
-
-        if (s.CaseMessagesAsOrgMember.Count > 0)
-            yield return new("Client messages awaiting a reply",
-                $"On cases at your groups · oldest {NotificationBadge.DescribeAge(s.CaseMessagesAsOrgMember.OldestUnreadUtc)}",
-                "message-square", "/organizations", s.CaseMessagesAsOrgMember);
-
-        if (s.OrgMessages.Count > 0)
-            yield return new("Unread group messages",
-                $"Internal messages addressed to you · oldest {NotificationBadge.DescribeAge(s.OrgMessages.OldestUnreadUtc)}",
-                "mail", "/organizations", s.OrgMessages);
-
-        if (s.PendingPermissionRequests.Count > 0)
-            yield return new("File permission requests",
-                $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
-                "lock", "/notifications", s.PendingPermissionRequests);
-
-        if (s.EquipmentCheckouts.Count > 0)
-            yield return new("Equipment requests & overdue gear",
-                $"Waiting on your decision, or late back · oldest {NotificationBadge.DescribeAge(s.EquipmentCheckouts.OldestUnreadUtc)}",
-                "tool", "/my-checkouts", s.EquipmentCheckouts);
-
-        if (s.SystemMessages.Count > 0)
-            yield return new("Unread messages",
-                $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
-                "bell", "/notifications", s.SystemMessages);
-    }
+    /// <remarks>
+    /// Buckets with nothing in them produce no row, so this page stays a to-do list rather than a
+    /// dashboard of zeroes.
+    /// </remarks>
+    private IReadOnlyList<NotificationRow> _rows = [];
 
     /// <summary>
     /// How to name a message's author. "Anonymous" states that we are withholding it; "Unknown" is
@@ -296,9 +357,6 @@
     /// </summary>
     private static string SenderLabel(MyMessageRecord msg)
         => msg.SenderHidden ? "Anonymous" : (msg.SentByDisplayName ?? "Unknown");
-
-    private sealed record SummaryRow(
-        string Title, string Detail, string Icon, string Destination, NotificationBucket Bucket);
 
     public void Dispose() => Notifications.Changed -= OnNotificationsChanged;
 }

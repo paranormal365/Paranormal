@@ -2,6 +2,9 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@inject SiteFeaturesProvider Features
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -21,9 +24,71 @@
     return;
 }
 
+@* A 403 or 404 comes back as null, and a null used to render nothing at all — a member whose
+   role does not include reading cases got a blank page under a "Case" title, from a desk that
+   had listed the case as a link (2026-09-06 evaluation, W-M1). Say what happened instead. *@
+@if (_loaded && _case is null)
+{
+    <div class="container py-3">
+        <div class="alert alert-warning" id="case-not-available">
+            <strong>This case isn't available to you.</strong>
+            It may belong to a group you're not in, or your role in the group may not include reading
+            cases — an administrator can give you a role that does.
+        </div>
+    </div>
+    return;
+}
+
 @if (_case is not null)
 {
     <div class="container-fluid py-3" style="max-width:1000px;">
+
+        @* Item 184 Phase D: a lapse took this case off the public site; renewal makes this
+           banner's one click put it back. The click runs through the normal Update gate, so a
+           group still on a plan without private-residence work sees the refusal sentence here. *@
+        @if (_case.WasPublicBeforeLapse == true && !_case.IsPublic)
+        {
+            <div class="alert alert-warning d-flex align-items-center gap-3 flex-wrap" id="case-republish-banner">
+                <div class="flex-grow-1">
+                    <strong>This case came off the public site when the subscription lapsed.</strong>
+                    Its public page returns the moment it is republished.
+                </div>
+                <button type="button" class="btn btn-warning btn-sm text-nowrap" id="case-republish"
+                        disabled="@_isBusy" @onclick="RepublishAsync">Republish</button>
+            </div>
+            @if (_republishError is not null)
+            {
+                <div class="alert alert-danger py-2" id="case-republish-error">@_republishError</div>
+            }
+        }
+
+        @* ── Where this case is, and who else has been there ──────────────── *@
+        @* Ben, 2026-09-17: linking a case to a place is what lets somebody "create their own
+           investigation" at somewhere other groups already work. A case that names a place says so
+           here, with the one fact that makes the place page worth opening: how many other groups
+           have been. Shown always rather than once — it is orientation, not a notice, and a banner
+           that vanishes on the second visit is a banner nobody can find again. *@
+        @if (_case.PlaceId is { } placeId)
+        {
+            <div class="alert alert-info d-flex align-items-center gap-3 flex-wrap py-2"
+                 data-testid="case-place-banner">
+                <div class="flex-grow-1 small">
+                    This case is at <strong>@(_case.PlaceName ?? "a place on file")</strong>.
+                    @if (_placeSummary is { } summary && summary.OrganizationCount > 1)
+                    {
+                        <text>
+                            @(summary.OrganizationCount - 1)
+                            @(summary.OrganizationCount - 1 == 1 ? "other group has" : "other groups have")
+                            investigated there.
+                        </text>
+                    }
+                </div>
+                <a class="btn btn-outline-secondary btn-sm text-nowrap" id="case-place-link"
+                   href="@($"/places/{placeId}")">
+                    <BenIcon Name="map-pin" Class="me-1" />See the place
+                </a>
+            </div>
+        }
 
         @* ── Header ────────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
@@ -57,10 +122,37 @@
                 <span class="badge fs-6 @_case.Status.BadgeClass()">
                     @_case.Status.Label()
                 </span>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
-                    🎚 Audio Mixer
-                </button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
+                @* The mixer's only outcome is attaching a rendered file to this case, and the
+                   export endpoint requires Cases.Create. The button was shown to everyone, so a
+                   read-only member could arrange a whole mix and meet a 403 at the end of it
+                   (2026-09-06 audio walk, finding K-perm). Same grant, same door. *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+                {
+                    <button type="button" id="case-audio-mixer" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases/{CaseId}/audio-mix"))">
+                        <BenIcon Name="sliders" Class="me-1" />Audio Mixer
+                    </button>
+                }
+                @* The tour is about publishing, which starts in Edit Case: offered to whoever can edit. A member who cannot got
+                   a first step pointing at a button they do not have (member test pass M.2, 2026-09-14). *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)
+                {
+                    <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
+                            title="How cases go public" @onclick="StartTourAsync">
+                        <BenIcon Name="help-circle" />
+                        <span class="visually-hidden">How cases go public</span>
+                    </button>
+                }
+                @* IH-03 step 2: the same Cases.Update grant CaseController checks on PUT. A
+                   member who cannot edit is no longer shown the door to a refusal. *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)
+                {
+                    @* Its own page since 2026-09-14 (Ben: a case's description can be any length, and a dialog
+                       gives it whatever room is left). *@
+                    <a id="case-edit" class="btn btn-secondary btn-sm" href="@($"/organizations/{OrgId}/cases/{CaseId}/edit")"><BenIcon Name="edit-2" Class="me-1" />Edit Case</a>
+                }
             </div>
         </div>
 
@@ -191,6 +283,8 @@
                                 </dl>
                             </div>
                         </div>
+
+                        <CaseContactsPanel OrgId="@OrgId" CaseId="@CaseId" CaseManagerAppUserId="@_case.CaseManagerAppUserId" />
                     </div>
                 </div>
             </BenTab>
@@ -212,14 +306,58 @@
             @* ── Files ─────────────────────────────────────────────────────── *@
             <BenTab Title="Files" Id="files">
                 <div class="mt-2">
-                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseFiles OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
 
             @* ── Transfers ────────────────────────────────────────────────── *@
             <BenTab Title="Transfers" Id="transfers">
                 <div class="mt-2">
-                    <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)" />
+
+                    @* Who agreed to publish this case's footage to the feed (2026-09-17 audit).
+
+                       FeedPostConsent is append-only and its entity doc says what it is for:
+                       "When a client asks 'who put this footage up', this row is the answer." The
+                       table was entirely write-only, so the question had no answer anywhere. Shown
+                       here rather than on a page of its own — it is the same kind of fact as a
+                       transfer: something that happened to this case's privacy, recorded, with a
+                       person's name on it.
+
+                       Shown only when there IS one, because a case nobody published to the feed
+                       has nothing to account for. *@
+                    @if (_feedConsents.Count > 0)
+                    {
+                        <div class="mt-4" data-testid="case-feed-consents">
+                            <BenSectionHeading Text="Published to the feed" />
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var consent in _feedConsents)
+                                {
+                                    <li class="border-top pt-2 mt-2">
+                                        <div>
+                                            <strong>@consent.AgreedByDisplayName</strong>
+                                            agreed on
+                                            @consent.AgreedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @* "Agreed and then took it down" and "nobody ever
+                                               agreed" are different facts; the consent outlives
+                                               the post on purpose, so this says which. *@
+                                            @if (consent.PostExists)
+                                            {
+                                                <text>The post is still up.</text>
+                                            }
+                                            else
+                                            {
+                                                <text>That post is gone; the agreement stands on the record.</text>
+                                            }
+                                            <text> · wording version @consent.WordingVersion</text>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
                 </div>
             </BenTab>
 
@@ -240,78 +378,74 @@
             </BenTab>
 
             @* ── Research ─────────────────────────────────────────────────────── *@
+            @* Research is written on the canvas: on the writer's own machine, and theirs alone until they publish it.
+               There is no second editor behind a switch any more — Ben, 2026-09-16, chose to retire the flag rather
+               than carry two of them, and nobody was using the site yet, so nothing written needed keeping. *@
             <BenTab Title="Research" Id="research">
                 <div class="mt-2">
-                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" />
+                    <Ben.Web.Website.Library.Manage.Messenger.CaseResearchBoards OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@
             <BenTab Title="Notes" Id="notes">
                 <div class="mt-2">
-                    <CaseNotes OrgId="@OrgId" CaseId="@CaseId" />
+                    <CaseNotes OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
 
             @* ── Video Editor ────────────────────────────────────────────────────── *@
-            <BenTab Title="Video" Id="video">
-                <div class="mt-3">
-                    <p class="text-muted small mb-2">Create and manage video projects for this case. The video editor opens full-screen.</p>
-                    <a href="/organizations/@OrgId/cases/@CaseId/video-editor"
-                       class="btn btn-sm btn-outline-primary">
-                        Open Case Video Editor →
-                    </a>
-                </div>
-            </BenTab>
+            @* Shown only when the editor is on. The page behind this link is gated, so with the
+               feature switched off the tab was still there and its one button led to "Page not
+               found" — a link that always shows and sometimes works is worse than no link
+               (2026-09-05 audit, site-10). The tab and the page read the same provider, so they
+               cannot disagree. *@
+            @if (Features.IsOn(SiteFeatures.VideoEditor))
+            {
+                <BenTab Title="Video" Id="video">
+                    <div class="mt-3">
+                        <p class="text-muted small mb-2">Create and manage video projects for this case. The video editor opens full-screen.</p>
+                        <a href="/organizations/@OrgId/cases/@CaseId/video-editor"
+                           class="btn btn-sm btn-outline-primary">
+                            Open Case Video Editor →
+                        </a>
+                    </div>
+                </BenTab>
+            }
         </BenTabs>
     </div>
 }
 
-@* ── Edit dialog ──────────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showEdit" Title="Edit Case">
-    <ChildContent>
-        <div class="row g-3">
-            <div class="col-12">
-                <label class="form-label fw-semibold" for="casedetail-case-label-surname-city-0146">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
-                <input id="casedetail-case-label-surname-city-0146" type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" />
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Status</label>
-                <BenSelect Data="@_statusOptions" @bind-Value="@_editStatus" TextField="@nameof(StatusOption.Label)" ValueField="@nameof(StatusOption.Value)" Width="100%" />
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Description (optional HTML summary)</label>
-                <TelerikEditor @bind-Value="@_editDescription" Height="200px" />
-            </div>
-            <div class="col-md-8">
-                <label class="form-label fw-semibold" for="casedetail-public-pseudonym-88c6">Public Pseudonym</label>
-                <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" />
-                <div class="form-text">Shown on public pages instead of real client name.</div>
-            </div>
-            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
-                <input type="checkbox" class="form-check-input" id="case-public" @bind="@_editIsPublic" />
-                <label for="case-public" class="form-label mb-0">Make Public</label>
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Case Manager</label>
-                <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
-            </div>
-        </div>
-        @if (_editError is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_editError</div>
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showEdit = false)">Cancel</button>
-            <button type="button" class="btn btn-primary" @onclick="SaveEdit" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
-                @(_isBusy ? "Saving…" : "Save")
-            </button>
-        </div>
-    </ChildContent>
-</BenModal>
+<BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
 
 @code {
+    // ── Item 166 W4(b): how a case goes public — and what stays hidden when it does. ──
+    // NOT auto-launched: case pages are visited constantly, and a tour ambushing the first
+    // case someone opens would teach at the worst moment. The ? beside Edit Case launches it.
+    private const string PublishTourName = "public-case-pages";
+    private BenTour? _tourRef;
+    private readonly TourModel _tour = new(
+    [
+        new TourModel.TourStep("#case-edit",
+            "Publishing starts in Edit Case",
+            "A case reaches the public in two moves, both on the Edit Case page: set the status, and tick Make Public. Beside them is the Public Pseudonym, so nobody's real name appears: it replaces the client's name on every public surface — pick something like \"The Henderson Family\". Addresses are generalized the same way: public pages show the area, never the street."),
+        new TourModel.TourStep("#tab-files",
+            "What media may go public",
+            "Publishing the case publishes its story, not its files. A photo appears publicly only when it's placed in a case slot on one of your CMS pages and approved for publication — the general Files tab is never publishable."),
+        new TourModel.TourStep("#tab-overview",
+            "Where visitors see it",
+            "Published cases appear on your group's public site — the pages you build under CMS. Check the result signed out: the public sees less than you do, and that's the point."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(PublishTourName, completed); } catch { }
+    }
+
     /// <summary>Tab label with its unread count. A property, not an inline expression: an
     /// interpolated string nested in an attribute's own quotes does not parse.</summary>
     private string MessagesTabTitle => _unreadCount > 0 ? $"Messages ({_unreadCount})" : "Messages";
@@ -325,11 +459,22 @@
     private CaseRecord? _case;
 
     /// <summary>
+    /// Recorded agreements to publish this case's footage to the feed (2026-09-17 audit).
+    /// </summary>
+    /// <remarks>
+    /// Empty for almost every case, and the section does not render then. Fetched quietly: an
+    /// accountability record that cannot be reached is not a reason to fail the case page, it is a
+    /// reason for the section to be absent.
+    /// </remarks>
+    private IReadOnlyList<CaseFeedConsentRecord> _feedConsents = [];
+
+    /// <summary>
     /// The client request this case came from, when there is one and the caller may read it.
     /// Null is the normal state for an internally-raised case, so it is not treated as an error.
     /// </summary>
     private CaseClientRequestRecord? _clientRequest;
     private bool _loaded;
+    private Ben.Web.Services.PlaceSummary? _placeSummary;
     private string? _error;
     private bool _isBusy;
     private int _unreadCount;
@@ -349,21 +494,9 @@
         _                => "overview",
     };
 
-    // Edit dialog
-    private bool _showEdit;
-    private string _editTitle        = "";
-    private CaseStatus _editStatus   = CaseStatus.Accepted;
-    private string _editDescription  = "";
-    private string _editPseudonym    = "";
-    private bool _editIsPublic;
-    private Guid? _editCaseManagerId;
-    private string? _editError;
-    private List<MemberOption> _memberOptions = [];
-
-    private static readonly List<StatusOption> _statusOptions = Enum
-        .GetValues<CaseStatus>()
-        .Select(s => new StatusOption(s, s.Label()))
-        .ToList();
+    /// <summary>What this viewer may do with cases in this group (IH-03 step 2).</summary>
+    /// <remarks>Fails closed: an unknown verdict hides the control rather than offering it.</remarks>
+    private MyOrgPermissionsItem? _perms;
 
     private Guid _loadedCaseId;
 
@@ -399,10 +532,30 @@
 
         _clientRequest = null;
 
+        // What this PERSON may do here (IH-03). The plan's word on private engagements moved with the
+        // edit form to CaseEditPage (2026-09-14).
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        catch { _perms = null; }
+
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
         _loaded = true;
         StateHasChanged();
+
+        // How many groups have worked this place — the one fact that makes the place worth
+        // opening. Separate and quiet for the same reason as the request below: the banner keeps
+        // its link either way, and it simply says less.
+        if (_case?.PlaceId is { } bannerPlaceId)
+        {
+            try { _placeSummary = await AdminClient.GetPlaceSummaryAsync(bannerPlaceId); }
+            catch { /* the banner just carries no count */ }
+            StateHasChanged();
+        }
+
+        // Quiet for the same reason: no consents is the ordinary answer, and an unreachable one
+        // costs a section rather than the page.
+        try { _feedConsents = (await AdminClient.GetCaseFeedConsentsAsync(OrgId, CaseId)).Items; }
+        catch { _feedConsents = []; }
 
         // Fetched separately and allowed to fail quietly: most cases have one, some don't, and a
         // missing original request should never stop the case page rendering.
@@ -428,69 +581,42 @@
         _ => $"{bytes / (1024.0 * 1024 * 1024):0.#} GB",
     };
 
-    private void OpenEditDialog()
+    private string? _republishError;
+
+    /// <summary>The banner's one click: the same Update the Edit Case page performs, flipping only
+    /// IsPublic. A refusal (the plan gate, a slug problem) renders under the banner.</summary>
+    private async Task RepublishAsync()
     {
         if (_case is null) return;
-        _editTitle          = _case.Title;
-        _editStatus         = _case.Status;
-        _editDescription    = _case.Description ?? "";
-        _editPseudonym      = _case.PublicPseudonym ?? "";
-        _editIsPublic       = _case.IsPublic;
-        _editCaseManagerId  = _case.CaseManagerAppUserId;
-        _editError          = null;
-        // Load org members lazily for the dropdown
-        if (_memberOptions.Count == 0)
-            _ = LoadMembersAsync();
-        _showEdit = true;
-    }
-
-    private async Task LoadMembersAsync()
-    {
+        _isBusy = true; _republishError = null;
         try
         {
-            var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
-            _memberOptions = members
-                .Where(m => m.IsActive)
-                .OrderBy(m => m.DisplayName)
-                .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()))
-                .ToList();
-            StateHasChanged();
+            var (result, error) = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, new UpdateCaseRequest(
+                Title:                _case.Title,
+                Description:          _case.Description,
+                Status:               _case.Status,
+                PublicPseudonym:      _case.PublicPseudonym,
+                IsPublic:             true,
+                CaseManagerAppUserId: _case.CaseManagerAppUserId));
+            if (result is null) { _republishError = error ?? "Republish failed."; }
+            else { _case = result; }
         }
-        catch { /* non-critical — dropdown just stays empty */ }
-    }
-
-    private async Task SaveEdit()
-    {
-        if (string.IsNullOrWhiteSpace(_editTitle)) { _editError = "Label is required."; return; }
-        _isBusy = true; _editError = null;
-        try
-        {
-            var req = new UpdateCaseRequest(
-                Title:                _editTitle.Trim(),
-                Description:          string.IsNullOrWhiteSpace(_editDescription) ? null : _editDescription.Trim(),
-                Status:               _editStatus,
-                PublicPseudonym:      string.IsNullOrWhiteSpace(_editPseudonym) ? null : _editPseudonym.Trim(),
-                IsPublic:             _editIsPublic,
-                CaseManagerAppUserId: _editCaseManagerId);
-
-            var result = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, req);
-            if (result is null) { _editError = "Save failed."; }
-            else { _case = result; _showEdit = false; }
-        }
-        catch (Exception ex) { _editError = ex.Message; }
+        catch (Exception ex) { _republishError = ex.Message; }
         finally { _isBusy = false; }
     }
 
-    private record StatusOption(CaseStatus Value, string Label);
-    private record MemberOption(Guid Id, string Label);
-
-    private async Task<IReadOnlyList<CaseMessageRecord>> LoadOrgMessages()
+    private async Task<LoadResult<CaseMessageRecord>> LoadOrgMessages()
     {
         var msgs = await AdminClient.GetCaseMessagesAsync(OrgId, CaseId);
-        _unreadCount = 0; // tab opened — all now marked read by the server
+        // Only clear the badge if the thread actually came back; a refused fetch leaves the unread
+        // count alone rather than reporting that everything has been read.
+        if (!msgs.Failed) _unreadCount = 0;
         return msgs;
     }
 
     private async Task<CaseMessageRecord?> PostOrgMessage(string body)
-        => await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
+    {
+        var (result, _) = await AdminClient.PostCaseMessageAsync(OrgId, CaseId, body);
+        return result;
+    }
 }

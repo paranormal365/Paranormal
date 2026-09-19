@@ -1,4 +1,4 @@
-using Ben.Service.Models.People;
+﻿using Ben.Service.Models.People;
 using Ben.Service.Models.Entities;
 using Ben.Data.Common.Enums;
 
@@ -6,8 +6,37 @@ namespace Ben.Web.Services.WebApi;
 
 public interface IWebApiClient
 {
+    /// <summary>
+    /// Fetches one object, answering <c>null</c> for every kind of failure.
+    /// </summary>
+    /// <remarks>
+    /// Prefer <see cref="GetItemAsync{TResponse}"/> on any surface a person looks at. This overload
+    /// cannot tell a 401 from a 404 from an empty success, which is precisely the confusion item 120
+    /// removed from lists; it stays because ~90 call sites use it and converting them is a migration,
+    /// not an edit. It is no longer able to kill a circuit, though — see <c>SendItemAsync</c>.
+    /// </remarks>
     Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>The anonymous counterpart to <see cref="GetAsync{TResponse}"/>, with the same caveat.</summary>
     Task<TResponse?> GetAnonymousAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>
+    /// Fetches one object and reports what actually happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>The counterpart to <see cref="GetListAsync{T}"/> for endpoints that return an object.
+    /// <see cref="GetAsync{TResponse}"/> answers any refusal — 401, 403, 404, 500, an unreachable
+    /// API — with the same <c>null</c> a genuinely absent record produces, so the page is left
+    /// guessing at a sentence to show. <see cref="ItemResult{T}"/> carries the difference.</para>
+    /// </remarks>
+    Task<ItemResult<TResponse>> GetItemAsync<TResponse>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>The same as <see cref="GetItemAsync{TResponse}"/> for an endpoint that takes no bearer token.</summary>
+    /// <remarks>
+    /// Anonymous surfaces need this as much as signed-in ones — a public page whose fetch was
+    /// refused shows a visitor nothing, and that visitor has no account and no reason to retry.
+    /// </remarks>
+    Task<ItemResult<TResponse>> GetAnonymousItemAsync<TResponse>(string relativeUrl, CancellationToken token = default);
     Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
 
@@ -16,7 +45,29 @@ public interface IWebApiClient
     /// response, which is what <c>PostAnonymousAsync</c> would do.
     /// </summary>
     Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// An anonymous POST with no answer body, keeping the refusal's sentence when there is one.
+    /// </summary>
+    Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Anonymous POST that returns the body <b>whatever the status</b>.
+    /// </summary>
+    /// <remarks>
+    /// For endpoints whose refusal is the answer rather than an error — sign-up, where "that name
+    /// is taken" arrives as a 400 carrying a typed result with the message and the field to point
+    /// at. <c>PostAnonymousAsync</c> would turn all of that into <c>null</c>, and the form would
+    /// have nothing to say but "something went wrong".
+    /// </remarks>
+    Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<TResponse?> PostMultipartAsync<TResponse>(string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
+
+    /// <summary>Multipart upload that keeps the server's refusal sentence — see the implementation.</summary>
+    Task<(TResponse? Result, string? Error)> PostMultipartExpectingReasonAsync<TResponse>(
+        string relativeUrl, MultipartFormDataContent content, CancellationToken token = default);
     Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
@@ -32,6 +83,18 @@ public interface IWebApiClient
         HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
+    /// As <see cref="SendExpectingReasonAsync"/>, and also the HTTP status — for a caller that acts differently on a
+    /// conflict than on any other refusal.
+    /// </summary>
+    /// <remarks>
+    /// Added for research-page autosave (2026-09-14): a 409 means somebody else's work would be overwritten and the
+    /// editor must stop saving and say so, while a 400 is a sentence to show and a failure to retry. A null
+    /// <paramref name="payload"/> sends no body.
+    /// </remarks>
+    Task<(TResponse? Result, string? Error, int Status)> SendWithStatusAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest? payload, CancellationToken token = default);
+
+    /// <summary>
     /// Posts, and returns either the result or <b>a typed 409 body</b> the caller can act on.
     /// </summary>
     /// <remarks>
@@ -42,9 +105,66 @@ public interface IWebApiClient
     /// </remarks>
     Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
         string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Sends, and returns the result, <b>or</b> the server's refusal sentence, <b>or</b> a typed
+    /// 409 body — whichever the server actually answered with.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two helpers above each keep one kind of failure and drop the other.
+    /// <see cref="SendExpectingReasonAsync"/> keeps prose and would show a 409's JSON to nobody;
+    /// <see cref="PostExpectingConflictAsync"/> keeps the structure and turns a 400 with a perfectly
+    /// good sentence into two nulls. The layout designer (item 235) needs both from one endpoint:
+    /// <c>PUT …/layout</c> answers a bad plan with a sentence and a plan that would strand a
+    /// confirmed party with <c>LayoutRefusalRecord</c> — the sentence AND the ids of the units to
+    /// ring, because a venue with four hundred seats cannot be left hunting for row C.</para>
+    ///
+    /// <para>Takes the verb, unlike its Post-only sibling, because the one caller that needs it is
+    /// a PUT. A 409 whose body is not the expected shape falls through to the prose test rather
+    /// than vanishing, so a proxy's 409 page is dropped and a hand-written 409 sentence is kept.</para>
+    /// </remarks>
+    Task<(TResponse? Result, string? Error, TConflict? Conflict)> SendExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
+    /// <summary>
+    /// Fetches a list, distinguishing "the server said no" from "there is nothing here".
+    /// </summary>
+    /// <remarks>
+    /// <para>The counterpart to <c>GetAsync</c> for list endpoints. <c>GetAsync</c> answers any
+    /// non-2xx with <c>default</c>, which the adapters turn into an empty list — so a 403 renders
+    /// as "No records available" and the page tells somebody their group is empty when in fact
+    /// they were refused. Item 120, and the shared cause of three bugs on 2026-08-20.</para>
+    ///
+    /// <para>Prefer this for any list a person could be refused. <see cref="LoadResult{T}.Items"/>
+    /// is always safe to enumerate, so adopting it never makes a call site worse; rendering the
+    /// difference is a separate, opt-in step.</para>
+    /// </remarks>
+    Task<LoadResult<T>> GetListAsync<T>(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>
+    /// The same as <see cref="GetListAsync{T}"/> for an endpoint that takes no bearer token.
+    /// </summary>
+    /// <remarks>
+    /// Public pages need to distinguish "refused" from "empty" more than signed-in ones do, not
+    /// less: a visitor who sees an empty group has no account, no error and no way to tell the
+    /// difference.
+    /// </remarks>
+    Task<LoadResult<T>> GetAnonymousListAsync<T>(string relativeUrl, CancellationToken token = default);
+
     Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes, and recovers the server's sentence when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// The same argument as <see cref="SendExpectingReasonAsync"/>, for the verb that has no body
+    /// to send. A delete refused because the thing still has posts in it is a rule the person can
+    /// act on — "Couldn't delete that" is not, and a guard whose reason the UI throws away is
+    /// barely better than no guard.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteExpectingReasonAsync(
+        string relativeUrl, CancellationToken token = default);
 
     /// <summary>Downloads raw bytes from any authenticated endpoint (e.g. PDF export).</summary>
     Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default);
@@ -55,28 +175,38 @@ public interface IWebApiClient
     Task<AcceptInviteResult?> AcceptInviteExistingAsync(string token, CancellationToken cancellationToken = default);
 
     // Example typed endpoint usage using service models.
-    Task<IReadOnlyList<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
+    Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
 
-    Task<IReadOnlyList<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default);
+    Task<LoadResult<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default);
+    Task<LoadResult<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default);
     Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default);
     Task<bool?> CheckMyOrganizationAccessAsync(Guid organizationId, OrganizationSecurityTable table, OrganizationSecurityAction action, CancellationToken token = default);
     Task<bool?> CheckOrganizationAccessAsync(Guid organizationId, CheckOrganizationAccessRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default);
+    Task<LoadResult<OrganizationUserMembershipResponse>> GetOrganizationUsersAsync(Guid organizationId, CancellationToken token = default);
     Task<OrganizationUserMembershipResponse?> UpsertOrganizationMembershipAsync(Guid organizationId, Guid targetUserId, UpsertOrganizationMembershipRequest request, CancellationToken token = default);
     Task<OrganizationAccessGrantResponse?> SetOrganizationGrantAsync(Guid organizationId, Guid targetUserId, SetOrganizationGrantRequest request, CancellationToken token = default);
 
     /// <summary>Minimal Id+DisplayName directory of an org's active members — see
     /// OrganizationController.GetUserDirectory's doc comment for why this exists instead of the
     /// full AppUserRecord (now SuperAdmin-only).</summary>
-    Task<IReadOnlyList<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
+    Task<LoadResult<OrgUserDirectoryEntryResponse>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default);
 
     // Upload Files
-    Task<IReadOnlyList<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default);
-    Task<IReadOnlyList<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default);
+    Task<LoadResult<UploadFileTypeRecord>> GetUploadFileTypesAsync(CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetUploadFilesAsync(CancellationToken token = default);
     Task<UploadFileRecord?> UploadFileAsync(MultipartFormDataContent content, CancellationToken token = default);
+    /// <summary>Opens a chunked upload session; the browser then sends the chunks through the website relays. Returns (record, refusal-sentence).</summary>
+    Task<(ChunkedUploadSessionRecord? Session, string? Error)> StartChunkedUploadAsync(StartChunkedUploadRequest request, CancellationToken token = default);
     Task<UploadFileRecord?> UpdateUploadFileAsync(Guid id, UpdateUploadFileRequest request, CancellationToken token = default);
     Task<bool> DeleteUploadFileAsync(Guid id, CancellationToken token = default);
+
+    // Upload File — delete-and-reassign (item 180 Phase B)
+    /// <summary>Where the file is in use beyond the owner's library — what the delete questions are about.</summary>
+    Task<FileUsageRecord?> GetUploadFileUsageAsync(Guid id, CancellationToken token = default);
+    /// <summary>First answer: remove it everywhere it is shared, then delete it.</summary>
+    Task<DeleteEverywhereResult?> DeleteUploadFileEverywhereAsync(Guid id, CancellationToken token = default);
+    /// <summary>Second answer: hand the file to the group using it instead of destroying it.</summary>
+    Task<UploadFileRecord?> ReassignUploadFileAsync(Guid id, Guid organizationId, CancellationToken token = default);
 
     // Upload File — Replace (item #6 phase 3)
     Task<UploadFileRecord?> ReplaceUploadFileAsync(Guid id, MultipartFormDataContent content, CancellationToken token = default);
@@ -86,15 +216,19 @@ public interface IWebApiClient
     // Upload File — Audio Config
     Task<UploadFileAudioConfigRecord?> GetAudioConfigAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileAudioConfigRecord?> UpsertAudioConfigAsync(Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
+
+    /// <summary>Saves a file's audio config, and on refusal hands back the server's own sentence.</summary>
+    Task<(UploadFileAudioConfigRecord? Result, string? Error)> UpsertAudioConfigWithReasonAsync(
+        Guid fileId, UpsertAudioConfigRequest request, CancellationToken token = default);
     Task<bool> DeleteAudioConfigAsync(Guid fileId, CancellationToken token = default);
 
     // Upload File — Region Notes
-    Task<IReadOnlyList<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileRegionNoteRecord>> GetRegionNotesAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileRegionNoteRecord?> CreateRegionNoteAsync(Guid fileId, CreateRegionNoteRequest request, CancellationToken token = default);
     Task<UploadFileRegionNoteRecord?> UpdateRegionNoteAsync(Guid fileId, Guid noteId, UpdateRegionNoteRequest request, CancellationToken token = default);
     Task<bool> DeleteRegionNoteAsync(Guid fileId, Guid noteId, CancellationToken token = default);
 
-    Task<IReadOnlyList<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileCommentRecord>> GetFileCommentsAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileCommentRecord?> CreateFileCommentAsync(Guid fileId, CreateFileCommentRequest request, CancellationToken token = default);
     Task<UploadFileCommentRecord?> UpdateFileCommentAsync(Guid fileId, Guid commentId, UpdateFileCommentRequest request, CancellationToken token = default);
     Task<bool> DeleteFileCommentAsync(Guid fileId, Guid commentId, CancellationToken token = default);
@@ -102,21 +236,40 @@ public interface IWebApiClient
     Task<FileCommentSettingsRecord?> UpdateFileCommentSettingsAsync(Guid fileId, FileCommentSettingsRecord request, CancellationToken token = default);
 
     // Upload File — Audio Markers (EVP)
-    Task<IReadOnlyList<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
     Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default);
     Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default);
     Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);
-    Task<IReadOnlyList<AudioMarkerRecord>> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
+    Task<IReadOnlyList<AudioMarkerRecord>?> ReplaceAudioCandidatesAsync(Guid fileId, BulkCreateAudioCandidatesRequest request, CancellationToken token = default);
     Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<AudioMarkerRecord>> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
+    Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
     // Upload File — Audio Clip
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
-    Task<IReadOnlyList<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Saves a clip, and on refusal hands back the server's own sentence.</summary>
+    /// <remarks>Same reasoning as <see cref="EditAudioWithReasonAsync"/>.</remarks>
+    Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
+        Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
     Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
 
     // Upload File — Audio Edit (destructive)
     Task<UploadFileRecord?> EditAudioAsync(Guid fileId, AudioEditRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// Applies an audio edit, and on refusal hands back the server's own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The audio editor answered every failed edit with one hardcoded line — "only WAV and MP3
+    /// sources can be edited" — because <see cref="EditAudioAsync"/> returns null and drops the
+    /// body. That line was true for exactly one of the reasons the endpoint refuses, and phase 1
+    /// added several more: a private recording that cannot be published, a gain outside the range,
+    /// a region past the end, a recording longer than the edit ceiling. Every one of those would
+    /// have reached the person as a sentence about file formats.
+    /// </remarks>
+    Task<(UploadFileRecord? Result, string? Error)> EditAudioWithReasonAsync(
+        Guid fileId, AudioEditRequest request, CancellationToken token = default);
 
     // Upload File — Votes
     Task<UploadFileVoteSummary?> GetVoteSummaryAsync(Guid fileId, CancellationToken token = default);
@@ -124,15 +277,15 @@ public interface IWebApiClient
     Task<bool> RemoveMyVoteAsync(Guid fileId, CancellationToken token = default);
 
     // Upload File — Org Sharing
-    Task<IReadOnlyList<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default);
-    Task<IReadOnlyList<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<UploadFileOrgShareResponse>> GetFileOrgSharesAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetOrgSharedFilesAsync(Guid orgId, CancellationToken token = default);
     Task<UploadFileOrgShareResponse?> ShareFileWithOrgAsync(Guid fileId, ShareFileWithOrgRequest request, CancellationToken token = default);
     Task<UploadFileOrgShareResponse?> UpdateOrgShareVisibilityAsync(Guid shareId, UpdateOrgShareVisibilityRequest request, CancellationToken token = default);
     Task<bool> RemoveOrgShareAsync(Guid shareId, CancellationToken token = default);
 
     // Upload File — Permission Requests
-    Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default);
-    Task<IReadOnlyList<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default);
+    Task<LoadResult<UploadFilePermissionRequestResponse>> GetFilePermissionRequestsAsync(Guid fileId, CancellationToken token = default);
+    Task<LoadResult<UploadFilePermissionRequestResponse>> GetPendingPermissionRequestsForReviewerAsync(Guid reviewerUserId, CancellationToken token = default);
     Task<UploadFilePermissionRequestResponse?> SubmitPermissionRequestAsync(Guid fileId, SubmitPermissionRequestRequest request, CancellationToken token = default);
     Task<UploadFilePermissionRequestResponse?> ReviewPermissionRequestAsync(Guid requestId, ReviewPermissionRequestRequest request, CancellationToken token = default);
 
@@ -144,7 +297,7 @@ public interface IWebApiClient
     // token happens to be sitting in the store at call time; the server validates it via the
     // "Entra" JWT scheme and reads OID/email from its own claims, never from the payload.
     Task<EntraRegisterResponse?> EntraRegisterAsync(string entraAccessToken, EntraRegisterPayload request, CancellationToken token = default);
-    Task<bool> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default);
+    Task<EntraLinkOutcome> EntraLinkAsync(string entraAccessToken, EntraLinkPayload request, CancellationToken token = default);
 }
 
 // ── Entra request/response records ───────────────────────────────────────────
@@ -156,10 +309,25 @@ public sealed record EntraRegisterPayload(string DisplayName);
 /// <summary>Response from POST /api/auth/entra/register.</summary>
 public sealed record EntraRegisterResponse(Guid UserId, string Email);
 
+/// <summary>What a link attempt did.</summary>
+/// <param name="RequiresTwoFactor">
+/// The password was right and the account has a second factor. NOT a failure to report as one: the
+/// caller should ask for a code, not tell somebody to check their password.
+/// </param>
+/// <param name="Message">The server's own sentence, when it wrote one.</param>
+public sealed record EntraLinkOutcome(bool Succeeded, bool RequiresTwoFactor = false, string? Message = null)
+{
+    public static readonly EntraLinkOutcome Ok = new(true);
+}
+
 /// <summary>Sent to POST /api/auth/entra/link — identifies the target local account to link the
 /// caller's (validated, token-derived) Entra identity to; ownership of that account is proven by
 /// <see cref="Password"/>, checked server-side.</summary>
-public sealed record EntraLinkPayload(string Email, string Password);
+public sealed record EntraLinkPayload(
+    string Email,
+    string Password,
+    string? TwoFactorCode = null,
+    string? TwoFactorRecoveryCode = null);
 
 // ── Sub-client invite accept-flow records (item #4) — mirrors api/case-invites' shapes; this
 // project has no reference to Ben.Data.WebApi (HTTP-only boundary), so the DTOs are duplicated

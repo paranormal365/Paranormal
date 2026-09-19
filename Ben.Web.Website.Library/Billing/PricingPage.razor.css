@@ -1,0 +1,237 @@
+/* IH-10, Ben's 2026-08-26 sweep: the three pricing cards disagreed about where their feature
+   list began, because the notes above it are optional — Free carries an extra "Not included"
+   line, and Large group's "Unlimited pieces of equipment" wraps to two. Three different heights,
+   above the fold.
+
+   Reserving the slot is enough: every card keeps the same room for its notes whether it has any
+   or not, so the first feature row lands on the same line across all three. Two lines of small
+   text plus its margin. On a narrow screen the cards stack and there is nothing left to align,
+   so the reservation is dropped rather than leaving a gap under each price. */
+.pricing-notes {
+    min-height: 3.25rem;
+}
+
+@media (max-width: 767.98px) {
+    .pricing-notes {
+        min-height: 0;
+    }
+}
+
+/* ── The bands (beta feedback, 2026-09-14: "spiced up to be less blah") ──────────────────────────────────
+   Each band has a colour of its own, --band-hue, set in order so the ladder reads as one (violet, blue, teal,
+   ember…). The header borrows the event pages' radial-over-linear wash in that hue; the body stays the theme's
+   card surface so every word below it is ordinary text in light and dark alike. The price is the focal figure,
+   the limits a checklist, the button tinted from the same hue and dark enough that white text on it clears AA. */
+
+.pricing-band {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bs-body-bg);
+    border: 1px solid hsl(var(--band-hue) 40% 50% / .35);
+    border-radius: .9rem;
+    overflow: hidden;
+    box-shadow: 0 .35rem 1.1rem rgba(0, 0, 0, .12);
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.pricing-band:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 .6rem 1.6rem hsl(var(--band-hue) 50% 30% / .28);
+}
+
+.pricing-band--featured {
+    border: 2px solid hsl(var(--band-hue) 60% 55%);
+    box-shadow: 0 .75rem 2rem hsl(var(--band-hue) 60% 35% / .35);
+}
+
+.pricing-band__flag {
+    position: absolute;
+    top: .7rem;
+    right: .7rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: #fff;
+    background: hsl(var(--band-hue) 62% 38%);
+    box-shadow: 0 .15rem .5rem rgba(0, 0, 0, .25);
+}
+
+.pricing-band__flag ::deep .sa-icon {
+    width: .8rem;
+    height: .8rem;
+}
+
+.pricing-band__head {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    padding: 1.4rem 1.25rem 1.2rem;
+    color: #fff;
+    background:
+        radial-gradient(ellipse 70% 150% at 10% 50%, hsl(var(--band-hue) 60% 46% / .38), transparent 64%),
+        linear-gradient(115deg,
+            hsl(var(--band-hue) 38% 16%) 0%,
+            hsl(calc(var(--band-hue) + 30deg) 32% 9%) 100%);
+}
+
+.pricing-band--featured .pricing-band__head {
+    padding-top: 2.9rem;   /* room for the flag above the name */
+}
+
+.pricing-band__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .7rem;
+    background: rgba(255, 255, 255, .12);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+
+.pricing-band__icon ::deep .sa-icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    color: hsl(var(--band-hue) 85% 82%);
+}
+
+.pricing-band__title {
+    min-width: 0;
+}
+
+.pricing-band__name {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.pricing-band__who {
+    margin: .15rem 0 0;
+    font-size: .8rem;
+    opacity: .82;
+}
+
+.pricing-band__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    padding: 1.2rem 1.25rem 1.25rem;
+}
+
+.pricing-band__price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: .4rem;
+    row-gap: .2rem;
+    margin-bottom: 1rem;
+}
+
+.pricing-band__amount {
+    font-size: 2.6rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -.02em;
+}
+
+.pricing-band__per {
+    color: var(--bs-secondary-color);
+    font-size: .9rem;
+}
+
+.pricing-band__saving {
+    padding: .1rem .5rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--bs-success-text-emphasis);
+    background: var(--bs-success-bg-subtle);
+}
+
+.pricing-band__tax,
+.pricing-band__unavailable {
+    flex-basis: 100%;
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+}
+
+.pricing-band__limits {
+    list-style: none;
+    margin: 0 0 1.25rem;
+    padding: 0;
+    font-size: .875rem;
+}
+
+.pricing-band__limits li {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding: .3rem 0;
+    border-bottom: 1px dashed var(--bs-border-color-translucent);
+}
+
+.pricing-band__limits li:last-child {
+    border-bottom: 0;
+}
+
+.pricing-band__limits ::deep .sa-icon {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin-top: .15rem;
+    color: hsl(var(--band-hue) 55% 50%);
+}
+
+.pricing-band__cta {
+    margin-top: auto;
+}
+
+.pricing-band__for {
+    margin-top: .35rem;
+    text-align: center;
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+}
+
+.pricing-band ::deep .btn-band {
+    color: #fff;
+    font-weight: 600;
+    background: hsl(var(--band-hue) 55% 34%);
+    border-color: hsl(var(--band-hue) 55% 34%);
+}
+
+.pricing-band ::deep .btn-band:hover,
+.pricing-band ::deep .btn-band:focus-visible {
+    color: #fff;
+    background: hsl(var(--band-hue) 58% 28%);
+    border-color: hsl(var(--band-hue) 58% 28%);
+}
+
+/* The featured band stands a little forward only when the row is wide enough to hold four side by side. */
+@media (min-width: 992px) {
+    .pricing-band--featured {
+        transform: translateY(-.5rem);
+    }
+
+    .pricing-band--featured:hover {
+        transform: translateY(-.7rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pricing-band,
+    .pricing-band:hover,
+    .pricing-band--featured,
+    .pricing-band--featured:hover {
+        transition: none;
+        transform: none;
+    }
+}

@@ -40,7 +40,8 @@ public class CaseInviteControllerTests
         Mock<UserManager<AppUser>>? userManager = null, Guid? userId = null)
     {
         var ctrl = new CaseInviteController(factory, (userManager ?? CreateUserManagerMock()).Object,
-            new Mock<IAuditLogService>().Object);
+            new Mock<IAuditLogService>().Object,
+            new Ben.Data.WebApi.Services.UserHandleService(factory));
         var identity = userId.HasValue
             ? new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())], "Bearer")
             : new ClaimsIdentity(); // anonymous — no authenticationType
@@ -183,6 +184,10 @@ public class CaseInviteControllerTests
         Assert.NotNull(createdUser);
         Assert.Equal(invite.Email, createdUser!.Email);
         Assert.True(createdUser.EmailConfirmed);
+
+        // C1 (site evaluation 2026-09-06): the @name used to be left null here, so an invited
+        // client could not be mentioned anywhere until the next API restart's backfill ran.
+        Assert.False(string.IsNullOrWhiteSpace(createdUser.Handle));
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.True(await db.CaseClientAccesses.AnyAsync(a => a.CaseId == caseId && a.AppUserId == createdUser.Id));

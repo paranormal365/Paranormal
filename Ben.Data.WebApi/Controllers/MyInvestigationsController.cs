@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,8 +12,15 @@ namespace Ben.Data.WebApi.Controllers;
 public sealed class MyInvestigationsController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
-    public MyInvestigationsController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public MyInvestigationsController(
+        IDbContextFactory<BenDataContext> db,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+    {
+        _db = db;
+        _security = security;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<MyInvestigationItem>>> GetMyInvestigations(CancellationToken ct)
@@ -33,14 +40,30 @@ public sealed class MyInvestigationsController : BenControllerBase
             .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .ToListAsync(ct);
 
+        // Which of these groups' cases this person may actually open (site evaluation 2026-09-06,
+        // W-M1). The roster named somebody Lead Investigator on a case and offered its reference
+        // as the way in, while a membership rank on its own grants nothing below Administrator —
+        // so the link answered 403. A visit whose case is closed to the reader still appears, and
+        // still opens: it falls back to the group's Investigations tab, the same landing a
+        // case-less visit has always had.
+        var readable = new Dictionary<Guid, bool>();
+        foreach (var orgId in attendances.Select(a => a.Investigation.OrganizationId).Distinct())
+            readable[orgId] = await _security.HasAccessAsync(
+                userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
+
         return Ok(attendances.Select(a => new MyInvestigationItem(
             AttendeeId:        a.Id,
             InvestigationId:   a.InvestigationId,
-            CaseId:            a.Investigation.CaseId,
+            CaseId:            readable.GetValueOrDefault(a.Investigation.OrganizationId)
+                                   ? a.Investigation.CaseId
+                                   : null,
             CaseReference:     a.Investigation.Case is null
+                                || !readable.GetValueOrDefault(a.Investigation.OrganizationId)
                                    ? null
                                    : $"#{a.Investigation.Case.CaseYear}-{a.Investigation.Case.OrgCaseNumber:D3}",
-            CaseTitle:         a.Investigation.Case?.Title,
+            CaseTitle:         readable.GetValueOrDefault(a.Investigation.OrganizationId)
+                                   ? a.Investigation.Case?.Title
+                                   : null,
             OrgId:             a.Investigation.OrganizationId,
             OrgName:           a.Investigation.Organization.Name,
             OrgUrlName:        a.Investigation.Organization.UrlName,
@@ -80,6 +103,12 @@ public sealed class MyInvestigationsController : BenControllerBase
             .Where(a => a.AppUserId == userId
                      && a.DidAttend == true
                      && a.Investigation.ScheduledDateTime < now)
+            // Ordered on the ENTITY, before the projection. Sorting after it asks EF to order by a
+            // property of a record it is constructing, which it cannot turn into SQL — and it says
+            // so by throwing at runtime, not by failing to compile. Both callers wrap this in a
+            // catch that falls back to an empty list, so the 500 surfaced as "you have not
+            // attended anything yet" and the map was quietly empty for everyone.
+            .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .Select(a => new AttendedInvestigationItem(
                 a.InvestigationId,
                 a.Investigation.Title,
@@ -97,8 +126,8 @@ public sealed class MyInvestigationsController : BenControllerBase
                 a.Investigation.Latitude,
                 a.Investigation.Longitude,
                 a.Investigation.GeocodeNote,
-                a.IsLead))
-            .OrderByDescending(i => i.ScheduledDateTime)
+                a.IsLead,
+                a.Investigation.Location))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -175,4 +204,5 @@ public sealed record AttendedInvestigationItem(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    bool WasLead);
+    bool WasLead,
+    string? Location = null);

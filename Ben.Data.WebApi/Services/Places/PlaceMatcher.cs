@@ -89,6 +89,44 @@ public static class PlaceMatcher
     /// a wrong suggestion costs a glance, while a missed one costs a duplicate place that somebody
     /// has to merge later.</para>
     /// </remarks>
+    /// <summary>
+    /// The looser rule a PUBLIC location's archive uses: same spot, and one name inside the other.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the ordinary rule is not enough here.</b> Two people describing one landmark
+    /// write "Bell Witch Cave" and "Bell Witch Cave, Adams", or "430 Keysburg Rd" and "430
+    /// Keysburg Road". <see cref="IsProbableMatch"/> rejects both — the names differ by more than
+    /// a typo and the street types are different strings — and the archive then splits one cave
+    /// into two pages that each look like nobody has ever been there. Splitting is the failure
+    /// that destroys the feature; pooling two neighbouring landmarks merely annoys.</para>
+    ///
+    /// <para><b>Deliberately not applied to private residences.</b> Merging two homes on one
+    /// street because their names overlap would put one family's readings on another's record.
+    /// The caller checks the kind; this method only answers the geometry-and-name question.</para>
+    ///
+    /// <para>Containment rather than similarity, because the realistic duplicate is one person
+    /// adding the town, the county, or "(cave)" to a name somebody else typed plainly.</para>
+    /// </remarks>
+    public static bool IsProbableArchiveMatch(
+        Place existing, string? name, decimal? latitude, decimal? longitude)
+    {
+        // Coordinates on BOTH sides, unlike the ordinary rule: "unknown counts as close enough"
+        // is right when a human is being offered a candidate to confirm, and wrong when the match
+        // is applied without anybody looking at it.
+        if (existing.Latitude is null || existing.Longitude is null) return false;
+        if (latitude is null || longitude is null) return false;
+        if (DistanceMiles(
+                (double)existing.Latitude.Value, (double)existing.Longitude.Value,
+                (double)latitude.Value, (double)longitude.Value) >= MatchRadiusMiles)
+            return false;
+
+        var a = NormaliseName(existing.Name);
+        var b = NormaliseName(name);
+        if (a.Length == 0 || b.Length == 0) return false;
+
+        return a == b || a.Contains(b, StringComparison.Ordinal) || b.Contains(a, StringComparison.Ordinal);
+    }
+
     private static bool NameMatches(Place existing, string? name)
         => NormaliseName(existing.Name) is { Length: > 0 } a
         && NormaliseName(name) is { Length: > 0 } b

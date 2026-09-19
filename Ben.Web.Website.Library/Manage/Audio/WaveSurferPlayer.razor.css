@@ -1,0 +1,43 @@
+/*
+    The transport's two sliders (AE-3, 2026-09-06 audio walk).
+
+    Bootstrap's .form-range removes the browser's native appearance and draws its own track and
+    thumb; the theme layered on top of that left both with no height, so a volume control read as
+    a dot with a hairline through it. These rules restore a track and a thumb of a size somebody
+    can actually aim at, in the theme's own accent colour rather than the browser's.
+*/
+.ws-player-range {
+    height: 1.25rem;
+    accent-color: var(--kendo-color-primary, #0d6efd);
+}
+
+.ws-player-range::-webkit-slider-runnable-track {
+    height: 0.35rem;
+    border-radius: 0.35rem;
+    background: var(--kendo-color-base-emphasis, #ced4da);
+}
+
+.ws-player-range::-moz-range-track {
+    height: 0.35rem;
+    border-radius: 0.35rem;
+    background: var(--kendo-color-base-emphasis, #ced4da);
+}
+
+.ws-player-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    margin-top: -0.28rem;
+    border: 0;
+    border-radius: 50%;
+    background: var(--kendo-color-primary, #0d6efd);
+}
+
+.ws-player-range::-moz-range-thumb {
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 0;
+    border-radius: 50%;
+    background: var(--kendo-color-primary, #0d6efd);
+}

@@ -1,3 +1,4 @@
+using Ben.Data.Common.Constants;
 using AutoMapper;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -78,7 +79,7 @@ public sealed class ExperienceCategoryController : BenControllerBase
 /// <summary>SuperAdmin CRUD for experience categories.</summary>
 [ApiController]
 [Route("api/admin/experience-categories")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminExperienceCategoryController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -180,7 +181,7 @@ public sealed class AdminExperienceCategoryController : BenControllerBase
 /// <summary>SuperAdmin CRUD for experience types within a category.</summary>
 [ApiController]
 [Route("api/admin/experience-categories/{categoryId:guid}/types")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(Policy = RoleNames.SuperAdmin)]
 public sealed class AdminExperienceTypeController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

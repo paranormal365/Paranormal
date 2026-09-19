@@ -47,7 +47,7 @@ public class EquipmentLoanHistoryTests
         // No org-owned gear in this fixture, so the security service is never the deciding voice —
         // personal items resolve to their owner.
         return new EquipmentLoanHistoryController(
-            f, new Mock<IOrganizationSecurityService>().Object, storage.Object, new Mock<IAuditLogService>().Object)
+            f, new Mock<IOrganizationSecurityService>().Object, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), new Mock<IAuditLogService>().Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -60,9 +60,18 @@ public class EquipmentLoanHistoryTests
         };
     }
 
+    /// <summary>
+    /// A real, decodable JPEG. Since 2026-08-24 this door strips EXIF on upload, which means it
+    /// decodes what it is handed — "not really a jpeg" is now a 400, correctly.
+    /// </summary>
     private static IFormFile FakePhoto(string name = "before.jpg")
     {
-        var bytes = Encoding.UTF8.GetBytes("not really a jpeg");
+        using var bitmap = new SkiaSharp.SKBitmap(2, 2);
+        bitmap.SetPixel(0, 0, SkiaSharp.SKColors.Red);
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data  = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+        var bytes = data.ToArray();
+
         return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", name)
         {
             Headers = new HeaderDictionary(),

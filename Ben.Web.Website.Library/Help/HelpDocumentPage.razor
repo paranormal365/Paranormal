@@ -1,7 +1,8 @@
-@page "/help/{Slug}"
+﻿@page "/help/{Slug}"
 @using Ben.Web.Services.Help
 @inject HelpContentService Content
 @inject HelpViewerResolver Viewers
+@inject SiteFeaturesProvider Features
 
 <PageTitle>@(_document?.Title ?? "Help")</PageTitle>
 
@@ -85,7 +86,7 @@
 
         var viewer = await Viewers.ResolveAsync();
 
-        _document = Content.Find(Slug, viewer);
+        _document = Content.Find(Slug, viewer, Features.IsOn);
         _html = _document is null ? string.Empty : Content.ToHtml(_document);
         _headings = _document is null ? [] : HelpContentService.HeadingsOf(_document);
         _loading = false;

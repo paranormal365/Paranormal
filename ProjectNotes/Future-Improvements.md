@@ -140,7 +140,7 @@ On audio file playback/preview (e.g. `AudioFilePreview.razor`/`WaveSurferPlayer.
 
 ---
 
-## 9. Thoroughly test the Ben.Video component 🟡 In progress (2026-08-06)
+## 9. Thoroughly test the Ben.Video component (recurring practice, not a finishable item — both tracked bugs fixed)
 
 Need a dedicated pass to thoroughly test the Ben.Video.Editor component and verify all aspects of it — not just the specific bugs found incidentally while working on other items (see item #6's follow-up and item #8). Lives in the separate Ben.Video.Editor repo (Github-BenVideo remote), not this one.
 
@@ -2156,7 +2156,13 @@ dev tooling cannot drive an OS file picker). Profile and witness photos were ver
 > The public **CMS member roster** section (`CmsSectionType.MemberRoster`) is still a placeholder
 > that renders "Member roster section." — that belongs to item #80's CMS phases, not here.
 
-## 55. Equipment inventory & checkout tracking (not started)
+## 55. Equipment inventory & checkout tracking (BUILT through phase 6 — header was stale; see item 86 for what was deliberately left)
+
+> **Header correction (2026-08-20):** this read "not started" long after the fact. Personal and
+> organization equipment, sharing, checkouts, photos, FAQs, counters and loan feedback all shipped
+> across phases 1–6; all four phase-6 branches are content-verified in develop. What remains is
+> recorded honestly in item 86 (deliberate leftovers), plus one default decision and Ben's own
+> click-test. The description below is kept as the original spec.
 
 Two related but distinct systems:
 
@@ -3790,7 +3796,31 @@ text reads well under real Telerik table layout before considering this fully do
 
 ---
 
-## 84. Organization subscription lapse, and what happens to their clients (not started, designed 2026-08-17)
+## 84. Organization subscription lapse, and what happens to their clients (CLOSED 2026-08-22)
+
+**Shipped (84a):** `CaseStatus.Paused` (= 8, appended; all 55 branch points audited — public
+surfaces were safe by allowlist construction, stats/avatars/filters fixed); `Case.StatusBeforePause`
+makes the pause a lossless round trip (Active resumes Active); `SubscriptionLapseJob` runs the
+whole clock — two-week warning to the billing people, one-week tell-your-clients prompt, then
+lapse + pause open cases + message each case's clients directly, all date-keyed idempotent so a
+renewal re-arms the warnings with no clearing code; `WhyReadOnlyAsync` on the guard makes a lapsed
+group read-only across the five capped creates plus timeline entries, case files (upload AND
+attach), notes, and org case messages — the client's own MyCase surface deliberately stays open;
+reactivation restores exactly the cases the lapse paused, via `PeriodOpener.RestorePausedCasesAsync`.
+Client banner on the paused case; help docs updated. 7 job tests, regressed two ways.
+
+**Shipped (84b, same day):** `CaseTransferLog` gains `ProposedByClient` + the two consent flags;
+`POST/GET/DELETE /api/my-cases/{caseId}/reassign` (paused cases only, one pending move at a time,
+the case STAYS Paused while pending so rejection leaves nothing to clean up); consent enforced at
+acceptance — withheld history re-scoped to a new `CaseTimelineVisibility.ClientOnly` (org queries
+exclude it, the client-side `>= Client` filter admits it by construction; Public entries stay
+Public), withheld investigations DETACH and remain the original group's flat records, shared ones
+stay attached while still org-owned = dual visibility for dual ownership, no copies, no deletes.
+Found and fixed in passing: the receiving side of ANY transfer had no surface at all (the per-case
+list requires the case to already be yours) — new org-level `incoming-transfers` endpoint + an
+Incoming cases card on the Cases page with the consent summary. The client hears the answer either
+way; the move flow lives in the paused banner itself. 7 consent tests, regressed both directions
+(consent inverted; detach replaced with delete).
 
 Ben's policy, worked out while sizing monetisation (see item #85 for the billing model itself).
 Deferred with the rest of monetisation until the site's functionality and help documents are
@@ -3857,7 +3887,7 @@ Groups are to be told all of this **when they join**, not when it happens.
 
 ---
 
-## 85. Monetisation: subscriptions, and paid rental (not started, direction set 2026-08-17)
+## 85. Monetisation: subscriptions, and paid rental (BUILT 2026-08-22 — header was stale like item 55's; the whole arc shipped: domain, admin screens, pricing page, contracts, notices, enforcement, lapse wind-down. Paid RENTAL remains unbuilt and undecided.)
 
 Deferred by Ben until the site's functionality and help documents are complete. Recorded so the
 thinking is not repeated. Payment provider undecided — **Square or PayPal** are the candidates.
@@ -3942,7 +3972,7 @@ Admin view is complete; only the stripping half waits.
 
 ---
 
-## 87. Open events — public investigations and open meetings (mostly built 2026-08-17 — the pre-event reminder remains, and needs a scheduler)
+## 87. Open events — public investigations and open meetings (CLOSED 2026-08-20 — the reminder and its scheduler shipped in phase 6)
 
 Ben: *"An open investigation can be open to the public and if someone wants to attend and let them
 know they are coming they have to be a site user. The information to attend and information about
@@ -4172,6 +4202,41 @@ to invent a password.
 A reminder before the date belongs here too. Ben's *"I base this off my experience"* is the argument
 for it: somebody who signed up three weeks ago needs telling again, and a stranger who does not turn
 up is worse for the organization than one who never signed up.
+
+### The reminder, and the scheduler under it — ✅ built 2026-08-20 (phase 6)
+
+Anyone whose RSVP is **Accepted** is emailed roughly a day before the event: time, place, the link
+to the event page, and a way to say they can no longer come while the place can still be offered to
+somebody else. Not the merely invited and not the tentative — an invitation nobody answered is not a
+commitment, and mail about a thing somebody never agreed to is mail they did not ask for. Widening
+that is one enum value, and should be a decision rather than a drift.
+
+**This is the platform's first background worker.** `ScheduledWorkService` is a `BackgroundService`
+that wakes every five minutes and runs each registered `IScheduledJob` in its own scope and its own
+try/catch. **No Hangfire, no Quartz** — the work is a handful of jobs on a timer with no cron
+expressions, no backoff, no dashboard and no persisted queue, and the one guarantee that matters is
+provided by a unique index rather than by anything a job framework would supply. Adding a job is one
+`AddScoped<IScheduledJob, …>` line.
+
+Three decisions in it worth keeping:
+
+- **The first pass waits 30 seconds.** Jobs that fire the instant the process starts run while
+  migrations may still be applying, and turn a crash-restart loop into a job loop.
+- **Resolution happens inside the guard, not before it.** An exception escaping `ExecuteAsync` stops
+  the entire host by default, so a job whose constructor threw would have turned "reminders are
+  broken" into "the API is down". Caught while writing the tests, not by them.
+- **The marker is written after the send, never before.** Writing it first would make a failed send
+  permanent silence; writing it after means the worst case is a duplicate — much the better of the
+  two for somebody who is expected somewhere tomorrow.
+
+`EventReminderSent`'s unique index across (event, user) **is** the idempotency, not a tidiness
+constraint: the loop would otherwise find the same event on every pass and send the same person the
+same email a dozen times before the evening. The in-memory provider the tests use does not enforce
+unique indexes, so the tests exercise the query — the layer that operates on every normal pass — and
+assert the index structurally, with the reasoning next to the assertion.
+
+Turning **events off sitewide stops the mail**, not just the pages. A disabled section that carries
+on writing to people is worse than one that merely hides itself.
 
 ### Smaller things to settle when it is picked up
 
@@ -4632,3 +4697,7916 @@ Both screens now show a "did you mean" prompt: each suggestion is one click, and
 different"* creates it as typed. Two source-scan tests hold the line — one that the suggestions
 reach a screen at all, one that **every** screen showing them can also overrule them, since a
 prettier dead end is still a dead end.
+
+---
+
+## 91. Video editor — scope the Server media tab (CLOSED 2026-08-20 — phase 7)
+
+The editor's **Server** tab lists every media file the signed-in person can reach, in one flat
+list. That is fine with four demo clips and unusable with four hundred: a real investigation
+produces dozens of files per visit, and the tab is the only way to get any of them into a project.
+
+**The ask.** A scope selector above the list:
+
+- **All** — everything they may see, as today.
+- **Personal** — only files they own.
+- **By case** — pick a case, see that case's media; then optionally narrow to a single
+  **investigation** within it.
+
+Permissions decide what each scope can return, not the selector: someone with access to all media
+sees a case's whole set, while someone with narrower rights sees only their own share of it. The
+selector filters what they are already entitled to — it must never widen it.
+
+**Why it matters beyond convenience.** Importing is a two-click operation per file (download, then
+add), so the cost of finding the right file dominates. Scoping by case and investigation also puts
+the editor in the same mental model as the rest of the site, where work is organised by case first.
+
+**Notes for whoever builds it.** The list comes from `GET /api/media-library/files`, which already
+aggregates across ownership, org membership, shares and case links —
+`MediaLibraryController` composes those sets, so the scoping belongs there rather than in the
+editor, which should send a scope and an optional case/investigation id. `BenMediaLibraryProvider`
+is the client side. Keep the content-type filter as-is.
+
+### How it shipped (2026-08-20)
+
+A selector above the Server tab: **All media / My files / By case**, with a case list appearing for
+the third and a visit list appearing under that when the chosen case has more than one.
+
+**The scope narrows and cannot widen**, and that is a property of where the filtering happens
+rather than a promise. `MediaLibraryController` computes the full audience union first, exactly as
+it always did, and applies a scope as an *intersection* over the result — so naming a case you have
+no part in returns nothing rather than its contents. A test asserts precisely that, and fails if
+the intersection is ever "optimised" into the union.
+
+**The editor still does not know what a case is.** A second, optional interface —
+`IMediaLibraryScopeSource` — hands it groups with labels and ids; it renders them and sends an id
+back. A host that registers none simply gets All and Personal. Optional in the real sense: it is
+resolved through the service provider rather than with `[Inject]`, because `[Inject]` calls
+`GetRequiredService` and a nullable property does not make it optional.
+
+**Two things this turned up:**
+
+1. **The two hosts were listing different things.** The WASM host's Server tab called
+   `/api/upload-files`, which is *owner-only*, while the Blazor Server site called
+   `/api/media-library/files`, which aggregates. So the same tab in the same editor showed a
+   narrower list on one host than the other, and the WASM host silently omitted images as well.
+   Both now use the aggregating endpoint and both show images; anyone who wants the old behaviour
+   picks **My files**.
+2. **A stale-response race** — found by a test that changed scope twice quickly, which is exactly
+   what somebody hunting for a file does. The first fetch was still in flight when the second
+   scope was chosen, and whichever landed last won: the list would show the previous scope's files
+   under a selector describing the new one. A generation counter now discards superseded results.
+   The failing test went from a 17-second timeout to two seconds once it was fixed, which is how
+   the race announced itself.
+
+---
+
+## 92. Home map renders into a sliver (CLOSED 2026-08-19)
+
+Reported with a screenshot: on the home page, the "Public Investigations" map draws its tiles into
+a narrow strip down the left of its container and leaves the rest black. The zoom and recentre
+controls sit inside the strip, so the map believes it is that width.
+
+**The guess in this entry was wrong twice over**, and is kept because the shape of the mistake is
+worth remembering: it named Leaflet and `invalidateSize()`, and these maps are Telerik's. The
+reasoning about *when* — measured once at mount, never re-measured — was right; the library was
+not. Diagnosing from a symptom's resemblance to a library you have used before will do that.
+
+**Where to look.** The home map component and its JS interop, plus anything that resizes the page
+after first render. Worth checking whether it reproduces on a hard reload versus a soft navigation,
+and whether collapsing the sidebar fixes or worsens it — both distinguish "never measured" from
+"measured too early".
+
+Not reproduced in the capture harness, which screenshots the same page at a fixed 1440×900 viewport
+and gets a full-width map — so it likely depends on window size or on the sidebar state at load.
+
+**Suspect the template migration first.** The map predates the move from the Telerik-based layout to
+the current template, and the new layout owns the page's widths and the collapsible sidebar. A map
+that measured itself correctly under the old chrome would fail exactly this way under new chrome
+that sizes its container later or differently.
+
+### What it was (fixed in 8798656)
+
+Both public maps re-measured themselves by reaching for a global `kendo` object —
+`kendo.widgetInstance(el).resize(true)`, behind a `typeof kendo !== 'undefined'` guard. Telerik UI
+for Blazor ships no jQuery and defines no such global, so the guard was false every time and every
+call did nothing. The map kept whatever width it measured at mount: load narrow, widen, and the
+tiles stayed in a strip.
+
+Both components now hold a `TelerikMap` ref and call `Refresh()`; the JS keeps only the debounced
+resize event. The same dead path drove `setMapCenter`, so recentring the home map on a searched
+location had quietly done nothing since it was written.
+
+Re-checked live 2026-08-19 after the toolbar work, since the entry had been left open: tiles cover
+100% of the map box at 1280, at 1600, at 1024 on a fresh load, after collapsing the sidebar, and in
+dark mode. Worth knowing for the next map bug — a screenshot taken too early shows a blank white
+map, because Kendo creates each tile with `visibility: hidden` and reveals it on load. That is not
+a defect, and it briefly looked like one here.
+
+---
+
+## 93. Editor toolbar — overflow items need labels, and undo/redo need checking (CLOSED 2026-08-19)
+
+Reported against the WASM host, but the toolbar is shared, so both apply to the site too.
+
+**Labels in the overflow.** The toolbar's "More tools" dropdown shows its items as bare icons. In
+the toolbar itself an icon with a tooltip is fine — the row is a known set and space is tight — but
+a dropdown is a list of choices being read one after another, and there icons alone make people
+guess. Give the overflow items their text. The same goes for the cloud icon, whose meaning
+(save/publish to the server) is not something anyone should have to hover to learn.
+
+**Undo and redo appear unclickable.** Both are legitimately disabled when there is nothing to undo —
+their tooltips say "Nothing to undo" / "Nothing to redo" — so the first thing to establish is
+whether they stay disabled *after* an edit. If they do, that is a real defect in the undo stack's
+wiring; if they don't, the defect is that a disabled control gives no hint why, which the tooltip
+only fixes for people who hover.
+
+### What it turned out to be
+
+**Undo and redo were never broken.** Measured before and after an edit: with an empty project the
+button reports `Nothing to undo` and disabled; after adding a marker it reports
+`Undo: Add marker "0:00.0"` and enabled. The undo stack was wired correctly the whole time. What
+was true is the second half of the report — a disabled control explains itself only to whoever
+hovers it, and in a dropdown nobody hovers.
+
+**Labels.** Only three buttons could ever reach the "…" menu: Undo, Redo and Save to server. Every
+other icon button in the bar sets `Overflow="Never"` and stays put, and `ToolBarTemplateItem`
+behaves as `Never` regardless. Those three now carry child content, which the menu renders as the
+row's text; a scoped rule hides that text while the button is in the bar, so the bar is unchanged.
+The rule needs `::deep` — the span holding the text is Telerik's, so it never receives this
+component's isolation attribute and a plain descendant selector matches nothing at all.
+
+**And the reason nobody had complained the menu was useless.** It was covered. Kendo puts popups at
+z-index 10002 and windows at 11500, and the Media & Properties window docks to the right, directly
+beneath the "…" button. Hit-testing the menu's four items returned the window's title bar and tab
+strip: not a cosmetic overlap but an unclickable menu, and at narrow widths it is the only route to
+Preview, Export, Undo and Redo. The popup is now raised above the window layer. An earlier attempt
+at 10050 looked plausible and changed nothing, because the number to beat was never the 10003 the
+panel happened to be reporting at the time.
+
+Verified end to end at 900px: added a marker, opened the menu, clicked **Undo** in it, and the
+state went to `Nothing to undo` / `Redo: Add marker "0:00.0"`. Two guards added in
+`ToolbarOverflowLabelTests` — one fails if a button that can overflow has no label, one fails if the
+popup is not raised past 11500 — both confirmed to fail against the unfixed code.
+
+## 94. Background render stalls at "Processing… 0%" after an overlay is added (CLOSED 2026-08-19)
+
+Hit while automating the editor for the help screenshots, in the site host. Sequence: import two
+clips, select a clip, add a text overlay, add a callout. The ffmpeg status chip then went to
+`Processing… 0%` and stayed there for the full two minutes the capture waited, which also leaves
+Export disabled (it requires `FfmpegState.Ready`).
+
+Reproduced three times while capturing screenshots. It is a genuine stall, not slowness: the first
+run sat at `Processing… 0%`, the next two reached `Processing… 47%` and stayed there for four and a
+half minutes without moving. Export is unusable for as long as it lasts.
+
+This may be the same class as the clip-art background-render stall hardened in phase 138, whose
+exact trigger was never confirmed live. This one has a reproducible-looking recipe, which that one
+lacked, so it is worth trying to reproduce by hand before assuming they are the same.
+
+Reproduce with the seeded demo footage: `/my-videos`, Initialize, import `porch-camera.mp4` and
+`hallway-camera.mp4` from the Server tab, then **click a clip on the timeline**. That last step is
+the trigger; importing alone renders fine (`exec 4.6s`, `concatClips 3.9s`, both ✓).
+
+### Investigated 2026-08-19 — one cause found and fixed, one still open
+
+**Fixed: a source with no audio stream produced an invalid command.**
+`BuildBackgroundRenderVideoArgs` decided whether to map audio from the export settings and the
+clip's mute flag alone, never from whether the file actually has an audio stream. For a video-only
+source it emitted `-map 0:a`, which ffmpeg refuses outright — verified against the real binary:
+
+```
+Stream map '' matches no streams.  To ignore this, add a trailing '?' to the map.
+```
+
+The probe now reports `hasAudio`, `VideoClip.HasAudio` carries it (defaulting true, so projects
+saved before this are not silenced), and the builder attaches the silent `anullsrc` track it
+already had for muted clips. Three tests, one of which fails against the old code. This moved the
+stall from 47% to 64% — it did not cure it.
+
+**Still open: what actually freezes.** With a clip selected, the status chip sits at
+`Processing… 64%` for four minutes and more. The evidence says a command is hung in the worker
+rather than the state machine being wrong:
+
+- the operation trace records entries *on completion*, and shows **nothing** after the selection;
+- `FfmpegState` is `Processing`, and the paths that fail cleanly set `Error` instead — covered by
+  three new tests in `FfmpegServiceRecoveryTests` asserting a failed exec never leaves the service
+  pinned at Processing;
+- the ffmpeg log tail ends in five × `Aborted()`, which is how ffmpeg.wasm reports an internal
+  abort;
+- **the `WorkerWatchdog` never declared it wedged**, so the chip never offered its "⚠ Stuck —
+  Reset?" affordance and the user has no way out short of reloading.
+
+### Root cause found and fixed 2026-08-19 — nothing was ever stuck
+
+**The render was never hung. The toolbar had stopped repainting.**
+
+The decisive measurement: with the chip reading `Processing… 33%`, opening the diagnostics panel in
+the same second reported `State | Ready`. Two components, one service, two different answers — so
+the disagreement was in the rendering, not in ffmpeg.
+
+`Toolbar.razor` reads `Ffmpeg.State` straight from the injected service — the status chip, its
+progress bar, and the `Enabled` of Initialize, Open, Preview and Export all depend on it — and
+subscribed to nothing, relying on its parent re-rendering. Blazor skips a child whose parameters
+have not changed, and going from Processing back to Ready changes none of the toolbar's parameters.
+So the toolbar kept painting whatever was true at its last render, indefinitely, and Export stayed
+greyed out behind a progress bar that had stopped.
+
+The percentage differing run to run (33, 47, 50, 64, 65) was the giveaway in hindsight: it was
+whatever the last painted value happened to be.
+
+`Ffmpeg.OnStateChanged` is now subscribed — and the guard test written alongside found the same
+defect in three more components: `MediaLibraryPicker` (whose Import button would stay disabled
+after ffmpeg became ready), `ClipBrowser`, and `DiagnosticsPanel` itself. All four fixed.
+
+The watchdog was right not to fire: nothing was wedged.
+
+Two real bugs were found on the way there and are worth keeping separately in mind — the two audio
+mapping defects above — but neither was the stall.
+
+
+---
+
+## 95. Editor toolbar — reclaim the space (CLOSED 2026-08-20 — was already done)
+
+Three changes to the same row, all about making room for the buttons that matter:
+
+- **Drop the "Ben.Video" wordmark** and put the ghost logo at the far right of the bar instead, as
+  a small image that does not grow the bar's height. Light and dark versions, chosen by the active
+  theme like everything else on the page.
+- **Hide the Initialize button once ffmpeg has loaded.** It is a one-shot action with a visible
+  result — the status chip already says "Ready" — so keeping it costs permanent width for a button
+  nobody presses twice.
+- Use the space that frees up to show undo/redo (and friends) directly, rather than pushing them
+  into the overflow where they need text labels (item 93).
+
+**Closed 2026-08-20 on inspection: all three were already shipped**, as part of item 93's toolbar
+work, and only this header was left stale — the same trap items 9, 55, 92 and 96 set. Verified in
+the running editor rather than by reading: the Initialize button is rendered only in the Idle and
+Error states, undo and redo are direct toolbar buttons rather than overflow entries, and the mark
+sits at the end of the bar.
+
+One detail worth recording because it is better than what was asked for. The mark is **not** two
+images chosen by theme — it is a single mask painted with `--bv-text-muted`, so it follows the
+theme by construction and there is no second asset that can drift out of step with the first.
+
+## 96. Diagnostics and logs are visible to everyone (CLOSED 2026-08-20 — phase 7)
+
+The editor's ffmpeg diagnostics panel and its error log are on the toolbar for every user. They are
+operator tools: memory use, worker state, ffmpeg command output, internal errors. A client editing
+their own footage has no use for them, and the output names internals they should not be reading.
+
+Show them only to platform and group administrators. The editor itself has no notion of roles — it
+is a component library — so the flag belongs in `VideoEditorOptions`, set by each host from the
+identity it already has: the site from its user state, the WASM host from the signed-in account.
+
+**Status: closed 2026-08-20.** The site host gates all three editor pages on
+`IsSuperAdmin || IsAdmin`. The WASM host now asks `GET /api/me` after sign-in and sets
+`ShowDiagnostics` from the answer — it has no claims to read, because sign-in there goes through
+`MapIdentityApi` and yields tokens rather than a principal. It re-asks when the signed-in account
+changes, which matters most in the sign-out direction.
+
+The default stays **off**, and every failure resolves to off: signed out, no API configured, or the
+call throwing. This is a display decision and not a security boundary — every endpoint those tools
+reach authorises itself, so somebody who forced the answer would reveal a panel to themselves and
+gain nothing. That is written next to the code, because the next reader will wonder.
+
+Both directions are tested against the live WASM host. A test that only checked the panel was
+hidden would have passed against the previous behaviour, which hid it from everybody — including
+the people it exists for.
+
+---
+
+## 97. Expanded sidebar is clipped by the editor (CLOSED 2026-08-19)
+
+With the site's sidebar minimised, hovering it expands a flyout over the page. On `/my-videos` the
+flyout is cut off at the editor's left edge: the menu's own tooltip and the right-hand part of the
+panel disappear behind the editor's chrome, so the labels are unreadable exactly where the flyout
+is supposed to be doing its job.
+
+A stacking problem, not a layout one — the menu is drawn, then something in the editor paints over
+it. The editor's root establishes its own stacking context (it positions its panels, the preview
+and the timeline against each other), so a flyout that relies on sitting above ordinary page
+content has nothing to sit above once it crosses that boundary.
+
+Worth checking against the template migration generally: the old Telerik-based chrome and the
+current template do not necessarily agree about which layer the expanded sidebar belongs to, and
+this is the first page where a full-viewport component sits beside it.
+
+### Fixed — a z-index tie, not a clip
+
+Reproduced with the sidebar minified and hovered open over `/my-videos`. Nothing was clipping it:
+the editor's own horizontal rules were drawing *over* it. Measured, three `.bv-divider` elements at
+**z-index 10, left: 90** — well inside the 252px the expanded sidebar occupies — against a sidebar
+that shipped at **z-index 10** itself. Equal layer, later in the document, so the page won.
+
+The shell now sits above page content: `.app-sidebar` at 1000 and `.app-header` at 1001, kept below
+the popup layer `telerik-night.css` pins at 1090 so dropdowns and pickers still open above the
+navigation. Fixing it at the shell rather than at the divider settles the whole class — a page is
+entitled to stack its own content without knowing what the chrome uses.
+
+Verified by hit-testing rather than by eye: at each divider's midpoint inside the sidebar's width,
+the topmost element is now a sidebar link.
+
+---
+
+## 98. Charts — the template already styles ApexCharts, we just never shipped it (CLOSED 2026-08-20 — phase 2)
+
+Ben likes the look of the ApexCharts in the SmartAdmin demos and asked whether they come with the
+template. They effectively do: `smartapp.min.css` carries **190 `.apexcharts-*` rules** — the whole
+theming layer, tooltips, legends, grid lines, the lot — so a chart dropped in would already match
+the site. What is missing is only the library: `wwwroot/plugins/` holds `bootstrap` and `waves` and
+nothing else, and no page references ApexCharts.
+
+So this is not "build a charting story from scratch"; it is "add the script and use it".
+
+**Where charts would actually earn their place**, rather than decorating a page:
+
+- a group's own dashboard — cases opened/closed over time, investigations per month, equipment out
+  on loan;
+- the site administration screens, which currently report counts as bare numbers;
+- a case's evidence over time, which is the one chart a client would care about.
+
+Ben's reference for the full set of template functionality:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html> — worth walking through
+before choosing, since the template ships more patterns than we have adopted.
+
+**Peity** is the other half, and Ben flagged it separately: tiny inline charts — sparklines, mini
+bars, mini pies — for places too small for a real chart. Think a row in a list, a stat tile, a
+count beside a heading. Apex for the panel, Peity for the cell; picking one for both jobs is how
+dashboards end up with either unreadable thumbnails or oversized decorations.
+
+**Check first** whether the vendored Night skin's palette reaches the Apex variables the way it
+reaches Kendo's; if not, the same bridge trick used for the video editor applies.
+
+### How it shipped (2026-08-20)
+
+**The licence turned out to be the real decision.** ApexCharts went dual-licensed at v5: free only
+under $2M annual revenue, payable above it. For a site with monetisation on the roadmap that is a
+dependency whose terms change exactly when it succeeds, so the vendored build is **4.7.0, the last
+MIT release** — MIT cannot be revoked from a version already published. Recorded in
+`wwwroot/plugins/apexcharts/VENDORED.md`, including the warning to read a future version's LICENSE
+file rather than npm's `license` field, which said "SEE LICENSE IN LICENSE" for precisely the
+releases where the terms changed.
+
+**The check this item asked for, answered:** `smartapp.min.css` carries all 190 `.apexcharts-*`
+rules and every one is light-theme; `themes/night.min.css` carries none. So `ben-charts.css` bridges
+the dark half off `--bs-*` properties — but only for what the library renders as real DOM. Series
+and axis-label colours are drawn from config, not CSS, so the JS module reads the palette at build
+time and re-reads it on a theme change.
+
+**Peity is not vendored.** It needs jQuery, which this site does not load; ApexCharts' sparkline
+mode covers the same job. One library for both roles — recorded because Ben asked for Peity by name.
+
+Built: `ApexChart.razor(.js)` (module-level Map keyed by container id — the multi-instance pattern
+a dashboard requires) and `StatCard.razor`, generalised from the sidecar page's three hand-rolled
+tiles, which were the only stat cards in the app and about to be copied. That page is the first
+consumer: its "Installations by version" badge row was a bar chart with the bars left out, and is
+now a bar chart.
+
+One thing looking at it caught that no assertion would have: with a single category ApexCharts
+stretches a bar across most of the panel, reading as a filled progress bar. Column width now scales
+with category count.
+
+Guards: three Playwright tests — renders with real geometry, one canvas per container (the
+multi-instance regression), and the canvas paints no background of its own in dark mode. The
+sidecar admin page also gained help documentation, which it had never had — found because the
+orphaned-screenshot guard refused the new image.
+
+---
+
+## 99. Profile page — adopt the template's layout (CLOSED 2026-08-20 — phase 4)
+
+Ben likes the SmartAdmin profile demo and wants our profile page to read like it:
+<https://getwebora.com/smartadmin/demo/profile.html>
+
+The catch is that ours carries considerably more than the demo does — two photos with their
+two-key consent, contact details with their own visibility rules, email confirmation, addresses,
+phones, links, and the investigation map. So this is a layout adoption, not a page swap: take the
+demo's structure (the header band with the avatar and identity, the tabbed/carded body, the
+consistent section rhythm) and fit our sections into it, rather than dropping our controls into a
+page built for fewer of them.
+
+Worth deciding up front which sections are prominent — most people come to this page to change one
+thing — and whether the investigation map belongs on the profile at all or behind its own tab.
+
+---
+
+## 100. Internal messages — adopt the template's mail layout (CLOSED 2026-08-20 — phase 5)
+
+Ben likes the SmartAdmin system-mail demo for our internal messaging:
+<https://getwebora.com/smartadmin/demo/systemmail.html>
+
+Three surfaces could share it, and they should look like one thing rather than three:
+
+- the **case message board** (client ↔ group), today a plain list;
+- **platform messages** from site administrators;
+- the **notifications** page, which is closer to a feed but shares the read/unread rhythm.
+
+The demo's useful parts are the list/detail split, the unread treatment, and the sender block —
+all of which we already have data for. What it does not cover is who may see a given message, which
+is the part our version cannot borrow: case messages carry visibility rules and platform messages
+carry an audience, so the layout has to leave room to say so on each row.
+
+Sequence this after item 99 — they are the same kind of work and share the card and header idioms.
+
+**Closed 2026-08-20.** The group's Messages tab is now the template's mail idiom: a folder rail
+(Inbox / Sent / Broadcasts / Direct / Case teams / Public, each with its unread count), a list of
+`MailRow`s inside the template's own `<ul class="notification">`, and a reading pane under the list
+in place of the modal. Platform messages on the notifications page use the same rows and the same
+reading pane. The case thread stays a chat — bubbles are right for it — but its body now renders
+through the shared `MessageBody`, and its received bubble no longer uses a fixed light fill that
+turned white in night mode.
+
+`MessageBody` is the point of the exercise beyond appearance: three surfaces each rendered a
+message body their own way, and @mention/#hashtag linkification (phase 8) needs one place to land.
+`MessageList.razor` is gone; nothing else consumed it.
+
+**Deviation from the plan:** compose stayed a dialog rather than becoming a route. A composer with
+bold/italic/lists is the "small formatting" exception to the pages-over-modals rule, and every mail
+client in the world overlays it. The *read* view did move out of its modal, which is the half that
+mattered.
+
+**Three bugs found while building it, all invisible to an owner account:**
+
+1. **Ordinary members could not open their own group at all** (fixed here). `GET
+   /api/organizations/{id}` required Read access through the org security service, which returns
+   true for Owners and Administrators and otherwise falls through to explicit grants and named
+   roles. A plain Member had none, so the hub — whose first call this is — said "Organization not
+   found or you do not have access" about a group they belong to and can post messages in. Three of
+   BenCo's four seeded members were locked out. Active membership is now sufficient to read the
+   organisation's own record; the check sits in the controller, not in `HasAccessAsync`, because
+   members are emphatically not entitled to read every table.
+2. **The recipient picker used an org-admin-only endpoint** (fixed here).
+   `GetOrganizationMembersAsync` goes through the security service and throws for anyone who is not
+   an org admin — that is, for exactly the person most likely to be sending a direct message. The
+   catch around it turned the refusal into "this group has no other active members to write to."
+   Now `GetOrgUserDirectoryAsync`, which asks only that the caller be an active member.
+3. **The channel dropdown never called its own change handler** (fixed here). `ChannelChangedAsync`
+   was written, correct, and unreferenced: the `BenSelect` had `@bind-Value` but no `OnChange`, so
+   the member fetch never ran and the picker sat on "Loading members…" indefinitely.
+
+The direct-message fix this item was partly about — compose sent `RecipientUserIds: []` while
+offering Direct Message and Case Team — is also done, and is covered by a test that reads the
+message as the recipient rather than trusting the composer.
+
+All six tests in the new `Messaging` Playwright category sign in as **James, an ordinary member**,
+not as Sarah, who owns BenCo. All three bugs above were owner-invisible. That is the lesson worth
+keeping from this phase, and it generalises past messaging: a suite that only ever authenticates as
+the most privileged account cannot see the product most people use.
+
+---
+
+## 101. Administrator dashboard — the template's stat-card bar (CLOSED 2026-08-20 — phase 3)
+
+For administrators and site administrators, Ben wants the row of cards the template's project
+dashboard opens with:
+<https://getwebora.com/smartadmin/demo/dashboard-project-management.html>
+
+Sensible things to put in them: sign-ins, new members, cases opened, investigations scheduled,
+equipment out on loan, support tickets waiting. Each card wants a number, a period-on-period
+change, and — per item 98 — a Peity sparkline rather than a full chart, which is exactly the size
+the template's cards are built for.
+
+**One of those needs data we do not keep.** The audit log records entity changes (create, update,
+delete); nothing records a *sign-in*, so "logins" cannot be charted today without first recording
+them. That is a deliberate decision to make rather than an oversight to fix quietly: sign-in
+records are personal data with their own retention question, and a chart is a poor reason to start
+keeping them indefinitely. Decide the retention window first, then record.
+
+Everything else on the list is already in the database and only needs aggregating —
+`AppUser.DateCreated` for new members, cases and investigations by their own dates, checkouts by
+status, support tickets by state.
+
+Gate the whole bar on the same administrator check the diagnostics panel now uses (item 96), so
+one rule decides who sees operator-facing surfaces.
+
+---
+
+## 102. AudioFilePreview's toast has no element — its errors are shown to nobody (CLOSED 2026-08-19)
+
+`AudioFilePreview.razor` declares `TelerikNotification? _toast` and routes three messages through
+it, but no `<TelerikNotification @ref="_toast" />` exists in the markup, so `_toast` is null
+forever and `Notify()` no-ops. Two of the three are save confirmations; the third is the one that
+matters: **"Save failed — only WAV and MP3 sources can be clipped."** A user clipping from an
+unsupported source sees nothing happen, which reads as a broken button.
+
+Found by the compiler (CS0649), which is the same disguise the item #77 phase-6 bugs wore. Fix is
+one line of markup; while there, check whether the site's shared toast pattern should be used
+instead of a per-component TelerikNotification.
+
+## 103. Six public components read auth state that may not have resolved yet (CLOSED 2026-08-19)
+
+`PublicCaseDiscovery`, `HomeHero`, `CaseVoteWidget`, `EvidenceVoteWidget`, `UploadFileVoteBar` and
+`FileCommentThread` read `UserState.IsAuthenticated` without awaiting `AuthReady` and without
+subscribing to a state-changed event. Five are markup-only and merely render the signed-out
+variant until something re-renders them; `PublicCaseDiscovery` is worse — `LoadVoteSummariesAsync`
+bails on `!IsAuthenticated` **during initial load**, so on a hard navigation a signed-in user's
+own votes never appear on the home page's case cards until they page or re-sort.
+
+This is the same family as the Safari base-href bug and the editor toolbar repaint: state read
+once, never followed. The site-wide pattern (await `AuthReady` in pages; components either receive
+auth as a parameter or subscribe) should be applied, and the existing AuthReady guard test extended
+to components that inject `IBenUserState`.
+
+## 104. ImageEditorPlayer's opacity slider is fire-and-forget (CLOSED 2026-08-19)
+
+The layer-opacity `<input @oninput>` calls `async Task SetLayerOpacity(...)` without awaiting it
+(CS4014). Failures vanish as unobserved tasks, and a fast drag can interleave
+`setLayerOpacity`/`RefreshLayersAsync` pairs out of order. Make the lambda async and await, or
+funnel through a small debounce like the editor's own sliders use.
+
+## 105. One flaky e2e test: RequestList_AnonymousRedirectsToLogin (CLOSED 2026-08-19)
+
+The only failure in a 265-test run, and the product is fine — verified live, anonymous
+`/my-requests` lands on `/login` with the sign-in form. The test asserts on `Page.Url` immediately
+after `GotoAsync`, but the redirect is client-side after the circuit connects, so the assert races
+it. Wait for the URL change (`WaitForURLAsync`) the way the login helper already does. NetworkIdle
+proves nothing here — that lesson is already written down.
+
+## 106. The editor pages don't link their own help doc (CLOSED 2026-08-19)
+
+`using-the-video-editor.md` shipped with ten screenshots, and no screen links to it:
+`MyVideosPage`, `CaseVideoEditorPage` and `VideoEditorPage` carry no `HelpLink`. The house rule is
+docs + HelpLink in the same branch; the doc half landed alone. `getting-started` and
+`requesting-an-investigation` are also unlinked but reachable from the help index, which may be
+fine — decide deliberately.
+
+## 107. Nineteen entity controllers are exposed surface with no caller (CLOSED 2026-08-19 — decided: they stay, documented)
+
+The plain row controllers — `organization-addresses/emails/phones/links/notes/pages`,
+`user-addresses/emails/phones/links/notes`, `user-messages`, `user-message-tos` and friends — have
+zero client references. Their functions are served by the aggregate `MyContactInfoController`
+(`api/me/*`) and the `api/admin/*` proxies; the lookup-*type* tables go through the generic
+route-string client and are used. The rows are auth-filtered since security phase A, so this is
+not a hole — it is dead surface that will rot and confuse. Decide: delete them, or mark them as
+the deliberate raw-CRUD tier and say so in the controller docs.
+
+**Decided:** they stay. They are SuperAdmin-locked since Phase A and enumerated by
+`EntityReadControllerBaseAuthorizationTests`, so the surface is closed and guarded; deleting
+thirteen controllers the night before a UAT deploy buys tidiness and risk. The decision and the
+routing map (aggregates for users, admin proxies for operators, these as the raw tier) are
+written on `EntityReadControllerBase` itself, where the next investigator will look first.
+
+**How the rest closed (2026-08-19):** #102 routes through `BenToastService` — the documented
+TelerikNotification replacement the component predated — and the dead field is gone. #103 applies
+`WaitUntilAuthReadyAsync` to all six components (the three vote widgets reload, since their
+summaries are viewer-specific; the comment thread and hero repaint; the discovery grid waits
+inside `LoadVoteSummariesAsync`), plus a seventh nobody flagged: the notification bell, which was
+already correct through `EnsureStartedAsync`. A new source-scan guard —
+`Every_reader_of_auth_state_follows_its_resolution` — fails the build if a reader stops
+following; it was verified to discriminate. An e2e hard-nav test was added too, with an honest
+note: it passes against the un-fixed code on this machine (the race resolves in auth's favour
+locally), so the source scan is the enforcing barrier, not it. #104 awaits the call. #105 rewrites
+both redirect tests to wait on the URL change — the twin test shared the race and had merely been
+lucky. #106 links the doc from all three editor pages, the standalone page from its signed-out
+guard text, the two others from their headings.
+
+---
+
+## 108. Sitewide feature switches (CLOSED 2026-08-20 — phase 1 of the nine-phase plan)
+
+Ben asked for SuperAdmin switches "for most logical sections of the site" while the two new
+features (public feed, publications) were being flagged anyway. Ten switches now exist:
+video editor, equipment, events, discovery, CMS public pages, media library, group messaging,
+voting, plus the two unbuilt features.
+
+**The rule the design turns on:** switching a section off takes its **URLs** down, not just its
+navigation links. `FeatureGate` runs during the server render and shows the ordinary page-not-found
+body, so a bookmark or a shared link reaches the same dead end as the menu does. The navigation and
+the gate read one provider, so they cannot disagree — which is the failure mode this codebase keeps
+re-learning, most recently as "a refusal the UI discards is worse than no rule".
+
+**Shape.** Keys are declared in `SiteSettingKeys` with their defaults in one list
+(`FeatureDefaults`) — established sections default ON so adding a switch never removes a working
+feature, and the two unbuilt ones default OFF so they cannot appear early. No rows are seeded; a
+key with no row reads its declared default. A new `[AllowAnonymous] GET /api/public/site-features`
+returns the resolved bools, narrow in the same way `PublicSiteContactController` is narrow: it
+walks the declared feature list, so a non-feature setting can never leak onto it. The website holds
+a singleton `SiteFeaturesProvider` (30s snapshot, `RateLimitSettingsProvider` shape) whose fallback
+is the declared defaults — an unreachable API leaves the site looking normal rather than stripped.
+
+**Two bugs found while building it, both mine, both caught before commit:** `BooleanKeys` was a
+static field initialised before the list it read, so every request touching the class died in a
+`TypeInitializationException`; and the provider was a singleton holding a scoped client — a captive
+dependency the container refuses outright.
+
+**Also fixed in passing:** the admin settings page had no boolean editor, so the one bool-shaped
+setting carried "Accepts true or false" in its description — an instruction that existed only
+because the control was a text box. Switches now render as switches and save on toggle, and saving
+invalidates the provider so the administrator who threw the switch sees it immediately instead of
+up to thirty seconds later.
+
+Guards: five xUnit tests (key parity across the two projects, default parity, admin-page coverage,
+boolean rendering, and that the unbuilt features stay off) — the parity test verified to fail
+against a deliberately drifted key. One Playwright test throws the switch through the real admin
+UI and asserts the URL dies and returns.
+
+### How it shipped (2026-08-20)
+
+**Sign-ins get their own table, not audit rows.** `SignInEvent` is `AppUserId?`, `Utc`,
+`Succeeded`, `Method` and nothing else — the dashboard's question is a `GROUP BY` over an indexed
+date, and answering it from `AuditLogs` would mean string-matching action names across a mixed
+free-text stream forever. A unit test pins the column set, because the temptation later is "just
+an IP address", and that turns a counting table into a tracking one.
+
+**Where the hook goes.** `/login` is mapped by `MapIdentityApi`, so there is no action of ours to
+add a line to; recording lives in a `SignInManager` subclass, which every password check funnels
+through. Writing the row is wrapped in a swallow-and-log: losing a data point beats locking people
+out of the site. Verified live — three attempts produced two rows, the third being an address
+matching no account, which never reaches a password check and has no user to attribute.
+
+**Ben's chart ideas, costed and built:** busiest groups, largest groups, cases by status,
+sign-ins and registrations over time, and the three geographic cuts (people, cases, investigations
+by state) — all from `State` columns already on the entities. The registered-in-a-group funnel is a
+stat card with the percentage stated, since the raw pair invites the reader to divide it wrong.
+**Not built: anonymous visitor counts.** Nothing records people who are not signed in, so "new vs
+returning" would mean building page-view tracking — a privacy and retention decision, not a chart.
+The dashboard and its help doc both say so out loud rather than leaving the absence to be noticed.
+
+**Two bugs found by looking at the page, not by tests passing.** Every chart rendered *twice*:
+`create` is async, its library-load is a yield point, and two calls both cleared the container
+before either registered anything to clear — ApexCharts appends, so the dashboard stacked two
+complete charts per card. Serialised per container now, and the regression test counts canvases
+against containers: it reports "8 containers produced 16 charts" against the unfixed code. Second,
+a sparkline drew 300px wide inside a 258px card and hung 119px into its neighbour, because
+ApexCharts overwrites the inline width of the element it owns; the width is measured from the DOM
+now, with a wrapper the library cannot touch as backstop.
+
+Two pre-existing e2e locators broke on the new org stats panel — `GetByText("Cases")` had always
+meant "any text saying Cases" and only now had competition. Tightened to `GetByRole(Tab)`, which is
+what they meant.
+
+### How it shipped (2026-08-20)
+
+Hero band (photo, name, sign-in address, chips that state something true about the account) over
+three tabs: **About** (name, both photos, the two-key consent switch), **Contact** (the four
+detail cards, two columns), **Where you've been** (the map, in its own tab as Ben chose). Every
+mechanism moved unchanged — the plain-input-not-Telerik name field, the optimistic consent toggle
+that reverts on failure, the data-URI photo pipeline that exists because an `<img>` sends no
+bearer token.
+
+**The find: `/api/my-investigations/attended` was returning 500 for every caller.** It ordered by a
+property of the record it was projecting into, which EF cannot translate and reports at runtime,
+not at compile time — the same shape as the two query bugs phase 3 hit. Both callers wrap it in a
+catch that falls back to an empty list, so a total endpoint failure surfaced as the reassuring
+sentence "you haven't attended an investigation yet", and the investigation map has been silently
+empty for everyone since it was written. Fixed by ordering on the entity before the projection;
+Sarah now has two attended investigations and a pin near Adams, Tennessee.
+
+That is the third time a swallowed exception has hidden a working-looking failure in this codebase.
+The catch is right — a history map must not take down someone's account settings — but a catch that
+distinguishes "nothing to show" from "the call failed" would have said so.
+
+**Cleanup the change forced:** eight e2e locators across five files said `GetByText("Cases")` when
+they meant the Cases *tab*. They only broke once the org stats panel gave the word competition, and
+Playwright's strict mode failed on the ambiguity rather than silently clicking the wrong element —
+the good outcome. All now `GetByRole(AriaRole.Tab)`.
+
+---
+
+## 109. The test suite only ever signs in as privileged accounts (CLOSED 2026-08-22)
+
+**Done:** `MemberSurfaceWalkTests` walks all eight member-facing org-hub tabs as James and asserts
+content-not-refusal on each, plus the mirror check that the six admin-only tabs are ABSENT for
+him. It caught a real bug on its first run: the Members tab rendered the admin-gated
+membership-requests widget for everyone, so an ordinary member saw "Couldn't load this — 403" on
+their own group's roster. Now gated on CanEdit. The API-level probe of 13 member endpoints found
+the three 403s that exist are all deliberate (billing, CMS editing, addresses-with-access-controls).
+The four seats were already in `BenTestBase` from the earlier phase; this closes the walking half.
+
+### Original text
+
+Phase 5 found three separate faults in group messaging that were **completely invisible to an owner
+account** and total for everyone else: the organisation page refusing ordinary members outright, the
+recipient list being fetched from an org-admin-only endpoint, and that fetch never being triggered
+at all. See item 100 for the detail.
+
+None of them were subtle. All three were caught within minutes of signing in as James — an ordinary
+BenCo member — instead of Sarah, who owns it. The rest of the Playwright suite uses `UserEmail`,
+which is Sarah, or the SuperAdmin. So the whole product is currently exercised from the two most
+privileged seats in it.
+
+BenCo's seed gives us four members at three levels (owner, active member, and Daniel, who is not an
+active member and is refused by design), which is enough to test this properly without new fixtures.
+
+What to do:
+
+- Give `BenTestBase` a named ordinary-member account alongside `UserEmail`, so reaching for it is
+  the easy path rather than a thing each test invents. `MessagingTests` defines its own today.
+- Walk the surfaces an ordinary member is supposed to reach — the org hub's tabs, cases,
+  investigations, calendar, files, equipment — as that member, and record what breaks. Expect more
+  of the same shape: `HasAccessAsync` returns false for a plain Member on *every* table, so any
+  surface gated on it that members are meant to use is broken right now.
+- Where a surface genuinely is admin-only, the failure should say so rather than claiming the thing
+  does not exist. "Organization not found or you do not have access" for a group you belong to is
+  the wrong sentence even when the refusal is right.
+
+This is adjacent to the standing "a server guard needs a UI path" rule, but the failure mode is the
+mirror image: there the server refused and the UI discarded the refusal; here the server refuses
+and the UI reports it faithfully, and nobody ever looked because nobody ever signed in as the
+person it happens to.
+
+---
+
+## 110. Merge two groups into one (CLOSED 2026-08-23 — model-driven merge, preview-first)
+
+An **admin-level** function: take two organisations and end up with one.
+
+Ben's framing, which is the starting point rather than a spec:
+
+- Someone has to choose **which group is the base** and which is merged into it. The distinction
+  matters because everything that cannot be duplicated — the URL name, the settings, the identity —
+  comes from the base.
+- Someone has to choose **the name after the merge**. It is not necessarily either group's current
+  name, so it is a decision, not a consequence of picking the base.
+- It is **low priority**, and **the logic needs working through with Ben** before anything is
+  built. Do not design this alone.
+
+Things that will need answering when it comes up, noted now so the conversation starts further
+along — none of these are decisions, just the questions the schema will ask:
+
+- **Members.** Someone in both groups has two memberships with two roles; the merged group can only
+  give them one. Higher role wins, base group's role wins, or ask?
+- **The URL name that goes away.** Item 89 established that a released URL name can capture another
+  group's traffic. A merged-away group's URL name should almost certainly become a permanent alias
+  pointing at the survivor rather than being freed.
+- **Cases, investigations, places, equipment, files, messages.** These reparent, but each carries
+  its own visibility and ownership rules, and case visibility in particular is set per case with the
+  original group as the audience.
+- **Clients.** A client of the merged-away group did not agree to work with the survivor. Whether
+  that needs telling them, or their consent, is a product question and not a data one.
+- **Reversibility.** A merge that cannot be undone is a destructive admin action on other people's
+  records, which argues for either a dry-run preview or a soft merge that can be unwound.
+
+**Built 2026-08-23** (`OrganizationMergeService` + `/admin/merge-groups`), answering each open
+question as recorded policy rather than schema:
+
+- **The sweep is model-driven, not a hand list.** Every FK pointing at Organization is
+  discovered from EF metadata and reparented, so a table added next year merges correctly with
+  nobody remembering this file. The same sweep runs one level down for duplicate members'
+  membership-scoped rows (role grants, duties, titles, address access). A test walks every FK
+  in the model post-merge and asserts nothing still references the merged id — and on SQL
+  Server the final husk delete enforces the same thing physically (every org FK is NoAction),
+  so a missed row rolls the whole transaction back rather than leaving a half-merged group.
+- **Members in both groups**: one membership survives (the base's), at the HIGHER of the two
+  roles.
+- **Colliding unique rows** (same coupon redeemed by both, same file/equipment/request shared
+  to both, same billing contact): the base's copy wins, the merged copy is deleted.
+- **Case numbers collide by construction** (both groups start at #1): merged cases renumber
+  into the base's sequence; colliding slugs (cases, investigations, events) get a suffix; CMS
+  templates colliding on (scope, name) get "(merged)".
+- **The URL**: the merged group's UrlName becomes a permanent `OrganizationUrlNameAlias` of
+  the base (item 89 — a freed name can capture traffic), so old links keep working forever.
+- **The subscription**: the merged group's is dropped (with its contract terms); the base's
+  plan governs. Money owed back, if any, is a ledger adjustment (item 168).
+- **Reversibility**: no undo; instead a mutation-free PREVIEW (counts per table + every
+  collision, generated by the same sweep) and a type-the-name confirmation gate the execute.
+- **Everyone is told**: former members ("your group is now part of…") and clients with open
+  cases ("the group handling your case has a new name") get platform messages.
+
+3 tests incl. the everything-moves walk (probe-regressed: sweep disabled fails it). One open
+niggle for later: case/investigation slugs that get suffixed break old public deep links to
+those specific pages — org-level aliasing exists, page-level does not; noted in the preview.
+
+---
+
+## 111. Evidence at a public investigation — who may add it, and is it all public? (BUILT 2026-08-22; publicity sub-questions still open)
+
+**Shipped:** `EventEvidenceSubmission` + `EvidenceSubmissionStatus`; submit / mine / accepted /
+queue / review endpoints plus an anonymous bytes endpoint gated purely on acceptance-and-public;
+attendance proven by a confirmed `EventAttendanceInvite` OR org membership (members use the same
+door, so the record of who offered what stays uniform); acceptance flips `UploadFile.IsPublic` and
+messages the submitter; declining requires a reason. UI: submit panel + "your submissions" status
+on the public event page (the public-record sentence sits ABOVE the button), accepted list on the
+same page, review queue card on the group's Calendar tab that renders nothing when empty. Seed
+adds a past public event with Daniel — who belongs to no group — as a confirmed attendee, which is
+what makes the e2e deterministic. 9 controller tests (3 gates regressed) + 2 Playwright tests
+covering the whole journey including a real file chooser and the signed-out read.
+
+**Still open — the publicity sub-questions Ben did not decide:** a visitor's own recording of
+themselves, other attendees appearing in someone's footage (the two-key consent question with
+thirty strangers), and whether written documentation is as locked-open as raw evidence. The build
+decides none of these; it states item 87's existing bargain and stops.
+
+**Ben's decision:** attendees may SUBMIT, a member must ACCEPT — the queue shape, copying the
+file-permission-request precedent. The publicity sub-questions (a visitor's own recording of
+themselves, other attendees in someone's footage, documentation vs evidence) were NOT decided and
+remain open below; the build tells submitters plainly that evidence accepted into a public
+investigation's record is public, per item 87's recorded bargain, and decides nothing beyond that.
+
+### Original text
+
+Ben, while the accounts work was in flight: *"When we complete this, we need to address who and how
+people who attend a group's public investigations are able to add evidence and if public events have
+only public evidence and documentation."*
+
+Two questions, and they are not the same one.
+
+### Who may add evidence, and how
+
+A public event brings **strangers** — that is the whole point of item 87, and it is what makes this
+hard. The people who turn up are not group members, have no role, and in some cases have a
+passwordless account created by clicking a link in an email. Today only the group's own members can
+attach anything to an investigation.
+
+The shapes worth weighing when we get here:
+
+- **Nobody but members.** Simplest, and wastes the fact that thirty people were there with phones.
+- **Attendees may submit, a member must accept.** A queue, like the file-permission requests already
+  built. Keeps the group's record theirs while letting visitors contribute.
+- **Attendees may add directly.** Fastest, and makes the group's evidence trail something outsiders
+  can write to — which is a lot to hand somebody who signed up with an email address a fortnight ago.
+
+The middle one is almost certainly right, and it has a precedent in this codebase to copy rather
+than invent.
+
+### Is everything at a public event necessarily public?
+
+Item 87 already recorded the bargain: *"All collected evidence and data is public and cannot be made
+private for an open investigation. The location can be scrubbed and hidden to the public not
+attending, but evidence is not."* That settles the **group's own** findings.
+
+What it does not settle, and what needs deciding:
+
+- **A visitor's own recording of themselves or their friends.** Publishing it because they attended
+  a public event is a different promise from the group publishing its own findings.
+- **Other attendees appearing in someone's footage.** Thirty strangers in a dark building, and any
+  of them may be identifiable. There is already a two-key consent rule for member photos; this is
+  the same question with more people and less warning.
+- **Documentation** — reports, notes, timelines — as distinct from raw evidence. The quoted rule
+  says "evidence"; whether a group's written write-up is equally locked open is not stated.
+
+Sequence: after the feed and publications. It depends on nothing in them, but it is a policy
+decision as much as a build, and it should not be made in the middle of something else.
+
+---
+
+## 112. The 2FA enrolment panel hangs on "Starting…" (CLOSED 2026-08-20)
+
+Pressing **Turn on two-step sign-in** on the profile's Security tab leaves the button reading
+"Starting…" indefinitely. The QR never appears and no error is shown.
+
+**What is and is not broken.** The API underneath is complete and verified end to end against a
+live server with real TOTP codes computed from the secret it issues: setup, enable, sign-in with an
+app code, sign-in with a recovery code, single-use enforcement on recovery codes, and disable. It
+also rendered correctly through the browser once, early in the same session, before the panel was
+finished. It is the **panel** that hangs, not two-factor authentication.
+
+**What the evidence rules out.** A twenty-second `CancellationTokenSource` around the call does not
+surface either — no timeout message, no error, no re-render — and `finally` sets `_busy = false` and
+calls `StateHasChanged`. So the await is not simply slow: **the circuit stops re-rendering
+altogether**. That also rules out the HTTP call itself, and swapping `PostAsync` for
+`SendExpectingReasonAsync` (the helper every other POST on this page uses successfully) changed
+nothing. `GET /api/me/2fa` on the same page works — the panel renders "Off" from it.
+
+**Where to look next**, roughly in order of suspicion:
+
+- Something in the chain doing sync-over-async and deadlocking the circuit's synchronisation
+  context. A blocked circuit fits every symptom, including cancellation appearing to do nothing.
+- `TelerikQRCode`'s first render — it is the one component on this page never used anywhere else in
+  the product, and it is what the successful branch renders.
+- The interaction between the panel's `StateHasChanged` and Telerik's masked textboxes.
+
+**Reproduce it** by signing in as any account with 2FA off, opening `/profile` → Security, and
+pressing the button. `AccountTests.EnrollingWithARealCodeTurnsItOn` is written, is currently
+`Assert.Ignore`d pointing at this item, and will pass once the panel does — it should not be
+deleted.
+
+### The cause (found 2026-08-20)
+
+**`TelerikMaskedTextBox` does not splat unmatched attributes — it throws.**
+
+```
+System.InvalidOperationException: Object of type
+'Telerik.Blazor.Components.TelerikMaskedTextBox' does not have a property
+matching the name 'aria-label'.
+```
+
+The `aria-label` had been added to that component the day before, as the fix for a *different*
+finding: `LabelAssociationTests` had caught a `<label for>` pointing at nothing, because Telerik
+renders no `id` on its inner input — only a `data-id` GUID. The attribute was added on the
+assumption that Telerik splats what it does not recognise. It does not.
+
+The exception is thrown **during render**, not during the call, which is why every symptom pointed
+away from the truth: the API had already answered, the `finally` never took effect, the
+cancellation token never fired, and clicking a different tab did nothing either. **The circuit was
+dead.** It froze displaying the last frame it had successfully rendered — the one with the button
+reading "Starting…".
+
+What actually found it: reading the **browser console** through Playwright. Nothing server-side
+showed it. The diagnostic that split the problem in two — a `Console.WriteLine` at the top of the
+API action, proving the request arrived, was resolved and answered in milliseconds — is what
+justified looking at the client at all.
+
+### The fix
+
+Both code boxes — the enrolment panel and the sign-in page — are now **plain inputs** rather than
+`TelerikMaskedTextBox`. This is not a retreat from the house preference for Telerik components; the
+component genuinely cannot do what is needed here:
+
+- no `id`, so no `<label for>` can ever name it, and it has no accessible name at all;
+- it throws on an unmatched attribute, **during render**, killing the circuit;
+- no `inputmode="numeric"` and no `autocomplete="one-time-code"`, so a phone offers neither a
+  numeric keypad nor the code it has just received.
+
+A plain input gives all three, and a real label. A test asserts the accessible name comes from a
+label pointing at a real id.
+
+### Guarded against recurrence
+
+`TelerikAttributeSplattingTests` scans every `.razor` file in the site, the library, the editor and
+the WASM host, and fails on any Telerik tag carrying a plain HTML attribute. Verified by
+reintroducing the bug: it reports the offending file, tag and attribute by name.
+
+The next person will make the same assumption — that Telerik splats what it does not recognise — and
+this is how they find out in a second rather than an afternoon.
+
+### Two things fixed alongside
+
+- **`LockedOut` was being reported as "invalid email or password".** Found because a run of probes
+  locked the SuperAdmin account and the page said the password was wrong — sending somebody to
+  reset a password that was right, when only waiting helps. The sign-in page now distinguishes five
+  refusals.
+- **`SigningInWithTwoStepAsksForTheCodeAndAcceptsIt` was lying twice.** It shared the fixture's
+  account, so its result depended on what the previous test left behind; and the sign-in page
+  **pre-fills developer credentials in Development**, so a submit landing before the test's own
+  values reached the server model signed in as the developer, navigated to the home page, and
+  looked exactly like a two-step account being let through without a code. It now creates its own
+  throwaway account, and waits for the pre-fill to appear — which is itself proof the circuit is
+  live — before replacing it.
+
+### The misdiagnosis, recorded because it cost the most
+
+Several failing tests were read as a slow cold start, and timeouts were raised to 60, then 90, then
+120 seconds. **Measured, the page is interactive about 450ms after navigation on a cold host**, and
+server render is 9ms. The real fault: a character typed before the circuit connects is not merely
+ignored — the first interactive render overwrites the input from the server's empty value, so the
+keystroke is *erased*. The cure is to type again, not to wait longer. Those tests now run in about
+two seconds; they were taking ninety.
+
+A generous timeout on a fast page buys nothing and hides the next real regression behind a minute
+and a half of silence. Ben spotted it: *"It was almost instantaneous before these changes."*
+
+
+---
+
+## 113. Accounts: sign-up, @names, email confirmation and two-step sign-in (2026-08-20 — mostly shipped)
+
+Four things Ben asked for in one stretch, all of them account identity and all of them prerequisites
+for the public feed rather than part of it.
+
+### @names — shipped
+
+Ben: *"Lets let people choose a unique name to use for the @name when they create their account. We
+verify it is not already taken."* and *"For now, we will not let them change their @name but in the
+future we might... but super low priority."*
+
+`AppUser.Handle`, unique, lower-cased, 3–30 characters of letters, digits and underscores, starting
+with a letter. Reserved words are refused — route words that would make a profile URL read like a
+section of the site, and names somebody would trust in a mention (`support`, `admin`, `ishaunted`).
+Checked live as it is typed on the sign-up page; the unique index is what actually decides, and
+registration reports a collision that lands between the check and the insert.
+
+**Why a handle at all**, rather than matching display names: names here are neither unique nor free
+of spaces, so `@sarahmitchell` could only be matched by stripping punctuation and hoping exactly one
+account came back. Two people called Sarah Mitchell would then have meant notifying both or neither
+— and the answer would change as accounts were added, so a post's meaning would depend on who else
+had signed up since.
+
+Every account has one. `UserHandleBackfillService` gives one to anything created before the column
+existed and does nothing on every start after that; the other creation paths (Entra, event magic
+links, the seeders, an administrator) get one derived from the display name or email and uniquified.
+
+**Follow-up, explicitly low priority per Ben:** letting somebody change their @name later. It is not
+free — the handle appears in other people's posts — but the mention tables already store the
+account's id rather than the text, so old mentions would keep pointing at the right person.
+
+### Sign-up and email confirmation — shipped
+
+There was **no self-service sign-up at all** before this: accounts arrived through Entra, an invite,
+or an administrator. `/signup` now creates one, and `/confirm-email` is where the link lands.
+
+`MapIdentityApi`'s own `/register` could not be used — it takes an email and a password and nothing
+else, so an account made through it has no display name and no @name, and a handle cannot be added
+afterwards without letting people change it. Registration is therefore our own endpoint, generating
+the same token type and pointing at the same confirmation flow.
+
+Two decisions worth keeping:
+
+- **The answer is identical whether or not the address is already registered.** An endpoint that
+  says "that email is taken" is a way of testing who has an account here — worth more care on a site
+  about people's homes than a precise error is worth. The real account holder gets an email saying
+  somebody tried, which is the only party entitled to know. The @name is reported precisely, because
+  it is public by nature.
+- **Confirming happens on a button press, not on page load.** Mail scanners and security gateways
+  fetch every link in a message; a confirmation that happened on load is one they can complete on
+  somebody's behalf, which proves nothing about the address reaching a person.
+
+### Two-step sign-in — API shipped, panel blocked
+
+Standard TOTP, so **Duo Mobile and Okta Verify both work**, along with Google Authenticator,
+Microsoft Authenticator and 1Password — they scan the same code. (Duo's push approval and Okta as a
+single-sign-on provider are separate integrations and are not this. Okta as an identity provider
+would sit beside the existing Entra OIDC path.)
+
+**Opt-in, per account, and never required** — Ben: *"Let the end user determine if they want 2FA or
+not. It is not an administrator-related setting."* The administrator screen previously had a
+`TwoFactorEnabled` checkbox with no enrolment behind it, which would have switched on a second
+factor nobody could satisfy and locked that person out of their own account. The control is gone and
+the field is no longer written there; it shows as read-only status, because it is worth knowing when
+somebody writes in unable to sign in.
+
+Sign-in needed no new endpoint: `MapIdentityApi`'s `/login` already takes `twoFactorCode` and
+`twoFactorRecoveryCode` and answers `RequiresTwoFactor`. Reading that detail also fixed a separate
+long-standing lie — an unconfirmed account was being told "invalid email or password", which sends
+somebody off to reset a password that was always right. Four refusals now say four different things.
+
+**Telerik 14.1.0 has no OTP input component**, so the code boxes are `TelerikMaskedTextBox` with a
+`000000` mask. It does have `TelerikQRCode`, which is what renders the enrolment code.
+
+**The panel hangs — see item 112.** The API is complete and verified end to end with real TOTP
+codes. Do not read item 112 as "2FA does not work"; read it as "the enrolment page does not".
+
+### Found along the way
+
+- A **captive dependency** — a hosted service holding a scoped service — which the container refuses
+  to build, at startup, before anything else runs. Second instance of that class this month.
+- **`TelerikMaskedTextBox` renders no `id`**, only a `data-id` GUID, so a label pointing at the
+  component's `Id` names nothing: clicking it does nothing and a screen reader announces an
+  unlabelled box. `LabelAssociationTests` caught it; the accessible name comes from `aria-label`
+  instead, and a test now asserts the attribute reaches the input.
+- **Blazor Server pages are server-rendered long before their circuit connects**, so a test that
+  types as soon as an input appears triggers no handler at all and then waits out its timeout. It
+  passes or fails depending on how warm the host is, which reads as flakiness. The account tests
+  wait on the page's own echo to prove interactivity first.
+
+---
+
+## 114. Every page waits on a CDN for fabric.js (CLOSED 2026-08-21)
+
+`App.razor` loads Fabric from an external CDN on **every page of the site**:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/fabric@6/dist/index.min.js" defer></script>
+```
+
+It is only needed by the image editor, and it is pre-existing — it came in with the original
+SmartAdmin shell — but it is paid for by every visitor on every page, including the sign-in page and
+the public microsite.
+
+**How it surfaced.** The first navigation of a Playwright run times out on
+`waiting until "load"` at 30 seconds, intermittently. Measured with a warm connection the fetch is
+352ms; cold, with DNS and a TLS handshake to an external host, it is the slowest thing on the page
+by a wide margin, and `load` does not fire until it finishes. Every test context is fresh, so there
+is no browser cache to help.
+
+**Why it matters beyond the tests:**
+
+- **A visitor's first page view pays for it too**, and they have no warm connection either.
+- **It is a third party on the critical path.** If jsdelivr is slow, blocked by a corporate proxy,
+  or unreachable — which is the normal state of an air-gapped or restricted network — every page on
+  the site waits, on a script only the image editor uses.
+- It is a privacy leak of sorts: every page view tells a CDN a visitor was here.
+
+**The fix is one already used here.** ApexCharts was vendored under
+`wwwroot/plugins/apexcharts/` with its licence and a `VENDORED.md` recording where it came from and
+why. Fabric should be vendored the same way — and, better, loaded **only by the image editor**
+rather than from the shell, since nothing else touches it.
+
+Small, self-contained, and it removes an external dependency from every page load.
+
+
+---
+
+## 115. The public feed (SHIPPED 2026-08-20 — phase 8)
+
+Short-form public posts: anyone signed in can post, follow people, mention them with `@name` and tag
+posts with `#tag`. **Off by default** behind `features.public-feed`, and the API 404s wholesale when
+it is off — not 403, because a disabled feature should not be discoverable by the shape of its
+refusal.
+
+### What it is
+
+`/feed` with two modes (everybody, or the people you follow), `/feed/tags/{tag}`, `/feed/{postId}`
+for a thread, and `/feed/people/{userId}` for somebody's feed presence. Posts are plain text, at
+most 1,000 characters — short-form is the point, and a wall of text belongs in a publication.
+
+Storage reuses **`OrgMessage` with `ChannelType.PublicFeed`**. That table already had a nullable
+`OrganizationId` and parent-based threading, which is exactly a feed post and its replies; a second
+near-identical table would have meant two places to fix every time the way a message is written
+changes.
+
+### Decisions worth keeping
+
+- **Anyone signed in may post**, Ben's call — which is what makes moderation part of the feature
+  rather than an optional extra.
+- **Reports hide nothing, and no number of them does.** There is no threshold, deliberately: an
+  automatic one removes whatever is least popular rather than whatever breaks the rules, and the
+  people worst served by that are the ones with unusual things to say — which is most of this
+  site's subject matter. Hiding is a person's decision, recorded against their name.
+- **Hidden, not deleted.** A deleted post takes its replies, its reports and the record of the
+  decision with it. One decision resolves *every* pending report against that post, because five
+  people reporting one post is one decision.
+- **The moderation queue is not behind the feature flag**, unlike every reader-facing page.
+  Switching the feed off does not un-report anything, and stranding those complaints behind the
+  switch would leave the only record of them unreachable.
+- **A mention is read when the post carrying it is opened** — reusing `OrgMessageView` rather than
+  inventing a second read marker. A post scrolling past in the feed does not count: "you were
+  mentioned" is the notification somebody would most resent losing unseen.
+
+### Two things this fixed on the way
+
+**Mentions now resolve on the `@name`, exactly.** They were written before handles existed and
+matched a normalised display name, which had to refuse whenever two accounts normalised alike —
+and worse, its answer could *change* as accounts were added, so a mention that resolved today would
+stop resolving the day a second Sarah signed up. It is also one indexed lookup now instead of
+reading every account into memory.
+
+**`FeedTextSegmenter` is separate from `FeedTextParser`, and that is not duplication.** The parser
+answers "which names does this post contain", returning each once — so a renderer driven by it would
+linkify the first mention of somebody and leave the second as plain text. The segmenter answers
+"where are they". Both call the parser to decide what a token *is*, including the rule that earns
+its keep most: an email address is not a mention.
+
+### Deliberately not built
+
+Likes, reposts, images, and any ranking beyond chronological. Following is one-directional and
+unacknowledged — it changes what you are shown, not what you may see, and a mutual-consent model
+would imply a privacy guarantee the feed does not make. No report-reason prompt yet: the endpoint
+takes one, and a dialog for it is worth adding once there is evidence administrators need more than
+"somebody objected". No per-person feed endpoint — a profile filters a page of the feed, which is
+honest for recent activity and thin for an old account; that is the fix if profiles turn out to be
+somewhere people browse.
+
+Authors are told nothing when a post is hidden. Whether they should be is a decision about wording
+more than mechanism, and worth making deliberately rather than adding quietly.
+
+### Tests
+
+16 on the controller, 22 on the segmenter, 25 on the parser, 6 in the browser. The three properties
+worth naming each have their own test — the feed 404s wholesale when off, a hidden post disappears
+from every read path, and a report never hides anything by itself — and each was verified by
+breaking the code it names.
+
+The browser tests turn the flag on and put it back as they found it, and check the switched-off case
+by **navigating repeatedly rather than waiting**: the website reads its flags from a snapshot
+refreshed on a timer, so a page that has already rendered will never change its mind. Polling the
+DOM of one page waits for something that cannot happen.
+
+---
+
+## 116. Publications (SHIPPED 2026-08-20 — phase 9)
+
+The last phase of the nine-phase plan. Long-form writing by groups, readable by anybody.
+
+### What it is
+
+A **publication** is a group's own title — *Field Notes*, *The Ridgeway Case*. Inside it are
+**posts**: case write-ups, research, notes worth more room than the feed gives them. Readers need
+no account. Subscribing needs one, because a subscriber is somebody the group can reach.
+
+Three tables — `Publication`, `PublicationPost`, `PublicationSubscription` — rather than reuse of
+`OrganizationPage`. A CMS page carries site structure; a post is chronological and subscribable.
+
+Behind `features.publications`, **default off**.
+
+### Decisions worth keeping
+
+**A draft is a post with no `PublishedUtc`.** Not a second status column: two fields that must
+agree eventually disagree. Creating a post never publishes it, whatever the author intended.
+
+**Two gates, both required.** A post is public only if it is published *and* its publication is
+public. Independent on purpose — a group can get several pieces ready before anyone knows the
+publication exists.
+
+**The authoring and public controllers are separate classes**, not one set of queries with a
+flag. One forgotten argument on a shared path is how a draft reaches the world, and there is no
+forgetting an argument that does not exist.
+
+**Slugs are derived once and never regenerated** — item 89's lesson, applied before it could be
+repeated. Renaming changes the heading, not the link.
+
+**Bodies are sanitised on save, not on render.** The stored markup is the safe markup, so no
+future read path can resurrect what the author sent, and a change to the sanitiser cannot quietly
+alter a thousand published articles.
+
+**`RequiredTier` is written by nothing and withheld anyway.** Building the withholding path now,
+against a column that is always null, costs nothing; retrofitting it later means changing what is
+already being read. The body is withheld by the server — a paywall implemented in CSS is not a
+paywall. This is the whole of what item 85 gets for now.
+
+**Unsubscribing marks rather than deletes.** Unlike a feed follow — deleted outright, because a
+soft-deleted follow is a record of who once read whom — a subscription is what a payment would
+attach to, so a cancelled one stays answerable for what it covered. Re-subscribing revives the
+same row.
+
+### The anonymous path is the product
+
+A publication nobody can read without an account is a newsletter with no readers. The public
+controller is `[AllowAnonymous]`, the client's public calls use `GetAnonymousAsync` — which sends
+no bearer token *even when the reader is signed in* — and **the tests hold no principal at all**.
+
+That last part is the point. Sign a test in and read a public page and the feature passes its
+tests while being broken for every real visitor: the author always sees what the visitor cannot.
+The two help screenshots for readers were likewise captured signed out.
+
+### Deliberately not built
+
+Billing of any kind. Email digests when a post goes up — the scheduler from phase 6 is the right
+home for it and it is a separate piece of work. Comments. Cross-posting to the feed.
+
+Deleting a whole publication was left out here and **added straight afterwards** — see item 118.
+
+### Tests
+
+16 on the controllers. Six were run against deliberately broken code first — draft filter
+removed, public gate removed, tier check disabled, listing bodies included, subscription revive
+disabled — and each failed as it should before being trusted.
+
+---
+
+## 117. The sidebar, grouped by subject (SHIPPED 2026-08-20)
+
+Eighteen top-level rows signed in with everything on, which is what prompted it. Now eight:
+Notifications and Organizations stay put — checked constantly rather than navigated to — and the
+rest fold into **My Work**, **Equipment**, **Media** and **Community**. Signed out it stays flat;
+four entries folded into two groups costs a click each to save two rows nobody was struggling to
+read.
+
+### What grouping broke, and had to be fixed with it
+
+**Only a leaf rendered a badge.** Folding a badged item into a group hid it — turning the change
+meant to make the sidebar readable into a way of losing the one signal it exists to carry. Groups
+now sum everything beneath them recursively, and take urgency from the oldest unread item in the
+subtree. The parent badge shows only while closed.
+
+**The filter matched one level deep.** Administration's tools are two levels down, so filtering
+for one of them found nothing — a pre-existing bug that grouping would have spread to most of the
+menu. Matching is recursive, matched groups are pruned to their matching children, and everything
+left is expanded: a filter that reports a match and then hides it is worse than no filter.
+
+**A group of one is worse than the item alone** — same row, plus a click to reach what the row
+already named. Switch the media library and video editor off and Media held only Upload Files.
+A one-child group now renders as its child.
+
+### Found on the way: the bell under-explained itself
+
+Checking whether the bell would cover a badge inside a collapsed group turned up that it would
+not have covered all of it. `TotalCount` sums every bucket; the dropdown was a hand-written list
+of seven; `FeedMentions` was in the first and not the second. A mention made the bell read "3
+items waiting" and then account for two.
+
+Fixed, and guarded by a test that reads the bucket list off `NotificationSummaryResponse` itself
+rather than a list kept in step by hand — so the next bucket added cannot repeat it. Verified by
+deleting the new row and watching it fail.
+
+`My Checkouts` also now carries the equipment bucket it always had available and never showed.
+
+---
+
+## 118. Deleting a publication (SHIPPED 2026-08-20)
+
+Shipped with 116 leaving no way to remove a publication at all — only its posts. A group that
+created one by mistake was stuck with it, and the address never moves on rename, so "created by
+mistake" mostly means "wrong title".
+
+### The rule
+
+**A group administrator may delete a completely empty publication. A SuperAdmin may delete any**,
+taking its posts and subscriptions with it.
+
+Two tiers because deleting a publication is two different acts. Removing one with nothing in it
+costs nobody anything. Removing one people have written in and subscribed to destroys work and
+breaks every link somebody shared — not a thing to do by clicking twice.
+
+**A cancelled subscription still blocks the group.** "Empty" is meant to mean nothing ever
+happened here, and somebody having subscribed and left is something happening.
+
+### The one refusal a real user can reach, and why it matters
+
+The group's own listing counts *live* subscribers; the rule counts *every* subscription ever made.
+So a publication with one cancelled subscription looks empty on screen, the button is offered, and
+the server refuses.
+
+That is deliberate, and it is why the refusal is a sentence rather than a status. The alternative
+— hiding the button on a guess the client cannot make correctly — leaves somebody with no way to
+find out why. Five instances of "a server guard the UI discards" are already on record; this one
+is guarded by a test that asserts the message names the blocker, and **the advice follows the
+blocker**: telling somebody to delete the posts first when a subscriber stopped them sends them to
+stare at an empty list.
+
+Verified live from the org administrator's seat — not the SuperAdmin's, which bypasses the rule
+and would have shown nothing.
+
+### Tests
+
+Six, four of them load-bearing and each verified against deliberately broken code: the rule
+disabled, cancelled subscriptions excluded from the count, and the cascade removed so posts would
+have been orphaned.
+
+---
+
+## 119. Ordinary-member seats in the test suite, and the two bugs the first walk found (SHIPPED 2026-08-20 — closes item 109)
+
+Item 109 predicted that walking the member-facing surfaces as an actual member would find more of
+the phase-5 shape — `HasAccessAsync` false on every table for a plain Member, refusals rendered as
+empty lists. The very first walk found two.
+
+### The seats
+
+`BenTestBase` now names four: SuperAdmin, `UserEmail` (Sarah — administrator, the default and the
+trap), **`MemberEmail` (James — plain Member, no grants, no named role)**, and `ClientEmail`
+(Daniel — account, no memberships). Member/Client were previously re-declared in seven fixtures;
+all local copies are gone, and the six hardcoded Daniel logins in RequestStatusProgressionTests
+point at the seat. CoClientAccessTests' "stranger" is documented as the member seat wearing a
+different hat.
+
+### The fixture
+
+`OrdinaryMemberSurfaceTests` (Category=OrdinaryMember) walks every tab the hub shows a member —
+and asserts **real content, never a page merely loading**, because the failure it hunts renders as
+"No records available", not as an error. It also asserts the admin tabs are absent, so "fix the
+member" cannot be satisfied by giving members everything.
+
+### Bug 1: the Files tab
+
+`GET /api/organizations/{id}/files` required OrganizationFiles/Read through the security service —
+false for every plain member. The tab rendered the 403 as an empty grid; a member with a group
+handbook on the server was told the group had no files. Fixed: reading the list needs active
+membership; the writes keep their permission gates. Same fix the org record itself got in phase 5.
+
+### Bug 2: the Members tab
+
+The roster was read from `/security/users` — the *manage-access* endpoint, Owner/Administrator
+only. Details said "Members: 3"; the Members tab told James there were none. Fixed with a new
+member-readable `GET /api/organizations/{id}/roster` (same shape, no contact details — display
+name and role only, matching the user-directory precedent); the manage endpoint keeps its gate.
+
+### What made both invisible
+
+136 sites in the client adapter turn any non-2xx into `[]` — a refusal and an empty group are the
+same value on screen. Too systemic to fix inline; raised as item 120.
+
+### Verified
+
+The fixture ran against the unfixed code first: Files and Members failed exactly as predicted
+(Cases/Investigations failures were my locators, corrected and noted in the test). Green after the
+fixes. Tabs confirmed working from James's seat live: Details, Members, Cases, Investigations,
+Calendar, Messages, Files, Equipment.
+
+---
+
+## 120. The client adapter cannot tell "refused" from "empty" (CLOSED 2026-08-22 — all 120 converted; render debt tracked as item 141)
+
+`WebApiClient.GetAsync` returns `default` on any non-2xx, and 136 call sites in
+`BenAdminClientAdapter.*` follow it with `?? []`. Every one of them renders a 403 — or a 500 —
+as "No records available". This is the mechanism that hid both item-119 bugs and the phase-5
+messaging faults: the server refuses correctly, the page reports an empty world, nobody sees an
+error anywhere.
+
+Worth designing once rather than patching per-site: likely a `GetExpectingReasonAsync` sibling
+(the Delete/Send variants exist) plus a component-level convention for "couldn't load" vs
+"nothing here". Until then, any new list surface should assert real content in its tests, per
+the OrdinaryMemberSurfaceTests pattern.
+
+### Progress
+
+| Slice | Date | Converted | Ratchet |
+|---|---|---|---|
+| Organization | 2026-08-21 | 19 | 120 → 101 |
+| **Case** | **2026-08-22** | **20** | **101 → 81** |
+| **Platform** | **2026-08-22** | **14** | **81 → 67** |
+| **Equipment** | **2026-08-22** | **22** | **67 → 45** |
+| **User** | **2026-08-22** | **13** | **45 → 34** |
+| **Investigation** | **2026-08-22** | **8** | **34 → 26** |
+| **Cms, Places, Media, Publications, Membership, Feed, Account** | **2026-08-22** | **26** | **26 → 0** |
+
+**Case slice (branch `feature/loadresult-case-area`).** All 20 swallowing methods in
+`BenAdminClientAdapter.Case.cs`, their declarations across `IBenCaseClient` / `IBenPlatformClient` /
+`IBenMediaClient`, and 19 consumers. `CaseMessageThread` — shared by the client and org sides — now
+takes a `LoadResult` delegate, so a refused thread stops telling a client nobody has written to
+them. Six adapter tests were **inverted**: they asserted that a refusal "returns empty", which made
+them green tests defending this very bug.
+
+New `LoadResultRenderedGuardTests` requires any `.razor` calling a converted method to mention
+`BenListState` or read `.Failed`, with an allowlist for genuine decorations that records the reason.
+It stops the likely half-conversion — silencing the compile error with `.Items` and leaving the page
+as wrong as before while the ratchet records progress. (A bUnit-style render test was the plan;
+there is no bUnit in this solution, so this follows the existing source-scan convention instead.)
+
+**None left.** All 120 are converted, and `SwallowedFailureRatchetTests` is now a **ban** rather
+than a count — it scans the whole `Ben.Web.Services/WebApi` folder, not just the adapter, with one
+principled exclusion: `LoadResult.Items => _items ?? []`, which is the mechanism that makes the
+rule enforceable rather than an instance of breaking it. Verified to discriminate.
+
+The final pass reached past the adapter again and converted **15** swallows inside `WebApiClient`
+itself, which the old ratchet never counted.
+
+**Three mutations were found wearing the same defect** and fixed differently, because "did this
+happen?" is not "is this list real?": `SetMyEquipmentSharesAsync` (a refused save closed its dialog
+reporting success), `SetInvestigationLeadAsync` (an empty roster would have wiped everyone off the
+screen as though it had worked), and `ScanAudioForEvpAsync` — where an empty list does not mean the
+scan came back clean, it means the scan never ran, and on this site "no EVP detected" is a finding
+somebody acts on.
+
+**Platform slice** brought the internal messaging surfaces over, which item 120 named from the
+start. Two of the scheduler's call sites were correctness bugs rather than display ones: the
+attendee dedup set and the invitee prefill both read a refusal as "nobody is invited", which would
+have re-invited the whole list.
+
+**Equipment slice** was the one where the guard paid for itself. The area uses `[.. await …]`
+spreads, so 27 sites were a one-line mechanical change each — the whole slice compiled green while
+every page still reported a refusal as empty. Registering the new method names in
+`LoadResultRenderedGuardTests` turned it into a worklist of 14 files, which is how the twelve real
+surfaces were separated from the two genuine picker feeds.
+
+It also turned up a **mutation** with the same defect: `SetMyEquipmentSharesAsync` is a PUT whose
+refusal became `?? []`, and `EquipmentShareEditor` discarded the result, closed its dialog and
+reported success — somebody believed their equipment was shared when nothing had been saved. It now
+returns `(Shares, Error)` and the editor shows the reason.
+
+**User slice** reached past the adapter for the first time. `GetAllUsersAsync` and
+`GetOrgUserDirectoryAsync` delegate to dedicated methods on `WebApiClient` itself rather than the
+generic `GetAsync`, so their `?? []` sat outside the ratchet's scan — the ratchet counts
+`BenAdminClientAdapter.*.cs` only. Both are converted; worth remembering that the ratchet measures
+one file pattern, not the whole client.
+
+It also turned up a defect in **item 133's own work**. An adapter that reshapes a response —
+`Ok(result.Items.Select(…))` — silently drops `SessionExpired`, and both places doing that by hand
+had dropped it: a signed-out roster told the reader to "try again" instead of to sign in.
+`LoadResult.Map` now carries the whole outcome across and changes only the shape, and the
+organization roster uses it.
+
+**Three dead methods found so far**, declared and implemented but called by nothing:
+`GetPublishedInvestigationsAsync`, `GetEquipmentItemCheckoutsAsync` and `GetMyPhotosAsync`.
+
+**For whoever takes the next slice:** a list that is mutated in place — `Insert`, `Add`,
+`RemoveAll` — must **not** be wrapped in `BenListState`. The wrapper keeps rendering the load's own
+emptiness, so the first item added never appears. Branch on `.Failed` beside the existing empty
+check instead.
+
+---
+
+## 121. No seeded org Owner who is not also SuperAdmin (CLOSED 2026-08-20 — see below)
+
+Both seeded groups are owned by the SuperAdmin account: `DevelopmentDataSeeder` takes `owner`
+from `SeedData:SuperAdmin:Email`, and BenCo's roster is AverageBen (Owner), Sarah
+(Administrator), James and Emma (Members). So the **Owner role tier cannot be exercised
+separately from SuperAdmin** — every check an Owner should pass by membership role, the seeded
+owner passes earlier by app role, which is precisely the masking item 109 was about, one tier up.
+
+Item 109's fixture covers Member vs Administrator; Owner vs Administrator differences (the org-id
+display rule in OrganizationView already distinguishes them, and anything else that keys on
+`OrganizationMemberRole.Owner`) are invisible until a seeded org has a plain-account owner.
+
+Cheap fix when wanted: seed a third small group owned by Emma, or promote Sarah to Owner of BenCo
+in the seeder (she is its Administrator today; MessagingTests' comment already believes she owns
+it, which is how stale that assumption is).
+
+### Closed same day, by DevelopmentRosterSeeder
+
+A new seeder (`SeedData/DevelopmentRosterSeeder.cs`, running after DevelopmentDataSeeder, same
+`DevData:Enabled` flag) widens the world rather than patching the one gap:
+
+**Eleven new accounts.** Investigators Marcus Webb, Olivia Chen, Tyler Brooks, Rachel Kim, David
+Okafor, Priya Sharma, Nathan Cole, Grace Delgado (@benco.dev); clients Linda Maxwell, Robert
+Hayes, Karen Foster (@example.com — clients arrive from anywhere, so their addresses look like
+it). Passwords come from `SeedData:DevData:Password`, never from this file; handles arrive via the
+normal backfill service.
+
+**The rosters.** TGH grows to eight (Rachel is a second Administrator, so "the admin" stops being
+one person); NPS gains Priya and Nathan. **Music City Spirit Seekers** (`mcss`) is the third
+group, **owned by Emma** — the first Owner who is not SuperAdmin, which is what closes this item.
+Grace administers it; Olivia and Nathan belong to two groups each, so cross-group membership stops
+being hypothetical.
+
+**Three client stories, one per state that matters.** Linda → accepted, Active at TGH (manager
+Rachel). Robert → accepted, Summarized at MCSS (manager Emma). Karen → Submitted, still sitting
+in TGH's Requests queue, so decline/resubmit has something real to act on by hand.
+
+**Three investigations with full rosters** — two completed (32 and 60 days back, so the dashboard
+time charts have shape), one scheduled 9 days out (so reminder surfaces have a subject). RSVP
+states are mixed on purpose: a roster where everyone accepted exercises none of the RSVP
+rendering.
+
+**Three real brands** (Panasonic, K-II Enterprises, Tascam) with era-appropriate models, and
+items owned by Marcus, Olivia and Priya — including one shared into two groups and one
+deliberately unloanable and unlisted.
+
+Verified live from Emma's seat: the full owner strip (Settings, Roles, Requests, Edit) renders
+through membership role alone. The first run crashed on Investigation's direct `OrganizationId`
+FK (an investigation can exist without a case, so the org is its own required column); the retry
+after the fix found everything the crashed run had created and duplicated nothing, which is the
+idempotency doing its job.
+
+---
+
+## 122. The standalone Members page rendered before auth (SHIPPED 2026-08-20)
+
+`OrganizationMembers.razor` called the API in `OnParametersSetAsync` with no
+`WaitUntilAuthReadyAsync`. It has its own route, so a hard navigation to
+`/organizations/{id}/members` rendered it before the circuit existed and before any bearer token
+did — both its calls came back unauthorised, the client's `?? []` turned that into empty results,
+and the page told a **SuperAdmin** the group had no members while printing the raw GUID as its
+heading (the org lookup came back empty too, so `_orgName` fell through to `OrgId.ToString()`).
+
+Embedded in the hub it was always fine: `OrganizationView` awaits AuthReady before rendering any
+tab, so the component only failed at its own address — which nothing exercised.
+
+**It was caught by a help screenshot.** The capture navigates to the standalone page, and the
+re-run after the seed expansion published a grid reading "No records available. 0 – 0 of 0 items"
+into the group-administration document. Worth recording: the screenshots are now load-bearing as
+tests, because they are the only thing that visits some of these addresses cold.
+
+### Guarded
+
+`AuthReadyOnRoutablePagesTests` scans every `.razor` with a `@page` route that awaits
+`AdminClient`/`Client` in a lifecycle method and requires `WaitUntilAuthReadyAsync`, with a named
+exemption list for pages that genuinely work signed out (each entry carries its reason).
+
+On its first run it found two more: `EquipmentModelPage` and `EventAttendanceConfirm`. Both were
+checked rather than assumed — the catalogue endpoint answers 200 with no token and the help states
+anyone may browse it, and `/attending/{Token}` is an emailed link whose token is the credential —
+so both are exemptions, not bugs. Verified to discriminate by removing the fix and watching the
+test name the file.
+
+### The foundation, shipped 2026-08-20
+
+Not the 136-site rewrite — a way to tell the truth, plus adoption on the two surfaces that
+actually carried the bug.
+
+**`LoadResult<T>`** (`Ben.Web.Services/WebApi/LoadResult.cs`) — a readonly struct carrying
+`Items`, `Failed` and an optional `Reason`. `Items` is safe to enumerate in **every** state
+including `default`, which is what makes adoption non-breaking: a call site that ignores `Failed`
+behaves exactly as it does today.
+
+**`IWebApiClient.GetListAsync<T>`** derives the distinction from the status code, treats an
+unreachable API as a failure rather than an empty list, and carries the server's sentence through
+when it is prose (a ProblemDetails blob or HTML page is dropped — same rule as
+`SendExpectingReasonAsync`).
+
+**`BenListState`** (`Kit/`) renders the three states a list actually has: loading, could not load,
+nothing here. The failure state deliberately does **not** say "you do not have permission" — the
+client cannot know that, and a 500 and a dropped connection arrive identically; guessing would be
+the page's second untruth.
+
+**Adopted** on the org Files tab and the Members roster — the two surfaces where refusals were
+found rendering as empty lists (item 119). Everything else keeps the old path until touched.
+
+15 tests on the type and client, including a theory that 403/401/404/500 are all failures.
+
+### Two more bugs found while doing it
+
+**`OrganizationFiles` had the same auth race as `OrganizationMembers`** (item 122). The guard
+written for that missed it, because its lifecycle method is `=> await ReloadAsync()` and the scan
+only read lifecycle *bodies* — one level of indirection. Found by loading the page by hand and
+seeing the new "Couldn't load this" state appear when the API was up. The guard now treats any
+routable page with a load-time lifecycle method that calls the API anywhere as in scope; it
+over-triggers on API calls in button handlers, which costs one unnecessary await against a live
+bug for the miss. Two more pages surfaced and both check out as genuinely anonymous
+(`OrgDiscovery`, `SupportTicketTrackingPage`).
+
+**A Razor paren bug in the Files grid's Source column.** `@((OrganizationFileRecord)context).X ? …`
+ends the expression at the cast, so the cell rendered the record's `ToString()` —
+`OrganizationFileRecord { Id = … }` — and the ternary as text. It compiled. Nobody saw it because
+**a populated row in that grid was unreachable**: ordinary members were refused, and the page
+loaded before auth. Fixing two access bugs is what made the third visible. One instance in the
+codebase; grepped for the pattern.
+
+---
+
+## 123. Images fetched the whole upload to draw a thumbnail (SHIPPED 2026-08-20, Ben's request)
+
+Every `<img>` on the site pointed at `/api/upload-files/{id}/download`, which serves the original
+bytes. A group logo drawn in a 40px box pulled the entire upload down the wire at whatever size it
+was uploaded, and the browser discarded nearly all of it. `/find` lists every group, so that was
+one full-size image per card — on the page a first-time visitor is most likely to open, quite
+possibly on a phone.
+
+Invisible in development: the seeded logos are a few kilobytes and the API is on localhost. It
+would have shown up as "the site is slow" once real groups uploaded real photographs.
+
+### What shipped
+
+`GET /api/upload-files/{id}/thumbnail`, beside the download route, reusing the thumbnail pipeline
+that already existed for equipment photos and video assets (`MediaIngestService`, 400px long
+edge, generated on first request so nothing needs backfilling).
+
+**The access check is literally the same call as the download's.** A thumbnail is still the
+picture; making it cheaper to fetch than the file it shrinks would be a way around the audience
+rules. Verified: anonymous gets 401 on both, a signed-in non-viewer gets 403 on both.
+
+**Non-images fall through to the real file** rather than 404 — the sanitiser returns nothing for a
+PDF, and the equipment route had already settled this question the same way.
+
+Six components moved over — org cards, the two public page headers, the CMS preview, the home
+hero, and the user menu avatar. All were 36–120px boxes.
+
+Measured on the seeded site photo: **960×540 / 14,709 bytes → 400×225 / 4,265 bytes**, a 71%
+reduction on a file small enough to be a rounding error. On a phone photograph it is the
+difference between a page and a download.
+
+Guarded by `ImagesUseThumbnailsTests`, which fails on any `src=` bound to `GetFileDownloadUrl` —
+and, in a second test, on the thumbnail helper falling out of use entirely.
+
+`<a href>` download links are untouched: that is somebody asking for the file.
+
+### Closed 2026-08-21 — and the image editor turned out to be dead
+
+Fabric is vendored at `Ben.Web.Website/wwwroot/plugins/fabric/` with its licence and a VENDORED.md,
+the CDN tag is gone from `App.razor`, and **the shell now loads nothing from a third party at all**
+(verified in a browser: `externalScripts: []` on the sign-in page).
+
+**The premise was wrong in our favour, then worse.** The item said Fabric was "only needed by the
+image editor". In fact nothing in the live solution referenced it — the only other match in the
+repo was the word *fabricated* in a comment. The reason: `image-editor.js` had only ever lived at
+`Ben.Web.WebApp/wwwroot/js/image-editor.js`, and commit `1762dfc` deleted that project. The
+component was ported to the new site; **its JavaScript module was left behind.**
+
+So `ImageEditorPlayer.razor` — still rendered by `OrganizationFiles`, `CaseTimeline` and
+`AdminUserDetail` — has been importing a 404 ever since. Confirmed live: `/js/image-editor.js`
+returned 404 while its sibling `/js/geolocation.js` returned 200. The image editor was not slow or
+partly broken; it could not start.
+
+Recovered the module from `1762dfc^` into `Ben.Web.Website/wwwroot/js/`, and fixed a second latent
+bug in it while there: every filter went through `fabric.Image.filters.*`, the **v5** path, which
+is undefined in v6 and v7 alike — 7 call sites that would have thrown. Filters live at
+`fabric.filters.*`.
+
+**Updated to the latest, 7.4.0, at Ben's request.** The API surface was checked in a real browser
+rather than by grepping a minified bundle (an earlier grep gave a confident false negative on every
+class): all nine classes the module uses are present, and all six filter classes resolve under
+`fabric.filters`. The old tag was `fabric@6` — a *floating* major that could change under the site
+without a commit; the vendored copy is pinned and sha-verified.
+
+**Loading moved to where it is used.** `image-editor.js` injects the script itself, once, on first
+`init()`, with the in-flight promise cached so two editors opening together share one fetch.
+Measured end to end: module imports in 6ms, `window.fabric` is `undefined` until `init`, then
+7.4.0 loads and a canvas is created in 32ms, with filters reachable.
+
+Guarded by `NoExternalAssetsInShellTests`, verified to fail when the CDN tag is put back. Google
+Fonts is an explicit, documented exception.
+
+**Not in the WASM host.** Checked at Ben's request: `Ben.Wasm.Video` never referenced Fabric, and
+its `index.html` loads no external assets either. Nothing to change there.
+
+---
+
+## 124. The fonts were the last third party on the critical path (SHIPPED 2026-08-21)
+
+Vendoring Fabric (item 114) did **not** stop the intermittent Playwright timeouts. The full suite
+still lost 3 of 319 to the exact symptom item 114 had blamed on Fabric:
+`navigating to /login, waiting until "load"` at 30s. All 3 passed in isolation and in the previous
+run, so they were flakes — but flakes with a cause.
+
+Two `@import url(https://fonts.googleapis.com/...)` statements were left, buried **inside**
+stylesheets rather than in the shell:
+
+- `css/smartapp.min.css` → Public Sans (body font, 6 faces)
+- `app.css` → Irish Grover (logo face)
+
+Confirmed live rather than assumed: `performance.getEntriesByType('resource')` showed exactly two
+external requests on `/login` and the browser's own `renderBlockingStatus` reported **both as
+`blocking`**. Worse than a tag in the head, because the browser cannot discover an `@import` until
+it has already fetched and parsed the stylesheet containing it — a serial chain on every
+navigation, in a fresh context with no cache, ~319 times a run.
+
+### What shipped
+
+All 7 woff2 files self-hosted under `wwwroot/fonts/` with `fonts.css` carrying Google's own
+`@font-face` blocks verbatim, URLs rewritten to local paths. Every unicode subset kept — dropping
+`latin-ext` or `vietnamese` would silently break accented characters rather than fail loudly.
+`font-display: swap` preserved, so a slow font can never block content. 148 KB total.
+
+**No CSS rule was altered** — only the two `@import` lines. The `font-family:"Public Sans"` rule on
+`:root` is present exactly once before and after, and the page renders identically.
+
+Measured on `/login`: **2 external requests → 0**, and the load event **282ms → 59ms**.
+
+### The guard was sheltering the bug
+
+`NoExternalAssetsInShellTests` originally allow-listed `fonts.googleapis.com` on the reasoning that
+self-hosting fonts is a separate decision. That allowance was hiding the actual remaining cause.
+The list is now empty, and a second test scans every stylesheet under `wwwroot/` for `@import`
+from another host — the place the fonts were actually hiding, which a scan of `App.razor` could
+never have found.
+
+That second test strips CSS comments first: `fonts.css` documents the very `@import` it replaced,
+and a guard that cannot tell a doc comment from a fetch flags the fix as the bug. It did exactly
+that on first run. Both guards verified to fail against a reintroduced import.
+
+---
+
+## 125. Neither app honoured reverse-proxy headers (SHIPPED 2026-08-21)
+
+Found while planning a Cloudflare Tunnel for the UAT deploy, before it was set up rather than
+after.
+
+Both `Program.cs` files called `UseHttpsRedirection()` and neither called `UseForwardedHeaders`.
+Behind any reverse proxy — a tunnel now, Azure App Service later — TLS terminates at the proxy and
+the request reaches the app over plain HTTP. The app would have seen `IsHttps == false`, answered
+`307 → https://`, the proxy would have fetched that, and the request would have looped. IIS healthy,
+app healthy, site unreachable, nothing in any log to explain it.
+
+### What shipped
+
+`UseForwardedHeaders` in both apps, honouring `XForwardedProto | XForwardedFor`, registered
+immediately after `builder.Build()` — **before** anything that reads the scheme.
+
+`KnownProxies`/`KnownNetworks` are deliberately left at their defaults, which trust forwarded
+headers **only from loopback**. `cloudflared` runs on the same host and connects to `localhost`, so
+the immediate peer genuinely is loopback. Widening it would let any caller claim to have arrived
+over HTTPS from any address — the absence of that configuration is the secure state, not an
+oversight.
+
+`XForwardedFor` also restores the real client IP. Without it the audit log would have recorded the
+proxy for every request — worse on the API, which is where security decisions are logged.
+
+### Guarded on order, not presence
+
+`ForwardedHeadersTests` asserts `UseForwardedHeaders` appears **before** `UseHttpsRedirection` in
+both files. Registered after, it compiles, starts, serves every local request correctly, and still
+loops behind a proxy — so presence alone proves nothing. Verified by moving the call after the
+redirect and watching it fail.
+
+The guard flagged its own documentation on first run: the comment above the call names
+`UseHttpsRedirection`, so a naive `IndexOf` found the prose first. It strips comments now — the
+same mistake the stylesheet guard made a day earlier, which suggests any source-scanning guard
+should strip comments as a matter of course.
+
+### Not verified locally, and honestly so
+
+The local run cannot reproduce the loop: with no HTTPS port configured, `UseHttpsRedirection` is
+inert, so both the with- and without-header cases return 200. What is proven locally is
+registration and ordering. The behavioural proof has to come from the deployed site behind the
+tunnel.
+
+---
+
+## 126. SuperAdmin Site Settings and Dashboard render empty on the server (CLOSED 2026-08-21)
+
+Ben reports both `/admin/site-settings` and `/admin/dashboard` are blank for him as SuperAdmin.
+
+**They are not blank locally.** Verified the same day against the dev stack: Site Settings renders
+every setting card including the ten feature switches, and the Dashboard renders its four stat
+cards, the sign-ins/registrations chart, the cases-by-status donut and the group tables. So this is
+a **deployment** fault, not a page fault — which narrows it a great deal.
+
+### The likely cause, and why it presents as "empty" rather than "error"
+
+Both pages are pure API consumers, and both go through the adapter's
+`GetAsync(...) ?? []` path — **item 120's bug class**. A failed call there is indistinguishable
+from a successful empty one, so an API that is refusing, unreachable, or answering on the wrong
+path renders as a page with nothing on it and no error anywhere. That is precisely the symptom
+described.
+
+Candidates, in order:
+
+1. **API base path.** The server deployment serves the API under `/webapi`, and
+   `ApiBasePathHandler` was added on 2026-08-21 (commit c82a7c9) for exactly this. If a call is
+   built without the base path it 404s, and 404 → `?? []` → empty page.
+2. **Auth.** SuperAdmin-only endpoints answering 401/403 to a token the site is not sending — same
+   silent-empty outcome.
+3. **CORS**, if the site and API are not same-origin in that deployment.
+
+### How to tell them apart in one step
+
+The browser's network tab on the deployed site, filtered to `/api/`: the status codes on
+`/api/admin/site-settings` and `/api/admin/stats/summary` name the cause immediately — 404 is the
+base path, 401/403 is auth, a CORS error is the third.
+
+### Worth doing regardless
+
+Adopting `LoadResult`/`BenListState` on these two pages would have made this self-diagnosing: the
+page would have said "Couldn't load this" instead of silently claiming there are no settings. They
+are good candidates for the next slice of item 120 adoption, precisely because they are
+admin-only pages where a silent empty state is most misleading.
+
+### 2026-08-21 — made self-diagnosing, not yet diagnosed
+
+**The cause is still unknown.** Both pages render fully against the dev stack, so it is a
+deployment fault, and nothing here identifies which one. What changed is that the pages will now
+*say* what happened instead of rendering blank.
+
+- **Site Settings** reads through `LoadSiteSettingsAsync`, so a refusal is a failure rather than an
+  empty list. Its existing `catch` never fired because nothing ever threw.
+- **Dashboard** treats a null summary or charts as failure — those endpoints always return an
+  object when they answer at all — and names what to check.
+- **`GetListAsync` now reports the status** when the body is not prose: "The server answered 404
+  (Not Found)." A blank page says nothing; 404 says the path is wrong and 403 says the path is
+  right and the caller was refused. That is the whole question.
+
+**A simulation that was NOT faithful, recorded so nobody repeats it.** Pointing `WebApi:BaseUrl` at
+`/wrongpath` reproduced blank-and-silent, but that path exists nowhere — whereas on the deployment
+`/webapi` does exist and `ApiBasePathHandler` restores it. Ben caught this: it risks re-fixing
+something the deploy already solved. The base path is not implicated by that test.
+
+**What the symptom does suggest:** sign-in works on the deployment and the admin menu renders, so
+the API is reachable and the token is accepted. That points away from the base path and toward the
+SuperAdmin *role* not being honoured on those endpoints — `/api/me` computes `isSuperAdmin` from
+the database, while `[Authorize(Roles = SuperAdmin)]` reads the token's role claim, and those two
+can disagree. Unconfirmed.
+
+**Next step is one look at the deployed browser's network tab**, filtered to `/api/admin/` — or
+simply reloading those pages once this ships, since they will now print the status themselves.
+
+---
+
+## 127. Sign-in blamed the password when the API was unreachable (SHIPPED 2026-08-21)
+
+Found while reproducing 126, and real independently of it.
+
+`LoginFailure` had five cases and no way to say "the endpoint was never reached", so a 404 or a 5xx
+fell through to the catch-all and the page said **"Invalid email or password."** The credentials
+were correct and had never been examined. That sends somebody to reset a password that was fine,
+and the reset cannot help — the same mistake the rate-limit case was fixed for, on the page where
+it is most costly.
+
+`LoginAttempt` already carried the status code, so this is a sixth case rather than new plumbing:
+`WasUnreachable` (status 0, 404, or 5xx) maps to `LoginFailure.Unreachable`, and the page says the
+problem is with the site rather than the password.
+
+### 2026-08-21 — cause found: a stale WebApi, not a code fault
+
+Ben refreshed the WebApi on the server and both pages came up. **There was never a bug in the
+code** — the deployed `C:\Ben\WebApi` predated the controllers those two pages call, so the routes
+did not exist and returned 404.
+
+The dates were the tell, and they are worth keeping as a diagnostic habit:
+
+| Controller | Added | Deployed page |
+|---|---|---|
+| `MeController` | 07-16 | worked |
+| `AdminSiteSettingController` | **08-15** | blank |
+| `AdminStatsController` | **08-20** | blank |
+
+Everything failing was recent; everything working was old. Two other facts narrowed it before the
+check: production and development share one database, so the SuperAdmin rows behind the failing
+session were the same rows that work locally — which killed the role-claim theory — and the
+notification badge rendered, proving the token reached the API and was accepted.
+
+**The lesson is about deployment, not code:** the website and the WebApi are published separately,
+so they can drift, and the symptom of drift is a *recent* feature failing while everything older
+works. Worth republishing both together, or stamping a build version the site can compare.
+
+The reporting added earlier in the day is what made this a five-minute diagnosis instead of a
+guess, so it stays.
+
+---
+
+## 128. Admin dashboard: axis defects (SHIPPED 2026-08-21)
+
+Found in Ben's screenshot of the working dashboard.
+
+- **Day-first dates on the chart axis.** `DayLabels` formatted with a hardcoded `"d MMM"`, giving
+  "23 Jul" — day-first, on a site that is month-first everywhere, and written *at the call site*,
+  which is the exact thing `DateTimeViewerExtensions` exists to prevent. Now `ChartDayPattern`
+  (`MMM d`) with `DateTime` and `DateOnly` overloads, pinned by two tests.
+- **Fractional counts on the y-axis.** Left to itself ApexCharts picks a "nice" scale, so "People
+  by state" — tallest bar 1 — drew an axis reading 0, 0.2, 0.4, 0.6, 0.8, 1. Fractional people.
+  Every number this dashboard draws is a count, so the axis is integer-only, floored at zero, with
+  no more ticks than the largest value can fill.
+- **Ninety rotated labels stacked on each other.** Thinned to about eight ticks; the tooltip still
+  names every day. Rotation then had to go too — angled labels were clipped by the panel edge,
+  rendering "Jul 23" as "l 23".
+
+---
+
+## 129. Admin dashboard: readability and dead ends (SHIPPED 2026-08-21)
+
+Ben asked what would make the dashboard prettier and more functional. Four changes, plus two bugs
+the work uncovered.
+
+- **The stat cards are links.** "97 people" that cannot be clicked is a dead end — the number
+  raises a question and the list answers it. People → users, In a group → groups, Cases → cases.
+  *Signed in this week* deliberately stays inert: no page lists recent sign-ins, and a card
+  linking somewhere approximate is worse than one that stays put.
+- **Three "by state" panels became one with a toggle.** They filled a whole row to show one bar
+  each, which with a single state in the data is a row of decoration.
+- **Group charts are horizontal.** A vertical bar gives its label only as much width as the bar,
+  which is why "Tennessee Ghost Hunters" was rendering as a rotated "…essee Ghost Hunters".
+- **The donut legend carries counts.** Every number on it used to be behind a hover, which is no
+  answer for someone reading the page rather than pointing at it.
+
+### Two bugs found while verifying, both pre-existing
+
+**Charts never re-themed.** `RethemeAsync` was exported with a "call this from whoever owns the
+toggle" contract and had **no callers anywhere** — so every chart on the site kept the palette it
+was born with, and in light mode that meant near-white axis labels on a white card. The module now
+watches `data-bs-theme` on `<html>` itself with a MutationObserver. A contract nobody can forget
+beats a contract everybody forgot; the unused method is gone rather than left as a trap.
+
+**The re-theme then ate the axis config.** Apex's `updateOptions` *replaces* a nested object
+instead of merging into it, so sending `yaxis: { labels: { style } }` silently dropped the label
+formatter and `maxWidth` — group names truncated again the instant anyone touched the toggle, and
+the integer axis would have gone with them. `retheme` now derives its options from `baseOptions`
+and the stored spec, so a created chart and a re-themed one cannot drift apart.
+
+### Not done, and why
+
+- **The sign-in spike.** One seeded day of ~2,700 flattens the other 29 to the floor. It is seed
+  data, but any real burst does the same; a rolling-average toggle is the cheap insurance. Left
+  for Ben to decide whether it is worth a control.
+- **Nobody has an address.** "People by state" counts 1 of 97 because **no seeder writes
+  `UserAddress` rows** — that bar is Ben's own record. The panel is honest and useless until
+  either the seeder populates addresses or real users do. A data decision, not a chart fix.
+
+---
+
+### 2026-08-21 — the organization area, and a ratchet so it cannot regrow
+
+**The decision: replace, do not parallel.** The three methods converted on 08-20 were added
+*beside* their originals as `LoadXAsync`, leaving `GetXAsync` in place. A day later two of those
+originals — `GetOrgFilesAsync` and `GetSiteSettingsAsync` — had **zero callers**: the parallel
+approach had produced dead code within a day, while doubling the interface and leaving every old
+method sitting there as the trap it already was. Converting the return type instead means the
+compiler names every consumer, and there is one way to call each thing. Nothing has shipped, so
+this is the cheapest it will ever be.
+
+**A ratchet, because a ban is unmergeable.** 120 swallow sites, each needing its consumers changed
+with it, cannot land as one change. `SwallowedFailureRatchetTests` asserts the count is both at
+most and exactly the ceiling: it can only ever fall, and leaving the ceiling slack is itself a
+failure. Verified to discriminate by adding one and watching both assertions fail. **120 → 101.**
+
+**Converted:** the whole organization area — 17 methods and 32 files. `GetAnonymousListAsync` was
+added so public endpoints report failure too; a visitor refused a public list has no account, no
+error and no reason to try again, which makes anonymous surfaces the ones that need this most, not
+least.
+
+**Where the difference is now on screen** — rather than only in the type: the groups list, all
+cases, all investigations, site roles, group roles, public events, org discovery, and the front
+page's own search. Supporting fetches — dropdown options, name lookups, permission maps — take
+`.Items`, because a page makes no "nothing here" claim about them.
+
+**A test that was defending the bug.** `SearchOrganizationsAsync_WhenApiReturnsNull_ReturnsEmpty`
+asserted exactly the behaviour item 120 exists to end, and passed. It now asserts the opposite.
+Worth remembering that a green suite was part of how this survived.
+
+**Found and NOT fixed, deliberately:** `OrganizationView` decides `_isMember` and `_canEdit` from
+whether the org appears in the list it fetched, so a *failed* fetch silently demotes a member to a
+non-member and hides what they may do. Unchanged by this pass — an empty list did the same — but
+it is the same bug wearing a permissions hat, and it should be fixed with the rest of that page's
+conversion rather than bolted on mid-verification.
+
+**Still open: 101 sites** across equipment, case, platform, user, investigation, cms, places,
+media, publications, membership and feed. Same recipe each time; the ratchet stops the number
+growing while the work continues.
+
+---
+
+## 130. Dates were day-first in 74 places a constant could not reach (SHIPPED 2026-08-21)
+
+Ben reported British dates on "Date Created" columns. **This was the fourth time he had reported
+it**, and he was right every time.
+
+**Why three previous fixes did not hold.** Each one corrected `DateTimeViewerExtensions` and
+whichever screen was in front of us, and the constants then looked authoritative. A constant
+governs only what refers to it — and the places that were wrong *could not* refer to it. A Telerik
+picker takes `Format="dd/MM/yyyy"` as a string attribute; a grid column takes
+`DisplayFormat="{0:dd/MM/yyyy}"`. Neither can hold a C# constant without being written to.
+
+**The audit found 74 day-first patterns across 28 files**, including the WebApi — so emails to
+borrowers and event attendees carried them too, not just the UI. `DisplayDateFormatTests` passed
+throughout, because it only ever asserted the constants.
+
+Fixed by making the constants reachable — added `MediumDatePattern`, `GridDateFormat`,
+`GridDateTimeFormat` — and rewriting every call site to reference them instead of carrying a
+pattern. ISO `yyyy-MM-dd` was deliberately left alone: `<input type="date">`, log lines, sort keys
+and generated filenames all need it, and it is not ambiguous to anybody.
+
+**`DateFormatSourceGuardTests`** now scans every `.cs` and `.razor` across six projects and fails
+the build on any day-first literal, in each spelling that has actually turned up. Verified to
+discriminate: reintroducing one `Format="dd/MM/yyyy"` fails it. Comments are stripped first — the
+fifth guard in this codebase that would otherwise fire on its own explanatory prose.
+
+**The lesson is bigger than dates.** When something is reported wrong repeatedly *after* being
+fixed, the fix is landing somewhere the broken code never consults. Go and find the call sites, and
+add a source scan rather than another assertion on the thing that was already right.
+
+---
+
+## 131. Signed-out, the "Request an Investigation" page's button does nothing (CLOSED 2026-08-22)
+
+Ben: *"the sign up button if you try to create a case and are not logged in, does nothing."*
+
+`/my-requests/new` (`ClientRequestWizard.razor`) renders this to an anonymous visitor:
+
+```razor
+@if (!UserState.IsAuthenticated)
+{
+    <p class="lead">You must be signed in to submit a request.</p>
+    <button type="button" class="btn btn-primary"
+            @onclick="@(() => NavManager.NavigateTo("/login"))">Sign In</button>
+    return;
+}
+```
+
+**Why it does nothing.** `@onclick` needs a live SignalR circuit. This page is reached by a
+signed-out visitor — often the very first page they open — and it is prerendered long before the
+circuit connects, so a click in that window is dropped on the floor with no feedback. Navigation
+needs no circuit at all: a plain `<a href="/login" class="btn btn-primary">` works in the
+prerender, works with JS disabled, and is right-clickable. See the standing note on the Blazor
+Server interactivity race.
+
+**It is also the wrong destination.** Somebody who has never used the site and wants to report
+activity has no account yet. The dead end offers only Sign In; it should offer **Create an
+account** (`/signup`) as the primary action with Sign In secondary, and both should carry
+`?returnUrl=/my-requests/new` so they land back on the request they were trying to start rather
+than on a dashboard. `Login.razor` already supports `ReturnUrl` (built for the case-invite flow,
+item 4).
+
+**Same defect, same page family — fix together:**
+
+- `ClientRequests.razor:14` and `:32` — "New Request" buttons, also `@onclick` navigation
+- `HomeHero.razor:57` already gets this right (`<a href="/login">`), which is the model
+
+**Worth a guard.** A `@onclick` handler whose whole body is `NavManager.NavigateTo(<literal>)` is
+always better as an anchor, and a source scan can say so. That would also have caught this one.
+
+### Verified live, and the first diagnosis was only half right
+
+Reproduced in a browser rather than left as a reading of the source, which changed the answer.
+
+**The wizard's button.** The `@onclick` mechanism is real but small: measured on localhost, the
+button is painted 5ms after navigation starts and the circuit's negotiate completes at 55ms — a
+**~50ms dead window**. Wide enough to swallow a fast click, and much wider over a real network,
+but not enough to explain a button that reliably does nothing. Fixed anyway, because an anchor is
+strictly better: `<a href="/login" class="btn btn-primary">` needs no circuit, survives a slow
+connection, works with scripting off and can be opened in a new tab. Confirmed by `curl` — the
+anchor is in the server's HTML with no JavaScript involved at all.
+
+**Ben's clarification settled the destination question.** *"Clicking the sign in button can
+redirect to the sign in page. There is a link there for signing up."* So the wizard keeps its
+single Sign In action; no create-an-account button was added, and the `returnUrl` idea was dropped.
+
+**What was actually dead was `/signup`.** Following the path Ben described — wizard → Sign In →
+login → "Create an account" → `/signup` — the Create account button ships **`disabled`**, and
+stays disabled until the @name availability check returns. Every other field is `[Required]` with
+a `ValidationMessage`; `Handle` had **neither**, and was enforced only by that silent `disabled`.
+
+Reproduced exactly: fill every field, leave @name alone, click Create account →
+`button_disabled: true`, **zero validation messages anywhere on the page**, nothing happens. And
+the @name box's grey placeholder read as a filled-in value (see item 134), so skipping it is the
+natural thing to do.
+
+### Fixed
+
+- `Handle` gets `[Required]` and a length rule, plus a `ValidationMessage` beside the field, so it
+  behaves like every other field. The same click now says *"Choose an @name — it's how people
+  mention you."*
+- The button is disabled only while the request is in flight. **A disabled control cannot explain
+  itself**, so it is the wrong way to enforce a rule the person can still fix — the same lesson as
+  a server guard the UI discards.
+- `SubmitAsync` checks the handle itself, so somebody who types a name and clicks inside the 400ms
+  debounce is no longer blocked by a race; the server remains the authority on uniqueness.
+- The three navigation buttons became anchors: `ClientRequestWizard` and `ClientRequests` (×2).
+- **At Ben's request**, the `@` prefix now reports the check: grey at rest, blue while in flight,
+  green when free, red when taken. See item 135 for what that took.
+
+### The other ten — checked one at a time, seven converted (2026-08-22)
+
+Ben asked for these to be done **only after verifying they are not working as one would expect**,
+which was the right instruction: checking turned ten into seven, and produced a sharper rule than
+"convert them all".
+
+**What decides it is whether the button exists during the prerender.** A handler in markup that
+renders unconditionally is emitted by the server before the circuit exists, so it is on screen,
+looks pressable, and swallows clicks until SignalR connects. A handler inside a branch that cannot
+render until after the circuit — an auth check, or a field that is null until loaded — has no such
+window, because the button is not there yet.
+
+Verified by fetching each page **anonymously with curl**, no JavaScript involved, and looking for
+the button in the raw HTML:
+
+| Site | Renders in prerender? | Verdict |
+|---|---|---|
+| `OrganizationCreateEdit` "Back to Organizations" / "Cancel" | yes | converted |
+| `OrgCmsEditor` "Back to Organizations" (`@if (!EmbeddedMode)`, default false) | yes | converted |
+| `AdminUsers` "New User" | yes | converted |
+| `AdminUserCreate` "Back to Users" / "Cancel" | yes | converted |
+| `ClientRequestDetail` "My Requests" | yes | converted |
+| `OrganizationList` (inside `@if (UserState.IsSuperAdmin …)`) | **no** | left alone |
+| `AdminUserDetail` (inside `else` of `@if (_detail is null)`) | **no** | left alone |
+| `ClientRequestWizard` (signed-in branch, `@if (_step == 5)`) | **no** | left alone |
+
+**The dead window is bigger than the first measurement suggested.** The signed-out request page
+measured ~50ms; `/admin/users` measured **298ms** — and that is localhost with a warm server and no
+network. Wide enough for a real person to lose a real click.
+
+An incidental confirmation of why these could not be clicked directly: an anonymous visit to
+`/admin/users` renders the full page chrome and then **redirects to home once the circuit connects
+and auth resolves** — the markup ships to anyone, the authorisation happens a third of a second
+later.
+
+`NavigationIsAnAnchorTests` now bans the pattern, with the three verified exceptions listed
+alongside the branch that protects each. Verified to discriminate: turning the `AdminUsers` anchor
+back into a button fails it.
+
+---
+
+---
+
+## 132. Dark mode: fixed-light Bootstrap utilities make white cards with near-white text (CLOSED 2026-08-22)
+
+Ben: *"even when you are in dark mode and on the audit log page, when you expand the log record,
+the row that opens has a white background card with near-white text."*
+
+`AdminAuditLog.razor`'s `<DetailTemplate>` used `bg-light` for the panel and `bg-white` for the
+JSON block. Both are pinned to a literal colour, so in dark mode the panel stayed white while the
+text inside kept the theme's light-on-dark foreground.
+
+### What was actually wrong — and two things worth correcting
+
+Reading the compiled `smartapp.min.css` instead of reasoning from class names changed the scope
+twice, both times **downward**. The dark block redefines `--bs-tertiary-bg-rgb`,
+`--bs-secondary-bg-rgb`, `--bs-body-bg-rgb`, `--bs-emphasis-color` and `--bs-secondary-color`, but
+**not** `--bs-light-rgb`, `--bs-white-rgb` or `--bs-dark-rgb`:
+
+| Class | Resolves through | Redefined in dark? | Verdict |
+|---|---|---|---|
+| `bg-light` | `--bs-light-rgb` | no | **broken** — 22 uses |
+| `bg-white` | `--bs-white-rgb` | no | **broken** — 3 uses |
+| `text-bg-light` | `--bs-light-rgb` + literal `#000` | no | **broken** — 1 use |
+| `text-dark` | `--bs-dark-rgb` | no | broken **only** off a fixed background — 10 of 76 |
+| `alert-light` | `--bs-light-bg-subtle` / `-text-emphasis` / `-border-subtle` | **yes, all three** | fine — leave alone |
+
+1. **`alert-light` was never broken.** The first version of this item said to sweep it. Wrong: the
+   theme redefines all three variables it reads (#343a40, #f8f9fa, #495057), so the ~15
+   `alert alert-light` empty states were always theme-aware.
+2. **65 of the 76 `text-dark` uses were fine.** They sit on `bg-warning` or `bg-info`, neither of
+   which changes between themes, so black text on them is correct in both. Only the 10 paired with
+   `bg-light`/`bg-white` needed anything, and they were fixed with their background.
+
+Guessing from the class name would have "fixed" 80 working things.
+
+### What shipped
+
+- 23 replacements: `bg-light` → `bg-body-tertiary` (surfaces) or `bg-body-secondary` (chips),
+  `bg-white` → `bg-body`, `text-bg-light` and paired `text-dark` → `text-body-emphasis`
+- **One deliberate exception**, annotated in place: the 2FA QR-code container keeps `bg-white`.
+  A QR code is read by a camera, not a person, and scanners need the light modules light in
+  either theme.
+- **`ThemeSafeColorExtensions`** — `ColorClass` is a *stored* value (an org picks a colour for a
+  calendar event type; `AdminLookupTypes` lets a SuperAdmin type any class into a free-text box),
+  so fixing the dropdown alone would only help the next choice. Stored values are translated at
+  render across 8 sites, and the picker's "Black" (`text-dark`, which vanished into the page in
+  dark mode) became "Contrast" (`text-body-emphasis` — black on light, white on dark).
+- **`FixedLightUtilityGuardTests`** bans all three utilities in `.razor`, and bans `text-dark`
+  except on a background that never changes; allowlist entries must still be real. Verified to
+  discriminate — reintroducing the audit log's `bg-light`, and adding a `text-dark` to a
+  theme-following surface, each fail it.
+
+### Measured in the running app
+
+| | background | text | contrast |
+|---|---|---|---|
+| Audit-log panel, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| JSON block, before | `#ffffff` | `#dee2e6` | **1.30:1** |
+| Panel, after | `#2b3035` | `#dee2e6` | **10.23:1** |
+| JSON block, after | `#212529` | `#dee2e6` | **11.85:1** |
+
+WCAG AA wants 4.5:1; at 1.30:1 the text was effectively invisible. Every replacement token was
+measured in both themes and changes value; all three banned ones were measured and do not. The home
+page renders zero banned backgrounds, and its two remaining `text-dark` are both
+`badge bg-warning text-dark` — black on yellow-ochre, correct in both themes.
+
+Ben confirmed the page himself: *"Audit log fix looks great."*
+
+The custom stylesheets needed nothing — `app.css`'s `#fff` uses sit inside
+`:root[data-bs-theme="dark"]` blocks, mixing outline-button colours *toward* white on purpose.
+
+---
+
+## 133. An expired or lost token reads as a raw 401, and one page shows the error and a spinner together (CLOSED 2026-08-22)
+
+Ben, on two SuperAdmin pages: *"site settings page gives a couldn't load site settings, the server
+answered 401 (Unauthorized). then below it the word 'Loading…'"* and *"Support tickets page say
+Could not load tickets."*
+
+**First, the likely cause of that particular sighting.** The website host was restarted mid-session
+while Ben was signed in. `IWebApiTokenStore` is registered **scoped** (`Program.cs:83`), which under
+Blazor Server means per-circuit: restarting the host destroys every circuit and the access token
+with it. The browser reconnects into a fresh scope holding no token, `WebApiClient` sends no
+`Authorization` header, and the API answers 401 to everything. Signing in again clears it. So these
+two reports are probably not standing product defects — but they expose two that are.
+
+### 133a. A dead session is reported as an HTTP status code
+
+The page said *"the server answered 401 (Unauthorized)"*. That sentence is `LoadResult.Reason`
+being rendered faithfully — item 120 working as designed — but 401 is the one status where the
+generic treatment is wrong. It does not mean "something went wrong fetching this list"; it means
+**this person is no longer signed in**, and the only useful thing to say is so, with a way back.
+
+This is not a dev-only artefact. It happens in production whenever a token expires, an app pool
+recycles, or a deployment restarts the host — and the reader will be told their site settings could
+not be loaded rather than that they need to sign in again.
+
+**Fix.** Handle 401 distinctly from other failures in the client — a flag on `LoadResult` or a
+dedicated reason — and have `BenListState` (and the ad-hoc error banners) render "Your session has
+ended. Sign in again" with a link carrying `returnUrl`. Consider re-authenticating silently where a
+refresh token exists. Related to item 131, which is also a dead end offering no way forward.
+
+**Worth deciding separately:** whether the token should survive a reconnect at all. It is scoped
+today, and `EntraTokenPersister` only bridges the prerender-to-circuit handoff, not a host restart.
+
+### 133b. AdminSiteSettings renders its error and "Loading…" at the same time
+
+Real, and independent of the 401. In `AdminSiteSettings.razor`, `LoadAsync` sets `_error` and
+returns on failure — leaving `_settings` null. The template's only test is:
+
+```razor
+@if (_settings is null) { <p class="text-secondary">Loading…</p> }
+```
+
+So a failed load shows the red banner *and* a spinner that will never resolve, which reads as "it
+failed, but it is also still trying". The page needs the third state the rest of the site now has:
+this is a surface that should be using `BenListState`, which distinguishes loading from
+couldn't-load from empty. `AdminSupportTickets` gets this right (`_loading && _page is null`) and
+is the model.
+
+Cheap, and worth doing with the next item-120 slice rather than alone.
+
+### Fixed (2026-08-22)
+
+**133a — a dead session says so.** `LoadResult<T>` gains `SessionExpired`, and
+`WebApiClient.SendListAsync` maps 401 to it before any other handling. It is deliberately a
+*subset* of `Failed`, so every existing call site that only checks `Failed` is unaffected.
+
+**403 is deliberately excluded.** Forbidden means the session is fine and this particular thing is
+not theirs to see; telling that person to sign in again sends them round a loop back to the same
+refusal. Only 401 means "you are not signed in any more".
+
+`BenListState` grew a fourth state — loading, **signed out**, couldn't-load, empty — rendering
+*"You've been signed out"* with a **Sign in again** link carrying `returnUrl` so they come back to
+the page they were on. It is an anchor (item 131's rule) and offers no Try again button, because a
+retry on a dead session is a control that cannot work. `Login.razor` already had the `ReturnUrl`
+parameter and its open-redirect guard, so the link is relative.
+
+**The design reaches surfaces that never adopted `BenListState`, for free.** `SessionEnded()`
+carries **no** `Reason`, and four places render `Reason ?? "their own sentence"` — so a null falls
+through to their own wording instead of quoting HTTP at somebody. The two that a signed-in person
+can actually hit (`InvestigationPanel`'s binder, `ClientRequests`' organization picker) now name the
+state outright. The other two run anonymous searches, where a 401 cannot arise.
+
+**133b — the error and the spinner.** `AdminSiteSettings` now renders through `BenListState` with a
+real `_loading` flag cleared in a `finally`. The old template's only test was `_settings is null`,
+which stayed true after a failure, so the red banner and a spinner appeared together and read as
+"it failed, but it is also still trying". That is now structurally impossible rather than merely
+fixed: the loading branch and the failure branch are the same component's mutually exclusive arms.
+
+Four tests, verified to discriminate — removing the 401 mapping fails the two that assert it, while
+the 403 and unreachable-server tests stay green, which is what makes them worth having.
+
+### Still open, deliberately
+
+- **Only the list path is covered.** `GetAsync`, `PostAsync` and friends still answer a 401 with
+  `default`, so a single-record fetch or a save that hits a dead session is as silent as ever. That
+  is the same shape as item 120 and belongs with it.
+- **`AdminSupportTickets`** ("Could not load tickets") is not on `LoadResult` yet — it is in the
+  Platform slice, 14 swallows. Its message is at least generic rather than a status code, so Ben's
+  specific complaint does not apply there, but it cannot say "you've been signed out" either.
+- **Whether the token should survive a host restart at all.** `IWebApiTokenStore` is scoped, so a
+  restart takes every circuit's token with it. `EntraTokenPersister` only bridges prerender to
+  circuit, not a restart. Worth deciding separately — this item makes the symptom honest, it does
+  not remove the cause.
+
+---
+
+## 134. Placeholders looked like filled-in text in dark mode (CLOSED 2026-08-22)
+
+Ben: *"if the placeholder in dark needs to look like a placeholder and not filled in text… Real
+text in dark mode looks way too close 'colorwise' to placeholder text."*
+
+The template renders `.form-control::placeholder` as `--bs-secondary-color`, which in night mode is
+`rgba(222, 226, 230, .75)` — **the same hue as body text** (`#dee2e6`) at 75% opacity. Measured
+against real input text in the running app, the ratio was **1.00:1**: indistinguishable.
+
+This was not cosmetic. It is why item 131 happened: the @name box showed a grey `sarahmitchell`
+placeholder that read as a value, so the field got skipped, and the only thing standing between the
+person and their account was a button that refused in silence.
+
+Fixed with a `--ben-placeholder-color` token defined per theme in `app.css`, so each value is
+chosen against its own background rather than one value being asked to work on both:
+
+| | placeholder vs real text | placeholder vs input background |
+|---|---|---|
+| Dark, before | **1.00:1** | — |
+| Dark, after | **4.01:1** | 2.96:1 |
+| Light, after | 2.96:1 | 2.72:1 |
+
+Legible, and unmistakably not a value.
+
+---
+
+## 135. The @name availability indicator, and what the template does to colours (CLOSED 2026-08-22)
+
+Ben, on the signup page: *"I liked the @ being blue and then turning green if the name was
+available after checking or red if the name was unavailable… I liked it being gray and turning blue
+while checking."*
+
+Built as four states on the `@` prefix — grey at rest, blue in flight, green free, red taken —
+which needed a new `_handleChecking` flag, since the 400ms debounce plus a round trip is long
+enough that the field otherwise just sits there.
+
+**Two things had to be beaten, and both are worth knowing for any future work on this template.**
+
+1. **`.input-group:focus-within .input-group-text` sets `color: var(--bs-white) !important`.** So
+   while the field has focus — exactly when somebody is typing a name — the prefix was forced to
+   white and none of the states showed. Bootstrap's own `.text-success` and friends lose that
+   fight: one class against three, even with `!important`. The prefix now carries its own class
+   with matching specificity and keeps a neutral, theme-following chip background in every state.
+2. **The semantic colours are theme-independent, but the chip background is not.** Raw
+   `--bs-primary` on the night chip measured **1.70:1** — the "checking" state, whose entire
+   purpose is to be noticed, was effectively invisible. `--bs-danger` was 2.78:1.
+
+The state colours are therefore mixed per theme, the same technique `app.css` already uses for
+outline buttons in dark mode. Measured after:
+
+| state | dark | light |
+|---|---|---|
+| idle (grey) | 6.49:1 | 3.69:1 |
+| checking (blue) | **4.60:1** (was 1.70) | 7.44:1 |
+| free (green) | 4.54:1 | 4.51:1 |
+| taken (red) | 4.50:1 | 4.54:1 |
+
+**The general lesson:** a semantic colour that does not change between themes still needs checking
+against a background that does. Item 132 established that reading the compiled CSS beats guessing
+from class names; this is the same point one level down.
+
+---
+
+## 136. First and last names get their initial capital (CLOSED 2026-08-22)
+
+Ben: *"can we capitalize first and last names when blurring the text box. Display name can be
+whatever."*
+
+Done on `/signup` via `@bind-Value:after`, which for a text input runs on change — i.e. on blur.
+
+**Only words typed in all lower case are touched.** Anyone who wrote "McTest", "van der Berg" or
+"d'Eath" meant it, and a blanket title-case would quietly correct somebody's own name to something
+wrong — the one field where being clever is least welcome. Word boundaries include hyphens and
+apostrophes, so `mctest-o'brien` becomes `McTest-O'Brien` while an existing `McTest` is left alone.
+Verified live: `testy` → `Testy`, `McTest-o'brien` → `McTest-O'Brien`, display name untouched.
+
+Only the signup form does this today. If the same treatment is wanted on profile editing and the
+admin user screens, that is a small follow-up — the helper is currently local to `SignUp.razor` and
+would move to `Ben.Web.Services` first.
+
+---
+
+## 137. UAT dashboard: "Couldn't load the dashboard figures" after a republish (CLOSED 2026-08-22)
+
+Ben, after publishing to ishaunted.com: *"when I go to dashboard after logging in, I get: Couldn't
+load the dashboard figures — the server refused the request or could not be reached."* That sentence
+is `AdminDashboard`'s own catch, which cannot tell the three causes apart.
+
+### Established by probing the live site anonymously
+
+| Probe | Result | What it rules out |
+|---|---|---|
+| `GET /webapi/api/admin/stats/summary` | **401** | The route **is deployed**. Not a stale API package, not a wrong path *on the server side*. An `[Authorize]` route answers 401 anonymously; a missing one answers 404. |
+| `GET /api/admin/stats/summary` (no prefix) | **404** | Confirms the prefix matters — a website calling the un-prefixed path would see exactly the 404 the message mentions. |
+| `GET /webapi/api/public/cases` | **200** | The API is up, reachable, and serving. |
+| `GET /webapi/api/public/organizations/search` | **200** | Anonymous API paths work end to end. |
+
+So the API is healthy and the endpoint exists. The failure is on the website→API leg, and it is one
+of two things.
+
+### The two candidates, and the one check that separates them
+
+**Read the failing request in the browser's network tab.** The full URL and status decide it:
+
+- **URL is missing `/webapi`** → configuration. The website's `WebApi:BaseUrl` is wrong on the box.
+  `ApiBasePathHandler` restores the base path for leading-slash calls, but it can only restore a
+  path that is configured in the first place.
+- **URL has `/webapi` and the status is 401 or 403** → authorization. `AdminStatsController` is
+  `[Authorize(Roles = RoleNames.SuperAdmin)]`, so the signed-in account is not carrying the
+  SuperAdmin role claim on that deployment.
+
+Checked and **ruled out** already: `AddIdentityApiEndpoints` *does* call `.AddRoles<IdentityRole<Guid>>()`,
+so role claims are populated in principle — this is not the "roles were never registered" bug.
+
+### Two repo-level defects found while diagnosing, worth fixing regardless
+
+1. **`scripts/publish-website.sh` writes `appsettings.Production.json`.** This is the exact pattern
+   the API side abandoned: that file loads only when `ASPNETCORE_ENVIRONMENT` matches, and a value
+   sitting unread in the package already cost a night on `FileStorage:RootPath`
+   (see the UAT deployment notes). `uat-webapi-config.py` merges into `appsettings.json` for the API
+   precisely because of it. The website was never given the same treatment.
+
+2. **Run with no arguments, it writes the literal string `__SET_ME__` as the API base URL.**
+   `API_URL="${1:-}"` then `"${API_URL:-__SET_ME__}"`. It prints a warning, but a warning in a build
+   log is not a guard: the package ships, IIS serves it, and every API call fails at runtime with a
+   message about the server being unreachable. `new Uri("__SET_ME__")` is not even a valid absolute
+   URI. **The script should refuse to publish** rather than emit a package that cannot work.
+
+Both are cheap and would make this class of failure impossible to ship silently. Neither turned out
+to be the cause here, and both are still worth doing.
+
+### Resolved — it was the authorization branch
+
+Eight endpoints across seven controllers were gated on `[Authorize(Roles = RoleNames.SuperAdmin)]`
+instead of the SuperAdmin policy. **A bare `Roles` attribute names no authentication scheme**, so
+ASP.NET re-authenticates with the *default* scheme alone — the local Identity bearer handler. A
+caller holding a valid Entra JWT is not refused for lacking the role; they come back
+unauthenticated, and the endpoint answers **401 where a 403 was meant**. The role check never runs.
+
+That is why the site let Ben onto the dashboard while the API refused him: the page's guard reads
+`UserState.IsSuperAdmin`, which comes from `/api/me` — and `/api/me` resolves the role from the
+**database**, not from a claim. Two sources of truth, agreeing right up until the scheme mismatch.
+
+Fixed by moving those endpoints onto policies whose registration pins both schemes explicitly, with
+`SuperAdminHandler` resolving the role by OID for Entra sessions.
+`AdminAuthorizationIsAPolicyTests` ratchets it — no controller may use `[Authorize(Roles = ...)]` —
+and was verified to discriminate.
+
+**Confirmed live by Ben after republishing: "Dashboard works again."**
+
+This also retro-closes the real cause of **item 126**, which was closed as "made self-diagnosing,
+not yet diagnosed" — the same two pages, the same fault, finally named.
+
+---
+
+## 138. Grid filter-row dropdowns are unreadably narrow (CLOSED 2026-08-22)
+
+Ben: *"when you pull up a grid like 'All Investigations' as SuperAdmin… there are dropdowns to
+choose from like the status column. You cannot read what to choose from because the size of the
+items to choose from is so narrow… I don't need the column to be wider, just the selection list."*
+
+The screenshot shows the Status column's filter cell: the popup is clipped to roughly the width of
+the little dropdown button, so the options read as `Se…`, `…posed`, `…pted`.
+
+### Researched — the setting Ben was reaching for does exist
+
+Reflected out of the installed **Telerik 14.1.0** assembly rather than taken from memory.
+`DropDownListPopupSettings` derives from `DropdownPopupSettings`, which exposes:
+
+`Width`, `MinWidth`, `MaxWidth`, `Height`, `MinHeight`, `MaxHeight`, `Class`, `AnimationDuration`
+
+So `<DropDownListPopupSettings Width="auto" MinWidth="16rem" />` sizes the popup to its content and
+leaves the column alone. The same properties exist on `ComboBoxPopupSettings`,
+`MultiSelectPopupSettings` and `DropDownButtonPopupSettings`.
+
+### The catch, and the two ways round it
+
+Popup settings only reach dropdowns **we** render. The filter cell in
+`FilterMode="GridFilterMode.FilterRow"` is built by the Grid, and there is no parameter path to its
+popup. What the Grid does expose, on `BoundColumnBase`:
+
+- **`FilterCellTemplate`** — supply our own editor for that column's filter, which *can* carry
+  popup settings. For a Status column this is the better UI anyway: a real list of statuses beats
+  an operator dropdown plus a text box.
+- `ShowFilterCellButtons` — reclaims the space the operator and clear buttons eat in a narrow cell.
+- `FilterOperators` — trims the operator list.
+
+Only **three** grids use FilterRow: `/admin/cases`, `/admin/investigations`, `/upload-files`.
+
+A `min-width` in CSS is the fallback for the Grid's own internal operator menu, which no parameter
+reaches. Note `.k-animation-container` carries **no width in the stylesheet** — Telerik sets it
+inline from the anchor's width — so a stylesheet `min-width` is what overrides it, not `width`.
+
+### Fixed with the CSS floor, and verified
+
+`FilterCellTemplate` was the tidier option on paper but only reaches the columns we rewrite; the
+Grid's own operator menu has no parameter path, and that is the one in the screenshot. One rule in
+`app.css` covers every list popup, present and future, scoped with `:has(.k-list-container)` so
+date and colour pickers are untouched.
+
+**Measured against real components**, filter row on a 130px Status column:
+
+| | before | after |
+|---|---|---|
+| popup width | the anchor's width | **210px** |
+| anchor (filter cell) | 174px | 174px |
+| options | `Se…`, `…posed`, `…pted` | "Is equal to", "Is not equal to", "Does not contain" — all twelve in full |
+
+---
+
+## 139. File Types grid clips its own action buttons (CLOSED 2026-08-22)
+
+The command column on `/admin/file-types` is too narrow for what it holds: **Edit** and
+**Extensions** fit, and the **Delete** button is cut off at the right edge — the trash icon and a
+sliver of its label are visible, the rest is outside the column.
+
+A row action a person cannot click is not a smaller button, it is a missing feature — and unlike a
+narrow text column, nothing about it invites the reader to widen anything.
+
+Worth checking the other admin grids in the same pass, since the command column is usually written
+by copying a neighbour: any grid whose `GridCommandColumn` has a fixed `Width` and three or more
+buttons is a candidate. Options are a wider command column, dropping the button labels to icons
+with tooltips, or moving Delete behind an overflow menu.
+
+### Fixed at the mechanism, not just the column
+
+Kendo sets `white-space: nowrap; overflow: hidden; text-overflow: ellipsis` on every grid cell.
+That is right for a text column — a long name gets an ellipsis. On a command cell it means a button
+past the width is **cut off**, and unlike text there is no ellipsis to hint that anything is
+missing. A row action nobody can click is not a smaller button; it is an absent feature.
+
+So command cells now allow wrapping, which makes a cramped column taller instead of hiding
+something — self-correcting for the 18 command columns that exist and any written later. Three
+that were genuinely too narrow were widened as well, so the common case stays on one line:
+`AdminFileTypes` 220→300, `AdminUserDetail`'s addresses 220→320, `OrganizationFiles` 240→380.
+
+**Verified against real components** with the cell constrained to 220px: the buttons wrap, the last
+one is fully visible, and header and body columns still line up.
+
+A first attempt also set `display: flex` on the cell. That turned out to be **redundant** —
+`telerik-night.css` already makes command cells flex — and adding a second opinion about a `<td>`'s
+formatting context, from a file that does not own that decision, is how column alignment breaks on
+the first frozen or virtualised column. Dropped.
+
+---
+
+## 140. Do the inline `User.IsInRole` checks share the Entra blind spot? (CLOSED 2026-08-22 — 2 did, not 87)
+
+Item 137's fix moved eight endpoints off `[Authorize(Roles = ...)]` onto the SuperAdmin policy,
+because a bare Roles attribute pins no authentication scheme and so answers 401 to an Entra caller.
+That is fixed and guarded. This item is about the layer underneath it.
+
+**The API makes 87 inline `User.IsInRole(...)` calls across 37 controller files.** They decide
+things like whether a SuperAdmin sees another group's CMS pages, whether a file share is visible,
+and whether a message board is readable — mostly by widening what an ordinary user would get.
+
+Those calls read role **claims**. An Entra JWT carries no Identity role claims of its own;
+`EntraClaimsTransformation` adds them, and when it runs and finds a linked account it does the job
+properly — it calls `GetRolesAsync` and adds a `ClaimTypes.Role` claim per role. So in the happy
+path these checks are fine.
+
+**The question is the unhappy path, and it comes from the fix's own documentation.**
+`AppUserPrincipal.ResolveAsync` says the OID fallback exists *"because it does not always run"*. If
+that is accurate, then every one of those 87 sites can silently evaluate `false` for a legitimate
+SuperAdmin signed in with Microsoft — and unlike the endpoint attribute, **there is no status code
+to notice**. The caller is quietly treated as an ordinary user: a filtered list, a missing button,
+a `Forbid()` that looks like a permissions decision rather than a bug. That is the same failure
+shape as item 120 — a wrong answer delivered in the voice of a correct one.
+
+**What to do, in order:**
+
+1. **Establish whether the premise is true.** Under what conditions does
+   `EntraClaimsTransformation` not run? `IClaimsTransformation` runs inside
+   `AuthenticationService.AuthenticateAsync`, which policy evaluation calls per scheme, so it may
+   in fact always run and the fallback is belt-and-braces. Worth settling, because the answer
+   decides whether this item is a real defect or a note.
+2. If it can be skipped, give the inline checks one shared helper with the same two paths as
+   `SuperAdminHandler` — claim first, database by OID second — rather than 87 copies of a claim
+   read.
+3. A guard, once the helper exists, so the 88th call site uses it.
+
+Recorded rather than acted on because the premise is unverified, and because acting on it would
+mean touching 37 files on the strength of a parenthetical.
+
+### Answer: the premise was mostly wrong — 2 sites, not 87
+
+**`options.DefaultPolicy` pins both schemes.** So on any action with `[Authorize]` — bare, or with
+a policy — the authorization middleware authenticates Entra too, the claims transformation runs,
+and `User` is replaced with the merged principal carrying its database roles. **79 of the 81 role
+checks in the controllers sit on such actions and were always correct.** None of the `IsSuperAdmin()`
+helper calls were affected either.
+
+**The gap is `[AllowAnonymous]` actions**, where nothing does that. `UseAuthentication` populates
+`User` from the *default* scheme alone, so a caller signed in with Microsoft arrives with no
+principal at all — not lacking the role, unauthenticated — and the check silently says no. Two
+endpoints:
+
+- **`EquipmentCatalogController`** — an unapproved model 404s unless you are its proposer or a
+  SuperAdmin. An Entra SuperAdmin was **404ed out of the very model they were there to review.**
+- **`EquipmentItemDetailController`** — an Entra SuperAdmin saw the visitor's view of an item.
+
+Both fail **closed** — an admin saw less, never more — which is why this was a visibility gap
+rather than a security hole, and why nobody noticed.
+
+Fixed with `BenControllerBase.CallerIsSuperAdminAsync()`: the local claim first, then the Entra
+scheme authenticated explicitly. `AnonymousEndpointRoleChecksTests` bans `User.IsInRole` inside an
+`[AllowAnonymous]` action, and was verified to discriminate.
+
+**A bug in the first version of that fix, caught by the existing tests.**
+`HttpContext.AuthenticateAsync("Entra")` **throws when the scheme is not registered**, and Entra is
+registered only when configured — so the first attempt would have taken both anonymous endpoints
+down in every environment where Entra is off, which is most of them. It now asks
+`IAuthenticationSchemeProvider` whether the scheme exists first. Four `EquipmentItemDetailTests`
+failed immediately, which is the only reason it was caught before the branch was pushed.
+
+---
+
+## 141. Pages that can see a refusal and still render it as "nothing here" (CLOSED 2026-08-22 — all 22)
+
+Item 120 removed the client's ability to lie: every list method now returns `LoadResult<T>`, and a
+ban stops the pattern returning. **This is the other half** — the pages that receive that result and
+still only render two states.
+
+**They are no worse than before.** Previously the adapter handed them a bare empty list; now it
+hands them a result whose `.Items` is empty. The sentence on screen is identical. What changed is
+that the truth is now available at the call site, and this item records where it is going unused.
+
+Listed in `LoadResultRenderedGuardTests.AwaitingRenderPass` — deliberately **not** in
+`Decorations`, which is for fetches where a refusal genuinely costs the reader nothing. Each entry
+here has a list a person reads. A second ratchet holds the count at 22 and lets it only fall, so
+the list cannot become a place to hide a new page.
+
+The 22: `AdminFeedReports`, `AdminFileTypes`, `AudioFilePreview`, `CaseVideoEditorPage`,
+`ClientRequestWizard`, `CmsSectionEditor`, `FeedThreadPage`, `FileCommentThread`,
+`InvestigationRoster`, `MediaLibraryGrid`, `MyVideosPage`, `NewInvestigationWindow`,
+`OrgAddressManager`, `OrgPublicationPosts`, `OrgRoleEditor`, `OrganizationMembershipQuestions`,
+`OrganizationSecurity`, `OrganizationView`, `PlaceView`, `PublicationsDirectory`, `UploadFiles`,
+`WsRegionExplorer`.
+
+**Worth doing in the same slice-by-slice way**, and worth doing in this order — the ones where the
+false "empty" is a claim somebody acts on: `ClientRequestWizard`'s organization search (choosing
+who to send a case to), `OrgRoleEditor` and `OrganizationSecurity` (who has access),
+`InvestigationRoster` (who attended), then the media and CMS surfaces.
+
+### Done 2026-08-22 — 22 → 17
+
+The five where the false "empty" ends an errand rather than merely misleading:
+
+- **`ClientRequestWizard`** — the organization search. The one screen where "no groups near you"
+  stops the whole thing: somebody reporting activity concludes nobody covers their area and leaves.
+- **`OrgRoleEditor`** — "nobody holds this role" is what an administrator grants access on.
+- **`InvestigationRoster`** — who attended is evidence; an empty roster over a refusal is a record
+  saying nobody was there.
+- **`OrganizationMembershipQuestions`** — a group shown no questions writes them again, and
+  applicants then answer two sets.
+- **`OrgAddressManager`** — the address list is what a group's area of operation is judged from.
+
+Two more were cleared before the list existed: `OrganizationMembershipRequests` (people waiting to
+join, shown as nobody waiting, is an application that never gets answered) and `OrgPublications`.
+
+### Closed — all 22, same day
+
+The remaining seventeen followed: the publications directory and posts, the place view, the feed
+moderation queue, the feed thread, the media library grid, file comments, both video project lists,
+the file-types and uploads grids, the region-note explorer, the CMS embed picker, audio markers,
+the new-investigation place search, the org security page and the org view.
+
+**Three of them were not list surfaces at all**, and are the ones worth remembering:
+
+- **`NewInvestigationWindow`** — the place-candidate search is what stops a second copy of a place
+  being created. Read as "no match exists" when the search was refused, it invites exactly the
+  duplicate it prevents. It now says so before you save.
+- **`OrganizationView`** — owner-ness is derived from the roster, so a refused roster read as "not
+  an owner" and quietly removed the person's own controls. It fails *closed*, which is the safe
+  direction, but silently — the page now says the role could not be confirmed rather than letting
+  somebody conclude their access changed.
+- **`AudioFilePreview`** — markers are somebody's analysis of a recording, and "no markers yet" over
+  a refusal says the file was reviewed and found empty.
+
+**The debt list is gone**, because it is empty. `LoadResultRenderedGuardTests` is unconditional
+again — verified by regressing a page that had been on the list and watching it fail. The class
+doc records that the list existed and what shape to use if one is ever needed again: something that
+can only get shorter, never a silent exemption.
+
+Item 120 and item 141 together mean the client cannot report a refusal as an empty list, and no
+page can receive that answer and ignore it. Both halves are enforced by tests that were each
+verified to discriminate.
+
+Removing an entry means wrapping the list in `BenListState`, or branching on `.Failed` where the
+list is mutated in place — the wrapper keeps rendering the load's own emptiness after the first
+item is added.
+
+---
+
+## 145. Price Bands killed its circuit on production (CLOSED 2026-08-22, same day it was reported)
+
+Ben, live: loading /admin/subscription-tiers terminated the Blazor circuit. The browser log showed
+Telerik frames, which suggested a component bug — but those were the aftermath of the dead
+connection. The cause: the tiling-validation endpoint returns `Ok(null)` when the price list is
+HEALTHY, ASP.NET renders that as **204 with an empty body**, and `WebApiClient.GetAsync`'s
+`ReadFromJsonAsync` throws on an empty stream — unhandled inside `OnInitializedAsync`, circuit
+dead. It fired precisely in the common case, and never during development because the page was
+verified by curl and never actually opened. Fixed in the client for the whole class (204 or
+zero-length success reads as null, `GetAsync` and `GetAnonymousAsync` both), 3 regression tests
+verified to fail without the guard, and the three Billing screens added to the Playwright admin
+walk — the layer that would have caught this before it shipped.
+
+---
+
+## 142. Email-and-password sign-in fails on production; Entra works (CLOSED 2026-08-22)
+
+Ben, on ishaunted.com: **Entra sign-in works, but filling in Email and password does not.**
+
+That pairing is the useful half of the report. Entra and local sign-in share the return-URL
+handling, the cookie, the circuit and the redirect — so whatever is broken is almost certainly on
+the part they do *not* share: the Identity password check, the `SignInManager` call behind it, or
+the endpoint that receives the form.
+
+### What to rule out first, in order
+
+1. **The rate limiter.** `feedback_signin_rate_limited` records that a 429 from this endpoint used
+   to surface as "Invalid email or password", and Ben would have been retrying. Curl the endpoint
+   and read the actual status before believing any on-screen message. This is the cheapest check
+   and it has already fooled us once.
+2. **Whether the request arrives at all.** The site is behind IIS at `/` with the API at `/webapi`;
+   a sign-in POST that 404s or is swallowed by the reverse proxy looks identical to a wrong
+   password from the browser.
+3. **Password hash provenance.** Accounts created before a key or hashing-option change can fail
+   to verify while the account itself is fine. Entra users never touch this path, which fits the
+   symptom exactly.
+4. **`SignInResult` other than `Succeeded`.** `IsLockedOut`, `IsNotAllowed` (unconfirmed email) and
+   `RequiresTwoFactor` all end up rendering as a generic failure. Item 112 already records that the
+   2FA panel hangs — if production accounts have 2FA on, `RequiresTwoFactor` is a strong candidate
+   and the two items are the same bug wearing different clothes.
+
+### The reporting defect underneath it
+
+Whatever the cause turns out to be, the screen said something that did not distinguish four very
+different situations. Same disease as item 120: one message for every failure. Fix the cause, then
+make the four outcomes above say four different things — locked out, not confirmed, needs a second
+factor, and genuinely wrong — because the next occurrence should be diagnosable from the screen.
+
+**Do not test this by typing Ben's password into the form.** Probe with curl against a seeded
+development account, or read the server log for the `SignInResult` that production is producing.
+
+### Root cause — none of the four suspects; a product gap
+
+Probing production with a fake account returned a clean 401 "Failed" from `/webapi/login`, and the
+production sign-in page rendered "Invalid email or password" for it — transport, endpoint, rate
+limiter and page all healthy. The truth: **an account created through Entra has no password**
+(`EntraAuthController` calls `CreateAsync(user)` with none), and until today the product had **no
+way to acquire one** — no forgot-password link, no reset page, no set-password panel. The Identity
+endpoints and a real email sender existed, unreachable: the sixth write-only feature found by
+building the UI for something that "already worked". Ben's production account is Entra-born;
+"Invalid email or password" was technically true — there was no password to be wrong.
+
+### Shipped
+
+- `/forgot-password` + `/reset-password` pages riding Identity's own endpoints; the reset email
+  now carries a finished link (it used to send a bare code with nowhere to paste it)
+- `MyPasswordController` (`/api/me/password`): status, add-first-password (the session is the
+  proof — an Entra-born account has no "current password" to ask for), change-password
+- Profile → Security gains a Password panel beside two-step sign-in
+- The "Invalid email or password" message now hints at the Entra-born case without disclosing
+  whether an address has an account
+- Help: "Forgot your password — or never had one" in getting-started
+
+### Verified live (dev stack, seeded member account)
+
+forgot → logged link (SMTP fallback) → reset page → new password → login 200; wrong password still
+401; change-password demands the current one; the spent reset code refused with a sentence. The
+one branch not exercised live is `AddPasswordAsync` for a hash-less account (needs an Entra
+session to obtain a token) — it is the `else` of a live-verified `if`, and Ben's account will be
+its first real test after the next deploy.
+
+---
+
+## 143. Monetization levers beyond tiers — the menu (OPEN, decisions pending — 2026-08-22)
+
+Ben mid-build on item 85: tiers are not the only part to monetize — equipment limits, loan limits,
+open-case limits, "keep in mind things we could do to monetize what we are building" — and then
+asked for suggestions. The foundation now supports two mechanisms, and almost every idea fits one:
+
+**Mechanism 1 — keyed limits (`SubscriptionTierLimit`, shipped with item 85).** A cap is a row
+(band × `SubscriptionLimit` enum × max), no row = no cap, zero = feature off for that band. In the
+enum already: OpenCases, EquipmentItems, ActiveEquipmentLoans, OpenInvestigations, PendingInvites,
+StorageMegabytes, PublishedPages. Cheap additions when wanted: members-per-case, EVP scans/month,
+video render minutes (the sidecar/RenderService makes these measurable).
+
+**Mechanism 2 — feature gating (zero-means-off).** Candidates, roughly by leverage:
+- Video editor tiers — the most differentiated asset. Basic trim free; overlays/keyframes/callouts/
+  background rendering/native sidecar paid. Rough-vs-fine render quality is already a concept.
+- EVP detection — basic scan free, adjustable-tolerance presets paid.
+- CMS — basic public page free; custom layouts, case-bound media slots, publications paid.
+- White-label / custom domain for a group's public site (needs real work, not just a gate).
+
+**Explicitly deprioritised:** paid placement in local discovery (erodes trust in a community
+product); marketplace shapes where clients pay groups through the platform (payouts, disputes,
+tax — see the monetization-direction memory: platform-bills-orgs first).
+
+**Enforcement rule when limits go live:** the check belongs server-side at the create/loan/open
+endpoint, refusing with a sentence that names the cap and the band — and per the standing lesson,
+every such refusal needs a UI path that renders it.
+
+**Ben's launch shape (2026-08-22):** "to start, mostly the tiers will just be how many open cases
+and how many members increasingly." Both levers already exist and need no code: member bands are
+the tier boundaries, and Open cases is a cap row in the Price Bands editor, enforced at both
+case-creation doors with closed cases never counting. Setting it up is admin data entry.
+
+**The levers menu for later, ranked by Ben's own principle** (cap what scales with value received;
+never what groups do to organise themselves):
+
+1. **Storage** — the only lever that tracks a real cost to the platform, in a media-heavy product.
+   Mechanism exists (`StorageMegabytes`); enforcement waits on one decision: whose storage a case
+   file counts against.
+2. **Video rendering** — real CPU burned per render. Shapes: background/server rendering as a paid
+   feature (in-browser rough rendering free), fine two-pass quality paid, or metered render
+   minutes. The editor is the product's moat; this monetises its most expensive part without
+   locking the basic tool.
+3. **Video editor depth** — basic trim/clip free; overlays, keyframes, callouts, text effects,
+   clipart on paid bands. Zero-means-off already expresses it per feature.
+4. **EVP detection** — basic scan free; adjustable-tolerance presets, or scans-per-month, paid.
+   Server-side compute, so it also tracks cost.
+5. **Public presence** — published pages (cap exists), custom page layouts, case-bound media
+   slots, publications on paid bands; later, custom domain / white-label as a headline paid
+   feature (high perceived value, low marginal cost, real build).
+6. **Equipment lending** — active-loans cap (exists). Mild, but lending is coordination the
+   platform does.
+7. **Support priority** — cheap to offer, standard, zero code beyond a flag.
+
+**Deliberately not recommended:** charging for data export (data hostage-taking erodes trust),
+paid placement in local discovery (erodes the community product), and any cap on roles, naming,
+taxonomy, or members-per-case (self-organisation, not scale).
+
+**Ben's governing principle (his words, near enough):** maximise what we can earn *without turning
+people off*. The useful test that falls out of it: cap the things that scale with the value a group
+gets (storage, open cases, equipment, renders) and leave alone the things groups do to organise
+themselves (roles, members-per-case, naming, taxonomy). Ben floated a custom-roles cap; the enum
+value exists (`CustomRoles = 8`) so the option is real, with a note recommending it stay unset.
+
+Nothing here is decided. This item is the menu; Ben picks.
+
+---
+
+## 144. Per-member pricing — the overflow-seat model (BUILT 2026-08-24; prices are Ben's to set)
+
+Ben, during the phase-B build: what if a tier charged **per member**, and **each member had their
+own contract**? Answer given: doable, in two shapes with very different costs.
+
+**Shape 1 — per-seat price, one group contract.** `PricingMode` on the tier (FlatPerPeriod vs
+PerMember); the bill is seat price × `MemberCountAtPeriodStart`, which already exists and is
+already frozen. Snapshot machinery, notices, admin UI all unchanged; one renewal date per group.
+Cheap — roughly a column, a resolver branch, and pricing-page wording.
+
+**Shape 2 — every seat its own contract.** Per-seat start dates, per-seat price-at-signing,
+staggered renewals. The contract-snapshot machinery generalizes (one row per seat instead of one
+per org-period), so it is structurally reachable — but it multiplies billing events, renewal
+notices and the admin surface, and makes MANUAL billing painful: ten members means ten renewal
+dates for a SuperAdmin to mark paid. Recommended only after a payment provider automates
+collection.
+
+**Ben's pick (2026-08-22): the overflow-seat model.** A group's band covers its member count as
+today; a group can grow PAST its band by new members creating their own accounts and signing up,
+and ishaunted.com bills the NEW MEMBER individually — under the group's contract agreement, at a
+per-extra-member price. In Ben's words, "this is just another tier I can set up later with price
+per extra member values at that time" — so nothing is built now. When he sets it up, the schema
+addition is small and known: a per-extra-member price on the tier (a `SubscriptionTierPrice`-style
+row keyed "per extra member per period", or a nullable `PricePerExtraMember`), a member-level
+subscription record for the overflow seats (Shape 2's machinery, but scoped to overflow only —
+the base group contract stays one row), and the join flow offering "this group is full at its
+plan; join by subscribing yourself for $X/month". The resolver's band-tiling rule needs one
+amendment when this lands: a band with a per-extra-member price is allowed to be outgrown.
+
+**BUILT 2026-08-24, exactly the shape Ben picked.**
+- `MemberSeatSubscription` — one row per (group, person), status reusing the subscription
+  lifecycle with two new values (`PendingPayment`, `Canceled`), price FROZEN at offer time.
+- `SubscriptionTierPrice.PricePerExtraMember` — nullable, per price row, so a band sells
+  overflow seats per cadence. Setting it is admin data entry; nothing is priced until Ben does.
+- **The resolver amendment landed as predicted:** a bounded top band is legal EXACTLY when it
+  prices extra members, and a group past such a band still resolves to it (rather than throwing
+  or falling off the list). Both pinned; the three Validate callers that loaded tiers without
+  `Include(Prices)` were fixed, since without prices the rule would refuse a sound list.
+- `OverflowSeats.MaybeOfferSeatAsync` at the membership-accept door: judged against the FROZEN
+  band of the group's current period, counting the joiner (tracked-but-unsaved, like the caller
+  has it). **Joining is never blocked** — the seat is a billing record, the member is in
+  immediately, and the acceptance message states the price so nobody learns it from an invoice.
+- Admin **Member Seats** worklist (activate with a period when paid; the payment itself is a
+  separate ledger row on purpose) and a member-facing **Your seats** section on the Pricing page
+  — fetched independently of the group cards, because a seat-holder is an ordinary member with
+  no settings permission and would otherwise never see their own bill.
+- 9 tests (probe-regressed on the band boundary). The append-only ledger guard from item 168
+  caught this item's own `SetMemberSeat` PUT on the day it was written — a seat standing is
+  configuration, not money, so the allowance is deliberate and now documented in that test.
+
+**Referral commission (Ben's decision, 2026-08-24): PERCENT OF REVENUE, per campaign.**
+`Coupon.ReferralCommissionPercent` — a campaign's cut of what its redeemers actually paid
+(the frozen `Payable` amounts). The Referrals screen now shows Owed and Balance beside Paid out,
+pre-fills a payout with the outstanding balance, and badges the owed figure **partial** when
+some of a referrer's campaigns have no percent — an owed number that silently omitted campaigns
+would read as settled.
+
+**Referral links (Ben's follow-up, 2026-08-22): SHIPPED in the minimal honest shape.** A referral
+link is `/pricing?code=X` — the Coupons screen's codes panel has a per-code **Copy link** button.
+The visitor lands with a banner, and signed-in group cards show the code quoted against their own
+cadence (or the refusal sentence, learned there rather than at checkout). Attribution needs no new
+machinery: which code was redeemed is already a `CouponRedemption` row, so a seller's results are
+their code's redemption count. **Still future:** a commission/payout ledger — what the platform
+OWES the seller per redemption — which belongs with the payment provider work, since payouts
+without a money pipeline are a spreadsheet anyway. A generated batch of one single-use code per
+seller, or one shared multi-use code per seller, both work today; the campaign budget caps
+exposure either way.
+
+
+---
+
+## 146. The super-testing journey, and the three doors it found missing (CLOSED 2026-08-22)
+
+Ben's ask: run the product as a brand-new person — sign up, create a group, take a tier, add a
+member or two, open a case with an investigation. Built as `NewGroupJourneyTests` (Playwright,
+category `Journey`): every account is created DURING the test, so nothing leans on the seeded
+roster; email confirmation uses the dev fallback (the link lands in the API log, read via
+`BEN_API_LOG`; the fixture skips without it).
+
+**Writing the journey found three write-only features before it ever ran:**
+
+1. **Nobody could APPLY to join a group.** The API accepted applications and the group's review
+   panel existed — but no screen ever called `ApplyForMembershipAsync`. New `OrgApplyPanel` on the
+   group's public page (`/o/{urlName}`): sign-in aware, shows pending state, renders the server's
+   sentences ("not accepting applications", "already a member") verbatim.
+2. **Nobody could FOUND a group.** The register endpoint has always let any signed-in user create
+   a group and become its Owner — the billing model depends on self-serve founding — but the only
+   create page was SuperAdmin-gated. New `/organizations/new` ("Start a group": name + web
+   address, slug suggested from the name), a Start-a-Group button on /organizations for everyone,
+   and the admin create kept beside it.
+3. **The coupon line had no input box** on the manual payment screen — the request field existed
+   and nothing sent it (the server-guard-needs-a-UI-path lesson wearing its input-field face).
+   The Subscriptions modal now takes a code; the journey redeems LAUNCH25 on the new group's
+   first period.
+
+The journey passes end to end in ~24s: cold signup → confirm → found group → applications on →
+SuperAdmin records the Small-group tier with LAUNCH25 → two more cold signups apply → founder
+accepts both → roster of three → case opened → investigation scheduled.
+
+**Also from this session's full-suite analysis (12 e2e failures, all resolved):** nine were
+environmental (the WASM editor host wasn't running — it must be up for the full suite: :5180);
+one was a stale test asserting the pre-item-131 disabled-button contract on signup; two were the
+evidence tests, whose diagnosis found and fixed two REAL page bugs — `NearbyDiscovery` and
+`PublicCaseDiscovery` threw `JSDisconnectedException` from `DisposeAsync` (marking every
+navigation off the home page as an unhandled circuit exception), and the evidence submit handed a
+`RemoteBrowserFileStream` straight to `StreamContent`, which could leave the page frozen and even
+double-submit on circuit replay — it now buffers before the HTTP call. The tests themselves were
+also wrong twice over (asserting the note where only the file name renders; navigating away while
+the upload streamed).
+
+
+---
+
+## 147. Documentation audit — ten surfaces shipped with no help link (CLOSED 2026-08-22)
+
+Ben asked whether documentation and help were up to date. Audited rather than assumed, and the
+answer was **no** in three places:
+
+1. **Ten new surfaces had no `HelpLink` at all** — pricing, start-a-group, the apply panel, the
+   password panel, the evidence review queue, all three Billing screens, and both password pages.
+   The prose existed for every one of them; the in-app door to it did not. This is the standing
+   "docs + HelpLink in the same branch" rule failing quietly across a whole day's work, because
+   nothing checks it.
+2. **`your-profile.md` never mentioned the Security tab** — neither the new Password panel nor
+   two-step sign-in, so the natural place to look said nothing. New section added.
+3. **The product PDF was two days stale** (Aug 20), predating items 84, 85, 111 and 142.
+   Regenerated: 77 pages, all of today's sections present.
+
+**The guard.** `HelpLinkAnchorGuardTests` now scans every `.razor` in both web projects, resolves
+each `HelpLink`'s slug and anchor against the actual headings in the help content, and fails on
+any that points nowhere — a stale anchor is silent otherwise: it renders, it clicks, and it drops
+the reader at the top of a page missing the section they were promised. 56 links checked, 0
+broken; verified by renaming an anchor and watching it fail. It does not yet enforce that a NEW
+page HAS a link — that needs a list of what counts as a page, which is a judgement call, so the
+rule stays a habit backed by this audit.
+
+## 148. True-data launch seed — every lookup table populated with real values (CLOSED 2026-08-22)
+
+Ben will clean the shared database before launch and rebuild it from seeders, so every lookup
+table needs launch-real data in a production-safe seeder — not just the dev roster. The survey
+found most already were: experience taxonomy, contact/note types (org and user), file types,
+message types, and subscription tiers all ship real values. Per-org calendar event types are not
+a global lookup and were excluded from seeding — but see below. The genuine gap was the
+**equipment catalog**: production seeding created only "Generic / Unbranded" plus one generic
+model per category; every real-looking brand on the site came from the dev-only roster seeder
+and would vanish on a clean rebuild.
+
+`EquipmentTaxonomySeeder` now ships a real launch catalog: **29 genuine manufacturers** (K-II
+Enterprises, DAS Distribution, Digital Dowsing, GhostStop, FLIR, Zoom, Tascam, Sony, Fluke, GQ
+Electronics, …) and **40 genuine products** with model numbers and field-use descriptions,
+mapped across the existing 17 categories (K-II EMF Meter, Mel-8704R, P-SB7 Rev4, REM-Pod,
+Ovilus V, Zoom H1n, Sony PCM-A10, Panasonic RR-DR60, FLIR ONE Pro, SiOnyx Aurora Pro, Laser
+Grid GS1, …). Name-matched idempotent, approved-on-arrival (curated data skips moderation),
+slugs assigned, never touches existing rows including user-proposed same-name entries. Verified
+live: first cold start added 40, second added 0.
+
+Calendar event types got the launch treatment differently: they are per-organization, so a
+seeder cannot reach them — instead `OrgCalendarDefaults.AddDefaultEventTypes` now stamps five
+defaults (Investigation, Public Event, Meeting, Training, Fundraiser) onto every NEW group from
+all three creation doors (self-service registration and both SuperAdmin creates), staged on the
+same SaveChanges as the organization itself. A founder's calendar is usable from the first
+moment; the owner can rename, recolour, or retire them. Covered by tests on the registration
+service and the SuperAdmin controller door, both regressed against the un-wired code.
+
+## 149. A click must always show something — case-less investigations were dead ends (CLOSED 2026-08-22)
+
+Ben, as SuperAdmin, clicked the two seeded internal Bell Witch visits on /my-investigations and
+nothing happened. Deliberate code, wrong design: a case-less investigation has no case page, so
+three handlers (MyInvestigations ×2, MyProfile's map, and OrgInvestigations' own map pins) read
+`if (CaseId is not { } …) return;` under an element styled `cursor:pointer`. Ben's rule, now
+policy: **"A link should always show something... even if it is a message explaining why it
+shows nothing... or where to find it."**
+
+The fix gives case-less investigations a real destination: the group hub
+(`/organizations/{id}`) now honors `?tab=` (every BenTab got a stable Id) and `?inv=`, which
+lands on the Investigations tab with the row highlighted (`table-active`), scrolled into view,
+and its Team roster already open. Clicks from the tab's own map pins focus the row in place.
+Two structural bugs fell out along the way:
+
+- **BenTabs deep-link race**: `OnParametersSet` applied `ActiveId` before any tab had
+  registered, so a `?tab=` on first render silently kept index 0. `Register` now honors a
+  pending ActiveId as the named tab arrives. (CaseDetail's ?tab= links had been winning this
+  race by load-order luck.)
+- **Both video Publish buttons were dead**: MyVideosPage and CaseVideoEditorPage import
+  `/_content/Ben.Web.Website.Library/js/domInterop.js`, which did not exist — the only
+  domInterop.js shipped in Ben.Video.Editor's assets. The Library now ships its own (with the
+  scroll helper this fix needed).
+
+Proof: three Playwright tests (CaselessInvestigationClickTests) — the specific click, the
+deep-link surviving cold navigation, and an every-card-navigates sweep — plus
+DeadEndClickGuardTests, a source scan banning the `CaseId is not { } … ) return;` idiom in
+.razor files, regressed by reintroducing it and watching it name the file and line.
+
+## 150. SuperAdmin was Forbidden by six case surfaces the case page itself allowed (CLOSED 2026-08-22)
+
+Ben's report: production audio-mix page said "Couldn't load this case's audio files. This is a
+problem reaching the server, not an empty case." Root cause reproduced locally as a **403**:
+`CaseFileController.IsOrgMember` checked membership only, while the case endpoint honors
+SuperAdmin — so half the page loaded and the other half was refused. (The error surface itself
+worked exactly as designed — that message replacing a silent empty list is item 141 doing its
+job.)
+
+The sweep found the same membership-only helper in six controllers: CaseFile, CaseAudioMix,
+ScheduleProposal, CaseReport, CaseResearch, EventEvidence. All six now check
+`User.IsInRole(SuperAdmin)` first, the same shape as CaseNoteController / InvestigationController
+/ OrgCalendarController. UploadFileShareV2 already handled SuperAdmin at its call sites. Each of
+the six has a SuperAdmin-non-member regression test; the CaseFile one was watched failing
+against the reverted code. Live-verified: the exact production request (org 50000001…, case
+445ddf1d…) now answers 200 with an empty list — that case genuinely has no audio files yet, so
+after the next deploy the mixer will say so instead of erroring.
+
+## 151. The site-wide announcement was the seventh write-only feature (CLOSED 2026-08-22)
+
+Ben set a site-wide announcement in Site Settings and it showed nowhere. `site.announcement` was
+declared, seeded, editable — and read by nothing. It now rides the anonymous
+`/api/public/site-features` response (named explicitly on `SiteFeaturesInfo`, preserving the
+"only declared values can be published" property) into `SiteFeaturesProvider`, and MainLayout
+renders it as an info banner above every page's body — every page, not just home, because its
+declared purpose is maintenance windows and the people it warns are mid-task; anonymous
+visitors included. Plain text, line breaks preserved, never markup.
+
+Two rules from the pipe: only a response that names features may set OR clear the announcement
+(a failed fetch cannot wipe a live notice), and the admin's Save now awaits `PrimeAsync()`
+rather than firing `Invalidate()` — Invalidate schedules the refresh behind the NEXT reader, so
+the admin's own next page could still show the old snapshot, which is exactly the "did it
+save?" moment the call exists to prevent (found by this feature's e2e test).
+
+Proof: four unit tests (endpoint publishes/omits, provider carries and clears, failed refresh
+keeps the notice, layout wiring) — the endpoint one watched failing against the reverted
+controller — plus a Playwright test that saves a notice, sees the banner on home AND another
+page, clears it, sees it leave, and restores whatever announcement was set beforehand in a
+finally, because the database is shared with the public site. Help doc updated
+(site-administration → The site-wide announcement).
+
+## 152. "Allow groups to self-register" was a switch that did nothing (CLOSED 2026-08-22)
+
+Found by auditing every declared site setting after item 151. `org.allow-self-registration` was
+declared, rendered as a switch, and described as *"When off, only a SuperAdmin can create one"* —
+and **read by nothing anywhere in the codebase**. An administrator could switch it off, watch the
+page report Off, and every signed-in visitor kept founding groups. Worse than item 151: this one
+is a policy control, so its failure mode is believing you closed a door. Worse still, the
+Start-a-Group founder door added for item 146 is exactly what it is meant to gate — the hole was
+widened while the switch sat there looking authoritative.
+
+Now enforced in `OrganizationMembershipController.RegisterOrganization` (403 with a sentence, not
+a bare refusal) **and** given a UI path, because a server rule the UI never surfaces is the same
+bug wearing a different coat: the "Start a Group" button is hidden and `/organizations/new`
+explains itself and points at the contact form. SuperAdmins are exempt at both layers. Unset
+reads as **on** — self-registration is how the product has always worked and the billing model
+depends on it, so introducing the check must not close the door for a site that never set it.
+Carried to the website on the existing anonymous site-features response, like the announcement.
+
+Verified live end to end: switch off → member gets 403 and no button, SuperAdmin still gets 201.
+Three unit tests plus a Playwright test that restores the switch in a `finally` (shared database).
+
+**The guard that stops the next one:** `SiteSettingConsumerGuardTests` asserts every setting in
+`SiteSettingKeys.Seed` is read somewhere outside its declaration and outside the admin page that
+edits it — editing a setting is not consuming it, which is the exact failure. Regressed by
+declaring an unread probe setting and watching the test name it.
+
+## 153. Seven feature switches reported "Off" while their features were running (CLOSED 2026-08-22)
+
+Caught by the item-152 Playwright test refusing to toggle a switch it believed was already off.
+The admin page drew each switch from the **stored** value, but an unset flag's real behaviour is
+its declared default — and the established sections default **on**. So Site Settings was telling
+Ben that the video editor, events, discovery, group public pages, the media library, group
+messaging and voting were all switched off, while every one of them was running.
+
+`SiteSettingRecord` now carries `DefaultWhenUnset`, the admin page renders the effective state,
+and a row with nothing stored is marked **(default)** beside On/Off so "nobody has set this" stays
+distinguishable from "somebody set this". Same class as 151 and 152: a control that misreports the
+state it controls is as bad as one that does nothing.
+
+## 154. Four feature switches still gate nothing (CLOSED 2026-08-23 — all four wired, ratchet list empty)
+
+The sweep behind 152 found the flags themselves half-built. `features.discovery`,
+`features.cms-pages` and `features.voting` are read by **no code at all**, so switching them off
+changes nothing. `features.events` is read only by `EventReminderJob`, which is worse than
+untouched: switching it off silently stops the reminder emails while leaving calendars, event
+pages and RSVPs working, so people sign up for events and are never reminded.
+
+Not fixed here because closing them is a product decision per feature — whether
+`features.cms-pages` also takes down `/o/{group}/cases`, for instance — across roughly two dozen
+surfaces and an anonymous read path, and `SiteSettingKeys`'s own rule ("turning one off must kill
+the URLs, not just the navigation links") means each one is real work rather than a one-line gate.
+
+`FeatureFlagGatesSomethingTests` records the four as a shrinking list, the same shape as the
+item-120 ratchet: an eleventh switch that gates nothing cannot ship, and fixing one requires
+deleting its line. The test also documents what it cannot see — it measures whether a flag is read
+*at all*, not whether the gate is complete, which is why `features.events` passes it while being
+the most misleading of the four.
+
+**Wired 2026-08-23, list now empty.** The product decisions, made and recorded:
+
+- **Server side**: a `[FeatureGated(key)]` controller attribute answers every action 404 while
+  the switch is off (404 not 403 — a switched-off section looks never-built, per FeatureGate's
+  own reasoning), defaulting ON when unset so adding a gate can never silently remove a live
+  feature (both behaviors unit-tested). Applied: `SearchController` (discovery);
+  `OrgPublicController` + `OrgCmsPageController` (cms-pages — the anonymous /o read path AND
+  the authoring API); `PublicCaseVoteController` + `UploadFileVoteController` (voting);
+  `OrgCalendarEvent[Type]Controller` + `PublicEventController` + `PublicEventAttendanceController`
+  (events, joining the reminder job's existing read).
+- **Pages**: FeatureGate wraps /o/{group} and /o/{group}/{page}, the CMS editor pages, the org
+  calendar page, /events, event detail, and attendance-confirm — the URLs die, not just links.
+- **Tabs and panels**: the org Calendar and CMS tabs read the flag directly (the Publications-tab
+  shape — a gated tab must not exist); NearbyDiscovery, PublicCaseDiscovery, and the three vote
+  widgets render nothing when off.
+- **Scope call on discovery**: it gates the "near you" panel, the home maps, and the nearby
+  API — NOT the public cases directory API, which serves the case directory feature and only
+  incidentally the home map.
+
+Live-verified without leaving marks on the shared prod DB: with all flags unset every surface
+still answers (the dangerous regression), and `features.discovery` was flipped off (nearby → 404),
+back on (→ 200) in one breath. The help section that warned administrators off the four switches
+now describes what each one takes down.
+
+## 155. No group created after item 148 could be deleted (CLOSED 2026-08-22)
+
+Found while cleaning up a probe group: `DELETE /api/organizations/{id}` answered **500**. Every
+foreign key onto `Organizations` is `NoAction` by convention, so deleting a group has never
+cascaded — and item 148 gave every new group five default calendar event types **at birth**, which
+turned that latent weakness into a certainty: from that commit on, no newly created group could
+ever be deleted, and the failure surfaced as an unhandled server error.
+
+Delete now removes the rows created *with* the organization — the founder's membership and the
+default event types, neither of which is anyone's reason to keep it — and catches the remaining
+`DbUpdateException` to answer **409 with a sentence** naming what to do. Refusing to delete a group
+that still has cases, files or events is correct; doing it with a 500 was not. Live-verified by
+deleting the probe group cleanly, and covered by a regression test that seeds both birth children.
+
+## 156. Organization roles & permissions, tier-aware — the full plan (CLOSED 2026-08-23 — all six phases shipped)
+
+Ben's request, near-verbatim, plus what the codebase already has so the plan builds on it
+instead of beside it.
+
+**The ask.** CRUD settings per role per organization. Users can belong to several organizations;
+roles are per organization, and a person in two groups counts against BOTH groups' member-count
+tiers (already true — memberships are per-org rows). All CRUD settings are shown when creating a
+role, but where the organization's tier does not include a given capability, those toggles are
+**grayed out with a note that upgrading the tier would make them apply**. Defaults are
+**no permission**. Every new organization gets **several roles created for it** at birth. The
+**owner always has access to everything**. Members may hold **one or more roles**. An accepted
+member gets a **baseline read of the obvious parts** of the organization; beyond that, nothing
+unless a role they hold grants it. Candidate roles: Equipment Manager, Case Manager, CMS Manager,
+Client Manager, Content Manager, Historian, Secretary.
+
+**Already built (do not rebuild):**
+- `OrganizationRole` + `OrganizationRolePermission` (per-table CRUD bitmask,
+  `OrganizationSecurityTable` × `OrganizationSecurityAction`) + `OrganizationRoleMembership`
+  (a member may hold many roles; OR across them).
+- The role editor (`OrgRolesManager`/`OrgRoleEditor`) with 22 permission sections, each with a
+  plain-language description (item 83) and a coverage guard test.
+- Enforcement: `OrganizationSecurityService.HasAccessAsync` — SuperAdmin, then Owner/Administrator
+  bypass, then direct grants, then role permissions. Default deny, exactly Ben's "none unless
+  covered". ~38 call sites; a further ~16 controllers use plain is-member/is-admin checks — the
+  de-facto "baseline member read" today, implicit rather than declared.
+- Tier machinery: keyed `SubscriptionLimit` rows incl. a dormant `CustomRoles` cap;
+  `SubscriptionLimitGuard`; better-of contract rule.
+
+**Genuinely new:**
+1. **Default roles at organization creation** — same pattern as item 148's calendar event types
+   (`OrgCalendarDefaults`, stamped from all three creation doors on the same SaveChanges).
+   Backfill decision needed for existing orgs.
+2. **Tier-gated capabilities in the role editor** — a mapping from (permission section × action)
+   to "included in your tier?", grayed toggles + upgrade note when not. Nothing like this exists;
+   the tier system caps counts, not capabilities. Shape needs Ben's answers below.
+3. **Baseline member read made explicit** — either a seeded, protected "Member" role or a
+   documented implicit baseline; today it is scattered across is-member checks.
+4. **Role templates** for Ben's candidate list, as starting points a group can edit.
+
+**Ben's decisions (2026-08-23), locked:**
+- **D1 — Tier gating is per permission AREA.** Each tier carries a checklist of included areas
+  (Equipment, Cases, CMS, …); the role editor grays out sections whose area the group's tier does
+  not include, with an upgrade note. Managed as a checklist per tier in SuperAdmin.
+- **D2 — Owner and org-designated Administrators keep the blanket bypass** within their own
+  organization. Custom roles govern Manager, Member, and Viewer memberships. (Confirmed distinct
+  from the application-wide SuperAdmin/Admin identity roles, which this plan never touches.)
+- **D3 — Baseline read for any accepted member:** group details/profile, member list,
+  calendar/events, group messages, shared-files list. Cases, investigations, equipment, CMS,
+  clients, and settings require a role.
+- **D4 — On downgrade/lapse, uncovered permissions stop applying at runtime** but remain stored;
+  the editor shows them grayed-but-remembered and they resume on upgrade. Nothing is deleted.
+- **D5 — Roles are strictly additive.** A role can only add permission on top of the
+  no-permission default. There is no deny/revoke row and never will be: holding more roles can
+  never reduce access. (The existing resolver is already OR-across-roles, so this is a stated
+  invariant to guard, not a change.)
+
+**Key code fact the plan turns on:** `OrganizationSecurityTable` (36 values, persisted numbers,
+never renumber — append only) has **no Case, no ClientRequest, and no OrgCalendar value**. Case
+access today is enforced purely by is-member checks, which is exactly the "implicit baseline"
+that D3 replaces. So "Case Manager" and "Client Manager" roles require NEW enum values, new
+editor sections, and controller migration — the largest genuinely new work in the plan.
+
+---
+
+### The plan — six phases, each independently shippable
+
+**Phase A — Permission areas + tier inclusion model (zero behavior change).**
+New `OrganizationPermissionArea` enum (explicit numbers, append-only): OrganizationProfile,
+Membership, Cases, Investigations, Equipment, PublicPages, Files, Clients, Calendar. A total
+static map `AreaFor(OrganizationSecurityTable)` — every org-scoped table maps to exactly one
+area (user-scoped values and the dead `AppUser=13` are a documented exclusion list). Append new
+enum values `Case=37`, `ClientRequest=38`, `OrgCalendar=39`. New entity
+`SubscriptionTierPermissionArea` (TierId × Area, unique index) + migration. **Seed every
+existing tier with ALL areas** so deploy changes nothing; Ben unchecks to differentiate later.
+Resolution rides the effective tier the limits already use (better-of contract rule); a group
+with no subscription resolves to the default tier's areas; no tiers configured at all reads as
+all-areas — a billing hiccup must never lock a group out of its own data (same fail-open
+philosophy as SubscriptionLimitGuard; deliberate downgrade is D4's job, not an outage's).
+SuperAdmin UI: area checklist per tier on AdminSubscriptionTiers, audit-logged.
+*Tests:* mapping guard (total, no orphans, every area non-empty); resolver units (no-sub /
+contract better-of / lapsed); SuperAdmin-only endpoint auth; all regressed against un-fixed code.
+
+**Phase B — The new permission surfaces, additively (still no tightening).**
+Role-editor sections for Case, ClientRequest, OrgCalendar with plain-language descriptions
+(`RolePermissionCoverageTests` forces completeness). Controllers gain role checks **in addition
+to** what exists: operations that are admin-only today (e.g. calendar event Create, client
+request accept) become "org-admin OR role grant" — so a Secretary or Client Manager role is
+immediately useful, while member-wide reads stay untouched until Phase D.
+*Tests:* per-endpoint — role grants the write to a non-admin member; no role still Forbids;
+regressed.
+
+**Phase C — Default roles at birth + backfill + grandfathering.**
+`OrgRoleDefaults.AddDefaultRoles` stamped from all three creation doors on the same SaveChanges
+(item 148 pattern), and **added to the org-delete birth-children list** (item 155's lesson —
+role memberships, permissions, then roles). Idempotent name-matched backfill seeder for
+existing groups. Starting grants (every group can edit or delete these afterwards):
+
+| Default role | Grants |
+|---|---|
+| Case Manager Role | Cases CRUD, Investigations CRUD |
+| Equipment Manager Role | Equipment CRUD, Checkouts CRUD |
+| CMS Manager Role | Public pages CRUD, CMS sections CRUD |
+| Client Manager Role | Client requests CRUD, Cases Read |
+| Content Manager Role | Org files CRUD, CMS sections RU |
+| Historian Role | Read on every area |
+| Secretary Role | Calendar CRUD, Membership requests RU, Org profile RU |
+
+Naming decided by Ben 2026-08-23: every permission role carries the **"… Role" suffix**, because
+the member-title ladder (item 157) legitimately uses overlapping words — "Case Manager" the
+title-adjacent word and "Case Manager Role" the permission set must never be confusable in the
+UI. Titles are seniority; roles are permission sets; the suffix is what keeps that boundary
+visible to a group owner reading a screen.
+
+**Grandfathering (recommended, needs Ben's yes):** a one-time migration assigns an
+"Investigator" role (Cases + Investigations Read) to every existing active non-admin member, so
+the Phase D flip strips nobody mid-case; members joining after cutover start at baseline.
+*Tests:* the three creation-door tests extended; delete test extended; backfill idempotence
+(run twice, second adds zero); regressed.
+
+**Phase D — The enforcement flip (the breaking phase).**
+`HasAccessAsync` gains the area gate: role permissions AND direct grants in area X count only
+while X is in the group's effective areas (D4). Baseline read becomes an explicit constant —
+`OrganizationBaseline.ReadTables` — honored for any active membership (Viewer included), with a
+source-scan guard listing exactly which controllers may still use bare is-member checks (the
+baseline surfaces) versus which must call `HasAccessAsync`. Then the migration: the Cases
+cluster (CaseFile, CaseNote, CaseReport, CaseResearch, CaseAudioMix, ScheduleProposal,
+Investigation reads, CaseTransfer, EventEvidence review), equipment reads, and CMS drafts move
+from is-member to `HasAccessAsync(table, Read)`. The UI mirrors the server the same day
+(server-guard-needs-a-UI-path — five strikes already): OrganizationView's Cases /
+Investigations / Equipment tabs and BenNav render from a new lightweight
+"my effective permissions in this org" endpoint, and every refusal renders BenListState
+(item 141), never "nothing here".
+*Tests:* the full HasAccessAsync matrix — Owner/org-admin bypass, baseline × membership kinds,
+area included/excluded, multi-role OR (D5), **multi-org isolation** (a role in group A grants
+nothing in group B), inactive membership/role/permission rows, Viewer; effective-permissions
+endpoint; every case regressed.
+
+**Phase E — Tier-aware role editor + org-facing surfaces.**
+Editor sections grouped by area; an ungated area's toggles are disabled but show their stored
+values (D4 grayed-but-remembered) under a note — "These come with the {tier} plan — upgrade to
+put them into effect," linking to /pricing. The server refuses *changes* to ungated sections
+(400 with a sentence) while preserving stored rows on unrelated edits. Role list shows
+"N permissions inactive on your tier." The public pricing page lists each tier's included role
+areas (verified on the anonymous path — authors-see-what-visitors-cannot). Downgrade notices
+name the areas that will stop applying, through the existing TierChangeNotice machinery.
+*Tests:* editor server guard (refuses the change, preserves the rows) regressed; pricing
+anonymous render.
+
+**Phase F — End-to-end proof, help, and the verification pass.**
+Playwright: (1) `RoleTierJourneyTests` — SuperAdmin unchecks an area → owner's editor grays with
+the note → a role-holding member loses that access at runtime as a rendered refusal → re-check →
+access resumes; everything restored in `finally` (shared DB). (2) `OrdinaryMemberBaselineTests`
+— a role-less member sees exactly the D3 baseline; assign Case Manager → cases appear; unassign
+→ gone (test-as-an-ordinary-member rule, seeded accounts). (3) Fresh group lists the seven
+default roles, and can still be deleted. (4) Multi-org isolation. Help docs in the same branch:
+organization-administration (roles rewrite: additive model, defaults, tier graying),
+getting-started (what a new member sees), site-administration (the tier checklist), plus
+HelpLinks and the PDF regen. Full unit + e2e suites, then a live click-test as owner, org-admin,
+member, and viewer before merge.
+
+**Flagged for Ben, not blocking:** (1) grandfathering yes/no — recommended yes, above;
+(2) Viewer membership semantics — recommended: baseline read only, but roles remain assignable
+to Viewers like anyone else; (3) whether Historian ships as a default role or only as an
+add-from-template option.
+
+**Sizing:** A, B, C, E, F ≈ one session each; D ≈ two (it touches ~16 controllers and every
+member-visible tab). Order is load-bearing: A and B change nothing visible, C prepares the
+safety net, and only then does D flip enforcement.
+
+## 157. Member title ladder — seniority, not permissions (CLOSED 2026-08-23 — built as agreed)
+
+Ben's concept, agreed after discussion: a per-organization ladder of member **titles** —
+seniority within the group, deliberately and permanently distinct from permission roles (item
+156) and from the membership security kinds (Owner/Administrator/Manager/Member/Viewer).
+**Titles define the level a member is within the group; roles define sets of permissions.**
+Titles grant nothing, ever.
+
+Decisions locked:
+- **Ladder ends at Lead Investigator.** Ben's default rungs: Probationary, Junior Investigator,
+  Investigator, Senior Investigator, Lead Investigator. "Case Manager" is NOT a rung — it is a
+  permission role (Case Manager Role, item 156) designating who actually manages cases.
+- **Additive purity preserved:** "probationary" is a label, never a restriction. A group that
+  wants a genuinely restricted newcomer already has the Viewer membership kind — probation-as-
+  title plus Viewer-as-restriction covers both meanings without ever inventing a deny mechanism.
+- **Per-org and editable**, same pattern as calendar event types (item 148): an
+  `OrganizationMemberLevel` lookup (Name, SortOrder, IsActive) seeded with the five defaults at
+  every creation door on the same SaveChanges — and added to the org-delete birth-children list
+  (item 155's lesson). Idempotent backfill for existing groups.
+- **A nullable `MemberLevelId` on `OrganizationUserMembership`** (no title is fine, and a
+  deleted level nulls out rather than blocking). Displayed wherever the member displays: roster,
+  member list, profile's group section, investigation team lists; public team page only if the
+  group opts in.
+- **Deferred on purpose:** any bridge from level to auto-assigned roles ("Investigator and above
+  get Case Read"). Useful someday; reintroduces the title/permission entanglement today.
+
+**Built 2026-08-23, one session, exactly as specified above.** `OrganizationMemberLevel` +
+nullable `OrganizationUserMembership.MemberLevelId` (SetNull — deleting a rung clears, never
+blocks), migration applied; `OrgMemberLevelDefaults` stamped at all three creation doors on the
+same SaveChanges and added to the org-delete birth-children list; `MemberLevelSeeder` backfilled
+every existing group (skips any group that has ANY levels, so an edited ladder is never
+touched); CRUD + assign endpoints (members read, admins write, cross-org assignment refused
+with a sentence — that guard watched failing); ladder manager in group Settings (add, rename,
+reorder by swap, delete) and a per-row assignment dropdown on the Members tab (plain-Blazor
+select — the Telerik synthetic-event trap bites exactly here), badge for non-admin readers.
+Six controller unit tests + all three door tests and the delete test extended (ladder assertion
+regressed); Playwright MemberTitleLadderTests passes ×4 including cleanup in finally. Help:
+organization-administration → "Member titles — the ladder" + HelpLink. Verified live in the
+browser and via API: TGH answers the five seeded rungs in order.
+
+One operational relearning while verifying: BOTH hosts on :5252/:5078 were stale from a
+previous session — `dotnet run` on an occupied port dies silently and the old binary keeps
+answering, which produced a phantom 404 on the new endpoint. Kill by PID from
+`lsof -sTCP:LISTEN` before trusting any live check (feedback_dotnet_run_stale_process_trap,
+third occurrence).
+
+## 158. Engagement assignments — investigation duties + case contacts (CLOSED 2026-08-23 — built as proposed)
+
+The third people-concept, from Ben's scenario: ten people RSVP to a scheduled investigation —
+who is lead investigator *for that visit*, who is in charge of equipment, who collects the
+evidence when finished? And every case needs **at least one point of contact besides the case
+manager**. Neither titles (seniority) nor roles (standing permissions): a duty for one specific
+engagement.
+
+**What already exists** (this feature is half-gestured-at in the schema):
+`InvestigationAttendee.IsLead` (bool) and `InvestigationAttendee.AssignedRole` (**free text** —
+no consistency, nothing to filter on, no way to see an unfilled duty), and
+`Case.CaseManagerAppUserId` (real, assigned, tested). Missing: structured duties, and any case
+contact besides the manager.
+
+**Investigation duties:**
+- Per-org `InvestigationDuty` lookup (calendar-event-types pattern), seeded: Lead Investigator,
+  Equipment, Evidence Collection, Documentation — editable per group, birth-children rules apply.
+- `InvestigationDutyAssignment`: attendee × duty. Lead Investigator is single-holder; others
+  allow several. Migration: `IsLead = true` becomes a Lead assignment; existing `AssignedRole`
+  strings migrate to a matching duty where the name matches, otherwise survive as a note field.
+- Scheduling screen gets a "who's doing what" panel over RSVP'd attendees, **showing unfilled
+  duties** — the organizer sees the gap before the night of, which is the point of structuring
+  this at all.
+- **Duties grant nothing** — coordination, not permission (additive rule stays pure) — with one
+  scoped exception: the Lead duty feeds the existing InvestigationAccess manage-this-
+  investigation logic, which already honors leads.
+
+**Case point of contact:**
+- Per-case contact assignment (one or more members), shown on the case header for investigators
+  **and on the client's view** — the client finally has a named human. Client-message
+  notifications route to contacts + case manager. With no explicit contact, the case manager IS
+  the contact, so the client-facing surface never renders empty.
+
+**Title-to-duty eligibility (Ben, 2026-08-23):** *"the higher the title, the more responsibility
+they can take on during an investigation."* Built in as an optional per-duty **minimum title**:
+each InvestigationDuty may name a minimum member level from the group's own ladder (item 157);
+null = anyone. Comparison is by the ladder's SortOrder at assignment time, so it survives
+renames and follows each group's own ordering. **Soft enforcement**: under-level attendees
+render grayed with the reason, and whoever manages the visit may override with an explicit,
+recorded confirm — the senior calls in sick, the capable junior steps up. Seeded duties ship
+with **no minimums** (no surprise behavior; groups opt in). A deleted rung nulls the
+requirement (SetNull) rather than blocking. This is the one sanctioned title→responsibility
+bridge, and it is deliberately eligibility-not-permission: titles still grant no CRUD, ever —
+the level→auto-role bridge stays deferred (item 157). Tests: eligibility rendering, the
+override path and its audit trail, SetNull on rung deletion, SortOrder-not-name comparison.
+
+**Naming note, accepted:** the title "Lead Investigator" (rank, item 157) and the duty "Lead
+Investigator" (tonight's lead) share words on purpose — that is how groups talk, a junior can
+lead a small visit, and context (profile vs. roster) disambiguates.
+
+**Built 2026-08-23, one session.** `InvestigationDuty` (per-org, IsSingleHolder,
+MinimumMemberLevelId SetNull) + `InvestigationDutyAssignment` (attendee × duty, unique,
+EligibilityOverridden recorded) + `CaseContact`; migration applied. Defaults (Lead
+Investigator solo / Equipment / Evidence Collection / Documentation, no minimums) stamped at
+all three creation doors, in the delete birth-children list, backfilled for 14 existing groups;
+the legacy structurer turned 7 IsLead/AssignedRole values into assignments idempotently, and
+free text that matches no duty survives untouched. The Lead duty writes through to
+`InvestigationAttendee.IsLead`, so InvestigationAccess and every lead badge keep one source of
+truth. Duty board on the roster's Team panel (unfilled duties badged, per-duty assign picker,
+soft-eligibility refusal with an Assign-anyway confirm, ⚠ on overridden holders); duty manager
+in group Settings (solo flag + minimum-title select, cross-org level refused); case contacts
+panel on the case Detail column and on the client's case view with the case-manager fallback
+badge; client-message notification bucket routed contacts → manager → members (org admins
+always see it). Two of the house guards caught the build mid-session — a `?? []` in the new
+adapter method and a dropped LoadResult in the contacts panel — both fixed, not excused.
+
+14 new unit tests (duty rules incl. eligibility regressed by disabling the gate; contact
+fallback and gates) + door/delete tests extended; Playwright
+InvestigationDutyAndContactTests green ×3 with shared-DB cleanup in finally. Two e2e lessons:
+a retrying click on a TOGGLE alternately opens and closes the thing it waits for — click once
+and wait; and when a mid-load re-render can bounce a clicked tab strip, arrive by the item-149
+?tab= deep link instead — the deep link IS the state. Help: working-a-case (two sections) +
+organization-administration (duties). Deliberately deferred to item 160 (Ben's matrix spec):
+per-title duty ELIGIBILITY beyond the single minimum, capability semantics (PoC/invite/
+schedule per duty), and the Case Lead position.
+
+## 159. Impersonation-faithful bell + your-organizations links in the sidebar (CLOSED 2026-08-23)
+
+Two navigation-shell asks from Ben, verbatim in substance:
+
+1. **Impersonation fidelity for the bell.** When impersonating someone, the notification bell in
+   the top bar must reflect exactly what the impersonated person sees — their counts, their
+   buckets — not the SuperAdmin's own. (Audit which other shell surfaces read the real identity
+   while impersonating; the bell is the named one, but the fix should sweep the header.)
+
+2. **Sidebar links to your groups.** A member of one organization gets a link to that
+   organization's page, with its name, directly below Home in the main navigation sidebar. A
+   member of several gets the list. A member of MORE THAN FIVE gets a "Your Organizations"
+   expandable group holding the links — same collapse behaviour as the existing grouped menu.
+   (BenNav already renders grouped entries with chevrons and badge roll-ups; this reuses that
+   machinery, fed from the person's memberships — and under impersonation it must show the
+   impersonated person's groups, which is the same fidelity rule as the bell.)
+
+**Built 2026-08-23.** What the investigation found: the bell itself was already faithful —
+impersonation swaps the real bearer token and NotificationState refetches on the switch — but
+THREE adjacent fidelity breaks made the whole view lie:
+1. **The sidebar showed the signed-out menu while impersonating** (an explicit
+   `|| IsImpersonating` in both nav branches) — the single biggest lie in the view; the
+   impersonated person's real menus, groups, and badges never rendered. Removed; only the
+   SuperAdmin's own Administration section stays hidden while impersonating.
+2. **Impersonation did not survive a reload**: `PersistedAuthState` never carried
+   IsImpersonating or the Original* session, so a refresh restored the impersonated token with
+   no banner and no Return — the SuperAdmin was silently stuck as the other person until
+   logout. The full quintet (flag + original access/refresh/id/email/display-name) now
+   persists and restores.
+3. **The avatar kept the impersonated person's initials after Return** — StopImpersonating
+   restored email and id but not UserDisplayName. Restored with the rest.
+
+The sidebar links: new membership-rows-only endpoint
+(`/api/security/organizations/my-memberships`) and service method, deliberately distinct from
+the SuperAdmin-sees-all list — the sidebar answers "YOUR groups" (a SuperAdmin sees the three
+they belong to, not all fourteen; unit-tested contrast). One link per group under Home; six or
+more fold into a "Your Organizations" expandable. One timing fix worth remembering: the nav's
+fetch guard must read the TOKEN STORE, not the IsAuthenticated parameter — inside the store's
+own StateChanged handler the parameter is a render behind, and the fetch silently skipped on
+every soft sign-in. Verified live in the browser: sign-in shows the three links; impersonating
+Sarah shows HER two groups, her badges (bell 73 vs 78, Notifications 4 vs 7), her menus; a hard
+navigation keeps the banner and Return; returning restores everything including the avatar.
+Help updated (getting-started nav, site-administration impersonation section). e2e coverage
+deferred until Ben lifts the test hold.
+
+## 160. Title-to-duty eligibility matrix, owner-configured per org (BUILT 2026-09-04)
+
+Ben's spec, given while item 158 was being built, in substance: a new organization tab where the
+owner decides which investigation-level duties each TITLE is eligible for — a matrix, not just a
+minimum. His worked example: a Junior Investigator may ASSIST with equipment; an Investigator
+may RUN the equipment but may not be a point of contact for the investigation; a Lead
+Investigator may run equipment AND be a point of contact AND send invites to members for the
+investigation — but may not schedule or reschedule it. The CASE LEAD acts as the investigation's
+administrator: always a point of contact, schedules investigations, assigns and re-assigns
+duties from the member list (for the investigation and the case itself), provides history, and
+assigns adequately-titled members to historical research — with "adequate" being the org admin's
+determination via this matrix.
+
+What this builds on (158, shipped): `InvestigationDuty.MinimumMemberLevelId` is the degenerate
+single-threshold case of this matrix — the schema hook is already there. What is genuinely new:
+- an **eligibility matrix** (title × duty) replacing/augmenting the single minimum, edited on a
+  new org tab;
+- **capability semantics attached to duties** — point-of-contact-for-the-visit, may-invite,
+  may-schedule are capabilities a duty confers, which is a step beyond "duties grant nothing"
+  and must be reconciled with that principle deliberately (they are per-visit capabilities, like
+  the Lead's manage right — scoped, expiring, not standing CRUD);
+- a **"Case Lead" duty/position** with defined powers (the investigation-admin bundle above),
+  overlapping the existing case manager and item 158's case contacts — the design must say
+  which of those three the client sees and which schedules;
+- interaction with item 156's permission areas (scheduling is also a CRUD permission — the
+  matrix and the role system must not give two different answers to "may Sarah schedule this").
+
+**Built 2026-09-04.** Ben asked for it directly and added: every new group should start with a
+real ladder — "Associate, Junior Investigator, Investigator, Senior Investigator, etc." — already
+assigned rather than an empty page.
+
+*Schema:* `InvestigationDutyEligibility` (one row per duty × title cell; Cascade from the duty,
+NoAction to the rung) and `InvestigationDuty.Capabilities`. Migration
+`AddInvestigationDutyEligibilityMatrix`.
+
+*The two rules, in one place.* `DutyEligibility.CheckAsync`: a duty whose matrix has rows is
+answered by the matrix; a duty with none falls back to `MinimumMemberLevelId`. So every group that
+was using a minimum keeps it and nothing was backfilled. Eligibility stays soft — the override is
+still offered and still recorded.
+
+*Defaults, per Ben.* Bottom rung renamed **Associate** (a rung named after a probation period
+reads as a warning rather than a welcome). Equipment split into **Equipment** and **Equipment
+Assist**, because the worked example distinguishes assisting from running and one duty cannot say
+that. The matrix ships filled in: Associate documents and assists, Junior adds evidence
+collection, Investigator runs equipment, and the Lead Investigator duty is open to the top two
+rungs. `NewOrganizationDefaults.AddAll` now seeds all three together, and
+`OrganizationSecurityService` was switched to that one call — it had already drifted from the
+other creation doors once, and the matrix would have been the second thing it silently lacked.
+
+*The three questions the item reserved, answered:*
+1. **Matrix versus item 156's roles.** A capability only ever widens, for one investigation, and
+   is asked alongside `CanManageAsync` rather than instead of it. Either says yes and the answer is
+   yes. A duty can open a door the roles left shut for one night; it can never close one.
+2. **Only capabilities with a door.** `PointOfContact` (shown on the roster) and `MayAssignDuties`
+   (enforced at assign/unassign) ship. Invite and reschedule are in Ben's example but have no
+   control anywhere in the product, and shipping switches that change nothing is the write-only
+   pattern this backlog keeps having to close. They go in with their doors.
+3. **No new Case Lead position.** The investigation-administrator bundle is capabilities on the
+   existing Lead Investigator duty; the case manager stays the case-level lead the client sees.
+   **This is the call worth Ben's review** — a distinct Case Lead is a seeded duty and a capability
+   away if he wants one.
+
+*Advice or hard limit — Ben asked, same day.* It stays **advice with a recorded override**: a hard
+limit does not stop the junior running the camera when the senior calls in sick, it stops the
+roster from saying so, and the group goes back to organising by text message. A permissive record
+that is true beats a strict one that is quietly false, and the override is itself the evidence that
+somebody is already working above their title.
+
+Two adjustments went in with that answer, because item 160 changed what an override can cost.
+Before it, an override handed out a label; now it can hand out point-of-contact and the right to
+hand out the other duties, and the person given that could override somebody else in turn. So:
+**an override into a capability-carrying duty needs standing authority** over the group's
+investigations rather than merely the right to manage tonight; and **`InvestigationDuty.IsEnforced`**
+(migration `AddInvestigationDutyIsEnforced`) — per duty, off by default, ticked as *no exceptions*
+in the grid, for the minority where the title really is a qualification. Then there is no per-visit
+exception for anybody, owner included: the way past is to change the grid, which is deliberate and
+visible rather than a decision taken at nine o'clock at a site.
+
+*Tests:* `DutyEligibilityMatrixTests` (15, including the worked example as a theory and the
+capability-scope test that stops a capability becoming standing rank) and five more in
+`InvestigationDutyTests` for the rule flag and the authority override; the group-purge behaviour
+test gained a matrix cell so the sweep order is proven against real foreign keys; four
+discrimination runs confirmed. Playwright renders the grid without saving. Suite 4,137/0. Help:
+`organization-administration.md` § Who may hold which duty.
+
+## 161. Action-needed banners under the site-wide announcement (CLOSED 2026-08-23)
+
+Ben's spec: when an investigation request is waiting, show an info alert **just below the
+site-wide announcement banner** for anyone who can accept and review investigation requests;
+likewise a waiting membership application shows the alert to anyone with permission to accept
+members. Per-viewer, permission-aware banners in the MainLayout slot the announcement (item 151)
+already owns — the same render position, driven by the caller's own pending-work counts (the
+notification summary already carries some of these buckets; the banner is a louder surface for
+the two decisions that block OTHER people: a client waiting on an answer, an applicant waiting
+at the door). Design notes for the build: dismiss-per-item-or-session so it nags without
+becoming wallpaper, link straight to the queue it names, and counts must be permission-scoped
+server-side (the item-141 rule — never render a bucket the caller cannot open).
+
+**Built 2026-08-23 as specified.** `GET api/security/organizations/action-needed` counts the
+two buckets per group the caller belongs to (membership rows decide scope — impersonation-
+faithful, and a SuperAdmin hears about their OWN groups, not everyone's), each bucket only
+behind the same read gate as the tab it links to (client requests → Case read, the Requests
+tab's own gate; applications → MembershipRequests read). "Waiting" mirrors the Requests
+queue's definition: Pending, Viewed, and UnderReview all count. `ActionNeededBanners.razor`
+renders in MainLayout directly under the announcement: one alert per group, each bucket a
+link to its tab, dismiss stored in sessionStorage keyed by group AND counts so a new arrival
+re-shows. Five endpoint unit tests (regressed — ungating both buckets fails two), and an e2e:
+Daniel applies to TGH, Sarah sees the banner with the members-tab link, dismisses it, it
+stays gone across a reload, and Victor — same group, no gates — sees nothing; the
+application is withdrawn in finally. Help note in organization-administration.
+
+## 162. Default avatar is an upload, not a Guid box (CLOSED 2026-08-23)
+
+Ben: *"Instead of having to provide a Guid for the missing user icon in the admin settings, I
+would rather it be an upload like is currently used for uploading anyone's avatar"* — and
+*"replacing it removes the old icon."* The Site Settings row for `avatar.default.upload-file-id`
+now renders an **Upload image** control instead of a free-text Guid input: pick a JPEG/PNG/GIF/
+WebP and it uploads through the same path profile photos use (public on purpose — the image
+renders for signed-out visitors), points the setting at the new file, and refreshes the preview.
+**Replacing deletes the previous image** best-effort after a successful save; a file that is
+genuinely referenced elsewhere survives because its foreign keys make the hard delete refuse,
+which is the right arbiter. Browser-file streams are buffered before upload (the
+RemoteBrowserFileStream freeze). Seed description + help updated ("there is nothing to clean
+up"). Upload click-through verification rides the held e2e pass — the file picker cannot be
+driven by the sandboxed browser tool.
+
+**Flagged in passing (spawn-task chip raised):** `UploadFileController.Delete` has NO ownership
+check — any authenticated user can hard-delete anyone's file and its blob. Its sibling Update
+endpoint has the owner-or-SuperAdmin gate; Delete needs the same, plus a regression test. Same
+controller family as the previously flagged GetAll/Download gaps.
+
+## 163. Three default avatars — man, woman, generic (CLOSED 2026-08-23)
+
+Ben: *"break it into 3 kinds: known man, known woman, generic when we do not know."* Two new
+settings (`avatar.default.man.upload-file-id`, `.woman.`) beside the generic, all three
+rendering the item-162 upload control with per-key previews and replace-deletes-old.
+`UserAvatarController` resolves: the person's own photo always first, then the man/woman image
+when their profile declares it AND the image is configured, then the generic — an unset
+specific image degrades to generic, never to a broken picture.
+
+The chain was dead without one more piece the survey caught: **nothing anywhere wrote
+`AppUser.Gender`** (every existing Gender reference was the ClientRequest entity) — the
+settings would have passed the consumer guard while feeding off a field nobody could set,
+the write-only bug one level down. So the profile gained an optional, self-declared **Sex**
+select — per Ben's wording: blank by default, with Male / Female / Unspecified as the options —
+null-means-untouched in the update request, blank and Unspecified both stored as null and both
+selecting the generic icon (the two are indistinguishable on purpose; nothing else ever reads
+the field). It is
+used for exactly one thing and the profile says so. 5 avatar-resolution tests (regressed by
+nulling the man branch) + a profile round-trip test; help updated on both pages. Upload
+click-throughs ride the held e2e pass.
+
+## 164. File deletion belonged to everyone; now it belongs to the owner (CLOSED 2026-08-23)
+
+Found while building item 162: `UploadFileController.Delete` had **no ownership check at all** —
+any authenticated user could hard-delete anyone's file AND its blob from disk. The destructive
+sibling of this controller family's previously flagged GetAll/Download gaps, and strictly worse:
+a read leaks, a delete destroys. The sibling Update endpoint had carried the correct
+owner-or-SuperAdmin gate the whole time.
+
+Ben's rule, set while fixing it: **only a file's owner can delete it. An organization can
+exclude a file from its own collection, but never delete it from the person's account.** The
+audit confirmed the org-side surfaces already obey: a case-file "delete" removes only the link
+(the UploadFile survives — chain of custody), and an OrganizationFile is the org's own byte-copy,
+so removing it never touches the source. The one path to a person's actual file now carries the
+same gate as Update; SuperAdmin retains it for moderation, the one deliberate exception to
+"owner only" — somebody has to be able to remove abuse, and that somebody is accountable.
+
+Three tests: non-owner gets Forbid with the row AND the blob surviving (the blob check matters —
+a Forbid that still deleted from disk would be the same hole in a different layer); owner
+deletes both; SuperAdmin may. The non-owner test was watched failing against the ungated code.
+
+**The full lifecycle, Ben's rules, verified 2026-08-23 as already-shipped behavior:** an
+organization EXCLUDES a file from its collection (Files-Delete permission removes the org's own
+copy; the person's original survives). The end user may RE-SUBMIT it by sharing the file with
+the organization — the share is owner-controlled. Re-ADDING it to the collection then requires
+someone with the org's Files-Create permission (`copy-from-user`, which also verifies the
+source is public or actively shared with this org), and publishing it publicly requires
+Files-Update on top. Every step is a real HasAccessAsync permission, not mere membership, so
+the item-156 roles arc will govern these gates without further work.
+
+## 165. The documentation refresh pass (CLOSED 2026-08-23)
+
+Ben lifted the e2e hold with "do e2e and screenshot and help and any missing seeding and
+anything else we missed." The pass:
+
+- **Two event-evidence e2e tests had been silently skipping since the day after they were
+  written**: the seeded past event's slug embeds the SEED date, and the tests recomputed
+  "today minus 30" — drifting one day per day. They now ask the anonymous events API for the
+  real slug (the same source the page uses). Both run and pass again.
+- **New e2e coverage** that had waited on the hold: ImpersonationAndSidebarTests (the
+  impersonated person's real menu, the reload surviving with its exit, membership-only sidebar
+  links) and DefaultAvatarUploadTests (a real PNG through the file input — the one interaction
+  the sandboxed browser pane cannot drive — including replace-over-replace and a shared-DB
+  cleanup that clears only what the test set).
+- **All 14 help-media generators re-run** (~40 dark-mode screenshots refreshed, including the
+  new Site Settings upload rows, the sidebar group links, and the members-grid Title column) and
+  the **product PDF rebuilt** (~10MB) via the headless-Chrome print step.
+- **A stale-description bug the screenshot pass caught**: SiteSettingsService.GetAllAsync
+  preferred the STORED description, fossilizing the wording of the day a row was first written —
+  the generic avatar row still told administrators to "paste its file id here". Descriptions now
+  always come from the current declaration.
+- **Seeding review**: nothing missing — the aged-out past event was a test-side drift, not a
+  seed defect; the three default-avatar images are deliberately unset for Ben to choose;
+  duties/levels/catalog all backfilled on earlier items.
+
+Final sheet: **322 e2e passed, 0 failed**, the only 15 skips being the capture generators
+themselves; 5,255 unit tests; zero warnings. Baseline run had two 30-second GotoAsync timeouts
+under full-machine load (both pass in 2s solo) — congestion, recorded here so the next reader
+doesn't chase them.
+
+### Item 156 Phase A — SHIPPED 2026-08-23
+
+Permission areas exist end to end, gating nothing yet, exactly per the phase contract:
+`OrganizationPermissionArea` (9 areas, numbered, append-only); the TOTAL table→area map in
+`PermissionAreas` with its guard (every OrganizationSecurityTable value mapped or in the
+declared user-scoped exclusion list — never neither, never both; every area non-empty; the tier
+admin endpoint's SuperAdmin policy asserted by reflection); `Case=37 / ClientRequest=38 /
+OrgCalendar=39` appended to the security-table enum, which the item-83 coverage guard
+immediately caught until the role editor gained their three described sections (grants storable
+now, becoming decisive as later phases land — the descriptions say so);
+`SubscriptionTierPermissionArea` rows (unique tier×area) with cascade from the tier;
+`IncludedAreasResolver` mirroring SubscriptionLimitGuard's tier resolution and failing OPEN in
+every ambiguous case (no tiers, invalid list, zero rows) — only a checklist that SAYS so may
+exclude; the all-areas seed placed BEFORE the tiers-exist early-return (first attempt sat after
+it and never ran on an existing database — caught live, the zero-behavior-change promise almost
+shipped as zero-rows-fail-open instead); whole-list-replace endpoint + save-on-toggle checklist
+on Price Bands. 11 new unit tests (map totality, resolver incl. regressed checklist case,
+endpoint replace semantics) + TierRoleAreasTests e2e round-trip ×2 with restore. Help updated.
+Live-verified: 3 tiers × 9 areas seeded; an uncheck survives reload; restored.
+
+Next: **Phase B** — role checks added ADDITIVELY to admin-only writes (calendar create, client
+request accept) so Secretary/Client Manager roles become useful with zero tightening.
+
+### Item 156 Phase B — SHIPPED 2026-08-23
+
+The three new permission surfaces do real work, strictly additively. Formerly admin-only writes
+became "admin OR the named grant": case Create and non-manager case Update (Case table); client
+request accept and decline (ClientRequest — accepting is handling the request; the case it opens
+is the consequence); calendar event-type CRUD per-action and the two attendee-management spots
+(OrgCalendar). Calendar events themselves were already member-open and stay that way — there was
+nothing to add. Every gate keeps the historical admin check in front and reads as what it is:
+the old rule OR the new one. A Case Manager Role, Client Manager Role, or Secretary Role built
+in the editor now actually does something.
+
+Five PhaseBAdditiveGrantTests through the REAL security service (grant opens the door for a
+plain member; no grant still Forbids; the admin path untouched; a grant on the WRONG table opens
+nothing — the per-table check matters; regressed by reverting the Create gate). Three existing
+test files updated for the new controller ctors. e2e: affected families green (one cold-host
+flake passed solo; the TierRoleAreas e2e now ENSURES its starting state instead of asserting it
+— a previous run's residue in the shared DB had turned one bad run into a permanently red test,
+and self-healing beats blame). Help: "What role grants open today."
+
+Next: **Phase C** — default roles at birth (the seven "… Role" templates), backfill, and the
+grandfathering decision Ben still owes an answer on.
+
+### Item 156 Phase C — SHIPPED 2026-08-23 (grandfathering as recommended, Ben approved)
+
+`OrgRoleDefaults`: the seven "… Role" templates (grants per the amended plan table; Historian
+reads every mapped table via PermissionAreas.Map so it grows with the map) stamped at all three
+creation doors and added to the delete-birth-children list (assignments → grants → roles,
+leaf-first). `OrgRoleSeeder`: backfilled the seven for 13 existing groups (one already had
+roles and was left alone — the two gates are independent, so it was STILL grandfathered);
+grandfathered 29 members across all 14 groups with an **Investigator Role** (Cases +
+Investigations Read). The one-time semantics live in the gate: the whole block runs only where
+the role is absent, so members joining later start at baseline and are handed the role by a
+person, not a seeder. Owners/administrators skipped (D2 bypass — an assignment would only muddy
+the roster). New groups get the role too, created empty, as a hand-out template.
+
+Four OrgRoleSeederTests: the member-not-admin bridge; one-time semantics (a later joiner stays
+at baseline across a reseed); independent gates (custom-role org keeps its list AND gets the
+bridge); and the chain proof — the grandfather grant opens Case Read through the REAL
+HasAccessAsync and correctly refuses Delete. Grandfathering regressed by emptying the bridge
+list. Door tests ×3 + delete test extended. Live: TGH shows exactly the eight roles; e2e
+families green (the TierRoleAreas toggle keeps losing 21s races in loaded family runs while
+passing solo in 2s — its waits are now 45s).
+
+Next: **Phase D** — the enforcement flip. Biggest phase; the bridge this phase built is what
+makes it safe.
+
+## 166. Wizards and walkthroughs — guided paths through the site's big jobs (CLOSED 2026-08-23 — W0-W5 all shipped)
+
+Ben's list, in substance; the closing rule matters most: **where the underlying functionality
+does not exist yet, we build the functionality AND its wizard/walkthrough together.**
+
+1. **A multi-step wizard for creating a new organization** — replacing/wrapping the two-field
+   founder door (item 146's StartGroupPage) with guided steps: identity, address, first
+   settings, first members, likely ending on the group hub with pointers.
+2. **Onboarding steps for new site users** — a guided first-run after signup: profile, sex/photo,
+   what to do first depending on whether they came to request an investigation or join a group.
+3. **Organization ads** — an owner creates an ad promoting their group, with a walkthrough of
+   suggestions for building it and making it successful. NOTE: no ad feature exists today — this
+   is the clearest case of the closing rule; needs design (where ads display, who sees them,
+   whether they tie into tiers/billing as a monetization lever — cross-reference item 143).
+4. **A CMS editor walkthrough** — how pages are made and linked, and what to include.
+5. **A public-case-pages walkthrough** — how to build case pages for the public, and specifically
+   how locations and the names of people involved are hidden (the pseudonym and address-privacy
+   machinery already exists — the walkthrough teaches it; audit for gaps while writing it).
+
+Shape suggestion for the build: one reusable step-wizard component (the site has none) plus a
+walkthrough/tour affordance, then the five applications. Sequencing after the item-156 arc.
+
+---
+
+### The implementation plan (written 2026-08-23 at Ben's request, ready to start when free)
+
+Six phases, W0–W5. W0 builds the two reusable primitives; each following phase applies them to
+one of Ben's five asks and ships independently. Throughout: help docs + HelpLinks in the same
+branch as each feature (house rule), every guard regressed against un-fixed code before being
+trusted, all e2e written to ENSURE starting state and restore in `finally` (shared database).
+
+**W0 — The two primitives: BenWizard and BenTour.**
+- `BenWizard` (Kit): a multi-step container owning step order, back/next/finish, per-step
+  validation gates (a step exposes `CanLeaveAsync` returning null-or-refusal-sentence), progress
+  header, and draft persistence to localStorage keyed by wizard name (a founder who closes the
+  tab resumes where they left off; Finish clears the draft). Plain-Blazor inputs inside — the
+  Telerik binding traps are documented reasons.
+- `BenTour` (Kit): a walkthrough overlay — an ordered list of (selector, title, body) steps,
+  highlighting the target element, next/back/skip, "don't show again" persisted per-tour-name
+  per-user (a `UserTourState` table row, not localStorage — Ben impersonating a user must see
+  their real tour state, and a cleared browser must not replay every tour). Tours can be
+  launched from a `?` affordance and auto-launch at most once.
+- *Tests:* bUnit is absent, so component logic lives in testable plain classes
+  (`WizardModel`, `TourModel`) covering step transitions, validation refusal blocking Next,
+  draft round-trip, tour-dismiss persistence; Playwright: a fixture page exercising both
+  primitives (walk a 3-step wizard incl. a refused Next; run a tour, dismiss it, reload, assert
+  it stays dismissed). *Validation:* the primitives ship WITH W1 so they are never
+  speculative code.
+
+**W1 — The organization-creation wizard.**
+Replaces StartGroupPage's two-field card with steps: (1) Identity — name + slug with the live
+refusal from OrganizationUrlNames; (2) Where you work — city/state + area of operation, feeding
+the map/discovery settings; (3) First settings — accepting applications?, contact email; (4)
+Review + create. On Finish: the existing RegisterOrganizationAsync + follow-up PUTs, then land
+on the hub with the owner's first-steps tour (see W4 list) offered. The self-registration
+switch (item 152) still short-circuits the whole wizard with the closed message.
+- *Tests:* WizardModel units for the flow; controller tests unchanged (no new endpoints);
+  Playwright: full wizard journey creating a real group (reusing the NewGroupJourney cleanup
+  discipline), a mid-wizard tab-close + resume via draft, and the switch-off closed path.
+- *Validation:* run the existing NewGroupJourneyTests family — the wizard must not break the
+  journey; click-test as an ordinary user.
+
+**W2 — New-user onboarding.**
+After first sign-in (flag: `AppUser.DateOnboarded` null), a 3-step wizard: (1) your profile —
+display name, sex (item 163's field), photo; (2) what brought you here — "I need investigators"
+routes toward the request wizard, "I want to join a group" toward /find, "I run a group" toward
+W1; (3) finding your way — launches the getting-started tour of the sidebar/bell. Skippable at
+every step; skipping stamps DateOnboarded too (never nag twice).
+- *Tests:* unit — the routing choice map; the stamp set on finish AND skip; migration adds the
+  column (nullable, no backfill: existing users are already onboard, so seed the stamp for all
+  existing rows in the same migration — assert in a seeder test).
+- *Validation:* Playwright — a cold signup (email-confirm via BEN_API_LOG) lands in onboarding,
+  completes it, never sees it again on relog; an existing seed account never sees it at all.
+
+**W3 — Organization ads (the functionality does not exist; build feature + wizard together).**
+Smallest honest feature first: an `OrganizationAd` (org, headline ≤80, body ≤300, image via the
+item-162 upload path, target URL constrained to the org's own public page or /find, Status
+Draft→Submitted→Approved/Rejected by SuperAdmin — the site must never render an unreviewed ad),
+displayed in two placements: a rotating card on /find ("Featured groups") and one on the home
+page's discovery section, weighted evenly, marked "Promoted". Monetization hooks deferred to
+item 143 (the entity carries the org, so tier-gating or paid placement bolts on later).
+The creation WIZARD is the walkthrough: each step teaches while collecting (headline step shows
+good/bad examples; image step states dimensions and the public-file rule; success step explains
+review + where it will appear + linking their public page's quality to ad performance).
+- *Tests:* controller units (owner-only create for own org, SuperAdmin-only approve, unapproved
+  never served by the public endpoint — regress that one hard; the public serve endpoint is
+  anonymous and must leak nothing but approved content); WizardModel units; Playwright — owner
+  drafts via wizard, SuperAdmin approves, the ad renders on /find with the Promoted badge,
+  rejected ad never renders; cleanup deletes the ad.
+- *Validation:* the authors-vs-visitors rule — verify the placement on the ANONYMOUS path.
+
+**W4 — The two CMS walkthroughs (tours over existing machinery).**
+(a) *Editor tour* on OrgCmsEditor: how pages are made, linked (nav + inter-page links), section
+types, layouts (copy-not-reference, item 80 2b), publish vs draft, and what belongs on a public
+page. (b) *Public-case-pages tour* on the case-slots flow: publishing a case, choosing the
+pseudonym (names hidden by design — the client's chosen name replaces theirs), how addresses
+are generalized on public surfaces, which case media may go public (the item-80 publication
+rule), and where the anonymous visitor actually sees it. While WRITING (b), audit the privacy
+claims live on the anonymous path — any gap found becomes its own backlog item before the tour
+asserts the promise.
+- *Tests:* TourModel units; a source-scan guard asserting every tour step's selector exists in
+  the razor it names (a tour pointing at a renamed element is a silently broken walkthrough —
+  same class as the HelpLink anchor guard, regress by renaming a selector); Playwright — launch
+  each tour, walk it to the end, dismiss-persists.
+- *Validation:* screenshot pass of each tour step for the help docs; the case-pages tour's
+  privacy claims verified logged-out.
+
+**W5 — Polish + docs sweep.**
+Wire "restart this tour" entries into the help pages; capture generators extended for the new
+surfaces; PDF regen; item 166 closed with a per-phase record.
+
+**Sizing:** W0+W1 one session; W2 one; W3 one to two (it is a real feature + review queue);
+W4 one; W5 half. Sequenced after the item-156 arc unless Ben pulls one forward — W0+W1 has no
+dependency on 156 at all.
+
+---
+
+### W0+W1 — SHIPPED 2026-08-23
+
+**W0, the primitives.** `WizardModel`/`TourModel` are plain classes holding every decision
+(step order, refusal-blocks-Next, back-never-validates, draft-restore clamps, skip-vs-complete)
+— six xUnit tests. `BenWizard` renders progress/step/refusal/buttons and keeps a localStorage
+draft `{step, data}` under `wizard:{key}`; the HOST clears the draft only after its Finish work
+succeeds, because a draft cleared before the create lands eats the person's answers on a failed
+submit. `BenTour` renders a highlight ring + step card positioned by `BenTour.razor.js` (which
+scrolls with the item-169 measured fallback — smooth scrollIntoView silently no-ops on inner
+scrollers); a missing target centers the card rather than stranding the person. Dismissal is a
+`UserTourState` ROW (unique per person+tour; migration applied) via `GET/PUT api/me/tours` —
+never localStorage, so impersonation shows the real person's state and a cleared browser
+replays nothing. `BenTabs` buttons now carry `id="tab-{Id}"` so tours (and tests) can address
+tabs. A source-scan selector guard fails when any TourStep points at an element its razor no
+longer contains (probe-regressed).
+
+**W1, the founder's wizard.** StartGroupPage is four steps — Identity (name + suggested slug,
+format-gated), Where-you-work (optional all-or-nothing address, kept private, feeds discovery),
+First settings (applications toggle default-on + public email), Review — finishing with
+register + best-effort follow-up writes (settings PUT; first address using the first address
+type), then the hub at `?welcome=1`. A failed register keeps the draft and walks the person
+back to step 1 with the sentence. The self-registration switch still closes the whole door.
+The hub grew the **owner-first-steps tour** (Members/Cases/Roles/Settings), auto-launched only
+from `?welcome=1` when never dismissed, relaunchable forever from the `?` button beside Edit.
+e2e: the full founding journey through all four steps with a tour walk + skip, and a
+draft-resume across reload (both green); NewGroupJourney + SelfRegistrationSwitch updated for
+the wizard flow and green (one cold-start congestion flake, passed solo). The item-141 guard
+caught the wizard's own address-type fetch — recorded as a Decoration with its reason.
+getting-started rewritten for the wizard; PDF regenerated.
+
+### W2 — SHIPPED 2026-08-23
+
+`AppUser.DateOnboarded` (nullable; the SAME migration stamps every existing row — nobody who
+predates the column is ever nagged, pinned by the journey e2e's seed-account leg).
+`GET/POST api/me/onboarding` with an idempotent stamp; finishing AND skipping both stamp,
+because a skip is an answer and the wizard must never nag twice (unit-pinned). The /onboarding
+page: three skippable steps — profile (pre-filled, item 163's Sex select), what-brought-you-
+here (the `OnboardingRouting` map is a plain tested class: request→/my-requests/new,
+join→/find, run→/organizations/new W1 wizard, looking→/), and a layout tour (#nav-menu,
+#nav-bell — BenTabs-independent ids added; the selector guard now searches BOTH web projects
+because a tour may teach the LAYOUT from a page elsewhere).
+
+**The bug the e2e caught:** `OnboardingGate` (MainLayout) originally checked on first
+interactive render only — but LOGIN HAPPENS INSIDE A CIRCUIT, so the gate never fired for the
+exact person it exists for; the journey e2e failed and a probe showed authed=false on every
+firing. The gate (and `ActionNeededBanners`, which had the same latent gap) now also
+subscribes to `IBenUserState.StateChanged`. Journey e2e green: cold signup → gate → wizard →
+routed to /find → never again; James never gated at all.
+
+### W3 — SHIPPED 2026-08-23 (the feature and its wizard, built together)
+
+`OrganizationAd` (headline ≤80, body ≤300, optional image, target locked to the group's page
+or /find — never a free URL) with the Draft→Submitted→Approved/Rejected chain. **The public
+endpoints serve Approved and nothing else, ever** — the list AND the image route (the image
+travels through its own approved-gated anonymous route, never the general file routes, whose
+audience rules know nothing about ad review); both gates probe-regressed. One non-rejected ad
+per group; any edit of a submitted/approved ad drops it back to Draft (the reviewed text is
+the approved text). Review messages the group's admins either way — a decision sitting
+silently in a table is the write-only shape.
+
+Surfaces: the `/organizations/{id}/promote` teaching wizard (each step teaches while it
+collects: headline do/don'ts, message structure, picture advice, destination choice with the
+fill-your-page-first warning, review card rendered exactly as the placements render);
+Settings-tab entry card; `/admin/org-ads` review queue (approve / reject-with-reason);
+`PromotedGroupsCard` on the home page and /find — server-randomized per load, always marked
+"Promoted". The image step is the content picker's SECOND consumer (own media, images only).
+
+Found live while testing: `BenPageHeader` has no ChildContent, and a stray child fragment is
+a runtime 500 — extras go in its Actions slot. The render-debt guards caught two more of my
+own: the failed ads-fetch now renders its sentence, and a refused media library throws into
+the picker's own error line rather than reading as "no images yet".
+
+e2e: wizard → queue check (unapproved absent from the public endpoint) → approve → ANONYMOUS
+/find shows the card marked Promoted → cleanup. 3,036 unit green.
+
+### W4 — SHIPPED 2026-08-23 (the two walkthroughs, and what auditing them found)
+
+**(a) CMS editor tour** on `/organizations/{id}/cms`: four steps — pages are born (title/slug/
+parent = nav nesting), content lives in sections (layouts copy, never reference), draft vs
+publish (two switches; what belongs on a public page), logos. Auto-launches once per person
+(UserTourState), replayable forever from the ? beside New Page. The CMS tabs gained Ids for
+the selectors.
+
+**(b) Public-case-pages tour** on the case page: publishing starts in Edit, the pseudonym
+replaces the client's name everywhere public (addresses generalized to the area), case media
+only reaches the public through approved CMS case slots (the general Files tab never
+publishes), and check-it-signed-out. Deliberately NOT auto-launched: case pages are visited
+constantly, and a tour ambushing the first case someone opens teaches at the worst moment —
+the ? beside Edit Case launches it.
+
+**The privacy audit** (the plan's requirement while writing (b)) ran on the anonymous path:
+public case lists show pseudonyms ("The Hargrove Family", "Hotel Guest #2024-7"), place-named
+titles, city-level coordinates — clean. The one gap found is recorded as **item 176**: a case
+TITLE is free text and several internal cases are titled with the client's surname; nothing
+warns when such a case is made public. Warn-not-block at Make-Public is the proposed shape.
+
+e2e: both tours walked end to end from their ? affordances, every step's teaching asserted,
+dismissals verified in the tour-state API. 3,036 unit green; the selector guard covers all
+four tours now (owner-first-steps, layout, cms-editor, public-case-pages).
+
+**W5 essentials folded in**: help pages point at both ? affordances; PDF regenerated. The one
+deferred W5 piece — extending the screenshot capture generators to the new surfaces — moves to
+the recurring help-media pass rather than being half-done here. **Item 166 is CLOSED.**
+
+### The full-suite validation (Ben's ask: "continue through W4 then run a full end to end test")
+
+Three full runs, each teaching something:
+1. **18 failures** → eight were the WASM family against a stale :5180 (the standing trap —
+   fresh host, all nine pass), and the other ten shared ONE root cause found via the SQL Logs
+   sink + a console-sink restart: **ApexChart's JS create fired after its container was gone**
+   (a tab switched away mid-flight), the JSException went unhandled, and the whole circuit
+   died — an old race exposed the day the stats panel's permission gating (item 171) slowed
+   its fetch. Fixed in ApexChart: a chart nobody is looking at is nothing to draw, never a
+   circuit kill. The flaking fixture went 33/33 across three runs.
+2. **3 failures** → CmsAuthoring assumed the page row's FIRST button opens Edit (item 169
+   moved Edit/Delete into the More-actions dropdown; the first button now NAVIGATES) — fixture
+   updated; NewGroupJourney's cold founder now legitimately meets W2's onboarding — the
+   journey Skips it like a real impatient founder; the video-editor back-nav was load timing.
+3. **Final: 341 passed / 1 load-timing failure (passes solo) / 14 deliberate skips.** 3,036
+   unit tests green throughout.
+
+## 167. Free-plan groups cannot transfer or accept transferred cases (CLOSED 2026-08-23)
+
+Ben's rule, verbatim in substance: an organization on the free plan can neither transfer a case
+out nor accept a case transferred in. Both ends checked — a paid group must not be able to hand
+a case TO a free group either, or the rule leaks through the receiving door. Design note: this
+is a tier CAPABILITY, not a count (SubscriptionLimit) and not a role area
+(SubscriptionTierPermissionArea) — likely a third keyed concept, per-tier boolean capabilities
+("case transfers"), so future rules of this shape ("publications", "API access") are a row not
+a migration. Enforce in CaseTransferController at initiate AND accept with the refusal naming
+the plan and what to do (item-141 sentence rule + a UI path); pricing page and help say it.
+Sequenced after the item-156 arc — same machinery neighborhood, cleaner once Phase D settles.
+
+**Built 2026-08-23, with one design correction found before it shipped.** `TierCapability`
+enum + `SubscriptionTierExcludedCapability` EXCLUSION rows — not inclusion rows like the areas,
+because with a single capability defined, an include-model cannot tell "never configured" from
+"explicitly none": unchecking the only capability leaves zero rows, which fail-open reads as
+everything-included, and the uncheck silently does nothing. Exclusions make fail-open
+structural (zero rows = nothing excluded), need no seeding or backfill at all, and excluding
+the one capability writes exactly one row.
+
+- `TierAreaResolution.HasCapabilityAsync` (shared `EffectiveTierAsync` core with the areas).
+- Three gates: org-Propose checks BOTH ends; Respond-accept re-checks the receiver at the
+  moment the case actually moves (the plan may have changed while the proposal waited);
+  rejecting never requires the capability. The client's own move (`MyCaseController.Reassign`)
+  is gated ONLY on the destination — a free plan must not hold a client's case hostage.
+- The refusal sentences actually SURFACE: Propose/Respond adapters moved to
+  `SendExpectingReasonAsync` (they were null-on-refusal → "Proposal failed", the exact
+  server-guard-needs-a-UI-path trap, caught in review); the client-move path already carried
+  reasons.
+- Admin: Capabilities checklist beside the role areas (save-per-toggle), PUT
+  `{id}/capabilities`; notices ride the SAME netting as areas — `ApplyNettedAsync` extracted
+  to a sentence-pair core, capability flip-flops reach groups as silence.
+- Pricing: `IncludedCapabilities` (null = everything) + "Not included: Case transfers" on the
+  card, anonymous-path verified. Help: site-administration checklist section + a case-transfer
+  passage in working-a-case (transfers had NO help coverage at all before); PDF regenerated.
+- Tests: 3 gate tests + reject-allowed (all three gates probe-regressed), netting ×2,
+  pricing projection, 3,000 unit green. Live: the Free tier now genuinely excludes Case
+  transfers — that IS the rule, left in place — and a real transfer proposal to a free-band
+  group answers 400 "That group's plan (Free) does not include case transfers…" with nothing
+  mutated. Test-writing also caught that a lone valid tier captures unsubscribed orgs via
+  member-count resolution — both test orgs get explicit subscription rows.
+
+### Item 156 Phase D — SHIPPED 2026-08-23 (the enforcement flip)
+
+Reading a group's cases and investigations answers to `HasAccessAsync(table, Read)` instead of
+bare membership. The pieces:
+
+- **The tier area gate inside HasAccessAsync** (via the new shared
+  `TierAreaResolution` core, which also serves the WebApi resolver — one implementation of the
+  fail-open rules, because two copies would eventually disagree; `SubscriptionTierResolver`
+  moved down to Ben.Data.Source where it always belonged). Placed after the Owner/Administrator
+  bypass: a plan narrows what ROLES may do, never what the owner may do. Regressed.
+- **Ten controllers converted** — CaseFile, CaseAudioMix, CaseReport, CaseResearch,
+  ScheduleProposal, CaseNote, CaseTransfer, CaseController.CanReadAsync (→ Case), and
+  InvestigationController + OrgInvestigationsController (→ Investigation). Each helper is now a
+  one-line delegation, with the CLAIMS-based SuperAdmin bypass kept in front — dropping it was a
+  real regression the item-150 tests caught in flight (HasAccessAsync checks DB roles; the
+  claims principal is what production tokens carry).
+- **Deliberately NOT flipped, recorded as decisions:** equipment reads stay member-open (the
+  role editor has documented that as the product's promise since item 83 — flipping it would
+  need its own bridge, and the one-time grandfather gate is already consumed); calendar events
+  member-open by design; EventEvidence review stays member-gated pending its own decision.
+- **The UI mirrors the server the same day**: a `my-permissions` endpoint (per-area read
+  verdicts) now decides whether the hub's Cases and Investigations tabs render at all — a member
+  the server would refuse is never handed the tab (the sixth application of the
+  server-guard-needs-a-UI-path rule, this time BEFORE anyone hit it live).
+- **Test fallout, honestly handled**: 133 unit tests modeled the pre-flip world; their seeds now
+  run `TestSeeds.BridgeAsync` — the same bridge production members got — rather than weakening
+  assertions. `PhaseDFlipTests` pins the flip itself (a role-less member is refused; the bridge
+  opens it) plus a source scan that fails if any converted helper regrows a membership query.
+- **Live**: sarah (ordinary bridged member) answers `canReadCases:true` and reads TGH
+  investigations with a 200 — the flip is invisible to existing members, which was the entire
+  point of Phase C's bridge. e2e: 321/338 passed; the two failures were shared-DB residue
+  (triplicate ladder rungs breaking a strict-mode cleanup locator — purged, test now
+  self-heals) and the known tier-checklist congestion case — both pass solo ×2.
+
+**Phase E — SHIPPED 2026-08-23.** The plan's areas became visible everywhere they matter:
+
+- **Role editor**: sections whose area the plan excludes are grayed with disabled toggles under
+  a note naming the areas, the plan, the count of kept-but-inactive grants, and a Pricing link.
+  Verified live on a free-band fixture group ("Phase E Probe Group", urlname `phase-e-probe` —
+  no org-delete endpoint exists, so it stays as the permanent e2e fixture).
+- **Server rule** (`OrganizationRoleController.SetPermissions`): a CHANGE to an excluded table
+  is refused with a sentence; untouched excluded grants are carried forward verbatim on every
+  save — the editor's graying is a courtesy, the server is the law. Tests regressed (2 of 3
+  fail with the guard removed; the identical-echo test passes either way by design).
+- **`GET api/security/organizations/{id}/included-areas`** returns areas + tier name; tier-name
+  resolution moved into `TierAreaResolution.ResolveAsync` because the first cut only named the
+  tier for groups with subscription ROWS — precisely not the free groups the note is for.
+- **Public pricing** (`/pricing`, anonymous-path verified): each plan lists its included
+  role areas, only when something is excluded; zero checklist rows serializes as **null**
+  (= everything), never an empty list that would read as "includes nothing".
+- **Downgrade notices with netting** (`TierChangeNotifier.ApplyAreaChangesAsync`): the areas
+  checklist saves per TOGGLE, so area changes do not use the terms fan-out. Removals are queued
+  (free groups behind a 30-minute grace, paid on the renewal window floored at the grace);
+  a re-add cancels the pending sentence per org, so uncheck-then-recheck — a mis-click, or
+  every e2e run — reaches groups as silence. Only un-netted additions are announced. The
+  delivery job's wording now distinguishes already-live changes from upcoming ones.
+- Also fixed along the way: role editor banner grammar; roles-grid Actions buttons kept on one
+  line (item 169's exemplar); Edit now scrolls the inline editor into view — smooth
+  `scrollIntoView` was measured to silently no-op on inner-container scrollers, so
+  `domInterop.scrollToElementId` verifies visibility and falls back to an instant jump, and
+  takes a `block` argument because centering a taller-than-viewport card puts its title
+  off-screen.
+
+**Phase F — SHIPPED 2026-08-23. Item 156 is CLOSED.**
+
+- **`RoleTierJourneyTests`**: SuperAdmin unchecks Cases on the tier TGH actually resolves to
+  (asked of the same included-areas endpoint the UI uses); James — an ordinary member holding
+  the bridged Investigator Role — loses the Cases tab at runtime, gets it back when the area
+  returns; everything restored in finally. Phase E's netting is what makes this test safe to
+  run at all: the uncheck-then-recheck reaches subscribed groups as silence.
+- **`OrdinaryMemberBaselineTests`**: role-stripped James sees exactly the D3 baseline
+  (Details/Members/Calendar/Messages/Files) and no Cases/Investigations; one Case Manager
+  Role grant opens both tabs; removal closes them. Second test: removing his TGH role leaves
+  his BenCo access untouched (multi-org isolation). Arrangement through the API as SuperAdmin,
+  every verification from James's own browser; teardown ENSUREs his normal bridged state.
+- **`FreshGroupDefaultsTests`**: a just-registered group lists the seven default roles AND can
+  be deleted (item 155's class of bug — birth children blocking the delete — now has a test
+  that tries the delete). Learned: the roles endpoint answers an empty 200 to a SuperAdmin for
+  any org id, so the post-delete proof is the EMPTY list, not a 404.
+- **`FourSeatSmokeTests`** — the four-seat pass as a fixture instead of a memory: owner
+  (Emma@MCSS), administrator (Sarah@TGH), member (James@TGH), viewer each assert exactly the
+  tabs their seat is owed. **Victor Reyes (victor.reyes@benco.dev) is now permanently seeded
+  as a TGH Viewer** and `BenTestBase.ViewerEmail/ViewerPassword` exists — before him, every
+  four-seat pass had to mutate a real member and remember to undo it. Emma's password lives
+  only in gitignored dev config, so the owner test takes `BEN_OWNER_PASSWORD` from the
+  environment and Assert.Ignores loudly when unset.
+- **Viewer seat also click-tested live**: baseline tabs render with content (roster, messages),
+  no Cases/Investigations, no admin tabs; profile page (item 163's Sex field included) works
+  for the brand-new account. Found item 171 (dashboard case counts visible to case-less seats
+  — Ben's call, recorded, not changed).
+- **Help**: getting-started gains "What you'll see as a new member" (baseline + roles-open-
+  doors + titles-open-nothing); site-administration's tier-checklist section rewritten from
+  "enforcement arrives later" to the shipped reality including the netted notices;
+  organization-administration got its roles/graying coverage in Phase E. PDF regenerated
+  AFTER the edits (verified: new passages present in the HTML).
+- **Suites**: 2,986 unit tests green. Full e2e: 329 passed / 3 failed / 15 deliberate skips —
+  all 3 failures were congestion (a WASM-host build was compiling mid-suite), each passes
+  solo ×2; the NewGroupJourney passes with BEN_API_LOG set.
+
+Whole-item recap: Phases A (checklist + editor sections), B (additive grants doing real
+work), C (defaults + grandfather bridge), D (the enforcement flip across ~10 controllers),
+E (visibility: graying, pricing, netted notices), F (proof). Decisions D1-D5 all landed as
+locked. Spun off along the way: items 160 (title×duty matrix), 167 (free-plan transfer
+block), 170 (role editor offers grants over site-wide lookup tables), 171 (dashboard counts).
+
+## 168. Billing paperwork: receipts, tax, and an audited money trail (CLOSED 2026-08-23 — ledger, tax, receipts, referrals all shipped)
+
+**Built ahead of its stated sequencing** (item 85 B–F) because none of it actually needed a
+payment provider: the admin subscriptions screen already IS the manual payment record, and the
+paperwork attaches to that. What shipped:
+
+- **`BillingLedgerEntry`** — the append-only money trail: Charge / Payment / Adjustment /
+  ReferralPayout. There is NO update or delete path, API or UI, and a reflection test pins
+  that structurally (a future PUT fails a test, not a review). Mistakes are answered with an
+  Adjustment naming them. Admin screen: Billing → Ledger, with record-entry dialog.
+- **Tax** — `TaxRateRule` per state (Billing → Tax Rates), resolved from the group's address
+  at write time and FROZEN on every row (rate + dollars; probe-regressed: rule edits never
+  move a written row). No rule = honest zero. The subscription quote now carries
+  TaxRatePercent / Tax / TotalWithTax as its own lines, shown on the pricing page. Charges
+  are taxed; payments are not (their tax was on the charge they settle — counting it twice
+  lies in both directions). Half-up rounding, pinned with a case banker's rounding fails.
+- **Receipts** — payments get sequential receipt numbers (unique index referees the race;
+  loser retries). The receipt is a self-contained HTML document generated from the frozen row
+  — reprint in five years, it says what it said — downloadable and re-downloadable from the
+  group's own Billing history panel on the Pricing page (org-gated same as the quote;
+  outsider-forbidden is tested).
+- **Referrals** — `Coupon.ReferrerAppUserId` (set by email in the campaign editor; typo =
+  refusal, not silent detachment; round-tripped through the record so editing keeps the
+  attribution). Every redemption of a referrer's coupon is their referral, with the money
+  already frozen on the redemption rows (that was Ben's verbatim requirement in the coupon
+  work). Billing → Referrals shows standings — campaigns, redemptions, revenue attributed,
+  discount given, paid out — and records payouts onto the ledger. **Deliberately NOT computed:
+  what is OWED.** The reward rule (percent? flat? per what?) is a product decision Ben has
+  not made; the screen shows both sides so a human can settle it. That is the one open
+  decision this item leaves.
+
+10 unit tests; live smoke: tax rule set → TGH quote showed $15.00 + $1.46 (9.75%) = $16.46 →
+rule deleted again (shared prod DB — rates are Ben's to set, and a smoke rule would have taxed
+real quotes).
+
+Ben, 2026-08-23: "Ability to generate receipts. Ability to calculate tax for bills. All billing
+tracked and audited in administration billing sections including tracking referrals overall and
+individually and how much is paid out."
+
+Three strands, all downstream of item 85's billing foundation:
+
+1. **Receipts** — a group's payment produces a receipt the payer can download (and re-download
+   later from their billing history). Needs a stable receipt number, the group's billing
+   details, line items, tax shown separately, and the payment reference.
+2. **Tax calculation** — bills compute tax rather than assuming none. Rate resolution (by the
+   group's jurisdiction), tax shown as its own line on quotes, bills, and receipts, and the
+   rate frozen on each historical document the way contract terms already are.
+3. **Admin billing audit trail** — the administration billing section shows every charge,
+   payment, adjustment, and payout with who/when/why, nothing editable in place. Includes
+   referral tracking: referrals overall and per referrer, and how much has been paid out to
+   each — which presumes a referral-reward scheme; its rules (who counts as a referrer, what
+   triggers a payout) need a design pass with Ben before building.
+
+Sequencing: after item 85's remaining phases (B–F) land — receipts and tax attach to real
+payment flow, and the audit section wants the payment provider integration to exist first.
+
+## 169. Grid action buttons: small, one line, everywhere (CLOSED 2026-08-23)
+
+Ben, 2026-08-23: "buttons in grids should be small and not wrap the line." And, on clicking Edit
+in the roles grid: "maybe the editor should scroll into view, or it will look like nothing
+happened."
+
+The roles grid (OrgRolesManager) got both fixes with item 156 Phase E: `btn-sm` was already
+there, a `text-nowrap` wrapper keeps Edit/Delete on one line, and Edit now scrolls the inline
+editor card into view. Remaining: a sweep of every other grid with action buttons for the same
+two defects — stacked/wrapping buttons, and inline editors or detail panes that open below the
+fold with no scroll. Candidates: every TelerikGrid with an Actions template column (grep for
+`GridColumn Title="Actions"`).
+
+**Swept 2026-08-23** — the sweep looked wider than the Actions title (any grid Template with
+2+ buttons and no nowrap/flex/dropdown), which found more than the title-grep would have:
+
+- **OrgCmsEditor pages grid**: four stacked buttons wrapped to two lines; now the house
+  pattern from OrganizationList — Sections as the primary button, Edit/Preview/Delete behind
+  a More-actions dropdown, one line at 170px.
+- **OrgCmsEditor logos grid**: nowrap wrapper + width.
+- **CaseVideoEditorPage** and **MyVideosPage** project grids: bare button triples wrapped in
+  a nowrap flex row.
+- Already fine (d-flex is nowrap by default): OrganizationList, OrgAddressManager,
+  OrganizationEquipment, AdminEquipmentTaxonomy.
+- Scroll-into-view half: the roles grid (fixed with item 161's session) was the only inline
+  below-the-grid editor; every other candidate (`OrgCmsEditor`, `AdminCoupons`,
+  `AdminFileTypes`, `OrgCmsPageEdit`) turned out to be a modal or an in-place row swap,
+  which bring themselves into view.
+
+## 170. Role editor offers grants over site-wide lookup tables (CLOSED 2026-08-23)
+
+Ben, mid-Phase-E review of the role editor: "Are the 'types' like address types specific to
+groups? I thought they were generalized."
+
+They ARE generalized — confirmed in the schema: `OrganizationAddressType`, `OrganizationEmailType`,
+`OrganizationPhoneType`, `OrganizationLinkType` (and their User* siblings) have **no
+OrganizationId column**. They are site-wide labels, written only through the SuperAdmin Admin
+controllers; the entity controllers are read-only for everyone else.
+
+The defect: `OrganizationSecurityTable` still lists these tables, so the org role editor renders
+C/U/D toggles for "Address Types", "Email Types", "Phone Types", "Link Types" — grants that gate
+NOTHING, because no org-reachable write path consults them. It is the mirror image of the
+write-only-feature class: a control the UI offers that the server never reads. A group owner who
+"grants" Address Types management has been lied to.
+
+The fix (own pass, not a Phase E rider): audit every table in `OrganizationSecurityTable` for
+whether an org-scoped write path actually consults it; drop the site-wide lookup tables from the
+role editor's list (and from `PermissionAreas.AreaFor`'s org-gated view if warranted); adjust
+`RolePermissionCoverageTests` to pin the corrected list. Caution: some type-like tables ARE
+per-org (calendar event types were seeded per-group in item 148) — each table needs its own
+verdict from the schema, not from its name.
+
+**Audited and fixed 2026-08-23.** The audit counted `HasAccessAsync`/`OrganizationSecurityTable`
+consumers per table across the WebApi and repository layers, and found TEN dead rows, not five:
+
+- The five `…Type` lookups (Address/Email/Phone/Link/Note Types): no OrganizationId column,
+  entity controllers read-only, writes SuperAdmin-only. Schema verdict pinned by a reflection
+  test (`Site_wide_lookup_tables_really_are_site_wide`).
+- Five more org-scoped tables whose CRUD is ALSO admin-only today with zero grant consumers:
+  **OrganizationEmail, OrganizationPhone, OrganizationLink, OrganizationNote,
+  OrganizationAddressSearch**. (The self-service contact work of 2026-08-15 was USER contact
+  info — `api/me/*` — never org contact rows; the org's public email/phone/website are plain
+  columns on Organization, gated by the Organization table.)
+
+The classification is a shared constant — `PermissionAreas.UngatedTables` — read by all three
+consumers so they cannot drift: the role editor (ten sections removed), `OrgRoleDefaults`
+(Historian now reads mapped-minus-ungated, so new groups stop seeding grants nothing consults),
+and `RolePermissionCoverageTests` (the every-table-assignable test skips them, and a REVERSE
+guard fails if any ungated table reappears in the editor — probe-verified). The area map stays
+total: the tables are excluded from GRANTING, not from existing. Existing groups' Historian
+rows still hold the old dead grants; they gate nothing and the editor's next save drops them.
+
+Restore path is deliberate friction: when a write path arrives for one of these tables, remove
+it from `UngatedTables` and the coverage guard demands its editor row back.
+
+## 171. The group dashboard shows case counts to seats without case access (CLOSED 2026-08-23 — Ben: "the gates count as tabs")
+
+Found during the Phase F four-seat pass, from the Viewer seat: a member (or viewer) WITHOUT any
+case-reading role no longer sees the Cases or Investigations tabs — but the Details tab's
+dashboard still shows "Open cases: 4", "Investigations: 6", "Cases this year" and the
+cases-by-status donut, all computed from the tables the seat cannot read.
+
+Two defensible readings, so it is Ben's call, not a unilateral fix:
+- **Counts are group-profile facts** (like the member count) and belong to the D3 baseline —
+  fine as-is, nothing leaks but aggregates.
+- **Counts are case data** and should follow the same gate as the tabs — the dashboard would
+  show member/calendar stats to the baseline and add the case widgets only when
+  `my-permissions` grants case read.
+
+Ben ruled the second reading: **"the gates count as tabs."** Built same day:
+
+- `OrganizationStatsController` now runs the case and investigation numbers through the same
+  `HasAccessAsync` chain as `CaseController.CanReadAsync` (SuperAdmin → Owner/Admin bypass →
+  tier gate → role grants), independently per table. The membership gate stays in front for
+  the panel as a whole; the two read gates shape what is in it. Notably, the controller's own
+  remarks had CLAIMED this gate all along ("gated on being able to read that group's cases")
+  while the code checked bare membership — the doc promised Phase D before Phase D existed.
+- `OrgStatsSummary`'s case/investigation parts became **nullable** — a refused number arrives
+  as null, never zero, because a zero reads as "an idle group". The panel hides null widgets;
+  the member count stays for every member.
+- Tests: 5 controller unit tests (regressed — ungating cases fails the two null-assertions),
+  and the FourSeatSmoke e2e now pins the rendered result: James (role-holder) sees "Open
+  cases", Victor (viewer, no roles) sees Members only, no case widgets, no donut. Verified
+  live against both seats' tokens: victor gets `{"members":9,"cases":null,...}`, james the
+  full numbers.
+
+## 172. Sidebar group links stop working after opening a pending request (CLOSED 2026-08-23 — fixed same day)
+
+Ben: "When I click a pending message like request for joining a group, I cannot click out into
+another group — it causes some kind of glitch where I cannot swap groups clicking them in the
+main sidebar menu."
+
+Suspected class: OrganizationView loads its data only on first render; when navigation changes
+only the ROUTE PARAMETER (org A's page → org B's page via the sidebar), Blazor reuses the
+component instance, no reload happens, and the page keeps showing the old group — which reads
+as "clicking does nothing". The pending-request path (action-needed banner / bell → org page
+with ?tab=) is simply the way Ben lands on an org page before trying to swap. Fix:
+observe parameter changes (OnParametersSetAsync) and reload when OrgId differs from the loaded
+org; e2e that walks org A → sidebar → org B and asserts B's name renders.
+
+**Fixed as diagnosed.** `OrganizationView.OnParametersSetAsync` reloads when `OrgId` differs
+from the loaded group (resetting edit mode and honoring the new ?tab=), and applies a CHANGED
+?tab= deep link on the same group without clobbering tabs the person clicked since (the
+applied-tab is primed at init so a mere re-render never re-applies it). The new
+`SidebarOrgSwapTests` e2e lands with a ?tab= deep link, swaps groups both ways through the
+sidebar, and REPRODUCES Ben's bug with the fix probed off — it fails exactly as reported,
+which is the proof the test discriminates.
+
+## 173. Bell buckets: wrong destination and wrong counts (CLOSED 2026-08-23)
+
+Ben: "In the bell, when I have 21 messages in the Client messages to answer, I click and get
+Organizations. I click the 54 Group messages, I get 18 messages."
+
+Two defects to verify separately: (1) the Client-messages bucket navigates somewhere that
+isn't the client-messages surface; (2) the Group-messages bucket's badge (54) disagrees with
+what the destination lists (18) — either the badge counts a different population (e.g. all
+orgs vs one org, or unread vs total) or the destination filters what the badge does not.
+The item-141 rule applies: a badge must count exactly what its click opens.
+
+**Fixed 2026-08-23.** Both defects were one design flaw: the two cross-org buckets rendered as
+single rows linking to the bare `/organizations` list, counting unread across EVERY group while
+any page they could land on shows one group's. The summary now carries per-group breakdowns
+(`OrgScopedBucket`: id, name, count, oldest) alongside the aggregates; the aggregate is the
+FOLD of the slices, so the bell's total always equals the sum of its rows. The bell and the
+notifications page render one row per group — "Group messages · BenCo (52)" →
+`/organizations/{id}?tab=messages`, "Client messages · BenCo (21)" → `?tab=cases`. Org-less
+unread rows (nothing structurally forbids one, though feed posts create no recipients) are
+deliberately NOT counted: a number no surface can show is a lie on a badge. Verified live:
+sarah's 52 unread were ALL BenCo — the exact 54-vs-18 shape Ben hit, now labeled and routed.
+EF lesson re-learned: a grouped join into a record constructor doesn't translate — two clean
+queries (grouped projection + name lookup) beat one clever untranslatable one. **Second pass, same day — Ben: "show the cases — if they are messages from cases."** The
+client-message breakdown went one level deeper: `CaseScopedBucket` (case id + title + group),
+one bell row per CASE, each opening the case's own page — the only surface where the message
+can actually be answered. Verified live: sarah's 21 resolve to "AverageBen, Nashville TN (1)"
+and "Park, Nashville TN (20)". Group messages stay per-group (they live on the group's
+Messages tab). The aggregate remains the fold of the slices in both breakdowns.
+
+## 174. GetMine returned an arbitrary membership application when history existed (CLOSED 2026-08-23 — found by Ben's click-test)
+
+Ben, testing live: "If Daniel Park withdrew, why does he still appear in the list waiting for
+approval or denial?" — the TGH Members tab showed the same person Pending AND Withdrawn.
+
+The withdrawn row was fine (history). The bug: `GET membership-requests/my` used an unordered
+`FirstOrDefaultAsync` over (org, person) — with a withdrawn row and a pending row both present,
+it returned an ARBITRARY one. The action-needed banner e2e's cleanup asked "what's my request?",
+was handed the already-withdrawn row, withdrew it again, and its actual Pending application
+survived — the exact stranded row Ben found. The same arbitrariness would show an applicant the
+wrong state on the group's public page.
+
+Fix: `/my` now returns the Pending row when one exists, else the most recent (`OrderByDescending
+(Pending).ThenByDescending(DateCreated)`). Two unit tests seeded with the withdrawn row FIRST —
+in-memory FirstOrDefault picks insertion order, so both FAIL with the ordering removed
+(probe-verified). The stranded live row was withdrawn through the fixed endpoint as Daniel;
+TGH's queue is clean again. The one-Pending-max rule was never broken — Apply refuses
+duplicates and a filtered unique index backs it.
+
+## 175. Reusable content picker — replace the paste-a-Guid share dialog (CLOSED 2026-08-23 — every GUID box and hand-rolled grid replaced)
+
+Ben, testing live: the "Share from User" button on the group Files tab opens a modal asking for
+a raw file Guid. His spec, in substance: the modal should LIST the shareable/shared content —
+filterable by type and by investigation or location; thumbnails-with-information or a grid
+view; if not thumbnails then filename + type, searchable. And the closing requirement that
+shapes the build: **"This type of content selection should be very robust and reusable because
+there are many places throughout the site where this type of interface would be useful."**
+
+Build shape: one `BenContentPicker` component (Kit or Media), fed by a pluggable source
+(user's own uploads for the share dialog; a group's library elsewhere; case media elsewhere),
+with type/context filters, search, thumbnail and list layouts, single- and multi-select.
+`MediaLibraryGrid` (item 6's universal media library) already renders thumbnails+info — reuse
+its rendering inside the picker rather than building a third grid. First consumer: the group
+Files tab's Share-from-User dialog; then sweep other Guid-asking or hand-rolled pickers.
+
+**Phase 1 built 2026-08-23 — the component and its first consumer.**
+- `ContentPickerItem`/`ContentPickerModel` (Kit): source-agnostic items carrying a type label
+  and arbitrary named FACETS; the model owns search (name/type/meta, case-insensitive), the
+  type filter, per-facet filters, and drops filters a reload orphaned (stale filters would
+  render an empty library) — all pinned in xUnit, the WizardModel pattern.
+- `BenContentPicker`: modal with search, type dropdown, one dropdown per facet present,
+  thumbnail-grid and list layouts (toggle), single- AND multi-select, loader-per-open so the
+  list is never stale. Image thumbnails render through `UserMediaPreview` (the authenticated
+  path — the img-sends-no-bearer trap stays dodged); a failed load renders its own sentence.
+- `GET api/organizations/{orgId}/files/shareable-user-files`: exactly the set CopyFromUser
+  accepts — public, or actively shared with this group — shared-first, gated like the copy
+  itself (probe-regressed: the visibility filter removed fails the test).
+- The Share-from-User dialog lost its Guid box: a Choose-a-file button opens the picker
+  (Source facet = "Shared with this group"/"Public"), the choice fills a chosen-file card.
+  e2e: dialog → picker → search/layout controls → select fills the card, and asserts the
+  Guid box is GONE; closes without sharing so the shared DB keeps nothing. Live: TGH's
+  candidate list serves 24 real files with owners. Help: org-administration gained its first
+  Files-tab section; PDF regenerated.
+
+**Sweep slice 2026-08-23 — the last two GUID boxes are gone.** A survey found the sweep
+smaller than feared: case media attachment already runs a real picker (`MediaLibraryGrid`
+PickerMode), and equipment photos are device-uploads by nature (you photograph the physical
+item; there is nothing to "pick"). What actually remained was two more paste-a-GUID boxes:
+
+- **CMS Image-or-banner section** (`CmsSectionEditor`): "GUID of an uploaded image file" is now
+  Choose-an-image → picker over the group's shared files, with a **Visibility facet** (Public /
+  Members only) — and a warning when the chosen image is members-only, because the anonymous
+  `/download` route only serves `IsPublic` files: the banner renders for the author and breaks
+  for visitors, the authors-see-what-visitors-cannot shape. A saved section re-resolves its
+  file on open so the warning fires for yesterday's choice too.
+- **SuperAdmin Clipart Library** (`AdminVideoAssets`): "publish it here by its file id" is now
+  a picker over the caller's own media library (images + Lottie JSON), defaulting the asset
+  name from the filename stem.
+
+e2e: two new ContentPickerTests walk both surfaces and assert the GUID boxes are GONE; the CMS
+one creates and API-deletes a throwaway page. **Lesson paid for here:** the first cleanup drove
+the grid's More-actions dropdown, failed silently BOTH runs (best-effort catch), and left orphan
+pages in the shared prod DB — cleanup now goes through the API and logs its 204, and the DB was
+verified clean. A cleanup is code too; verify it deleted once before trusting it forever.
+
+**Preview wiring (same day) — and the regression it flushed out.** The picker's grid cells now
+load video/audio previews on demand (per-item Preview button, stopPropagation so previewing is
+not choosing; the MediaLibraryGrid fetch-storm lesson). The e2e that asserts a working player
+found that **every audio preview on the site had said "Player init failed" since 2026-08-19**:
+the `/js/wavesurfer/` asset folder (core + 9 plugins + spectrogram workers + noise gate) lived
+only in Ben.Web.WebApp's wwwroot and was deleted with that host — WaveSurferPlayer imports it
+by absolute path and nothing asserted the path resolved. Restored from git history into
+Ben.Web.Website/wwwroot; a repo-wide scan confirmed no other Library-referenced absolute asset
+path is missing from the host. The e2e now pins the distinction: a decode error on the seed's
+8-byte .wav stubs is data, the missing-module error is product and fails the test.
+
+**Final piece (same day): the logo dialog.** Its From-Library tab — the last hand-rolled
+thumbnail grid — is now the picker too, with the same Visibility facet and members-only
+warning as the banner: the logo renders on the group's PUBLIC page through the same
+IsPublic-gated anonymous thumbnail route. The Upload New tab stays (uploads are public by
+construction, so a fresh upload never warns). Four picker e2e tests now cover all four
+consumers: share-from-user, CMS banner, clipart library, logo dialog. **Item closed** — the
+picker has five consumers (those four plus the group-ad wizard's image step), every
+paste-a-GUID box on the site is gone, and Ben's closing requirement ("very robust and
+reusable") is what the five consumers demonstrate.
+
+## 176. A case title can leak the client's name onto public pages (CLOSED 2026-08-23 — warn-not-block leak check, pseudonyms covered too)
+
+The pseudonym machinery replaces the client's NAME on public surfaces, and addresses are
+generalized — verified anonymously during the W4 case-pages tour audit (public list shows
+"The Hargrove Family", "Hotel Guest #2024-7", place-named titles, city-level coordinates).
+But the case TITLE is free text the org writes, and several internal cases are titled with
+the client's surname ("Park, Nashville TN"). Nothing warned when such a case was made public —
+the title would carry the real name straight past the pseudonym.
+
+**Shipped as specified, warn — never block.** `PublicTitleLeakCheck` (WebApi) matches whole
+words of the client's first/last/display name (tokens ≥3 chars; "Parker" is not "Park") and
+the street line minus its house number, case-insensitively. It runs server-side behind
+`GET cases/{id}/publish-leak-check` — necessarily so: the org-facing records deliberately carry
+no client name (`CaseClientRequestRecord` has none), so the check runs where the name lives and
+returns only the sentences. CaseDetail's Edit dialog calls it when Make Public is ticked: first
+Save shows the warnings and stops; Save again on the same text publishes as written. A failed
+check is silence, not a warning — an advisory that can't run must never stand between the org
+and publishing.
+
+**The check grew a second field while being built:** the seed itself had client Daniel Park
+pseudonymized as "The Park Family" — a disguise made of the thing it hides. The check now reads
+the pseudonym for the real name too (and the seeder's pseudonym is fixed; note the first
+replacement attempt, "The Belmont Family", was also wrong — the case sits on Belmont Blvd).
+Existing dev-DB rows keep the old pseudonym; the warning catches them at publish time.
+
+13 unit tests (probe-regressed twice: neutered check fails 6, Contains-instead-of-word-boundary
+fails the Parker test) + 2 e2e walking the real dialog — warn/stop/publish-anyway and the
+clean-title-no-stop path — because a warning the UI discards is the server-guard-with-no-UI-path
+bug, instance six. Help: working-a-case gets "The case label when a case goes public"; PDF regen.
+
+## 177. Action-needed banners rendered every row twice (CLOSED 2026-08-23 — Ben's live report, fixed same hour)
+
+Ben: two investigation-request notifications on login, "separated by 1 and 1, then BenCo the
+same 1 investigation request and another BenCo 1 investigation request. Clicking it, there is
+only 1 for each." (And no — it was not his two accounts: the endpoint scopes to the one token
+that asks; a second account's rows cannot blend in.)
+
+The W2 hardening gave `ActionNeededBanners` two triggers — first interactive render AND the
+sign-in StateChanged — and its loaded-guard yielded to `await UserState.AuthReady` BEFORE
+setting its flag, so both triggers could pass the check and each appended the full list: every
+banner exactly twice, which is precisely the shape Ben saw. `OnboardingGate` had the
+re-entrancy flag from day one; the banners didn't — the asymmetry was the bug.
+
+Fix: the same `_loading` re-entrancy guard, `_loaded` set only after a successful authenticated
+fetch (so a pre-auth pass still retries on sign-in), and the visible list rebuilt rather than
+appended as the belt to the guard's braces. The e2e now asserts EXACTLY ONE banner per bucket;
+green ×3.
+
+---
+
+## 178. Site-wide audit as every kind of user (DONE 2026-08-24 — Ben's request; findings below)
+
+Ben: *"run through the site as every kind of user and verify each step and process. make notes of
+any found gaps or issues."*
+
+Walked seven personas — **anonymous, client, group member, viewer, group administrator, group
+owner, SuperAdmin** — across their real surfaces, then probed the same ground at the API level as
+each of them, then ran the whole e2e suite. Two new fixtures keep it repeatable:
+`SiteWideAuditTests` (does every surface this role uses render?) and `RefusalHonestyAuditTests`
+(when a role is refused, does the page SAY so rather than claim emptiness?). Both pass.
+
+**The product came out clean.** No unhandled errors, no dead routes, no refusal rendered as an
+empty state, and the permission matrix is coherent in both directions: SuperAdmin-only endpoints
+answer 403 to every group seat and 401 anonymous; group billing answers 403 to members without
+settings permission; a Viewer is refused cases *and* the Cases tab is correctly hidden from them
+(item 156 Phase D already closed that one). Full e2e: **353 passed, 18 deliberate skips, 0 real
+failures.**
+
+### What the audit actually found
+
+1. **Nine e2e "failures" were a stale WASM host, not the product.** Every video-editor test failed
+   until :5180 was restarted against the current build; all 22 pass after. This is the recurring
+   trap ([[feedback_restart_hosts_after_rebuild]]) and it cost the first full run.
+   **CLOSED same day:** `EditorHostFreshnessTests` compares the fingerprinted entry script the
+   host serves against the one this checkout built, and fails FIRST (`[Order(-1)]`) with the
+   restart command, so the nine downstream failures are read as what they are. Unreachable host
+   or unbuilt project is Inconclusive, not red — "I have not built the WASM host" is not a
+   product defect. Probe-regressed by renaming the built entry script: it fires, and the message
+   names both sides. The first version cried wolf on `dotnet.native.js`, which is referenced
+   un-fingerprinted too; the check now uses the entry script alone, which never is.
+
+2. **The seeded demo case is titled "Park Residence, Nashville TN" for client Daniel Park** — the
+   exact leak item 176 exists to warn about. Not published, so nothing leaked, and the live check
+   correctly returns the warning for it. But the seed teaches the wrong habit on every fresh
+   database. **CLOSED same day:** both seeded client cases are now named for their place —
+   "Belmont Boulevard Residence" (was Park, client Daniel Park) and "Fatherland Street Workshop"
+   (was Maxwell, client Linda Maxwell) — along with the investigation locations that echoed them.
+   The rows already in the shared database keep their old titles on purpose: they are not public,
+   and the publish-time warning is exactly the safety net that should catch them if Ben ever
+   publishes one. Changing demo content under him would be the more surprising move.
+
+3. **The ledger cannot be smoke-tested without permanently marking the money trail.** It is
+   append-only by design (no update, no delete, enforced by a test), and dev/UAT share ONE database
+   (`IsHauntedDb` on 192.168.1.71 — UAT testers mutate dev data, decided knowingly). So any
+   end-to-end billing rehearsal writes rows that can never be removed, only offset by adjustments.
+   The receipt path is proven at unit level instead. **Before real billing starts, either give
+   production its own database or accept that rehearsal rows live in the ledger forever** — this is
+   the one finding with money attached.
+
+4. **No band sells overflow seats yet, and no tax rule exists.** Both are deliberate — item 144's
+   machinery and item 168's rates are data entry Ben owns — but it means neither path has run
+   against real configuration. The tax line was verified live once (TN 9.75% → $15.00 + $1.46 =
+   $16.46) and the rule deleted again so it would not tax real quotes.
+
+5. **Several routes I assumed exist do not**, which is worth recording because the next person will
+   assume the same: sign-up is `/signup` (not `/register`), messages are org-scoped
+   (`/organizations/{id}/messages`, not `/messages`), the admin home is `/admin/dashboard`, and
+   group settings/roles/places are TABS rather than pages. Now encoded in the audit fixture.
+
+### Smaller notes
+
+- `GET .../billing/my-seat` answered **204** when the caller holds no seat — which `GetAsync`
+  cannot tell apart from a 403 or a 500, so a seat-holder whose fetch failed would have seen no
+  card and no explanation. **CLOSED same day:** the endpoint is now `my-seats` and returns a LIST
+  of at most one, so the answer travels as a `LoadResult` and the page distinguishes "you hold no
+  seat" from "we could not check" — the latter now says so. A seat is somebody's bill; showing
+  nothing is the worst of the three readings.
+- A Viewer can read the duty board, member levels and calendar event types while being refused
+  cases and investigations. Coherent (those are org taxonomy, not case content), but worth a
+  deliberate look when the title×duty matrix (item 160) lands.
+- `experience-types` answers 405 to a plain GET on the collection for every seat — it is
+  write/lookup shaped. Not a bug; noted so the next audit does not re-flag it.
+
+---
+
+## 179. The stripped copy was built but almost never served (PARTLY CLOSED 2026-08-24 — anonymous paths fixed; ingest coverage and A/V remain)
+
+Found while following up item 178's A/V-metadata note, and it turned out to be bigger than the
+A/V half.
+
+**`MediaSanitizationService` states the contract in its own comments:** the original is kept
+untouched because it is evidence, a stripped derivative (`.clean.jpg`) is written alongside, and
+"this is what every serve path returns". **Exactly one serve path honoured it** —
+`MyEquipmentController`, the only caller of `MediaIngestService.ServingPathFor`. Everything else,
+including all three anonymous byte routes, served `StoragePath` — the original, EXIF intact.
+
+The consequence, in the product's own terms: a case photo published on a public page could hand an
+anonymous visitor the camera's embedded location, while the map beside it showed the deliberately
+vague city-level pin the whole coordinate-generalization machinery exists to produce. The
+authors-see-what-visitors-cannot shape, inverted — the protection existed and the public route
+walked past it.
+
+**Fixed now:** `UploadFileController.Download` and `PublicCaseMediaController.Get` both resolve
+through `ServingPathFor`, which returns the stripped copy when one exists and the original when it
+does not — so the change is a no-op for every file that was never sanitized, and the content type
+follows the copy actually served. Four tests pin it, including one that splices an EXIF segment
+into a real JPEG and proves the re-encode drops it (the mechanism is "decode pixels, re-encode",
+so there is no tag list to keep current).
+
+**Still open, and the reason this is only PARTLY closed:**
+
+1. **Most upload doors never sanitize.** `MediaIngestService` is used by the equipment doors and
+   for thumbnails; `CaseFileController` — case evidence, the most sensitive files on the site —
+   writes raw bytes straight to storage and extracts no metadata at all. On the current dev/UAT
+   data that shows as **102 stored files and zero `.clean.jpg` derivatives**: the fix above is
+   correct but currently has almost nothing to serve. Routing the remaining doors through ingest
+   is the substantive work, and it carries a product decision — a member viewing case evidence
+   would start receiving the re-encoded copy rather than the original, which is right for privacy
+   and arguable for evidence fidelity. **Ben's call.**
+2. **Video and audio are still never stripped** (the original item 86 note): it needs an ffmpeg
+   remux (`-map_metadata -1`) and ffmpeg is reachable from the sidecar, not the API. A design that
+   avoids a hosting decision: strip when a configured ffmpeg path exists, pass through exactly as
+   today when it does not.
+3. **A backfill** for files already stored without a derivative, if the answer to (1) is yes.
+
+**What IS captured, for the record** (Ben asked, 2026-08-24): metadata is extracted into its own
+`UploadFileMetadata` table — one row per file — holding GPS latitude/longitude/altitude, capture
+time, camera make and model, dimensions, duration, sample rate, bitrate, channels and codec, plus
+**`RawMetadataJson`**: every directory and tag verbatim, so nothing is lost even where a field is
+not modelled. Read access is `AdminFileMetadataController`, **SuperAdmin-only** — note the service
+comment says "org Administrator or SuperAdmin", so the doc and the gate disagree; the gate is the
+stricter of the two, which is the safe direction, but one of them should be corrected.
+
+---
+
+## 180. EXIF comes off on ANY upload, and clips keep where they came from (Ben, 2026-08-24 — Phase A shipped)
+
+Ben, after item 179 exposed how narrow the stripping actually was: *"The EXIF strip should occur on
+any upload. It should store the data in a table linked to the record for the uploaded file."* And,
+minutes later: *"if we create clips from an audio file... keep any lat/lon altitude or other info
+related to the clip in an exif record - if possible."*
+
+**Every upload door now ingests.** Before this, `MediaIngestService` was reached by the equipment
+doors and by thumbnail generation, and nothing else — `CaseFileController`, the door case EVIDENCE
+comes through, wrote raw bytes and extracted nothing at all. Converted: case files, case research,
+`MyCaseController` timeline evidence, event evidence, equipment loan photos, and published video
+exports. Each keeps the original untouched, writes the stripped derivative beside it, and adds the
+`UploadFileMetadata` row.
+
+**Derived files carry the recording's place forward.** `DeriveMetadataAsync` copies exactly what
+stays true of a derivative — GPS latitude/longitude/altitude, capture time, camera make and model —
+onto audio clips, audio edits, case audio mixes, and copy-on-attach case copies. What belongs to
+the NEW bytes is deliberately NOT carried: duration, sample rate, channels, pixel dimensions (a
+thirty-second clip of a ten-minute recording is thirty seconds), and neither is the raw dump, which
+describes a file this is not. The clip endpoint sets its own duration from the range it cut.
+
+`UploadFileMetadata.InheritedFromUploadFileId` records that the values were **carried, not
+measured**. That distinction is the whole reason to store it: a clip has no EXIF of its own —
+encoders write none — so without the flag the choice would be to lose the location or to imply the
+clip was measured at it. Inherited values are still true about where the recording was made, which
+is what an investigator means when they ask where a clip came from.
+
+**A structural guard keeps it true.** `UploadMetadataCoverageTests` walks every controller: one
+that creates an `UploadFile` must also record its metadata, freshly extracted or derived. It caught
+three doors mid-build (audio mixes, loan photos, video exports) that the manual sweep had missed —
+which is exactly the failure it exists to prevent, since case evidence went years without anyone
+noticing it extracted nothing.
+
+**Fixtures had to get more honest.** Three test helpers handed the API a buffer of zeros labelled
+`image/jpeg`; a door that decodes to strip now answers that with a 400, correctly. They encode real
+2x2 JPEGs instead — and the empty-file case still passes zero bytes, because that guard is real.
+
+**Verified live** through the case-evidence door: a 73-byte PNG came back as a 762-byte stripped
+JPEG with `.clean.jpg` and `.thumb.jpg` written beside the untouched original, and a metadata row
+carrying dimensions and the raw dump. Probe rows and files removed afterwards (shared DB).
+
+**Phase B — BUILT 2026-09-04** (see the closing note at the end of this item). Ben's
+delete-and-reassign flow as specified 2026-08-24:
+when a user deletes a file that is shared and in use, ask whether they want it removed everywhere
+it is shared. If yes, honour it. If no, ask whether they still wish to delete it; if they do, the
+file and its EXIF record are **reassigned to the organization using it** rather than destroyed —
+ownership moves to the org, the person stops being the owner, it leaves their personal files, and
+it appears only to those with the right permission in that organization. Needs: an owner-org column
+on `UploadFile`, a usage endpoint so the UI can ask the two questions, ownership checks that read
+org-ownership, and personal-file listings that exclude reassigned files.
+
+---
+
+
+**Phase B closing note (2026-09-04).** Ben's clarification the same day: *"Ownership remains
+with user who uploaded the file until they delete it and only if they choose not to delete
+usages beyond their account?"* — yes, and that is what shipped. Ownership never moves on its own;
+it moves only on the second answer of the delete dialog.
+
+*Schema:* `UploadFile.AppUserId` is now nullable and `OwnerOrganizationId` added (migration
+`AddUploadFileOwnerOrganization`). Nullable rather than re-pointed: every "is this mine" check
+reads `AppUserId == userId`, and null fails all of them at once — the personal listing, the owner
+gates, the account purge — with no second column each would have to remember. Who uploaded it is
+still `CreatedByAppUserId`.
+
+*Doors:* `GET api/upload-files/{id}/usage` (one row per group: shares, case copies, group
+copies, direct links — counts, not the group's case titles); plain `DELETE` now refuses with the
+usage (409) while a group is using it, where before it deleted without looking and left the
+group's copies pointing at nothing; `POST …/delete-everywhere` ends both share tables' rows,
+removes case copies with their comments and votes, the group's own copies, and every direct link
+(case, timeline, report, logo, ad, event evidence, equipment photo, client request), then
+destroys the file — refusing up front if a Field Kit session holds it; `POST …/reassign`
+requires the group to be *using* the file (or anyone could plant one), clears `AppUserId`, sets
+`OwnerOrganizationId`, keeps the id (so shares, copies and the metadata row keyed on it come
+along untouched), and gives the group a copy in its own Files the way copy-from-user does.
+
+*Gates:* `FileAudienceAccess.CanManageFileAsync` — owner, or the owning group's Owner /
+Administrator, or SuperAdmin; the former owner is deliberately out. `CanViewFileAsync` lets any
+active member of the owning group see it. The group purge releases the claim in its transaction
+and removes each file afterwards through `UploadFileRows`, never in bulk (the coverage guard's
+`UploadFiles` rule now says so).
+
+*UI:* `UploadFiles.razor` — usage first; a plain confirm when nobody else uses it; otherwise the
+two questions in a small dialog with a group picker when more than one group is using it.
+
+*Verified:* 47 controller tests (13 new) in a 4,064/0 suite; three guards proven to
+discriminate (the in-use refusal, the former-owner refusal, the session hold). Playwright
+`UploadFilesTests.Delete_AFileNobodyElseUses_AsksOnce_ThenRemovesIt` written, not run here (the
+runner needs the two secrets). Help: new `your-files.md`. **Deploy note:** the migration must
+reach the site's database.
+
+*Found on the way:* Field Kit recordings are ordinary owned files and show in Upload Files, but a
+session holds them and there is no door for a person to delete a session — item 218.
+## 181. A/V metadata stripping as an org setting, gated by plan (Ben, 2026-08-24 — BUILT)
+
+Ben: *"Make stripping the EXIF-like data from audio and video files a setting at the org level. It
+may be a paid-for feature."* And, clarifying the split: *"every file reads and has a row entered
+into the table containing EXIF-like data, but removal is what you are working on knowing that
+might require a REMUX."*
+
+**The split, which is the whole design.** READING is unconditional and ungated — every file, of
+every kind, gets its `UploadFileMetadata` row whatever the group's plan says. Selling a group its
+own facts back would be indefensible, and the extraction is nearly free. REMOVAL is what costs: an
+image is re-encoded (already paid for on every upload, so images are stripped for everyone,
+always), while audio and video need an **ffmpeg remux per file**, which is real compute. So only
+A/V removal is a capability a plan can withhold. A test pins the ordering in the ingest source, so
+a future change that gated extraction fails rather than ships.
+
+**Three things must agree** before A/V is stripped, and each refusal names itself:
+1. **The host** has a configured ffmpeg (`MediaTools:FfmpegPath`). Absent, the feature reports
+   itself unavailable and uploads carry on exactly as before — never a failed upload.
+2. **The plan** includes `TierCapability.MediaMetadataStripping` (capability #2, stored as
+   exclusions, so fail-open is structural).
+3. **The group** has left `Organization.StripMediaMetadata` on. It defaults **ON**, including for
+   every existing row: a privacy protection nobody has to discover is worth more than one everyone
+   has to find. A group documenting landmarks may legitimately turn it off.
+
+`MediaStrippingPolicy` returns `(Strips, Reason, NeedsUpgrade, CanChoose)` — `CanChoose` is
+explicit rather than inferred by the UI, so a switch is never offered where nothing could honour
+it, and `NeedsUpgrade` distinguishes the one refusal a group can act on. The settings page grays
+the toggle with the sentence and a link to plans.
+
+**Remux, not re-encode** (`-map_metadata -1 -c copy -map 0`): the streams are copied byte-for-byte
+and only the container is rebuilt, so a two-hour recording costs a file copy rather than an hour of
+CPU — and, for an investigation platform, the evidence is not degraded. Every failure path keeps
+the original: no tool, timeout, non-zero exit, empty output. Losing evidence to a failed strip
+would be far worse than keeping metadata the group can still see in its own table.
+
+Stripped A/V is stored as `.clean{ext}` beside the original (a remuxed MP4 is still an MP4, unlike
+a cleaned image which is always JPEG), and `ServingPathFor` checks both, so item 179's serve-path
+fix covers it with no further change. The row's ContentType already describes the served copy,
+which fixed a bug introduced by item 179's first draft: a stripped MP4 would have been served as
+`image/jpeg`.
+
+7 policy tests + the ordering pin; 3,088 unit tests green. Verified live with no ffmpeg configured:
+the setting reports "no media tool is configured", `CanChoose` false, uploads unaffected.
+
+**DECIDED 2026-08-24: the public-place gate.** Ben agreed the inverted framing — free groups may
+take **public-place** work (landmarks, businesses, abandoned buildings, cemeteries); a **private
+residence requires a paid plan**. Not "free cases are unprotected", which would put the cost on a
+client who never chose the plan. `PlaceKind.PrivateResidence` already exists and is already
+enforced for event publication and investigation visibility, so this extends a live rule. Since built: item 184 shipped the
+`PrivateResidenceCases` capability, the designation, the display-time redaction and the lapse
+handling — see item 184 for the whole arc.
+
+**The original follow-on thought and the assessment behind the decision:** *"maybe the free tier
+cannot guarantee privacy and has only the way to take on a case that is allowed to be completely
+public and unguarded. Then paid versions are where cases are allowed that are guarded."* The
+recommendation given was to invert it: not "free cases are unprotected" (which puts the cost on the
+CLIENT, who never chose the plan) but **"free groups may only take public-place work; a private
+residence requires a paid plan"**. Same revenue driver, no third party bearing the risk, and
+`PlaceKind.PrivateResidence` already exists and is already enforced for event publication and
+investigation visibility. Ben's decision.
+
+---
+
+## 182. Applying a case's privacy protections after an upgrade (Ben, 2026-08-24 — BUILT)
+
+Ben: *"if a case is taken on while the group is under the free tier but subscribes, we run all the
+requirements to make a case private and hide the exif for files and the exact location of the
+property and allow the replacement of client names in all reports and pages displaying the
+findings."*
+
+`CasePrivacyRetrofit` + `POST .../cases/{id}/apply-privacy`, reachable from **Apply privacy
+protections** in the case's Edit dialog. It does the mechanical work and reports the rest.
+
+**Applied automatically:** the case becomes private; the exact latitude/longitude are cleared from
+the row (the street address stays — investigators still have to get there); and every file on the
+case that lacks a stripped copy gets one, rebuilt from the original. That last part is only
+possible because the original was always kept untouched — the design decision that looked like
+mere caution now pays for itself.
+
+**Found but never applied: the client's name in prose.** Case label, description, timeline titles
+and bodies, report titles, summaries, conclusions and section bodies are scanned with item 176's
+whole-word matcher and every occurrence is reported with its location and row id. **It is not
+rewritten.** An investigator's account of a night is theirs; a find-and-replace through it can
+change what a sentence means or break a quotation, and nobody reviews the result. The platform's
+own name-writing is already covered by the pseudonym machinery — this covers what a person typed,
+and a person should fix it. That is a deliberate departure from the literal ask ("allow the
+replacement"), and the UI wording makes the reason visible rather than silently narrowing scope.
+
+**Reported and impossible: publication.** `WasEverPublic` is returned and the dialog says it
+plainly — what a visitor read, a search engine indexed or somebody saved cannot be recalled.
+A group upgrading should not be left believing the exposure was erased.
+
+9 unit tests including the two refusals (prose untouched; near-miss names like "Parker" not
+reported) and the file paths (already-clean counted not rebuilt; missing copy built from the
+original). Help: a new "Applying privacy protections to an older case" section in working-a-case;
+PDF regenerated. 3,097 unit tests green.
+
+**Two things this turned up, worth their own attention:**
+
+1. **There is no way to delete a case.** No endpoint exists on any controller, for any role,
+   including SuperAdmin — see item 183. It surfaced because the first version of the e2e created
+   a throwaway case and could not remove it; the test is now deliberately non-destructive and says
+   why in its own remarks.
+2. **The retrofit is destructive by design and the database is shared.** The first e2e run cleared
+   the seeded Park case's real coordinates; they were restored by hand. Any test that exercises
+   this must use data it owns — and while dev and UAT share one database, "owns" is a promise a
+   test cannot keep for a case it cannot delete.
+
+## 183. A case can be created but never deleted (CLOSED 2026-09-04 — SuperAdmin delete, and the rule stated)
+
+No `DELETE` endpoint for a case exists anywhere: not on `CaseController`, not on
+`AdminCaseController`, not for SuperAdmin. Timeline entries, files, notes and transfers can all be
+removed; the case itself cannot. Consequences seen already: a test case created against the shared
+database had to be removed with raw SQL, and any mistaken or duplicate case is permanent.
+
+Not obviously wrong as a default — a case is a record of real work and hard-deleting one destroys
+somebody's history, which is exactly the reasoning behind the ledger being append-only. But the
+current state is not a considered rule either; it is an absence. The likely shapes: SuperAdmin-only
+hard delete for mistakes, an org-level archive/withdraw that hides without destroying, or an
+explicit "this cannot be deleted, close it instead" refusal so the absence is a stated rule rather
+than a missing verb. Ben's call.
+
+**Built 2026-09-04 — the first and third together**, because each alone is half an answer. Closing
+already existed (`CaseStatus.Closed`, reachable in Edit Case) and nothing said it was the answer;
+the SuperAdmin delete did not exist at all.
+
+*The stated rule.* The Edit Case dialog now says, under the status field, that a case is never
+deleted — set it to Closed and it stays as the record of the work — and links to `/contact` for
+the one thing closing cannot fix, a duplicate or a mistake. A rule with no path is worse than no
+rule.
+
+*The delete.* `CasePurge` + `AdminCasePurgeController` (`GET`/`DELETE api/admin/cases/{id}/purge`,
+SuperAdmin) and `/admin/delete-case`, linked from the trash button on All Cases. Preview first,
+in two blocks. **Destroyed:** everything existing only because the case does — timeline (with its
+files and tags), files, notes, messages, research, reports and sections, contacts, votes,
+transfer logs, client access and invites, feed consents, scheduling proposals, and the case's
+investigations with attendees, findings and duty assignments. Files only where they are the
+case's own copy-on-attach copies, one row at a time through `UploadFileRows`. **Kept, unlinked:**
+feed posts, calendar events, video projects, evidence votes, public pages, equipment checkouts.
+**Kept, whole: field sessions** — `InvestigationId` set to null, which is exactly what a personal
+session is, so a recording goes back to the person who made it rather than dying with somebody
+else's case. Notices, not refusals: the client's name, and a public case. No refusal exists —
+deleting a case cannot lock the platform out of anything, unlike the other two purges — so the
+typed title is the guard, checked on the server too.
+
+*Tests.* `CasePurgeCoverageTests` derives the delete order from the model (the test the group
+purge lacked when production refused it twice) and names eleven sets the purge must never touch;
+`AdminCasePurgeControllerTests` covers the preview and the confirmation; Playwright
+`AdminDeleteCaseTests` drives everything up to the button. Three discrimination runs confirmed.
+Suite 4,089/0.
+
+*The gap that was recorded, then closed the same day.* The delete path had no in-process behaviour
+test: it is built from `ExecuteDeleteAsync`/`ExecuteUpdateAsync` and the InMemory provider
+implements neither (probed). The fix needed `Microsoft.EntityFrameworkCore.Sqlite`, whose restore
+failed while the local NuGet source `/Users/ben/telerik-blazor` was missing; Ben restored it and
+the harness went in — `SqliteTestDb` plus `CasePurgeBehaviourTests`, and
+`OrganizationPurgeBehaviourTests` for the group purge that production refused twice. See item 219.
+
+*Deliberately not built:* a group-level delete for an empty case. It is defensible — a case
+created five minutes ago with nothing in it has no history to destroy — but it is a second
+destructive door on the surface groups use every day, and the `/contact` route covers the same
+need at this scale. Ask for it if the support requests become routine.
+
+## 184. Private engagements: designation, display-time redaction, plan gates, lapse (Ben, 2026-08-24 — BUILT, Phases A–D shipped)
+
+The redaction model item 181's decision pointed at, built end to end across four shipped phases
+(this is the item that closes 181's dangling "See item 184").
+
+**The model.** `Case.IsPrivateEngagement` designates private-lane work, set three ways: born from
+a client request; an investigation placement binds a `PrivateResidence` place; the Private
+engagement toggle in Edit Case. A one-time migration backfilled the flag (client-linked cases,
+cases at residence places). Groups and clients then **write real names freely** — reports,
+timeline entries, notes stay exactly as typed — and every public surface substitutes at display
+time in the API projection: `CaseRedactionRoster` (the who-becomes-what ladder: client → their
+alias → the org's pseudonym → "the family"/"the client"; each related person → their new
+`PublicLabel` → a relationship-derived label → "a resident"/"a witness") and `CaseProseRedactor`
+(whole words ≥3 chars, longest-first, HTML via AngleSharp text nodes only so `<strong>` survives
+a client surnamed Strong; parse failure falls back toward privacy; doubled articles shed —
+"The Vexley house" → "the family house"). Wired into PublicCase list+detail, cross-org discovery,
+PublicInvestigation list+detail, PublicPlace rows, and `CmsEmbed.ResolveAsync` — inside the
+resolver, so the live page and the authenticated preview cannot disagree. A case NOT designated
+renders verbatim everywhere (Ben's scope rule, pinned per surface).
+
+**The gates** (`TierCapability.PrivateResidenceCases = 3`, exclusion rows, fail-open;
+`PrivateCaseGate` sentence-or-null): accepting a client request, binding a residence place (all
+three placement doors via the shared helper — on pass the case is designated), accepting a
+private transfer (receiver end), the client's reassign pick (receiver end ONLY — a free plan
+never holds a client's case hostage), the false→true `IsPublic` flip, and manual designation.
+Grandfathered: an already-designated case is never re-gated; an already-public case stays
+editable. Every refusal renders in its dialog (two clients moved off body-discarding
+Put/PostAsync to reach that).
+
+**The lapse** (plan-governs-publication, decided over back-dating): `SubscriptionLapseJob`
+unpublishes ALL published private cases on lapse (closed ones included) remembering the way back
+in `WasPublicBeforeLapse`; both 14/7-day warnings carry a count-conditional paragraph naming the
+consequence; thirty days into a lapse a third pass tells each paused case's clients about the
+reassignment flow (stamp `StrandedClientNoticeSentAtUtc`, cleared on reactivation so a future
+lapse re-arms). CaseDetail shows a one-click Republish banner off the memory; republishing
+consumes it and runs the normal gate. Landmark publication is untouched by billing.
+
+40+ tests across the arc, each refusal/substitution probe-regressed (gate neutered → tests fail).
+Help: working-a-case "Private engagements" section (+ HelpLink from the Edit Case toggle),
+your-case client-side guarantees, site-administration capabilities list. Playwright
+`PrivateCaseRedactionTests` walks the public pages read-only.
+
+## 185. Private engagements — open questions reserved for Ben (recorded 2026-08-24)
+
+Recorded during item 184's build; none block the shipped arc.
+
+1. **Migration rules for stranded clients** — what carries over by default when a client moves a
+   lapsed case; explicitly reserved by Ben.
+2. **Grandfathering shape** — the built rule (designation setters never re-gate an
+   already-designated case; publication gated only at the flip) is the recommended version; veto
+   open.
+3. **Publication posts can quote case prose unredacted** — `PublicPublicationController` BodyHtml
+   is authored free text; a compose-time warning à la PublishLeakCheck would close the gap.
+4. **Case-less investigations at residence places by free groups** — currently ungated (no case,
+   no designation); gate or leave.
+5. **Clearing `IsPrivateEngagement`** — currently free to anyone who can edit the case;
+   SuperAdmin-only is the alternative.
+6. **Case reports have no anonymous path today** — if one ever ships, it must join the redaction
+   surfaces; add a pinning test then.
+
+## 186. The feed as the front door — engagement arc (Ben, 2026-08-24 — BUILT, dark-launched 2026-08-24)
+
+Ben's direction, recorded verbatim from the session that planned item 184: engagement becomes the
+top product goal — an X/Twitter-like feed for paranormal-interested people, "addictive like
+TikTok", pushing people to join or create organizations. DECIDED: **anyone scrolls, members
+post** — the open scroll is the hook; posting/liking/following/commenting require belonging to a
+group. Feed ads: existing groups' ads (item-166 OrganizationAd machinery, currently random
+placement) become LOCATION-fed, interleaved with house ads prompting "create your own
+organization".
+
+Already in hand: the feed exists dark (`features.public-feed`, FeedController, /feed pages,
+hashtags/mentions/follows, moderation queue); org-ad approval flow; geo machinery (item 88's
+nearby search). To design when the arc starts: the ranking/scroll loop, geo-targeting consent
+(reuse the nearby-search geolocation pattern), ad frequency/labeling, and what "members post"
+means for clients vs group members.
+
+**BUILT 2026-08-24, all ten phases (F1–F5 + F5b–F10), dark behind `features.public-feed`:**
+F1 anonymous read; F2 participation gate (member OR case-client posts); F3 likes + For You
+gravity ranking + bell replies; F4 photos/video fail-closed until screened; F5 Moderator role +
+review queue + screening seam; **F5b** the automatic screener (on-server ONNX ViT, fetched by
+`scripts/get-screener-model.{sh,ps1}` — run it on the deploy build host or screening is
+manual-only, the startup log and /admin/feed-reports both say which); F6 experience-type
+categories + the learning loop (append-only labelled examples from moderators/posters/group
+claims, nightly logistic re-fit, author-only mismatch nudge that never blocks); F7 editor →
+feed ("Post to the feed" destination, private-engagement consent recorded append-only, org
+attribution Unclaimed-shows-nothing / Claim = name + Group-verified badge); F8 geo-fed promoted
+cards (1-per-8 weave, nearest public address, AreaOfOperation contributes nothing, /go counted
+redirect, impressions/clicks on the promote page); F9 avatars + new-posts pill + home teaser;
+F10 dark-launch reminder banner (SuperAdmin, names the switch and the screening posture) +
+Playwright walks (FeedTests + FeedArcTests, 16 green) + this record.
+
+**The switch is `features.public-feed` at /admin/site-settings.** The site's resting state is
+dark; a SuperAdmin banner nags while content accumulates behind it.
+
+**Follow-ons recorded, not built:** galleries / multiple media per post; reposts/quotes; ad
+billing hook into items 143/144 once ads charge; screener threshold tuning surface; video
+luma/motion feature extraction sharing the screener's sampled frames; APNs feed notifications
+for the iOS app (needs server device-token registry); universal links incl. /attending/{token}
+(needs AASA hosting); the iOS app's feed fixtures must be re-captured before its Slice 3
+(FeedPostRecord grew: categories, badges, attribution).
+
+## 187. The dev WebApi dies under load — .NET's IPv6 accept path on macOS (CLOSED 2026-08-31 — every host now binds IPv4)
+
+**Symptom.** The local WebApi process disappears during long test runs. Nothing in the
+application log explains it; the last thing written is an ordinary request. What follows in the
+suite is a spray of unrelated-looking failures — "sign-in never left the login page", "no
+equipment categories in the taxonomy", timeouts, `ECONNREFUSED ::1:5252` — none of which name the
+real cause. It killed the API **nine times** during one full Playwright run and invalidated two
+runs before the pattern was recognised.
+
+**What it actually is:**
+
+```
+Unhandled exception. System.ArgumentException: The supplied System.Net.SocketAddress is an
+invalid size for the System.Net.IPEndPoint end point. (Parameter 'socketAddress')
+   at System.Net.IPEndPoint.Create(SocketAddress socketAddress)
+   at System.Net.Sockets.SocketAsyncEventArgs.FinishOperationSyncSuccess(...)
+   at System.Net.Sockets.SocketAsyncContext.AcceptOperation.InvokeCallback(...)
+   at System.Threading.PortableThreadPool.WorkerThread.WorkerThreadStart()
+```
+
+A .NET runtime bug on macOS in the **socket accept** path — below Kestrel, below any middleware,
+below anything we wrote. It surfaces on a threadpool thread, so it is unhandled by construction
+and takes the process down; no `try`/`catch` of ours can be in the way of it. Reported upstream
+as [dotnet/runtime#102663](https://github.com/dotnet/runtime/issues/102663) (and #40913 in CI),
+and it has bitten other .NET servers on Apple Silicon —
+[Jellyfin #16265](https://github.com/jellyfin/jellyfin/issues/16265),
+[Kavita #2996](https://github.com/Kareadita/Kavita/issues/2996). Reports associate it with
+IPv6/dual-stack endpoints, and specifically with *several services on one machine talking to each
+other over different ports* — which is exactly this repo's local shape (website 5078 → API 5252,
+plus the WASM host on 5180). Observed on .NET SDK 10.0.301 / runtime 10.0.9.
+
+**What was done about it (2026-08-25):**
+
+- **The dev start scripts now bind `http://127.0.0.1:5252` instead of `http://localhost:5252`.**
+  `localhost` makes Kestrel open an IPv4 *and* an IPv6 listener; binding the address directly
+  leaves only IPv4, so the faulting accept path is never taken. Verified: a single IPv4 listener,
+  and clients asking for `localhost:5252` still get 200 — curl and Chromium both fall back from
+  `::1` to `127.0.0.1`. A 34-test API-heavy Playwright slice passes against it.
+- **`scripts/dev-api-supervisor.sh`** restarts the API if it dies anyway, for full-suite runs.
+  Check `grep -c restarting /tmp/ben-api-supervisor.log` afterwards: **a run with restarts in it
+  is a run whose failures cannot be trusted.** Both invalid runs on 2026-08-25 looked like real
+  failures until that was checked.
+- `DOTNET_SYSTEM_NET_DISABLEIPV6=1` was tried first and does **not** help: Kestrel still opens
+  both listeners for a `localhost` binding. Recorded so nobody spends the time twice.
+
+### Closed 2026-08-31 — and the mitigation was leakier than it looked
+
+**Measured before changing anything.** All three hosts were listening on BOTH stacks:
+
+```
+Ben.Data.WebApi   127.0.0.1:5252   AND   [::1]:5252
+Ben.Web.Website   127.0.0.1:5078   AND   [::1]:5078
+Ben.Wasm.Video    127.0.0.1:5180   AND   [::1]:5180
+```
+
+The API was supposed to be IPv4-only already. It was not, **because the mitigation lived only in
+the shell scripts** — every `applicationUrl` in every `launchSettings.json` still said `localhost`,
+so an IDE run, a plain `dotnet run`, or a hand-typed `ASPNETCORE_URLS` put the IPv6 listener
+straight back. That is exactly how it came back here: a host started by hand earlier the same day
+had silently undone it. **A workaround that one ordinary command defeats is not a workaround.**
+
+**What was done:**
+
+- **Every `applicationUrl` on the three loaded ports now binds `127.0.0.1`** — `launchSettings.json`
+  for `Ben.Data.WebApi`, `Ben.Web.Website` (both its profiles and the IIS Express one) and
+  `Ben.Wasm.Video`. The HTTPS profiles keep `localhost` for their own port, because the ASP.NET dev
+  certificate is issued for the name `localhost` and would fail validation against an address.
+- **`run-e2e.sh` now separates BIND from BROWSE.** `*_BIND` is `127.0.0.1` and is what Kestrel
+  listens on; `*_URL` stays `localhost` and is what tests and browsers ask for. The **readiness
+  probes deliberately use the localhost form**, which makes startup itself the proof that the
+  fallback works — if it ever stops, the run fails at once with "never became ready" instead of
+  dying strangely in the middle.
+- **`start-website-with-api.sh`** binds `127.0.0.1:5078` and still opens the browser at
+  `localhost:5078`.
+- The website's own `Services:BaseUrl` for the API is now `127.0.0.1:5252` locally, so
+  server-to-server calls stop making a doomed `::1` attempt before every connection. **That file is
+  gitignored**, so it is recorded in `docs/deploy-production.md` beside the SMTP trap rather than
+  committed.
+
+**Why `localhost` is still what everything ASKS for, and must be.** `:5078` is the redirect URI
+registered with Entra and an allow-listed CORS origin on the API; both are matched on the URL the
+browser used, not on what Kestrel bound. A client asking for `localhost` still reaches an
+IPv4-only listener because it falls back from `::1` to `127.0.0.1`.
+
+**Verified:** after the change, `lsof` shows **no `[::1]` listener on any of the three ports**, all
+three still answer `localhost` with 200, and the Playwright suite passes — including Blazor
+Server's SignalR websocket, which is the part that actually rides the connection.
+
+**Still true, and worth keeping:**
+
+- **UAT/production are unaffected**: Windows/IIS, not macOS Kestrel-on-loopback. This is a local
+  development problem, which is precisely why it is easy to keep re-diagnosing as "flaky tests".
+- `scripts/dev-api-supervisor.sh` stays. **A run with restarts in it is a run whose failures cannot
+  be trusted** — `grep -c restarting /tmp/ben-api-supervisor.log`.
+- `DOTNET_SYSTEM_NET_DISABLEIPV6=1` does **not** help; Kestrel still opens both listeners for a
+  `localhost` binding. Recorded so nobody spends the time twice.
+- Worth re-testing on a later .NET 10 patch and dropping the workaround if upstream fixes it. The
+  same class of bug was fixed once before, in 9.0.2, and evidently returned.
+
+**The lesson worth keeping**, independent of the bug: a suite failure whose message is about
+sign-in, or empty data, or a timeout, may be a *dead dependency* wearing a costume. Check the
+hosts are alive before believing any of it.
+
+## 188. Tier shape: free is public-only, paid unlocks private client work (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> The free tier can only have public cases with public files and results, and can have 2 public
+> cases open. When you move to the first paid tier, they can accept private cases from clients
+> and have 2 private and any number of public.
+
+This is a sharper line than anything in item 143 and worth taking seriously: it makes the free
+tier a *contribution* tier rather than a crippled version of the paid one. A free group's work
+feeds the public side of the site — cases, evidence, results anyone can read — which is exactly
+what item 186's feed and item 88's discovery need in order to be worth visiting. The thing you
+pay for is **privacy**, which is also the thing a paying client is actually buying.
+
+It also lines up with what item 184 already built: `IsPrivateEngagement`, the display-time name
+redaction, and `PrivateResidenceCases` as a plan limit. The machinery for "this plan may hold N
+private cases" exists; this changes what the numbers are and makes the free number **zero**.
+
+**To settle before building:**
+
+- What happens to a free group's existing private cases if this lands after they have some — the
+  lapse path from item 184 (unpublish + 30-day stranded-client notice) is the obvious model.
+- Does "public case" mean the client agreed to publication? A client requesting an investigation
+  through the site has to be told, at request time, that a free group's work is public — that is
+  a consent surface, not a settings toggle.
+- Whether "any number of public cases" stays literally unlimited, or gets a high ceiling so one
+  group cannot flood discovery.
+
+### Billing and the iPhone/iPad apps — Ben asked, and the recommendation is: don't
+
+**Keep the apps free and entitle them from the group's plan.** Three reasons:
+
+1. **Apple takes a cut of anything sold in-app.** Digital content unlocked inside the app must go
+   through In-App Purchase (15–30%). The subscription is already sold on the web; selling it
+   again in the app would either duplicate the billing or hand Apple a slice of revenue the site
+   already collects cleanly.
+2. **The app is what makes the subscription sticky, not a product beside it.** A group that
+   records its investigations on the phone has its evidence in this system rather than a folder
+   of files. Charging for that discourages exactly the behaviour worth encouraging.
+3. **Seats already exist.** Item 144's overflow-seat model is the right lever if per-person
+   revenue is wanted: the app rides the seat, and a group with more members pays for members —
+   not for an app.
+
+The one place billing meets the app is the **paid-event flow in item 189**: reserving a spot on a
+paid weekend is a purchase, and if that is ever taken *inside* the app it is Apple IAP territory.
+Keep reservations on the web and the app stays free of it.
+
+## 189. Public places, multiple groups, and ticketed public events (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Places that are public like The Thomas House in Red Boiling Springs, TN should be able to have
+> multiple groups have investigations there because it is public. Also there are organizations
+> like Ghost Hunt Weekends which hold events there. Maybe we allow people to sign up for public
+> events like these. The owner should be able to schedule these events, create a page to advertise
+> the event, and see how many unique people looked at it. People should be able to show interest,
+> ask a question, or reserve X spots; the owner marks them Attending or Confirmed. When confirmed,
+> the user can use the iPhone/iPad app during the investigation to post data. Messages in the apps
+> go to everyone confirmed to be attending that investigation only.
+
+**Two features wearing one coat, worth separating:**
+
+**(a) A public place is not owned by one group.** Item 90's places and item 9's investigation
+mapping assume a place belongs to the org that entered it. The Thomas House is a venue many
+groups visit. Needs: a place that several organizations can each hold their own investigations
+at, without seeing each other's cases, and a public place page that lists what has been published
+about it by anyone. This is close to the item 80 CMS work and to the walking-tour group kind.
+
+**(b) A ticketed public event, which is a paid tour by another name.** Ben has already said the
+weekend-long event is "really a lot like the Ghost Tour Walk" — and the walking-tour group kind
+(`RunsPublicTours`), item 111's attendee evidence flow, and the invite/RSVP machinery all exist.
+The new parts are the **funnel** and the **numbers**: show interest → ask a question → reserve N
+spots → owner marks Attending → Confirmed; plus unique views on the advert page.
+
+**Where it meets the app:** *Confirmed* becomes the gate. A confirmed attendee may post Field Kit
+data to that investigation, and the in-app group messages reach confirmed attendees only. The
+server side of that is already close — `FieldSessionUploadController.MayContributeAsync` allows an
+attendee, an org member, or anyone when the investigation is public — so the work is making
+"confirmed attendee of a ticketed event" one of the identities it recognises, not inventing a new
+path.
+
+**To settle:** whether reserving a spot takes payment (see item 188 — keep purchases on the web,
+not in the app), what a no-show or refund does to the Confirmed gate, and whether a visitor's
+uploads at a paid event belong to the visitor, the host organization, or both.
+
+## 190. Devices talking to each other with no internet (Ben, 2026-08-26)
+
+**Ben's proposal, recorded as given:**
+
+> Could our apps on iPads and iPhones during an investigation contact one another without internet
+> — send messages between those at the investigation. Push and receive from nearby devices,
+> assuming they are in range. If they are not in range, as soon as they come back their messages
+> catch up and any waiting ones can send. At the end, the case manager or organization owner can
+> choose to archive them in the database.
+
+**This is buildable on Apple platforms, and it fits the product.** The Field Kit exists precisely
+because the building has no signal; a team spread across three floors of it currently cannot say
+"come to the cellar" without walking there. `MultipeerConnectivity` does peer-to-peer over
+Bluetooth and peer-to-peer Wi-Fi with no infrastructure, which is exactly this shape.
+
+**What makes it real work rather than a demo:**
+
+- **Range is small and walls are unkind.** Tens of metres, less through stone. The honest framing
+  is "the people near you", not "the team" — and the app must say which, or somebody will believe
+  a message was delivered when it was not.
+- **Store-and-forward is the whole feature.** Every message needs an id, an author, a timestamp
+  from the sending device, and a delivered-to set, so a device coming back into range can
+  exchange what each side is missing without duplicating. This is the same append-only,
+  reconcile-later discipline the reading log already uses.
+- **Background limits.** iOS restricts what a backgrounded app may do on Bluetooth; a phone in a
+  pocket with the screen off is the normal case for a sentry device. Expect to keep the session
+  alive the way the Field Kit already keeps the screen awake, and to be honest about the gaps.
+- **Clocks disagree.** Two devices with no network have no shared time. Order by a logical clock
+  and show the sender's own timestamp for what it is.
+- **Trust.** Anything within range can attempt to join. Pair against the investigation — only
+  devices signed in to an account confirmed for it — and encrypt payloads.
+- **Archiving is the easy half** and should not be forgotten: on reconnection, the case manager
+  or owner chooses to keep the thread, and it lands as case material like any other record.
+
+Related: `NearbyInteraction` gives direction and distance between devices on U1/U2 hardware — a
+separate idea, but the same permission and pairing surface, and "who else is in this building and
+roughly where" is obviously useful during an investigation.
+
+## 191. The audit log will outgrow the database — archive it, never delete it (DEFERRED 2026-08-31 — measured, and it is nowhere near)
+
+Ben's question: the audit log grows without bound because nearly everything is audited; should
+old records be archived after a period, rather than deleted?
+
+**Yes — and the instinct not to delete is the right one.** An audit trail whose old entries were
+thrown away is worth much less than one that can answer a question about last year, and for a
+platform holding other people's case material the ability to say *who did what, when* is part of
+what is being sold.
+
+**The shape that fits this system:**
+
+- **Keep a hot window in SQL Server** — 90 days is a reasonable starting point, and it is the
+  window anyone actually queries interactively.
+- **Roll everything older into compressed monthly files** in the existing file storage
+  (`FileStorage:RootPath`), as newline-delimited JSON, gzipped. One file per month per table,
+  plus a small manifest row in the database so an archive is *discoverable* rather than a folder
+  someone has to know about. NDJSON because it appends, streams, and survives a torn write — the
+  same reasoning as the Field Kit's reading log.
+- **A restore path, tested.** An archive nobody has ever restored is a belief, not a backup. The
+  job that writes them should have a counterpart that reads one back into a queryable form, and
+  it should be exercised.
+- **Do the sums before choosing the window.** Row counts per month by table would say whether 90
+  days is generous or absurd; that measurement should come first.
+
+If SQL Server Enterprise features are ever available, table partitioning with partition switching
+is the tidier mechanism for the same idea — but the file-based roll-off works on any edition and
+keeps the archive portable.
+
+### Measured 2026-08-31 — the premise does not hold yet
+
+The item's own instruction was "do the sums before choosing the window". Done, against the live
+database:
+
+| | |
+|---|---|
+| Whole database | **272 MB** |
+| `AuditLogs` | **444 rows, 1.1 MB** |
+| Largest table (`Logs`) | 6,066 rows, **36.5 MB** |
+
+Every table's oldest row is 2026-08-27, so this is four days of a rebuilt database — but the rate
+is the point: ~111 audit rows a day is roughly **40,000 a year, well under 100 MB**. A hot window,
+an NDJSON roll-off and a tested restore path is the right design *eventually*, and it is written
+down above so it does not have to be re-derived. Building it now would be effort spent on the
+smallest number in the table.
+
+**Revisit when `AuditLogs` passes about a million rows, or when the database as a whole becomes
+awkward to back up.** Neither is close.
+
+**What the measurement actually found is the opposite of what was expected**, and it is now item
+202: the biggest table is not the audit log but the ERROR log, and 96% of it was one avoidable
+message. The instinct to measure before building was right; it just found a different problem.
+
+## 192. Running out of room for files — yes, a new drive works (Ben, 2026-08-26)
+
+Ben's question: if collected files outgrow the current storage location, can he buy a new hard
+drive and have it become more room?
+
+**Yes, and more easily than it might look**, because of something proved during the 2026-08-26
+thumbnail diagnosis: **the database stores only relative paths** (`orgs/{guid}/{file}`), and
+`FileStorage:RootPath` supplies the rest. Move the tree, point the root at its new home, and every
+existing row still resolves. Nothing in the database needs rewriting.
+
+Three ways to add room, roughly in order of preference:
+
+1. **A bigger volume, one root.** Copy `C:\ishaunted-files` to the new drive, change
+   `FileStorage:RootPath`, restart. Simplest thing that works, and the one to choose while the
+   answer is "we need more space", not "we need many machines".
+2. **Mount the new drive into the existing path.** Windows can mount a volume at an empty folder,
+   so `C:\ishaunted-files\2027\` can physically live on a different disk with no configuration
+   change at all. Useful if the files should stay under one root by year.
+3. **Network or object storage.** A UNC path works today with no code change. Cloud object
+   storage (S3/Azure Blob) would need an `IFileStorageService` implementation, which is a real but
+   contained piece of work — the interface already exists and everything goes through it.
+
+Two things worth doing before any of it:
+
+- **Measure.** Which organizations and which media kinds account for the growth. Video will
+  dominate; the Field Kit will accelerate it.
+- **Decide about derivatives.** Sanitised copies and thumbnails are regenerable. If space gets
+  tight, those are the cheapest things to drop and rebuild on demand — unlike originals, which
+  are irreplaceable.
+
+**Related and already true:** UAT shares the dev database but not the blobs, which is why
+ishaunted.com shows "File data is unavailable" for files uploaded on the Mac. Whatever storage
+plan is chosen should say plainly which machines share which file store.
+
+## 193. The private-engagement toggle is offered to groups whose plan refuses it (CLOSED 2026-08-30 — toggle fixed 2026-08-26, the TierCapability sweep finished 2026-08-30)
+
+The "Private engagement" checkbox on the case editor renders unconditionally. A free-tier group can
+tick it, save, and get a 400 back from `PrivateCaseGate`. The help text beside it does say a plan is
+required — but the control is live, so the only way to learn is to try.
+
+This is IH-03's shape inverted: not an invisible grant, but a **visible control that always fails**.
+Both come from the same root, a UI that cannot see what the server will allow.
+
+The fix is now cheap, because the widened `my-permissions` endpoint tells the browser what the plan
+includes: disable the toggle, and say why beside it rather than after the attempt. Folded into the
+step-2 work on `feature/role-grants-visible`.
+
+Worth checking the same pattern elsewhere while there: anything gated by `TierCapability` almost
+certainly renders the same way, since none of it could see the plan until now.
+
+### The sweep — done 2026-08-30
+
+All three `TierCapability` values checked for the same shape, a control that renders without
+knowing what the plan allows:
+
+| Capability | Surface | Verdict |
+|---|---|---|
+| `PrivateResidenceCases` | case editor toggle | fixed 2026-08-26 (this item's headline) |
+| `MediaMetadataStripping` | group settings | **already correct** — `MediaStrippingPolicy` returns `CanChoose`/`NeedsUpgrade` and `OrgSettingsManager` renders them (item 181 built it right) |
+| `CaseTransfers` | `CaseTransferPanel` | **was blind — fixed here** |
+
+`CaseTransferPanel` was the only one left, and it was blind at both doors. A free-tier group could
+open the propose dialog, pick a destination, write a reason and submit, and only then collect the
+sending gate's 400 — the whole form filled in to learn one thing. A group *receiving* a case could
+press Accept and be refused for the same reason, or, for a private case, because its plan lacks the
+private lane.
+
+Both answers were already on the wire: `my-permissions` returns every capability, so this needed no
+server change. The rule went into `Ben.Web.Services/CaseTransferPlanGate.cs` rather than a Razor
+expression, because a Razor expression cannot be tested and this one has three ways to get it
+backwards. Nine tests; four of them fail against the pre-fix behaviour, which is the check that
+they discriminate.
+
+**Reject is deliberately not gated.** The server says declining work never requires a plan, and a
+UI that disabled Reject would trap a group with an incoming case it can neither accept nor turn
+down.
+
+**Left undone, on purpose.** The propose dialog's destination picker still lists groups whose own
+plan cannot receive a transfer; picking one produces a clear server refusal naming that group's
+plan. Fixing it properly means widening `OrganizationListItemResponse` — a DTO used all over the
+site — and running a capability lookup per row on a general list endpoint. That is the same shape
+as item 194 (a client cannot tell which groups may take their case), and belongs with it rather
+than bolted onto a transfer dialog.
+
+## 194. A client cannot tell which groups may take their case until after they pick one (CLOSED — built 2026-08-26)
+
+The gate works — `MyCaseController` refuses a transfer to a group whose plan does not cover
+private-residence work, with "Pick a different group, or ask them about upgrading." But `/find` and
+the request-an-investigation flow surface **nothing**. Somebody with a haunted house browses groups,
+chooses one, and only then learns that group cannot take their case.
+
+Backwards, and avoidable: the capability is knowable when the list is built.
+
+**Ben's direction (2026-08-26):** show it on the card, and make paid groups stand out — a colour
+for groups that can take private work, plain for free-tier ones, with the free ones noted as
+public-investigations-only.
+
+Design notes for whoever builds it:
+
+- **Say what a free group CAN do**, not what it lacks. "Public investigations only" is a fact;
+  greyed-and-diminished reads as a punishment, and these are the early adopters.
+- **Filter, don't only tint.** Somebody requesting an investigation of their HOME should have
+  free-tier groups filtered out by default, with an explicit "show groups that cannot take private
+  cases" escape. That answers their actual question rather than decorating it.
+- **Do not hard-block selection everywhere.** A free group can still take a public case — a ghost
+  walk, a public building. Block it for a private-residence REQUEST, which is the only place the
+  plan is relevant.
+### Built 2026-08-26
+
+`TierAreaResolution.WithCapabilityAsync` resolves one capability for a whole listing in a fixed
+number of queries (asking per card is the N+1 that turns a browse page into forty round trips),
+and both public listing endpoints stamp `TakesPrivateResidenceCases` onto every result. The finder
+badges it — colour for groups that can, plain "Public investigations only" for the rest, per Ben's
+"say what a free group CAN do". The request wizard **filters** rather than only tinting: groups
+that cannot take private-residence work are hidden by default, with an explicit checkbox to show
+them, and an honest empty state when the filter hides everything. Free groups are NOT blocked from
+public cases anywhere — the filter lives only in the wizard, which is about somebody's own home.
+
+Five tests pin the batched resolver to the single-group one, including all three fail-open cases
+(no tiers, no exclusion row, empty list). Verified live on the anonymous path.
+
+**Promotion in ORDER, added the same day.** Paid groups lead — but only WITHIN a range bucket,
+never across one. Promoting globally would put a paid group forty miles away above a free one down
+the road: worse for the searcher, and the pay-to-win shape that makes a directory untrustworthy.
+Inside a bucket every group is equally reachable, so leading with the ones that can actually take
+the case is a service rather than a tax. On the browse listing the promotion is applied within the
+page the database already chose, because a group's visibility should not depend on how somebody
+paged to it. Two tests pin it, including the boundary: a free group IN range still outranks a paid
+group out of it.
+
+**Still open:** the same treatment on `/organizations` if it ever grows a public face.
+
+- **Tie the highlight to the paid tier itself**, not to a new "featured" flag. Otherwise there are
+  two competing notions of prominence the moment paid placement arrives (item 143).
+
+## 195. Verify a 100%-off trial end to end before September (Ben, 2026-08-26)
+
+Ben plans to start taking groups on 1 September and wants to offer a three-month trial of the paid
+tier. **The coupon machinery already expresses this**: `CouponDuration.Repeating` with
+`DurationPeriods = 3` and `PercentOff = 100`, plus `ValidFromUtc` (1 September), `RedeemByUtc` to
+close the window, `MaxRedemptions` to cap it, `AppliesToInterval` for monthly-only, and
+`CouponKind` batch codes if each group should get its own.
+
+Nothing needs building. Two things need PROVING, because both are the kind of edge that is only
+discovered by a customer:
+
+1. **A zero-value period all the way through.** 100% off means an invoice for nothing — through the
+   append-only ledger (item 168), the frozen tax line, and the receipt. A zero-value invoice is
+   exactly the case a billing path forgets.
+2. **What happens in month four.** The group should meet the renewal notice that already exists,
+   not a surprise charge. The trial ending is the moment the relationship is won or lost.
+
+Both are testable today against the seeded billing demo data.
+
+### Verified 2026-08-26 — one of the two was broken
+
+**1. The zero-value period WAS forgotten, exactly as predicted.** `AdminBillingController`
+refused any amount at or below zero on all three entry paths, so a 100%-off period could not be
+recorded at all — a three-month hole in the billing history of the first groups Ben courts.
+Fixed: a CHARGE or PAYMENT may now be zero (a trial period costs nothing and still has to appear,
+and its description names the coupon that made it free); a PAYMENT of zero still takes the next
+receipt number, so the sequence has no gap for an accountant to ask about. Negative stays refused
+on every path, and an ADJUSTMENT still demands a positive number because its direction lives in
+the credit flag. Three tests, each proven by reverting the fix under them.
+
+**2. Month four already works.** `SubscriptionLapseJob` sends its fourteen-day and seven-day
+notices before EVERY period end, so a trial's last period meets the same warning a paid one does
+— no surprise charge, and the machinery needed no change.
+
+**The quote is proven too (2026-08-26, later).** The half a group actually READS before deciding
+had no tests at all. Six now cover it: 100% off quotes nothing payable and no tax, the quote names
+how many periods the trial covers, no code quotes full price, a trial before its ValidFromUtc and
+one past its RedeemByUtc both decline to discount and say why, and a wrong code reads identically
+to a withdrawn one (distinguishing them would let anybody probe which codes exist). Proven by
+capping the discount at 90% and watching the right test fail.
+
+Two things learned seeding them, worth knowing before configuring the real thing: the quote
+resolves the tier from the group's MEMBER COUNT rather than taking a tier id, and the ladder's
+lowest band must start at 1 member or every quote answers 503.
+
+### The trial-ending wording — fixed 2026-08-27
+
+Both notices now ask whether this is a renewal or the end of a free ride, and say the true thing
+either way. A group finishing a trial reads "your free trial ends on DATE. After that, keeping
+the plan you are on costs $49.00 per month" — never "renewing keeps everything exactly as it
+is", which was reassurance that would have been contradicted by their first invoice.
+
+The distinction is `CouponMath.IsLastFreePeriod`: the redemption still applies, it is paying
+nothing (`Payable <= 0`), and exactly one period remains. All three matter — a `Forever` coupon
+is never a trial ending however free it is, a group two months into three is not ending yet, and
+a discount that still leaves something payable was never free. The two negative cases are pinned
+by tests and were proven by treating any coupon as a trial and watching them fail.
+
+The price is read from the tier's CURRENT active price, not the `ListPrice` frozen on the
+redemption, because the group may have changed bands since. When no price resolves, the notice
+says "what your plan lists" rather than inventing a figure — a notice naming the wrong price is
+a broken promise, one naming none is a link to click.
+
+Five tests. **Still Ben's to decide:** whether the trial notice should also carry a link
+straight to the billing page, and whether "you do not have to do anything, and you will not be
+charged" is the tone he wants for a group choosing to walk away — it is deliberately
+low-pressure, which is a judgement about the relationship rather than about the mechanism.
+
+### The Stripe door reopened it — three months free delivered ONE (fixed 2026-08-31)
+
+Everything above was verified on **2026-08-26 against the manual admin path**. Stripe went live on
+**08-30** and added a second door to the same offer, with a rule of its own: Stripe refuses a
+zero-amount session, so `OrganizationCheckoutController` routes a 100%-off period straight to
+`FulfillAsync` with a **null customer ref and a null payment method** — the group never sees a card
+form, because there is nothing to collect.
+
+`StripeRenewalJob`'s due query then required both refs to be non-null. **A trial group was skipped
+by the very job meant to carry it.** Month two never opened and `SubscriptionLapseJob` wound them
+down: "your first three months are free" would have delivered one month and a lapse notice, to
+exactly the groups Ben was courting on 1 September. `RenewOneAsync` already had a correct "a free
+continuing period skips the card entirely" branch — it was unreachable for the only groups it was
+written for.
+
+**Fix.** The card predicates come off the ORG due query, and the question moves to where the price
+is known: if something is owed and there is no card, log and return, leaving it to the lapse job —
+the one-consequence-engine rule. Whether a card is NEEDED is a question about the price, not a
+precondition for being looked at. The SEAT query keeps its predicates: a seat is always born from a
+real card checkout and takes no coupons, so a seat without one is genuinely un-renewable.
+
+**Two tests, both proven to discriminate.** `TrialCheckoutTests` covers the act of redeeming (six —
+the fake gateway asserts `Payable > 0`, so a regression that sends a free period to Stripe fails
+loudly here rather than in production) and `TrialRenewalTests` covers months two and three (two).
+The renewal test fails before the fix; the charge-site guard test fails with the guard removed,
+where the job calls Stripe with an **empty** customer ref and payment method — what `!` on a null
+was hiding. Full suite 3658 passed, 0 failed.
+
+**The lesson, which is the general one:** a feature verified on one path is not verified on a path
+added after it. Item 195 was closed as "nothing needs building, two things need proving", and both
+were proven — on the only door that existed that week.
+
+**Not a bug, but worth knowing:** the Stripe free path records a $0 CHARGE naming the coupon and
+**no** PAYMENT row, so no receipt number is taken. The admin path gives a zero payment the next
+receipt number precisely so the sequence has no gap. Two defensible rules on two paths; reconcile
+if an accountant ever asks which.
+
+### The campaign as configured
+
+Ben settled it 2026-08-31: **one shared code, 100% off, 3 monthly periods, first subscription
+only, valid 1 September through 30 November, capped at 25 redemptions.** Proposed code `FOUNDING`
+rather than the form's `LAUNCH25` placeholder — a number inside a 100%-off code reads as the
+discount. Created through `/admin/coupons`; the form turns a "Redeem by" date into 23:59:59 on that
+day, so the window closes at the end of 30 November rather than its start.
+
+**The fix must be deployed before the first trial group's month two** — roughly 1 October if anyone
+redeems on the first day.
+
+## 196. A hold-harmless form for visits to private residences (Ben, 2026-08-26)
+
+> "We may need to provide a hold harmless form to generate for groups visiting private residences."
+
+A group walking into somebody's home at 2am, in the dark, with equipment and strangers, has real
+exposure — to the homeowner's property, to injury on unfamiliar stairs, and to what gets published
+afterwards. A generated waiver is the sort of thing a small group never gets round to writing and
+would value having handed to them.
+
+**It fits what already exists**, which is why it is worth doing properly rather than as a static
+PDF download:
+
+- `IsPrivateEngagement` (item 184) already marks exactly the cases this applies to, so the form can
+  be offered where it is relevant instead of everywhere.
+- `CaseReportPdfGenerator` already produces PDFs from case data, so the group's name, the client's
+  name, the address and the visit date can be filled in rather than typed.
+- The client already has an account and a case view (`/my-cases`), which is where a signed copy
+  would naturally live for both sides.
+- Publication consent is already a concept here — item 184's leak-warnings and the
+  plan-governs-publication rule. A waiver that also records *what may be published* would join up
+  two things that are currently separate conversations.
+
+**Questions to settle before building:**
+
+- **Signature.** A typed name and a timestamp is not nothing, but it is not a signature either.
+  Real e-signature means either integrating a provider or accepting a drawn-signature image with
+  an audit trail. That choice sets the size of the work.
+- **Who owns the wording.** This is the one that matters. A template that a group treats as legal
+  cover, written by a website, is a liability of its own — for them and for IsHaunted.com. The
+  honest shape is a clearly-labelled *starting point* the group may edit, with a plain statement
+  that it is not legal advice and they should have their own reviewed. Ben may want a lawyer's
+  wording for the default before it ships at all.
+- **Jurisdiction.** Waiver enforceability varies by state, and some clauses are void in some of
+  them. A single national template will be wrong somewhere. Per-state variants are a research task,
+  not a coding one.
+- **Whether it blocks anything.** Recommend NOT gating the investigation on a signed form —
+  groups will work anyway and a blocked flow just gets worked around. Offer it, record whether it
+  was signed, and show its absence on the case.
+
+
+## 197. Haunted hotels — a property that IS the attraction (Ben, 2026-08-26)
+
+> "Ability to run an entire hotel where the attraction to the public is how haunted it is
+> reported to be. A hotel owner is like an organization owner, but they own the property so there
+> are always ongoing investigations. Also, an owner of a hotel or dormitory would need to define
+> their rooms and offerings. We can discuss it later when we get further."
+
+Parked deliberately — Ben wants to discuss it when we get further. Recorded now so the shape is
+not lost, because it inverts two assumptions the whole site currently makes.
+
+**What inverts:**
+
+- **The haunting stops being the problem and becomes the product.** Everywhere else, reported
+  activity is something a client wants investigated and possibly kept private
+  (`IsPrivateEngagement`, redaction, leak warnings). A haunted hotel wants the opposite: the
+  reports ARE the marketing, and the public page should lead with them. The privacy machinery
+  must not fight the business model — but guest-specific details still need the same care.
+- **Investigations stop ending.** Today an investigation is a visit: scheduled, attended,
+  written up, closed. A property owner investigating their own building is a standing state —
+  "always ongoing" in Ben's words. That is closer to the Field Kit's sentry mode and to a
+  rolling timeline than to the visit lifecycle, and it should not be modelled by forever-open
+  `Investigation` rows that every org-scoped list has to step around.
+
+**What already fits:**
+
+- `OrganizationKind` (item for walking tours) is exactly the seam: a `HauntedProperty` kind
+  (hotel, dormitory, inn — probably a sub-type or free label) with its own creation defaults,
+  the way `GhostWalkingTour` set address visibility and `RunsPublicTours`. Owner-of-property is
+  a kind of organization, not a new account type.
+- Places already exist (area 9) and the property is one Place the org owns rather than visits —
+  the dedup rule and public place pages carry over.
+- Public investigations, evidence votes, the feed, and CMS pages give the "how haunted is it"
+  public face a head start; per-room activity feeds could hang off the same publication flow.
+- Events + RSVP + overflow-seat billing already handle "book a night on the ghost floor" better
+  than a bespoke booking engine would at first.
+
+**Genuinely new:**
+
+- **Rooms.** A property defines its rooms/spaces (the Field Kit already stamps a `room` label on
+  readings — this would make those labels first-class and shared between the phone, the
+  timeline, and the public page). Per-room haunting history is the obvious public draw:
+  "Room 217's activity log."
+- **Offerings.** What a guest can buy: a night in a specific room, a ghost-hunt package, an
+  after-hours tour. Needs pricing, availability, and probably the same processor decision item
+  144/the subscription arc is already waiting on. Dormitory case suggests offerings ≠ only
+  lodging (student housing runs tours and events, not bookings).
+- **Standing investigation.** A first-class "ongoing" mode: no end date, rolling evidence,
+  sentry-style instrument feeds, per-room attribution. Needs its own lifecycle answer before any
+  UI.
+
+**Questions for the later discussion:** does a hotel need investigator members at all, or does
+it HOST visiting groups (which meets the existing model neatly — the hotel as a client whose
+case never closes, or as a venue listing groups can book)? Do guest reports enter as
+occurrences, feed posts, or a new lightweight "guest log"? And which tier does a property pay
+on — the seats model fits groups, not businesses whose value is the public page.
+
+## 198. A business plan for tours and events — flat-rate, not member-banded (Ben, 2026-08-27)
+
+> "How do I make money off of people who have ghost walking tours? … a subscription for
+> businesses like ghost walking tours or ghost hunting events … different than a ghost hunting
+> group."
+
+The gap it names: the paid tiers sell private-residence casework, which a tour business will
+never want. Under free-is-a-choice they would stay free forever. What a business values is
+already built — the GhostWalkingTour kind and finder filter, public events with RSVP, guest
+evidence review at public events, promoted placement, publications, and the free iPhone/iPad
+apps with the Field Kit as the on-tour instrument.
+
+**Nothing blocks starting today.** Onboarding is manual and Ben-shaped: email the pitch PDF
+(docs/IsHaunted-Tour-Business-Offer.pdf, source docs/tour-business-pitch.html), and on a yes,
+SuperAdmin creates the org as GhostWalkingTour and attaches a subscription row by hand. The
+recommended intro price in the PDF is $29/month or $290/year, flat per business — one extra
+ticket sold covers the month — with the same three-month-free machinery item 195 verified.
+
+**What to build when there are a few of them:**
+- A Business tier that is flat-rate: member bands should not price a tour company whose "members"
+  are guides. Cheapest shape: a tier row the resolver never bands into, assigned only by
+  subscription — which is exactly how free-is-a-choice already works.
+- Self-serve signup for it on the pricing page, once the payment processor exists (item 144's
+  decision).
+- Per-event capacity/ticket links if operators ask — NOT a booking engine; the PDF deliberately
+  sells RSVP as "no booking software to buy", not as a replacement for their ticketing.
+
+The PDF keeps the investor-doc honesty rule: every feature claimed is live today, no invented
+metrics, and the trial line matches what the coupon machinery actually does.
+
+## 199. One person, many organizations — the account is the person, the bill is the org (Ben, 2026-08-27)
+
+> "So maybe the ghost walk tours and the ghost hunter organization are actually two separate…
+> While a person could potentially work for a ghost walking tour and be a ghost hunter
+> organization owner, they would need two separate payments or need to expand their account to
+> cover both. But they could work for a ghost hunting walking tour and a ghost hunting event
+> provider, and still have their own ghost hunting organization they own."
+
+**Ben's instinct is what the schema already does, and it is worth stating so it stops being
+re-litigated.** Three facts already hold today:
+
+1. **A kind belongs to an organization, not to a person.** `OrganizationKind` is a column on
+   `Organization`. A tour company and an investigation group are two rows, each with its own
+   kind, defaults, address visibility, calendar behaviour and public page.
+2. **A subscription is keyed to an organization.** `OrganizationSubscription.OrganizationId`
+   and `MemberSeatSubscription.OrganizationId` — there is no user-level subscription anywhere
+   in the model. Two organizations therefore already means two bills, with no work required to
+   make it so. "Expand their account to cover both" would be the *new* idea, and it should be
+   resisted: it re-introduces the person as a billing subject, which is what makes the seat
+   model, the referral ledger, and the contract rules coherent today.
+3. **A person's memberships are unbounded and independent.** One account can guide for a tour
+   company, work events for a second organization, and own a third — each with its own roles,
+   permissions and title rung. The sidebar's group switcher and the my-memberships endpoint
+   (item 159) already exist for exactly this life.
+
+**So the answer to "two separate?" is yes — separate organizations, one account.** What should
+NOT happen is a second login, a second profile, or a "tour operator account type". The person
+is one identity with a history that spans employers; that is also what makes guest tour history
+and cross-org reputation possible later.
+
+**The real gap Ben's sentence exposes is the kind list, not the account model.** He named four
+kinds of business in three sentences — walking tour, *event provider*, investigation group,
+and (item 197) haunted property — and the enum has two:
+
+```
+InvestigationGroup = 0
+GhostWalkingTour   = 1
+```
+
+A "ghost hunting event provider" — the outfit that rents a decommissioned prison for a Saturday
+night and sells tickets — is neither. It is closer to a tour (public, ticketed, meeting point is
+the product, guides not investigators) than to a group, so today it would be created as a
+GhostWalkingTour and mislabelled everywhere its kind is displayed. That costs nothing
+functionally, since **the kind is a label and a set of defaults, never a gate**, but it reads
+wrong on the public page and in discovery filters.
+
+**Recommended when the kinds are next touched (with 197):** add `PublicEventProvider = 2` and
+`HauntedProperty = 3` in one append-only change, with their own `OrganizationKindDefaults`, and
+keep `RunsPublicTours` as the orthogonal capability it already is — a group that *also* runs
+tours says so with the flag rather than by changing what it is. Resist a fifth kind per new
+business idea: the test is whether the creation defaults genuinely differ, not whether the
+words differ.
+
+### Decided by Ben, 2026-08-27
+
+**Multi-group owner discount is case by case.** No rule, no automatic tier, nothing to build —
+each org keeps paying for itself, and where Ben wants to reward somebody running several, he
+applies it himself. The machinery for that already exists and needs no change: coupons and
+subscriptions are both keyed to an organization, so a SuperAdmin can price one group differently
+without the person ever becoming a billing subject. That is the property worth protecting, and a
+standing multi-org discount rule would have been the thing to erode it.
+
+**Both new org kinds are wanted** ("I like those org types to be available"), and are built:
+`PublicEventProvider` and `HauntedProperty`, appended to the enum with their own creation
+defaults, their own names, and a place in the creation wizard and the settings dropdown. The
+haunted-property kind is the seam item 197 will hang from when Ben takes it up; adding it now
+means a property owner is not made to call themselves an investigation group in the meantime.
+
+Three kinds are public-facing and one is not, which is the whole distinction the kind exists to
+draw — written once as `IsPublicFacing` rather than repeated per default, so a kind added later
+cannot pick up half of the behaviour.
+
+**Addendum (Ben, same day): the role is per-membership, and so is the seat charge.**
+
+Ben's third variation — "work for a walking tour, own a ghost hunting event provider and be
+part of an organization" — is three rows for one `AppUserId`, and it works today because
+authority is carried by the membership, never by the person:
+
+```
+OrganizationUserMembership: Id, OrganizationId, AppUserId, Role, MemberLevelId, IsActive
+HasIndex("OrganizationId", "AppUserId").IsUnique()
+```
+
+`Owner` is a value in `OrganizationMemberRole` ("exactly one owner exists per organization"),
+not a column on `Organization` and not a flag on `AppUser` — which is precisely why owning one
+organization grants nothing in another. Checked `AppUser` for anything global that could leak
+across orgs: no role, no admin flag, no tier, no subscription. The title rung (`MemberLevelId`)
+sits on the membership too, so "Lead Investigator" at your own group and "Guide" at the tour
+company do not collide.
+
+**The consequence to decide on:** `MemberSeatSubscription` is keyed `(OrganizationId,
+AppUserId)` in the same way. A person who is the *overflow* seat (item 144) in more than one
+organization is therefore billed separately by each of them, with no single place showing all
+three charges. That is internally consistent — every organization pays for its own headcount —
+but somebody guiding for a tour, working events for a second outfit and belonging to a third
+group may be surprised by three small charges. Not a bug, and if Ben wants it to feel like one
+relationship the fix is to group receipts at payment time, not to make the person a subscriber.
+
+## 200. The e2e suite is data-dependent, and that hid a real bug (CLOSED 2026-08-27)
+
+Chasing two e2e failures cost most of a session, and the lesson is worth more than the fix.
+
+**What happened.** Two tests failed on the long-lived dev database. The obvious theory —
+accumulated test data — was exactly backwards: running against a FRESH database produced *more*
+failures (six), and those six named the real defect. Three seeders create organizations without
+the default roles, title ladder and duty board that every real creation path adds. Fixed in
+026d101.
+
+**Why it was invisible.** The backfill seeders run early in startup, so they miss organizations
+created later — but the NEXT startup catches them. The bug therefore cannot be seen on any
+database that has been started twice, which is every database anybody actually uses. The
+known-good "401 tests, 0 failures on the rebuilt DB" run in the notes was itself a
+started-more-than-once database.
+
+**What is still open, and is the actual item:**
+
+- **The suite depends on state it does not create.** Tests assume roles, ladders and duties
+  exist; some appear to depend on data other tests leave behind. That is why two different runs
+  of identical code failed two different pairs of tests while both passing 373. A suite whose
+  result depends on run order and database age is a gate nobody can trust, and it will eventually
+  be ignored at exactly the wrong moment.
+- **Recommended shape:** each test that needs a role/ladder/duty should assert its precondition
+  with a clear message (`OrdinaryMemberBaselineTests.RoleIdAsync` already does this well — its
+  failure message is what found the bug) or create what it needs. The goal is that a first run on
+  a brand-new database is green, because that is the only run that proves the product rather than
+  the history of the machine it ran on.
+- **A first-run check is cheap:** stand a scratch database beside the real one, start the API
+  against it once, and assert every seeded organization has 8 roles, a full ladder and the four
+  duties. That single check would have caught this without a 400-test suite.
+
+**A second cause of the same shape, found 2026-08-27:** localhost and ishaunted.com share ONE
+database but have SEPARATE file storage. A file uploaded on the live server leaves a row every
+local run can see and bytes no local run can read, so `/media/...` answers 404 and any test that
+asserts a thumbnail decodes fails — with nothing wrong in the code. `ThumbnailsActuallyLoad`
+failed exactly this way on three of Ben's own profile photos, and the share-dialog picker test
+most likely followed it, because a picker full of unloadable files never settles.
+
+That is not a bug to fix in the app; it is a property of pointing two environments with different
+storage at one database. Worth knowing before triaging any media failure locally: check whether
+the file's bytes were ever written on THIS machine before believing the code is wrong. The clean
+answer is a local database, which is also what would end this item's main complaint.
+
+**Do not fix this by rebuilding the shared dev database.** It also serves ishaunted.com, and
+rebuilding it has already caused one outage. Create a second database beside it instead — the
+whole investigation above was done that way, and IsHauntedDb was never touched.
+
+### Done 2026-08-27
+
+`scripts/run-e2e.sh` gives the suite its own database and its own uploads directory, seeded from
+scratch. The main complaint of this item — a suite whose result depends on run order and database
+age — is answered: what it tests is now the product rather than the history of the machine.
+
+Isolation immediately paid for itself. It showed the earlier seeding fix was INCOMPLETE (it could
+only help groups created after it, never one already in a database), found a
+`FileMigrationService` predicate mismatch, showed the site-wide walks could not tell a working
+feature gate from a broken route, found the route crawl handing the publications page an
+organization slug, and turned three intermittent failures into three fixable ones.
+
+Three consecutive full runs afterwards: 375/0, 375/0, and 374/1 whose single failure is fixed.
+
+**Still true, and worth knowing:** roughly one test per full run can still fail on a loaded
+machine, always a different one, always a test asserting before the page has rendered. Three of
+those were fixed today by waiting on a signal the page produces rather than on the circuit being
+up. That is the pattern to apply to the next one rather than treating it as a product defect.
+
+## 201. A whole access token in a URL is too big to be safe (CLOSED 2026-08-27 — BrowserTicketStore, 43 chars against 2504)
+
+Ben's profile photos would not display on ishaunted.com while working perfectly on localhost.
+Root cause: `/media/{id}/{kind}?t=...` carries the viewer's API access token, encrypted with Data
+Protection, and a real ticket measured **2504 characters**. IIS refuses a query string over 2048
+with 404.15 **before the request reaches the application** — nothing logs it, and what comes back
+is an IIS error page, so it reads as "wrong URL" rather than "URL too long". Kestrel has no such
+limit, which is exactly why localhost was clean and only the deployed site failed.
+
+Raised to 16384 in `Ben.Web.Website/web.config`, which unblocks it. **That is the band-aid.**
+
+**Why it deserves a real fix.** A limit raised is still a limit, and this one is crossed by
+something that grows on its own: the access token. Nothing warns when it gets longer — the next
+claim added to a JWT silently pushes some viewers back over, and the failure is invisible
+server-side because IIS answers before any of our code runs. It also looked *intermittent* for
+exactly this reason: whether a page's images worked depended on how long that viewer's token
+happened to be that day.
+
+It is bad for other reasons that have nothing to do with length. A URL is the most-copied,
+most-logged, most-cached string in a system: it lands in proxy logs, browser history, and
+`Referer` headers. Encryption keeps it unreadable, but a URL nobody can read is still a URL
+anybody can replay until it expires.
+
+**Recommended shape:** keep the ticket, shrink it to an opaque handle. Mint a short key (a GUID
+is 36 characters against 2504), hold `(fileId, token, expiry)` server-side against it, and put
+only the key in the URL. Everything the current design is careful about survives — bound to one
+file id, expiring, token never in the URL — and it gets *better*, because the token stops
+travelling at all.
+
+**The one thing to get right:** the current ticket is stateless, so it survives a restart and
+would survive a second web instance. A server-side handle does not. Derive the key
+deterministically (file id + a hash of the token + the hour bucket, as the expiry is rounded
+today) so the same viewer gets the same URL across renders and the browser can still cache the
+bytes — and rebuild the entry on a miss rather than failing, so a restart costs a re-mint and not
+a broken image.
+
+**Also worth a guard:** nothing anywhere asserts that a generated URL fits in a URL. A test that
+mints a ticket and checks the resulting query string against a stated ceiling would have caught
+this before deployment, and is three lines.
+
+### Done 2026-08-27
+
+`BrowserTicketStore` replaces the encrypted payload with an opaque handle: **43 characters
+against 2504**, and the token no longer travels at all. Both ticket services use it — media
+(1 hour) and chunked upload (12 hours) — under separate scopes, so one can never be redeemed as
+the other, which matters because their lifetimes differ by eleven hours.
+
+Everything the old design was careful about survives. Bound to one id, still checked on redeem
+even though the handle is derived from it — deriving is the optimisation, the check is the rule.
+Expires, absolutely rather than slidingly, so a handle cannot renew itself past the session it
+belongs to. And the handle is unguessable because the access token is part of what is hashed:
+256 bits of digest over a secret, so nobody without the token can construct the handle standing
+for it.
+
+**Derived, not random**, so the same viewer asking for the same file in the same hour gets the
+same URL and the browser can cache the bytes — the property the rounded-down expiry gave the old
+version, kept for the same reason.
+
+**In-memory, and that is fine here.** A restart empties it and every outstanding handle stops
+resolving, which sounds worse than it is: this is Blazor Server, and a restart has already
+destroyed every circuit, so the page holding those URLs is gone anyway and its viewer must
+reload. The store loses nothing that was not already lost.
+
+The guard exists too, and it is the point: `A_ticket_fits_inside_the_default_iis_query_string_limit`
+asserts against the **default** 2048 rather than the raised limit, because a ticket that only fits
+because of a config change is one waiting to break on the next server. Proven by reverting to the
+old design under it — it reports "A ticket is 2530 characters", within a few of the 2504 that
+actually broke.
+
+The raised limit in `web.config` stays as a belt: harmless, and it protects any other long URL.
+
+## 202. The error log was 96% noise, so it could not show a real fault (found 2026-08-31 — FIXED)
+
+Found while measuring item 191. `Logs` is the largest table in the database, every row is `Error`,
+and **1,978 of its 2,022 rows were one message** — `An unhandled exception has occurred while
+executing the request` — carrying a `FileNotFoundException` and a full stack trace. **1,934 of
+those stood for just THREE files**, one of them requested 1,695 times in four days.
+
+**Why it happened, and why it is not the missing files' fault.** Those particular rows are the
+known one-database-two-disks condition: the row exists here, the bytes live on the server. But the
+handler in `Program.cs` already treats a missing stored file correctly — 404 to the caller, and a
+**Warning**, with a comment explaining that a routine data gap must not fill the error log and hide
+real faults.
+
+That decision never took effect. ASP.NET Core's `ExceptionHandlerMiddleware` **logs the exception
+at Error, with the stack trace, BEFORE it invokes the registered handler.** The Error was written
+regardless; the deliberate Warning landed underneath it. The code was right and was being
+overruled by the framework, which is why nobody noticed by reading it.
+
+**The damage is not disk.** 36 MB is nothing. It is that a log where one missing avatar outnumbers
+everything else twenty to one **cannot show a real fault** — the precise outcome the handler was
+written to prevent. On production the same mechanism applies to any file whose bytes genuinely go
+missing.
+
+**Fixed** with `LogNoise.IsDuplicateOfAHandledMissingFile`, a Serilog `ByExcluding` filter scoped
+as tightly as the problem: that one middleware, that one exception family, that one level. The
+same exception from anywhere else still logs at Error; every other exception from that middleware
+still logs in full; and the handler's own Warning is untouched, because **the Warning is the record
+being kept** — the database and the disk disagreeing is worth knowing.
+
+In code rather than configuration, deliberately: it is a correctness rule about not contradicting
+ourselves, and a config setting that silently turned it off would bring the noise straight back.
+
+Six tests, each holding one clause, and mutation-verified — removing the source-context clause
+fails exactly the test that guards it, on a clean build.
+
+**What each of those rows cost.** Measured after the fix, when 74 fresh error rows were generated
+deliberately to prove the filter: `Logs` went from 36.5 MB to 38.0 MB for 84 rows — roughly
+**18 KB per row**, because every one carries a full stack trace plus its properties XML. So the
+1,978 noise rows accounted for essentially the entire table, and `Logs` was 14% of the whole
+272 MB database.
+
+**Follow-up now built as item 203:** nothing pruned `Logs` at all.
+
+## 203. Nothing pruned the error log (built 2026-08-31, alongside 202)
+
+Item 202 removed the message that made up 96% of `Logs`. That fixes the noise and not the shape of
+the problem: **no window existed at all**, so whatever grows next simply takes its place.
+
+`LogRetentionJob` is a scheduled job in the existing `IScheduledJob` loop. Default window **30
+days**, `Logging:Retention:Days`.
+
+**It deletes rather than archives, and the difference from item 191 is the point.** The audit
+trail is archived and never deleted, because *who did what, when* is part of what is being sold
+and holds its value for years. This is Serilog's Error sink — diagnostic value that decays in
+days. Nobody has ever wanted an unhandled exception from three months ago, and rolling these into
+compressed files would spend the disk space the platform is short of on the least valuable bytes
+it holds.
+
+**The safety properties, in the order they matter:**
+
+- **0 or less switches it off.** Read literally, `0` means "keep nothing" and `-30` is a cutoff
+  thirty days in the *future* — either would empty the table. Both mean off.
+- **A window below 7 days is clamped up, not obeyed.** A mistyped `1` is the realistic accident.
+  Obeying it destroys nearly everything; refusing outright leaves a misconfigured site with no
+  retention at all. Clamping does neither, and logs that it did.
+- **The table name is validated** against a plain-identifier pattern before it can reach a
+  command. It is the one part of the statement that comes from configuration.
+- **Bounded batches** (5,000 a statement, 50,000 a pass, swept at most every 6 hours), so a first
+  run against years of rows is many cheap passes rather than one long lock.
+
+**On deployment it deletes nothing**, deliberately: the oldest row in the table was four days old.
+The job ships inert and starts working when there is genuinely something old — the cheapest way to
+roll out a statement that removes rows.
+
+**A trap found while writing it, worth knowing beyond this job.** The two log tables in this
+database keep time differently. `AuditLogs.OccurredAt` is **UTC**; Serilog's sink writes
+`Logs.TimeStamp` in the logging process's **LOCAL** time (`ColumnOptions.TimeStamp.ConvertToUtc`
+defaults to false). Measured 2026-08-31: the newest row in `Logs` read 14:30 while `AuditLogs`
+read 19:31 — the same instant, five hours apart. The first draft built its cutoff from
+`DateTime.UtcNow` and would have shifted the window by the offset, silently and in the wrong
+direction in half the world. **Any query joining or comparing these two tables has the same
+trap**, and nothing about the column names warns you.
+
+**Not covered, and correct:** `AuditLogs` and `SignInEvents`. The first is item 191's business;
+the second feeds the sign-in insights dashboard and is 0.7 MB.
+
+## 204. A member's Home that is a desk, not a poster (CLOSED 2026-09-03 — MyDeskController, MemberDesk.razor)
+
+Next investigation, open cases, unread messages, gear checked out — the "has work waiting"
+banners already know all of this; the page below them repeats the visitor hero. Build the
+signed-in Home from the same queries the banners run, and keep the hero for visitors.
+
+**Size:** small–medium (a day). **Depends on:** nothing; every number is already served.
+**Order:** first — it is the most-seen page for every member and all the data is there.
+
+## 205. A default group page (CLOSED 2026-09-03 — OrgPublicFacts on the public home response)
+
+"This organization has not published a home page yet" is what every public group shows today.
+Build one from data the group already has: kind, area served, accepting cases, next public event,
+verified badge. The CMS page, when one exists, still wins.
+
+**Size:** small–medium (a day). **Depends on:** nothing. **Order:** second — it changes what
+every visitor to every group sees, and reuses the profile's own records.
+
+## 206. Client status mail (CLOSED 2026-09-03 — ClientStatusMailer, CaseStatusWording)
+
+When a case changes state or a visit is scheduled, the client gets the same sentence the site
+shows. The mail rail now works and is observable (item 187), so this is templates and triggers.
+
+**Size:** medium (a day or two: the state-change and scheduling seams, the templates, the
+per-client opt-out, the observability row). **Depends on:** nothing.
+
+## 207. Share a session or a piece of evidence by link (CLOSED 2026-09-04 — FieldSessionShareController, /s/{token})
+
+Time-limited, for a client or a TV producer who has no account. A signed link that opens the
+player or the evidence read-only until it expires, revocable from the case, with the view logged.
+
+**Size:** medium (two days). **Depends on:** item 208 is a natural companion; and note item 201's
+rule — nothing token-sized goes in a URL, so this is a short signed id resolved server-side.
+
+### Built 2026-09-04
+
+`FieldSessionShareLink` + `FieldSessionShareLinkView`, `FieldSessionShareController` (four
+authenticated routes, two anonymous), `SharedSessionDocument`, `FieldSessionSharePanel`, and a
+`ShareToken` mode on `FieldKitPlayer` behind the route `/s/{token}`. Made and withdrawn from the
+session's playback page, which is what the case's Report Builder already opens with **Play back**.
+
+Four decisions worth keeping:
+
+- **Coordinates do not travel by default.** A fix taken indoors is the building's street address.
+  The redaction sweeps the whole document **by property name** rather than down the one path the
+  format documents, because `position` declares `additionalProperties: true` and a device may write
+  a fix somewhere no code has seen. A document that cannot be parsed cannot be redacted, so it is
+  refused rather than forwarded.
+- **The token is random, not derived** — the opposite of the website's browser tickets. A derived
+  token comes back the moment its inputs recur, which is exactly what revocation must prevent.
+  22 characters, meaningless outside the table.
+- **Sharing is narrower than reading.** `MayContributeAsync` lets anybody read a *public*
+  investigation's sessions; minting a link that outlives their visit is a different act. Uploader
+  or active group member only.
+- **Unknown, expired and revoked all answer 404**, so a probe cannot tell a real token from a
+  guess.
+
+Two purges had to learn about the table — the NoAction foreign key to `FieldSessionUploadFiles`
+would have refused a group deletion. `OrganizationPurgeCoverageTests` and
+`OrphanedSessionPurgeCoverageTests` both caught it the moment the entity existed, which is exactly
+what they were written for after BenCo's deletion was refused on 2026-09-03.
+
+34 new tests; every guard proven against deliberately broken code first. Playwright coverage is in
+`FieldSessionShareLinkTests` (`TestCategory=ShareLink`) and has **not been run** — the seeded
+persona passwords live only in Ben's environment, and the dev SQL Server at 192.168.1.71 went off
+the network partway through verification.
+
+**Still worth doing:** a link that opens straight at a cited moment rather than at 00:00, once
+item 210's trim window exists.
+
+## 208. Session summary in the report (CLOSED 2026-09-03 — FieldSessionReadout)
+
+The Field Sessions report section cites a session; a one-paragraph readout — peak field, when, in
+which room, what was recorded at that moment — would make the PDF stand on its own.
+
+**Size:** small (half a day; the summary is a pure function of the document, already parsed by
+the player). **Depends on:** nothing. **Order:** early — cheapest item on the list.
+
+## 209. Universal links + a PWA manifest (CLOSED 2026-09-04 — AASA endpoint, manifest, entitlement)
+
+A link to a case opens the app on a phone that has it and installs cleanly on one that doesn't.
+An `apple-app-site-association` file served at the root, the associated-domains entitlement in
+the app, and a web manifest with icons and a start URL.
+
+**Size:** medium (a day; the AASA file must be served with the right type at the root, and the
+entitlement needs a signed build). **Depends on:** the App Store listing existing (it does) and a
+build after 1.0 review for the entitlement.
+
+### Built 2026-09-04
+
+The app already had a `DeepLinkParser` reading website URLs, so the work was deciding **which
+paths the association file may claim** — narrower than the parser's grammar, because claiming a
+path the app cannot render is worse than claiming nothing: the link leaves Safari, where the real
+page is, and opens an app that shows a placeholder.
+
+Three paths parse and were deliberately **left out**:
+
+- `/events/{id}` and `/organizations/{org}/cases/{case}` — both parse, and both fall through to
+  `RootShell`'s `default:` arm, which renders "Coming soon".
+- `/attending/{token}` — the router reads the token and throws it away; its own comment says the
+  flow stays on the website until an association file exists. Claiming it would lose an RSVP.
+
+Nine patterns are claimed. **No `exclude` entries at all**: Apple's component ordering is easy to
+get subtly wrong and fails silently on a stranger's phone, so `/events` is claimed exactly rather
+than claiming `/events/*` and carving the detail route back out.
+
+Both documents are endpoints, not files — the association file has no extension so static
+middleware has no content type for it, and the app id and site name come from configuration.
+`UnclaimedPaths` carries the reason for each omission **as data**, so a test asserts each is absent
+and a later author finds the reasoning instead of tidying up the gap.
+
+24 C# tests, 5 Swift, 4 Playwright — the Playwright ones need no credentials and **were run**.
+Guards proven by breaking them. The manifest's short-name rule was caught by its own test: capping
+a domain suffix at four characters would keep `.paranormal` while stripping `.com`.
+
+**Still to do, and none of it is code.** Deploy so the association file is live (iOS caches the
+result, so it must be reachable before the app is installed); enable Associated Domains for the App
+ID in the developer portal; ship a build after 1.0 review, since the entitlement changes the
+provisioning profile. Until then the entitlement is inert and nothing regresses. **Nothing about
+it can be verified in the simulator** — iOS only performs the check on a real device.
+
+**Deliberately not done:** `webcredentials` for password autofill; it needs its own entitlement.
+
+**Worth doing when the screens exist:** claim `/events/*` and `/organizations/*/cases/*` once
+`RootShell` renders them, and `/attending/*` once the RSVP screen exists.
+
+## 210. Trim a field session to the evidence (CLOSED 2026-09-04 — on the phone, before upload)
+
+An hour-long recording usually matters for ten seconds. After upload, let the investigator
+choose the window to keep — the readings, marks and media inside it — and store only that on the
+server, with a plain sentence that the full original stays on their phone (and only there,
+unless they have deleted it). Cheaper storage for the group, faster playback, and the citation in
+the report points at exactly the moment that mattered.
+
+**Size:** large (three days: the window UI on the player, a server "trim" that rewrites the
+document and cuts the media through ffmpeg where the host has it, the replaced-file bookkeeping,
+the sentence about the original, and the report citation carrying the window). **Depends on:**
+the media clock (shipped 2026-09-03) — the window is chosen on that timeline.
+
+### Built 2026-09-04 — on the phone, not the server
+
+Ben asked mid-build whether the trim could happen **before upload, on the phone, so the original
+stays on the device**. It can, and it is better on every axis: nothing on the server is ever
+destroyed, no irreversible operation, no conflict with published/cited/shared sessions, no server
+ffmpeg needed, and the upload itself shrinks. Built that way; a server-side trim for sessions
+already uploaded is NOT built and would be its own item.
+
+Ben's control spec (green in-dot, red out-dot, bolder band between, each handle's time shown while
+dragged) is `SessionTrimSlider`; his follow-ups — preview while trimming, and naming a clip — are
+`TrimPreview` and `back bedroom (20:00–30:00)`.
+
+Decisions in BenKit (43 tests): unknown-length recordings are **sent whole rather than guessed
+at**; a trimmed document **declares the window as its span**; and **audio offsets are rebased**
+after a cut — without that the recording lands on the timeline as far from its readings as the
+amount cut off the front. Media is cut via `AVAssetExportPresetPassthrough` into scratch; the
+original is never opened for writing.
+
+The UI harness found two real view bugs a screenshot never could: the drag double-counted the
+handle's offset (in point ran away, out point could not move) and the Form claimed the out-point
+drag as a row swipe. Both fixed; the drag test now asserts where the handle lands.
+
+**Not verified:** a real AVFoundation cut on a device, and the server round-trip of a trimmed
+document. One manual upload from a phone would close that. See README-trim-session-to-evidence.md.
+
+## 211. App Attest for the Field Kit upload door (open, planned 2026-09-03)
+
+The "never trust what it sent" half shipped 2026-09-03 (`FieldSessionDocumentGuard`,
+`FieldSessionFileGuard`). This is the other half: proving the *app* sent it. A key from the
+Secure Enclave, Apple's attestation verified once and stored, an assertion on each upload,
+a simulator bypass. **After 1.0 clears review** — it touches the app.
+
+**Size:** medium (a day). **Depends on:** App Store review of 1.0.
+
+### Recommended order for 204–211
+
+208 (half a day, pure function) → 204 → 205 → 206 → 207 → 209 → 210 → 211 (gated on review).
+204–210 are closed. **Next:** 213/214/215 (Ben's queue, in that order or as he says); 211 stays gated on App Store review of 1.0.
+
+## 212. Delete a person from the SuperAdmin users list (CLOSED 2026-09-04 — AppUserPurge, /admin/delete-user)
+
+Ben, 2026-09-04: the users list had no delete at all, and he wanted one that shows a count per
+section before committing, the way deleting a group already does.
+
+### The constraint that shaped it
+
+`AppUsers` is the principal of **335 foreign keys**, **124** of them a required
+`CreatedByAppUserId` on tables like case notes, timeline entries and group messages. A true row
+delete means deleting all of those — a group's record of its own work, written by somebody who has
+left. Ben chose (from three options offered) to destroy what is only the person's and anonymise the
+rest, so an account holding nothing disappears completely and a real member's row survives emptied.
+The screen says **which of the two** before the button.
+
+### Built 2026-09-04
+
+`AppUserPurge` + `AdminAppUserPurgeController` (`api/admin/users/{id}/purge`) +
+`AdminDeleteUser.razor` (`/admin/delete-user`), mirroring the group-delete screen. Trash icon on
+each users-grid row opens it preselected; nav entry for arriving deliberately.
+`AccountClosureService.AnonymiseAsync` extracted and shared, so the anonymisation rules exist once.
+
+- **One refusal only** (Ben): the last SuperAdmin.
+- **Two notices, not bars** (Ben): owning a group, and holding an active paid seat — the second
+  added on his follow-up, and it says plainly that nothing here cancels the subscription.
+- Deliberate asymmetry with self-service closure, which still refuses an owner. Different acts by
+  different people.
+
+`RowWillSurvive` is computed by asking the **EF model** for every foreign key into `AppUsers`,
+not from a hand-kept list — the lesson the organization purge learned twice. Written first as raw
+`COUNT` queries, which could not run on the in-memory provider and killed every unit test of the
+preview inside the census; now `EF.Property` over `db.Set<T>()`.
+
+19 new tests, each guard proven against broken code. The reachability guard is worth remembering:
+**it passed twice while the grid button was missing** — once matching the delete page's own
+`@page` directive, once matching the nav entry — before being pinned to the two files that must
+link in.
+
+**Not verified here:** the SuperAdmin-authenticated path. `AdminDeleteUserTests`
+(`TestCategory=DeleteUser`) is written and unrun; the SuperAdmin password is only in Ben's
+environment. Live checks confirmed 401 anonymous, 403 for an ordinary account, and the page
+bouncing a non-SuperAdmin.
+
+Documented in `site-administration.md`; **self-service account closure was documented for the
+first time** in `your-profile.md`, having shipped 2026-08-28 with no help text at all.
+
+## 213. The App Store package for 1.0.2 (BUILT 2026-09-04 — submission waits, Ben's call)
+
+A second upload folder alongside the 1.0.0 one, with `1.0.2` in its name so the two cannot be
+confused, carrying the same iPhone and iPad video and screenshots. Plus a single document named
+with `1.0.2` before the `.md` holding everything App Review needs and every instruction for
+building and submitting the build.
+
+**Size:** medium. **Depends on:** the screenshots being recapturable, which needs item 214.
+
+### Built 2026-09-04
+
+`Ben.iOS/screenshots-1.0.2/` (byte-identical copies of the 1.0.0 set, dark, with a README saying
+which screens are now stale and that 214 recaptures them) and `Ben.iOS/APP-STORE-1.0.2.md` — the
+listing, privacy answers, review notes, the seven Guideline 2.1 answers, and the full build-and-
+submit procedure. `MARKETING_VERSION` 1.0.2 / build 2 set in the project and proven in the built
+bundle.
+
+Two findings while writing it: the "§3c" rejection answers the notes said were in APP-STORE.md
+were **never committed** — the file has no such section, so 1.0.2's document carries them; and
+the current tree holds two "paid plan" sentences with no purchase path, which is the one
+Guideline 3.1.1 risk in the build and is flagged for Ben's decision.
+
+Ben, 2026-09-04: *"I am going to wait until we finish everything to try to get the submission
+done."* So this is ready, not sent.
+
+## 214. Demo records for the simulator, so the screenshots have something to show (BUILT 2026-09-04)
+
+Screenshots taken against an empty simulator show empty screens. Seed records that exercise the
+**whole** Field Kit: **dark mode**, a **base level actually set**, and a gauge that visibly
+**moves** rather than sitting at zero. `-fieldKitFakeSensors` already drives the sensors; what is
+missing is a session worth photographing and the app being in the state a real night looks like.
+
+**Size:** medium. **Blocks:** item 213's screenshots.
+
+### Built 2026-09-04
+
+`FieldKitScreenshotTests` drives a real scripted night — room named, **base level set while
+pending**, Start, sentry armed, the needle at ~+60 mG *over report level*, a mark, the review, the
+trimmer — and attaches five Field Kit frames plus the home list; captured **dark** on the iPhone 17
+Pro Max (scaled to 1242×2688) and iPad Pro 13-inch (2064×2752 native). The feed/cases/
+investigations/events frames are carried from 1.0.0 unchanged: recapturing them needs a seeded
+persona's password, which lives only in Ben's environment. Two new 28 s previews from Start onward,
+recorded with `simctl io recordVideo` and cut with a small AVFoundation tool
+(`screenshots-1.0.2/tools/preview.swift`) because the Mac has no ffmpeg.
+
+The capture exposed two real layout bugs, both fixed and re-verified: the trimmer preview's chart
+drew over its readouts and Play button at 90 pt; and the iPad's live-session clock wrapped
+"10:03:01 A / M". Harness lessons: query containers by any element type, and relaunch after
+`-autoSignIn` lands or the Send screen photographs "Your session ended".
+
+
+## 215. A session should not start recording the moment it is created (BUILT 2026-09-04)
+
+Ben: *"They may want to set everything up first and then start."* So the button that currently
+says **Stop** becomes **Start**, and only then becomes **Stop** to end the session. A session that
+turned out to be nothing can be deleted straight away to free the space.
+
+Worth care: "interrupted" currently means the phone died mid-session, and a session created but
+never started is a third state that must not be reported as either a recording or a failure. The
+Field Kit UI tests drive start/stop directly and will all need revisiting.
+
+**Size:** medium.
+
+### Built 2026-09-04
+
+A fourth state, `pending`: the live screen opens with the gauge running and nothing logged; the bar
+reads *not started* with **Discard** and a green **Start**; Start begins the clock, opens the log
+and brings the Mark/Note/EVP/capture controls; Stop ends it as before. Recovery at launch leaves a
+pending session alone — nothing was lost, so it is not "interrupted". `startedAt` is rewritten at
+Start so the trimmer, export, media clock and readout all measure from the real beginning; audio
+starts at Start for the same reason. The engine has one log gate (`beginLogging`), proven to
+discriminate. 317 BenKit / 25 UI tests green, the demo-video script updated and run. The first
+screenshot exposed the clock saying "stopped" for a pending session — fixed to *not started*.
+See README-delayed-session-start.md. Ben's untracked upload probe will need the new Start tap.
+
+## 216. Nothing could put a person into a site role (BUILT 2026-09-04 — Site Roles tab on user detail)
+
+Ben, 2026-09-04: *"I don't see a way I can assign Site Roles to people. They obviously can be
+user and verified user by creating an account and verifying email. How do I, as SuperAdmin, add
+roles to users like Admin, Moderator or SuperAdmin?"*
+
+He could not, and the code knew it: `SuperAdminSeeder` creates Admin and Moderator with the
+comment "so a SuperAdmin can assign it", and nothing let one. **Site Roles** creates and deletes
+role names and counts holders; **New User** offers SuperAdmin at creation only; the user detail
+page had no roles section. The only writers were the two seeders. Admin and Moderator were
+reachable by a hand-typed `AspNetUserRoles` row and by nothing else — the eighth write-only
+feature found on this site, and the same shape as items 142, 151 and the others: a read surface
+and a seeded value with no door between them.
+
+**Built:** `PUT api/admin/app-users/{id}/roles` takes the whole set (checkboxes, not deltas),
+canonicalises names to the stored spelling, refuses to strip the caller's own SuperAdmin role or
+the last one on the site, bumps the security stamp so existing sessions re-sign-in at their next
+refresh, and audits as `AppUserRoles`. The user detail page shows role badges beside the name and
+a **Site Roles** tab: one checkbox per defined role with what it grants, the caller's own
+SuperAdmin box locked, and an honest note that it lands at the next sign-in with current sessions
+ending within the hour (bearer tokens are not re-read per request; refresh checks the stamp).
+
+Tests: eight controller tests, all green in a 4,040/0 suite; the own-SuperAdmin guard was shown
+to discriminate. A Playwright test of the tab is written but not yet run — the isolated runner
+needs `BEN_E2E_ADMIN_PASSWORD` and `BEN_SUPERADMIN_PASSWORD`, which left the repo in the secrets
+sweep. Help: `site-administration.md` § Site roles.
+
+**Left as is:** the New User form's SuperAdmin checkbox — still creation-only, still one role;
+the tab covers the rest and a second path to the same rows is a second thing to keep right.
+
+## 217. Refused uploads go to a person — unless the person is spamming (BUILT 2026-09-04)
+
+Ben, 2026-09-04, after asking whether the NSFW screener only checks for nudity ("the site is
+about ghost hunting... it should allow scary stuff"): *"Before it denies it, can it just submit it
+to admin, superadmin or moderator for approval instead of outright denial? ... Unless the person
+is spamming it."*
+
+**Already true, and worth writing down:** nothing was ever denied outright. Both of the
+screener's upper bands set `Held`, the Held pile on Feed Media, where Approve publishes; the post
+is always created and the author only told it is being checked. The model is
+`Falconsai/nsfw_image_detection`, two classes, trained on pornography — violence, gore and horror
+are not things it knows. Under automatic screening the page's default "Waiting" pile is nearly
+empty and the Held pile is where the work is; the help now says so.
+
+**Built — the spam exception.** `OrgMessage.MediaScreenerScore` stores the classifier's number
+(migration `AddOrgMessageScreenerScore`; `FeedMediaVerdict.Score`; set on create and by the
+pending sweep). `FeedMediaAbuse`: three posts by one author in 24 hours scored ≥ 0.85 *and still
+Held* pause that author's media uploads, checked before ingest so a paused account cannot fill
+the disk; text still posts; the message names no check. A moderator approving one of the three
+lifts it (the rule reads the decided state), borderline never counts, and nothing is written to
+the account — the window ends on its own. The queue shows "Uploads paused — N refusals today".
+
+Tests: nine, including the discrimination run on the guard; suite 4,051/0. No Playwright — the
+e2e stack has no model and no fixture the classifier would refuse. Help:
+`moderating-the-feed.md`. **Deploy note:** the migration must reach the site's database.
+
+## 218. A person cannot delete their own field session (CLOSED 2026-09-04)
+
+Found while closing item 180 Phase B, on Ben's question *"This will include FieldKit uploads?"*
+A session's recordings and document are ordinary files the person owns, listed in Upload Files
+and covered by the delete dialog — but `FieldSessionUploadFile` and
+`FieldSessionUpload.DocumentUploadFileId` hold them (Restrict), and the only doors that remove a
+session are the SuperAdmin orphan purge and, for the archive, *retract*, which unpublishes
+without deleting. So the file delete refuses with "part of a field session" and there is nowhere
+for the person to go next.
+
+**Decided as proposed, and built.** Retraction from the public archive is paid-only on purpose —
+the publish-then-hide exploit — so a whole-session delete follows the same rule: free while
+unpublished, retraction's rule once published. `DELETE api/field-sessions/{id}` (the submitter
+only; NotFound for anyone else, as retract does) sweeps share links by both columns, then the file
+rows, then the session; the upload rows and bytes go afterwards one at a time through
+`UploadFileRows.TryDeleteAsync`, so a recording something else still holds is left standing. The
+place is left alone, exactly as retract leaves it.
+
+**Three refusals, each an existing rule rather than a new one:** recorded for an investigation (the
+group's evidence — the same rule the account purge keeps by sparing group sessions, and the case
+purge keeps by detaching them); cited by a case report (the citation would point at nothing);
+published and on a free plan (402, the retraction sentence verbatim).
+
+**UI:** `MyFieldSessions.razor` gains a delete beside Play back with a confirmation naming what
+goes, and shows *the group's* where the button would be on an investigation session.
+
+**Tests:** `FieldSessionDeleteTests` on the SQLite harness (item 219) — 8, including the paid half
+of the published pair so a blanket refusal could not pass. Two discrimination runs confirmed:
+dropping the share-link sweep makes the database refuse (that key is NoAction), dropping the
+investigation guard destroys a group's session. Playwright drives the dialog and presses nothing.
+Suite 4,117/0.
+
+**Docs:** `the-mobile-apps.md` § Deleting a session; `your-files.md` corrected — it said deleting a
+whole session was not yet possible.
+
+## 219. The purges can be run in a test at last (BUILT 2026-09-04)
+
+Discovered closing item 183 and fixed the same day. **No purge in this repo had a behaviour test
+of its delete path** — not the case purge, not the person purge, and not the group purge that
+production refused twice. The reason was mechanical: every purge is built from
+`ExecuteDeleteAsync` and `ExecuteUpdateAsync`, and the EF **InMemory provider implements neither**
+("not supported by the current database provider" on the first statement — probed, not assumed).
+Model-derived coverage tests were the workaround.
+
+**`SqliteTestDb`** is the answer: a real relational database, in memory, with foreign keys
+enforced. The model carries SQL Server column types (`nvarchar(max)`, `varbinary(max)`) SQLite
+cannot parse, so a model customizer drops every explicit column type and server-specific default
+or computed SQL — nothing about relationships, keys or delete behaviour is touched, which is the
+half the tests are about. The connection is held by the handle, so every context the factory hands
+out shares one database.
+
+**What it caught immediately.** An invalid foreign key in a fixture the InMemory tests had happily
+accepted (`CaseNote.AuthorAppUserId` left empty). And, on purpose: removing the
+`InvestigationDutyAssignments` sweep from `OrganizationPurge` reproduces the exact production
+refusal of 2026-09-03 as a test failure.
+
+**Also worth writing down:** most of a case's children are `Cascade`, so breaking their order
+proves nothing — a delete-order test has to break a **NoAction** table (`CaseNote`,
+`CaseMessage`, `CaseVote`, `InvestigationDutyAssignment`) to mean anything. The first
+discrimination attempt used `InvestigationAttendee`, which is Cascade, and passed against
+deliberately broken code.
+
+**Followed up the same day:** `AppUserPurge` got its behaviour tests too, and they found a real
+defect — see item 220.
+`Microsoft.EntityFrameworkCore.Sqlite` is a test-only package reference; nothing ships against it.
+
+## 220. Deleting a person promised a row removal the database then refused (FIXED 2026-09-04)
+
+Found by writing the behaviour tests item 219's harness made possible, at Ben's ask. Not
+hypothetical: it would fire on the live site for any account whose only remaining tie was a
+session recorded for an investigation, or an upload file something else still holds.
+
+**The defect.** `AppUserPurge` promises, on the screen and in advance, which of two endings a
+delete will have: the row goes, or the row stays emptied. The promise comes from a census of every
+foreign key into `AppUsers`, which skipped a list of tables the purge "empties". Four of those it
+empties only **partly** — a field session recorded for an investigation is the group's and stays,
+and so does a file something else still references. The census therefore reported nothing pointing
+at the account, the preview promised a complete removal, the row delete was attempted, and the
+database refused it **after the anonymise had already been committed**.
+
+**And the refusal escaped.** `ExecuteDelete` goes straight to the provider, so a foreign-key
+violation arrives as `SqlException`, never `DbUpdateException` — which is what both catches in the
+purge were written for. The narrow catch was in `UploadFileRows.TryDeleteAsync` too, which the
+case and group purges both call, so one still-referenced file could have failed a whole purge.
+
+**Fixed:** `sweptEntities` keeps only the tables emptied entirely; `GoingRowsAsync` names the exact
+rows about to go so the partly-emptied tables are still counted for everything that survives; both
+catches widened so a census gap degrades to the warning the code already intended.
+
+**Tested:** `AppUserPurgeBehaviourTests` (7, on the SQLite harness) including the preview promise
+matching the outcome in both directions; `AppUserPurgeCoverageTests` gains two structural guards —
+a table is emptied entirely or excluded row by row, never both, and the partly-emptied ones are
+named so they cannot be skipped wholesale again. Reintroducing the old list fails four tests.
+Suite 4,109/0. Help: the "kept, emptied" bullet now names the two cases it was missing.
+
+
+## 221. A date field rewrote the date you were building (FIXED 2026-09-09)
+
+Ben, typing a date into Propose Dates: *"I had entered 09 and was moving the numbers up for the
+date from 00 to 18 and before I could even get to 18, it moved and my 09 had changed to 10."*
+
+**An empty Telerik date field rebuilds the whole date the first time a segment is stepped.**
+Measured on the isolated stack: select the month, type `09`, press Up **once** on the day, and the
+field reads `10/01`. One slow press does it, so it is not a race with the circuit. The caret never
+moves — everything after that press is being typed into a date nobody started.
+
+A field that already holds a date is fine: twelve fast presses on the day of `09/14/2026 03:00 PM`
+walk it 14 → 26 and never touch the month. An empty **time** field is fine too. So the trigger is
+precisely an empty date field, and the Schedule Investigation dialog never had the fault because it
+has always seeded its start.
+
+**Fixed** by seeding the proposed dates — a week out at 7pm, each further option the next evening —
+so the picker is never empty. `DateFieldTests` guards the precondition rather than the symptom,
+because the precondition IS the fix; both tests fail against the pre-change code with
+`"MM/dd/yyyy hh:mm aa"`.
+
+**Also, at Ben's choice:** the start is now a **date box and a time box** rather than one combined
+picker. That answers his other complaint — the combined popup switches to its Time panel the moment
+you click a day, so changing your mind about the date cost a trip back through the tab every time.
+
+### Still open: an impossible day is silently taken as its second digit
+
+Typing `31` into a September date gives you the **1st**. Promoted to its own entry — see item 224.
+
+## 222. Viewport loading for the three maps that were deliberately left without it
+
+Ben, 2026-09-09, asked for viewport loading on every map that lacked it, then agreed to take the
+two that need it now (item 223) and record these three.
+
+None of them is a straight port of the Field Kit's pattern, and the reason is the same in each
+case: **a viewport map must say what it is not showing**, and on these three that sentence would
+cost more than it buys.
+
+- **A place's own page** (`PlaceView.razor`). Every pin is at the place's own coordinates, because
+  the map is showing the visits made *there*. Panning cannot bring anything new into view. Bounds
+  here are ceremony with a chance of bugs, and would be worth adding only if the map ever plots
+  something other than that one point — a room-level layout, say, or neighbouring places.
+
+- **Your profile map** (`MyProfile.razor`) and **My Investigations** (`Client/MyInvestigations.razor`).
+  One person's attended visits, each drawn beside a list of exactly the same rows. Loading by
+  viewport would make the map and the list disagree with no way for the reader to tell which is
+  right. The Field Kit map escapes that because it deliberately answers a different question from
+  its table and prints the gap; here the equivalent footer would tell somebody "showing 12 of 40 in
+  view" about their own history, which is worse than today's complete picture.
+
+**What would change the answer:** a person or a place with enough plotted rows that loading them
+all is the problem. At that point the honest shape is the Field Kit's — a bounded query, a cap, and
+a footer naming what was left out — applied to the map *and* the list together, so the two never
+disagree.
+
+## 223. Two maps now load what is in view (DONE 2026-09-09)
+
+The pair item 222 set aside its three exceptions from. Both loaded once and then panned over a set
+that never changed, and the public one asked for **500**, so past that it quietly stopped being the
+whole picture.
+
+- **A group's Investigations map** got `GET /api/organizations/{orgId}/investigations/map` — pins
+  and nothing actionable, so it can be asked on every pan without the per-row permission verdicts
+  the grid endpoint carries. Gated on membership exactly as the grid is. The page draws first from
+  the rows it already has, so the map is never blank mid-request.
+- **The home page's public cases map**: `GET /api/public/cases` now takes the four bounds, and the
+  map and the list are built from **one** answer. They can never disagree, because a reader has no
+  way to tell which of two pictures is the true one.
+
+Both follow `FieldSessionUploadController.GetMyMapPoints` rather than a second convention: all four
+bounds or none, corners normalised (map libraries disagree about which one comes first, and a
+reversed box reads as "nothing here" rather than as a mistake), a row with no coordinates dropped
+only when bounded, a 350 ms debounce with cancellation, and a footer naming what is not shown.
+
+**The rule worth carrying forward:** a viewport map is only honest if it says what it is leaving
+out. Eleven unit tests, four of which fail against a mutant that drops the normalisation and the
+all-or-nothing check; Playwright `MapViewport` proves three quick drags produce exactly one request.
+
+One thing the Playwright work taught: **a bounding box is in viewport coordinates**, so a map below
+the fold hands back a y the mouse cannot reach and the drags land on whatever is on screen instead.
+The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
+first.
+
+## 224. A date field silently takes an impossible day as its second digit (FIXED 2026-09-15 — `fix/date-picker-impossible-day-224`)
+
+Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
+
+**The defect.** With `09/__/2026` in the field, select the day and type `3` then `1`. You get
+**09/01**, not the 31st and not a refusal. Telerik rejects the day that cannot exist in September
+and falls back to treating the `1` as a fresh first digit. Nothing on screen says so.
+
+It is worse than it first sounds because it is **inconsistent**: the same keystrokes in a 31-day
+month give you the 31st. So the field works until the month it does not, and the failure is silent
+in both directions — you get a real date, just not the one you typed.
+
+**Why it is not a one-liner.** The behaviour lives inside Telerik's `AutoCorrectParts`, and no
+parameter on the call sites reaches the decision. There are **34 picker call sites across 17 files**
+and no `BenDatePicker` wrapper, unlike `BenModal`, `BenSelect` and `BenContentPicker`.
+
+**The decision tree when it is picked up** — measure, do not guess; three guesses about Telerik's
+typing behaviour were wrong on the day this was found:
+
+1. Probe a real picker with `AutoCorrectParts` off. It may leave `31` standing and mark the value
+   invalid, which is honest, or it may do something worse.
+2. Control: type `31` into a month that has one, so "rejects impossible days" can be told from
+   "rejects the second digit".
+3. If a parameter combination behaves, wrap it **once** in `Kit/BenDatePicker` and migrate the 34
+   sites, then add a source-scan guard banning the raw Telerik picker — the habit this codebase
+   already has for exactly this shape.
+4. If nothing behaves, fall back to the native `<input type="date">` for date-only fields. Browsers
+   handle this sanely, and `NewInvestigationWindow` already uses one. Telerik would stay only where
+   a calendar popup genuinely earns its place.
+
+**Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
+first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
+
+### Measured 2026-09-15 (branch `fix/date-picker-impossible-day-224`) — every option on the tree above fails
+
+Real keystrokes in Chromium against temporary pickers on `/styleguide`, value seeded 09/15/2026, typing from the month:
+
+| Field | Typed | Shows | Bound value |
+|---|---|---|---|
+| `TelerikDatePicker` (today's call sites) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikDatePicker AutoCorrectParts="false"` | 0 9 3 1 | 09/31/2026, red `k-invalid` | 09/15/2026 — Save keeps the old date |
+| …then 3 0 to fix the day | | 09/31/**0030** — focus had moved to the year | 09/15/2026 |
+| `TelerikDateTimePicker` (MM/dd/yyyy hh:mm tt) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikTimePicker` (hh:mm tt) | 1 3 | 03:00 PM | 15:00 — silent |
+| native `<input type="date" @bind>` | 0 9 3 1 | 01/01/0001 | 09/03/2026 |
+| **Telerik 15.0.1** (probe build only, reverted) | same | identical to 14.1 | identical |
+
+Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
+part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
+only a real click does, which matters for any automated test.
+
+**Done, as (1)** — and wider than this entry knew. `Kit/BenDateField` (`DateEntry` parses; a sentence and the kept value on refusal; TelerikCalendar inline) replaced all 34 Telerik pickers **and** the fourteen `type="date"` and three `type="datetime-local"` boxes added since, which failed too: `@bind` saved 01/01/0001 into a `DateTime`, erased a `DateTime?`, and an impossible `datetime-local` read as "none" posted a scheduled post at once. `BenDateFieldGuardTests` bans all of them; `type="time"` stays (it took 08:30 PM correctly).
+
+**What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
+date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
+with a guard; (2) intercepting Telerik's keystrokes in JS (fragile across Telerik versions; not recommended); (3) a
+support ticket to Telerik with the table above, and wait.
+
+---
+
+## 225. A desktop client, and the client library both front ends share (SHELVED 2026-09-10 — kept as a future enhancement)
+
+Ben, 2026-09-10: two new C# projects, `Ben.Desktop.App.UI` (Telerik UI for .NET MAUI) and
+`Ben.Desktop.App.Library` (reusable components), talking to the database only through
+`Ben.Data.WebApi`, with sign-in following the Identity rules the website already enforces.
+
+**It needed a third project, and finding out why was the useful part.** Everything the desktop app
+wanted — sending a request, reading the answer, holding a session — already existed, in
+`Ben.Web.Services`. That project carries a `FrameworkReference` to `Microsoft.AspNetCore.App` and a
+reference to the Razor-and-Telerik `Ben.Video.Editor`, so a MAUI app cannot reference it at all.
+The code it actually wanted was plain `HttpClient` work with nothing Blazor about it. So
+`Ben.Data.WebApi.Client` is that code, with no packages and one reference to the DTOs, sitting in
+`/Api Layers/` beside the API whose client half it is. Both front ends use it, which is the point:
+two clients that each decide for themselves what a refusal means will eventually disagree.
+
+Underneath that, `Ben.Data.Common` had been declaring EF Core, its SQL Server provider and
+Identity.EntityFrameworkCore and using none of them. Nothing in its 99 files references an EF or
+Identity type. The cost was paid downstream: `Ben.Service.Models` is pure records with no packages
+of its own, so every consumer of the DTOs inherited a database provider. Invisible on the server;
+fatal for an app that has no business shipping one.
+
+**What capturing real answers settled.** The rule about never inventing a fixture earned itself
+again. Against an API on a scratch database:
+
+- The three `/login` refusals really are one status separated only by a string. `Failed`,
+  `NotAllowed` and `RequiresTwoFactor` all arrive as 401. Wait, confirm your email, enter your code
+  and fix your password are four different instructions, and three of them waste somebody's time if
+  the fourth is guessed.
+- The 429 carries `Retry-After: 60`, and every client had been throwing it away. A rate-limited
+  person was left guessing, or pressing a button certain to be refused — which spends the next
+  window too.
+- **Registration answers a refusal as JSON**, not prose: `{"succeeded":false,"message":"That name
+  is taken.","field":"Handle"}` with a 400. The ordinary refusal handling discards any body
+  starting with a brace, so the one sentence telling somebody what to change would have been
+  replaced by a paraphrase of the status code.
+
+**A test that proved nothing.** The single-flight refresh test — eight callers must produce one
+refresh — passed with the guard deleted. Its stub slept on the calling thread, so the whole
+"request" ran inside the caller's own lock and the callers never overlapped. A handler that yields
+instead of blocking is the difference between a concurrency test and a decoration.
+
+**Four things a clean build said nothing about, all found by launching the app.** An `x:Name` in
+XAML generates a field on the same partial class, so an element and a bindable property of the same
+name collide. .NET 10 stopped including `Microsoft.Maui.Controls.Compatibility` implicitly and
+Telerik still needs it, so the app compiled and died inside `UseTelerik`. Before that it would not
+launch at all — "Launchd job spawn failed", naming nothing — because an ad-hoc signature cannot
+carry `keychain-access-groups`: `$(AppIdentifierPrefix)` expands only from a provisioning profile.
+And `Telerik.UI.for.Maui` 3.2.1 brings SkiaSharp and `System.Security.Cryptography.Pkcs`
+transitively at versions with known HIGH severity advisories, now pinned forward.
+
+**`dotnet build Ben.slnx` no longer works without the MAUI workload** (NETSDK1147), so
+`Ben.Server.slnf` is the whole solution minus the two desktop projects and is what CI and an
+everyday build should use. A `macos-15` job compiles the desktop app so it is not left unbuilt by
+everything. No Windows job: nobody has built that head by hand yet, and adding one would claim a
+check that has never passed.
+
+Shipped on `feature/desktop-app-foundation-225`: the EF trim (`118dbbe5`), the extraction
+(`346753e9`), the session core (`acb6509b`), and the two MAUI projects with CI (`e003cd99`).
+103 client tests, all passing against a live API with nothing skipped; suite 7,790.
+
+### External sign-in (2026-09-10)
+
+Both providers, plus an account-merge door that was missing.
+
+**Microsoft is not one of our sessions; Apple is.** A Microsoft sign-in leaves the client holding a
+token Microsoft issued, which the API validates under its second scheme — so it renews at Microsoft,
+not at `/refresh`, which has never seen it and would refuse it about an hour in. Apple's endpoint
+signs the person in under our own scheme and answers a body identical to `/login`'s, so it is an
+ordinary session.
+
+**MSAL was dropped.** It has no Mac Catalyst asset — Catalyst resolves its plain desktop build — so
+it would need a loopback listener and a `network.server` sandbox entitlement, and would still only
+serve Windows properly. One authorization-code flow with PKCE behind a small browser seam covers
+both, and everything either side of the browser is testable without a browser.
+
+**The duplicate-account gap.** Sign-in only joins an external identity to an existing account when
+the provider's verified email happens to equal one. Apple's Hide My Email relay never will, and an
+Apple ID or work Microsoft account is often simply at a different address from the one somebody
+signed up with. All of those ended at "create an account" and quietly produced a SECOND account
+holding none of their cases, groups or history. Microsoft already had a link endpoint taking an
+arbitrary email and password; Apple had no door at all, so `api/auth/apple/link` is new — and it
+must issue a session, because an Apple identity token is not a credential this API accepts on
+ordinary requests. It honours lockout, unlike the Entra link's bare password check.
+
+The client now offers "I already have an account" for the whole of that screen, not only after the
+server spots a matching address — the server can only spot one in the case that was never broken.
+
+**Still unverified:** neither interactive round trip has been run; that needs a tenant, a browser
+and an Apple App ID, plus portal work. Nor is it known whether `SecureStorage` persists across a
+relaunch on an ad-hoc-signed Catalyst build — the iOS app hit exactly that and it fails silently, so
+assume it needs a signing identity.
+
+**Follow-ups this surfaced, none of them this item's job:**
+
+1. Nothing exchanges a Microsoft Entra token for an Identity session. The website gets away with it
+   through its OIDC cookie; a desktop client has no cookie.
+2. There is no sign-out, revoke or device registry for any client. Sign-out is local everywhere, so
+   "sign out my other machine" is not possible for anybody today.
+3. Two Telerik product lines now have to move in step by hand, with no `Directory.Packages.props`.
+4. `Apple:ClientIds` needs the desktop bundle id before Sign in with Apple can work there.
+
+
+### Shelved 2026-09-10
+
+Ben: "I am not sure I want to create a desktop version. Just keep it as future enhancement."
+Deleted: `Ben.Desktop.App.Library`, `Ben.Desktop.App.UI`, `Ben.Server.slnf`, the macOS CI job,
+`com.ishaunted.desktop` from `Apple:ClientIds`, and the fifteen desktop-only types in
+`Ben.Data.WebApi.Client` (the token session and session store, the bearer handler, the Microsoft
+PKCE stack, the desktop Entra account client) with their tests. `dotnet build Ben.slnx` needs no
+MAUI workload again.
+
+**Kept, because the website now stands on it:** `Ben.Data.WebApi.Client` itself — `LoadResult`,
+`ItemResult`, `LoginFailureMapping`, `AppleSignInClient`, `AppleWebAuthorizeRequest` — and every
+server-side change this work exposed (the link endpoints, `ExternalSignInService`, `EmailKind`, the
+admin-refusal and second-factor fixes). None of that was desktop-specific; the desktop was merely
+where it was found.
+
+**To resurrect:** the last commit with everything present is `a2aaa511` on
+`feature/apple-signin-website-227`. `git checkout a2aaa511 -- Ben.Desktop.App.Library
+Ben.Desktop.App.UI Ben.Server.slnf` and the removed client files, then rebuild against
+`ExternalSignInService` and the Apple contracts as they stand. The user-local MAUI SDK at
+`~/.dotnet-maui` can be deleted or reused.
+---
+
+## 226. The iPhone app can still be given a second account by Sign in with Apple (BUILT 2026-09-10)
+
+Found 2026-09-10 while building the desktop client's external sign-in (item 225). Ben asked whether
+the same gap existed elsewhere; it does, on iOS.
+
+**The defect.** `api/auth/apple` joins an Apple identity to an existing account only when Apple's
+own VERIFIED email equals one already here. Two ordinary situations defeat that:
+
+- **Hide My Email.** Apple hands over `something@privaterelay.appleid.com`, which will never equal
+  an address anybody signed up with.
+- **A different address.** Plenty of people have an Apple ID at one address and an account here at
+  another.
+
+Both fall through to "choose a display name and a handle", which creates a **second account**
+holding none of their cases, groups, equipment or history — and nothing offers to join the two.
+Worse than it sounds because it is silent: the person is signed in, everything works, and it is
+simply not their account.
+
+**Already fixed for the desktop client**, and the server half is done: `POST api/auth/apple/link`
+takes the Apple identity token plus the email and password of the account being claimed, adds the
+external login and issues a session. It honours lockout (`CheckPasswordSignInAsync` with
+`lockoutOnFailure`), because it takes a password from an unauthenticated caller.
+
+**What iOS needs:** on the needs-profile screen, offer "I already have an account" alongside
+creating one, and call the new endpoint. `BenKit/Sources/BenKit/Auth/AppleSignIn.swift` handles the
+409 today and only ever routes to the create path.
+
+**Checked and NOT affected:**
+
+- **The website's Microsoft flow.** `Ben.Web.Website/Components/Pages/Entra/CompleteProfile.razor`
+  already offers "I already have an account — link it" as a first-class choice with an arbitrary
+  address, which is exactly the right shape.
+- **The website's Apple flow.** There isn't one — the site has never offered the button, so there is
+  nothing to fix.
+
+**Worth doing at the same time:** `EntraAuthController.Link` uses `CheckPasswordAsync`, which does
+not count failed attempts. It is an unauthenticated door that takes a password, so guesses against
+it are free. The new Apple link uses the lockout-honouring form; the Entra one should match.
+
+
+### Built 2026-09-10, on `feature/apple-signin-website-227`
+
+`BenKit/Auth/AppleSignIn.swift` gained `link(identityToken:email:password:twoFactorCode:recoveryCode:)`,
+and two outcomes: `.addressTaken(reason:)` when the server says the address already has an account
+here, and `.needsTwoFactor` when the account being claimed has a second factor. `AppleProfileSheet`
+now has two doors. "Already have an account here?" is offered **always** — the server can only spot
+a collision when Apple's address happens to match an existing one, which is the case that was never
+broken — and when the server says the address is taken, the create form is put away and the link
+door becomes the prominent one. A code field appears only after the server asks for one; an empty
+code is never sent, because Identity reads that as a wrong code and spends a failed attempt.
+
+The footer promise the UI test pins — "rather than making a second one" — is now true for a
+mismatched address too, so the wording changed and the test did not.
+
+**Verified:** 16 BenKit tests (all 339 in the package pass); the iPhone app builds; the Apple UI
+regression passes on **both** iPhone 17 Pro and iPad Pro 13-inch (M5), which are different element
+trees. **Not verified:** the door itself against a real Apple identity — the simulator has no Apple
+ID to sign in with. The server half was tested in C# against the real endpoint with a forged token.
+
+Still open from this item: `EntraAuthController.Link` lockout — now DONE under 225's branch (see
+the 2026-09-10 commits closing the Microsoft hole).
+---
+
+## 227. Sign in with Apple on the website (BUILT 2026-09-10 — unverified through Apple until a Services ID exists)
+
+Ben, 2026-09-10, alongside item 226: the site should offer a "Sign in with Apple" button that can
+either create a new account or link one that already exists — the same two doors the Microsoft
+button already has at `Entra/CompleteProfile.razor`.
+
+Nothing here is broken today; the website has simply never offered the button. The server work is
+mostly done: `api/auth/apple` creates or signs in, and `api/auth/apple/link` (added under item 225)
+claims an existing account with its email and password. What is missing is the web half of Apple's
+own flow, and it is **not** the flow the phone and desktop apps use.
+
+**The web flow differs in ways that matter.**
+
+1. **A Services ID, not a bundle id.** Apple's web sign-in identifies the caller by a Services ID
+   configured against the App ID. That value becomes the token's audience, so it has to be added to
+   `Apple:ClientIds` in `Ben.Data.WebApi/appsettings.json` — the comment there has anticipated this
+   from the start. `com.ishaunted.ios` and `com.ishaunted.desktop` will not do.
+
+2. **No native sheet.** The browser is redirected to Apple, and Apple answers with a `form_post`
+   back to a registered `https` URL — so this needs a real endpoint on `Ben.Web.Website` that
+   accepts a POST, not a Blazor page callback.
+
+3. **Check whether a client secret is needed before designing around one.** Apple's web flow can
+   return the identity token directly in the form post when `id_token` is part of the requested
+   response type, which is all our API needs. Exchanging the authorization code at Apple's token
+   endpoint instead requires a client secret that is itself a JWT signed with a downloaded `.p8`
+   key and expires within six months — an operational burden worth avoiding if the first option
+   works. **Verify against Apple's current documentation rather than either assumption.**
+
+4. **No localhost.** Apple refuses non-`https` redirect URLs, so this cannot be exercised on
+   `127.0.0.1:5078` the way everything else here is. Expect to need the UAT host, and budget for
+   that being the only place it can be tested.
+
+5. **The name arrives once, in the form post.** Apple includes it in a `user` field on the FIRST
+   authorization only and never again — same rule as the native flow, same consequence for getting
+   it wrong: the account ends up named whatever we invented.
+
+**The two doors, once the token is in hand,** are the same ones the desktop client now has, and the
+lesson from item 226 applies directly: offer "I already have an account" for the whole of that
+screen, not only when Apple's address happens to match one. A Hide My Email relay address never
+matches, and that is exactly the case that silently produces a second account.
+
+Do this alongside item 226 — they share the link endpoint, the one-shot-name rule and the
+account-merge screen, and doing them together means designing that screen once.
+
+### Built 2026-09-10, and what was decided afterwards (Phase C)
+
+Built as `README-apple-signin-website-227.md` describes; plan of record is
+`ProjectNotes/External-SignIn-Plan-2026-09-10.md`. Unverifiable here: the round trip through Apple,
+which refuses localhost. Phase D is Ben's portal work and a UAT round trip.
+
+Two rules were left as questions on the day and decided with Ben that evening:
+
+- **The Microsoft email fallback is gone.** `EntraClaimsTransformation` used to link an unknown
+  object id to whichever account held its email claim, with no proof of ownership. Removed rather
+  than narrowed; a rotated object id uses the link door once, with a password and second factor.
+  Production's one Microsoft login is linked by object id, so nobody is stranded.
+- **Only a verified address is confirmed at creation.** An account made from an unverified provider
+  address (Microsoft's always) starts unconfirmed and is sent the website's confirmation email.
+  It works through that provider straight away — the external gate is closure and lockout, not
+  the confirmed-account rule, because confirmation proves the address and the provider proves the
+  person — but a password reset and anything else we would email wait for the link. The profile
+  shows the address with **Send the link again**; `ActionNeededBanners` reminds once per sign-in;
+  the help pages say why a reset link may not arrive.
+
+**On Ben's question of who owns a Field Kit upload:** the bearer token's user id, on every path.
+An account cannot exist without a display name and a permanent, unique @name — the website sign-up
+validates both, Apple asks for both, and the Microsoft flow allocates the @name from the name given
+— so anybody who can upload is already somebody the SuperAdmin can see, name, lock or close.
+
+---
+
+## 228. Apple Maps (MapKit JS) instead of OpenStreetMap tiles (BUILT 2026-09-10)
+
+Ben asked whether the website could use Apple Maps instead of OpenStreetMap, and whether that costs
+money. It does not: MapKit JS comes with the Developer Program membership (250,000 map views and
+25,000 service calls a day, and a request to Apple rather than a bill past that). What the site
+uses today is OpenStreetMap's public tile server, whose usage policy tolerates small sites and
+throttles without notice, and the public OSRM demo server over plain http for driving directions.
+
+**Not a URL swap.** Apple serves no raster tiles, so `TelerikMap`'s tile layer cannot point at it.
+The four map components are rebuilt on a `Kit/BenMap` wrapper over MapKit JS, one component per
+phase behind a provider switch, with the Telerik path removed at the end. Directions move to
+MapKit's own service; geocoding stays on Geocodio for now.
+
+Plan of record: `README-apple-mapkit-228.md` on `feature/apple-mapkit-228`. Portal work needed
+first: a **Maps ID** and a key with the Maps service enabled — not a Services ID, which belongs to
+Sign in with Apple (item 227).
+
+### Built 2026-09-10, all six phases
+
+Every map on the website is Apple MapKit JS through `Kit/Maps/BenMap`, authorised by a
+thirty-minute token the website signs with the key for Maps ID `maps.com.ishaunted`. The Telerik
+map, the OpenStreetMap tile server, the OSRM demo server and the modal's metered Geocodio lookup
+are gone; a guard test refuses their return. Details, verification and the two wrapper races
+found along the way: `README-apple-mapkit-228.md`. Left open: geocoding on the Apple Maps Server
+API, a separate decision.
+
+---
+
+## 229. Revoke Apple tokens when an account is deleted (BUILT and MERGED 2026-09-10)
+
+App Review guideline 5.1.1(v): an app offering Sign in with Apple that lets people delete their
+account must revoke their Sign in with Apple tokens as part of the deletion. Account deletion
+anonymises the row and drops the external login, so nobody can get back in, but Apple is never
+told. Revocation needs a refresh token, which needs the authorization code exchanged at sign-in
+with a client secret signed by the Sign in with Apple key Ben created 2026-09-10 (`5VY456C8RR`).
+Neither client sends the code today. Plan and phases: `README-apple-token-revocation-229.md`.
+
+### Built 2026-09-10, phases A-D
+
+The API signs Apple's client secret with the key, exchanges the authorization code every client
+now sends for a data-protected refresh token, and revokes every kept token before an account is
+anonymised — by its owner or by a SuperAdmin purge. Apple accepted a secret signed with the real
+key (a bogus code answered `invalid_grant`). Merged to develop and master and the
+`AppleCredentials` migration applied to production the same day. Left for deploy time: the three
+`Apple:*` values plus the `.p8` on the server.
+
+---
+
+## 230. Geocoding on the Apple Maps Server API (BUILT 2026-09-10)
+
+Ben: "Move geocoding to apple." The last metered call after item 228: Geocodio is gone from the
+API, the deploy script, the secrets template and the setup script. `AddressGeocodingService`
+keeps its one static door and its eight callers; behind it `AppleMapsGeocoder` signs the same
+Maps key the website uses, buys an access token, and answers forward, reverse and free-text
+lookups in the shapes the callers already had. Fixtures captured from the real API; a live test
+proves the key. Details: `README-apple-geocoding-230.md`.
+
+---
+
+## 231. One flat price for tour and event businesses (BUILT 2026-09-10)
+
+Ben asked for the tour-business mailing to be re-verified, given the logo, and for tour groups to
+be billed monthly and yearly at the flat price it promises. Every claim held except the price:
+the tier resolver priced every organization by member count, so a tour with eight guides landed
+in a $60 band. `SubscriptionTierResolver` now takes the organization's kind and sells a business
+kind the flat tier when one is on offer. No schema change; the tier is data (Administration →
+Subscription Tiers, banded by members unticked, 29 / 290). Created on the testing copy;
+**production needs the same tier entered.** Mailing rebuilt with the logo. Details:
+`README-tour-business-billing-231.md`.
+
+---
+
+## 232. The Price Bands screen died whenever the ladder had something to say (FIXED 2026-09-11)
+
+Reported as "the reshape dialog will not open". It was the whole page, and the dialog was simply
+the only part anybody was looking at.
+
+**What it actually was.** `GET api/admin/subscription-tiers/validation` returned `Ok(aString)`.
+MVC serves a string result through its string formatter as `text/plain`, and every client here
+reads an answer as JSON — so `ReadFromJsonAsync` threw on the sentence, inside the page's
+`OnInitializedAsync`, which killed the circuit. The button rendered because it is drawn before the
+load; nothing it was wired to was alive.
+
+**Why nobody caught it.** A healthy ladder answers "nothing to report", and null comes back as an
+empty 204 that `ApiResponseMapper` already handles — a fix made after this same screen died on
+production for the mirror-image reason. So the page worked on a fresh database and died on a real
+one. The fixture failed only on the testing copy, whose "Free" band is priced at nothing.
+
+**The fix.** `TierValidationRecord`, so the answer is JSON. The record also carries `IsBlocking`,
+because the endpoint had been collapsing two different things into one string: the screen greeted
+a free-band advisory with "The price list is unusable" and "checkout is refused", neither true. A
+blocker is red and says that; an advisory is amber and says "Worth knowing".
+
+`GiphyController.SdkKey` had the same shape and nothing consuming it yet, so it was wrapped too.
+`TierValidationShapeTests` pins the shape and scans `Ben.Data.WebApi` for any endpoint answering
+with a bare string.
+
+**Verified** by running `LadderReshapeTests` against the testing copy — failing before, passing
+after — and by opening the repaired screen and reading its banner.
+
+---
+
+## 233. The tour tier: tours are the unit a business pays for (BUILT 2026-09-11, merged to develop and master; two pieces named below are deliberately out)
+
+Ben's brief, 2026-09-10, in his words and in order: photos stay a month unless the tour rep keeps
+them; video and audio a week, five minutes each at 720p or 1080p; Field Kit submissions the same,
+so the end user can save or download them first. "The tour can schedule tours and people can sign
+up for the tour. Money collected is to be arranged by the tour company or person… a template to
+generate for people who sign up and then as a reminder including the .ics file." "They can set the
+time and the number of people accepted." Then the rule that reshaped the item: **"The $29 per month
+is for a single tour no matter how many times scheduled. If they have a tour on one street and need
+another tour for another street, that is a different tour."** Nail it down by the start location
+(required) and, my call, the tour's name, unique within the business. The guest email carries the
+start date and time and "name and photo of person who will be leading the tour - for safety"; the
+photo is optional and per date, since a tour led by two people is not the same picture each time.
+"Tours are public so, they show up on the map and are searchable." Retention restated: "Evidence
+collected - unless marked to save - only lasts a week for everything but photos. Photos stay a
+month." The keep for images is a gallery: "up to 50 1920x1080 72ppi images… tag ones from tours to
+keep as well, but 50 images per tour max." Reviews are optional per tour and on by default. The
+owner is not necessarily a guide and adds guides to a tour; the owner manages tours from the web,
+choosing which when there is more than one.
+
+**Superseded by this item:** item 231's flat price per business. The tier row and its two prices
+stay; what changes is that the price is a *unit* price and the quantity is the business's live
+tours, re-counted at renewal and prorated when one is added mid-period (charged today on the saved
+card; without a card it is counted at the next renewal).
+
+Plan of record: `README-tour-tier-233.md`. Phases: **0** entity, `TourId` on dates,
+`TourCountAtPeriodStart`, `TourBilling` and `BillableUnits` behind checkout, quote, renewal and the
+admin screen; **1** tour API, add-on charge, tour and date guides, the calendar rule (a public date
+of a tour business belongs to a tour), the tours page with a per-tour management page, scheduler and
+billing page, public tour page, org home, `/events`, home-map pins and nearby search, iOS shows the
+tour name and guides; **2** guest mail with attachments, `.ics`, template placeholders, the four send
+sites, editor with preview; **3** retention limits as tier data, expiry stamps, the sweep with
+notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
+rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
+
+**Closed 2026-09-11.** All six phases shipped, merged to `develop` (888a63bd) and `master`
+(097859a9), suite green at 8,133. **Two pieces are not built and are named rather than implied:**
+the phone shows a tour's NAME on an event and reads every time on the Swift half of the clock rule
+(`EventClock`, 2026-09-11), but nothing renders a date's guides yet and there is no tour browsing of
+its own — item 234 is the larger version of that; and an over-long recording is refused on length
+but never downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
+`ProjectNotes/Test-Data-Written-2026-09-11.md`.
+
+**Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
+event, group, events and group-cases pages; the clock rule (times render in the zone of the place,
+or UTC, never the server's); a tour's social links; a timezone on an event; the case vote widget
+rebuilt as one button with a dropdown, beside share, repost, comments and report; comments on a
+published case; link previews under any message carrying a web address; and the composer's row of
+tools — photo/video, GIF (through our own API, so the Giphy key never reaches a browser), poll,
+emoji, schedule and location. Ben's item 3 from the Twitter screenshot ("that is Grok AI, I don't
+know what AI — if any — I would put there") is deliberately not built. The poll widget is reusable
+by design: a poll belongs to a message, so the same pair of components serves a feed post, a case
+comment and a group's own message.
+
+---
+
+## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (BUILT 2026-09-11; the phone half is staged behind App Store 1.0.3)
+
+Recorded while item 233 was being built, in Ben's words, to be picked up after it lands:
+
+> "I would like to be able to let the tours use the website with coordination to the iPhone and
+> iPad app where if the person downloads the app and creates an account free or paid, they can get
+> notified where the tour is, when to get there and other stuff that would be available in the
+> e-mail like a link to add to the calendar and a link to get directions to the start point. They
+> would not be confirmed until the tour guide or manager approves them meaning they have settled
+> how money will be or has been exchanged. Then, the person who is touring can confirm it on the
+> app - if they want. This is just confirmation between the tour company and the person taking the
+> tour the seat or seats have been reserved for the tour. I would also like to add the tours in a
+> Haunted Tours tab in the iPhone and iPad app based on current location or looking up a location
+> on the tab."
+
+Four pieces, each resting on item 233:
+
+1. **A seat is reserved, not merely requested.** A sign-up becomes `Requested → Reserved` only when
+   the guide or manager approves it, because approval is where the business says the money is
+   settled. We never take the money; the state is the two of them agreeing. The guest may then
+   acknowledge on the phone, which is optional and is the third state.
+2. **Seats, plural.** A sign-up carries how many places it holds, and capacity counts places rather
+   than people.
+3. **Notifications on the phone** for a reserved seat: where the tour is, when to be there, add to
+   the calendar, directions to the start point — everything the item 233 email already carries,
+   which is why the email's placeholders and its start address are the source for both.
+4. **A Haunted Tours tab** in the iPhone and iPad app: tours near me, or near a place I look up,
+   from the same public tour endpoints item 233 builds for the website map and search.
+
+**Closed 2026-09-11, in five phases.** Plan of record: `README-tour-on-the-phone-234.md`.
+
+1. **A seat is asked for, and the business decides.** `TourSeatStatus` beside `RsvpStatus` rather
+   than inside it, so every existing count of "accepted" goes on meaning *has a place*. Capacity
+   counts PLACES, and a sign-up may hold several. A request is never refused for fullness — the
+   approval is, in words naming how many places are left — so a full walk is a waiting list rather
+   than a closed door. **This site never takes the money**; approving is the two of them agreeing.
+2. **The business's screen and the guest's three sentences**, on the web: a Sign-ups page per date
+   with a "waiting" count on the tour's Dates list, and *asked for* / *reserved* / *not this time*
+   wherever a guest looks at the night.
+3. **The phone gets an event screen** — it had none, and `AppRoute.eventDetail` fell through to a
+   placeholder — plus reminders the device schedules itself the night before and an hour before.
+   **Local, not push**, by Ben's decision: no Apple key, no device-token table, and they still
+   arrive in a cellar with no signal. Real APNs remains the separate piece, needed only for an
+   approval landing while the app is closed.
+4. **A Haunted Tours tab**, near you or near a place looked up, anonymous throughout. The five-tab
+   ceiling meant Investigations moved under Profile for group members; Field Kit is hidden from
+   exactly one person, somebody whose only connection to the site is having attended a public event.
+5. **Two notification buckets**, one per direction, plus help, screenshots and both PDFs.
+
+**Left for production on Ben's word:** migration `TourSeats` applied with an explicit `--connection`
+naming `IsHauntedDb`. The iOS half is staged and proven only — 1.0.3 (4) is still with Apple — and
+the location permission string, which now mentions finding tours, must ship WITH that release.
+
+Prerequisites already true after 233: tours are public with a start address and coordinates, dates
+carry guides and capacity, and the guest mail knows how to say all of it.
+
+
+---
+
+## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+
+The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
+and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
+
+**What an event creator is.** A venue like The Thomas House Hotel, or any group that buys the right
+to hold one: multi-night events, rooms that each sleep so many, day passes sold to people not
+staying, a programme of optional classes with their own capacity, check-in and check-out, checklists,
+menus, files kept with the event, staff with different permissions, a flashy public page, ads, QR
+passes issued when a booking is confirmed, attendees sharing photos with each other on the phone,
+and one group hosting at another's venue by permission.
+
+**And it is not about ghosts.** Ben, the same day: *"The idea is to allow someone to schedule and
+track and organize an event that is not ghost hunting related."* A dinner-theatre run, a retreat and
+a Halloween lock-in are the same record. The copy stays neutral; the paranormal surfaces (evidence
+queue, archive publication) are per-event switches, off by default for an ordinary event.
+
+**Plan of record: `README-hosted-events-235.md`** on branch `feature/hosted-events-235` (from
+`develop` `d9c8a94d`). Thirteen phases, each independently shippable: the event package and its
+billing; bookings with rooms and menus; QR passes; sessions; staff, the door and checklists; files;
+the page, feed and ads; venue profiles and the site's first org-to-org grant; the attendee room; the
+phone's Event section; ticketing (design only); docs. **Event credits ship in this arc**, as phase
+1B directly after the event package — without them nobody outside a business plan could publish
+anything at all.
+
+**The model in one line:** a `HostedEvent` is the product, the way a `Tour` is, and it owns exactly
+one `OrgCalendarEvent` umbrella row — so the shipped phone, the public list, the reminder job, the
+`.ics` and the `/o/{org}/events/{slug}` URL all keep working with no change at all.
+
+**Decisions Ben took 2026-09-11:** the site takes no guest money from guests (the host confirms a
+booking; passes issue on confirmation). **An event is sold as a credit, not metered** — `$99` buys
+one event for anybody, credits expire a year after purchase with a thirty-day warning, and one is
+spent at publish behind a confirmation that says what it costs and that it does not come back.
+Metering an occasional weekend at a tour's monthly rate would have priced a hotel weekend as a walk
+round a block, earned less, and reached none of the groups that run one fundraiser a year. The flat
+business plan stays for people who run events for a living, capped by `ActiveHostedEvents` rather
+than metered; `HauntedProperty` joins the business kinds only so it resolves to that plan.
+Publishing is the single moment that spends a credit or occupies a slot, and an event stops counting
+14 days after its last night.
+
+**Open question in the README:** whether a run of separate dates (the resident play company) lands
+its `DatesAreSeparate` flag in phase 1.
+
+**Phase 0 done 2026-09-11:** every append-only value fixed before anything depends on the numbers —
+`OrganizationPermissionArea.Events`, six `OrganizationSecurityTable` values, four `SubscriptionLimit`
+values, three `TierCapability` values, four `CmsSectionType` values, `OrgMessageChannel.EventRoom`,
+and five new enums. Three guards caught what the appends broke, which is what they are for: the
+permission map, the role editor's rows, and the permissions endpoint's probe list. A new
+`TierLabelCoverageTests` refuses a cap or capability a SuperAdmin would have to set by its enum name.
+
+---
+
+## 236. Room mapping with LiDAR: the phone knows which room it is in (FUTURE — iPhone and iPad, next version; not scoped for build)
+
+Ben, 2026-09-12: *"I would like to use the built in Lidar and front camera to map the rooms or
+locations… This makes the end user be able to actually map where they are when things happen
+without having to tell the field kit what room they are in."* And: *"I don't know if it is even
+doable or not, it just came to me there is the potential it would be another piece to set us
+apart."*
+
+**Verdict first: doable, in layers, and the first layer is genuinely worth building.** The part
+Ben most wants — the phone knowing which room a reading happened in without being told — is a
+solved problem on Apple's side, with a first-party framework that does the scanning, names the
+walls and doors, and merges rooms into a building. The parts that are *not* solved by anyone's
+framework are textured, photo-real walk-through models and merging those across visits into ever
+better ones. Those are real engineering with real compute cost, and this entry says exactly where
+the line is so nobody promises the second thing while building the first.
+
+### What Apple actually provides (checked 2026-09-12 against developer.apple.com)
+
+| Piece | What it is | Since | Matters because |
+|---|---|---|---|
+| **RoomPlan** — `RoomCaptureSession`, `RoomCaptureView`, `CapturedRoom` | Scans a room with LiDAR and returns a **parametric** model: walls, doors, windows, openings, floors, and recognised objects (bed, table, fireplace…) with dimensions and positions | iOS 16 | This is the room. Small (kilobytes), comparable, mergeable, and it is what "which room am I in" is computed against |
+| **`StructureBuilder`** → `CapturedStructure` | Merges several `CapturedRoom` scans "captured in the same physical vicinity" into one building | iOS 17 | Apple has done the within-visit merge for us |
+| `CapturedRoom.export` / `CapturedStructure.export` | USDZ model plus a metadata JSON | iOS 16 / 17 | The viewable file and the durable data, from the same call |
+| **ARKit `ARWorldMap`** | The tracked space's feature points and anchors, archivable, reloadable as `initialWorldMap` to **relocalize** a later session | iOS 12 | How a later visit snaps into the same coordinate frame. Apple's own guidance: it only works in the *same physical environment with similar lighting* |
+| ARKit scene reconstruction — `ARMeshAnchor` | The raw LiDAR mesh, live | iOS 13.4 | Change detection while the phone sits on a stand, and the geometry any texturing would drape over |
+| **Object Capture** — `PhotogrammetrySession` | Photos → textured 3D model | iOS 17 on device | **Objects only.** Apple documents it as "creating 3D objects from photographs", not rooms. It is not the room-texturing tool |
+| `ARGeoAnchor` | Lat/lon anchors matched against Apple's street imagery | iOS 14 | **Not usable indoors.** Coverage is street-level in about fifty US cities and excludes anywhere not drivable. Lat/lon is a *seed* for alignment, never the alignment |
+
+**Two corrections to the request, said plainly:**
+
+1. **It is the rear camera, not the front.** LiDAR and the wide camera are on the back of the
+   phone. The front TrueDepth camera is short-range and faces the person holding it. Mapping,
+   texturing and "did something move" all use the back, which is also what you point at a room
+   when the phone sits on a table.
+2. **LiDAR is a minority.** Every iPhone Pro and Pro Max from the 12 onward has it, and iPad Pro
+   from the 2020 models on. No standard, Plus, Air or mini does. Most members will not have it, so
+   the feature has to degrade: a phone without LiDAR keeps today's "tell me the room" and can still
+   *use* a map somebody else made (relocalization needs a camera, not LiDAR).
+
+### What a "map" is, concretely
+
+One scan produces up to four artefacts, and they are kept apart on purpose because they have
+different sizes, different lifetimes and different audiences:
+
+| Artefact | Size | Kept for | Shared? |
+|---|---|---|---|
+| **Structure JSON** — the parametric `CapturedRoom`/`CapturedStructure`: rooms as polygons, walls, doors, windows, objects, all with dimensions in metres | ~10–200 KB | Forever. This is the record everything else hangs off | Yes, under the visibility rules below |
+| **USDZ model** | 1–10 MB | Viewing (QuickLook on the phone; a 3D viewer on the web) | Yes, same rules |
+| **World map** — the archived `ARWorldMap` | 5–50 MB | Relocalizing on a later visit, so a second night lands in the first night's coordinates | Within the group only; it is a fingerprint of a room's contents |
+| **Keyframe bundle** — timed photos with camera poses, and optionally the raw mesh | 100 MB–GBs | Texturing, and any photo-real model later | Optional, phase 5, and it counts against the account's storage like video does |
+
+The first two are the product. The third makes repeat visits work. The fourth is the "impressive,
+complex 3D models" ambition and is deliberately last.
+
+### End to end: the app side
+
+**Scanning (a new step, not a session).** Mapping is its own activity, done once per place with
+the lights on, before or after an investigation — not something that runs during a session, because
+RoomPlan wants the phone swept slowly around a lit room and an investigation wants it still, in
+the dark, for hours. The screen says so.
+
+1. From a place (or from a session that has a place), **Map this place**. `RoomCaptureView` runs
+   Apple's own scanning UI: the person walks the room, the walls draw themselves.
+2. **Room by room.** Each finished room is a `CapturedRoom`; the person names it, and the name
+   becomes (or is matched to) a `PlaceRoom` — the entity item 197 already made for exactly this.
+3. **Merge.** `StructureBuilder` combines the rooms into one `CapturedStructure` for the building
+   and exports USDZ plus metadata.
+4. **Save the world map** at the end of the scan so the next visit can relocalize.
+5. **Upload** structure JSON + USDZ (small, always); world map (group only); keyframes (only if
+   the person opts in, with the size shown first, under the same allowance rules as video —
+   README-continuous-video-and-auto-clips.md and item 210's trimmer already established that the
+   phone is never limited and the upload is).
+
+**Using the map during a session — the actual feature.**
+
+6. When a session starts at a place that has a map, the app loads the world map and runs an
+   `ARWorldTrackingConfiguration` with `initialWorldMap` while the person walks in. Relocalization
+   takes a few seconds of the camera seeing the room. The screen shows *"Found your place in the
+   map"* or *"Couldn't match the room yet — move slowly, or name the room yourself"*, and the
+   manual room picker never goes away.
+7. Once relocalized, every reading, mark and capture gets a **position in the map frame**
+   (x, y, z in metres) alongside the GPS it already carries. The room is derived by point-in-polygon
+   against the structure's room footprints, and written to the same `room` field the Field Kit
+   fills today. Nothing downstream has to change to benefit.
+8. **Without relocalization** (new place, or it failed): the session records device pose relative
+   to its own start anyway, and if the person maps the place afterwards the rooms are applied
+   **retroactively** from the pose history. The night's readings get their rooms the next morning.
+9. Tracking costs battery and cannot run with the screen off. So the pose log runs at a low rate
+   (a fix a second is plenty; a person does not cross a room in less) and the camera stops the
+   moment the blackout overlay goes up, keeping the last good position. This is the same
+   foreground-only limitation continuous video has and it is stated on screen the same way.
+
+**Change detection — "did something move".** Two different questions, two different answers:
+
+- *During a session, phone on a stand pointed at the room* (Ben's stabilisation advice is
+  exactly right, and it goes in the UI copy): take the first thirty seconds' LiDAR mesh as the
+  baseline; thereafter any region whose depth differs from the baseline by more than a threshold
+  for more than a few seconds is a **`scene_changed` mark** with a bounding box, in the same
+  channel Sentry mode already uses for `scene_motion`. This is tractable and it is the one that
+  produces evidence. Camera-motion (someone picks the phone up) is detected already and suppresses
+  it.
+- *Between visits*: after alignment (below), compare the recognised object lists — RoomPlan
+  returns categories and positions — and report *"the chair by the north wall is 40 cm from where
+  it was in March"*. Reliable for the objects RoomPlan classifies; a general mesh diff is noisier
+  and is a phase-5 refinement, not a promise.
+
+### End to end: the server side
+
+**Entities.**
+
+- `PlaceMapCapture` — one scan: `PlaceId`, `OrganizationId` (who made it), `CapturedByAppUserId`,
+  `DeviceModel`, `CapturedAtUtc`, `StructureUploadFileId`, `ModelUploadFileId` (USDZ),
+  `WorldMapUploadFileId?`, `KeyframeBundleUploadFileId?`, SHA-256 of each, `RoomCount`,
+  `FloorAreaSquareMetres`, `Visibility` (the existing sharing scope), `AlignmentToCanonical`
+  (a 4×4 transform, null until aligned), `QualityScore`.
+- `PlaceMap` — the **canonical** map for a (place, organization) pair, or for the place itself
+  when public: the merged structure JSON, the USDZ, `Version`, and `Provenance` (which captures
+  contributed, weighted how). Rebuilt when a capture is added or accepted.
+- `PlaceRoomGeometry` — a footprint polygon per `PlaceRoom` in the canonical frame, with `Floor`.
+  This is the table that turns a position into a room name, and it is what makes rooms
+  *definitions* rather than labels.
+- `FieldSessionUpload` gains nothing new; readings already carry `position` in the device data
+  document, which gains `map_ref` (below).
+
+**Storage.** Files land through `IFileStorageService` under the organization or user, exactly as
+field sessions do, and `AccountStorageGuard` counts them. Parametric JSON is free in practice;
+world maps and keyframes are not, and the upload screen shows the weight before sending, as it now
+does for video.
+
+**Device data format.** A backwards-compatible v1.1 addition, keeping the spec vendor-neutral so
+any LiDAR scanner could feed it:
+
+- `position.map_ref: { map_id, x, y, z, room_id?, confidence }` on a reading, mark or capture.
+- `maps[]` companion list: `{ id, kind: "roomplan-structure" | "usdz" | "arworldmap", filename,
+  sha256, frame: "map" }`.
+
+### The "mesh side": compare, align, merge, refine
+
+This is the part Ben asked about most and the part with the most honest uncertainty in it.
+
+**Within one visit** — solved: `StructureBuilder`.
+
+**Across visits and devices** — three tiers, tried in order:
+
+1. **Relocalization** (best). If the new scan's device relocalized against the canonical world
+   map, its frame *is* the canonical frame. Zero registration needed.
+2. **Footprint registration** (good, ours to build). Room footprints are 2D polygons with wall
+   lengths and door positions; two scans of the same building match by 2D rigid registration
+   (rotation + translation, ICP on wall segments), **seeded by the compass heading and the GPS
+   fix** so the solver starts near the answer. Indoors GPS is tens of metres out, which is enough
+   to say "same building" and not enough to say anything else — a seed, never a solution. Confidence
+   comes from how much wall length agrees after registration; below a threshold it is refused and
+   the scan is kept as a separate, unmerged capture rather than force-fitted.
+3. **A person** (fallback). Show the two floor plans side by side and let somebody drag one onto
+   the other. Two minutes for a human, and it settles the cases where a building was renovated.
+
+**Merging** the parametric structures is then a vote per wall: walls that appear in several
+aligned captures within tolerance are kept with higher confidence; a wall in one capture only is
+kept but marked; an object present in some captures and not others is a *change*, not an error,
+and shows as such. Over visits the canonical map gets tighter, and each room's polygon settles.
+That is the "refine as time passes" Ben described, and for the parametric layer it is achievable
+with ordinary geometry.
+
+**Textures — "the camera to provide the mesh cover."** RoomPlan does not texture, and Object
+Capture is for objects. The honest options:
+
+- *On the phone*: project keyframe photos onto the `ARMeshAnchor` geometry at capture time. Works,
+  quality varies with lighting, and it is a custom renderer to write and maintain.
+- *On the server*: upload the keyframe bundle and reconstruct there (photogrammetry, or Gaussian
+  splatting for the "walk through" feel). Better results, and it needs a machine with a GPU and a
+  queue — an operational cost the site does not have today.
+- *Neither, for now*: ship the parametric map, the USDZ and the floor plan, and add textures as a
+  later opt-in. **This is the recommendation.** The floor plan with readings drawn on it is what a
+  reviewer uses every night; the photo-real model is what a visitor admires once.
+
+### Who may see what — the four cases, mapped onto rules that already exist
+
+Everything below reuses `PlaceKind`, the sharing scopes from `Places-and-Investigation-Sharing.md`
+(`GroupOnly` / `PlaceInvestigators` / `Public`), `OrganizationKind`, `OrganizationMemberRole`,
+`PlaceRoom` ownership, `Case.IsPrivateEngagement` and the client-consent rule for publishing case
+media. Contributing and seeing are two separate grants.
+
+| Where | Who may add a map or name rooms | Who sees it | Default scope | Notes |
+|---|---|---|---|---|
+| **Private residence** (`PlaceKind.PrivateResidence`, a case) | Members of the investigating group with `Member` or above | That group only | `GroupOnly` | Leaves the group **only** with the client's consent recorded, the same two-key rule as case media. A floor plan of somebody's home is the most sensitive artefact this app will hold: it is redacted with the address under private-engagement rules and it never enters the public archive. |
+| **Public location** (`PlaceKind.PublicLocation`, e.g. the Bell Witch Cave) | Any investigator of the place, and the property's own organization if it has one (`HauntedProperty`) | Everyone, at that address | `Public` | Every contribution merges into the place's canonical map. The property owner's rooms (`PlaceRoom`, already per-organization) are the names shown; visiting groups' names are matched to them. |
+| **Hosted event** (`HostedEvent`, `OrganizationKind.PublicEventProvider`) | The organizer's `Owner`, `Administrator` and `Manager` members | Ticket holders of that event, for the event's dates and afterwards for their own records; the organizer always | Event-scoped (a new scope: `EventAttendees`) | If the venue is a public place the place's public map is visible to all anyway; the *event* map (its room names, its layout for that weekend) is what stays with attendees. `HideExactLocation` on the event hides the map with the address. |
+| **Ghost walk tour** (`OrganizationKind.GhostWalkingTour`) | The tour's `Owner`, `Administrator`, `Manager` | Everyone | `Public` | A tour is outdoors and public by nature; its "rooms" are stops. Maps here are more useful as a route than a structure, and RoomPlan is not the tool for a street — this case mostly *consumes* public place maps rather than producing them. |
+
+A `SuperAdmin` sees everything, as everywhere else. Moderation applies to public maps as it does
+to public media: a scan uploaded to a public place is reviewable before it merges into the
+canonical map.
+
+### The web side
+
+- **Floor plan first.** Render the structure JSON as SVG: rooms, doors, windows, and the session's
+  readings drawn where they happened, with the timeline player's playhead moving a dot across it.
+  Cheap, fast on every device, and the thing that makes the feature legible.
+- **3D second.** USDZ opens natively on iPhone and iPad (QuickLook). On the web a glTF conversion
+  in a three.js viewer; nothing in the Telerik set does 3D, so this is the one place a JavaScript
+  library is the pragmatic answer and it loads only on the page that needs it.
+- **Compare view.** Two captures of the same place side by side, aligned, differences highlighted.
+
+### Playing a session back inside the map (Ben, 2026-09-12, added mid-write)
+
+*"This approach would also be able to provide a 3d review to pull from our own refined version of
+the 3d map to play back during field kit sessions."* Yes, and it falls out of M2 and M3 rather
+than needing its own pipeline, because every reading already has a position in the map frame:
+
+- **On the phone, at review.** The session's USDZ (the canonical, refined one for the place, not
+  the raw scan) opens in a RealityKit view; the timeline's playhead drives a marker through the
+  rooms, marks appear where they happened, the field strength colours a trail behind it, and a
+  capture's thumbnail hangs at the spot it was taken. The same `SessionReplay` that drives the
+  audio and video today drives this — it is another consumer of the playhead, exactly as the
+  video is.
+- **On site, in AR.** Because relocalization puts a live device in the map's frame, the previous
+  visit can be *overlaid on the room itself*: stand in the cellar, hold the phone up, and see
+  where last month's spikes were and where the chair stood. This is the most striking thing the
+  feature can do and it costs nothing beyond M2, since it is the same anchors drawn through the
+  camera instead of over a model.
+- **On the web.** The floor plan player (M1) is the everyday version; the three.js viewer gets
+  the same playhead binding in M3, so a member at a desk can scrub a night through the building.
+- **Pulling from the refined map is the point.** A session is played back in the *current*
+  canonical map, aligned through the capture's `AlignmentToCanonical`, so a session recorded
+  against a rough first scan improves visually as later scans tighten the model, without being
+  re-uploaded.
+
+This adds one deliverable to **M2** (phone playback in the model, and the AR overlay behind a
+feature flag) and one to **M3** (the web 3D playhead).
+
+### Build order
+
+| Phase | Delivers | Verification |
+|---|---|---|
+| **M0 — Feasibility spike (1–2 days, Ben's iPhone Pro)** | Scan two rooms with `RoomCaptureView`, merge with `StructureBuilder`, export, save a world map; come back the next day, in the dark, and see whether relocalization works and how long it takes; measure battery and heat for a 30-minute pose log | Device only. Decides whether M2 is real. |
+| **M1 — Capture, upload, view** | Map this place; `PlaceMapCapture` + `PlaceMap`; floor plan SVG on the place page; visibility per the table | BenKit tests for parsing the structure JSON and polygon math; server tests for the visibility matrix (every row of the table is a test); device for the scan |
+| **M2 — The phone knows the room** | Relocalize at session start; pose log; point-in-polygon room attribution; retroactive attribution when a place is mapped afterwards; manual picker always present; **session playback inside the model, and the on-site AR overlay** | BenKit tests for attribution and the retro pass using recorded pose logs as fixtures; device for relocalization |
+| **M3 — Across visits** | Footprint registration seeded by heading and GPS; canonical merge with per-wall confidence; the side-by-side manual fallback; the object-moved report; **the web 3D viewer with the timeline playhead** | Pure geometry, fully unit-testable with synthetic and recorded structures |
+| **M4 — Something moved, live** | Baseline mesh on a stand; `scene_changed` marks with bounding boxes on the timeline; stabilisation guidance in the UI | Device only |
+| **M5 — Textures (optional)** | Keyframe bundle capture and upload under the allowance rules; server reconstruction on a GPU queue; textured model on the web | Needs infrastructure that does not exist yet; decide after M1–M3 have earned it |
+
+### What has to be true before any of it ships
+
+- **Nothing here can be verified in the simulator.** No LiDAR, no camera, no ARKit tracking. Same
+  warning, in capital letters, as continuous video and for the same reason this branch learned
+  the hard way with Sign in with Apple. M0 is on a real phone or it does not count.
+- **Consent copy before the first scan of a home.** The sentence a member reads before mapping a
+  private residence has to say who will see the floor plan, and the client has to have said yes
+  to the group having it, which is a new line on the case's consent record.
+- **The battery notes need measuring, not estimating.** ARKit tracking plus LiDAR is heavier than
+  video. M0 produces the numbers the UI will show.
+- **iOS 17 is the floor for `StructureBuilder`**; the app's minimum is already iOS 18, so this
+  costs nothing.
+
+### Open questions
+
+1. Is a public place's canonical map contribute-to-see, the same open question the sharing spec
+   already carries for findings? Recommend no for maps — a map is more useful the more people can
+   use it, and the property is public anyway.
+2. When a private residence later becomes a public location (a house that becomes a museum), do
+   old private maps migrate? Recommend no: the consent was for that group, at that time.
+3. How long are world maps kept? They go stale when furniture moves. Recommend replacing on each
+   successful re-scan and expiring after a year unused.
+4. Whether to accept structure JSON from *other* LiDAR apps through the device data format, so a
+   group with a Matterport or Polycam habit can contribute. The format is designed to allow it;
+   the question is whether to promise it.
+
+**What I think** (asked directly): the first three phases are a real differentiator and are
+built from parts Apple maintains. A field session whose readings sit on a floor plan the phone
+drew, with the room named automatically and a second visit lining up with the first, is something
+no competitor in this space has. The photo-real walk-through is the part people will ask for and
+the part to resist promising until the plain version has proved itself on a real night in a real
+cellar.
+
+
+---
+
+## 237. The user manager: saying at a glance who somebody is, and what they do here (SUPERADMIN — open, mostly doable now)
+
+Ben, 2026-09-12, after item 236: *"more doable than what we have listed as 236 — probably."* He is
+right, and most of it is reading data the site already stores rather than collecting anything new.
+Four threads, deliberately separated because they are worth very different amounts and one of them
+is a **live defect** rather than an enhancement.
+
+**Grounding, checked against the tree the day this was written.** `SignInEvent` already records
+`AppUserId`, `Utc`, `Succeeded` and `Method` (`password`, `apple`, `handoff`, …). `UserEmail`
+already has `IsValidated`, `ValidationToken` and `DateValidated`. `/admin/users` is
+`Ben.Web.Website.Library/User/AdminUsers.razor`, a Telerik grid whose Actions column uses
+`<BenIcon Name="eye" />`. `ApexChart.razor` already themes charts to the site. So threads A, B and D
+below are mostly wiring; thread C is the only one that needs anything built from nothing.
+
+---
+
+### A. ✅ FIXED 2026-09-12 (`fix/verify-a-new-email`, merged) — and this entry had it partly wrong
+
+> **The correction, first.** This entry was written claiming the verification flow did not exist.
+> It did. `CreateEmail` already refused public, `UpdateEmail` already refused publishing an
+> unvalidated address, re-typing the address already cleared validation and unpublished it, and the
+> whole chain — `send-validation`, the emailed link, the anonymous `/validate-email/{token}` page,
+> the redeem endpoint, the seven-day expiry, the one-minute cooldown — was built, tested and
+> working. All four columns existed and three of them were being written.
+>
+> **Two things were genuinely broken, and the second is what Ben hit.**
+>
+> 1. **`IsPrimary` was governed by nothing**, on create or update. Primary is the address a person
+>    is presented by, so an unproven one taking it is the same mistake as publishing it, only
+>    quieter — the rule public already had. Said honestly: nothing today routes mail by the primary
+>    `UserEmail` (the site writes to the Identity account address, which has its own confirmation),
+>    so this was a wrong label rather than mail redirected. Fixed at the rule level anyway, because
+>    the day something reads it, it becomes the other kind of defect. Changing the address of a
+>    primary row is now refused outright, since re-typing clears validation and a row that stayed
+>    primary through that lands in exactly the state the rule prevents.
+> 2. **No confirmation was ever sent on add.** The row was created with no token, and the link only
+>    went if somebody found a button most people never press — so the address sat unconfirmed for
+>    ever and could never become primary or public. Adding an address IS the request to confirm it,
+>    so create now issues the link immediately through the same helper the resend button uses.
+>    Behaviour change pinned by its own test: asking again inside the minute is throttled.
+>
+> **On the screen:** Primary is disabled until confirmed, with the note Public already had, defined
+> once because it is one rule; and a first address no longer defaults to primary, because a tick
+> the save would refuse is a tick that lied.
+>
+> 32 controller tests, proved to discriminate. `ProfileEmailConfirmationTests` is written and
+> compiles but is **unrun** — the e2e runner refuses while the dev hosts hold port 5252.
+>
+> **Still open from this thread:** the shared verified-tick component for two-factor, phone and
+> linked providers. Email already had a *Confirmed* badge.
+
+### A (original note, kept for the record): an email set primary and public without ever being verified
+
+Ben: *"I just updated my account in the profile by adding a new e-mail. I set it as primary and
+public. Shouldn't we verify that?"*
+
+**Yes, and the columns to do it already exist and are not being used.** `UserEmail.IsValidated`,
+`ValidationToken` and `DateValidated` are on the table; the add-an-email flow writes none of them.
+So today somebody can put any address on their public profile, and make it primary, with no proof
+they can read it. That is worse than untidy:
+
+- A **public** address nobody proved they own can be used to impersonate somebody, or to put a
+  stranger's real address on a page they never asked to appear on.
+- A **primary** address is where the site writes. An unverified one silently redirects a person's
+  own mail — including anything the account recovery path ever sends there.
+
+This is the same rule the site already keeps everywhere else: *say-so before it is seen*, and the
+provider-verified-address rule in `ExternalSignInService` exists precisely because an unverified
+claim on an address is not proof of holding it.
+
+**What to build.** Adding an address sends a confirmation to it and the row stays `IsValidated =
+false` until the link is followed. Unverified means: **may not be primary, may not be public**, and
+says so on the form rather than accepting and quietly ignoring the ticks. A resend button beside it,
+because a confirmation that never arrives is the commonest failure and the profile already offers
+resend for the account address. Existing rows are grandfathered as-is rather than mass-invalidated —
+telling everybody their address is suddenly unverified would be a support day for a problem nobody
+has yet — but a row that has never been validated cannot become primary or public from now on.
+
+**Then the tick.** A small check beside a verified address with a *Verified email* tooltip, and the
+same treatment wherever a fact about an account is proved rather than asserted: two-factor on,
+Apple or Microsoft linked, phone verified. One shared component, because four screens inventing four
+ticks is how they end up meaning four different things.
+
+### A2. ✅ FIXED 2026-09-12 — the profile did not say it had saved
+
+Ben: *"when I returned to my profile page, it didn't say that it was updated."* Adding an email
+succeeded and the screen said nothing. Whatever the enhancements below come to, **a save that
+reports nothing is the bug**: the person cannot tell the difference between "saved" and "silently
+refused", and this codebase has a standing rule that a refusal the UI discards is worse than no
+rule. Fix with the toast the rest of the site uses, naming what changed.
+
+---
+
+### B. Icons that say what somebody is
+
+Ben wants the user manager to show, at a glance: who is paying, who is verified, who is a personal
+account, who owns a ghost tour, who is an employee of one, and so on — with a popover for anybody
+who is several of those at once.
+
+**One correction, and it is small.** The site's icons are `BenIcon`, a sprite of the **Feather** set
+(575 symbols) that replaced `TelerikSvgIcon`; Bootstrap Icons is not loaded and switching sets
+wholesale would restyle every screen. But Ben's actual vocabulary is nearly all there already:
+
+| Ben asked for | Feather has |
+|---|---|
+| `person-fill-add` | `user-plus` |
+| `person-fill-check` | `user-check` |
+| `person-fill-x` | `user-x` |
+| `person-gear` / `person-fill-gear` | **nothing** — the one real gap |
+
+So: use the Feather names for the three that exist, and for `person-gear` add that one Bootstrap
+Icons symbol into our own sprite. The sprite is ours and a symbol is just a `<symbol>` element; one
+borrowed glyph is far cheaper than a second icon set, and it keeps every screen on one component.
+Replacing the eyeball with a person-and-gear on the Actions column is right — *view* is not what
+that button does, it opens the person's management view.
+
+**The badges themselves.** A column of small, consistent marks, each one a fact and not a guess:
+
+| Mark | Means |
+|---|---|
+| Personal account | Not a member of any organization |
+| Group member / manager / owner | Their highest `OrganizationMemberRole` |
+| Ghost tour owner / employee | The above, where the org is `OrganizationKind.GhostWalkingTour` |
+| Event organizer / employee | The same, for `PublicEventProvider` |
+| Venue | `HauntedProperty` |
+| Verified | Account address confirmed, and (per A) that means proved |
+| Paying | An **Active** subscription right now, on their own account or an org they own |
+| Two-factor | On |
+| Apple / Microsoft | An external login is linked |
+
+**Colour carries one meaning only: green is money in.** Ben's instinct — *"when a person is paying
+money currently, maybe we color the icon green vs base"* — is right, and it works precisely because
+nothing else is coloured. The moment a second thing is green the column stops answering the question
+it exists for. Everything else is the base weight.
+
+**The popover is the deliverable, not the badges.** Most people are one thing; some are five, and a
+row cannot show five without becoming unreadable. So a reusable component in the library — Ben asked
+for it in the library and that is right, because the same "who is this person, everywhere" answer is
+wanted on the org member list, on a case's contacts and on a booking's lead guest. It lists every
+position: the organization, the role, whether they own it, whether they are staff, whether they are
+merely an attendee, and since when. One query behind it, one component in front of it.
+
+**Look.** Ben: *"the site should pop and sizzle."* The floor is the tour page; the badges are small,
+quiet and consistent, and the popover is where the richness goes. A grid row that sizzles is a grid
+row nobody can scan.
+
+---
+
+### C. What we can honestly say about where people spend their time
+
+Ben: *"are we able to determine how long they were on the site and where they spent most of their
+time? If they looked at any ads, groups, events, tours, etc and how many times which ones."*
+
+**Partly, and the honest answer differs sharply by question.**
+
+| Question | Can we answer it today? |
+|---|---|
+| How many times somebody signed in, and when they last did | **Yes, now.** `SignInEvent` has every row already. This is a query, not a feature. |
+| Which method they used — password, Apple, Microsoft | **Yes, now.** `Method` is on the same row. |
+| Which pages they opened, and how often | **Not today.** Nothing records a page view. Adding it is ordinary work: one row per view, or a rolled-up counter per person per surface per day. |
+| How long they were on the site | **Only ever an estimate.** A browser does not tell a server when somebody wanders off; the usual trick is the gap between requests with a session cut-off, and it is wrong for anybody who reads one long page. Report it as "active minutes" with the definition written on the screen, or not at all. |
+| Which ads, groups, events and tours they looked at, and how many times | **Not today, and this is the one with a cost.** It means recording, per person, what they read — which is a different kind of data from anything the site currently keeps about members, let alone about signed-out visitors. |
+
+**The privacy line, and it should be drawn before anything is built.** This site's whole posture is
+that it holds less than it could: pseudonyms on public case pages, two keys before a member's photo
+reaches a client, addresses withheld for private residences. A per-person reading history is the
+first thing that would cut against that, and it would sit in the same database as people's home
+addresses.
+
+The recommendation is therefore: **count, do not follow.** Aggregate counters — how many views this
+tour had, what hour of day sign-ins cluster in, how the sections compare — answer every question Ben
+actually named as a reason (*"it is just to determine where to focus development time"*) and none of
+them need a per-person trail. Where a per-person number is genuinely wanted, keep it to the ones
+already kept for another reason: their own bookings, their own sessions, their own sign-ins.
+
+If a per-person trail is later wanted anyway, it needs: a retention window, a line in `/privacy`, an
+exclusion for signed-out visitors, and it must be in what an account deletion removes.
+
+### D. Charts on the manage-user page
+
+Ben wants cards above or below the grid: when people sign in, where they spend time, how the
+sections compare — group, iPhone, iPad, organization event, ghost tour, ads, maps.
+
+**`ApexChart.razor` already exists and already themes to the site**, including re-reading the
+palette when the theme changes, so a chart is a component call rather than a project. And
+`AdminStatsController` already answers the dashboard's numbers, which is where these belong beside.
+
+Buildable **immediately**, from `SignInEvent` alone:
+
+- Sign-ins by hour of day, averaged — the "when do people actually turn up" chart, which is the one
+  Ben named first and the one that tells a deployment window.
+- Sign-ins by day, with failures alongside successes; a spike in failures is an incident.
+- Method split — password against Apple against Microsoft — which is the number that says whether
+  Sign in with Apple was worth the fortnight it cost.
+- New accounts by week, against sign-ins, which is retention in the only form we can currently prove.
+
+Buildable **after C's counters exist**: section comparison, per-surface time, ad and tour view
+counts. Not before, and the cards should not be drawn with placeholder data in the meantime — a
+chart of nothing looks like a chart of zero.
+
+---
+
+### Suggested order
+
+| Slice | Why it goes here |
+|---|---|
+| **1. Verify a new email; refuse primary and public until it is** | It is the defect, and it is small |
+| **2. The saved-toast on the profile** | Same screen, same afternoon |
+| **3. Verified ticks, one shared component** | Reads what slice 1 now writes |
+| **4. The badge column and the positions popover** | The visible half, and the popover is reusable straight away |
+| **5. Sign-in charts on `/admin/users`** | Pure query over data already held |
+| **6. Aggregate view counters** | Needs the privacy decision first |
+| **7. Per-surface time, if still wanted** | Needs 6, and an honest definition of "time" |
+
+Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 is the first one
+that changes what the site knows about people, and it should be a separate decision with its own
+sentence in `/privacy`.
+
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+
+Ben, 2026-09-12, while phase 2.4 was being built:
+
+> Add future enhancement where we can send out notices to event organizers with summaries of who
+> is confirmed, any new reservations to contact with a link for them to log in and get the contact
+> information for the attendee and also ability to add this to the organizer or employee internal
+> messages. This might be triggered by someone signing up to reserve room or seat to give employee
+> notice new people are requesting reservation for "X".
+
+**Why it matters more than it sounds.** Everything item 235 built so far is pull: a request lands
+in a queue and waits for somebody to open the board. The bell rows added in phase 2.3 help a person
+who is already on the site. Nobody is *told*. A venue that checks on Monday has left a guest waiting
+since Friday, and a guest who waits three days books somewhere else — so the one number this
+feature moves is how fast a request is answered.
+
+### A. The alert, when somebody asks
+
+Triggered by a request arriving (the guest's own door, the umbrella RSVP, or a confirmed email
+invitation), to every member of the venue who may decide bookings.
+
+- **Say what is being asked for, not that something happened.** "A party of 4 has asked for the
+  Blue Room, Fri–Sat" is actionable; "you have a new notification" is not.
+- **Never carry the guest's contact details.** The letter links to the booking and the person signs
+  in to see who it is. Ben asked for exactly this — *"a link for them to log in and get the contact
+  information"* — and it is also the only version that survives a forwarded email.
+- **Batch, do not flood.** A weekend that sells out in an hour must not send forty letters. One
+  immediate letter, then a rolling window (fifteen minutes is a sensible first guess) that collapses
+  everything else into one "and 12 more".
+- **Per-person opt-out**, because the busiest venue is the one most likely to want only the digest.
+
+### B. The digest
+
+A scheduled summary per event, not per site: who is confirmed, who is still waiting and for how
+long, what is left in each room or seat, and anything undecided inside the booking deadline.
+
+- **Cadence is the venue's**, and the useful default is daily while an event is inside its booking
+  window and weekly outside it. A digest for an event nobody has asked about should not be sent at
+  all — an empty letter every morning is how people learn to filter you.
+- **The oldest undecided request is the headline.** That is the number a venue can act on, and it
+  is the one the bell already computes.
+- Reuses the existing job scheduling; nothing new is needed to run it.
+
+### C. Into the staff room
+
+Ben's *"ability to add this to the organizer or employee internal messages"*. The site already has
+organization messages, so this is a delivery target rather than a new feature: the same alert
+written into the group's own thread so a venue can discuss it where they discuss everything else,
+and so a member with no email still sees it.
+
+- Worth a **thread per event** rather than one per booking, or a busy weekend buries every other
+  conversation the group is having.
+
+### What has to be decided first
+
+- **Which permission receives them.** Today deciding a booking takes the settings key, which is
+  billing-level; phase 5 introduces the `Events` area and per-event staff, and that is the honest
+  audience for this. Building it before phase 5 means sending a venue's bookings to whoever can see
+  its bank details, which is broader than it should be. **So this follows phase 5, not phase 2.**
+- Whether the digest is per event or per venue when a venue runs several at once.
+- Whether an alert should ever go to a non-member (a hired door manager), which is the same
+  question phase 5 asks about non-member staff.
+
+
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
+
+Ben, 2026-09-12:
+
+> Should we create an email db table and a task to send them so we can timestamp when they are
+> created and when they are sent or if they have been sent. basically in order to verify all
+> e-mails generated get sent and if it doesn't send on the first try it will try to send it on the
+> next try.
+
+**Yes.** This is the transactional-outbox pattern and the site has already been bitten by not
+having it. `AdminMailDiagnosticsController`'s own doc comment records the incident: *"Ben signed up
+on 2026-08-31, received nothing, and there was no way to find out why: the sender swallowed its own
+failure, and the one log line that recorded it was a Warning, below the database sink's Error
+threshold. So the failure left no trace at all."* The diagnostics screen answers "can this machine
+send **right now**"; nothing answers "did **that** letter go, and if not, why, and will it be tried
+again". Today the answer to the second question is always no — every one of the twenty call sites
+catches, logs at Warning, and moves on.
+
+### Why it is cheap: the seam already exists
+
+`IEmailService` (`Ben.Data.Common/Interfaces/IEmailService.cs`) is one interface with one real
+implementation (`SmtpEmailService`) and one method that matters (`SendAsync(EmailMessage)`; the
+three-argument overload defaults into it). So the outbox is a **decorator**, not a rewrite:
+
+- `OutboxEmailService : IEmailService` — writes a row and returns. Registered as `IEmailService`.
+- `SmtpEmailService` stays, registered as itself, used only by the sender job and by
+  `AdminMailDiagnosticsController` (which must keep sending immediately and surfacing the raw
+  exception — a diagnostic that queues is not a diagnostic).
+- `MailSenderJob : IScheduledJob` beside `EventCreditExpiryJob`, claiming and sending.
+
+All twenty callers — Identity's own password and confirmation mail, the tour mailer, the event
+mailer, the client status mailer, the reminder job, the invite doors — are covered without being
+edited.
+
+### The table
+
+`OutboxEmail`: Id, To, Subject, HtmlBody, ReplyTo, Attachments (JSON of name/type/bytes, or a
+child table), **Kind** (a short string like `event-booking-confirmed` so a screen can group and a
+retention rule can differ), correlation ids (OrganizationId?, AppUserId?, a free `SubjectRef`),
+`CreatedUtc`, `Attempts`, `NextAttemptUtc`, `ClaimedUtc`/`ClaimedBy`, **`AcceptedBySmtpUtc`**,
+`FailedUtc`, `LastError`, `BodyScrubbedUtc`. Indexes: `(NextAttemptUtc) WHERE AcceptedBySmtpUtc IS
+NULL AND FailedUtc IS NULL` for the job's only query, and `(CreatedUtc)` for the screen.
+
+### Five things worth deciding, that the one-line ask does not settle
+
+1. **"Sent" must mean "the SMTP server accepted it", not "it arrived."** Naming the column
+   `AcceptedBySmtpUtc` rather than `SentUtc` is the whole difference between an honest screen and
+   one that claims delivery it cannot know. Real delivery needs bounce webhooks from a provider we
+   do not have; that is a later item, and the column name should not pretend otherwise.
+2. **Transient and permanent failures are not the same.** A 5xx for a mailbox that does not exist
+   must not be retried six times; a socket timeout or a 4xx must. MailKit's `SmtpCommandException`
+   carries the status code. Without this split the queue fills with dead addresses and the screen
+   stops being read. Recommended backoff: 1 min, 5, 15, 60, 6 h, 24 h, then `Failed` — about
+   31 hours of trying — and straight to `Failed` on a permanent reply, with the reply text kept.
+3. **A stored body is personal data, and sometimes a credential.** A hosted-event confirmation
+   carries the pass QR inlined as base64; the token behind it is a working door credential. It is
+   already in `HostedEventPasses`, so the outbox adds no new *kind* of secret, but it does put it
+   in a second table and every backup. Recommended: **scrub the body and attachments after
+   acceptance + 30 days, keeping the metadata row for ever** (`BodyScrubbedUtc`), so "did it go"
+   is answerable a year later and "what did it say" for a month. Same shape as the media retention
+   job. Cap the stored body (say 256 KB) and record truncation rather than refusing the enqueue.
+4. **When mail is not configured, enqueue anyway.** Then the day SMTP is switched on, everything
+   queued goes out. This changes what several screens should say — item 235's invite result field
+   is literally called `Sent` and would become `Queued`, and the copyable-link fallbacks stay but
+   stop being the only record. Better semantics, but it is a wording change across the site.
+5. **A crash between "SMTP accepted" and "row marked" sends twice.** Claim-then-send-then-mark
+   makes that window small and one-sided: at worst a duplicate letter, never a lost one. That is
+   the right way round and should be said out loud in the class comment rather than discovered.
+
+### Two steps, because the second is the expensive half
+
+- **239a — the decorator.** `OutboxEmailService` writes through its own `DbContext`; the job sends.
+  Fixes the actual complaint: nothing is lost to a transient failure, every letter is visible, a
+  SuperAdmin can retry one or see why it died. Twenty call sites unchanged. **This is most of the
+  value for a fraction of the work.**
+- **239b — enqueue inside the caller's transaction.** 239a still has a hairline window: a booking
+  saves, the process dies, the letter was never enqueued. Closing it means the enqueue joins the
+  caller's `SaveChanges`, which means the mailers take the caller's `db` — `EventGuestMailer`
+  already does; several others do not. Worth doing for the letters where silence is expensive
+  (a confirmed booking, a password reset, an invitation), not for all twenty.
+
+### The screen
+
+Extend `AdminMailDiagnosticsController` and its page rather than building a second one: a list of
+recent letters with Kind, To, Created, Attempts, state and the last error; filters for Failed and
+Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
+the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
+
+### 239a SHIPPED, 2026-09-12
+
+Built as designed, with four things worth recording that the design did not predict.
+
+- **`OutboxEmailService` decorates `IEmailService`; `SmtpEmailService` is registered as itself.**
+  All twenty callers were covered without one being edited, as intended.
+- **The diagnostics controller was taking the interface**, so its test-send would have queued
+  instead of proving anything — the one endpoint whose whole purpose is to fail loudly. It now
+  takes the raw sender, and a source guard,
+  `EveryMailerGoesThroughTheOutboxTests`, names the only three files allowed to.
+- **That guard's first run accused `IdentityEmailSender`**, which mentions the sender in a comment
+  and correctly asks for the interface. Guards that read comments cry wolf, and somebody edits the
+  comment to satisfy them, so it strips comments first.
+- **`OrganizationPurgeCoverageTests` fired**, because the outbox carries an `OrganizationId`. The
+  answer was not to purge: a queued letter is not the group's property, and the most important
+  letter a purge can produce is the one telling somebody the group they belonged to is gone.
+  Deleting the rows would take that letter away at the moment it was most needed. The purge clears
+  the link and keeps the letter.
+- **`TierValidationShapeTests` fired** on the retry endpoints answering with a bare string, which
+  MVC serves as text/plain and every client here reads as JSON. They return a record now.
+- Migration `20260912182335_MailOutbox`, two tables, nothing dropped in `Up`, applied to
+  `IsHauntedDb_player`. 17 tests; the backoff table and the wiring were each proved to
+  discriminate. Suite 8,458 pass.
+
+### Sequencing — DECIDED by Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*
+
+**239a and 239b run immediately after item 235 phase 1 merges, before phase 2 (the layout
+designer).** Not part of item 235, but three of its phases add letters (the decision letters
+exist; hold-lapsed and go/no-go land in phases 4 and 3; the digest in phase 8), and phase 1's
+slice D is editing `EventGuestMailer` right now, so mail cannot be touched until that merges.
+Doing it here means every letter item 235 adds from phase 3 onwards is born inside the outbox
+rather than retrofitted into it. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
+the cap is truncated and says so), `MailSenderJobTests` (transient retries with backoff, permanent
+fails at once, a claimed row is not claimed twice, running twice sends once),
+`MailRetentionTests` (a scrubbed row keeps its metadata), and a source guard
+`EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
+diagnostics controller may take `SmtpEmailService` directly).
+
+
+## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+
+Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
+kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
+a branch nobody remembers, and one of these was only ever in a working directory.
+
+### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
+
+Tip `62ce47e6`, pushed. **275 lines that had never been committed at all** — they were sitting
+uncommitted in a worktree and would have gone with it. Committed as an explicit WIP, and **never
+built or tested in that state**, so the first thing to do on picking it up is build it.
+
+What it does, from the diff:
+
+- **Every make stays listed in the picker, even when it has nothing in the chosen category.**
+  Dropping the empty ones hides exactly the make somebody needs the first time anybody registers,
+  say, a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable duplicate,
+  which is a dead end with no way out of it. Labelling is the honest half: the choice stays, it
+  just stops looking like a promise of models underneath it.
+- Loading states on the make and model selects, so a select is never enabled while empty.
+- The empty case says **which** of the three things it is, because broken, still loading, and
+  genuinely nothing here otherwise render identically — and points at the input below that fixes it.
+- Files: `Equipment/MyEquipmentItemEditor.razor`, `Organization/Equipment/OrgEquipmentEditor.razor`,
+  `Help/Content/your-equipment.md`, and 66 lines of `Ben.Web.Playwright/Tests/EquipmentTests.cs`.
+
+**To finish:** build it, run `EquipmentTests` through `scripts/run-e2e.sh --filter EquipmentTests`,
+check the help wording against the shipped screens, then merge. It is self-contained and touches
+nothing item 235 touches.
+
+### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
+
+Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
+things it was hiding"*. Moves 54 lines out of `Ben.Web.Website/wwwroot/css/app.css` into scoped
+component CSS for `FeedPostCard`, `FeedText` and `MailRow` — rules that were never loaded, and so
+three components were rendering without styling somebody had written for them.
+
+**One thing to fix before merging:** it adds `README-dead-app-css-scoped.md` and
+`README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
+— all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
+the merge, or the root fills up again.
+
+
+## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
+
+**Ben, 2026-09-15:** research is being built as a new, separate WASM project. When it is finished and tested it is imported
+into `Ben.slnx`; then it is shaped to fit, and the API is shaped to match it. Nothing here is built ahead of that import.
+
+`feature/beta-feedback-1` ships research pages as a Notion-style stack of blocks (text, picture, file, link card, map), with
+private drafts, Publish, and a Files & links rail, built in `Ben.Web.Website.Library/Kit/Blocks`. Ben, 2026-09-14, during
+the UI test pass: that stack is the foundation, not what the research document is meant to be.
+
+### What it is meant to be — Ben: *"Keep it like a combination of Notion, Canva, OneNote and Obsidian's Canvas. This is what the Research tool document is supposed to be."*
+
+- **Notion** — what ships now: blocks you type into, move and turn into other kinds.
+- **Canva** — the page is designed: layout, sizes, colour, pictures placed with care rather than stacked.
+- **OneNote** — put anything anywhere: click an empty spot and start writing there.
+- **Obsidian Canvas** — cards on a board you pan and zoom, joined by arrows and gathered into groups: the owners, the deed,
+  the cemetery and the newspaper story, with lines saying how they connect.
+- The **table block** is still owed (Ben asked to be reminded; memory `project_block_editor_followups`).
+
+### Where it runs — Ben: *"WASM sounds like is where it should be. The end user only needs to get data from the server when needed. It doesn't need anything but when it is saved... that is when the server is really needed. The rest can be stored in local storage until saved."*
+
+Today the editor is Blazor Server: every toolbar press, menu, drag and keystroke-driven change is a round trip over the
+circuit. It measured 3–5 ms on localhost, but on a real connection the lag shows — the test pass found that clicking B and
+typing at once loses the bold (4.5), because the tool waits for the server. So the next editor is **Blazor WebAssembly**
+(the video editor already has a WASM host, `Ben.Wasm.Video`, so C# and Telerik stay):
+
+- **Load once**: the page, its draft and its attachments come from the existing research API.
+- **Edit in the browser**: typing, formatting, moving, arranging cards, drawing arrows — no server involved.
+- **Keep the working copy in browser storage** until it is saved, so a refresh, a closed laptop or a dropped connection
+  loses nothing.
+- **The server when it matters**: save a draft, publish, upload a file, fetch a link's preview. The API's
+  `BaseRevision`/409 already tells a tab that somebody else saved first.
+
+### To settle before building
+
+1. **A local copy older than the server's** — the other tab or person saved since. Show both and let the person choose, or
+   merge block by block?
+2. **Shared computers** — browser storage outlives sign-out. Key it by person, clear it on sign-out, and cap how long an
+   unsaved copy is kept.
+3. **Files cannot wait in browser storage** — pictures and files upload the moment they are added (as now); only the
+   document waits.
+4. **Phones** — a free canvas on a 375px screen: pan/zoom with a finger, or the stack as the phone's view of the same
+   document?
+5. **Storage shape** — card positions, sizes, groups and arrows beside today's block list (`BlockDocument` version 2), with
+   the stack kept as the reading and print view, and old version-1 pages opening unchanged.
+6. **The reader** — does a published canvas read as a canvas (pan/zoom) for members, or flatten to the stack?
+
+---
+
+## 242. EVP analysis that can tell a voice from noise, and says how sure it is (FUTURE — business-critical; parked 2026-09-15 for Claude usage)
+
+Ben, 2026-09-15: a small AI service that processes audio when someone analyses it for EVPs, then (separately, later) one
+for long video feeds. His outline: spectrogram analysis (voices leave formants even when buried), anomaly detection over
+the quiet parts of a room, and an open-source speech model (Whisper) to decide whether a flagged burst is a spoken word.
+Ben: *"I don't want to steal claude, I just want claude to teach my AI to be better."* Parked because the work would
+likely exceed his Claude usage allowance — **"invaluable for my business"**, so it comes back.
+
+### Already built
+- `Ben.Data.WebApi/Services/Audio/EvpDetector.cs` — voice-band energy above an adaptive local noise floor; candidates land
+  Pending for a person to accept or dismiss; manual Scan only. `EvpDetectorTests` is its accuracy gate (synthetic fixture).
+- Spectrograms in the audio player (WaveSurfer workers).
+- Local model hosting: `OnnxNsfwScreener` (ONNX Runtime 1.29, model fetched by script, never committed, degrades loudly).
+
+### The design that came out of the conversation
+1. **A speech detector decides "is it speech", not Whisper** — pretrained Silero VAD (ONNX) on each candidate.
+2. **Whisper only suggests words, and only on the flagged 1–3 s clips** — run locally (whisper.cpp / Whisper.net, MIT) so
+   private-residence audio never leaves the server; show its no-speech probability and word confidence; hide weak ones.
+   **Whisper invents fluent phrases from pure noise** — the single biggest risk to credibility.
+3. **Controls** — the same pipeline over plain room tone and reversed audio; its false-word rate is shown, not hidden.
+4. **Blind review** — the investigator writes what they hear before the suggestion is revealed (priming makes people hear it).
+5. **Cleaned listen** (RNNoise / DeepFilterNet) offered beside the original, labelled processed — denoisers can create
+   speech-like artefacts.
+6. Runs in its own process (≈1 GB model memory stays out of the IIS app pool), started by a person like Scan.
+
+### How "Claude teaches the AI" — honestly
+- Claude cannot hear audio, and its guesses at spectrogram images must never become labels.
+- **Known-truth training material:** real room tone, tape hiss and static from Ben's recorders, with public speech
+  (e.g. LibriSpeech) mixed in at known times and loudness down to barely audible, plus non-speech impostors (knocks, steps,
+  pipes, dogs, handling). Every example carries its true answer.
+- Claude writes the generator, the fine-tuning pipeline for a small pretrained detector (not a CNN from scratch — no dataset
+  of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
+  server integration.
+- **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
+  re-fits the feed).
+- Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
+  code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
+
+### First step when it resumes (cheap, decides the rest)
+A throwaway console measurement, outside the product: Silero VAD and Whisper tiny/base/small over current detector candidates
+on real recordings, and over plain room tone as a control — how often each "hears words" in the control, and CPU time per
+clip on a Windows-class server. **Needs from Ben:** real recordings, including plain room tone and hiss from his recorders.
+
+### Video (separate item when it comes)
+MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
+subtraction plus a small vision model; MCP could let an assistant use its results.

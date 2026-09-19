@@ -1,0 +1,318 @@
+using Ben.Data.Common.Enums;
+
+namespace Ben.Service.Models.Admin;
+
+/// <summary>What a band costs at one cadence, as the Administration screens see it.</summary>
+/// <param name="Interval">The cadence.</param>
+/// <param name="Price">The whole price for one period at that cadence — not a monthly equivalent.</param>
+/// <param name="IsActive">Retired prices stay for the periods that were billed against them.</param>
+/// <param name="SavingPercentAgainstMonthly">
+/// How much cheaper this is than paying monthly, floored. Null for the monthly row itself, for a
+/// band with no monthly price to compare against, and for a cadence that is not actually cheaper.
+/// Derived on the server so the screen and the checkout cannot disagree about it.
+/// </param>
+public record SubscriptionTierPriceAdminRecord(
+    BillingInterval Interval,
+    decimal Price,
+    bool IsActive,
+    int? SavingPercentAgainstMonthly,
+    // Item 144: what one member past the band's cap pays, themselves. Null = band cannot be outgrown.
+    decimal? PricePerExtraMember = null);
+
+/// <summary>What is wrong with the price list as it stands, or nothing.</summary>
+/// <param name="Problem">
+/// The sentence to show, or null when there is nothing to report.
+/// </param>
+/// <param name="IsBlocking">
+/// True when the list cannot price anybody and checkout is refused; false when it works and there
+/// is simply something worth knowing. Both used to arrive as one string, so the screen called a
+/// free band "unusable" and told the reader that checkout was refused, which it was not.
+/// </param>
+/// <remarks>
+/// A record and not a bare string, and that is the whole point of it. An endpoint that returns
+/// <c>Ok(someString)</c> is served as <c>text/plain</c> by MVC's string formatter, and every client
+/// in this solution reads an answer as JSON — so the Price Bands screen threw inside
+/// <c>OnInitializedAsync</c> and took its circuit down precisely when the ladder had a problem
+/// worth naming. It had already been broken once for the mirror-image reason, when a healthy
+/// ladder answered 204 with no body (2026-09-11, item 232).
+/// </remarks>
+public record TierValidationRecord(string? Problem, bool IsBlocking = false);
+
+/// <summary>One cap on a band. Null max is written-down-unlimited; zero is feature-off.</summary>
+public record SubscriptionTierLimitAdminRecord(SubscriptionLimit Limit, int? MaxValue);
+
+/// <summary>One band in the price list, with every cadence it is sold at.</summary>
+/// <param name="OrganizationCount">
+/// How many organizations are currently on this band. The number that makes retiring a band a
+/// decision rather than a click.
+/// </param>
+public record SubscriptionTierAdminRecord(
+    Guid Id,
+    string Name,
+    int MinMembers,
+    int? MaxMembers,
+    int SortOrder,
+    bool IsActive,
+    IReadOnlyList<SubscriptionTierPriceAdminRecord> Prices,
+    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits,
+    int OrganizationCount,
+    // Item 156 Phase A: the checklist of permission areas this tier includes. Defaulted so
+    // callers written before the field existed keep deserializing.
+    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea>? IncludedAreas = null,
+    // Item 167: the checklist of capabilities (case transfers, …), same contract.
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability>? IncludedCapabilities = null,
+    // Item 198: false means member count never assigns this tier — it is chosen, not banded into.
+    // Appended rather than inserted: this record is built positionally, and a parameter added in
+    // the middle silently reassigns every argument after it.
+    bool IsBandedByMembers = true);
+
+/// <summary>Replaces a tier's included-areas checklist (item 156 Phase A).</summary>
+/// <summary>
+/// The whole ladder, saved as one change.
+/// </summary>
+/// <remarks>
+/// <para>Judged on where it ends up rather than on each step, which is the point: some legitimate
+/// reshapes have no legal intermediate state. Splitting an unbounded top band into a bounded one
+/// and a new band above it cannot be done a band at a time — bounding the top first leaves the
+/// members above it unpriced, and adding the new band first overlaps the unbounded one below.</para>
+///
+/// <para>The list IS the ladder. A banded tier that is active today and absent here is retired,
+/// because that is the only way to say a band goes: there is no delete while subscriptions point
+/// at these rows.</para>
+/// </remarks>
+public sealed record SaveSubscriptionLadderRequest(IReadOnlyList<SaveLadderBandRequest> Bands);
+
+/// <summary>One band in a whole-ladder save. <c>Id</c> is null for a band being added.</summary>
+public sealed record SaveLadderBandRequest(
+    Guid? Id,
+    string Name,
+    int MinMembers,
+    int? MaxMembers,
+    int SortOrder,
+    IReadOnlyList<SaveTierPriceRequest> Prices,
+    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits)
+{
+    /// <summary>
+    /// The same band as a single-tier save, so both doors share one validator and one writer.
+    /// </summary>
+    /// <remarks>
+    /// A ladder band is always active and always banded by member count — an inactive band is one
+    /// left out of the list, and a tier sold to a kind of business (item 198) is not part of the
+    /// ladder at all.
+    /// </remarks>
+    public SaveSubscriptionTierRequest AsTierRequest()
+        => new(Name, MinMembers, MaxMembers, SortOrder, IsActive: true, Prices, Limits,
+               IsBandedByMembers: true);
+}
+
+public sealed record SetTierPermissionAreasRequest(
+    IReadOnlyList<Ben.Data.Common.Enums.OrganizationPermissionArea> Areas);
+
+/// <summary>The whole capabilities checklist to write over a tier (item 167).</summary>
+public sealed record SetTierCapabilitiesRequest(
+    IReadOnlyList<Ben.Data.Common.Enums.TierCapability> Capabilities);
+
+/// <summary>A price to write, as the editor sends it.</summary>
+public record SaveTierPriceRequest(BillingInterval Interval, decimal Price, bool IsActive, decimal? PricePerExtraMember = null);
+
+/// <summary>
+/// A band and its whole price list, saved together.
+/// </summary>
+/// <remarks>
+/// The prices come with the band rather than through their own endpoint. Saving a band and its
+/// cadences separately means a moment where the band exists at no price, and the validation that
+/// matters — that the bands tile the whole member range — has to run against the finished state.
+/// </remarks>
+public record SaveSubscriptionTierRequest(
+    string Name,
+    int MinMembers,
+    int? MaxMembers,
+    int SortOrder,
+    bool IsActive,
+    IReadOnlyList<SaveTierPriceRequest> Prices,
+    IReadOnlyList<SubscriptionTierLimitAdminRecord> Limits,
+    // Item 198: false for a tier sold to a KIND of business rather than a size of team, which
+    // member count must never assign. Defaulted so every existing caller keeps making ladder
+    // bands, which is what they all are.
+    bool IsBandedByMembers = true);
+
+/// <summary>One redeemable string under a campaign.</summary>
+/// <param name="RestrictedToAppUserName">
+/// The addressed account's display name, resolved for the screen. Null when the code is open to
+/// anybody. The screen must not show a raw id to explain who a code belongs to.
+/// </param>
+public record CouponCodeAdminRecord(
+    Guid Id,
+    string Code,
+    int? MaxRedemptions,
+    int RedemptionCount,
+    string? IssuedTo,
+    Guid? RestrictedToAppUserId,
+    string? RestrictedToAppUserName,
+    bool IsActive,
+    DateTime DateCreated);
+
+/// <summary>A discount campaign as Administration sees it.</summary>
+/// <param name="CodeCount">How many codes exist under it. One, for a shared campaign.</param>
+/// <param name="SharedCode">
+/// The single code, for a shared campaign — so the list can show it without a second request.
+/// Null for a generated batch, where there is no one code to show.
+/// </param>
+/// <param name="Problem">
+/// What is wrong with this campaign, or null. Surfaced in the list rather than only at redemption,
+/// because a coupon that takes nothing off looks completely normal until somebody tries it.
+/// </param>
+public record CouponAdminRecord(
+    Guid Id,
+    string Name,
+    string? Description,
+    CouponKind Kind,
+    int? PercentOff,
+    decimal? AmountOff,
+    CouponDuration Duration,
+    int? DurationPeriods,
+    int? MaxRedemptions,
+    int RedemptionCount,
+    DateTime? ValidFromUtc,
+    DateTime? RedeemByUtc,
+    BillingInterval? AppliesToInterval,
+    CouponApplicability AppliesTo,
+    bool IsActive,
+    int CodeCount,
+    string? SharedCode,
+    string? Problem,
+    DateTime DateCreated,
+    // Item 168: when set, every redemption of this coupon is a referral attributed to this person.
+    // The email rides along so the editor can round-trip the attribution — a form that reloaded
+    // only the display name would silently CLEAR the referrer on the next save.
+    Guid? ReferrerAppUserId = null,
+    string? ReferrerName = null,
+    string? ReferrerEmail = null,
+    // Ben's rule (2026-08-24): the referrer's cut is a percent of revenue, set per campaign.
+    decimal? ReferralCommissionPercent = null);
+
+/// <summary>
+/// Creating or editing a campaign. The codes are managed separately once it exists.
+/// </summary>
+/// <param name="SharedCode">
+/// For a shared campaign, the code itself. Ignored for a generated batch, whose codes come from
+/// <see cref="GenerateCouponCodesRequest"/>.
+/// </param>
+public record SaveCouponRequest(
+    string Name,
+    string? Description,
+    CouponKind Kind,
+    int? PercentOff,
+    decimal? AmountOff,
+    CouponDuration Duration,
+    int? DurationPeriods,
+    int? MaxRedemptions,
+    DateTime? ValidFromUtc,
+    DateTime? RedeemByUtc,
+    BillingInterval? AppliesToInterval,
+    CouponApplicability AppliesTo,
+    bool IsActive,
+    string? SharedCode,
+    // Item 168: the referrer's account email; empty clears. Resolved server-side so a typo is a
+    // refusal with a sentence, never a silently unattributed campaign.
+    string? ReferrerEmail = null,
+    decimal? ReferralCommissionPercent = null);
+
+/// <summary>Generating a batch of codes under an existing campaign.</summary>
+/// <param name="Count">How many codes to make.</param>
+/// <param name="Prefix">A campaign marker such as PARACON, for the humans handing them out.</param>
+/// <param name="MaxRedemptionsPerCode">
+/// Usually one — the single-use batch. Null means each code is unlimited, which is a shared code
+/// with extra steps and is almost never what is wanted.
+/// </param>
+/// <param name="RestrictedToAppUserId">
+/// Addresses every code in this run to one account. For a run of one, which is the only shape
+/// where addressing a whole batch to a single person makes sense.
+/// </param>
+public record GenerateCouponCodesRequest(
+    int Count,
+    string? Prefix,
+    int? MaxRedemptionsPerCode,
+    Guid? RestrictedToAppUserId);
+
+/// <summary>Editing one code — withdrawing it, or addressing it to somebody.</summary>
+public record SaveCouponCodeRequest(
+    int? MaxRedemptions,
+    string? IssuedTo,
+    Guid? RestrictedToAppUserId,
+    bool IsActive);
+
+/// <summary>Where one organization stands, for the Administration list and detail.</summary>
+/// <param name="CurrentMemberCount">
+/// Members <i>now</i>, which is deliberately shown next to
+/// <paramref name="MemberCountAtPeriodStart"/>: the gap between them is what the group will be
+/// re-banded on at renewal, and it is the number an administrator is actually looking for.
+/// </param>
+/// <param name="ResolvedTierName">
+/// The band the current member count would fall into, which may not be the band being billed.
+/// Null when the price list cannot price anybody — itself worth showing.
+/// </param>
+public record OrganizationSubscriptionAdminRecord(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    SubscriptionStatus Status,
+    Guid? SubscriptionTierId,
+    string? SubscriptionTierName,
+    BillingInterval Interval,
+    int MemberCountAtPeriodStart,
+    int CurrentMemberCount,
+    string? ResolvedTierName,
+    decimal PriceAtPeriodStart,
+    DateTime? CurrentPeriodStart,
+    DateTime? CurrentPeriodEnd,
+    bool CancelAtPeriodEnd,
+    DateTime? LapsedAtUtc,
+    DateTime? FirstPaidPeriodStartUtc,
+    string? ProviderName);
+
+/// <summary>
+/// A SuperAdmin setting an organization's subscription by hand.
+/// </summary>
+/// <remarks>
+/// This is the manual provider. Until money is actually taken by Square or PayPal, somebody has to
+/// be able to say "this group is paid up until March", and that somebody is a SuperAdmin. The same
+/// endpoint stays useful afterwards for the cases every payment provider produces — a refund, a
+/// comped account, a group that paid by cheque.
+/// </remarks>
+public record SetOrganizationSubscriptionRequest(
+    SubscriptionStatus Status,
+    Guid? SubscriptionTierId,
+    BillingInterval Interval,
+    DateTime? CurrentPeriodStart,
+    DateTime? CurrentPeriodEnd,
+    bool CancelAtPeriodEnd,
+    string? Note,
+    string? CouponCode = null);
+
+/// <summary>One redemption on the referral report — enough to compute a reimbursement from.</summary>
+/// <param name="ReferrerNote">The code's IssuedTo — who handed this code out.</param>
+public record CouponRedemptionAdminRecord(
+    string Code,
+    string? ReferrerNote,
+    string OrganizationName,
+    DateTime RedeemedAtUtc,
+    decimal ListPrice,
+    decimal Discount,
+    decimal Payable);
+
+/// <summary>One consequence of a tier edit, for the confirm step.</summary>
+public record TierChangeRecord(bool IsImprovement, string Sentence);
+
+/// <summary>
+/// What saving this edit will do, shown to the SuperAdmin before they commit it.
+/// </summary>
+/// <remarks>
+/// The blast radius belongs on the screen before the save, not in support tickets after it:
+/// "this lowers storage for 12 paid groups — they will be notified before renewal" is a decision,
+/// and the person making it should see it stated.
+/// </remarks>
+public record TierImpactRecord(
+    IReadOnlyList<TierChangeRecord> Changes,
+    int GroupsMessagedNow,
+    int PaidGroupsNoticed);

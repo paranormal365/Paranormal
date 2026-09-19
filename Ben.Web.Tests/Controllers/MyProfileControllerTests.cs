@@ -147,6 +147,32 @@ public class MyProfileControllerTests
     }
 
     [Fact]
+    public async Task Gender_RoundTrips_AndNotProvidedClears(
+        )
+    {
+        // Item 163: self-declared, optional, feeds only the default-avatar choice. Null in the
+        // request leaves it alone; NotProvided is a real answer that clears it.
+        var (factory, userId) = await SeedAsync();
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, Gender: Ben.Data.Common.Enums.ClientGender.Female), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.Female,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await Build(factory, userId).UpdateProfile(new UpdateMyProfileRequest(null), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.Female,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await Build(factory, userId).UpdateProfile(
+            new UpdateMyProfileRequest(null, Gender: Ben.Data.Common.Enums.ClientGender.NotProvided), default);
+        Assert.Equal(Ben.Data.Common.Enums.ClientGender.NotProvided,
+            (await GetProfileAsync(factory, userId)).Gender);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.AppUsers.FindAsync(userId))!.Gender);
+    }
+
+    [Fact]
     public async Task UpdateProfile_SetsDisplayName()
     {
         var (factory, userId) = await SeedAsync();
@@ -435,6 +461,52 @@ public class MyProfileControllerTests
         await AddMembershipAsync(factory, userId, orgAllows);
 
         Assert.Equal(expected, (await GetProfileAsync(factory, userId)).AnyOrgAllowsPrivatePhotoSharing);
+    }
+
+    /// <summary>
+    /// Whether the member-facing controls on the profile are addressed to this person at all.
+    /// </summary>
+    /// <remarks>
+    /// W-CL4 of the 2026-09-06 evaluation: somebody who is only a client — they asked a group to
+    /// come and look at their house — was offered "Show my private photo to clients of the groups
+    /// I work with". They work with no groups. They are the client that sentence is about.
+    /// </remarks>
+    [Fact]
+    public async Task Profile_SaysWhenSomebodyBelongsToNoGroupAtAll()
+    {
+        var (factory, userId) = await SeedAsync();
+        Assert.False((await GetProfileAsync(factory, userId)).BelongsToAnyOrganization);
+    }
+
+    /// <summary>
+    /// And a member belongs, whether or not their group permits the sharing.
+    /// </summary>
+    /// <remarks>
+    /// The two questions are separate on purpose: "your group has not enabled this" and "you are
+    /// not in a group" are different sentences, and the profile said the first to people for whom
+    /// the second was true.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Profile_SaysAMemberBelongs_WhateverTheirGroupPermits(bool orgAllows)
+    {
+        var (factory, userId) = await SeedAsync();
+        await AddMembershipAsync(factory, userId, orgAllows);
+
+        var profile = await GetProfileAsync(factory, userId);
+        Assert.True(profile.BelongsToAnyOrganization);
+        Assert.Equal(orgAllows, profile.AnyOrgAllowsPrivatePhotoSharing);
+    }
+
+    /// <summary>A lapsed membership is not a current relationship, here as everywhere else.</summary>
+    [Fact]
+    public async Task Profile_DoesNotCountAMembershipSomebodyHasLeft()
+    {
+        var (factory, userId) = await SeedAsync();
+        await AddMembershipAsync(factory, userId, orgAllows: true, isActive: false);
+
+        Assert.False((await GetProfileAsync(factory, userId)).BelongsToAnyOrganization);
     }
 
     [Fact]

@@ -23,6 +23,27 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     /// <summary>MEMFS filename of the source video (set after the file is written to ffmpeg MEMFS).</summary>
     public string? MemFsName { get; set; }
 
+    /// <summary>
+    /// Parts of this clip's picture that must not be shown.
+    /// </summary>
+    /// <remarks>
+    /// Faces, number plates, house numbers — whatever identifies a client or an address. The
+    /// editor had a whole-frame blur and nothing that could obscure part of a picture, so a clip
+    /// with one identifying detail in it could only be left out (2026-09-05 audit, the
+    /// completeness critic's first item). Empty on every clip until somebody draws one.
+    /// </remarks>
+    public List<RedactionRegion> Redactions { get; set; } = [];
+
+    /// <summary>
+    /// Where this clip's picture sits in the frame, and how much of it is used.
+    /// </summary>
+    /// <remarks>
+    /// Null means "fill the frame", which is what every clip did before this existed. Set it to
+    /// put a second camera in a corner or beside the first, to turn portrait phone footage
+    /// upright, or to cut a DVR's bars off (2026-09-05 audit).
+    /// </remarks>
+    public ClipTransform? Transform { get; set; }
+
     /// <summary>Thumbnail blob: URLs extracted from the clip (populated after load).</summary>
     public List<string> ThumbnailUrls { get; set; } = [];
 
@@ -32,6 +53,19 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     /// </summary>
     public double TrimmedDuration =>
         EndTrim > StartTrim ? EndTrim - StartTrim : Duration;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Speed and all: this is the length the clip OCCUPIES, and <see cref="Speed"/> changes that.
+    /// It used to be the bare trimmed duration, while the export planner was handed
+    /// <see cref="EffectiveDuration"/> — so a clip set to 2× kept its full width on the timeline
+    /// and came out half as long, and the planner filled the difference with black. Two seconds of
+    /// nothing in the middle of an exhibit, with no gap drawn anywhere. Everything built on this —
+    /// chip width, overlap detection, ripple, transition junctions, the project's total — was
+    /// measuring a length the render did not produce (2026-09-18 audit).
+    /// </remarks>
+    public override double EffectiveLength => EffectiveDuration;
+
 
     /// <summary>
     /// Playback speed multiplier applied during export.
@@ -73,6 +107,21 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
     /// (set automatically by "Separate Audio" so the detached <see cref="AudioClip"/> becomes the sole audio source).
     /// </summary>
     public bool MuteAudio { get; set; }
+
+    /// <summary>
+    /// Whether the source file has an audio stream at all, as opposed to having one the user has
+    /// muted (<see cref="MuteAudio"/>).
+    /// </summary>
+    /// <remarks>
+    /// Render commands attach a silent track to clips without sound, so that every rendered
+    /// segment has the same audio layout and the segments stay concat-compatible. Getting this
+    /// wrong in the "has audio" direction is not a cosmetic error: ffmpeg refuses the whole
+    /// command with "Stream map '0:a' matches no streams".
+    ///
+    /// Defaults to true, so clips restored from a project saved before this existed behave as
+    /// they did rather than being silenced.
+    /// </remarks>
+    public bool HasAudio { get; set; } = true;
 
     /// <summary>
     /// Returns the linearly-interpolated gain at a normalised position [0,1] within the clip.

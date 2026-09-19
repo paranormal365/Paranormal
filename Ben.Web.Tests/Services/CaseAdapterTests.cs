@@ -61,28 +61,36 @@ public class CaseAdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseRecord>>(
+        api.Setup(x => x.GetListAsync<CaseRecord>(
                 $"/api/organizations/{orgId}/cases", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([MakeCase()]);
+           .ReturnsAsync(LoadResult<CaseRecord>.Ok([MakeCase()]));
 
         var result = await Build(api).GetOrgCasesAsync(orgId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<CaseRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<CaseRecord>(
             $"/api/organizations/{orgId}/cases", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A group's whole case list, refused — read as "no cases", which is what an ordinary member
+    /// saw on every org-scoped tab before item 120.
+    /// </summary>
     [Fact]
-    public async Task GetOrgCasesAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetOrgCasesAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseRecord>>(
+        api.Setup(x => x.GetListAsync<CaseRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<CaseRecord>?)null);
+           .ReturnsAsync(LoadResult<CaseRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetOrgCasesAsync(Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+        Assert.Empty(result.Items);
     }
 
     // ── GetOrgCaseAsync ───────────────────────────────────────────────────────
@@ -110,19 +118,23 @@ public class CaseAdapterTests
     {
         var orgId = Guid.NewGuid();
         var api   = ApiMock();
-        api.Setup(x => x.PostAsync<CreateCaseRequest, CaseRecord>(
+        // Reason-carrying since the subscription caps landed: the refusal sentence ("your plan
+        // includes 2 open cases…") must survive to the screen, which PostAsync's null cannot do.
+        api.Setup(x => x.SendExpectingReasonAsync<CreateCaseRequest, CaseRecord>(
+                HttpMethod.Post,
                 $"/api/organizations/{orgId}/cases",
                 It.IsAny<CreateCaseRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(MakeCase());
+           .ReturnsAsync((MakeCase(), (string?)null));
 
         var req = new CreateCaseRequest("Smith, Nashville TN", null,
             "123 Main", null, "Nashville", "TN", "37201", "US", 36.16m, -86.78m);
-        var result = await Build(api).CreateOrgCaseAsync(orgId, req);
+        var (result, error) = await Build(api).CreateOrgCaseAsync(orgId, req);
 
         Assert.NotNull(result);
-        api.Verify(x => x.PostAsync<CreateCaseRequest, CaseRecord>(
-            $"/api/organizations/{orgId}/cases", req, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Null(error);
+        api.Verify(x => x.SendExpectingReasonAsync<CreateCaseRequest, CaseRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases", req, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ── AcceptClientRequestAsCaseAsync ────────────────────────────────────────
@@ -133,16 +145,18 @@ public class CaseAdapterTests
         var orgId     = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var api       = ApiMock();
-        api.Setup(x => x.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+                HttpMethod.Post,
                 $"/api/organizations/{orgId}/cases/accept-client-request/{requestId}",
                 It.IsAny<AcceptClientRequestAsCaseRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(MakeCase());
+           .ReturnsAsync((MakeCase(), (string?)null));
 
         var req = new AcceptClientRequestAsCaseRequest(null, null);
         await Build(api).AcceptClientRequestAsCaseAsync(orgId, requestId, req);
 
-        api.Verify(x => x.PostAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
+            HttpMethod.Post,
             $"/api/organizations/{orgId}/cases/accept-client-request/{requestId}",
             req, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -155,17 +169,19 @@ public class CaseAdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PutAsync<UpdateCaseRequest, CaseRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<UpdateCaseRequest, CaseRecord>(
+                HttpMethod.Put,
                 $"/api/organizations/{orgId}/cases/{caseId}",
                 It.IsAny<UpdateCaseRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(MakeCase());
+           .ReturnsAsync((MakeCase(), null));
 
         var req = new UpdateCaseRequest("Smith, Nashville TN", null,
             CaseStatus.Active, null, false, null);
         await Build(api).UpdateOrgCaseAsync(orgId, caseId, req);
 
-        api.Verify(x => x.PutAsync<UpdateCaseRequest, CaseRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<UpdateCaseRequest, CaseRecord>(
+                HttpMethod.Put,
             $"/api/organizations/{orgId}/cases/{caseId}", req, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -177,30 +193,33 @@ public class CaseAdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>(
+        api.Setup(x => x.GetListAsync<CaseTimelineEntryRecord>(
                 $"/api/organizations/{orgId}/cases/{caseId}/timeline", It.IsAny<CancellationToken>()))
-           .ReturnsAsync([new() { Id = Guid.NewGuid(), CaseId = caseId,
-               AuthorAppUserId = Guid.NewGuid(), EntryType = CaseTimelineEntryType.Evidence }]);
+           .ReturnsAsync(LoadResult<CaseTimelineEntryRecord>.Ok([new() { Id = Guid.NewGuid(), CaseId = caseId,
+               AuthorAppUserId = Guid.NewGuid(), EntryType = CaseTimelineEntryType.Evidence }]));
 
         var result = await Build(api).GetCaseTimelineAsync(orgId, caseId);
 
-        Assert.Single(result);
-        api.Verify(x => x.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>(
+        Assert.False(result.Failed);
+        Assert.Single(result.Items);
+        api.Verify(x => x.GetListAsync<CaseTimelineEntryRecord>(
             $"/api/organizations/{orgId}/cases/{caseId}/timeline",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task GetCaseTimelineAsync_WhenApiReturnsNull_ReturnsEmpty()
+    public async Task GetCaseTimelineAsync_WhenTheApiRefuses_SaysSoRatherThanReturningEmpty()
     {
         var api = ApiMock();
-        api.Setup(x => x.GetAsync<IReadOnlyList<CaseTimelineEntryRecord>>(
+        api.Setup(x => x.GetListAsync<CaseTimelineEntryRecord>(
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
-           .ReturnsAsync((IReadOnlyList<CaseTimelineEntryRecord>?)null);
+           .ReturnsAsync(LoadResult<CaseTimelineEntryRecord>.Failure("The server answered 403 (Forbidden)."));
 
         var result = await Build(api).GetCaseTimelineAsync(Guid.NewGuid(), Guid.NewGuid());
 
-        Assert.Empty(result);
+        Assert.True(result.Failed);
+        Assert.False(result.IsEmpty);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
@@ -209,24 +228,27 @@ public class CaseAdapterTests
         var orgId  = Guid.NewGuid();
         var caseId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+        // Reason-carrying since item 84: the lapsed-subscription refusal must reach the screen.
+        api.Setup(x => x.SendExpectingReasonAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+                HttpMethod.Post,
                 $"/api/organizations/{orgId}/cases/{caseId}/timeline",
                 It.IsAny<UpsertTimelineEntryRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new CaseTimelineEntryRecord
+           .ReturnsAsync((new CaseTimelineEntryRecord
            {
                Id = Guid.NewGuid(), CaseId = caseId,
                AuthorAppUserId = Guid.NewGuid(),
                EntryType = CaseTimelineEntryType.ClientReport,
-           });
+           }, (string?)null));
 
         var req = new UpsertTimelineEntryRequest(CaseTimelineEntryType.ClientReport,
             DateTime.UtcNow, "Knocking at night", "<p>Loud knocking.</p>", CaseTimelineVisibility.OrgOnly, []);
-        var result = await Build(api).AddCaseTimelineEntryAsync(orgId, caseId, req);
+        var (result, error) = await Build(api).AddCaseTimelineEntryAsync(orgId, caseId, req);
 
         Assert.NotNull(result);
-        api.Verify(x => x.PostAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
-            $"/api/organizations/{orgId}/cases/{caseId}/timeline", req,
+        Assert.Null(error);
+        api.Verify(x => x.SendExpectingReasonAsync<UpsertTimelineEntryRequest, CaseTimelineEntryRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/timeline", req,
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

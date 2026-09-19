@@ -1,0 +1,112 @@
+.bc-header {
+    grid-area: header;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: .75rem;
+    min-height: var(--bc-toolbar-h);
+    padding: 0 .75rem;
+    border-bottom: 1px solid var(--bc-border);
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    z-index: 10;
+    touch-action: manipulation;
+}
+
+/* An h1 for the document outline, sized as the site's editor pages size their title (h6). */
+.bc-header__title {
+    margin: 0;
+    max-width: 300px;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+/* The path across boards. It sits before the title, which is the stop you are on.
+
+   The strip scrolls rather than wrapping: a header that grows a second line moves the whole board
+   down, and a path is usually two or three stops. Each title is clamped so one long board name
+   cannot push the rest off. */
+.bc-header__trail {
+    display: flex;
+    align-items: center;
+    gap: .125rem;
+    min-width: 0;
+    max-width: 40%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+/* In a narrow header there is no room for a path AND a title, and the title is where you are - which
+   matters more than how you got there. The last stop stays, so leaving is always one click. */
+@media (max-width: 900px) {
+    .bc-header__trail { max-width: 9rem; }
+    .bc-header__crumb:not(:nth-last-of-type(1)) { display: none; }
+    .bc-header__crumb-sep:not(:nth-last-of-type(1)) { display: none; }
+}
+
+.bc-header__trail::-webkit-scrollbar { display: none; }
+
+.bc-header__crumb {
+    /* Never shrinks. Allowed to, it collapsed to "P / E/" in a narrow header - a crumb of one letter
+       names nothing, and the strip already scrolls, which is the right answer to not enough room. */
+    flex: 0 0 auto;
+    max-width: 14ch;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--bc-radius-sm);
+    padding: .125rem .25rem;
+    background: transparent;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-header__crumb:hover {
+    background: var(--bc-surface-3);
+    color: var(--bc-text);
+    text-decoration: underline;
+}
+
+.bc-header__crumb:focus-visible {
+    outline: 2px solid var(--bc-accent);
+    outline-offset: 1px;
+}
+
+.bc-header__crumb-sep {
+    flex: 0 0 auto;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+}
+
+.bc-header__actions {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-left: auto;
+}
+
+/* ::deep because Export and Import arrive through ActionsContent, rendered (and scoped) by the editor. */
+.bc-header ::deep .bc-header__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bc-tap);
+    height: var(--bc-tap);
+    border: 0;
+    border-radius: var(--bc-radius-sm);
+    background: transparent;
+    color: var(--bc-text);
+}
+
+.bc-header ::deep .bc-header__button:hover:not(:disabled) { background: var(--bc-surface-3); }
+.bc-header ::deep .bc-header__button:disabled { opacity: .4; }
+
+.bc-header ::deep .bc-header__button:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 1px;
+}
+
+.bc-header__props[aria-pressed="true"] { color: var(--bc-accent); }

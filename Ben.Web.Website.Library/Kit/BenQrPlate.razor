@@ -1,0 +1,58 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@using Telerik.Blazor
+@using Telerik.Blazor.Components
+
+@* A QR code on a light plate, which is the only place a fixed colour is right (item 235 phase 6).
+
+   A QR CODE IS READ BY A CAMERA, NOT BY A PERSON. Scanners need the light modules light, and a
+   code drawn on this theme's dark surface is a code that fails at a door in the dark — which is
+   the one moment it exists for. So the plate is white in both themes, deliberately, and this is
+   the ONE component allowed to do that: FixedLightUtilityGuardTests bans the utility everywhere
+   else, and lists this file rather than a growing set of pages.
+
+   IT ALWAYS CARRIES WORDS. A code that will not scan — a cracked screen, a camera that will not
+   focus, a phone at four percent — has to leave something a human being can read out. Anything
+   passed as child content is drawn under the plate, and the pass page puts the code's own short
+   form there. *@
+
+<div class="qr-plate @Class">
+    <div class="qr-plate__code bg-white p-2 rounded border d-inline-block">
+        <TelerikQRCode Value="@Value" Size="@Size"
+                       ErrorCorrection="@ErrorCorrection" />
+    </div>
+
+    @if (ChildContent is not null)
+    {
+        <div class="qr-plate__words mt-2">@ChildContent</div>
+    }
+</div>
+
+@code {
+    /// <summary>What the camera reads. A token, a URL, an otpauth URI.</summary>
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+
+    /// <summary>
+    /// How big to draw it, as a CSS length.
+    /// </summary>
+    /// <remarks>
+    /// Bigger than it looks like it needs to be, on purpose: a door scans in bad light across a
+    /// desk, and every millimetre of module is a scan that works first time.
+    /// </remarks>
+    [Parameter] public string Size { get; set; } = "220px";
+
+    /// <summary>
+    /// How much of the code can be damaged and still read.
+    /// </summary>
+    /// <remarks>
+    /// <c>M</c> by default — the same level the authenticator panel has always used. A pass shown
+    /// on a cracked screen is the case for going higher, and the page that knows that decides.
+    /// </remarks>
+    [Parameter] public QRCodeErrorCorrectionLevel ErrorCorrection { get; set; }
+        = QRCodeErrorCorrectionLevel.M;
+
+    /// <summary>What a person reads when the camera will not.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

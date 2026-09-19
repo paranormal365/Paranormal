@@ -1,0 +1,208 @@
+@page "/event-picks/{Token}"
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@inject IBenAdminClient AdminClient
+
+<FeatureGate Flag="@SiteFeatures.Events">
+<PageTitle>Hold your places</PageTitle>
+
+@* The other end of the link sent to somebody who picked places without signing in
+   (item 235 slice 11d).
+
+   A BUTTON, NOT THE PAGE LOADING. Mail scanners open links to check them, and a page that held the
+   seats on being opened would hold them for whoever's scanner got there.
+
+   THE SAME LINK SHOWS WHAT HAPPENED AFTERWARDS, for a month: it is how somebody with no password sees
+   their places are held and lets them go. *@
+
+<div class="container py-5" style="max-width:640px;">
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Checking your link…" />
+        </div>
+    }
+    else if (_pick is null)
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="mb-2">That link doesn't work</h4>
+                <p class="text-secondary mb-3">It may be mistyped, or so old that it has been cleared away.</p>
+                <a class="btn btn-outline-secondary" href="/events">See what's on</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        var pick = _pick;
+        <div class="card" id="pick-card">
+            <div class="card-body py-4">
+                <div class="text-secondary small">@pick.OrganizationName</div>
+                <h3 class="mb-3">@pick.EventName</h3>
+
+                @if (_error is { Length: > 0 })
+                {
+                    <div class="alert alert-warning" id="pick-error" role="alert">@_error</div>
+                }
+
+                @switch (pick.State)
+                {
+                    case "waiting":
+                        <p>
+                            Press the button to hold
+                            @(pick.Places.Count == 1 ? "this place" : $"these {pick.Places.Count} places")
+                            for a party of @pick.PartySize. @(pick.Places.Count == 1 ? "It is" : "They are") waiting for you until
+                            <strong>@pick.PendingUntilUtc.ToLocalTime().ToString("h:mm tt")</strong>.
+                        </p>
+                        @Places(pick)
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary" id="pick-confirm"
+                                    disabled="@_busy" @onclick="ConfirmAsync">
+                                @(_busy ? "Holding…" : "Hold my places")
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="pick-let-go"
+                                    disabled="@_busy" @onclick="LetGoAsync">Let them go</button>
+                        </div>
+                        <p class="text-secondary small mt-3 mb-0">Holding as @pick.Email. Nothing is paid here.</p>
+                        break;
+
+                    case "held" when pick.Booking is { } booking:
+                        @BookingState(pick, booking)
+                        break;
+
+                    case "refused":
+                        <p id="pick-refused">@pick.Sentence</p>
+                        @OpenTheEvent(pick, "Pick again")
+                        break;
+
+                    case "lapsed":
+                        <p id="pick-lapsed">
+                            The fifteen minutes ran out and those places went back. They may well still be
+                            free.
+                        </p>
+                        @OpenTheEvent(pick, "Pick again")
+                        break;
+
+                    default:
+                        <p id="pick-let-go-done">You let those places go. Nothing is held.</p>
+                        @OpenTheEvent(pick, "Open the event")
+                        break;
+                }
+            </div>
+        </div>
+    }
+</div>
+
+</FeatureGate>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private HostedEventEmailPickRecord? _pick;
+    private bool _loading = true, _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var loaded = await AdminClient.GetEmailPickAsync(Token);
+        _pick = loaded.Item;
+        _loading = false;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (result, error) = await AdminClient.ConfirmEmailPickAsync(Token);
+
+        // A refusal is also a new state on the pick, so the page reads it again rather than guessing:
+        // "lapsed" and "somebody took A1" are different sentences with different next steps.
+        _pick = result ?? (await AdminClient.GetEmailPickAsync(Token)).Item ?? _pick;
+        if (result is null) _error = _pick?.State == "waiting" ? error ?? "That couldn't be held just now." : null;
+
+        _busy = false;
+    }
+
+    private async Task LetGoAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (result, error) = await AdminClient.LetGoEmailPickAsync(Token);
+        if (result is not null) _pick = result;
+        else _error = error ?? "That couldn't be done just now.";
+
+        _busy = false;
+    }
+
+    private static RenderFragment Places(HostedEventEmailPickRecord pick) => @<ul class="mb-3" id="pick-places">
+        @foreach (var place in pick.Places)
+        {
+            <li>@place</li>
+        }
+    </ul>;
+
+    private static RenderFragment OpenTheEvent(HostedEventEmailPickRecord pick, string label) => @<text>
+        @if (pick.EventUrlName is { } slug)
+        {
+            <a class="btn btn-primary" id="pick-open-event"
+               href="@($"/o/{pick.OrganizationUrlName}/events/{slug}")">@label</a>
+        }
+    </text>;
+
+    private RenderFragment BookingState(HostedEventEmailPickRecord pick, MyHostedEventBookingRecord booking) => @<text>
+        @switch (booking.Status)
+        {
+            case HostedEventBookingStatus.Held:
+                <h5 id="pick-held">Your places are held</h5>
+                <p>
+                    Nobody else can take them while @pick.OrganizationName answers you.
+                    @if (booking.HoldExpiresUtc is { } until)
+                    {
+                        <text>The hold lasts until <strong>@until.ToLocalTime().ToString("h:mm tt on MM/dd/yyyy")</strong>.</text>
+                    }
+                    You'll get an email either way.
+                </p>
+                @Places(pick)
+                <div class="d-flex flex-wrap gap-2">
+                    @OpenTheEvent(pick, "Open the event")
+                    <button type="button" class="btn btn-outline-secondary" id="pick-let-go"
+                            disabled="@_busy" @onclick="LetGoAsync">Let them go</button>
+                </div>
+                break;
+
+            case HostedEventBookingStatus.Confirmed:
+                <h5 id="pick-confirmed">@pick.OrganizationName has confirmed your places</h5>
+                @Places(pick)
+                <p class="small text-secondary">To change anything now, sign in and ask them.</p>
+                @OpenTheEvent(pick, "Open the event")
+                break;
+
+            default:
+                <h5 id="pick-over">These places are no longer held</h5>
+                @if (booking.DecisionNote is { Length: > 0 } note)
+                {
+                    <p>“@note”</p>
+                }
+                @OpenTheEvent(pick, "Open the event")
+                break;
+        }
+
+        @if (pick.AccountHasNoPassword)
+        {
+            <div class="border rounded p-3 mt-4" id="pick-set-password">
+                <strong>No password needed</strong>
+                <p class="small mb-2">
+                    We've made you an account with @pick.Email so this booking has somewhere to live. This
+                    link keeps working for a month. Set a password if you'd like to sign in and see your
+                    pass when it comes.
+                </p>
+                <a class="btn btn-sm btn-outline-secondary" href="/forgot-password">Set a password</a>
+            </div>
+        }
+    </text>;
+}

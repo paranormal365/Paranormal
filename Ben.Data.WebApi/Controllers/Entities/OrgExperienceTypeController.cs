@@ -177,9 +177,13 @@ public sealed class OrgExperienceTypeController : BenControllerBase
             Id                 = Guid.NewGuid(),
             UserMessageTypeId  = OrganizationSeeder.TaxonomyReviewMessageTypeId,
             MessageSubject     = $"New experience type: {entity.Name}",
+            // The type's name is typed by a group member and this notice goes to site
+            // administrators, so it is encoded rather than trusted — the widest reach of any
+            // unencoded fragment found in the 2026-09-04 sweep.
             MessageBody        =
-                $"<strong>{orgName}</strong> added the experience type <strong>{entity.Name}</strong> " +
-                $"under <strong>{categoryName}</strong>. It is live now and in use. " +
+                $"<strong>{Ben.Data.WebApi.Services.NotificationText.Safe(orgName)}</strong> added the experience type " +
+                $"<strong>{Ben.Data.WebApi.Services.NotificationText.Safe(entity.Name)}</strong> " +
+                $"under <strong>{Ben.Data.WebApi.Services.NotificationText.Safe(categoryName)}</strong>. It is live now and in use. " +
                 "Review it on the Experience Taxonomy page — confirm it to clear this notice, or " +
                 "reject it to remove the type and strip it from any entries tagged with it.",
             DateCreated        = DateTime.UtcNow,

@@ -2,6 +2,7 @@ using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -155,12 +156,10 @@ public sealed class ClientRequestController : BenControllerBase
     public async Task<ActionResult<ClientRequestRecord>> Submit(
         Guid id, [FromBody] SubmitClientRequestRequest request, CancellationToken ct)
     {
-        if (request.OrganizationIds.Count == 0)
-            return BadRequest("At least one organization is required.");
-        if (request.OrganizationIds.Count > 2)
-            return BadRequest("You may apply to a maximum of 2 organizations.");
-        if (request.OrganizationIds.Distinct().Count() != request.OrganizationIds.Count)
-            return BadRequest("Duplicate organizations are not allowed.");
+        // The org-count rules first, before the row is loaded: they need nothing from it.
+        var orgIds = request.OrganizationIds.ToList();
+        var countProblem = ClientRequestRules.CheckSubmission(0m, 0m, "x", orgIds);
+        if (countProblem is not null) return BadRequest(countProblem);
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -171,17 +170,15 @@ public sealed class ClientRequestController : BenControllerBase
         if (entity.AppUserId != userId) return Forbid();
         if (entity.Status != ClientRequestStatus.Draft)
             return BadRequest("Only draft requests can be submitted.");
-        if (!entity.Latitude.HasValue || !entity.Longitude.HasValue)
-            return BadRequest("The address must be geocoded before submitting.");
-        if (string.IsNullOrWhiteSpace(entity.Description))
-            return BadRequest("A description of your experiences is required before submitting.");
+
+        // The same rules the signed-out door applies — see ClientRequestRules.
+        var problem = ClientRequestRules.CheckSubmission(entity.Latitude, entity.Longitude, entity.Description, orgIds)
+                   ?? await ClientRequestRules.CheckOrganizationsExistAsync(db, orgIds, ct);
+        if (problem is not null) return BadRequest(problem);
 
         var now = DateTime.UtcNow;
-        foreach (var orgId in request.OrganizationIds)
+        foreach (var orgId in orgIds)
         {
-            var orgExists = await db.Organizations.AnyAsync(o => o.Id == orgId, ct);
-            if (!orgExists) return BadRequest($"Organization {orgId} not found.");
-
             db.ClientRequestOrganizations.Add(new ClientRequestOrganization
             {
                 Id                 = Guid.NewGuid(),
@@ -227,6 +224,167 @@ public sealed class ClientRequestController : BenControllerBase
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
         await db.SaveChangesAsync(ct);
         return Ok(_mapper.Map<ClientRequestRecord>(entity));
+    }
+
+    /// <summary>
+    /// Deletes a draft. Only a draft: anything a group has seen is withdrawn, not erased.
+    /// </summary>
+    /// <remarks>
+    /// W-R5 in the 2026-09-06 evaluation: a draft the person abandoned was offered "Withdraw",
+    /// which left a Withdrawn card on their list for a request nobody ever received. A draft that
+    /// was never sent has nothing to withdraw from; it is simply removed, files and all.
+    /// </remarks>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteDraft(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var entity = await db.ClientRequests.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return NotFound();
+        if (entity.AppUserId != userId) return Forbid();
+        if (entity.Status != ClientRequestStatus.Draft)
+            return BadRequest("Only a draft can be deleted. A request a group has received can be withdrawn instead.");
+
+        db.ClientRequests.Remove(entity);   // applications and file links cascade; the files themselves stay the person's
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    // ── Parked requests (site evaluation 2026-09-06, phase 1) ────────────────
+    //
+    // A request submitted from the signed-out wizard under an email that already has an account
+    // is parked in PendingClientRequests and the holder is emailed a link carrying a secret.
+    // These three endpoints are what that link reaches. Every one of them answers 404 for a row
+    // that is missing, expired, keyed wrongly, OR belongs to a different address — one answer,
+    // so the link cannot be used to learn anything about a row that is not the caller's.
+
+    /// <summary>The parked request, for the adopt page to show before asking "is this yours?".</summary>
+    [HttpGet("pending/{id:guid}")]
+    public async Task<ActionResult<PendingClientRequestRecord>> GetPending(
+        Guid id, [FromQuery] string? key, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var row = await FindMyPendingAsync(db, id, key, ct);
+        if (row is null) return NotFound();
+
+        var orgIds = ParseOrgIds(row.OrganizationIdsJson);
+        var names  = await db.Organizations.AsNoTracking()
+            .Where(o => orgIds.Contains(o.Id))
+            .Select(o => o.Name)
+            .ToListAsync(ct);
+
+        return Ok(new PendingClientRequestRecord(
+            row.Id, row.DisplayName, row.StreetAddress1, row.StreetAddress2, row.City, row.State, row.ZipCode,
+            names, row.DateCreated));
+    }
+
+    /// <summary>
+    /// Makes the parked request the caller's own: a real Submitted request with its organisation
+    /// applications, exactly as if they had been signed in when they typed it.
+    /// </summary>
+    /// <remarks>
+    /// A group that was chosen and has since disappeared is skipped rather than failing the
+    /// adoption; if none remain the request is still created, as a draft the person can send on.
+    /// </remarks>
+    [HttpPost("pending/{id:guid}/adopt")]
+    public async Task<ActionResult<ClientRequestRecord>> AdoptPending(
+        Guid id, [FromQuery] string? key, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var row = await FindMyPendingAsync(db, id, key, ct);
+        if (row is null) return NotFound();
+
+        var orgIds = ParseOrgIds(row.OrganizationIdsJson);
+        var living = await db.Organizations.AsNoTracking()
+            .Where(o => orgIds.Contains(o.Id))
+            .Select(o => o.Id)
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var entity = new ClientRequest
+        {
+            Id                 = Guid.NewGuid(),
+            AppUserId          = userId,
+            Status             = living.Count > 0 ? ClientRequestStatus.Submitted : ClientRequestStatus.Draft,
+            StreetAddress1     = row.StreetAddress1,
+            StreetAddress2     = row.StreetAddress2,
+            City               = row.City,
+            State              = row.State,
+            ZipCode            = row.ZipCode,
+            Country            = row.Country,
+            Latitude           = row.Latitude,
+            Longitude          = row.Longitude,
+            Gender             = row.Gender,
+            BirthYear          = row.BirthYear,
+            Description        = row.Description,
+            DateCreated        = now,
+            CreatedByAppUserId = userId,
+        };
+        db.ClientRequests.Add(entity);
+        foreach (var orgId in living)
+        {
+            db.ClientRequestOrganizations.Add(new ClientRequestOrganization
+            {
+                Id                 = Guid.NewGuid(),
+                ClientRequestId    = entity.Id,
+                OrganizationId     = orgId,
+                Status             = ClientOrgRequestStatus.Pending,
+                DateApplied        = now,
+                DateCreated        = now,
+                CreatedByAppUserId = userId,
+            });
+        }
+        db.PendingClientRequests.Remove(row);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(_mapper.Map<ClientRequestRecord>(entity));
+    }
+
+    /// <summary>"Not mine" — the parked request is discarded and nothing else happens.</summary>
+    [HttpPost("pending/{id:guid}/discard")]
+    public async Task<IActionResult> DiscardPending(Guid id, [FromQuery] string? key, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var row = await FindMyPendingAsync(db, id, key, ct);
+        if (row is null) return NotFound();
+
+        db.PendingClientRequests.Remove(row);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The parked row, only if it is this caller's: same address as the signed-in account, the
+    /// secret from the link, and not yet expired. Null for anything else.
+    /// </summary>
+    private async Task<PendingClientRequest?> FindMyPendingAsync(
+        BenDataContext db, Guid id, string? key, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+
+        var userId = GetCurrentUserId();
+        var myEmail = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.NormalizedEmail)
+            .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrEmpty(myEmail)) return null;
+
+        var row = await db.PendingClientRequests.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (row is null) return null;
+        if (row.DateExpires < DateTime.UtcNow) return null;
+        if (!string.Equals(row.NormalizedEmail, myEmail, StringComparison.Ordinal)) return null;
+
+        var expected = Public.PublicClientRequestController.HashSecret(key);
+        var a = System.Text.Encoding.UTF8.GetBytes(expected);
+        var b = System.Text.Encoding.UTF8.GetBytes(row.SecretHash);
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(a, b) ? row : null;
+    }
+
+    private static List<Guid> ParseOrgIds(string json)
+    {
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(json) ?? []; }
+        catch { return []; }
     }
 
     /// <summary>

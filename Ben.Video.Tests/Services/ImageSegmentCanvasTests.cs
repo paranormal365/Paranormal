@@ -37,20 +37,31 @@ public sealed class ImageSegmentCanvasTests
     {
         var src = ReadSource(Path.Combine("Services", "ExportService.cs"));
 
-        // Isolate the BuildImageSegmentArgs call so an unrelated clip.Width elsewhere can't
-        // trip this, and so the assertion names the exact regression.
-        var i = src.IndexOf("BuildImageSegmentArgs(", StringComparison.Ordinal);
-        Assert.True(i >= 0, "BuildImageSegmentArgs call not found — did RenderImageSegmentsAsync move?");
-        var call = src[i..src.IndexOf(");", i, StringComparison.Ordinal)];
+        // EVERY call, not just the first: the export grew a second one when tracks above the
+        // primary started being composited, and a guard that reads only the first call is a guard
+        // the next call can walk straight past.
+        var calls = new List<string>();
+        for (var i = src.IndexOf("BuildImageSegmentArgs(", StringComparison.Ordinal);
+             i >= 0;
+             i = src.IndexOf("BuildImageSegmentArgs(", i + 1, StringComparison.Ordinal))
+        {
+            calls.Add(src[i..src.IndexOf(");", i, StringComparison.Ordinal)]);
+        }
 
-        Assert.False(call.Contains("clip.Width", StringComparison.Ordinal),
-            "image segments must scale to the PROJECT canvas (ParseResolution(s.Resolution)), " +
-            "not the image's own source size — passing clip.Width makes the scale/pad a no-op.");
+        Assert.NotEmpty(calls);
 
-        // The canvas is computed just above the call, so look at a window around it rather than
-        // only inside the argument list.
-        var window = src[Math.Max(0, i - 600)..(i + call.Length)];
-        Assert.Contains("ParseResolution", window, StringComparison.Ordinal);
+        foreach (var call in calls)
+        {
+            Assert.False(call.Contains("clip.Width", StringComparison.Ordinal),
+                "image segments must scale to the PROJECT canvas, not the image's own source " +
+                "size — passing the clip's width makes the scale/pad a no-op.");
+            Assert.False(call.Contains("image.Width", StringComparison.Ordinal),
+                "image segments must scale to the PROJECT canvas, not the image's own source size.");
+        }
+
+        // The canvas comes from ResolveCanvas, which answers "source resolution" from the first
+        // clip instead of silently returning Full HD (2026-09-05 audit, export-5).
+        Assert.Contains("ResolveCanvas(s)", src, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -67,7 +78,31 @@ public sealed class ImageSegmentCanvasTests
 
         Assert.False(spec.Contains("OutputWidth: clip.Width", StringComparison.Ordinal),
             "the native image path must use the project canvas, matching ExportService.");
-        Assert.Contains("ParseResolution", src, StringComparison.Ordinal);
+        Assert.Contains("imgOutW", spec, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same agreement for video, which is where it had quietly stopped holding.
+    /// </summary>
+    /// <remarks>
+    /// The native path passed a zero canvas and a comment saying it matched the browser path. It
+    /// did not: the browser path scales each segment to the export canvas, so which engine
+    /// happened to render a given clip decided what size that segment came out — and concat is
+    /// what joins them (2026-09-05 audit, export-4).
+    /// </remarks>
+    [Fact]
+    public void NativeClipEncoder_AgreesWithTheWasmPathOnTheVideoCanvas()
+    {
+        var src = ReadSource(Path.Combine("Services", "NativeClipEncoder.cs"));
+
+        var i = src.IndexOf("SegmentKind.Video", StringComparison.Ordinal);
+        Assert.True(i >= 0, "video spec construction not found in NativeClipEncoder");
+        var spec = src[i..src.IndexOf("ExportQuality:", i, StringComparison.Ordinal)];
+
+        Assert.False(spec.Contains("OutputWidth: 0", StringComparison.Ordinal),
+            "the native video path must scale to the export canvas, matching ExportService's own "
+            + "BuildTrimArgs call — a zero canvas leaves the segment at its source resolution.");
+        Assert.Contains("OutputWidth: vw", spec, StringComparison.Ordinal);
     }
 
     [Fact]

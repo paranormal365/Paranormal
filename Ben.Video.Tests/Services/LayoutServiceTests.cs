@@ -2,207 +2,240 @@ using Ben.Video.Editor.Services;
 
 namespace Ben.Video.Tests.Services;
 
+/// <summary>
+/// The editor's layout: how tall the timeline is, how wide the panel is, and what survives a reload.
+/// </summary>
+/// <remarks>
+/// <para>The preview deliberately has no height here. It used to, and the timeline sat beside it
+/// asking for <c>height: 100%</c>, which in a column flexbox makes the timeline's flex-basis the
+/// whole editor: the two then shrank in proportion to those bases and the preview kept about
+/// two-thirds of whatever it was given, ending as a 38-pixel strip under 700 pixels of empty
+/// timeline. The timeline is the thing with a size; the picture takes the rest (2026-09-05 audit,
+/// F4).</para>
+/// </remarks>
 public sealed class LayoutServiceTests
 {
-    // ── Default values ────────────────────────────────────────────────────────
+    // ── Defaults ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Defaults_AreAllVisible_WithExpectedSizes()
+    public void Defaults_AreTheExpectedSizes()
     {
         var layout = new LayoutService();
 
-        Assert.True(layout.ShowClipBrowser);
-        Assert.True(layout.ShowPreview);
-        Assert.True(layout.ShowTimeline);
-        Assert.Equal(240, layout.BrowserWidth);
-        Assert.Equal(220, layout.TimelineHeight);
+        Assert.Equal(LayoutService.DefaultPanelWidth, layout.PanelWidth);
+        Assert.Equal(LayoutService.DefaultTimelineHeight, layout.TimelineHeight);
+        Assert.False(layout.PanelCollapsed);
+        Assert.Equal("media", layout.PanelTab);
+        Assert.False(layout.TimelineHeightUserSet);
     }
 
-    // ── Toggle methods ────────────────────────────────────────────────────────
+    // ── Resize ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ToggleClipBrowser_FlipsState()
+    public void SetPanelWidth_ValidValue_SetsExact()
     {
         var layout = new LayoutService();
 
-        layout.ToggleClipBrowser();
-        Assert.False(layout.ShowClipBrowser);
+        layout.SetPanelWidth(420);
 
-        layout.ToggleClipBrowser();
-        Assert.True(layout.ShowClipBrowser);
+        Assert.Equal(420, layout.PanelWidth);
     }
 
-    [Fact]
-    public void TogglePreview_FlipsState()
+    [Theory]
+    [InlineData(0, LayoutService.PanelMinWidth)]
+    [InlineData(9999, LayoutService.PanelMaxWidth)]
+    public void SetPanelWidth_OutOfRange_Clamps(int requested, int expected)
     {
         var layout = new LayoutService();
 
-        layout.TogglePreview();
-        Assert.False(layout.ShowPreview);
+        layout.SetPanelWidth(requested);
 
-        layout.TogglePreview();
-        Assert.True(layout.ShowPreview);
+        Assert.Equal(expected, layout.PanelWidth);
     }
 
-    [Fact]
-    public void ToggleTimeline_FlipsState()
+    [Theory]
+    [InlineData(0, LayoutService.TimelineMinHeight)]
+    [InlineData(9999, LayoutService.TimelineMaxHeight)]
+    public void SetTimelineHeight_OutOfRange_Clamps(int requested, int expected)
     {
         var layout = new LayoutService();
 
-        layout.ToggleTimeline();
-        Assert.False(layout.ShowTimeline);
+        layout.SetTimelineHeight(requested);
 
-        layout.ToggleTimeline();
-        Assert.True(layout.ShowTimeline);
+        Assert.Equal(expected, layout.TimelineHeight);
     }
 
-    // ── SetBrowserWidth clamping ──────────────────────────────────────────────
+    // ── Auto-fit defers to the person ─────────────────────────────────────────
 
     [Fact]
-    public void SetBrowserWidth_ValidValue_SetsExact()
+    public void AutoFitTimeline_SizesToTheTracks_BeforeAnyDrag()
     {
         var layout = new LayoutService();
 
-        layout.SetBrowserWidth(320);
+        layout.AutoFitTimeline(400);
 
-        Assert.Equal(320, layout.BrowserWidth);
+        Assert.Equal(400, layout.TimelineHeight);
     }
 
+    /// <summary>
+    /// The rule that makes auto-fit a courtesy rather than a fight: once somebody has dragged the
+    /// seam, adding a track must not undo their choice.
+    /// </summary>
     [Fact]
-    public void SetBrowserWidth_BelowMin_ClampsToMin()
+    public void AutoFitTimeline_IsIgnoredAfterTheSeamIsDragged()
     {
         var layout = new LayoutService();
+        layout.SetTimelineHeight(180);
 
-        layout.SetBrowserWidth(0);
+        layout.AutoFitTimeline(520);
 
-        Assert.Equal(LayoutService.BrowserMinWidth, layout.BrowserWidth);
-    }
-
-    [Fact]
-    public void SetBrowserWidth_AboveMax_ClampsToMax()
-    {
-        var layout = new LayoutService();
-
-        layout.SetBrowserWidth(9999);
-
-        Assert.Equal(LayoutService.BrowserMaxWidth, layout.BrowserWidth);
+        Assert.Equal(180, layout.TimelineHeight);
+        Assert.True(layout.TimelineHeightUserSet);
     }
 
     [Fact]
-    public void SetBrowserWidth_AtBoundary_AcceptsBoundaryValues()
+    public void AutoFitTimeline_ClampsLikeADrag()
     {
         var layout = new LayoutService();
 
-        layout.SetBrowserWidth(LayoutService.BrowserMinWidth);
-        Assert.Equal(LayoutService.BrowserMinWidth, layout.BrowserWidth);
-
-        layout.SetBrowserWidth(LayoutService.BrowserMaxWidth);
-        Assert.Equal(LayoutService.BrowserMaxWidth, layout.BrowserWidth);
-    }
-
-    // ── SetTimelineHeight clamping ────────────────────────────────────────────
-
-    [Fact]
-    public void SetTimelineHeight_ValidValue_SetsExact()
-    {
-        var layout = new LayoutService();
-
-        layout.SetTimelineHeight(300);
-
-        Assert.Equal(300, layout.TimelineHeight);
-    }
-
-    [Fact]
-    public void SetTimelineHeight_BelowMin_ClampsToMin()
-    {
-        var layout = new LayoutService();
-
-        layout.SetTimelineHeight(0);
-
-        Assert.Equal(LayoutService.TimelineMinHeight, layout.TimelineHeight);
-    }
-
-    [Fact]
-    public void SetTimelineHeight_AboveMax_ClampsToMax()
-    {
-        var layout = new LayoutService();
-
-        layout.SetTimelineHeight(9999);
+        layout.AutoFitTimeline(5000);
 
         Assert.Equal(LayoutService.TimelineMaxHeight, layout.TimelineHeight);
     }
 
     [Fact]
-    public void SetTimelineHeight_AtBoundary_AcceptsBoundaryValues()
+    public void AutoFitTimeline_DoesNotNotifyWhenNothingChanges()
     {
         var layout = new LayoutService();
+        var raised = 0;
+        layout.OnChanged += () => raised++;
 
-        layout.SetTimelineHeight(LayoutService.TimelineMinHeight);
-        Assert.Equal(LayoutService.TimelineMinHeight, layout.TimelineHeight);
+        layout.AutoFitTimeline(layout.TimelineHeight);
 
-        layout.SetTimelineHeight(LayoutService.TimelineMaxHeight);
-        Assert.Equal(LayoutService.TimelineMaxHeight, layout.TimelineHeight);
+        Assert.Equal(0, raised);
     }
 
-    // ── OnChanged event ───────────────────────────────────────────────────────
+    // ── Panel ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ToggleClipBrowser_RaisesOnChanged()
+    public void TogglePanel_FlipsCollapsed()
     {
         var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
 
-        layout.ToggleClipBrowser();
+        layout.TogglePanel();
+        Assert.True(layout.PanelCollapsed);
 
-        Assert.True(fired);
-    }
-
-    [Fact]
-    public void TogglePreview_RaisesOnChanged()
-    {
-        var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
-
-        layout.TogglePreview();
-
-        Assert.True(fired);
+        layout.TogglePanel();
+        Assert.False(layout.PanelCollapsed);
     }
 
     [Fact]
-    public void ToggleTimeline_RaisesOnChanged()
+    public void SetPanelTab_IgnoresBlankAndUnchanged()
     {
         var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
+        var raised = 0;
+        layout.OnChanged += () => raised++;
 
-        layout.ToggleTimeline();
+        layout.SetPanelTab("media");   // already current
+        layout.SetPanelTab("  ");      // nonsense
 
-        Assert.True(fired);
+        Assert.Equal(0, raised);
+        Assert.Equal("media", layout.PanelTab);
+
+        layout.SetPanelTab("props");
+        Assert.Equal(1, raised);
+        Assert.Equal("props", layout.PanelTab);
     }
 
-    [Fact]
-    public void SetBrowserWidth_RaisesOnChanged()
+    // ── Change notification ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("panel width")]
+    [InlineData("timeline height")]
+    [InlineData("collapse")]
+    public void EveryChange_RaisesOnChanged(string change)
     {
         var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
+        var raised = 0;
+        layout.OnChanged += () => raised++;
 
-        layout.SetBrowserWidth(300);
+        switch (change)
+        {
+            case "panel width":     layout.SetPanelWidth(400); break;
+            case "timeline height": layout.SetTimelineHeight(300); break;
+            case "collapse":        layout.TogglePanel(); break;
+        }
 
-        Assert.True(fired);
+        Assert.Equal(1, raised);
     }
 
+    // ── Persistence ───────────────────────────────────────────────────────────
+
     [Fact]
-    public void SetTimelineHeight_RaisesOnChanged()
+    public void Snapshot_RoundTripsThroughJson()
+    {
+        var saved = new LayoutService();
+        saved.SetPanelWidth(430);
+        saved.SetTimelineHeight(310);
+        saved.SetPanelTab("props");
+        saved.TogglePanel();
+
+        var restored = new LayoutService();
+        restored.Apply(LayoutService.Deserialise(saved.Serialise()));
+
+        Assert.Equal(430, restored.PanelWidth);
+        Assert.Equal(310, restored.TimelineHeight);
+        Assert.Equal("props", restored.PanelTab);
+        Assert.True(restored.PanelCollapsed);
+
+        // The drag is remembered too, so a restored layout is not re-fitted out from under them
+        // on the first clip that lands.
+        Assert.True(restored.TimelineHeightUserSet);
+    }
+
+    /// <summary>
+    /// Everything stored is optional, because an older build wrote fewer fields.
+    /// </summary>
+    [Fact]
+    public void Apply_TakesAPartialSnapshotAndLeavesTheRestAlone()
     {
         var layout = new LayoutService();
-        var fired = false;
-        layout.OnChanged += () => fired = true;
 
-        layout.SetTimelineHeight(280);
+        layout.Apply(LayoutService.Deserialise("""{"panelWidth":500}"""));
 
-        Assert.True(fired);
+        Assert.Equal(500, layout.PanelWidth);
+        Assert.Equal(LayoutService.DefaultTimelineHeight, layout.TimelineHeight);
+        Assert.Equal("media", layout.PanelTab);
+    }
+
+    /// <summary>
+    /// A hand-edited or corrupted entry must give a usable editor, never a zero-height timeline.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"panelWidth":-40,"timelineHeight":0}""")]
+    [InlineData("""{"panelWidth":99999,"timelineHeight":99999}""")]
+    public void Apply_ClampsWhateverTheBrowserHandsBack(string json)
+    {
+        var layout = new LayoutService();
+
+        layout.Apply(LayoutService.Deserialise(json));
+
+        Assert.InRange(layout.PanelWidth, LayoutService.PanelMinWidth, LayoutService.PanelMaxWidth);
+        Assert.InRange(layout.TimelineHeight, LayoutService.TimelineMinHeight, LayoutService.TimelineMaxHeight);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not json")]
+    [InlineData("[]")]
+    public void Deserialise_TreatsRubbishAsNoPreference(string? stored)
+    {
+        var snapshot = LayoutService.Deserialise(stored);
+
+        var layout = new LayoutService();
+        layout.Apply(snapshot);
+
+        Assert.Equal(LayoutService.DefaultTimelineHeight, layout.TimelineHeight);
     }
 }

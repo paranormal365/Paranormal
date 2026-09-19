@@ -1,3 +1,4 @@
+using Ben.Web.Services.WebApi;
 using Ben.Service.Models.Admin;
 using Ben.Service.Models.Support;
 using Ben.Service.Models.Entities;
@@ -22,16 +23,33 @@ public interface IBenOrganizationClient
     /// Returns organizations visible to the current user, each with CanEdit and CanDelete flags.
     /// SuperAdmins see all organizations; others see only orgs they are active members of.
     /// </summary>
-    Task<IReadOnlyList<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
+    Task<LoadResult<OrganizationListItemResponse>> GetOrganizationsAsync(CancellationToken token = default);
+
+    /// <summary>Founds a group with the caller as Owner — the self-serve door, any signed-in user.</summary>
+    Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default);
 
     /// <summary>Returns a single organization for pre-filling the edit form. Returns null if not found or forbidden.</summary>
     Task<OrganizationAdminRecord?> GetOrganizationAsync(Guid id, CancellationToken token = default);
 
     /// <summary>Creates a new organization (SuperAdmin only).</summary>
-    Task<OrganizationAdminRecord?> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
+    /// <summary>Creates a group, and hands back the server's refusal when it says no.</summary>
+    /// <remarks>Same reasoning as <see cref="UpdateOrganizationAsync"/>: the address rules refuse
+    /// with a sentence naming what is wrong, and "may already be in use" is a worse version of
+    /// it.</remarks>
+    Task<(OrganizationAdminRecord? Result, string? Error)> CreateOrganizationAsync(AdminCreateOrganizationRequest request, CancellationToken token = default);
 
     /// <summary>Updates an organization's Name and UrlName. Requires Update access or SuperAdmin.</summary>
-    Task<OrganizationAdminRecord?> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Saves a group's settings, and hands back the server's own refusal when it says no.
+    /// </summary>
+    /// <remarks>
+    /// The refusals this endpoint gives are sentences somebody has to act on — a name already
+    /// taken, or a plan that does not include members — and a page that guessed at them told an
+    /// owner they might lack permission on their own group while the server was explaining the
+    /// price of a plan. Same shape as <c>UpdateOrgCaseAsync</c>: the reason travels with the
+    /// result, and only prose is passed through.
+    /// </remarks>
+    Task<(OrganizationAdminRecord? Result, string? Error)> UpdateOrganizationAsync(Guid id, AdminUpdateOrganizationRequest request, CancellationToken token = default);
 
     /// <summary>Deletes an organization. Requires Delete access or SuperAdmin.</summary>
     Task<bool> DeleteOrganizationAsync(Guid id, CancellationToken token = default);
@@ -39,7 +57,7 @@ public interface IBenOrganizationClient
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns all site-level roles with the number of users currently assigned to each.</summary>
-    Task<IReadOnlyList<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
+    Task<LoadResult<AdminRoleWithCountResponse>> GetRolesAsync(CancellationToken token = default);
 
     /// <summary>Creates a new site-level role.</summary>
     Task<AppRoleAdminRecord?> CreateRoleAsync(string roleName, CancellationToken token = default);
@@ -50,15 +68,16 @@ public interface IBenOrganizationClient
     // ── Cross-org visibility (SuperAdmin) ────────────────────────────────────
 
     /// <summary>Returns every case across every organization (SuperAdmin only).</summary>
-    Task<IReadOnlyList<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
+    Task<LoadResult<AdminCaseSummaryRecord>> GetAllCasesAsync(CancellationToken token = default);
 
     /// <summary>Returns every investigation across every organization (SuperAdmin only).</summary>
-    Task<IReadOnlyList<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
+    Task<LoadResult<AdminInvestigationSummaryRecord>> GetAllInvestigationsAsync(CancellationToken token = default);
 
     // ── Organization Logos ────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
-    Task<OrganizationLogoRecord?> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
+    Task<LoadResult<OrganizationLogoRecord>> GetOrgLogosAsync(Guid orgId, CancellationToken token = default);
+    /// <summary>Adds a logo, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationLogoRecord? Result, string? Error)> CreateOrgLogoAsync(Guid orgId, CmsCreateLogoRequest request, CancellationToken token = default);
     Task<OrganizationLogoRecord?> UpdateOrgLogoAsync(Guid orgId, Guid logoId, CmsUpdateLogoRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgLogoAsync(Guid orgId, Guid logoId, CancellationToken token = default);
 
@@ -73,20 +92,24 @@ public interface IBenOrganizationClient
     /// Public search — no auth required. Returns orgs ordered by proximity.
     /// Center coordinates are NOT included in results.
     /// </summary>
-    Task<IReadOnlyList<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
+    Task<LoadResult<OrgSearchResult>> SearchOrganizationsAsync(double lat, double lon, int maxResults = 20, CancellationToken token = default);
 
     /// <summary>
     /// Every organization, paged, with no location required — what the "Browse All Groups"
     /// entry point needs. Anonymous, like the proximity search beside it.
     /// </summary>
-    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24, CancellationToken token = default);
+    /// <param name="toursOnly">Narrow to groups that run public walking tours (2026-08-24).</param>
+    Task<OrgBrowsePage?> BrowseOrganizationsAsync(int page = 1, int pageSize = 24,
+        CancellationToken token = default, bool toursOnly = false);
 
     // ── Organization Addresses ────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
-    Task<OrganizationAddressRecord?> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
-    Task<OrganizationAddressRecord?> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressRecord>> GetOrgAddressesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressTypeRecord>> GetOrgAddressTypesAsync(CancellationToken token = default);
+    /// <summary>Adds an address, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationAddressRecord? Result, string? Error)> CreateOrgAddressAsync(Guid orgId, OrgAddressUpsertRequest request, CancellationToken token = default);
+    /// <summary>Saves an address, and hands back the server's refusal when it says no.</summary>
+    Task<(OrganizationAddressRecord? Result, string? Error)> UpdateOrgAddressAsync(Guid orgId, Guid addressId, OrgAddressUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgAddressAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<GeocodingPreviewResponse?> PreviewGeocodingAsync(string streetAddress1, string? streetAddress2, string city, string state, string zipCode, string country, CancellationToken token = default);
     Task<GeocodingPreviewResponse?> SearchGeocodingAsync(string query, CancellationToken token = default);
@@ -104,6 +127,18 @@ public interface IBenOrganizationClient
     /// </summary>
     Task<OrgPublicPageResponse?> GetCmsPagePreviewAsync(Guid orgId, Guid pageId, CancellationToken token = default);
     string GetFileDownloadUrl(Guid uploadFileId);
+
+    /// <summary>
+    /// Where to fetch a small copy of an image file — use this for anything a person looks at.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetFileDownloadUrl</c> serves the original bytes, so an <c>&lt;img&gt;</c> pointed at it
+    /// pulls a whole upload down the wire to draw a 40px avatar. Same access rules either way; a
+    /// non-image falls through to the real file.
+    /// </remarks>
+    string GetFileThumbnailUrl(Guid uploadFileId);
+    /// <summary>The approved-only public route for an ad's picture (item 166 W3).</summary>
+    string GetPromotedAdImageUrl(Guid adId);
     string GetOrgFileDownloadUrl(Guid orgId, Guid orgFileId);
 
     /// <summary>
@@ -118,6 +153,10 @@ public interface IBenOrganizationClient
     /// see.
     /// </remarks>
     string GetPublicCaseMediaUrl(Guid caseId, Guid uploadFileId);
+
+    /// <summary>Absolute URL for one accepted evidence submission's bytes — the API origin, not
+    /// the site's, which is the trap every raw /api href falls into on the split deployment.</summary>
+    string GetEventEvidenceFileUrl(Guid eventId, Guid submissionId);
 
     /// <summary>
     /// The prefix the public renderer appends <c>{caseId}/media/{fileId}</c> to.
@@ -144,16 +183,93 @@ public interface IBenOrganizationClient
 
     // ── Org Member Groups ─────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The group's roster, distinguishing "could not load" from "nobody is in it".
+    /// </summary>
+    /// <remarks>
+    /// Prefer this for anything a person sees. The Members surfaces told readers their group was
+    /// empty when the truth was a refusal, twice (items 119, 122).
+    /// </remarks>
+    Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
+
+    Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
+    Task<WebApi.LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default);
+    Task<WebApi.LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Group ads (item 166 W3) ──────────────────────────────────────────────
+    Task<WebApi.LoadResult<OrganizationAdRecord>> GetOrgAdsAsync(Guid orgId, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> CreateOrgAdAsync(Guid orgId, SaveOrganizationAdRequest request, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> UpdateOrgAdAsync(Guid orgId, Guid adId, SaveOrganizationAdRequest request, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> SubmitOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
+    Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
+    Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
+    Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Investigating on your own (2026-09-17) ───────────────────────────────
+
+    /// <summary>
+    /// This account's personal organization, or null when it has none.
+    /// </summary>
+    Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Creates this account's personal organization, or returns the one it already has.
+    /// </summary>
+    /// <remarks>
+    /// <para>Free, and idempotent — tapping twice gets the same organization rather than a second
+    /// one. It takes no payment: it produces the organization the rest of the site hangs work on,
+    /// and the ordinary billing flow does the rest if somebody later wants a plan.</para>
+    ///
+    /// <para>The endpoint has existed since the solo tier shipped and <b>had no caller anywhere</b>
+    /// until this: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This is the door.</para>
+    /// </remarks>
+    Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default);
+    Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Member-title ladder (item 157) — seniority, never permission ─────────
+    Task<WebApi.LoadResult<OrgMemberLevelItem>> GetMemberLevelsAsync(Guid orgId, CancellationToken token = default);
+    Task<OrgMemberLevelItem?> CreateMemberLevelAsync(Guid orgId, string name, int sortOrder, bool isActive, CancellationToken token = default);
+    Task<OrgMemberLevelItem?> UpdateMemberLevelAsync(Guid orgId, Guid levelId, string name, int sortOrder, bool isActive, CancellationToken token = default);
+    Task<bool> DeleteMemberLevelAsync(Guid orgId, Guid levelId, CancellationToken token = default);
+    /// <summary>
+    /// Sets a member's title, optionally also granting the roles that title suggests.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="applySuggestedRoles"/> defaults to false so a plain title change stays a
+    /// plain title change. When true the grant is additive only — clearing or lowering a title
+    /// never takes a role away, because access is removed on the roles screen, deliberately.
+    /// </remarks>
+    Task<bool> AssignMemberLevelAsync(Guid orgId, Guid membershipId, Guid? levelId,
+        bool applySuggestedRoles = false, CancellationToken token = default);
+
+    /// <summary>The roles a title suggests — what assigning it will offer to grant.</summary>
+    Task<LoadResult<Guid>> GetSuggestedRolesAsync(Guid orgId, Guid levelId, CancellationToken token = default);
+
+    /// <summary>
+    /// Replaces the roles a title suggests. Changes nothing about who may do what today.
+    /// </summary>
+    Task<bool> SetSuggestedRolesAsync(Guid orgId, Guid levelId, IReadOnlyList<Guid> roleIds,
+        CancellationToken token = default);
+    Task<LoadResult<OrgMemberGroupRecord>> GetGroupsAsync(Guid orgId, CancellationToken token = default);
 
     // ── Organization Files ────────────────────────────────────────────────────
 
     /// <summary>Returns all files owned by the organization.</summary>
-    Task<IReadOnlyList<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// The group's files, distinguishing "could not load" from "there are none".
+    /// </summary>
+    /// <remarks>
+    /// Prefer this over <see cref="GetOrgFilesAsync"/> for anything a person sees. This is the
+    /// surface where a refusal rendering as an empty list was actually caught — a member with a
+    /// group handbook on the server was told the group had no files (items 119 and 120).
+    /// </remarks>
+    Task<WebApi.LoadResult<OrganizationFileRecord>> GetOrgFilesAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Returns the deletion audit log for organization files.</summary>
-    Task<IReadOnlyList<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationFileDeleteLogRecord>> GetOrgFileDeleteLogAsync(Guid orgId, CancellationToken token = default);
 
     /// <summary>Uploads a new file to the organization's file library.</summary>
     Task<OrganizationFileRecord?> UploadOrgFileAsync(Guid orgId, MultipartFormDataContent content, CancellationToken token = default);
@@ -175,24 +291,24 @@ public interface IBenOrganizationClient
     Task<OrgMemberGroupRecord?> CreateGroupAsync(Guid orgId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<OrgMemberGroupRecord?> UpdateGroupAsync(Guid orgId, Guid groupId, OrgGroupUpsertRequest request, CancellationToken token = default);
     Task<bool> DeleteGroupAsync(Guid orgId, Guid groupId, CancellationToken token = default);
-    Task<IReadOnlyList<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
+    Task<LoadResult<OrgMemberGroupMembershipRecord>> GetGroupMembersAsync(Guid orgId, Guid groupId, CancellationToken token = default);
     Task<OrgMemberGroupMembershipRecord?> AddGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
     Task<bool> RemoveGroupMemberAsync(Guid orgId, Guid groupId, Guid membershipId, CancellationToken token = default);
 
     // ── Organization Roles ────────────────────────────────────────────────────────
-    Task<IReadOnlyList<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRoleRecord>> GetOrgRolesAsync(Guid orgId, CancellationToken token = default);
     Task<OrganizationRoleRecord?> GetOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<OrganizationRoleRecord?> CreateOrgRoleAsync(Guid orgId, CreateOrgRoleRequest request, CancellationToken token = default);
     Task<OrganizationRoleRecord?> UpdateOrgRoleAsync(Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default);
     Task<bool> DeleteOrgRoleAsync(Guid orgId, Guid roleId, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRolePermissionRecord>> GetOrgRolePermissionsAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<bool> SetOrgRolePermissionsAsync(Guid orgId, Guid roleId, IEnumerable<SetRolePermissionRequest> permissions, CancellationToken token = default);
-    Task<IReadOnlyList<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
+    Task<LoadResult<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
 
     // ── Org address member access ──────────────────────────────────────────────
-    Task<IReadOnlyList<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
+    Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid accessId, CancellationToken token = default);
 
@@ -203,16 +319,62 @@ public interface IBenOrganizationClient
     // ── Public events (item #87) ────────────────────────────────────────────
 
     /// <summary>Upcoming public events, across every organization or narrowed to one.</summary>
-    Task<IReadOnlyList<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
+    Task<LoadResult<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
 
     /// <summary>One public event by its readable URL.</summary>
     Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
 
+    // ── Item 111: attendee evidence at public events ──────────────────────────
+
+    /// <summary>Offers one file to the event's record. Null error on success.</summary>
+    Task<(EventEvidenceRecord? Result, string? Error)> SubmitEventEvidenceAsync(
+        Guid eventId, Stream content, string fileName, string contentType, string? note, CancellationToken token = default);
+
+    /// <summary>The caller's own submissions for an event, with review state.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// Everything this account has ever offered, across every event — the guest's own copy.
+    /// </summary>
+    Task<LoadResult<EventEvidenceRecord>> GetMyEvidenceEverywhereAsync(CancellationToken token = default);
+
+    /// <summary>Contributes one submission to the archive of the place its event was held at.</summary>
+    Task<(bool Ok, string? Error)> PublishEvidenceToPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default);
+
+    /// <summary>Takes it back off the place's archive. Paid, as retraction is for field sessions.</summary>
+    Task<(bool Ok, string? Error)> RetractEvidenceFromPlaceAsync(
+        Guid eventId, Guid submissionId, CancellationToken token = default);
+
+    /// <summary>Accepted evidence — the public half of the record. Anonymous.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>Submissions waiting on this group's answer.</summary>
+    Task<LoadResult<EventEvidenceRecord>> GetEvidenceQueueAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>A member's verdict. Null error on success.</summary>
+    Task<(EventEvidenceRecord? Result, string? Error)> ReviewEventEvidenceAsync(
+        Guid orgId, Guid submissionId, bool accept, string? reason, CancellationToken token = default);
+
     /// <summary>Public events this caller has said they are coming to, recent past included.</summary>
-    Task<IReadOnlyList<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);
+    Task<LoadResult<PublicEventListItem>> GetMyPublicEventsAsync(CancellationToken token = default);
 
     /// <summary>Says the signed-in caller is coming. Returns the refreshed event.</summary>
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks for a number of places on a tour date (item 234).
+    /// </summary>
+    /// <remarks>
+    /// The same endpoint. A tour date records a REQUEST that holds nothing until the business
+    /// approves it; an ordinary event ignores the number and seats one person, as it always has.
+    /// </remarks>
+    Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, int seats, CancellationToken token = default);
+
+    /// <summary>
+    /// Says back that a reserved seat has been seen. Optional, always (Ben: "if they want").
+    /// </summary>
+    Task<PublicEventRecord?> AcknowledgeSeatAsync(Guid eventId, CancellationToken token = default);
 
     /// <summary>
     /// Asks to attend by email, for somebody who is not signed in. Always succeeds from the
@@ -229,4 +391,214 @@ public interface IBenOrganizationClient
 
     /// <summary>Says they are no longer coming.</summary>
     Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default);
+
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+    // A tour is the product a tour business pays for; a date on the calendar is that product
+    // happening. Reading is open to members, changing takes the settings key, because it can
+    // charge the card.
+
+    /// <summary>Every tour this business runs, active first.</summary>
+    Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Hosted events (item 235) ────────────────────────────────────────────
+    //
+    // An event is the product an organization pays for, the way a tour is — and one calendar row,
+    // the umbrella, carries it into every part of the site that already understands a public
+    // event. Reading is open to members; changing takes the settings key, because publishing costs
+    // either a credit or a slot on the plan.
+
+    /// <summary>Every event this organization is putting on, live ones first.</summary>
+    Task<LoadResult<HostedEventRecord>> GetHostedEventsAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>One event, with its dates.</summary>
+    Task<HostedEventRecord?> GetHostedEventAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// What publishing will cost, read before the page offers the button.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-11: "the person must understand and confirm they will be charged the
+    /// event credit before they can get too far in." This is what the page says beforehand.
+    /// </remarks>
+    Task<HostedEventPlanRecord?> GetHostedEventPlanAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>Creates or changes an event, keeping the server's refusal.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventAsync(
+        Guid orgId, Guid? eventId, UpsertHostedEventRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Changes one date — what it is called, when it runs, what to say about it.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventNightAsync(
+        Guid orgId, Guid eventId, Guid nightId, UpsertHostedEventNightRequest request,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Publishes, un-publishes, archives, restores or un-cancels an event.
+    /// </summary>
+    /// <remarks>
+    /// Publishing is the one that can refuse and the one that can cost, which is why it is an
+    /// endpoint of its own rather than a field on the save.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventStateAsync(
+        Guid orgId, Guid eventId, string action, CancellationToken token = default);
+
+    /// <summary>Calls an event off, keeping the row so the people coming can see that it is off.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// Everything standing between this event and going live.
+    /// </summary>
+    /// <remarks>
+    /// The same list the publish button refuses from, which is the point: a rule the server
+    /// enforces and the screen cannot see is met as a mysterious refusal after the button has been
+    /// pressed.
+    /// </remarks>
+    Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// What calling this event off would do to its credit, without doing anything.
+    /// </summary>
+    /// <remarks>
+    /// So the confirmation can say which is about to happen before the button is pressed, in the
+    /// same words the cancel itself will answer with.
+    /// </remarks>
+    Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Says whether an event that set a minimum number is going ahead.</summary>
+    /// <remarks>
+    /// A no routes through cancelling, so the people with places are told and the credit follows
+    /// the same forty-eight hour rule as any other cancellation.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
+        Guid orgId, Guid eventId, bool going, CancellationToken token = default);
+
+    /// <summary>
+    /// Changes how guests get a place: they pick one on the plan, or they ask and are placed.
+    /// </summary>
+    /// <remarks>
+    /// Refused once anybody is booked or waiting, because the switch would change what their
+    /// bookings mean. The refusal says how many and what to do about them.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default);
+
+    /// <summary>
+    /// A published event as a visitor sees it — its dates, its venue, whether it is a stay or a run.
+    /// </summary>
+    /// <remarks>
+    /// <para>Anonymous. The umbrella calendar row carries the sign-up and the reminder; this carries
+    /// what an umbrella cannot say, which is that there is more than one evening in it.</para>
+    ///
+    /// <para>An <see cref="ItemResult{T}"/> since the plan of record (2026-09-12): a visitor refused
+    /// the event's dates and a visitor looking at an event that has no such dates must not see the
+    /// same page, because one of them has a sentence worth reading and the other has nothing.</para>
+    /// </remarks>
+    Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default);
+
+    /// <summary>One tour.</summary>
+    Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>What the plan says a tour costs right now, read before the business commits.</summary>
+    Task<TourPlanRecord?> GetTourPlanAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Creates or changes a tour, keeping the server's refusal.
+    /// </summary>
+    /// <remarks>
+    /// The refusals here are sentences somebody has to act on — a name already used, an address
+    /// that is not theirs — so the variant that throws them away would leave a page able to say
+    /// only "Save failed".
+    /// </remarks>
+    Task<(TourRecord? Result, string? Error)> SaveTourAsync(
+        Guid orgId, Guid? tourId, UpsertTourRequest request, CancellationToken token = default);
+
+    /// <summary>Stops or restarts a tour. Retiring never refunds; restoring may charge.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default);
+
+    /// <summary>Replaces who guides a tour. Everybody named must be an active member.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(
+        Guid orgId, Guid tourId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default);
+
+    /// <summary>The tours a business advertises, as a visitor sees them.</summary>
+    Task<LoadResult<PublicTourListItem>> GetPublicToursAsync(string orgUrlName, CancellationToken token = default);
+
+    /// <summary>One tour's public page, with its next dates.</summary>
+    Task<PublicTourRecord?> GetPublicTourAsync(string orgUrlName, string tourSlug, CancellationToken token = default);
+
+    /// <summary>Every tour that can be drawn on a map.</summary>
+    Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// The guest mail as it would go out, from what is in the editor right now.
+    /// </summary>
+    /// <remarks>
+    /// The point of a preview is to see a change before saving it, so what is posted is the
+    /// editor's contents rather than what the tour last stored.
+    /// </remarks>
+    Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default);
+
+    /// <summary>What people who walked this tour thought of it, and whether the reader may add.</summary>
+    Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Leaves or changes the caller's own review. Keeps the server's refusal.</summary>
+    Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default);
+
+    /// <summary>Takes the caller's own review down.</summary>
+    Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Hides or restores a review on one of the business's own tours.</summary>
+    Task<bool> SetTourReviewHiddenAsync(Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default);
+
+    /// <summary>The pictures on a tour's page.</summary>
+    Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>Adds one of the business's own pictures. Refused at fifty, in words.</summary>
+    Task<(TourImageRecord? Result, string? Error)> AddTourImageAsync(
+        Guid orgId, Guid tourId, Stream content, string fileName, string contentType,
+        string? caption, CancellationToken token = default);
+
+    /// <summary>
+    /// Stops the clock on a file this business holds, or lets it run again (item 233).
+    /// </summary>
+    /// <remarks>
+    /// The keep for a RECORDING, and for a photograph the business wants to hold without
+    /// publishing. Putting a picture on a tour's page keeps it too, and is the better answer when
+    /// the picture is worth showing.
+    /// </remarks>
+    Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default);
+
+    /// <summary>Keeps a guest's photograph by copying it onto the tour's page.</summary>
+    Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
+        Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default);
+
+    /// <summary>Changes a picture's caption or where it sits.</summary>
+    Task<(IReadOnlyList<TourImageRecord>? Result, string? Error)> UpdateTourImageAsync(
+        Guid orgId, Guid tourId, Guid imageId, string? caption, int? sortOrder, CancellationToken token = default);
+
+    /// <summary>Takes a picture off the page and deletes the business's copy.</summary>
+    Task<bool> DeleteTourImageAsync(Guid orgId, Guid tourId, Guid imageId, CancellationToken token = default);
+
+    /// <summary>
+    /// What the signed-in caller sent in from one tour, whatever became of it.
+    /// </summary>
+    /// <remarks>
+    /// So somebody who walked a tour last month can find their own photographs from the tour's
+    /// page, rather than having to remember which night they went on.
+    /// </remarks>
+    Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Tours by name, by business, or near a point.</summary>
+    Task<LoadResult<PublicTourListItem>> SearchToursAsync(
+        string? query = null, double? latitude = null, double? longitude = null,
+        double radiusMiles = 25, CancellationToken token = default);
 }

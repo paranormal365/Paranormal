@@ -92,21 +92,63 @@ internal static class DevelopmentDataSeeder
 
         addrType = await db.OrganizationAddressTypes.FirstAsync(t => t.Name == "Headquarters");
 
-        // ── Org 1: Tennessee Ghost Hunters ────────────────────────────────────
-        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "tgh");
+        // ── Org 1: Paranormal365 ──────────────────────────────────────────────
+        // Renamed from "Tennessee Ghost Hunters" (Ben, 2026-08-26): Paranormal365 and
+        // Paranormal365.com are Ben's own names, so the flagship seeded group carries them. The
+        // row is still found by its old slug first, so a database seeded under either name
+        // converges on the new one instead of growing a twin.
+        var tgh = await db.Organizations.FirstOrDefaultAsync(o => o.UrlName == "paranormal365" || o.UrlName == "tgh");
         if (tgh is null)
         {
             tgh = new Organization
             {
-                Id = Guid.NewGuid(), Name = "Tennessee Ghost Hunters", UrlName = "tgh",
+                Id = Guid.NewGuid(), Name = "Paranormal365", UrlName = "paranormal365",
+                PublicWebsite = "https://paranormal365.com",
                 IsAcceptingClients = true, IsAcceptingApplications = true,
                 DateCreated = now, CreatedByAppUserId = owner.Id,
             };
             db.Organizations.Add(tgh);
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Created organization: Tennessee Ghost Hunters");
+
+            // Everything a real creation gives a group, given to a seeded one too. Every genuine
+            // path — OrganizationController, AdminOrganizationController and
+            // OrganizationSecurityService — adds these three at creation; a seeder that skips
+            // them produces a group no real group resembles. The standalone backfill seeders do
+            // NOT cover this: OrgRoleSeeder deliberately leaves alone any group that already has
+            // a role, so the one role created below would mask the eight missing defaults
+            // forever (found 2026-08-27 — six e2e tests failed on a fresh database with
+            // "Role 'Case Manager Role' not found").
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, tgh.Id, owner.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, tgh.Id, owner.Id);
+            // creation-time; the repair below covers groups that predate it
+            // W-M1: the group also starts its new members on the Investigator Role.
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(tgh,
+                Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, tgh.Id, owner.Id));
+            // A group nobody can find is not a group a client can hire. The public search needs
+            // IsAcceptingClients AND an area of operation; the seeders set the first and never the
+            // second, so on a fresh database every seeded group wore the "Accepting new cases"
+            // badge and answered no client search at all (2026-09-06 evaluation, W-V5).
+            db.OrganizationAreaOfOperations.Add(new OrganizationAreaOfOperation
+            {
+                Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+                CenterLatitude = 36.1627m, CenterLongitude = -86.7816m, RadiusMiles = 30,
+                DisplayLabel = "Within 30 miles of Nashville, TN",
+                DateCreated = now, CreatedByAppUserId = owner.Id,
+            });
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Created organization: Paranormal365");
+        }
+        else if (tgh.Name == "Tennessee Ghost Hunters")
+        {
+            tgh.Name = "Paranormal365";
+            tgh.UrlName = "paranormal365";
+            tgh.PublicWebsite = "https://paranormal365.com";
+            tgh.DateUpdated = now;
+            await db.SaveChangesAsync();
+            Console.WriteLine("[DevDataSeeder] Renamed Tennessee Ghost Hunters to Paranormal365.");
         }
 
+        await EnsureDefaultRolesAsync(db, tgh.Id, owner.Id);
         await SeedOrgMembersAsync(db, tgh, owner, sarah, james, now);
         await SeedOrgAddressAsync(db, tgh, addrType, "1200 Church St", "Nashville", "TN", "37203", "US", 36.1627m, -86.7816m, owner.Id, now);
 
@@ -122,9 +164,37 @@ internal static class DevelopmentDataSeeder
             };
             db.Organizations.Add(nps);
             await db.SaveChangesAsync();
+
+            // Everything a real creation gives a group, given to a seeded one too. Every genuine
+            // path — OrganizationController, AdminOrganizationController and
+            // OrganizationSecurityService — adds these three at creation; a seeder that skips
+            // them produces a group no real group resembles. The standalone backfill seeders do
+            // NOT cover this: OrgRoleSeeder deliberately leaves alone any group that already has
+            // a role, so the one role created below would mask the eight missing defaults
+            // forever (found 2026-08-27 — six e2e tests failed on a fresh database with
+            // "Role 'Case Manager Role' not found").
+            Ben.Data.Source.Services.OrgMemberLevelDefaults.AddDefaultLevels(db, nps.Id, owner.Id);
+            Ben.Data.Source.Services.OrgInvestigationDutyDefaults.AddDefaultDuties(db, nps.Id, owner.Id);
+            // creation-time; the repair below covers groups that predate it
+            // W-M1: the group also starts its new members on the Investigator Role.
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(nps,
+                Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, nps.Id, owner.Id));
+            // A group nobody can find is not a group a client can hire. The public search needs
+            // IsAcceptingClients AND an area of operation; the seeders set the first and never the
+            // second, so on a fresh database every seeded group wore the "Accepting new cases"
+            // badge and answered no client search at all (2026-09-06 evaluation, W-V5).
+            db.OrganizationAreaOfOperations.Add(new OrganizationAreaOfOperation
+            {
+                Id = Guid.NewGuid(), OrganizationId = nps.Id,
+                CenterLatitude = 36.1627m, CenterLongitude = -86.7816m, RadiusMiles = 30,
+                DisplayLabel = "Within 30 miles of Nashville, TN",
+                DateCreated = now, CreatedByAppUserId = owner.Id,
+            });
+            await db.SaveChangesAsync();
             Console.WriteLine("[DevDataSeeder] Created organization: Nashville Paranormal Society");
         }
 
+        await EnsureDefaultRolesAsync(db, nps.Id, owner.Id);
         await SeedOrgMembersAsync(db, nps, owner, emma, null, now);
         await SeedOrgAddressAsync(db, nps, addrType, "500 Commerce St", "Nashville", "TN", "37203", "US", 36.1651m, -86.7785m, owner.Id, now);
 
@@ -155,7 +225,18 @@ internal static class DevelopmentDataSeeder
             creator: sarah,
             confirms: 8, disputes: 0, inconclusive: 3, voters: [owner, james, emma, daniel],
             now: now,
-            latitude: 36.5726m, longitude: -87.0562m);
+            latitude: 36.5726m, longitude: -87.0562m,
+            // The one seeded case that shows its finding publicly (W-P3), so the surface exists
+            // to be seen on a fresh install rather than only in a test.
+            publicReportSummary:
+                "<p>Over four nights we recorded continuously in the main chamber and the upper "
+              + "passage. Twenty-one of the twenty-three audio anomalies reported this season "
+              + "matched airflow through the cave mouth at the hours they were heard; the "
+              + "remaining two were traced to a visitor group in the adjacent passage.</p>",
+            publicReportConclusion:
+                "<p>We found no evidence of paranormal activity. The site's acoustics are unusual "
+              + "and account for what visitors describe, which is worth saying plainly: people "
+              + "are hearing something real, and it is the cave.</p>");
 
         await SeedCaseAsync(db, nps,
             year: 2026, number: 1,
@@ -205,7 +286,12 @@ internal static class DevelopmentDataSeeder
         {
             var inv = new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = tghCase1.Id,
+                // OrganizationId is a direct FK, not derived through the case — an investigation
+                // can exist with no case at all, so the org is its own required column. Omitting
+                // it left Guid.Empty and the insert failed the foreign key, which only ever showed
+                // on a genuinely empty database: every other run skips this block because an
+                // investigation already exists. Found rebuilding from scratch, 2026-08-26.
+                Id = Guid.NewGuid(), OrganizationId = tghCase1.OrganizationId, CaseId = tghCase1.Id,
                 Title = "Initial Night Investigation",
                 Description = "Baseline EMF sweep and audio recording session. Focus on the main barn and east wing of the farmhouse.",
                 Location = "Springfield Farmhouse — Barn + East Wing",
@@ -288,13 +374,19 @@ internal static class DevelopmentDataSeeder
                 ClientRequestId = danielAcceptedReq.Id,
                 CaseManagerAppUserId = sarah.Id,
                 CaseYear = 2026, OrgCaseNumber = nextNum,
-                Title = "Park Residence, Nashville TN",
+                // Named for the PLACE, not the client (item 176/178): the seed teaches the habit
+                // every fresh database inherits, and "Park, Nashville TN" for client Daniel Park
+                // is exactly the leak the publish check warns about.
+                Title = "Belmont Boulevard Residence, Nashville TN",
                 Description = "<p>Client reports persistent activity over six months: footsteps on the second floor after midnight and objects found displaced. Initial evidence review underway.</p>",
                 StreetAddress1 = "4512 Belmont Blvd", City = "Nashville",
                 State = "TN", ZipCode = "37215", Country = "US",
                 Latitude = 36.1043m, Longitude = -86.7930m,
                 Status = CaseStatus.Accepted, IsPublic = false,
-                PublicPseudonym = "The Park Family",
+                // Not "The Park Family" — a pseudonym built from the client's real surname
+                // defeats itself, and item 176's leak check now warns on exactly that.
+                // (And not "The Belmont Family" either: the case sits on Belmont Blvd.)
+                PublicPseudonym = "The Caldwell Family",
                 DateCaseOpened = now.AddDays(-25),
                 DateCreated = now.AddDays(-25), CreatedByAppUserId = sarah.Id,
             };
@@ -325,10 +417,11 @@ internal static class DevelopmentDataSeeder
             // Upcoming investigation
             db.Investigations.Add(new Investigation
             {
-                Id = Guid.NewGuid(), CaseId = danielCase.Id,
+                // Same as above: the org is its own FK, not inferred from the case.
+                Id = Guid.NewGuid(), OrganizationId = danielCase.OrganizationId, CaseId = danielCase.Id,
                 Title = "Initial Site Assessment",
                 Description = "First visit to the property. EMF baseline, audio placement, walkthrough with client.",
-                Location = "Park Residence — Full property",
+                Location = "Belmont Blvd residence — Full property",
                 ScheduledDateTime = now.AddDays(5),
                 EndDateTime       = now.AddDays(5).AddHours(4),
                 Status = InvestigationStatus.Scheduled,
@@ -380,7 +473,7 @@ internal static class DevelopmentDataSeeder
                 {
                     Id                   = new Guid("30000001-0000-0000-0000-000000000001"),
                     CaseId               = danielCase.Id,
-                    Title                = "Initial Assessment — Park Residence",
+                    Title                = "Initial Assessment — Belmont Blvd residence",
                     Summary              = "Team conducted a baseline sweep of the property on 2026-08-07. Activity was primarily concentrated in the upstairs hallway.",
                     Conclusion           = "Evidence is consistent with a Type 2 residual haunting. Further investigations are recommended to capture additional audio and visual evidence.",
                     Status               = Ben.Data.Common.Enums.CaseReportStatus.Published,
@@ -395,6 +488,13 @@ internal static class DevelopmentDataSeeder
             }
         }
 
+        // Outside the block above, which runs only when the case is first made: a database seeded
+        // before boards existed gets its board too.
+        if (tgh is not null
+            && await db.Cases.Where(c => c.OrganizationId == tgh.Id && c.StreetAddress1 == "4512 Belmont Blvd")
+                             .Select(c => (Guid?)c.Id).FirstOrDefaultAsync() is { } belmontId)
+            await SeedResearchBoardAsync(db, belmontId, sarah, now);
+
         // Both organizations are created above if missing, so this is defensive rather than
         // expected — but the compiler is right that FirstOrDefaultAsync can return null, and a seed
         // that throws takes the whole API startup down with it.
@@ -407,7 +507,90 @@ internal static class DevelopmentDataSeeder
         if (tgh is not null)
             await SeedEquipmentAsync(db, tgh, owner, sarah, james, now);
 
+        // Both the regular user the documents are written for and the owner account, so the
+        // editor can be driven by hand from either.
+        await SeedVideoEditorMediaAsync(db, sarah, now);
+        await SeedVideoEditorMediaAsync(db, owner, now);
+
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    /// <summary>
+    /// Four small clips in the media library, so the video editor has something to open.
+    /// </summary>
+    /// <remarks>
+    /// <para>The editor's help documents are mostly pictures of the editor, and an editor with an
+    /// empty timeline demonstrates nothing — every screenshot would be of the same grey rectangle.
+    /// These are generated files (two camera clips, a room-tone recording and a site photo,
+    /// 172 KB in total) that live in <c>SeedData/Media</c> and are loaded as ordinary uploads
+    /// belonging to the seeded regular user, which is who the documents are written for.</para>
+    ///
+    /// <para>Stored as <c>FileData</c> rather than on disk: a seeded row pointing at a storage
+    /// path would break the moment the database and the file store disagreed, and these are small
+    /// enough that the blob is the simpler half of that trade.</para>
+    ///
+    /// <para>Typed as Case Evidence because that is what investigation footage is; the media
+    /// library filters by content type, not by file type, so the editor lists them either way.</para>
+    /// </remarks>
+    private static async Task SeedVideoEditorMediaAsync(BenDataContext db, AppUser owner, DateTime now)
+    {
+        var evidenceType = await db.UploadFileTypes.FirstOrDefaultAsync(
+            t => t.Name == UploadFileTypeSeeder.EvidenceFileTypeName);
+        if (evidenceType is null)
+        {
+            Console.WriteLine("[DevDataSeeder] Case Evidence file type missing — skipping demo media.");
+            return;
+        }
+
+        var mediaRoot = Path.Combine(AppContext.BaseDirectory, "SeedData", "Media");
+        if (!Directory.Exists(mediaRoot))
+        {
+            Console.WriteLine($"[DevDataSeeder] No demo media at {mediaRoot} — skipping.");
+            return;
+        }
+
+        var files = new (string File, string ContentType, string Description)[]
+        {
+            ("porch-camera.mp4",   "video/mp4",  "Front porch camera, 8 seconds. Static wide shot."),
+            ("hallway-camera.mp4", "video/mp4",  "Upstairs hallway camera, 6 seconds."),
+            ("basement-evp.m4a",   "audio/mp4",  "Basement EVP session — room tone with a low hum."),
+            ("site-photo.jpg",     "image/jpeg", "Exterior of the property, taken on arrival."),
+        };
+
+        var added = 0;
+        foreach (var (file, contentType, description) in files)
+        {
+            if (await db.UploadFiles.AnyAsync(f => f.AppUserId == owner.Id && f.FileName == file))
+                continue;
+
+            var path = Path.Combine(mediaRoot, file);
+            if (!File.Exists(path)) continue;
+
+            var bytes = await File.ReadAllBytesAsync(path);
+
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = evidenceType.Id,
+                AppUserId          = owner.Id,
+                FileName           = file,
+                StoredFileName     = $"{Guid.NewGuid():N}{Path.GetExtension(file)}",
+                ContentType        = contentType,
+                FileSize           = bytes.LongLength,
+                FileData           = bytes,
+                Description        = description,
+                IsPublic           = false,
+                DateCreated        = now,
+                CreatedByAppUserId = owner.Id,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[DevDataSeeder] Added {added} demo media files for the video editor.");
+        }
     }
 
     /// <summary>
@@ -631,13 +814,49 @@ internal static class DevelopmentDataSeeder
             tghAddress.PublicDisplayMode = OrganizationAddressDisplayMode.FullAddressAndMap;
             tghAddress.SearchRadiusMiles = 50;
             await db.SaveChangesAsync();
-            Console.WriteLine("[DevDataSeeder] Made Tennessee Ghost Hunters findable in nearby search.");
+            Console.WriteLine("[DevDataSeeder] Made Paranormal365 findable in nearby search.");
         }
 
         // ── Public events ────────────────────────────────────────────────────
         var placeId = new Guid("40000001-0000-0000-0000-000000000001");
         if (!await db.Places.AnyAsync(p => p.Id == placeId)) return;
-        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic)) return;
+
+        // ── A PAST public event with a confirmed outside attendee (item 111) ──
+        // Daniel belongs to no group, which makes him the canonical stranger-attendee: the
+        // evidence-submission door must open for him on attendance alone, and the e2e walk needs
+        // that state to exist without driving the email-confirmation flow.
+        var daniel = await db.Users.FirstOrDefaultAsync(u => u.Email == "daniel.park@benco.dev");
+        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Title == "Bell Witch Cave — Last Month's Open Night"))
+        {
+        var pastWalk = new OrgCalendarEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = tgh.Id,
+            Title = "Bell Witch Cave — Last Month's Open Night",
+            Description = "<p>The previous public night at the cave.</p>",
+            PlaceId = placeId,
+            StartDateTime = now.AddDays(-30).Date.AddHours(20),
+            EndDateTime   = now.AddDays(-30).Date.AddHours(23),
+            IsPublic = true,
+            UrlName = $"{now.AddDays(-30):yyyy-MM-dd}-bell-witch-cave-open-night",
+            DateCreated = now, CreatedByAppUserId = owner.Id,
+        };
+        db.OrgCalendarEvents.Add(pastWalk);
+
+        if (daniel is not null)
+            db.EventAttendanceInvites.Add(new EventAttendanceInvite
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = pastWalk.Id,
+                Email = daniel.Email!, DisplayName = "Daniel",
+                DateConfirmed = now.AddDays(-31), ConfirmedByAppUserId = daniel.Id,
+                DateExpires = now.AddDays(-31).AddDays(14),
+                DateCreated = now.AddDays(-31), CreatedByAppUserId = daniel.Id,
+            });
+
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded the past public event with Daniel as a confirmed attendee (item 111).");
+        }
+
+        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic && e.StartDateTime > now)) return;
 
         // Dated from "now" rather than fixed, so the panel — which shows upcoming events only —
         // does not quietly empty out as the seed data ages.
@@ -647,8 +866,9 @@ internal static class DevelopmentDataSeeder
             Title = "Bell Witch Cave — Public Night Walk",
             Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
             PlaceId = placeId,
-            StartDateTime = now.AddDays(14).Date.AddHours(20),
-            EndDateTime   = now.AddDays(14).Date.AddHours(23),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(20)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(23)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(14):yyyy-MM-dd}-bell-witch-cave-public-night-walk",
             AttendeeCapacity = 20,
@@ -671,8 +891,9 @@ internal static class DevelopmentDataSeeder
             // No PlaceId: an event may name an organization address instead, and VisibleEvents
             // allows a null Place. The nearby projection falls back to the address for coordinates.
             OrganizationAddressId = npsAddress?.Id,
-            StartDateTime = now.AddDays(28).Date.AddHours(19),
-            EndDateTime   = now.AddDays(28).Date.AddHours(21),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(19)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(21)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(28):yyyy-MM-dd}-open-meeting-what-we-found-this-year",
             DateCreated = now, CreatedByAppUserId = emma.Id,
@@ -680,7 +901,7 @@ internal static class DevelopmentDataSeeder
 
         db.OrgCalendarEvents.AddRange(walk, talk);
         await db.SaveChangesAsync();
-        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery.");
+        Console.WriteLine("[DevDataSeeder] Created two public events for local discovery, and a past one with a confirmed attendee.");
     }
 
     /// <summary>
@@ -792,7 +1013,12 @@ internal static class DevelopmentDataSeeder
         int confirms, int disputes, int inconclusive,
         AppUser[] voters,
         DateTime now,
-        decimal? latitude = null, decimal? longitude = null)
+        decimal? latitude = null, decimal? longitude = null,
+        // W-P3 (site evaluation 2026-09-06): a finished report the group has chosen to show on
+        // the public case page. Without one, a fresh install has no case anywhere that
+        // demonstrates the surface, and the browser walk has nothing to walk.
+        string? publicReportSummary = null,
+        string? publicReportConclusion = null)
     {
         if (await db.Cases.AnyAsync(c => c.OrganizationId == org.Id && c.CaseYear == year && c.OrgCaseNumber == number))
             return;
@@ -812,6 +1038,29 @@ internal static class DevelopmentDataSeeder
         };
         db.Cases.Add(caseEntity);
         await db.SaveChangesAsync();
+
+        // W-P3: a published report with its summary switched on, so a fresh install shows what a
+        // group's finding looks like on its own public page. Only on a case that is actually
+        // public — the switch means nothing otherwise, and seeding it elsewhere would suggest it
+        // does.
+        if (isPublic && publicReportSummary is not null)
+        {
+            db.CaseReports.Add(new CaseReport
+            {
+                Id                     = Guid.NewGuid(),
+                CaseId                 = caseEntity.Id,
+                Title                  = "Final report",
+                Summary                = publicReportSummary,
+                Conclusion             = publicReportConclusion,
+                Status                 = CaseReportStatus.Published,
+                IsPublicSummaryVisible = true,
+                PublishedAt            = opened.AddDays(45),
+                PublishedByAppUserId   = creator.Id,
+                DateCreated            = now,
+                CreatedByAppUserId     = creator.Id,
+            });
+            await db.SaveChangesAsync();
+        }
 
         // Timeline entries
         db.CaseTimelineEntries.Add(new CaseTimelineEntry
@@ -873,10 +1122,58 @@ internal static class DevelopmentDataSeeder
         Console.WriteLine($"[DevDataSeeder] Seeded case: {org.Name} #{year}-{number:D3} ({city}, {state})");
     }
 
+    /// <summary>Where the seeded public events happen. Named, so their times read in the place's own clock.</summary>
+    /// <remarks>
+    /// The two public events used to be seeded with no zone, and an event with none reads in UTC: a Tennessee night walk
+    /// at eight showed as "08:00 PM UTC" on What's on (UI test pass, 2026-09-14). The hours are the place's; stored as UTC.
+    /// </remarks>
+    private const string TennesseeZone = "America/Chicago";
+
+    private static DateTime TennesseeTimeToUtc(DateTime placeTime) =>
+        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(placeTime, DateTimeKind.Unspecified), TimeZoneInfo.FindSystemTimeZoneById(TennesseeZone));
+
     /// <summary>
     /// Ensures the owner is the org Owner and optionally adds an Admin and a Member membership.
     /// Safe to call on existing orgs — skips any memberships that already exist.
     /// </summary>
+
+    /// <summary>
+    /// Gives a demo group any default roles it is missing, on every run rather than only at
+    /// creation.
+    /// </summary>
+    /// <remarks>
+    /// <para>Creating them at creation time fixes groups made from now on and does nothing for
+    /// one already in a database: the seeder will not recreate a group that exists, and the
+    /// standalone backfill deliberately skips any group that has ANY role — so a demo group that
+    /// came out with exactly one kept that one for ever (found 2026-08-27, where it failed the
+    /// e2e suite with "Role 'Case Manager Role' not found").</para>
+    ///
+    /// <para>Safe here and nowhere else: these groups belong to the seeder. Nobody has decided to
+    /// delete a role from them, so there is no decision to overrule — which is exactly why the
+    /// backfill must keep its stricter rule for groups that belong to people.</para>
+    /// </remarks>
+    private static async Task EnsureDefaultRolesAsync(BenDataContext db, Guid orgId, Guid createdBy)
+    {
+        var existing = await db.OrganizationRoles
+            .Where(r => r.OrganizationId == orgId)
+            .Select(r => r.Name)
+            .ToListAsync();
+
+        var before = existing.Count;
+        var staged = Ben.Data.Source.Services.OrgRoleDefaults.AddDefaultRoles(db, orgId, createdBy, existing);
+
+        // W-M1: a group being repaired also gets the role its new members start on, unless it
+        // already has one. Without this a database seeded before the setting existed keeps
+        // handing every new member a desk of doors that refuse them.
+        if (await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId) is { } repaired)
+            Ben.Data.Source.Services.OrgRoleDefaults.PointAtStartingRole(repaired, staged);
+
+        await db.SaveChangesAsync();
+
+        var added = await db.OrganizationRoles.CountAsync(r => r.OrganizationId == orgId) - before;
+        if (added > 0)
+            Console.WriteLine($"[DevDataSeeder] Repaired {added} missing default role(s) on an existing demo group.");
+    }
     private static async Task SeedOrgMembersAsync(
         BenDataContext db, Organization org, AppUser owner,
         AppUser? admin, AppUser? member, DateTime now)
@@ -940,5 +1237,135 @@ internal static class DevelopmentDataSeeder
             DateCreated = now, CreatedByAppUserId = creatorId,
         });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>The research board the seed puts on the Belmont case, published.</summary>
+    private static readonly Guid SeededBoardId = new("12000002-0000-0000-0000-000000000001");
+
+    /// <summary>
+    /// One published research board on the Belmont case: four joined cards and a note.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Research is boards from 2026-09-16, and a fresh install with none shows an empty Research tab
+    /// — nothing for the help pictures, the product walk or the presentation to show. The block-editor
+    /// research page that used to be seeded here went with the block editor.
+    /// </para>
+    /// <para>
+    /// The cards are joined in a chain on purpose: that is what a side handle makes, and it is the
+    /// order presenting walks them in, so the seed exercises the feature rather than just filling a
+    /// tab. Written as the document JSON the editor itself writes — the seeder cannot reference
+    /// Ben.Canvas.Core (it is a WebAssembly-facing library, and the API does not take it), so the
+    /// shape here is pinned by CanvasSeedDocumentTests, which reads this board back with the real
+    /// reader and fails if the format moves.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedResearchBoardAsync(BenDataContext db, Guid caseId, AppUser author, DateTime now)
+    {
+        if (await db.CanvasDocuments.AnyAsync(b => b.Id == SeededBoardId)) return;
+
+        await WriteResearchBoardAsync(db, caseId, author, now, ResearchBoardJson(caseId, now));
+    }
+
+    /// <summary>
+    /// The seeded board's document, as the canvas editor's own format.
+    /// </summary>
+    /// <remarks>
+    /// Built as objects and serialised, not written out as text: JSON with braces in it inside an
+    /// interpolated raw string is a puzzle, and a seed nobody can read is a seed nobody corrects.
+    /// Separated from the write so <c>SeededBoardTests</c> can read it back with the editor's own
+    /// reader — this project cannot reference Ben.Canvas.Core, so nothing here can check its own work.
+    /// </remarks>
+    internal static string ResearchBoardJson(Guid caseId, DateTime now)
+    {
+        static object Card(string id, double x, string title, string description) => new
+        {
+            id,
+            type = "Card",
+            x,
+            y = 0,
+            width = 280,
+            height = 200,
+            z = (int)(x / 344) + 1,
+            data = new
+            {
+                kind = "card",
+                templateId = "evidence",
+                title,
+                fields = new Dictionary<string, string> { ["description"] = description },
+            },
+        };
+
+        static object Joins(string from, string to) => new
+        {
+            id = Guid.NewGuid(),
+            fromNodeId = from,
+            toNodeId = to,
+            fromSide = "Right",
+            toSide = "Left",
+            arrow = "End",
+        };
+
+        const string a = "20000001-0000-0000-0000-000000000001";
+        const string b = "20000001-0000-0000-0000-000000000002";
+        const string c = "20000001-0000-0000-0000-000000000003";
+        const string d = "20000001-0000-0000-0000-000000000004";
+
+        var document = new
+        {
+            schemaVersion = 1,
+            id = SeededBoardId,
+            title = "Previous owners and where they are buried",
+            createdAtUtc = now.AddDays(-6),
+            savedAtUtc = now.AddDays(-5),
+            caseId,
+            revision = 2,
+            nextZ = 6,
+            nodes = new object[]
+            {
+                Card(a, 0, "Built 1924", "County deed index: four owners since the house was built."),
+                Card(b, 344, "Sold 1951", "Deed book 1162, page 88. The second owners kept it thirty-one years."),
+                Card(c, 688, "Obituary, March 1982", "Names both owners. Burial at Mount Olivet."),
+                Card(d, 1032, "Mount Olivet", "Both graves found, section 14. Photographs on the case files."),
+                new
+                {
+                    id = "20000001-0000-0000-0000-000000000005",
+                    type = "Text",
+                    x = 0d,
+                    y = 300,
+                    width = 620,
+                    height = 120,
+                    z = 5,
+                    data = new { kind = "text", text = "Nothing in the deeds explains the upstairs room. Ask the client who used it." },
+                },
+            },
+            edges = new object[] { Joins(a, b), Joins(b, c), Joins(c, d) },
+            groups = Array.Empty<object>(),
+        };
+
+        return System.Text.Json.JsonSerializer.Serialize(document, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+    }
+
+    private static async Task WriteResearchBoardAsync(BenDataContext db, Guid caseId, AppUser author, DateTime now, string json)
+    {
+        db.CanvasDocuments.Add(new CanvasDocument
+        {
+            Id = SeededBoardId,
+            CaseId = caseId,
+            Name = "Previous owners and where they are buried",
+            DocumentJson = json,
+            PublishedJson = json,
+            Revision = 2,
+            PublishedRevision = 2,
+            PublishedAtUtc = now.AddDays(-5),
+            PublishedByAppUserId = author.Id,
+            DateCreated = now.AddDays(-6),
+            CreatedByAppUserId = author.Id,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded a published research board on the Belmont case.");
     }
 }

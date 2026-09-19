@@ -82,12 +82,15 @@ public class ClientRequestNavTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var nextBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Next: About You →" });
         await Expect(nextBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        // Click without filling anything — should show validation error
-        await nextBtn.ClickAsync();
+
+        // Since the 2026-09-06 evaluation (W-R1) the button is disabled until the address has
+        // been verified, rather than allowed and then refused three screens later. Disabled is a
+        // stronger answer than a validation message, and it is what this asserts now.
+        await Expect(nextBtn).ToBeDisabledAsync(new() { Timeout = 8_000 });
+
         var body = await Page.InnerTextAsync("body");
-        // Should still be on step 1 (no "About You" step heading yet)
         Assert.That(body, Does.Not.Contain("Step 2"),
-            "Should still be on step 1 after clicking Next without filling fields.");
+            "Should still be on step 1 with nothing filled in.");
     }
 
     [Test]
@@ -228,12 +231,22 @@ public class ClientRequestNavTests : BenTestBase
         var requestsTab = Page.GetByText("Requests", new() { Exact = true });
         await Expect(requestsTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await requestsTab.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
+
+        // A RETRYING expectation, not a single InnerText. The tab's own markup renders before its
+        // content arrives over the circuit, so reading the body once catches the shell and none of
+        // the data — which is why this passed alone and failed under the full suite's load, with a
+        // message listing the site header as though that were the answer. Its sibling
+        // OrgRequests_Tab_RendersWithRequestCards had the same defect and the same fix.
+        await Expect(Main.GetByText("No pending", new() { Exact = false })
+                .Or(Main.GetByText("Accept", new() { Exact = false }))
+                .Or(Main.GetByText("Decline", new() { Exact = false }))
+                .Or(Main.GetByText("Investigation Request", new() { Exact = false }))
+                .First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
-        // Should show either pending requests or an empty-state message
-        Assert.That(body, Does.Contain("No pending").Or.Contain("Accept").Or.Contain("Decline").Or.Contain("Investigation Request"),
-            "Expected some content in the Requests tab.");
     }
 
     [Test]

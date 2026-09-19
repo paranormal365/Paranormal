@@ -1,6 +1,8 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -10,7 +12,9 @@
 <div>
     @* ── Date negotiation with client ─────────────────────────────────────────── *@
     <details class="mb-3">
-        <summary class="fw-semibold small text-secondary" style="cursor:pointer;">
+        @* Drawn as a button: the template removes the disclosure triangle and the icon broke onto its own line, so the
+           summary read as a loose icon over a caption, not something to open (UI test pass, 2026-09-14). *@
+        <summary class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
             <BenIcon Name="calendar" /> Date Proposals to Client
         </summary>
         <div class="mt-2">
@@ -21,7 +25,12 @@
 
     <div class="d-flex align-items-center justify-content-between mb-3">
         <span class="fw-semibold">Investigations (@(_investigations?.Count ?? 0))</span>
-        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAdd"><BenIcon Name="plus" Class="me-1" />Schedule Investigation</button>
+        @* IH-03 step 2: answers to the same Investigations.Create grant the server checks. *@
+        @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                         Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
+        {
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenAdd" data-testid="schedule-investigation"><BenIcon Name="plus" Class="me-1" />Schedule Investigation</button>
+        }
     </div>
 
     @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
@@ -50,9 +59,7 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                                @if (i.EndDateTime.HasValue)
-                                { <span> – @i.EndDateTime.Value.ToViewerLocalTime(UserState).ToDisplayTime()</span> }
+                                @(i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState)))
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -176,7 +183,8 @@
                                        member saw the attendance and lead controls and got a 403 on
                                        using them — the exact thing CanEditRecord exists to stop. *@
                                     <InvestigationRoster OrgId="@OrgId" InvestigationId="@i.Id"
-                                                         CanManage="@i.CanEditRecord" />
+                                                         CanManage="@i.CanEditRecord"
+                                                         ReloadToken="@_rosterReloadToken" />
                                 </div>
 
                                 <div class="mt-3 border rounded p-3 bg-body-secondary">
@@ -245,7 +253,7 @@
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
-                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
+                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="e.g. Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
                                             </div>
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddAttendee(i))" disabled="@(!(_newAttendeeUserId != Guid.Empty && !_attendeeBusy))"><BenIcon Name="plus" Class="me-1" />
                                                 Add
@@ -275,17 +283,46 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-title-092d">Title <span class="text-danger">*</span></label>
-                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
+                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="e.g. Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
             </div>            <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
-            </div>            <div class="col-md-6">
-                <label class="form-label fw-semibold">Scheduled Date & Time</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.ScheduledDateTime" Width="100%" />
-            </div>
+            </div>            @* A date box and a time box rather than one combined picker. Two reasons, both
+               reported by Ben on 2026-09-09: the combined popup jumps to its Time panel the moment
+               you click a day, so changing your mind about the date costs a trip back through the
+               tab; and its single masked input rebuilds the whole date when a segment is stepped
+               while the value is incomplete — type 09, press Up on the day, and the month you just
+               typed becomes 10. A calendar that closes on the day you click has neither problem. *@
             <div class="col-md-6">
-                <label class="form-label fw-semibold">End Time (optional)</label>
-                <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EndDateTime" Width="100%" />
+                <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
+                <div class="d-flex gap-2">
+                    <BenDateField Mode="DateEntryMode.Date" Id="investigationpanel-start-date" @bind-Value="@_form.StartDate" Width="160px" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.StartTime" Width="130px" />
+                </div>
+            </div>
+            @* One arrival and one departure is the ordinary shape, and it is allowed to cross
+               midnight: 3pm until 8am the next morning is one investigation, not two days. So the
+               end is a clock time, and a time at or before the start belongs to the next morning.
+               Anything longer — a weekend, a week — is behind the checkbox, which keeps the common
+               case down to a time. *@
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Ends (optional)</label>
+                @if (_form.MultiDay)
+                {
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EndDateTime" Width="100%" />
+                }
+                else
+                {
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.EndTime" Width="100%" />
+                    <div class="form-text">A time at or before the start is the next morning.</div>
+                }
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="investigationpanel-multi-day"
+                           checked="@_form.MultiDay" @onchange="OnMultiDayChanged" />
+                    <label class="form-check-label" for="investigationpanel-multi-day">
+                        Runs over more than one day
+                    </label>
+                </div>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-location-within-property-optional-0b20">Location within property (optional)</label>
@@ -303,7 +340,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="dd/MM/yyyy hh:mm tt" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
@@ -315,21 +352,39 @@
                 @* Plain select: a Telerik dropdown that drops its selection would silently leave
                    the previous sharing scope in place, and this is the one field where quietly
                    keeping the old value could publish something. *@
+                @* An account that pays nothing shares a public place's findings with everyone and
+                   may not narrow them (Ben, 2026-09-17). The narrower options are not offered at
+                   all rather than offered and refused — the same treatment Public already gets at a
+                   private home. A home is untouched by the plan rule, so this only bites where the
+                   place is a public one, and this panel cannot always know the place from here:
+                   the server has the final say either way and its sentence is rendered below. *@
                 <select id="investigationpanel-who-can-see-the-e9a5" class="form-select" style="max-width:420px;" value="@_form.Visibility"
                         @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
-                    <option value="@InvestigationVisibility.GroupOnly"
-                            selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
-                        Just this group
-                    </option>
-                    <option value="@InvestigationVisibility.PlaceInvestigators"
-                            selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
-                        Groups who have also investigated this place
-                    </option>
+                    @if (!_publicByDefault)
+                    {
+                        <option value="@InvestigationVisibility.GroupOnly"
+                                selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
+                            Just this group
+                        </option>
+                        <option value="@InvestigationVisibility.PlaceInvestigators"
+                                selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
+                            Groups who have also investigated this place
+                        </option>
+                    }
                     <option value="@InvestigationVisibility.Public"
                             selected="@(_form.Visibility == InvestigationVisibility.Public)">
                         Anyone
                     </option>
                 </select>
+
+                @if (_publicByDefault)
+                {
+                    <div class="form-text" data-testid="investigation-scope-locked">
+                        On this account a visit to a public location is shared with everyone. What
+                        you find there joins the place's own page.
+                        <a href="/pricing">See what each plan includes.</a>
+                    </div>
+                }
 
                 @* The membership is dynamic, and that is not obvious from the wording alone. A
                    group that investigates this place next year gains access to what was shared
@@ -399,12 +454,15 @@
 
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
+    // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
+    // enum cannot be listed under one name in this panel and another on the timeline. Three kinds,
+    // not every kind: a binder row is what happened on the night. Research is a thing somebody read
+    // afterwards, and it goes on the timeline proper or on a board.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
-        new("Note",              CaseTimelineEntryType.InvestigatorNote),
-        new("Instrument reading", CaseTimelineEntryType.InstrumentReading),
-        new("Evidence",          CaseTimelineEntryType.Evidence),
-        new("Research",          CaseTimelineEntryType.ResearchNote),
+        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
+        new(CaseTimelineEntryTypes.DisplayName(CaseTimelineEntryType.InstrumentReading), CaseTimelineEntryType.InstrumentReading),
+        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.Evidence),          CaseTimelineEntryType.Evidence),
     ];
 
     private async Task ToggleBinderAsync(InvestigationRecord inv)
@@ -420,8 +478,20 @@
     {
         try
         {
-            _binderCache[investigationId] =
-                (await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId)).ToList();
+            // This panel already got the distinction right by hand — a refused binder leaves the
+            // cache unset rather than caching an empty one. Now the refusal is visible rather
+            // than inferred from a throw that a 403 never produced.
+            var binder = await AdminClient.GetCaseTimelineAsync(OrgId, CaseId, investigationId);
+            if (binder.Failed)
+            {
+                _binderError = binder.SessionExpired
+                    ? "You've been signed out. Sign in again to see this binder."
+                    : binder.Reason ?? "Couldn't load this binder.";
+            }
+            else
+            {
+                _binderCache[investigationId] = binder.Items.ToList();
+            }
         }
         catch
         {
@@ -444,7 +514,7 @@
         _binderError  = null;
         try
         {
-            var created = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId,
+            var (created, createError) = await AdminClient.AddCaseTimelineEntryAsync(OrgId, CaseId,
                 new UpsertTimelineEntryRequest(
                     _binderType,
                     DateTime.UtcNow,
@@ -456,7 +526,7 @@
                     [],
                     inv.Id));
 
-            if (created is null) { _binderError = "Couldn't add that entry."; return; }
+            if (created is null) { _binderError = createError ?? "Couldn't add that entry."; return; }
 
             _binderTitle = string.Empty;
             await LoadBinderAsync(inv.Id);
@@ -469,15 +539,10 @@
         }
     }
 
-    private static string EntryTypeLabel(CaseTimelineEntryType t) => t switch
-    {
-        CaseTimelineEntryType.ClientReport      => "Client Report",
-        CaseTimelineEntryType.InvestigatorNote  => "Note",
-        CaseTimelineEntryType.Evidence          => "Evidence",
-        CaseTimelineEntryType.ResearchNote      => "Research",
-        CaseTimelineEntryType.InstrumentReading => "Reading",
-        _                                       => t.ToString(),
-    };
+    // W-A11: the badge's short form, from the one helper. Every copy of this switch ended in
+    // t.ToString(), which is how a raw enum name reached a screen when the enum grew.
+    private static string EntryTypeLabel(CaseTimelineEntryType t)
+        => CaseTimelineEntryTypes.ShortName(t);
 
     private static string EntryTypeBadge(CaseTimelineEntryType t) => t switch
     {
@@ -506,13 +571,20 @@
     protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
-        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
         _orgMembers = members.ToList();
     }
 
+    /// <summary>What this viewer may do with investigations here — see CaseList for the pattern.</summary>
+    private MyOrgPermissionsItem? _perms;
+    private bool _publicByDefault;
+
     private async Task LoadAsync()
     {
-        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).ToList(); }
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); _publicByDefault = _perms?.PublicByDefault ?? false; }
+        catch { _perms = null; }   // unknown means the button stays hidden, not hopeful
+
+        try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
         catch { _error = "Failed to load investigations."; }
     }
 
@@ -531,12 +603,22 @@
         _attendeeBusy = true;
         try
         {
+            // Same treatment as the binder above: a refused attendee list leaves the cache
+            // unset rather than caching an empty roster as fact.
             var list = await AdminClient.GetInvestigationAttendeesAsync(OrgId, CaseId, invId);
-            _attendeeCache[invId] = list.ToList();
+            if (list.Failed)
+                _error = list.SessionExpired
+                    ? "You've been signed out. Sign in again to see who attended."
+                    : list.Reason ?? "Failed to load attendees.";
+            else
+                _attendeeCache[invId] = list.Items.ToList();
         }
         catch { _error = "Failed to load attendees."; }
         finally { _attendeeBusy = false; }
     }
+
+    /// <summary>Bumped to make the roster panels re-read at once. See W-A7 on the roster.</summary>
+    private int _rosterReloadToken;
 
     private async Task AddAttendee(InvestigationRecord inv)
     {
@@ -551,6 +633,9 @@
             _newAttendeeRole = "";
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
+            // W-A7: the roster panel above keeps its own state and would otherwise sit on
+            // "Nobody has been added to this investigation yet" until its next poll.
+            _rosterReloadToken++;
         }
         catch { _error = "Failed to add attendee."; }
         finally { _attendeeBusy = false; }
@@ -564,6 +649,7 @@
             await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
+            _rosterReloadToken++;
         }
         catch { _error = "Failed to remove attendee."; }
         finally { _attendeeBusy = false; }
@@ -623,13 +709,20 @@
     private void OpenEdit(InvestigationRecord inv)
     {
         _editInv = inv;
+        var start = inv.ScheduledDateTime.ToViewerLocalTime(UserState);
+        var end   = inv.EndDateTime?.ToViewerLocalTime(UserState);
+
+        var multiDay = InvestigationWindow.NeedsMultiDay(start, end);
+
         _form = new InvForm
         {
             Title             = inv.Title,
             Description       = inv.Description ?? "",
             Location          = inv.Location ?? "",
-            ScheduledDateTime = inv.ScheduledDateTime.ToViewerLocalTime(UserState),
-            EndDateTime       = inv.EndDateTime?.ToViewerLocalTime(UserState),
+            ScheduledDateTime = start,
+            MultiDay          = multiDay,
+            EndDateTime       = multiDay ? end : null,
+            EndTime           = multiDay ? null : end,
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
             EvidenceDueDate   = inv.EvidenceDueDate?.ToViewerLocalTime(UserState),
@@ -639,9 +732,46 @@
         _showDialog = true;
     }
 
+    /// <summary>What the two controls between them mean.</summary>
+    private DateTime? EffectiveEnd()
+    {
+        if (_form.MultiDay) return _form.EndDateTime;
+        return _form.EndTime is { } t
+            ? InvestigationWindow.SingleDayEnd(_form.ScheduledDateTime, t.TimeOfDay)
+            : null;
+    }
+
+    /// <summary>
+    /// Ticking the box carries the end across rather than clearing it, so somebody who set a time
+    /// and then realised the visit runs longer does not start again.
+    /// </summary>
+    private void OnMultiDayChanged(ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on == _form.MultiDay) return;
+
+        if (on)
+        {
+            _form.EndDateTime = EffectiveEnd() ?? _form.ScheduledDateTime.AddDays(1);
+            _form.EndTime = null;
+        }
+        else
+        {
+            _form.EndTime = _form.EndDateTime;
+            _form.EndDateTime = null;
+        }
+
+        _form.MultiDay = on;
+    }
+
     private async Task Save()
     {
         if (string.IsNullOrWhiteSpace(_form.Title)) { _dialogError = "Title is required."; return; }
+        if (_form.MultiDay && _form.EndDateTime is { } multiEnd && multiEnd <= _form.ScheduledDateTime)
+        {
+            _dialogError = "The end has to come after the start.";
+            return;
+        }
         _isBusy = true; _dialogError = null;
         try
         {
@@ -650,20 +780,18 @@
                 Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
                 ScheduledDateTime: _form.ScheduledDateTime.ToUtcFromViewerLocal(UserState),
-                EndDateTime:       _form.EndDateTime?.ToUtcFromViewerLocal(UserState),
+                EndDateTime:       EffectiveEnd()?.ToUtcFromViewerLocal(UserState),
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
                 OrgCalendarEventId: null,
                 EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState),
                 Visibility:        _form.Visibility);
 
-            InvestigationRecord? result;
-            if (_editInv is null)
-                result = await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req);
-            else
-                result = await AdminClient.UpdateInvestigationAsync(OrgId, CaseId, _editInv.Id, req);
+            var (result, error) = _editInv is null
+                ? await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req)
+                : await AdminClient.UpdateInvestigationAsync(OrgId, CaseId, _editInv.Id, req);
 
-            if (result is null) { _dialogError = "Save failed."; }
+            if (result is null) { _dialogError = error ?? "Save failed."; }
             else { _showDialog = false; await LoadAsync(); }
         }
         catch (Exception ex) { _dialogError = ex.Message; }
@@ -676,7 +804,16 @@
         _isBusy = true;
         try
         {
-            await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id);
+            // Checked, like DeleteInvestigation twelve lines below — whose comment records this
+            // exact bug being fixed for the delete and not for the cancel (2026-09-17 audit).
+            // A discarded false closed the dialog and reloaded as though the visit had been
+            // cancelled, while the client and every attendee still had it in their calendar.
+            if (!await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id))
+            {
+                _dialogError = "This visit could not be cancelled, so it is still scheduled.";
+                return;
+            }
+
             _showDialog = false;
             await LoadAsync();
         }
@@ -690,11 +827,19 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteInvestigationAsync(OrgId, CaseId, _editInv.Id);
+            // The result is READ. Discarding it closed the dialog and reloaded as though the
+            // delete had happened, so a server refusal looked exactly like success.
+            var (deleted, reason) = await AdminClient
+                .DeleteInvestigationExpectingReasonAsync(OrgId, CaseId, _editInv.Id);
+            if (!deleted)
+            {
+                _dialogError = reason ?? "This visit couldn't be deleted.";
+                return;
+            }
             _showDialog = false;
             await LoadAsync();
         }
-        catch { _error = "Delete failed."; }
+        catch { _dialogError = "Delete failed."; }
         finally { _isBusy = false; }
     }
 
@@ -722,7 +867,28 @@
         public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
         public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+
+        /// <summary>The two halves of the start, over one field. Splitting the state as well as
+        /// the controls is how the halves drift apart.</summary>
+        public DateTime StartDate
+        {
+            get => ScheduledDateTime.Date;
+            set => ScheduledDateTime = value.Date + ScheduledDateTime.TimeOfDay;
+        }
+
+        public DateTime StartTime
+        {
+            get => ScheduledDateTime;
+            set => ScheduledDateTime = ScheduledDateTime.Date + value.TimeOfDay;
+        }
+
+        /// <summary>The end when <see cref="MultiDay"/> is on — a date and a time.</summary>
         public DateTime?          EndDateTime       { get; set; }
+
+        /// <summary>The end when it is off — only the time of day is read.</summary>
+        public DateTime?          EndTime           { get; set; }
+
+        public bool               MultiDay          { get; set; }
         public InvestigationStatus Status           { get; set; } = InvestigationStatus.Scheduled;
         public string             Notes             { get; set; } = "";
         public DateTime?          EvidenceDueDate   { get; set; }

@@ -1,0 +1,41 @@
+/*
+    One row of tabs, scrolled rather than wrapped. See the comment above the <ul> in BenTabs.razor
+    for why (W-A2).
+*/
+.ben-tabs-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    /* A wrapped tab strip was the bug; a shrunk one would be the next bug. */
+    flex-wrap: nowrap;
+
+    /* Firefox, and any browser honouring the standard property. */
+    scrollbar-width: none;
+}
+
+/* WebKit draws a permanent bar on some platforms, and under a tab strip it reads as a rule. */
+.ben-tabs-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* A tab whose title would otherwise be squeezed to two lines by the flex container. */
+.ben-tabs-scroll > .nav-item {
+    flex: 0 0 auto;
+}
+
+.ben-tabs-scroll > .nav-item > .nav-link {
+    white-space: nowrap;
+}
+
+/* More tabs past an edge: that edge fades out (BenTabs.razor.js sets the classes from the scroll position). */
+.ben-tabs-scroll.is-more-after {
+    mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
+}
+
+.ben-tabs-scroll.is-more-before {
+    mask-image: linear-gradient(to left, #000 calc(100% - 3.5rem), transparent);
+}
+
+.ben-tabs-scroll.is-more-before.is-more-after {
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem, #000 calc(100% - 3.5rem), transparent);
+}

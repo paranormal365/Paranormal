@@ -1,0 +1,312 @@
+@page "/organizations/{OrgId:guid}/tours/{TourId:guid}/dates/{EventId:guid}"
+@namespace Ben.Web.Website.Library.Manage.Tours
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@* Who is coming on one night, and the business deciding (item 234, Ben 2026-09-10).
+
+   Ben: "They would not be confirmed until the tour guide or manager approves them meaning they
+   have settled how money will be or has been exchanged." THIS SITE NEVER TAKES THE MONEY — the
+   page says so in as many words, because a screen with an Approve button on it is exactly where
+   somebody would otherwise assume we had.
+
+   Its own page rather than a panel on the tour: a busy Saturday is a list of forty parties, and
+   that is a page, not something to unfold inside a card. *@
+
+<PageTitle>@(_event?.Title ?? "Sign-ups")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <a class="small text-secondary text-decoration-none" href="@($"/organizations/{OrgId}/tours/{TourId}#tour-dates")">
+        <BenIcon Name="arrow-left" Class="me-1" />Back to the tour
+    </a>
+
+    @if (_loading)
+    {
+        <div class="text-secondary mt-3">Loading…</div>
+    }
+    else if (_event is null)
+    {
+        <div class="alert alert-warning mt-3">
+            That date could not be found.
+            <a href="@($"/organizations/{OrgId}/tours/{TourId}")">Back to the tour</a>.
+        </div>
+    }
+    else
+    {
+        <h1 class="h4 mt-2 mb-1">@_event.Title</h1>
+        <p class="text-secondary mb-3">
+            @WhenText
+            @if (_event.AttendeeCapacity is { } capacity)
+            {
+                <span> · @Held of @capacity place@(capacity == 1 ? "" : "s") taken</span>
+                @if (PlacesLeft is { } left)
+                {
+                    <span> · @left left</span>
+                }
+            }
+            else
+            {
+                <span> · @Held place@(Held == 1 ? "" : "s") taken, no limit set</span>
+            }
+        </p>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger" id="seats-error">@_error</div>
+        }
+
+        @if (_seatResult.Failed)
+        {
+            <BenListState TItem="OrgCalendarEventAttendeeRecord" Result="@_seatResult" OnRetry="@LoadAsync" />
+        }
+        else if (_seats.Count == 0)
+        {
+            <div class="text-secondary">Nobody has signed up for this date yet.</div>
+        }
+        else
+        {
+            @* Waiting first. It is the only part of this page anybody has to act on. *@
+            <BenSectionHeading Text="@($"Waiting on you ({Waiting.Count})")" Id="seats-waiting" />
+
+            @if (Waiting.Count == 0)
+            {
+                <p class="text-secondary small">Nothing waiting. Every sign-up here has been decided.</p>
+            }
+            else
+            {
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Who</th><th>Places</th><th>Asked</th>
+                                <th class="text-end">Decide</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var seat in Waiting)
+                            {
+                                var id = seat.Id;
+                                <tr>
+                                    <td>
+                                        <div>@(seat.DisplayName ?? "A guest")</div>
+                                        @if (seat.Email is { Length: > 0 } address)
+                                        {
+                                            <a class="small text-secondary" href="@($"mailto:{address}")">@address</a>
+                                        }
+                                    </td>
+                                    <td>@seat.Seats</td>
+                                    <td class="small text-secondary">
+                                        @(seat.DateRsvp?.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") ?? "—")
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <button type="button" class="btn btn-primary btn-sm me-1"
+                                                disabled="@(_busy == id)" @onclick="@(() => ApproveAsync(id))">
+                                            Approve
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                disabled="@(_busy == id)" @onclick="@(() => TurnDownAsync(id))">
+                                            Turn down
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <BenSectionHeading Text="@($"Decided ({Decided.Count})")" Id="seats-decided" />
+
+            @if (Decided.Count == 0)
+            {
+                <p class="text-secondary small">Nothing decided yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Who</th><th>Places</th><th>State</th>
+                                <th class="text-end">Change your mind</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var seat in Decided)
+                            {
+                                var id = seat.Id;
+                                <tr>
+                                    <td>
+                                        <div>@(seat.DisplayName ?? "A guest")</div>
+                                        @if (seat.Email is { Length: > 0 } address)
+                                        {
+                                            <a class="small text-secondary" href="@($"mailto:{address}")">@address</a>
+                                        }
+                                    </td>
+                                    <td>@seat.Seats</td>
+                                    <td>
+                                        @if (seat.SeatStatus == TourSeatStatus.Reserved)
+                                        {
+                                            <span class="badge text-bg-success">Reserved</span>
+                                            @if (seat.GuestAcknowledgedUtc is not null)
+                                            {
+                                                @* The guest's optional "yes, I know" (Ben: "if they
+                                                   want"). Worth showing: it is the difference between
+                                                   somebody who has seen it and somebody who has not. *@
+                                                <span class="badge bg-body-secondary text-body-emphasis ms-1"
+                                                      title="The guest confirmed they've seen it">
+                                                    Guest confirmed
+                                                </span>
+                                            }
+                                        }
+                                        else if (seat.SeatStatus == TourSeatStatus.TurnedDown)
+                                        {
+                                            <span class="badge bg-body-secondary text-body-emphasis">Turned down</span>
+                                        }
+                                        else
+                                        {
+                                            @* No seat state at all: somebody a member added to the
+                                               date directly, which is how the calendar has always
+                                               worked and is not a sign-up to decide. *@
+                                            <span class="badge bg-body-secondary text-body-emphasis">Added by your group</span>
+                                        }
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        @if (seat.SeatStatus == TourSeatStatus.Reserved)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    disabled="@(_busy == id)" @onclick="@(() => TurnDownAsync(id))">
+                                                Turn down
+                                            </button>
+                                        }
+                                        else if (seat.SeatStatus == TourSeatStatus.TurnedDown)
+                                        {
+                                            <button type="button" class="btn btn-outline-primary btn-sm"
+                                                    disabled="@(_busy == id)" @onclick="@(() => ApproveAsync(id))">
+                                                Approve after all
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+
+        <p class="text-secondary small mt-4 mb-0" id="seats-money-note">
+            Approving a seat tells your guest it is theirs, and sends them your tour's welcome email
+            with the meeting point and a calendar file. <strong>It takes no money.</strong> How they
+            pay you is between you and them.
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid TourId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private OrgCalendarEventRecord? _event;
+    private LoadResult<OrgCalendarEventAttendeeRecord> _seatResult = LoadResult<OrgCalendarEventAttendeeRecord>.Ok([]);
+    private List<OrgCalendarEventAttendeeRecord> _seats = [];
+    private bool _loading = true;
+    private Guid? _busy;
+    private string? _error;
+
+    /// <summary>Sign-ups nobody has decided. The only part of this page that is work.</summary>
+    private List<OrgCalendarEventAttendeeRecord> Waiting =>
+        [.. _seats.Where(s => s.SeatStatus == TourSeatStatus.Requested)
+                  .OrderBy(s => s.DateRsvp ?? s.DateCreated)];
+
+    private List<OrgCalendarEventAttendeeRecord> Decided =>
+        [.. _seats.Where(s => s.SeatStatus != TourSeatStatus.Requested)
+                  .OrderByDescending(s => s.SeatDecidedUtc ?? s.DateCreated)];
+
+    /// <summary>
+    /// Places held, counted the way the server counts them: accepted rows, summed by seats.
+    /// </summary>
+    /// <remarks>
+    /// A row that predates seats carries zero rather than one when it is read from an older
+    /// snapshot, and counting that as nothing would tell a business a walk is emptier than it is.
+    /// </remarks>
+    private int Held => _seats
+        .Where(s => s.RsvpStatus == RsvpStatus.Accepted)
+        .Sum(s => Math.Max(1, s.Seats));
+
+    private int? PlacesLeft => _event?.AttendeeCapacity is { } cap ? Math.Max(0, cap - Held) : null;
+
+    private string WhenText => _event is null
+        ? ""
+        : _event.StartDateTime.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt");
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Auth resolves AFTER the circuit connects, so a load started in OnParametersSet goes out
+        // unauthenticated and comes back empty — which this page rendered as "That date could not
+        // be found", the same trap the tour page above it already carries a note about. Awaiting
+        // AuthReady on its own hangs the static prerender; the interactive check is what makes a
+        // hard navigation render at all.
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _event = await AdminClient.GetCalendarEventAsync(OrgId, EventId);
+
+            _seatResult = await AdminClient.GetCalendarEventAttendeesAsync(OrgId, EventId);
+            _seats = _seatResult.Failed ? [] : [.. _seatResult.Items];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApproveAsync(Guid attendeeId)
+    {
+        _busy = attendeeId;
+        _error = null;
+        try
+        {
+            var (seat, error) = await AdminClient.ApproveSeatAsync(OrgId, EventId, attendeeId);
+            // The server's own words: "Only 2 places left on this date, and this is a request for
+            // 4" is a sentence to act on, unlike "something went wrong".
+            if (error is not null || seat is null)
+                _error = error ?? "That seat couldn't be approved just now. Try again shortly.";
+            else
+                await LoadAsync();
+        }
+        finally { _busy = null; }
+    }
+
+    private async Task TurnDownAsync(Guid attendeeId)
+    {
+        _busy = attendeeId;
+        _error = null;
+        try
+        {
+            var (seat, error) = await AdminClient.TurnDownSeatAsync(OrgId, EventId, attendeeId);
+            if (error is not null || seat is null)
+                _error = error ?? "That seat couldn't be turned down just now. Try again shortly.";
+            else
+                await LoadAsync();
+        }
+        finally { _busy = null; }
+    }
+}

@@ -48,7 +48,9 @@ public sealed class RateLimitSettingsProvider
         _snapshot = new RateLimitSnapshot(
             Geocoding: configuration.GetValue("RateLimits:GeocodingPerMinute", RateLimiting.DefaultGeocodingPerMinute),
             Auth:      configuration.GetValue("RateLimits:AuthPerMinute",      RateLimiting.DefaultAuthPerMinute),
-            Global:    configuration.GetValue("RateLimits:GlobalPerMinute",    RateLimiting.DefaultGlobalPerMinute));
+            Global:    configuration.GetValue("RateLimits:GlobalPerMinute",    RateLimiting.DefaultGlobalPerMinute),
+            EventAttendance: configuration.GetValue("RateLimits:EventAttendancePerMinute", RateLimiting.DefaultEventAttendancePerMinute),
+            AudioProcessing: configuration.GetValue("RateLimits:AudioProcessingPerMinute", RateLimiting.DefaultAudioProcessingPerMinute));
 
         _nextRefreshTicks = DateTime.UtcNow.Ticks; // refresh on first use
     }
@@ -84,7 +86,9 @@ public sealed class RateLimitSettingsProvider
             _snapshot = new RateLimitSnapshot(
                 Geocoding: await ReadAsync(db, SiteSettingKeys.RateLimitGeocodingPerMinute, current.Geocoding),
                 Auth:      await ReadAsync(db, SiteSettingKeys.RateLimitAuthPerMinute,      current.Auth),
-                Global:    await ReadAsync(db, SiteSettingKeys.RateLimitGlobalPerMinute,    current.Global));
+                Global:    await ReadAsync(db, SiteSettingKeys.RateLimitGlobalPerMinute,    current.Global),
+                EventAttendance: await ReadAsync(db, SiteSettingKeys.RateLimitEventAttendancePerMinute, current.EventAttendance),
+                AudioProcessing: await ReadAsync(db, SiteSettingKeys.RateLimitAudioProcessingPerMinute, current.AudioProcessing));
         }
         catch (Exception ex)
         {
@@ -110,4 +114,4 @@ public sealed class RateLimitSettingsProvider
 }
 
 /// <summary>An immutable set of limits, swapped in wholesale so a reader never sees a half-update.</summary>
-public sealed record RateLimitSnapshot(int Geocoding, int Auth, int Global);
+public sealed record RateLimitSnapshot(int Geocoding, int Auth, int Global, int EventAttendance, int AudioProcessing);

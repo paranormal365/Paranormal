@@ -1,0 +1,231 @@
+@page "/feed/people/{AppUserId:guid}"
+@namespace Ben.Web.Website.Library.Feed
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>@(_profile?.DisplayName ?? "Profile")</PageTitle>
+
+@*
+    Somebody's feed presence: their counts, a follow button, and their posts.
+
+    Deliberately separate from /profile, which is your own account — contact details, photos,
+    consent, security. This is the public face: what somebody who read one of your posts is allowed
+    to see about you, which is your name and what you have written.
+*@
+
+<FeatureGate Flag="@SiteFeatures.PublicFeed">
+    <div class="container py-3" style="max-width: 680px;">
+
+        @if (_loading)
+        {
+            <p class="text-secondary">Loading…</p>
+        }
+        else if (_profile is null)
+        {
+            <div class="text-center text-secondary py-5">
+                <p class="mb-0">No such person.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card mb-3">
+                <div class="card-body d-flex align-items-start gap-3 flex-wrap">
+                    @* Item 186 F9 — the viewer-aware avatar, large, where a profile expects a face. *@
+                    <Ben.Web.Website.Library.Shared.UserAvatar AppUserId="@_profile.AppUserId"
+                                                               DisplayName="@_profile.DisplayName"
+                                                               Size="64" />
+                    <div class="flex-grow-1">
+                        <h4 class="mb-1">@_profile.DisplayName</h4>
+                        <div class="text-secondary small">
+                            <strong>@_profile.PostCount.ToString("N0")</strong> post@(_profile.PostCount == 1 ? "" : "s")
+                            · <strong>@_profile.FollowerCount.ToString("N0")</strong> follower@(_profile.FollowerCount == 1 ? "" : "s")
+                            · <strong>@_profile.FollowingCount.ToString("N0")</strong> following
+                        </div>
+                    </div>
+
+                    @if (!_profile.IsSelf && IsSignedIn)
+                    {
+                        <button type="button"
+                                class="btn btn-sm @(_profile.IsFollowedByCurrentUser ? "btn-outline-secondary" : "btn-primary")"
+                                disabled="@_busy" @onclick="ToggleFollowAsync">
+                            @(_profile.IsFollowedByCurrentUser ? "Following" : "Follow")
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            @if (_posts.Count == 0)
+            {
+                <p class="text-secondary text-center py-4 mb-0">
+                    @(_profile.IsSelf ? "You haven't posted yet." : "Nothing posted yet.")
+                </p>
+            }
+            else
+            {
+                @* ShowFollow is off: the button at the top of the page already says it, and one
+                   per post would be three answers to the same question on one screen. *@
+                @foreach (var post in _posts)
+                {
+                    <FeedPostCard Post="@post" ShowFollow="false" CanAct="@IsSignedIn"
+                                  OnLikeToggled="ToggleLikeAsync"
+                                  OnReportRequested="ReportAsync"
+                                  OnRecategorized="SwapPost"
+                                  OnScheduledCancelled="DropPost" />
+                }
+
+                @if (_nextCursor is not null)
+                {
+                    <div class="text-center my-3">
+                        <button type="button" class="btn btn-outline-secondary" disabled="@_loadingMore"
+                                @onclick="LoadMoreAsync">
+                            @(_loadingMore ? "Loading…" : "Load more")
+                        </button>
+                    </div>
+                }
+            }
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid AppUserId { get; set; }
+
+    private FeedProfileRecord? _profile;
+    private readonly List<FeedPostRecord> _posts = [];
+    private string? _error;
+    private bool _loading = true;
+    private bool _busy;
+
+    /// <summary>Read at render time — auth restores after the circuit starts. See FeedPage.</summary>
+    private bool IsSignedIn => UserState.IsAuthenticated;
+    private string? _nextCursor;
+    private bool _loadingMore;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Item 186: readable by anyone. Following still needs an account, so the button hides.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _posts.Clear();
+        _nextCursor = null;
+        StateHasChanged();
+
+        try
+        {
+            _profile = await Feed.GetFeedProfileAsync(AppUserId);
+            if (_profile is null) return;
+
+            // Item 186 added the author filter this page always wanted. Before it, this read the
+            // first page of EVERYTHING and kept the matches — thin for anyone who had not posted
+            // in the last 25 posts site-wide, and unpageable past that.
+            var page = await Feed.GetFeedAsync(author: AppUserId);
+            if (page is not null)
+            {
+                _posts.AddRange(page.Posts);
+                _nextCursor = page.NextCursor;
+            }
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_nextCursor is null || _loadingMore) return;
+
+        _loadingMore = true;
+        try
+        {
+            var page = await Feed.GetFeedAsync(cursor: _nextCursor, author: AppUserId);
+            if (page is null) return;
+
+            _posts.AddRange(page.Posts);
+            _nextCursor = page.NextCursor;
+        }
+        finally { _loadingMore = false; }
+    }
+
+    private async Task ToggleFollowAsync()
+    {
+        if (_profile is null) return;
+
+        _busy = true;
+        try
+        {
+            var nowFollowing = !_profile.IsFollowedByCurrentUser;
+
+            var ok = nowFollowing
+                ? await Feed.FollowAsync(AppUserId)
+                : await Feed.UnfollowAsync(AppUserId);
+
+            if (!ok) { _error = "Couldn't change that. Try again in a moment."; return; }
+
+            _profile = _profile with
+            {
+                IsFollowedByCurrentUser = nowFollowing,
+                FollowerCount = Math.Max(0, _profile.FollowerCount + (nowFollowing ? 1 : -1)),
+            };
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ToggleLikeAsync(FeedPostRecord post)
+    {
+        var nowLiked = !post.LikedByCurrentUser;
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index < 0) return;
+
+        _posts[index] = post with
+        {
+            LikedByCurrentUser = nowLiked,
+            LikeCount = Math.Max(0, post.LikeCount + (nowLiked ? 1 : -1)),
+        };
+
+        var ok = nowLiked ? await Feed.LikeAsync(post.Id) : await Feed.UnlikeAsync(post.Id);
+        if (!ok)
+        {
+            _posts[index] = post;
+            _error = "Couldn't record that. Try again in a moment.";
+        }
+    }
+
+    /// <summary>Swaps in a post the card re-read — a recategorize, or a scheduled post released.</summary>
+    private void SwapPost(FeedPostRecord post)
+    {
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index >= 0) _posts[index] = post;
+    }
+
+    /// <summary>Takes a called-back post off the page, since the server no longer has it.</summary>
+    private void DropPost(FeedPostRecord post) => _posts.RemoveAll(p => p.Id == post.Id);
+
+    private async Task ReportAsync(FeedPostRecord post)
+    {
+        if (!await Feed.ReportPostAsync(post.Id, null))
+        {
+            _error = "Couldn't report that. Try again in a moment.";
+            return;
+        }
+
+        var index = _posts.IndexOf(post);
+        if (index >= 0) _posts[index] = post with { ReportedByCurrentUser = true };
+    }
+}

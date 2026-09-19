@@ -1,0 +1,44 @@
+{
+  "id": "2edaa0ed-8094-4faf-8619-1f0afded1213",
+  "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+  "organizationName": "Paranormal365",
+  "organizationUrlName": "paranormal365",
+  "title": "Thomas House S\u00E9ance Weekend",
+  "description": "Stay the weekend, hunt both nights, and eat with us in between. Rooms are limited and go by request.",
+  "startDateTime": "2026-10-17T00:00:00",
+  "endDateTime": "2026-10-17T07:00:00",
+  "isAllDay": false,
+  "meetingUrl": null,
+  "location": {
+    "city": "Red Boiling Springs",
+    "state": "TN",
+    "approximateLatitude": null,
+    "approximateLongitude": null,
+    "exactAddress": "520 E Main St, Red Boiling Springs, TN, 37150",
+    "isExactAddressHidden": false
+  },
+  "attendingCount": 2,
+  "attendeeCapacity": null,
+  "rsvpClosesAt": null,
+  "flags": {
+    "canRsvp": false,
+    "hasRsvpd": true,
+    "isFull": false,
+    "rsvpHasClosed": false,
+    "rsvpBlockedReason": null
+  },
+  "tourName": null,
+  "tourUrlName": null,
+  "guides": [],
+  "tourRating": null,
+  "tourRatingCount": 0,
+  "mySeat": {
+    "status": 1,
+    "seats": 2,
+    "decidedUtc": "2026-09-13T21:07:57.843527",
+    "acknowledgedUtc": null
+  },
+  "timeZoneId": "America/Chicago",
+  "hostedEventId": "40000002-0000-0000-0000-000000000002",
+  "hostedEventName": "Thomas House S\u00E9ance Weekend"
+}

@@ -1,4 +1,4 @@
-using Ben.Data.Common.Enums;
+﻿using Ben.Data.Common.Enums;
 
 namespace Ben.Web.Services.Help;
 
@@ -29,7 +29,8 @@ public sealed record HelpDocument(
     string Section,
     HelpAudience Audience,
     int Order,
-    string Markdown);
+    string Markdown,
+    string? Feature = null);
 
 /// <summary>A section of the index, with the documents this reader may see inside it.</summary>
 public sealed record HelpSection(string Name, IReadOnlyList<HelpDocument> Documents);

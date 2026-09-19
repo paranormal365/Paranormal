@@ -77,15 +77,22 @@ public sealed class FileMetadataExtractorService
 
     private static void ExtractAudio(UploadFileMetadata meta, string contentType, Stream content)
     {
-        var isMp3 = contentType.Contains("mpeg", StringComparison.OrdinalIgnoreCase)
-                 || contentType.Contains("mp3",  StringComparison.OrdinalIgnoreCase);
         try
         {
             Rewind(content);
+            // Through AudioSourceReader, which picks NLayer's managed decoder for MP3.
+            //
+            // This used to construct Mp3FileReader directly, and that defaults to the ACM codec —
+            // Msacm32.dll, a Windows system library. Off Windows every MP3 threw
+            // DllNotFoundException here, the catch below swallowed it, and the file was recorded
+            // with no duration, no sample rate and no channel count at all. Silently: an MP3 that
+            // had never been measured looked exactly like one that could not be. The site runs on
+            // Linux, so that was every MP3 anybody has ever uploaded, and it is why the mixer had
+            // no lengths to draw with (2026-09-06 audio audit, phase 4).
+            //
             // NAudio's stream constructors leave ownership with the caller, so disposing the reader
             // below does not close `content` — which matters, because the fallback re-reads it.
-            WaveStream reader = isMp3 ? new Mp3FileReader(content) : new WaveFileReader(content);
-            using (reader)
+            using (var reader = Audio.AudioSourceReader.Open(content, contentType))
             {
                 meta.DurationSeconds = reader.TotalTime.TotalSeconds;
                 meta.SampleRateHz    = reader.WaveFormat.SampleRate;

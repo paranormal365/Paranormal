@@ -1,4 +1,6 @@
-
+﻿
+@using Ben.Web.Website.Services
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 <!DOCTYPE html>
 <html lang="en">
 
@@ -13,6 +15,12 @@
          nested route, breaking asset loading (and any @import inside an affected stylesheet,
          since a wrongly-fetched stylesheet's own relative @imports inherit its wrong base too).
          The template ships these paths relative; they are rewritten here for that reason. -->
+
+    <!-- Self-hosted web fonts, first so the faces are declared before anything asks for them.
+         These were @import'd from fonts.googleapis.com inside smartapp.min.css and app.css: two
+         render-blocking fetches to a third party on every navigation, at the end of a serial
+         chain (stylesheet → @import → font file). See wwwroot/fonts/fonts.css. -->
+    <link rel="stylesheet" href="/fonts/fonts.css" />
 
     <!-- Bootstrap 5.3.8 is compiled INTO smartapp.min.css — do not also load it from a CDN,
          two copies fight over the same cascade. -->
@@ -45,8 +53,12 @@
     <link rel="stylesheet" href="/theme/telerik-night.css" />
     <script src="/_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
+    <script src="/_content/Ben.Video.Editor/js/moduleLoader.js"></script>
     <script src="/_content/Ben.Video.Editor/js/ffmpeg.umd.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/fabric@@6/dist/index.min.js" defer></script>
+    @* Fabric is NOT loaded here. It is a 300KB library used only by the image editor, and a
+       tag in this shell made every page — sign-in, the public microsite, every case screen —
+       fetch it from a third-party CDN before `load` fired. wwwroot/js/image-editor.js now
+       loads it from wwwroot/plugins/fabric/ on demand. See VENDORED.md there, and item 114. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
     @* …then the map onto this template's palette. telerik-night.css above covers the Kendo
        variables the widgets use; this covers the editor's own --bv-* family and the handful of
@@ -56,11 +68,47 @@
     @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
        theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
        the template's own layoutSettings convention. *@
+    @* Telerik places a popup below its anchor and flips it above when there is no room —
+       and leaves it hanging off the bottom edge when there is room on neither side, which is
+       what a dialog's centred layout produces. See the file for the measurement. *@
+    <script src="/js/popup-fit.js"></script>
     <script src="/js/geolocation.js"></script>
     <script src="/js/timezone.js"></script>
+    <script src="/js/share.js"></script>
+    <script src="/js/chunked-upload.js"></script>
     <link rel="stylesheet" href="/@Assets["Ben.Web.Website.styles.css"]" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    @* The IsHaunted ghost, rasterized from static/images/is-haunted-logo.svg — until 08/30/2026
+       this was the default Blazor flame, which nobody had looked at in a tab bar. The
+       apple-touch icon is flattened onto the site's dark ground on purpose: iOS discards alpha
+       and would pick the backdrop itself. *@
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    @* Installable on a home screen (item 209). The manifest is an endpoint, not a file: it takes
+       the site's name from SiteIdentity, because a name baked in here is read by an installer
+       rather than by a page and so goes stale without anybody seeing it.
+
+       theme-color paints the browser's own chrome — the address bar on Android, the title bar of
+       an installed window. It matches the Night theme's body background; a mismatch reads as a
+       flash of the wrong colour on every launch. Both spellings of the capability meta are
+       present: the apple- prefixed one is what iOS still reads, the unprefixed one is what
+       replaced it and what Chrome reads. *@
+    <link rel="manifest" href="/manifest.webmanifest" />
+    @* Both read from the same constant the manifest uses. Two copies of a colour drift, and this
+       particular drift shows as the browser chrome flashing a different shade on every launch —
+       the kind of fault nobody files a bug about and everybody notices. *@
+    <meta name="theme-color" content="@WebAppManifest.ThemeColor" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    @* The home-screen label, from SiteIdentity for the reason SiteIdentity exists: it is read by
+       a launcher rather than by a page, so a stale one goes unseen for years. *@
+    <meta name="apple-mobile-web-app-title" content="@WebAppManifest.ShortNameFor(SiteOptions.Value.Name)" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <HeadOutlet @rendermode="@InteractiveServer" />
+    <!-- The dark half of ApexCharts' theming; the template ships only the light half. After the
+         theme file so it can override it, before app.css so app.css still has the last word. -->
+    <link rel="stylesheet" href="/css/ben-charts.css" />
     <link rel="stylesheet" href="/@Assets["app.css"]" />
 </head>
 

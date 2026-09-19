@@ -52,23 +52,9 @@ internal static class InvestigationPlacement
         }
         else if (newPlace is not null && newPlace.HasAnything)
         {
-            place = new Place
-            {
-                Id = Guid.NewGuid(),
-                Name = Trimmed(newPlace.Name),
-                StreetAddress1 = Trimmed(newPlace.StreetAddress1),
-                StreetAddress2 = Trimmed(newPlace.StreetAddress2),
-                City = Trimmed(newPlace.City),
-                State = Trimmed(newPlace.State),
-                ZipCode = Trimmed(newPlace.ZipCode),
-                Country = Trimmed(newPlace.Country) ?? "US",
-                Latitude = newPlace.Latitude,
-                Longitude = newPlace.Longitude,
-                Kind = newPlace.Kind ?? PlaceKind.PrivateResidence,
-                DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId,
-            };
-            await PlaceGeocoder.GeocodeAsync(place, trustSuppliedCoordinates: true, ct);
+            // Through PlaceFactory since 2026-09-17, so a case naming a place and a visit naming
+            // one build it identically.
+            place = await PlaceFactory.CreateAsync(newPlace, userId, ct);
             db.Places.Add(place);
         }
         else if (investigation.CaseId is { } caseId)
@@ -90,6 +76,24 @@ internal static class InvestigationPlacement
             return new PlacementResult(null, null);
         }
 
+        // ── Item 184: binding a residence to a case is the moment it becomes private-lane ──
+        // Gated HERE, in the one shared helper, so all three placement doors answer alike. An
+        // already-designated case is never re-gated (grandfathering): the plan governs taking
+        // on new private work, not work in hand.
+        if (place.Kind == PlaceKind.PrivateResidence && investigation.CaseId is { } boundCaseId)
+        {
+            var boundCase = await db.Cases.FirstOrDefaultAsync(c => c.Id == boundCaseId, ct);
+            if (boundCase is not null && !boundCase.IsPrivateEngagement)
+            {
+                if (await Ben.Data.WebApi.Services.PrivateCaseGate.RefusalAsync(
+                        db, investigation.OrganizationId, ct) is { } refusalMessage)
+                    return new PlacementResult(null, refusalMessage);
+
+                // Designation setter b: the case is now private-lane work, permanently.
+                boundCase.IsPrivateEngagement = true;
+            }
+        }
+
         investigation.PlaceId = place.Id;
         investigation.Latitude = place.Latitude;
         investigation.Longitude = place.Longitude;
@@ -100,8 +104,6 @@ internal static class InvestigationPlacement
         return new PlacementResult(place, null);
     }
 
-    private static string? Trimmed(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 /// <summary>Where an investigation ended up, or why it could not be placed.</summary>

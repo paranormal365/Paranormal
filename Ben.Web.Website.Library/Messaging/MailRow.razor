@@ -1,0 +1,105 @@
+@*
+    One row in a message list, in the template's own mail idiom.
+
+    The class names here are not decoration — smartapp.min.css already styles them:
+
+        .unread .mail-sender, .unread .mail-subject   { font-weight: 600 }
+        .unread .mail-body                            { color: var(--bs-body-color) !important }
+
+    So unread state is expressed by putting `unread` on the row and letting the stylesheet do the
+    rest, rather than by conditionally applying our own weights. That is the whole reason to adopt
+    the template's markup rather than approximate its appearance: the styling already exists, and
+    matching it means our messages look like the rest of the product instead of nearly like it.
+
+    The responsive shape is the template's too — sender, subject and snippet sit on one line on a
+    wide screen and stack on a narrow one, with `order-*` moving the timestamp out of the way. That
+    behaviour comes free with the classes; reproducing it by hand is how a list ends up unreadable
+    on a phone.
+
+    This must be placed inside a `<ul class="notification">`, which is where the rest of the row's
+    appearance lives:
+
+        .notification li          { background: var(--bs-body-bg) }
+        .notification li.unread   { background: rgba(var(--bs-primary-rgb), .05) }
+        .notification li > :first-child { padding: .75rem 1.5rem; border-bottom: 1px solid … }
+
+    Note that last selector: the separator and padding are applied to the row's *first child*, so
+    the outer div below has to stay the first thing in the `<li>`. Adding a sibling ahead of it
+    (a checkbox column, say) moves the border onto that sibling instead.
+*@
+
+<li class="@(Unread ? "unread" : null)">
+    <div class="d-flex align-items-center px-3 px-sm-4 py-2 py-lg-0 height-4 height-mobile-auto gap-2
+                mail-row @(Selected ? "mail-row--selected" : null)"
+         role="button" tabindex="0"
+         @onclick="OnOpen"
+         @onkeydown="HandleKeyAsync">
+
+        @* The badge column: a channel or audience pill, so a row says who it went to. The template
+           has a star here; ours has the thing a reader actually needs to know about a message. *@
+        <div class="d-flex align-self-center order-3 order-lg-2 me-lg-3 me-0 flex-shrink-0">
+            @Badge
+        </div>
+
+        <div class="d-flex flex-column flex-lg-row flex-grow-1 align-items-stretch order-2 order-lg-3"
+             style="min-width: 0;">
+
+            <div class="mail-sender flex-shrink-0 align-self-start align-self-lg-center width-sm width-max-sm text-truncate">
+                @Sender
+            </div>
+
+            <div class="d-flex flex-column flex-lg-row flex-grow-1 w-100 overflow-hidden">
+                <div class="mail-subject flex-shrink-0 align-self-start align-self-lg-center me-2 text-truncate width-max-100">
+                    @(string.IsNullOrWhiteSpace(Subject) ? "(no subject)" : Subject)
+                </div>
+
+                <div class="d-flex align-items-center flex-grow-1 w-100 overflow-hidden">
+                    <div class="mail-body d-block text-truncate w-100 pe-lg-6 text-muted">
+                        <span class="hidden-sm">-</span>
+                        <MessageBody Body="@Body" Html="@BodyIsHtml" Snippet="true" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="fs-sm text-muted ms-auto order-4 position-on-mobile-absolute pos-top pos-right
+                    mt-2 me-3 me-sm-4 mt-lg-0 me-lg-0 flex-shrink-0">
+            @When
+        </div>
+    </div>
+</li>
+
+@code {
+    [Parameter, EditorRequired] public string Sender { get; set; } = default!;
+    [Parameter] public string? Subject { get; set; }
+    [Parameter] public string Body { get; set; } = string.Empty;
+    [Parameter] public bool BodyIsHtml { get; set; }
+
+    /// <summary>Already formatted — the row does not decide how a date reads.</summary>
+    [Parameter] public string? When { get; set; }
+
+    /// <summary>Drives the template's own bolding. See the note above.</summary>
+    [Parameter] public bool Unread { get; set; }
+
+    /// <summary>Highlights the row whose message is open beside it.</summary>
+    [Parameter] public bool Selected { get; set; }
+
+    /// <summary>The pill shown ahead of the sender — channel, audience, whatever the list means.</summary>
+    [Parameter] public RenderFragment? Badge { get; set; }
+
+    [Parameter] public EventCallback OnOpen { get; set; }
+
+    /// <summary>
+    /// Enter and Space open the row.
+    /// </summary>
+    /// <remarks>
+    /// The row is a div carrying role="button", which gives it the right name and role for a
+    /// screen reader but none of a real button's behaviour — a keyboard user would be able to
+    /// focus it and unable to open it. A button element cannot be used instead: this markup is the
+    /// template's, and it nests block-level flex containers a button may not contain.
+    /// </remarks>
+    private async Task HandleKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ") await OnOpen.InvokeAsync();
+    }
+}

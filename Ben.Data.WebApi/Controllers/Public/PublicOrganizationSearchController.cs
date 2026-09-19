@@ -47,6 +47,9 @@ public sealed class PublicOrganizationSearchController : ControllerBase
         // Load orgs that are accepting clients AND have an area configured
         var orgs = await db.Organizations
             .AsNoTracking()
+            // A personal organization is one person's subscription, not a group taking clients.
+            // Listing one here would tell a stranger that a named individual pays for the site.
+            .Where(Services.PersonalOrganizations.Discoverable)
             .Where(o => o.IsAcceptingClients && o.AreaOfOperation != null)
             .Select(o => new
             {
@@ -93,9 +96,27 @@ public sealed class PublicOrganizationSearchController : ControllerBase
             ));
         }
 
+        // Item 194: whether each group may take private-residence work, resolved once for the
+        // whole result set rather than per card — and needed BEFORE ordering, because it is part
+        // of the order.
+        var canPrivate = await Ben.Data.Source.Services.TierAreaResolution.WithCapabilityAsync(
+            db, results.Select(r => r.OrganizationId).ToList(),
+            Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases, ct);
+
+        // Ben asked whether paid groups can be promoted over free ones. They are — but only
+        // WITHIN a range bucket, never across one, and never over distance's bucket boundary.
+        //
+        // Promoting globally would put a paid group forty miles away above a free one down the
+        // road, which is worse for the person searching and is the pay-to-win shape that makes a
+        // directory untrustworthy. Inside a bucket every group is equally reachable, so leading
+        // with the ones that can actually take a private-residence case is a service to the
+        // searcher rather than a tax on them — most people typing their address here are asking
+        // about their own home.
         var ordered = results
-            .OrderBy(r => r.IsWithinRange ? 0 : 1)   // within-range first
-            .ThenBy(r => r.SortKey)
+            .Select(r => r with { TakesPrivateResidenceCases = canPrivate.Contains(r.OrganizationId) })
+            .OrderBy(r => r.IsWithinRange ? 0 : 1)              // reachability first, always
+            .ThenBy(r => r.TakesPrivateResidenceCases ? 0 : 1)  // then the paid promotion
+            .ThenBy(r => r.SortKey)                             // then distance
             .Take(maxResults)
             .Select(r => r with { SortKey = 0 })      // strip internal sort key before returning
             .ToList();
@@ -115,10 +136,19 @@ public sealed class PublicOrganizationSearchController : ControllerBase
     /// who knows the name, so listing them exposes nothing new; it only makes them findable.
     /// Coordinates are still never returned — only the area's display label, same as search.</para>
     /// </remarks>
+    /// <param name="page">1-based.</param>
+    /// <param name="pageSize">Clamped.</param>
+    /// <param name="toursOnly">
+    /// Narrow to groups that run public walking tours (2026-08-24). Matches the CAPABILITY,
+    /// not the kind, so an investigation group that also runs tours is found here too — which
+    /// is the whole reason the capability is separate from the kind.
+    /// </param>
+    /// <param name="ct">Cancellation.</param>
     [HttpGet("browse")]
     public async Task<ActionResult<OrgBrowsePage>> Browse(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 24,
+        [FromQuery] bool toursOnly = false,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -126,7 +156,9 @@ public sealed class PublicOrganizationSearchController : ControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var query = db.Organizations.AsNoTracking();
+        var query = db.Organizations.AsNoTracking()
+            .Where(Services.PersonalOrganizations.Discoverable);
+        if (toursOnly) query = query.Where(o => o.RunsPublicTours);
         var total = await query.CountAsync(ct);
 
         var items = await query
@@ -147,8 +179,26 @@ public sealed class PublicOrganizationSearchController : ControllerBase
                 o.OrganizationLogos
                     .Where(l => l.IsActive)
                     .Select(l => (Guid?)l.UploadFileId)
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                o.Kind,
+                o.RunsPublicTours))
             .ToListAsync(ct);
+
+        // One resolution for the whole page (item 194) — asking per card is the N+1 that turns a
+        // browse into forty round trips.
+        var canPrivate = await Ben.Data.Source.Services.TierAreaResolution.WithCapabilityAsync(
+            db, items.Select(i => i.OrganizationId).ToList(),
+            Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases, ct);
+        items = items
+            .Select(i => i with { TakesPrivateResidenceCases = canPrivate.Contains(i.OrganizationId) })
+            // Paid promotion, applied WITHIN the page the database already chose. Ordering by tier
+            // in the query instead would change which groups land on page one — and a group's
+            // visibility should not depend on how the person paged to it. Accepting-new-cases
+            // still leads, because a promoted group that cannot take the case helps nobody.
+            .OrderByDescending(i => i.IsAcceptingClients)
+            .ThenBy(i => i.TakesPrivateResidenceCases ? 0 : 1)
+            .ThenBy(i => i.Name)
+            .ToList();
 
         return Ok(new OrgBrowsePage(items, total, page, pageSize));
     }
@@ -171,6 +221,12 @@ public sealed class PublicOrganizationSearchController : ControllerBase
 /// <summary>
 /// Public search result — deliberately excludes CenterLatitude and CenterLongitude.
 /// </summary>
+/// <remarks>
+/// <c>TakesPrivateResidenceCases</c> (item 194) is whether this group's plan lets it take
+/// private-residence work. Somebody with a haunted HOME needs it before they choose, not after:
+/// the transfer gate already refuses the wrong group politely, but only once they have picked
+/// one. Fail-open like every capability — a group with no resolvable tier reads as able.
+/// </remarks>
 public sealed record OrgSearchResult(
     Guid OrganizationId,
     string Name,
@@ -181,7 +237,8 @@ public sealed record OrgSearchResult(
     bool IsWithinRange,
     bool AcceptsClientsOutsideRange,
     Guid? ActiveLogoFileId,
-    [property: System.Text.Json.Serialization.JsonIgnore] double SortKey);
+    [property: System.Text.Json.Serialization.JsonIgnore] double SortKey,
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>
 /// One organization in the location-free browse listing.
@@ -193,6 +250,13 @@ public sealed record OrgSearchResult(
 /// </remarks>
 /// AreaLabel is the human-readable area, e.g. "Nashville, TN", and is null when none is set;
 /// RadiusMiles is the declared operating radius, null when no area is configured.
+/// <remarks>
+/// <para><c>Kind</c> is what this group primarily is (2026-08-24) — the badge on its card — and
+/// <c>RunsPublicTours</c> is whether it runs public walking tours whatever kind it primarily is.
+/// </para>
+/// <para><c>TakesPrivateResidenceCases</c> (item 194) is whether its plan lets it take
+/// private-residence work.</para>
+/// </remarks>
 public sealed record OrgBrowseResult(
     Guid OrganizationId,
     string Name,
@@ -200,7 +264,10 @@ public sealed record OrgBrowseResult(
     string? AreaLabel,
     double? RadiusMiles,
     bool IsAcceptingClients,
-    Guid? ActiveLogoFileId);
+    Guid? ActiveLogoFileId,
+    Ben.Data.Common.Enums.OrganizationKind Kind = Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup,
+    bool RunsPublicTours = false,
+    bool TakesPrivateResidenceCases = true);
 
 /// <summary>One page of the browse listing, with the total so the caller can page properly.</summary>
 public sealed record OrgBrowsePage(

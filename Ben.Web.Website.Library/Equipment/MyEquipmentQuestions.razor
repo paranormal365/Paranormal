@@ -2,40 +2,45 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
 
-<PageTitle>Equipment Questions</PageTitle>
+<FeatureGate Flag="@SiteFeatures.Equipment">
+    <PageTitle>Equipment Questions</PageTitle>
 
-@* A page, not a window: answering questions, declining them and publishing the good ones is a
-   whole task somebody sits down to do, not a single interaction. *@
+    @* A page, not a window: answering questions, declining them and publishing the good ones is a
+       whole task somebody sits down to do, not a single interaction. *@
 
-<div class="container-fluid py-3" style="max-width:900px;">
-    <h3 class="mb-1">Equipment questions<HelpLink Slug="your-equipment" Anchor="questions-and-faqs" /></h3>
-    <p class="text-secondary small mb-4">
-        Questions are anonymous in both directions. You will not see who asked, and whoever asked
-        will not see who answered.
-    </p>
+    <div class="container-fluid py-3" style="max-width:900px;">
+        <h3 class="mb-1">Equipment questions<HelpLink Slug="your-equipment" Anchor="questions-and-faqs" /></h3>
+        <p class="text-secondary small mb-4">
+            Questions are anonymous in both directions. You will not see who asked, and whoever asked
+            will not see who answered.
+        </p>
 
-    @if (_loading)
-    {
-        <BenLoaderOverlay Visible="true" Text="Loading…" />
-    }
-    else
-    {
-        @if (_error is not null)
+        @if (_loading)
         {
-            <div class="alert alert-danger py-2">@_error</div>
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
         }
+        else
+        {
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2">@_error</div>
+            }
 
-        <BenTabs>
-            <BenTab Title="@WaitingTabTitle">
-                @RenderReceived
-            </BenTab>
-            <BenTab Title="@AskedTabTitle">
-                @RenderAsked
-            </BenTab>
-        </BenTabs>
-    }
-</div>
+            <BenTabs>
+                <BenTab Title="@WaitingTabTitle">
+                    @RenderReceived
+                </BenTab>
+                <BenTab Title="@AskedTabTitle">
+                    @RenderAsked
+                </BenTab>
+            </BenTabs>
+        }
+    </div>
+</FeatureGate>
 
 @code {
     // Properties, not inline interpolations: a $"..." nested inside an attribute's own quotes
@@ -44,7 +49,11 @@
     private string AskedTabTitle   => $"You asked ({_asked.Count})";
 
     private RenderFragment RenderReceived => @<text>
-        @if (_received.Count == 0)
+        @if (_receivedResult.Failed)
+        {
+            <BenListState TItem="ReceivedQuestionRecord" Result="@_receivedResult" OnRetry="@LoadAsync" />
+        }
+        else if (_received.Count == 0)
         {
             <p class="text-secondary small mt-3 mb-0">Nobody has asked about your equipment yet.</p>
         }
@@ -126,7 +135,11 @@
     </text>;
 
     private RenderFragment RenderAsked => @<text>
-        @if (_asked.Count == 0)
+        @if (_askedResult.Failed)
+        {
+            <BenListState TItem="AskedQuestionRecord" Result="@_askedResult" OnRetry="@LoadAsync" />
+        }
+        else if (_asked.Count == 0)
         {
             <p class="text-secondary small mt-3 mb-0">You haven't asked anything yet.</p>
         }
@@ -177,7 +190,9 @@
     </text>;
 
     private IReadOnlyList<ReceivedQuestionRecord> _received = [];
+    private LoadResult<ReceivedQuestionRecord> _receivedResult;
     private IReadOnlyList<AskedQuestionRecord> _asked = [];
+    private LoadResult<AskedQuestionRecord> _askedResult;
     private bool _loading = true, _busy;
     private string? _error;
 
@@ -194,8 +209,8 @@
 
     private async Task LoadAsync()
     {
-        _received = await AdminClient.GetMyReceivedQuestionsAsync();
-        _asked    = await AdminClient.GetMyAskedQuestionsAsync();
+        _received = (_receivedResult = await AdminClient.GetMyReceivedQuestionsAsync()).Items;
+        _asked    = (_askedResult = await AdminClient.GetMyAskedQuestionsAsync()).Items;
         _loading  = false;
         StateHasChanged();
     }

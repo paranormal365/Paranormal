@@ -1,5 +1,6 @@
 using Microsoft.Playwright;
 using NUnit.Framework;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace Ben.Web.Playwright;
@@ -24,6 +25,48 @@ public class RouteCrawlTests : BenTestBase
         "/not-found",       // reached by the status-code middleware, asserted separately
     };
 
+    /// <summary>
+    /// Routes a switched-off feature owns. A dark feature is SUPPOSED to look absent — its
+    /// pages render "Page not found" so a visitor cannot tell a switched-off feature from one
+    /// that was never built — so walking them while the switch is off reports the feature
+    /// working correctly as a broken route. The flags are read live rather than hardcoded,
+    /// so the day the public feed launches these routes rejoin the walk on their own.
+    /// </summary>
+    private static readonly (string Flag, string[] Routes)[] FeatureGatedRoutes =
+    [
+        ("features.public-feed",  ["/feed"]),
+        ("features.publications", ["/publications"]),
+        ("features.equipment",    ["/equipment-catalog", "/my-equipment", "/my-checkouts"]),
+        ("features.video-editor", ["/video-editor", "/my-videos"]),
+        ("features.events",       ["/events"]),
+    ];
+
+    private static async Task<HashSet<string>> RoutesBehindOffSwitchesAsync()
+    {
+        var off = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(20) };
+            var features = await http.GetFromJsonAsync<JsonElement>("/api/public/site-features");
+            if (!features.TryGetProperty("features", out var map)) return off;
+
+            foreach (var (flag, routes) in FeatureGatedRoutes)
+            {
+                if (map.TryGetProperty(flag, out var value)
+                    && value.ValueKind == JsonValueKind.False)
+                {
+                    foreach (var route in routes) off.Add(route);
+                }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            // Cannot ask: walk everything and let a genuine breakage report itself, rather
+            // than silently skipping routes because one request failed.
+        }
+        return off;
+    }
+
     private static List<string> PlainRoutes() => RouteCrawlHelper.PlainRoutes(Excluded);
 
     [Test]
@@ -31,8 +74,9 @@ public class RouteCrawlTests : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
+        var switchedOff = await RoutesBehindOffSwitchesAsync();
         var broken = new List<string>();
-        var routes = PlainRoutes().ToList();
+        var routes = PlainRoutes().Where(r => !switchedOff.Contains(r)).ToList();
         Assert.That(routes, Is.Not.Empty, "no routes were discovered — has the layout moved?");
 
         foreach (var route in routes)

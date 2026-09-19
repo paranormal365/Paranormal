@@ -5,10 +5,17 @@
     anything interactive inside (a filter box, a form) would stop binding. Dismissal uses a
     transparent backdrop element rather than a document-level JS listener — it cannot outlive
     the component, and it costs no interop.
+
+    Floating (UI test pass, 2026-09-14): a menu is positioned inside its parent, and a grid clips its cells — the
+    Organizations grid's More actions opened as a four-pixel sliver with its nine choices cut off. A Floating dropdown
+    places its open menu against the window instead (BenDropdown.razor.js), below the button or above it when there is no
+    room, kept on screen, and following the button while the page scrolls.
 *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 <div class="dropdown @Class">
-    <button type="button" class="@ToggleClass @(NoArrow ? "no-arrow" : "dropdown-toggle") @(_open ? "show ben-dropdown-open" : null)"
+    <button type="button" @ref="_toggle" class="@ToggleClass @(NoArrow ? "no-arrow" : "dropdown-toggle") @(_open ? "show ben-dropdown-open" : null)"
             title="@Title" aria-label="@Title"
             aria-expanded="@_open.ToString().ToLowerInvariant()"
             disabled="@Disabled"
@@ -16,7 +23,7 @@
         @ToggleContent
     </button>
 
-    <div class="dropdown-menu @(AlignEnd ? "dropdown-menu-end" : null) dropdown-menu-animated @(_open ? "show" : null)"
+    <div @ref="_menu" class="dropdown-menu @(AlignEnd ? "dropdown-menu-end" : null) dropdown-menu-animated @(_open ? "show" : null)"
          style="@(MinWidth is not null ? $"min-width:{MinWidth};" : null)">
         @* Only while open: a closed menu that still renders its items leaves every one of them
            in the DOM as an invisible match for any text lookup. The wrapper stays so the
@@ -48,6 +55,9 @@
     [Parameter] public bool NoArrow { get; set; } = true;
     [Parameter] public bool Disabled { get; set; }
 
+    /// <summary>Places the open menu against the window, for a dropdown inside something that clips it — a grid cell.</summary>
+    [Parameter] public bool Floating { get; set; }
+
     /// <summary>CSS length, e.g. "320px".</summary>
     [Parameter] public string? MinWidth { get; set; }
 
@@ -55,6 +65,34 @@
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
 
     private bool _open;
+    private bool _placed;
+    private ElementReference _toggle;
+    private ElementReference _menu;
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Floating || _open == _placed) return;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Kit/BenDropdown.razor.js");
+            if (_open) await _module.InvokeVoidAsync("place", _toggle, _menu, AlignEnd);
+            else await _module.InvokeVoidAsync("unplace", _menu);
+            _placed = _open;
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            if (_placed) await _module.InvokeVoidAsync("unplace", _menu);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
 
     protected override void OnParametersSet()
     {

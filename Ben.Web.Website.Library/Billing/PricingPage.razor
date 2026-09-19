@@ -1,0 +1,641 @@
+﻿@page "/pricing"
+
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@inject SiteFeaturesProvider Features
+@using Microsoft.JSInterop
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>Pricing</PageTitle>
+
+@*
+    Rendered straight from the tier rows, which is the point: a SuperAdmin adding a band, a
+    cadence or a cap changes this page without a deployment. Anonymous first — the reader who
+    matters is the one deciding whether to sign up — and enriched after AuthReady for people who
+    already run a group.
+
+    What a signed-in group sees here can lawfully DISAGREE with the public cards: their contract
+    holds the terms they bought until their period ends. That case is said out loud ("your current
+    terms until…") because two silently different numbers read as a bug, not a kept promise.
+*@
+
+<div class="container py-4">
+    @if (_referralCode is not null)
+    {
+        @* A referral link landed here (?code=...). The code is applied to the signed-in quotes
+           below and travels to checkout — the visitor should never have to retype something the
+           link already carried. Nothing is redeemed by arriving: quoting never burns a code. *@
+        <div class="alert alert-info text-center">
+            Code <code>@_referralCode</code> will be applied at checkout.
+        </div>
+    }
+
+    <div class="text-center mb-4">
+        <h2>Pricing<HelpLink Slug="organization-administration" Anchor="your-groups-plan" /></h2>
+        <p class="text-secondary">
+            Free for public investigations, whatever your size. Paid plans add work at private
+            homes, and are priced by active members. Every plan includes the whole platform — cases,
+            investigations, equipment@(Features.IsOn(SiteFeatures.VideoEditor) ? ", the video editor" : "").
+        </p>
+
+        @if (!Features.PlanPurchasesEnabled)
+        {
+            @* Taken off sale by a SuperAdmin (2026-09-14): the prices stay, the buy buttons go, and this
+               says why there is nothing to press. *@
+            <p class="alert alert-secondary d-inline-block py-2 px-3" id="pricing-not-on-sale">
+                Plans aren't on sale at the moment. Groups that already have a plan keep it.
+            </p>
+        }
+
+        @if (_intervals.Count > 1)
+        {
+            <div class="btn-group" role="group" aria-label="Billing cadence">
+                @foreach (var interval in _intervals)
+                {
+                    var current = interval;
+                    <button type="button"
+                            class="btn @(interval == _selectedInterval ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => _selectedInterval = current">
+                        @CadenceTitle(interval)
+                        @if (BestSaving(interval) is { } save)
+                        {
+                            <span class="badge bg-success ms-1">save up to @save%</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <BenListState TItem="PublicSubscriptionTier" Result="@_tiersResult" Loading="@_loading"
+                  EmptyText="Pricing is being updated — check back shortly" OnRetry="@LoadAsync">
+        <div class="row g-4 justify-content-center pricing-bands">
+            @foreach (var (tier, index) in _tiersResult.Items.Select((t, i) => (t, i)))
+            {
+                var price = tier.Prices.FirstOrDefault(p => p.Interval == _selectedInterval);
+                var featured = tier.Id == FeaturedTierId;
+                <div class="col-12 col-md-6 col-lg-3 d-flex">
+                    @* Beta feedback, 2026-09-14: "the price bands need to be spiced up to be less blah". Each band
+                       wears its own colour, in a fixed order so the ladder reads as a ladder, with a header in the
+                       same radial-over-linear wash the event pages use, an icon for who it is for, the price as the
+                       thing the eye lands on, and the limits as a checklist. *@
+                    <article class="pricing-band flex-fill @(featured ? "pricing-band--featured" : "")"
+                             style="--band-hue:@(BandHue(index))deg;" data-testid="pricing-band"
+                             aria-label="@tier.Name">
+                        @if (featured)
+                        {
+                            <div class="pricing-band__flag" data-testid="pricing-band-featured">
+                                <BenIcon Name="star" Class="me-1" />Most groups start here
+                            </div>
+                        }
+                        <header class="pricing-band__head">
+                            <span class="pricing-band__icon" aria-hidden="true"><BenIcon Name="@BandIcon(tier)" /></span>
+                            <div class="pricing-band__title">
+                                <h3 class="pricing-band__name">@tier.Name</h3>
+                                @* Free is a choice, not a size (Ben, 2026-08-27): "a free version doesn't care about the
+                                   number of people, it only cares about privacy". Member bands price the PAID plans;
+                                   showing a headcount range on the free one said the opposite. *@
+                                <p class="pricing-band__who">
+                                    @(!tier.IsBandedByMembers
+                                        ? "Tour and event businesses"
+                                        : IsFree(tier)
+                                            ? "Any size group"
+                                            : tier.MaxMembers is { } max
+                                                ? $"{tier.MinMembers}–{max} active members"
+                                                : $"{tier.MinMembers}+ active members")
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="pricing-band__body">
+                            <div class="pricing-band__price">
+                                @if (IsFree(tier))
+                                {
+                                    <span class="pricing-band__amount">Free</span>
+                                    <span class="pricing-band__per">forever</span>
+                                }
+                                else if (price is not null)
+                                {
+                                    @* C0 is honest only because the bands are priced in whole dollars. If a band is ever
+                                       given cents, this has to become C2 with it. *@
+                                    <span class="pricing-band__amount">@($"{price.Price:C0}")</span>
+                                    <span class="pricing-band__per">per @CadenceNoun(_selectedInterval)</span>
+                                    @if (price.SavingPercentAgainstMonthly is { } save)
+                                    {
+                                        <span class="pricing-band__saving">save @save%</span>
+                                    }
+                                    @* Sales tax is resolved from the GROUP's own address at checkout, so no single number
+                                       can be shown here — but the total at checkout must not be the first mention of tax. *@
+                                    <span class="pricing-band__tax">plus sales tax where your state requires it</span>
+                                }
+                                else
+                                {
+                                    @* Not sold at the selected cadence — said plainly rather than rendered as $0. *@
+                                    <span class="pricing-band__unavailable">
+                                        Not offered @CadenceTitle(_selectedInterval).ToLowerInvariant() —
+                                        available @string.Join(", ", tier.Prices.Select(p => CadenceTitle(p.Interval).ToLowerInvariant()))
+                                    </span>
+                                }
+                            </div>
+
+                            @* Item 156 Phase E / 167: what the plan leaves out, only when it leaves something out. IH-10:
+                               the slot is reserved either way so the checklists start on the same line across the row. *@
+                            <div class="pricing-notes">
+                                @if ((tier.IncludedAreas?.Count ?? 9) < 9)
+                                {
+                                    <p class="small mb-1 fw-semibold">Custom-role areas included:</p>
+                                    <p class="small text-secondary mb-2">
+                                        @string.Join(", ", (tier.IncludedAreas ?? []).Select(AreaLabel))
+                                    </p>
+                                }
+                                @if (MissingCapabilities(tier) is { Count: > 0 } missing)
+                                {
+                                    <p class="small text-secondary mb-2">
+                                        Not included: @string.Join(", ", missing.Select(CapabilityLabel))
+                                    </p>
+                                }
+                            </div>
+
+                            <ul class="pricing-band__limits">
+                                @if (tier.Limits.Count > 0)
+                                {
+                                    @foreach (var limit in tier.Limits)
+                                    {
+                                        <li><BenIcon Name="check-circle" /><span>@LimitSentence(limit)</span></li>
+                                    }
+                                }
+                                else
+                                {
+                                    <li><BenIcon Name="check-circle" /><span>No limits</span></li>
+                                }
+                            </ul>
+
+                            <div class="pricing-band__cta" data-testid="pricing-cta">
+                                @CallToAction(tier, price)
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            }
+        </div>
+    </BenListState>
+
+    @* Several groups this person manages: which one is the plan for? (2026-09-14) *@
+    <BenModal @bind-Visible="@_choosingGroup" Title="Which group is this plan for?" Size="sm">
+        <ChildContent>
+            <div class="list-group" id="pricing-group-chooser">
+                @foreach (var (org, _) in _myGroups)
+                {
+                    <a class="list-group-item list-group-item-action py-3" href="@BillingHref(org.Id, _choosingTierId)">@org.Name</a>
+                }
+            </div>
+        </ChildContent>
+    </BenModal>
+
+    @* ── Item 144: your own paid seat, if you hold one ────────────────────── *@
+    @if (_seatLoadFailed)
+    {
+        <hr class="my-5" />
+        <div class="alert alert-warning" id="my-seats-failed">
+            We couldn't check whether you hold a paid seat in any of your groups just now.
+            If you were told you have one, it is still there — please try again shortly.
+        </div>
+    }
+    @if (_mySeats.Count > 0)
+    {
+        <hr class="my-5" />
+        <h4>Your seat@(_mySeats.Count > 1 ? "s" : "")</h4>
+        <p class="text-secondary small">
+            These groups have grown past the member count their plan covers, so your place in them
+            is billed to you.
+        </p>
+        <div class="row g-3" id="my-seats">
+            @foreach (var seat in _mySeats)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="mb-1">@seat.OrganizationName</h6>
+                            <p class="small mb-1">
+                                @($"{seat.PriceAtStart:C2}") per @CadenceNoun(seat.Interval)
+                                @(seat.CurrentPeriodEnd is { } end ? $" — renews {end:MM/dd/yyyy}" : "")
+                            </p>
+                            @switch (seat.Status)
+                            {
+                                case SubscriptionStatus.PendingPayment:
+                                    <p class="small text-warning mb-0">
+                                        Awaiting payment. Your membership is active in the meantime —
+                                        we will be in touch about the seat.
+                                    </p>
+                                    break;
+                                case SubscriptionStatus.Active:
+                                    <p class="small text-success mb-0">Paid and active.</p>
+                                    break;
+                                case SubscriptionStatus.Lapsed:
+                                    <p class="small text-danger mb-0">
+                                        The paid period ended. Get in touch to renew your seat.
+                                    </p>
+                                    break;
+                                default:
+                                    <p class="small text-secondary mb-0">Canceled.</p>
+                                    break;
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_myGroups.Count > 0)
+    {
+        <hr class="my-5" />
+        <h4>Your groups</h4>
+        <div class="row g-3">
+            @foreach (var (org, view) in _myGroups)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="mb-1">@org.Name</h6>
+                            @if (view.Status == SubscriptionStatus.Free)
+                            {
+                                <p class="text-secondary small mb-0">On the free plan.</p>
+                            }
+                            else
+                            {
+                                <p class="small mb-1">
+                                    <strong>@view.TierName</strong>,
+                                    @($"{view.Price:C2}") per @CadenceNoun(view.Interval)@(view.CurrentPeriodEnd is { } end
+                                        ? $" — {(view.CancelAtPeriodEnd ? "ends" : "renews")} {end:MM/dd/yyyy}" : "")
+                                </p>
+                                @if (view.AnyTermsHeldByContract && view.CurrentPeriodEnd is { } until)
+                                {
+                                    @* The kept-promise sentence. Without it, this card and the
+                                       public cards above can disagree and the reader has no way
+                                       to know that the difference is in their favour on purpose. *@
+                                    <p class="small text-info mb-1">
+                                        The plan has changed since you subscribed — you keep the
+                                        terms you signed up for until @until.ToString("MM/dd/yyyy").
+                                    </p>
+                                }
+                                @foreach (var limit in view.Limits.Where(l => l.FromContract))
+                                {
+                                    <p class="small text-secondary mb-0">
+                                        @LimitSentence(new PublicTierLimit(limit.Limit, limit.MaxValue)) (your current terms)
+                                    </p>
+                                }
+                            }
+                            @if (_quotes.TryGetValue(org.Id, out var quote))
+                            {
+                                @if (quote.CouponRefusedBecause is not null)
+                                {
+                                    <p class="small text-warning mb-0 mt-1">@quote.CouponRefusedBecause</p>
+                                }
+                                else if (quote.Discount > 0)
+                                {
+                                    <p class="small text-success mb-0 mt-1">
+                                        With code @_referralCode: @($"{quote.Payable:C2}")
+                                        (@($"{quote.Discount:C2}") off@(quote.CouponAppliesForPeriods switch
+                                        {
+                                            1        => " your next period",
+                                            null     => ", every period",
+                                            { } n    => $" for {n} periods",
+                                        }))
+                                    </p>
+                                }
+                                @if (quote.Tax > 0)
+                                {
+                                    @* Item 168: tax as its own line, never folded into the price. *@
+                                    <p class="small text-secondary mb-0">
+                                        + @($"{quote.Tax:C2}") tax (@($"{quote.TaxRatePercent:0.##}")%) —
+                                        @($"{quote.TotalWithTax:C2}") total
+                                    </p>
+                                }
+                            }
+                            <button type="button" class="btn btn-link btn-sm px-0 mt-1"
+                                    @onclick="@(() => ToggleHistoryAsync(org.Id, org.Name))">
+                                @(_historyOrgId == org.Id ? "Hide billing history" : "Billing history")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Item 168: the group's own money trail, with re-downloadable receipts ── *@
+        @if (_historyOrgId is { } historyOrg)
+        {
+            <div class="card mt-3" id="org-billing-history">
+                <div class="card-header fw-semibold">Billing history — @_historyOrgName</div>
+                <div class="card-body">
+                    <BenListState TItem="Ben.Service.Models.Admin.OrgBillingHistoryRecord" Result="@_history"
+                                  Loading="@_historyLoading" EmptyText="Nothing billed yet" OnRetry="@ReloadHistoryAsync">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th class="text-end">Tax</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _history.Items)
+                                {
+                                    <tr>
+                                        <td>@row.DateCreated.ToDisplayDate()</td>
+                                        <td>
+                                            <span class="badge me-1 @(row.Kind switch {
+                                                Ben.Data.Common.Enums.BillingLedgerKind.Payment => "bg-success",
+                                                Ben.Data.Common.Enums.BillingLedgerKind.Adjustment => row.AdjustmentIsCredit ? "bg-info text-dark" : "bg-warning text-dark",
+                                                _ => "bg-secondary" })">
+                                                @(row.Kind == Ben.Data.Common.Enums.BillingLedgerKind.Adjustment
+                                                    ? (row.AdjustmentIsCredit ? "Credit" : "Debit") : row.Kind.ToString())
+                                            </span>
+                                            @row.Description
+                                        </td>
+                                        <td class="text-end">@($"${row.Amount:0.00}")</td>
+                                        <td class="text-end">@(row.TaxAmount > 0 ? $"${row.TaxAmount:0.00}" : "—")</td>
+                                        <td class="text-end">
+                                            @if (row.ReceiptNumber is { } n)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
+                                                        @onclick="@(() => DownloadReceiptAsync(historyOrg, row.Id))">
+                                                    Receipt R-@n.ToString("00000")
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </BenListState>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private static IReadOnlyList<Ben.Data.Common.Enums.TierCapability> MissingCapabilities(PublicSubscriptionTier tier)
+        => tier.IncludedCapabilities is null
+            ? []
+            : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().Except(tier.IncludedCapabilities)];
+
+    private static string CapabilityLabel(Ben.Data.Common.Enums.TierCapability capability) => capability switch
+    {
+        Ben.Data.Common.Enums.TierCapability.CaseTransfers => "Case transfers",
+        Ben.Data.Common.Enums.TierCapability.MediaMetadataStripping => "Audio/video location stripping",
+        Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases => "Private-residence cases",
+        _ => capability.ToString(),
+    };
+
+    private static string AreaLabel(Ben.Data.Common.Enums.OrganizationPermissionArea area) => area switch
+    {
+        Ben.Data.Common.Enums.OrganizationPermissionArea.OrganizationProfile => "Group profile",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Membership          => "Membership",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Cases               => "Cases",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations      => "Investigations",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Equipment           => "Equipment",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.PublicPages         => "Public pages",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Files               => "Files",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Clients             => "Client requests",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
+        _ => area.ToString(),
+    };
+
+    // ── What a band's button does (2026-09-14) ─────────────────────────────────────────────────────────
+    // Ben: a visitor with no group is sent to start one on that plan; somebody who runs a group goes straight to that
+    // group's billing page, with a chooser when they run several. When plans are off sale, paid bands have no button.
+
+    private bool _choosingGroup;
+    private Guid? _choosingTierId;
+
+    private string StartHref(PublicSubscriptionTier tier) => $"/organizations/new?tier={tier.Id}";
+
+    private string BillingHref(Guid orgId, Guid? tierId) =>
+        $"/organizations/{orgId}/billing?interval={(int)_selectedInterval}" + (tierId is { } t ? $"&tier={t}" : "");
+
+    private RenderFragment CallToAction(PublicSubscriptionTier tier, PublicTierPrice? price) => __builder =>
+    {
+        if (IsFree(tier))
+        {
+            if (_myGroups.Count == 0)
+            {
+                <a class="btn btn-band w-100" href="@StartHref(tier)">Start a free group</a>
+            }
+            return;
+        }
+
+        if (!Features.PlanPurchasesEnabled || price is null) return;
+
+        switch (_myGroups.Count)
+        {
+            case 0:
+                <a class="btn btn-band w-100" href="@StartHref(tier)">Start a group on this plan</a>
+                break;
+            case 1:
+                <a class="btn btn-band w-100" href="@BillingHref(_myGroups[0].Org.Id, tier.Id)">Choose this plan</a>
+                <div class="pricing-band__for">for @_myGroups[0].Org.Name</div>
+                break;
+            default:
+                <button type="button" class="btn btn-band w-100"
+                        @onclick="@(() => { _choosingTierId = tier.Id; _choosingGroup = true; })">
+                    Choose this plan
+                </button>
+                <div class="pricing-band__for">for one of your @_myGroups.Count groups</div>
+                break;
+        }
+    };
+
+    /// <summary>
+    /// The band flagged "Most groups start here": the lower middle of the paid member bands, in the order they are
+    /// shown — Standard of four, Small of two. Worked out rather than stored until somebody wants to hand-pick it.
+    /// </summary>
+    private Guid? FeaturedTierId
+    {
+        get
+        {
+            var paid = _tiersResult.Items.Where(t => t.IsBandedByMembers && !IsFree(t)).ToList();
+            return paid.Count < 2 ? null : paid[(paid.Count - 1) / 2].Id;
+        }
+    }
+
+    /// <summary>Each band's colour, by its place in the ladder: violet, blue, teal, ember, rose, green.</summary>
+    private static int BandHue(int index) => new[] { 262, 222, 184, 28, 332, 142 }[index % 6];
+
+    private string BandIcon(PublicSubscriptionTier tier)
+    {
+        if (IsFree(tier)) return "user";
+        if (!tier.IsBandedByMembers) return "map";
+        if (tier.MaxMembers is null) return "award";
+        var firstPaid = _tiersResult.Items.FirstOrDefault(t => t.IsBandedByMembers && !IsFree(t));
+        return firstPaid?.Id == tier.Id ? "users" : "star";
+    }
+
+    private bool _loading = true;
+    private LoadResult<PublicSubscriptionTier> _tiersResult;
+    private List<BillingInterval> _intervals = [];
+    private BillingInterval _selectedInterval = BillingInterval.Monthly;
+    private readonly List<(OrganizationListItemResponse Org, OrgSubscriptionView View)> _myGroups = [];
+    private readonly List<Ben.Service.Models.Admin.MyMemberSeatRecord> _mySeats = [];
+
+    // A seat is somebody's BILL. If the fetch failed we say so rather than drawing no card,
+    // which is indistinguishable from "you owe nothing" (item 178).
+    private bool _seatLoadFailed;
+
+    // Item 168: the inline billing-history panel, one group at a time.
+    private Guid? _historyOrgId;
+    private string _historyOrgName = "";
+    private bool _historyLoading;
+    private LoadResult<Ben.Service.Models.Admin.OrgBillingHistoryRecord> _history;
+
+    private async Task ToggleHistoryAsync(Guid orgId, string orgName)
+    {
+        if (_historyOrgId == orgId) { _historyOrgId = null; return; }
+        _historyOrgId = orgId;
+        _historyOrgName = orgName;
+        await ReloadHistoryAsync();
+    }
+
+    private async Task ReloadHistoryAsync()
+    {
+        if (_historyOrgId is not { } orgId) return;
+        _historyLoading = true;
+        StateHasChanged();
+        _history = await Client.GetOrgBillingHistoryAsync(orgId);
+        _historyLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task DownloadReceiptAsync(Guid orgId, Guid entryId)
+    {
+        var receipt = await Client.DownloadReceiptAsync(orgId, entryId);
+        if (receipt is not { } r) return;
+        await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(r.Data), "text/html", r.FileName);
+    }
+    private string? _referralCode;
+    private readonly Dictionary<Guid, SubscriptionQuoteResponse> _quotes = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A referral link is ?code=... on this page — a seller hands out the URL, the visitor
+        // arrives with the discount already attached. Which code was used is already attributed
+        // per redemption, so a seller's results are their code's redemption count.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("code", out var code) && !string.IsNullOrWhiteSpace(code))
+            _referralCode = code.ToString().Trim().ToUpperInvariant();
+
+        await LoadAsync();
+
+        // The enrichment never gates the page: tiers render for the signed-out reader first, and
+        // the "your groups" section appears only for someone who can see a group's billing.
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) && UserState.IsAuthenticated)
+        {
+            foreach (var org in (await Client.GetOrganizationsAsync()).Items)
+            {
+                // Item 144: a seat is a bill addressed to THIS person, so it is fetched for every
+                // group they belong to — independently of the group-billing cards below, which
+                // need settings permission an ordinary seat-holder does not have.
+                var seatResult = await Client.GetMySeatAsync(org.Id);
+                if (seatResult.Failed) _seatLoadFailed = true;
+                else _mySeats.AddRange(seatResult.Items);
+
+                // Null covers both "may not see billing" and "could not load" — either way there
+                // is no honest card to draw for this group on a pricing page.
+                if (await Client.GetMySubscriptionAsync(org.Id) is { } view)
+                {
+                    _myGroups.Add((org, view));
+
+                    // The referral code priced against this group's own cadence — including the
+                    // refusal sentence when it does not apply, which is better learned here than
+                    // at checkout. Quoting never redeems anything.
+                    if (_referralCode is not null)
+                    {
+                        var (quote, _) = await Client.QuoteSubscriptionAsync(org.Id,
+                            new SubscriptionQuoteRequest(view.Interval, _referralCode));
+                        if (quote is not null) _quotes[org.Id] = quote;
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tiersResult = await Client.GetPublicPricingAsync();
+
+        _intervals = [.. _tiersResult.Items
+            .SelectMany(t => t.Prices.Select(p => p.Interval))
+            .Distinct().OrderBy(i => (int)i)];
+
+        if (_intervals.Count > 0 && !_intervals.Contains(_selectedInterval))
+            _selectedInterval = _intervals[0];
+
+        _loading = false;
+    }
+
+    /// <summary>A band whose every cadence costs nothing is the free band.</summary>
+    private static bool IsFree(PublicSubscriptionTier tier) =>
+        tier.Prices.Count > 0 && tier.Prices.All(p => p.Price == 0);
+
+    private int? BestSaving(BillingInterval interval) =>
+        _tiersResult.Items
+            .SelectMany(t => t.Prices)
+            .Where(p => p.Interval == interval)
+            .Select(p => p.SavingPercentAgainstMonthly)
+            .DefaultIfEmpty(null)
+            .Max();
+
+    private static string CadenceTitle(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "Monthly",
+        BillingInterval.Quarterly  => "Quarterly",
+        BillingInterval.HalfYearly => "Every 6 months",
+        BillingInterval.Yearly     => "Yearly",
+        _                          => interval.ToString(),
+    };
+
+    private static string CadenceNoun(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "month",
+        BillingInterval.Quarterly  => "quarter",
+        BillingInterval.HalfYearly => "6 months",
+        BillingInterval.Yearly     => "year",
+        _                          => "period",
+    };
+
+    /// <summary>
+    /// A cap as a sentence: "Up to 25 pieces of equipment", "Unlimited storage", "No public pages".
+    /// </summary>
+    /// <remarks>
+    /// Null and zero get words, not numbers — "∞" and "0" on a pricing card make the reader do
+    /// the interpreting, and zero-means-off is exactly the case that must not look like a typo.
+    /// </remarks>
+    private static string LimitSentence(PublicTierLimit limit)
+    {
+        var (thing, things) = limit.Limit switch
+        {
+            SubscriptionLimit.OpenCases            => ("open case", "open cases"),
+            SubscriptionLimit.EquipmentItems       => ("piece of equipment", "pieces of equipment"),
+            SubscriptionLimit.ActiveEquipmentLoans => ("equipment loan at a time", "equipment loans at a time"),
+            SubscriptionLimit.OpenInvestigations   => ("open investigation", "open investigations"),
+            SubscriptionLimit.PendingInvites       => ("pending invite", "pending invites"),
+            SubscriptionLimit.StorageMegabytes     => ("MB of storage", "MB of storage"),
+            SubscriptionLimit.PublishedPages       => ("public page", "public pages"),
+            SubscriptionLimit.CustomRoles          => ("custom role", "custom roles"),
+            _                                      => (limit.Limit.ToString(), limit.Limit.ToString()),
+        };
+
+        return limit.MaxValue switch
+        {
+            null => $"Unlimited {things}",
+            0    => $"No {things}",
+            1    => $"1 {thing}",
+            { } n when limit.Limit == SubscriptionLimit.StorageMegabytes && n >= 1024
+                 => $"{n / 1024m:0.#} GB of storage",
+            { } n => $"Up to {n:N0} {things}",
+        };
+    }
+}

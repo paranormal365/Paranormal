@@ -8,6 +8,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState   UserState
 @inject NavigationManager NavManager
+@inject SiteFeaturesProvider Features
 
 <PageTitle>@(_org?.Name ?? "Organization")</PageTitle>
 
@@ -15,14 +16,23 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(ReturnUrl ?? "/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(BackUrl))"><BenIcon Name="arrow-left" Class="me-1" />
                 Back
             </button>
-            <h3 class="d-inline-block ms-3 mb-0">Organization</h3>
+            @* W-A2: this said "Organization" — the name of the TABLE — on the page for a
+               particular group, on a site where a person belongs to several. The name is what
+               tells you which one you are looking at. It falls back to the word only while the
+               group is still loading or could not be read, where there is nothing better to say. *@
+            <h3 class="d-inline-block ms-3 mb-0">@(_org?.Name ?? "Organization")</h3>
         </div>
         @if (_canEdit && !_editMode)
         {
-            <div class="col-auto">
+            <div class="col-auto d-flex gap-2">
+                <button type="button" id="org-tour-launch" class="btn btn-outline-secondary"
+                        title="Show me around" @onclick="StartTourAsync">
+                    <BenIcon Name="help-circle" />
+                    <span class="visually-hidden">Show me around</span>
+                </button>
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="BeginEdit"><BenIcon Name="edit-2" Class="me-1" />
                     Edit
                 </button>
@@ -76,6 +86,20 @@
                 <input type="checkbox" class="form-check-input" id="edit-accepting-apps" @bind="@_editIsAcceptingApplications" />
                 <label for="edit-accepting-apps" class="form-label mb-0">Accepting Membership Applications</label>
             </div>
+            @* Unlisted is about being FOUND, not about being private: the group's own page still
+               works for anybody given the link, and everything inside it is unchanged. Said on the
+               label, because "hidden" would suggest a privacy guarantee this does not make. *@
+            <div class="col-12 d-flex align-items-start gap-2">
+                <input type="checkbox" class="form-check-input mt-1" id="edit-unlisted"
+                       checked="@_editIsUnlisted"
+                       @onchange="@(e => _editIsUnlisted = (bool)(e.Value ?? false))" />
+                <label for="edit-unlisted" class="form-label mb-0">
+                    Unlisted — keep this group out of search, browse and nearby results.
+                    <span class="d-block text-secondary small">
+                        Its page still works for anyone with the link, and nothing inside changes.
+                    </span>
+                </label>
+            </div>
             @* Half of a two-key rule — the member must opt in as well, so this switch alone
                shares nothing. The label says so, because an admin who thinks flipping this
                exposes their team's photos would reasonably leave it off forever. *@
@@ -91,6 +115,17 @@
                     </span>
                 </label>
             </div>
+            @if (_rosterUnavailable)
+            {
+                @* Owner-ness is read off the roster. When that could not be fetched the page hides
+                   this person's own controls, which looks like their permissions changed. *@
+                <div class="col-12">
+                    <div class="alert alert-warning py-2 small mb-0">
+                        Your role here couldn't be confirmed, so owner-only controls are hidden.
+                        This is a problem reaching the server, not a change to your access.
+                    </div>
+                </div>
+            }
             @if (_isOwnerOrSuperAdmin)
             {
                 <div class="col-12">
@@ -115,9 +150,74 @@
     else
     {
         @* ── Read-only tabbed view ─────────────────────────────────────────── *@
-        <BenTabs>
 
-            <BenTab Title="Details">
+        @* The client funnel is two answers — taking cases, and where you work — and a group that
+           has given one but not the other is invisible to every client while believing it is
+           open for business. Only that contradiction is a warning here: a group that has simply
+           said no to client work made a choice, and the Details tab states it without nagging. *@
+        @if (_canManageRoles && _clientAreaChecked && ClientReachBlocked)
+        {
+            <div class="alert alert-warning d-flex align-items-start gap-2">
+                <BenIcon Name="alert-triangle" Class="mt-1" />
+                <div>
+                    <div class="fw-semibold">Clients cannot find this group yet.</div>
+                    <div class="small">
+                        You are taking client cases, but
+                        @if (!_hasClientArea && _org.IsUnlisted)
+                        {
+                            <text>this group is unlisted and has no operating area, so it is left out of every client search.</text>
+                        }
+                        else if (!_hasClientArea)
+                        {
+                            <text>you have not said where you work, so this group is left out of every client search.</text>
+                        }
+                        else
+                        {
+                            <text>this group is unlisted, which keeps it out of every client search.</text>
+                        }
+                        @if (!_hasClientArea)
+                        {
+                            <a href="#" @onclick="@(() => _activeTabId = "clients")" @onclick:preventDefault>
+                                Set your operating area
+                            </a>
+                            @(_org.IsUnlisted ? ", and " : ".")
+                        }
+                        @if (_org.IsUnlisted)
+                        {
+                            <a href="#" @onclick="BeginEdit" @onclick:preventDefault>
+                                @(_hasClientArea ? "Turn off unlisted" : "turn off unlisted")
+                            </a>@(".")
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* A lapse said out loud, once, at the top of the group (2026-09-17 audit).
+
+           Until this, nothing on the website told a group's own members they were read-only: the
+           sentence existed on the server and was rendered only on the CLIENT's case page, so
+           every control the group could no longer use was offered live and failed on the click.
+           One banner rather than a per-control lock, because a lapse stops all writing — saying
+           it thirty times is worse than saying it once, and the click that follows now has a
+           sentence behind it either way. *@
+        @if (_isMember && _myPerms?.ReadOnlyReason is { } readOnly)
+        {
+            <div class="alert alert-warning" data-testid="org-read-only">
+                <strong>This group is read-only.</strong> @readOnly
+                <div class="mt-1">
+                    <a href="@($"/organizations/{OrgId}/billing")">Your group's plan</a>
+                </div>
+            </div>
+        }
+
+        <BenTabs @bind-ActiveId="_activeTabId">
+
+            <BenTab Title="Details" Id="details">
+                @* The numbers first: someone opening a group wants to know how busy it is before
+                   they want to know its URL slug. Full width, above the detail list. *@
+                <OrgStatsPanel OrgId="@OrgId" />
+
                 <div style="max-width:620px;">
                     <dl class="row g-2">
                         <dt class="col-sm-3 text-secondary small">Name</dt>
@@ -136,6 +236,33 @@
                                 @(_org.IsAcceptingApplications ? "Yes" : "No")
                             </span>
                         </dd>
+
+                        @* Managers only: whether clients can reach this group is an administrative
+                           fact, and it is the one setting a new group most often never finds. *@
+                        @if (_canManageRoles)
+                        {
+                            <dt class="col-sm-3 text-secondary small">Client Cases</dt>
+                            <dd class="col-sm-9 mb-0">
+                                <span class="badge @(_org.IsAcceptingClients ? "bg-success" : "bg-secondary")">
+                                    @(_org.IsAcceptingClients ? "Accepting" : "Not accepting")
+                                </span>
+                                <span class="text-secondary small ms-2">
+                                    @if (!_org.IsAcceptingClients)
+                                    {
+                                        <text>Clients cannot find this group.</text>
+                                    }
+                                    else if (_clientAreaChecked && ClientReachBlocked)
+                                    {
+                                        <text>Clients cannot find this group.</text>
+                                    }
+                                    else if (_clientAreaLabel is not null)
+                                    {
+                                        @_clientAreaLabel
+                                    }
+                                </span>
+                                <a class="small ms-2" href="#" @onclick="@(() => _activeTabId = "clients")" @onclick:preventDefault>Change</a>
+                            </dd>
+                        }
 
                         @if (!string.IsNullOrWhiteSpace(_org.PublicPhone) || !string.IsNullOrWhiteSpace(_org.PublicEmail) || !string.IsNullOrWhiteSpace(_org.PublicWebsite))
                         {
@@ -176,92 +303,143 @@
 
             @if (_isMember)
             {
-                <BenTab Title="Members">
+                <BenTab Title="Members" Id="members">
                     <OrganizationMembers OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Phase D (item 156): the tab renders from the same verdict the server enforces —
+               a member without case read must not be handed a tab whose every fetch refuses.
+               Owners, admins and role-holders (the grandfather bridge included) all pass. *@
+            @if (_isMember && _myPerms?.CanReadCases == true)
             {
-                <BenTab Title="Cases">
+                <BenTab Title="Cases" Id="cases">
                     <CaseList OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
-            @if (_isMember)
+            @if (_isMember && _myPerms?.CanReadInvestigations == true)
             {
-                @* Member-visible, not admin-only: seeing where the group has worked is ordinary
-                   membership. Who may *edit* a given investigation is decided per row by the
-                   server and rendered from its verdict. *@
-                <BenTab Title="Investigations">
-                    <OrgInvestigations OrgId="@OrgId" />
+                @* Reading where the group has worked now answers to the Investigation grant
+                   (Phase D) — the grandfather bridge keeps existing members seeing it. Who may
+                   *edit* a given investigation is still decided per row by the server. *@
+                <BenTab Title="Investigations" Id="investigations">
+                    <OrgInvestigations OrgId="@OrgId" FocusInvestigationId="@FocusInvestigationId" />
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Item 154: same shape as the Publications tab below — a gated tab must not exist,
+               because FeatureGate's not-found body inside a tab strip is a tab that opens onto
+               an error. The calendar PAGES carry their own gate so the URLs die too. *@
+            @if (_isMember && Features.IsOn(SiteFeatures.Events))
             {
-                <BenTab Title="Calendar">
+                <BenTab Title="Calendar" Id="calendar">
+                    @* The review queue lives with the events that produce it. Renders nothing
+                       when empty. *@
+                    <EventEvidenceQueue OrgId="@OrgId" />
                     <OrgScheduler OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Same rule as the Calendar tab above and the Publications tab below: a gated tab must
+               not EXIST, because FeatureGate renders a not-found body, and inside a tab strip that
+               is a tab which opens onto an error. OrgMessages wraps its whole self in a
+               FeatureGate — embedded mode included — so with messaging switched off this tab used
+               to open onto "There is nothing at this address" (2026-09-17 audit). The two tabs
+               either side were written to avoid exactly that; this one was missed. *@
+            @if (_isMember && Features.IsOn(SiteFeatures.OrgMessaging))
             {
-                <BenTab Title="Messages">
+                <BenTab Title="Messages" Id="messages">
                     <OrgMessages OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_isMember)
             {
-                <BenTab Title="Files">
+                <BenTab Title="Files" Id="files">
                     <OrganizationFiles OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Requests">
+                <BenTab Title="Requests" Id="requests">
                     <OrgPendingRequests OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
 
+            @* Requests is where client work arrives; Clients is what makes it arrive. They belong
+               next to each other, because a group with an empty Requests tab is usually looking at
+               a funnel that was never switched on. *@
             @if (_canManageRoles)
             {
-                <BenTab Title="CMS">
+                <BenTab Title="Clients" Id="clients">
+                    <OrganizationClientSettings OrgId="@OrgId" EmbeddedMode="true"
+                                                OnChanged="@ReloadClientReachAsync" />
+                </BenTab>
+            }
+
+            @if (_canManageRoles && Features.IsOn(SiteFeatures.CmsPages))
+            {
+                <BenTab Title="CMS" Id="cms">
                     <OrgCmsEditor OrgId="@OrgId" EmbeddedMode="true" />
+                </BenTab>
+            }
+
+            @* Publications is off by default sitewide. A FeatureGate cannot help here — it renders
+               a "page not found" body, which inside a tab strip would be a tab that opens onto an
+               error. The tab has to not exist, so the flag is read directly. The pages the tab
+               links to keep their own gate, because an address must die with the feature. *@
+            @if (_canManageRoles && Features.IsOn(SiteFeatures.Publications))
+            {
+                <BenTab Title="Publications" Id="publications">
+                    <Ben.Web.Website.Library.Publications.OrgPublications OrgId="@OrgId" />
                 </BenTab>
             }
 
             @* Equipment shared with the group is readable by any member — sharing is the owner's
                consent, so it needs no permission gate. The group's own equipment arrives here in
-               phase 3, behind the new Equipment permission. *@
-            <BenTab Title="Equipment">
-                <Ben.Web.Website.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
-            </BenTab>
+               phase 3, behind the new Equipment permission.
+
+               Behind the site switch, though: with Equipment off, /my-equipment and the rest 404
+               and the nav entries go, and this tab kept working (2026-09-17 audit) — so "off hides
+               the whole section", as the setting's own description puts it, was not true. *@
+            @if (Features.IsOn(SiteFeatures.Equipment))
+            {
+                <BenTab Title="Equipment" Id="equipment">
+                    <Ben.Web.Website.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
+                </BenTab>
+            }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Roles">
+                <BenTab Title="Roles" Id="roles">
                     <OrgRolesManager OrgId="@OrgId" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Addresses">
+                <BenTab Title="Addresses" Id="addresses">
                     <OrgAddressManager OrgId="@OrgId" />
                 </BenTab>
             }
 
             @if (_canManageRoles)
             {
-                <BenTab Title="Settings">
+                <BenTab Title="Settings" Id="settings">
                     <OrgSettingsManager OrgId="@OrgId" />
                 </BenTab>
             }
 
         </BenTabs>
+
+        @* Item 166 W1: the owner's first-steps tour. Auto-launches once after founding
+           (?welcome=1 from the wizard) unless already dismissed; the ? relaunches it. *@
+        @if (_canManageRoles)
+        {
+            <BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
+        }
     }
 </div>
 
@@ -273,11 +451,39 @@
     [Parameter, SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>Where Back goes: the page named in returnUrl when it is one of ours, else the groups list.</summary>
+    /// <remarks>
+    /// A path on this site only (UI test pass 6.9, 2026-09-14): Back followed any returnUrl, so a link to a group page
+    /// could send the person who pressed Back to another website.
+    /// </remarks>
+    private string BackUrl =>
+        ReturnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/organizations";
+
+    /// <summary>Tab to open on arrival, by <see cref="BenTab.Id"/> ("investigations", "cases", …).
+    /// Unknown or inaccessible ids fall back to the first tab — same contract as CaseDetail's.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "tab")]
+    public string? InitialTab { get; set; }
+
+    /// <summary>Investigation to highlight and scroll to on the Investigations tab. Set by the
+    /// surfaces that list case-less investigations (MyInvestigations, MyProfile), whose click has
+    /// no case page to open — this page is what that click shows instead.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "inv")]
+    public Guid? FocusInvestigationId { get; set; }
+
+    private string _activeTabId = "details";
+
     private OrganizationAdminRecord? _org;
     private bool   _canEdit;
     private bool   _canManageRoles;
     private bool   _isMember;
+    private MyOrgPermissionsItem? _myPerms;
     private bool   _isOwnerOrSuperAdmin;
+
+    // Client reach: the two answers that decide whether a client search can return this group.
+    private bool    _clientAreaChecked;
+    private bool    _hasClientArea;
+    private string? _clientAreaLabel;
+    private bool   _rosterUnavailable;
     private bool   _loading   = true;
     private bool   _editMode;
     private bool   _isSaving;
@@ -291,13 +497,68 @@
     private string? _editPublicEmail;
     private string? _editPublicWebsite;
     private bool    _editIsAcceptingApplications;
+    private bool    _editIsUnlisted;
     private bool    _editAllowMemberPrivatePhotos;
 
     protected override async Task OnInitializedAsync()
     {
+        _activeTabId = (InitialTab ?? "details").Trim().ToLowerInvariant();
+        _appliedInitialTab = InitialTab;   // primed, so a mere re-render never re-applies it
+
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
+    }
+
+    // ── The owner's first-steps tour (item 166 W1) ────────────────────────────
+
+    private const string TourName = "owner-first-steps";
+    private Kit.BenTour? _tourRef;
+    private readonly Kit.TourModel _tour = new(
+    [
+        new Kit.TourModel.TourStep("#tab-members",
+            "Invite your people",
+            "The Members tab is your roster: invite people, review applications, and give each member a title from your group's own ladder."),
+        new Kit.TourModel.TourStep("#tab-cases",
+            "Cases live here",
+            "When a client's request is accepted it becomes a case. The Cases tab is the case record and everything that hangs off it — investigations, files, reports."),
+        new Kit.TourModel.TourStep("#tab-roles",
+            "Roles open doors",
+            "A role is a named set of permissions. Members start with the baseline; hand them roles — like the ready-made Case Manager Role — as they earn them. Titles are seniority; roles are access."),
+        new Kit.TourModel.TourStep("#tab-settings",
+            "Make it yours",
+            "Settings holds your member-title ladder, investigation duties, calendar event types, and the group's own details. Everything the wizard skipped lives here."),
+    ]);
+
+    private async Task StartTourAsync()
+    {
+        if (_tourRef is not null) await _tourRef.StartAsync();
+    }
+
+    private async Task OnTourEndedAsync(bool completed)
+    {
+        try { await AdminClient.DismissTourAsync(TourName, completed); }
+        catch { /* Losing a dismissal replays a tour once; it never breaks the page. */ }
+    }
+
+    /// <summary>Auto-launch: only from the wizard's ?welcome=1 landing, only for someone who can
+    /// manage the group, and only if this person has never dismissed it.</summary>
+    private async Task MaybeAutoLaunchTourAsync()
+    {
+        if (!_canManageRoles || _tourRef is null) return;
+
+        var uri = new Uri(NavManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (query["welcome"] != "1") return;
+
+        try
+        {
+            var dismissed = (await AdminClient.GetMyDismissedToursAsync()).Items;
+            if (dismissed.Contains(TourName)) return;
+        }
+        catch { return; }   // cannot know the state: stay quiet rather than nag
+
+        await _tourRef.StartAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -305,6 +566,36 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
+        _loadedOrgId = OrgId;
+        await MaybeAutoLaunchTourAsync();
+    }
+
+    // ── Item 172 (Ben, 2026-08-23): the same component instance serves EVERY /organizations/{id}
+    // route, so clicking another group in the sidebar changes only the parameter — no fresh
+    // render, no reload, and the page keeps showing the old group, which reads as "clicking
+    // does nothing". Reload whenever the parameter points somewhere the loaded data is not. ──
+    private Guid _loadedOrgId;
+    private string? _appliedInitialTab;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedOrgId != Guid.Empty && _loadedOrgId != OrgId)
+        {
+            _loadedOrgId  = OrgId;
+            _editMode     = false;
+            _activeTabId  = (InitialTab ?? "details").Trim().ToLowerInvariant();
+            _appliedInitialTab = InitialTab;
+            await LoadAsync();
+            return;
+        }
+
+        // Same group, different ?tab= (a banner or bell deep link while already on the page):
+        // honor it once per distinct value, without clobbering tabs the person clicked since.
+        if (_loadedOrgId != Guid.Empty && InitialTab is not null && InitialTab != _appliedInitialTab)
+        {
+            _appliedInitialTab = InitialTab;
+            _activeTabId = InitialTab.Trim().ToLowerInvariant();
+        }
     }
 
     private async Task LoadAsync()
@@ -324,8 +615,13 @@
 
             _org = orgTask.Result;
 
-            var listItem    = listTask.Result.FirstOrDefault(o => o.Id == OrgId);
+            var listItem    = listTask.Result.Items.FirstOrDefault(o => o.Id == OrgId);
             _isMember       = UserState.IsSuperAdmin || listItem is not null;
+
+            // The per-area verdicts the Cases/Investigations tabs render from (Phase D). Fetched
+            // only for members — a non-member sees neither tab regardless.
+            if (_isMember)
+                _myPerms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
             _canEdit        = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
             _canManageRoles = _canEdit;
 
@@ -337,10 +633,17 @@
             }
             else if (UserState.UserId.HasValue)
             {
+                // Owner-ness is derived from the roster, so a refused roster reads as "not an
+                // owner" and quietly removes this person's own controls. It fails closed, which is
+                // the safe direction, but silently — so say which it was.
                 var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
-                _isOwnerOrSuperAdmin = members.Any(m =>
+                _rosterUnavailable = members.Failed;
+                _isOwnerOrSuperAdmin = members.Items.Any(m =>
                     m.AppUserId == UserState.UserId.Value && m.Role == OrganizationMemberRole.Owner);
             }
+
+            if (_canManageRoles)
+                await ReloadClientReachAsync();
         }
         catch
         {
@@ -351,6 +654,43 @@
         StateHasChanged();
     }
 
+    /// <summary>A group taking client cases that no client search can return. The three conditions
+    /// mirror the public search query exactly — accepting, listed, and an operating area — because
+    /// a notice that disagrees with the query is worse than none.</summary>
+    private bool ClientReachBlocked =>
+        _org is not null && _org.IsAcceptingClients && (!_hasClientArea || _org.IsUnlisted);
+
+    /// <summary>Re-reads the operating area behind the client-reach notice. The area endpoint is
+    /// manager-only and returns nothing when none is set, so a refusal and an absence look alike
+    /// here — both mean "a client search will not return this group", which is what is shown.</summary>
+    private async Task ReloadClientReachAsync()
+    {
+        try
+        {
+            var area = await AdminClient.GetOrgAreaOfOperationAsync(OrgId);
+            _hasClientArea   = area is not null;
+            _clientAreaLabel = area?.DisplayLabel;
+        }
+        catch
+        {
+            _hasClientArea   = false;
+            _clientAreaLabel = null;
+        }
+
+        _clientAreaChecked = true;
+
+        // The tab's own save updates the org's acceptance flag server-side; the copy this page
+        // renders its badge from is stale until it is re-read.
+        try
+        {
+            var fresh = await AdminClient.GetOrganizationAsync(OrgId);
+            if (fresh is not null) _org = fresh;
+        }
+        catch { /* the badge keeps the value it had */ }
+
+        StateHasChanged();
+    }
+
     private void CancelEdit()
     {
         _editMode = false;
@@ -358,15 +698,19 @@
         _successMessage = null;
     }
 
-    private static readonly TimeZoneInfo _centralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
-
-    /// <summary>Formats a stored UTC timestamp as the server's own Central time, explicitly labeled
-    /// "(server)" so it's never confused with the viewer's own local time.</summary>
-    private static string FormatServerTime(DateTime utc)
-    {
-        var central = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _centralTimeZone);
-        return $"{central:MM/dd/yyyy HH:mm:ss} (server)";
-    }
+    /// <summary>When the group was created or last changed, in the reader's own time.</summary>
+    /// <remarks>
+    /// <para>W-A2 of the 2026-09-06 evaluation. This used to convert to America/Chicago and append
+    /// "(server)" — the machine's timezone, labelled as such so nobody mistook it for their own.
+    /// The label was honest and the value was still useless: a reader in Portland was being asked
+    /// to do timezone arithmetic to learn what day their group was created, and told the answer to
+    /// the second, of a second nobody typed.</para>
+    ///
+    /// <para>Every other timestamp on the site goes through ToViewerLocalTime. There was never a
+    /// reason for this one not to.</para>
+    /// </remarks>
+    private string FormatServerTime(DateTime utc) =>
+        utc.ToViewerLocalTime(UserState).ToDisplayDateTime();
 
     private void BeginEdit()
     {
@@ -377,6 +721,7 @@
         _editPublicEmail            = _org.PublicEmail;
         _editPublicWebsite          = _org.PublicWebsite;
         _editIsAcceptingApplications = _org.IsAcceptingApplications;
+        _editIsUnlisted             = _org.IsUnlisted;
         _editAllowMemberPrivatePhotos = _org.AllowMemberPrivatePhotosToClients;
         _editMode = true;
     }
@@ -391,7 +736,7 @@
         _isSaving = true;
         StateHasChanged();
 
-        var updated = await AdminClient.UpdateOrganizationAsync(OrgId,
+        var (updated, saveError) = await AdminClient.UpdateOrganizationAsync(OrgId,
             new AdminUpdateOrganizationRequest(
                 _editName.Trim(),
                 _editUrlName.Trim().ToLowerInvariant(),
@@ -399,7 +744,8 @@
                 PublicPhone:    _editPublicPhone?.Trim(),
                 PublicEmail:    _editPublicEmail?.Trim(),
                 PublicWebsite:  _editPublicWebsite?.Trim(),
-                AllowMemberPrivatePhotosToClients: _editAllowMemberPrivatePhotos));
+                AllowMemberPrivatePhotosToClients: _editAllowMemberPrivatePhotos,
+                IsUnlisted: _editIsUnlisted));
 
         _isSaving = false;
 
@@ -411,7 +757,12 @@
         }
         else
         {
-            _errorMessage = "Save failed. The URL name may already be in use, or you may not have permission.";
+            // The server's own sentence, when it gave one. It is always better than a guess: the
+            // plan gate explains what a plan costs, and the URL check names the address that is
+            // taken. Guessing here once told an owner they might lack permission on their own
+            // group while the server was explaining the price of adding a second person.
+            _errorMessage = saveError
+                ?? "Save failed. The URL name may already be in use, or you may not have permission.";
         }
     }
 }

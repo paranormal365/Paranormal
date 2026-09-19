@@ -5,14 +5,32 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
-<PageTitle>Client Settings — @(_orgName ?? "Organization")</PageTitle>
+@if (!EmbeddedMode)
+{
+    <PageTitle>Client Settings — @(_orgName ?? "Organization")</PageTitle>
+}
 
-<div class="container-fluid py-3" style="max-width:860px;">
-    <h3 class="mb-4">Client Settings — @(_orgName ?? OrgId.ToString())</h3>
+@* Embedded, this is the group page's Clients tab and the page already carries the group's name
+   and its own width. Standalone, it is a page and supplies both itself. *@
+<div class="@(EmbeddedMode ? "" : "container-fluid py-3")" style="@(EmbeddedMode ? "" : "max-width:860px;")">
+    @if (!EmbeddedMode)
+    {
+        <h3 class="mb-4">Client Settings — @(_orgName ?? OrgId.ToString())</h3>
+    }
+
+    <p class="text-secondary">
+        A client looking for help finds you by these two answers: whether you are taking cases, and
+        where you work. Until both are set, no client search will return this
+        group.<HelpLink Slug="organization-administration" Anchor="being-found-by-clients" />
+    </p>
 
     @if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
+    }
+    @if (_savedMessage is not null)
+    {
+        <div class="alert alert-success">@_savedMessage</div>
     }
 
     @if (!_loaded)
@@ -26,13 +44,18 @@
             <div class="card-header fw-semibold">Case Acceptance</div>
             <div class="card-body">
                 <div class="d-flex flex-column gap-3">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="form-check form-switch"><input type="checkbox" class="form-check-input" @bind="@_isAcceptingClients" /></div>
-                        <span class="text-secondary small">
-                            @(_isAcceptingClients
-                                ? "Your organization will appear in client search results."
-                                : "Your organization is hidden from client search results.")
-                        </span>
+                    @* The switch had only its grey consequence beside it, so nothing named what it switched (UI test pass,
+                       2026-09-14). A label, as the checkbox below has, with the consequence under it. *@
+                    <div class="form-check form-switch mb-0">
+                        <input type="checkbox" class="form-check-input" role="switch" id="accepting-clients" @bind="@_isAcceptingClients" />
+                        <label for="accepting-clients" class="form-check-label">
+                            Taking new cases
+                            <span class="text-secondary small d-block">
+                                @(_isAcceptingClients
+                                    ? "Your organization will appear in client search results."
+                                    : "Your organization is hidden from client search results.")
+                            </span>
+                        </label>
                     </div>
                     @if (_isAcceptingClients)
                     {
@@ -119,9 +142,17 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>Rendered inside the group page's Clients tab rather than as its own page.</summary>
+    [Parameter] public bool EmbeddedMode { get; set; }
+
+    /// <summary>Raised after acceptance or the operating area changes, so a host page can drop the
+    /// "clients cannot find you" notice without a reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
     private string? _orgName;
     private bool _loaded;
     private string? _error;
+    private string? _savedMessage;
     private bool _isBusy;
 
     // Acceptance state
@@ -165,9 +196,27 @@
     private async Task SaveAcceptance()
     {
         _isBusy = true;
+        _error = null;
+        _savedMessage = null;
         try
         {
-            await AdminClient.UpdateClientAcceptanceAsync(OrgId, _isAcceptingClients, _acceptsOutsideRange);
+            // A green "Saved." on a discarded bool (2026-09-17 audit). The transport returns false
+            // on a refusal rather than throwing, so the catch below never fired on the 403 this
+            // endpoint actually returns — and a refusal here is a DESIGNED-FOR event, not a
+            // hypothetical: StartGroupPage documents that a brand-new group is on the free lane
+            // where the paid gate turns away any attempt to open membership applications.
+            if (!await AdminClient.UpdateClientAcceptanceAsync(
+                    OrgId, _isAcceptingClients, _acceptsOutsideRange))
+            {
+                _error = "That setting could not be saved, so nothing has changed. "
+                       + "If your group is on the free plan, taking on clients is part of a paid one.";
+                return;
+            }
+
+            _savedMessage = _isAcceptingClients
+                ? "Saved. Clients can find this group once an operating area is set."
+                : "Saved. This group is hidden from client searches.";
+            await OnChanged.InvokeAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _isBusy = false; }
@@ -176,9 +225,12 @@
     // ── Area of Operation ─────────────────────────────────────────────────────
     private void OpenEditArea() => _showAreaDialog = true;
 
-    private void OnAreaSaved(OrganizationAreaOfOperationRecord result)
+    private async Task OnAreaSaved(OrganizationAreaOfOperationRecord result)
     {
         _area = result;
+        // The dialog saves the acceptance flags this component handed it, so local state already
+        // matches the server; only the host page's notice needs telling.
+        await OnChanged.InvokeAsync();
     }
 
     private void ConfirmDeleteArea() => _showDeleteConfirm = true;
@@ -188,9 +240,16 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId);
+            // Checked for the same reason as the acceptance save above: a discarded false left
+            // the area looking deleted while it was still serving client searches.
+            if (!await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId))
+            {
+                _error = "That operating area could not be removed, so it is still in place.";
+                return;
+            }
             _area = null;
             _showDeleteConfirm = false;
+            await OnChanged.InvokeAsync();
         }
         catch { _error = "Failed to remove operating area."; }
         finally { _isBusy = false; }

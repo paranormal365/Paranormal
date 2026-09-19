@@ -1,0 +1,13 @@
+@namespace Ben.Web.Website.Library.Kit
+@page "/field-sessions/{SessionId:guid}"
+
+@*
+    The player on its own route. Everything it does lives in FieldKitPlayer, so the same thing
+    can be dropped into a case page or an investigation panel without moving any of it.
+*@
+
+<FieldKitPlayer SessionId="@SessionId" Standalone="true" />
+
+@code {
+    [Parameter] public Guid SessionId { get; set; }
+}

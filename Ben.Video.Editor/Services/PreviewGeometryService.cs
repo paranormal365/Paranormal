@@ -15,7 +15,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class PreviewGeometryService : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/previewGeometryInterop.js";
+    private const string ModulePath = "js/previewGeometryInterop.js";
 
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
@@ -33,7 +33,7 @@ public sealed class PreviewGeometryService : IAsyncDisposable
     /// <paramref name="canvasHeight"/>). Call before a drag gesture starts.</summary>
     public async Task RefreshAsync(ElementReference screenElement, int canvasWidth, int canvasHeight)
     {
-        _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+        _module ??= await _js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         var rect = await _module.InvokeAsync<ElementRect>("getElementRect", screenElement);
 
         _screenLeft = rect.Left;

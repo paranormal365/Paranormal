@@ -1,0 +1,215 @@
+@page "/organizations/{OrgId:guid}/venue"
+@namespace Ben.Web.Website.Library.Manage.Venue
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* The places this group runs as a venue, and what it says about each (item 235 phase 9).
+
+   DESCRIBING A PLACE PROVES NOTHING. Any group may write about a hall it rents every October; what
+   makes other organizers ask first is being confirmed as the venue there. So the publish switch
+   says plainly why it is off, rather than being missing — somebody hunting for a missing switch
+   never learns there is a step before it.
+
+   Opened from a place's own page with ?place=, which starts a profile for that place if there is
+   none: the place page is where somebody notices "this is ours", so that is where the door is. *@
+
+<PageTitle>Your venue</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+
+    <h1 class="h3 mb-1">
+        Your venue
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        Places your group runs. Once you are confirmed as the venue at one, other groups ask you
+        before they publish events there.
+        <a href="@($"/organizations/{OrgId}/venue-requests")" id="venue-requests-link">Hosting requests</a>
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="venue-profile-note" role="status">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="venue-profile-error" role="alert">@_error</div>
+    }
+
+    @* Branched rather than wrapped: a place opened from its own page is offered here before it has a
+       saved profile, and a wrapped list state would call that an empty list. *@
+    @if (_loading || _profiles.Failed)
+    {
+        <BenListState TItem="VenueProfileRecord" Result="_profiles" Loading="_loading"
+                      LoadingText="Loading your venues…" OnRetry="LoadAsync" />
+    }
+    else
+    {
+        @if (_forms.Count == 0)
+        {
+            <div class="alert alert-light border" id="venue-profiles-empty">
+                Your group doesn't describe any place as its venue yet. Open the place's own page and
+                choose <strong>Our venue</strong> to start.
+            </div>
+        }
+        @foreach (var form in _forms)
+        {
+            var f = form;
+            var key = f.PlaceId.ToString("N");
+            <div class="card mb-3 venue-profile" data-place="@f.PlaceId">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                    <a class="fw-semibold me-auto" href="@($"/places/{f.PlaceId}")">@f.PlaceName</a>
+                    @if (f.VerifiedUtc is { } verified)
+                    {
+                        <span class="badge bg-success">Confirmed as the venue @verified.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Not confirmed as the venue</span>
+                        <a class="small" id="@($"venue-claim-{key}")" href="@($"/organizations/{OrgId}/venue/claim?place={f.PlaceId}")">Claim it</a>
+                    }
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="@($"venue-history-{key}")">The building's story</label>
+                        <textarea class="form-control" rows="5" id="@($"venue-history-{key}")" maxlength="8000"
+                                  @bind="f.History"></textarea>
+                        <div class="form-text">Shown on your venue page, and on events you let tell it.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="@($"venue-rules-{key}")">House rules</label>
+                        <textarea class="form-control" rows="3" id="@($"venue-rules-{key}")" maxlength="4000"
+                                  placeholder="e.g. No candles upstairs. Quiet after midnight. Park behind the barn."
+                                  @bind="f.HouseRules"></textarea>
+                    </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-6 col-md-4">
+                            <label class="form-label" for="@($"venue-max-{key}")">Most who may stay overnight</label>
+                            <input type="number" min="1" class="form-control" id="@($"venue-max-{key}")"
+                                   @bind="f.MaxOvernightGuests" />
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="@($"venue-published-{key}")" disabled="@(f.VerifiedUtc is null)"
+                                       @bind="f.IsPublished" />
+                                <label class="form-check-label" for="@($"venue-published-{key}")">
+                                    Show the venue page to everybody
+                                </label>
+                            </div>
+                            @if (f.VerifiedUtc is null)
+                            {
+                                <div class="form-text" id="@($"venue-publish-why-{key}")">
+                                    A public page headed "the venue" is itself a claim to be the building, so it
+                                    waits until you are confirmed as the venue here.
+                                </div>
+                            }
+                            else if (f.IsPublished && _orgUrlName is { Length: > 0 } slug)
+                            {
+                                <div class="form-text">
+                                    <a href="@($"/o/{slug}/venues/{f.PlaceId}")">Open the venue page</a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="button" class="btn btn-primary" id="@($"venue-save-{key}")"
+                                disabled="@_busy" @onclick="() => SaveAsync(f)">Save</button>
+                    </div>
+                    @if (f.ProfileId is { } profileId)
+                    {
+                        <VenuePhotoLibrary OrgId="OrgId" ProfileId="profileId" />
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [SupplyParameterFromQuery(Name = "place")] public Guid? Place { get; set; }
+
+    private LoadResult<VenueProfileRecord> _profiles;
+    private readonly List<Form> _forms = [];
+    private string? _orgUrlName;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private sealed class Form
+    {
+        public Guid PlaceId { get; init; }
+
+        /// <summary>Null for a place listed here that has not been saved as a profile yet.</summary>
+        public Guid? ProfileId { get; init; }
+        public string PlaceName { get; init; } = "";
+        public string? History { get; set; }
+        public string? HouseRules { get; set; }
+        public int? MaxOvernightGuests { get; set; }
+        public bool IsPublished { get; set; }
+        public DateTime? VerifiedUtc { get; init; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _profiles = await AdminClient.GetVenueProfilesAsync(OrgId);
+        _orgUrlName ??= (await AdminClient.GetOrganizationAsync(OrgId))?.UrlName;
+        Fill(_profiles.Items);
+
+        // Started from a place's page: offer that place, unsaved, at the top.
+        if (!_profiles.Failed && Place is Guid placeId && _forms.All(f => f.PlaceId != placeId))
+        {
+            var place = await AdminClient.GetPlaceAsync(placeId);
+            if (place is not null)
+                _forms.Insert(0, new Form { PlaceId = placeId, PlaceName = place.Name ?? place.StreetAddress1 ?? "This place" });
+        }
+
+        _loading = false;
+    }
+
+    private void Fill(IEnumerable<VenueProfileRecord> profiles)
+    {
+        _forms.Clear();
+        _forms.AddRange(profiles.Select(p => new Form
+        {
+            PlaceId = p.PlaceId, ProfileId = p.Id == Guid.Empty ? null : p.Id, PlaceName = p.PlaceName, History = p.History, HouseRules = p.HouseRules,
+            MaxOvernightGuests = p.MaxOvernightGuests, IsPublished = p.IsPublished, VerifiedUtc = p.VerifiedUtc,
+        }));
+    }
+
+    private async Task SaveAsync(Form f)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+
+        var (saved, error) = await AdminClient.SaveVenueProfileAsync(OrgId,
+            new SaveVenueProfileRequest(f.PlaceId, f.History, f.HouseRules, f.MaxOvernightGuests, f.IsPublished));
+
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _profiles = LoadResult<VenueProfileRecord>.Ok(saved);
+        Fill(saved);
+        _note = $"Saved {f.PlaceName}.";
+    }
+}

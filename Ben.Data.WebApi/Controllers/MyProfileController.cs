@@ -68,15 +68,28 @@ public sealed class MyProfileController : BenControllerBase
                   m => m.OrganizationId, o => o.Id, (_, o) => o.AllowMemberPrivatePhotosToClients)
             .AnyAsync(allows => allows, ct);
 
+        // W-CL4: whether the member-facing controls on the profile are addressed to this person
+        // at all. Asked separately from anyOrgAllows — "your group has not enabled this" and
+        // "you are not in a group" are different sentences, and the profile said the first to
+        // people for whom the second was true.
+        var belongsToAnyOrg = await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
+
         return Ok(new MyProfileRecord
         {
             AppUserId    = user.Id,
             DisplayName  = user.DisplayName,
+            FirstName    = user.FirstName,
+            LastName     = user.LastName,
             Email        = user.Email,
+            EmailKind    = user.EmailKind,
+            EmailConfirmed = user.EmailConfirmed,
             PublicPhoto  = photos.FirstOrDefault(p => p.IsPublic),
             PrivatePhoto = photos.FirstOrDefault(p => !p.IsPublic),
             SharePrivatePhotoWithClients    = user.SharePrivatePhotoWithClients,
             AnyOrgAllowsPrivatePhotoSharing = anyOrgAllows,
+            BelongsToAnyOrganization        = belongsToAnyOrg,
+            Gender                          = user.Gender ?? Ben.Data.Common.Enums.ClientGender.NotProvided,
         });
     }
 
@@ -110,10 +123,38 @@ public sealed class MyProfileController : BenControllerBase
             user.DisplayName = trimmed.Length == 0 ? null : trimmed;
         }
 
+        // Legal name. Null still means "not supplied", but unlike DisplayName an *empty* value is
+        // refused rather than treated as "clear it": first and last name are required, so there is
+        // no legitimate way to end up with none. A caller that sends "" is either a bug or an
+        // attempt to bypass the requirement, and both deserve the same answer.
+        if (request.FirstName is not null)
+        {
+            var first = request.FirstName.Trim();
+            if (first.Length == 0) return BadRequest("First name is required.");
+            if (first.Length > MaxLegalNameLength)
+                return BadRequest($"First name cannot exceed {MaxLegalNameLength} characters.");
+            user.FirstName = first;
+        }
+
+        if (request.LastName is not null)
+        {
+            var last = request.LastName.Trim();
+            if (last.Length == 0) return BadRequest("Last name is required.");
+            if (last.Length > MaxLegalNameLength)
+                return BadRequest($"Last name cannot exceed {MaxLegalNameLength} characters.");
+            user.LastName = last;
+        }
+
         // Same null-means-untouched rule as DisplayName: consent is only changed when the caller
         // actually says so, never as a side effect of editing something else on the page.
         if (request.SharePrivatePhotoWithClients is { } share)
             user.SharePrivatePhotoWithClients = share;
+
+        // Same null-means-untouched rule. Self-declared and optional; NotProvided is a real
+        // choice, stored as null so "never asked" and "prefers not to say" read identically —
+        // both select the generic default avatar, which is the only thing this feeds.
+        if (request.Gender is { } gender)
+            user.Gender = gender == Ben.Data.Common.Enums.ClientGender.NotProvided ? null : gender;
 
         user.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -269,6 +310,9 @@ public sealed class MyProfileController : BenControllerBase
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private const int MaxDisplayNameLength = 100;
+
+    /// <summary>Matches the column width configured on AppUser.</summary>
+    private const int MaxLegalNameLength = 100;
 
     /// <summary>
     /// How many times a slot write may be attempted before a unique-index collision is treated as

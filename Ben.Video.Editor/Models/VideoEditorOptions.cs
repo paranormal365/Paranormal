@@ -15,6 +15,16 @@ public sealed class VideoEditorOptions
     public bool MultiTrack { get; set; } = false;
 
     /// <summary>
+    /// Whether the first thing imported into an empty project is placed on the timeline for you.
+    /// </summary>
+    /// <remarks>
+    /// Imports go to the media bin and are placed when you ask, which is how an editor with a bin
+    /// behaves. The exception is the very first file into an empty project: nobody opens an editor,
+    /// picks a video and wants to look at an empty timeline. Default: true.
+    /// </remarks>
+    public bool AutoPlaceFirstImport { get; set; } = true;
+
+    /// <summary>
     /// Enable dedicated audio tracks independent from video clips.
     /// Requires MultiTrack = true to show multiple audio tracks; a single audio track
     /// is shown even in single-track mode when this is true.
@@ -253,4 +263,51 @@ public sealed class VideoEditorOptions
     /// Default: false
     /// </summary>
     public bool NativeSidecar { get; set; } = false;
+
+    /// <summary>
+    /// Where the sidecar can be downloaded from, so the panel that asks for it can offer it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The panel said "Download and run it" and gave nobody anything to click. The downloads
+    /// page existed the whole time, one level down from the standalone editor, and nothing in the
+    /// editor linked to it — so the instruction was an instruction to go and find something
+    /// (2026-09-05 audit, F17).</para>
+    ///
+    /// <para>A host setting rather than a constant, because the two hosts reach it differently:
+    /// the site is at a site-absolute path, the standalone editor at one relative to its own
+    /// <c>&lt;base&gt;</c>. Null hides the link, which is right for a host that ships no sidecar.
+    /// </para>
+    /// </remarks>
+    public string? SidecarDownloadUrl { get; set; }
+
+    /// <summary>
+    /// The sidecar version this host is currently handing out, e.g. "1.1.0.0". Null says nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>Paired with <see cref="SidecarDownloadUrl"/>: the editor already learns the INSTALLED
+    /// version from the sidecar's own health endpoint, so this is the other half of "is yours
+    /// older than ours?". There is no auto-updater and no update feed — the sidecar is installed
+    /// once from a .dmg or .exe and nothing has ever told anybody a newer one exists, so an
+    /// install from before 2026-09-19 would go on watching the whole filesystem for ever.</para>
+    ///
+    /// <para>A host setting for the same reason the download URL is one, and because it has to be
+    /// bumped in the same breath as uploading a new build. Leave it null and the editor never
+    /// mentions updates, which is right for a host that ships no sidecar of its own —
+    /// see <see cref="SidecarUpdateCheck"/> for how carefully "null" is honoured.</para>
+    /// </remarks>
+    public string? PublishedSidecarVersion { get; set; }
+
+    /// <summary>
+    /// Whether to show the operator tools — the ffmpeg diagnostics chip and the panel behind it
+    /// (MEMFS residency, worker state, the raw ffmpeg log).
+    /// </summary>
+    /// <remarks>
+    /// Off by default, deliberately. These are for whoever runs the platform, not for someone
+    /// editing their own footage: the panel reports internals, names files and commands, and
+    /// offers a worker reset that is meaningless to anyone else. The editor has no notion of
+    /// roles — it is a component library — so each host sets this from the identity it already
+    /// holds. Defaulting to off means a host that never thinks about it stays quiet rather than
+    /// exposing its plumbing.
+    /// </remarks>
+    public bool ShowDiagnostics { get; set; } = false;
 }

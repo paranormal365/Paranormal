@@ -79,7 +79,7 @@ JSON serialisation uses `System.Text.Json` with `WriteIndented = false` and `Jso
 **File:** `Ben.Service.RepositoryService/Services/AddressGeocodingService.cs`
 
 ### Summary
-Converts a postal address to latitude/longitude coordinates by calling the Nominatim OpenStreetMap API.  
+Converts a postal address to latitude/longitude coordinates by calling Geocodio (metered; the maps themselves are Apple MapKit JS since item 228).  
 Used by `AdminOrganizationAddressController` and `AdminUserAddressController` — geocoding is applied in the `Create` and `Update` controller overrides before delegating to `AdminEntityControllerBase`.
 
 ### Key Method

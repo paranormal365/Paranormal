@@ -391,6 +391,53 @@ DECIDED: **spec document only**; import features come later.
 
 ---
 
+
+## Area 10 — Field Kit (recording an investigation on the phone)
+
+**Status: built 2026-08-25.** The iPhone/iPad app records a session offline — magnetic field
+(magnetometer), sound level, position, heading and relative altitude — with photos, video clips
+and audio captured into it, EVP question-and-answer marking, a sentry mode that watches an
+unattended device, and replay on the phone. Sessions export as a Device Data Format v1 bundle
+(Area 7's spec, now implemented by its first device) and upload to the server a file at a time.
+The website plays a session back on one playhead.
+
+A session carries the **room** the operator said they were in: everything recorded — readings,
+marks, photographs, clips — inherits it until they say otherwise, and changing it drops a mark of
+its own. This exists because a fix indoors is 20–50 m wide and cannot tell one room from another,
+so the person standing there is the only reliable source of that fact.
+
+**The material reaches the client's report.** A case report section of type *Field Sessions* cites
+sessions recorded for that case's investigations. The citation is a reference — the document, the
+recordings and their per-file checksums stay with the upload — and the PDF states what each cited
+session holds: where it was, when it ran (or that it was interrupted), who recorded it or that
+nobody was signed in, the device, the reading and mark counts, and every recording, flagged when a
+checksum did not match on arrival.
+
+### Enhancement — feed a recording into the video editor
+
+*Ben, 2026-08-25: to be discussed once the apps are finished and proven. Recorded here so it is
+not lost, and deliberately NOT built.*
+
+When somebody opens the video editor, they should be able to pick one of these uploaded sessions
+and have it generate a video and audio piece from the whole recording — the captured clips laid
+out on the timeline in the order they happened, with the readings available as something the
+editor can show over the footage (a trace, a needle, the marks where something crossed a level).
+
+What already exists in its favour: every reading, marker and capture carries a timestamp on one
+clock, media carries start offsets and durations, and the session document is stored verbatim,
+so the editor would be reading the same source the playback page does rather than a second
+interpretation of it.
+
+Open questions to settle at that point, not now:
+
+- Does the editor pull a session in as a *project template* (clips placed, readings alongside)
+  or as a rendered piece it then edits? The first keeps the evidence editable; the second is
+  faster to something watchable.
+- What do the readings look like on screen — an overlay burned into the render, or a separate
+  track the editor can style? Burning them in makes the numbers unarguable but unchangeable.
+- A five-hour session is mostly silence. Does it bring in the whole recording, or only the
+  stretches around marks?
+
 ## Area 8 — Group Type Expansion (UFO / Bigfoot / other paranormal)
 
 ### ⏸ LONG-TERM 2026-08-15 — the site stays ghost-hunting-only for now

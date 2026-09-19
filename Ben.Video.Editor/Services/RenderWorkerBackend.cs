@@ -69,12 +69,14 @@ public sealed class RenderWorkerBackend : IRenderBackend
                 var effectiveDuration = videoClip.EffectiveDuration > 0 ? videoClip.EffectiveDuration : videoClip.Duration;
                 var volumeFilter = ExportArgBuilders.BuildVolumeAutomationFilter(videoClip, effectiveDuration);
                 var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
-                    videoClip.AppliedEffects, _effectRegistry, effectiveDuration, videoClip.Speed);
+                    videoClip.AppliedEffects, _effectRegistry, effectiveDuration, videoClip.Speed,
+                    previewWidth, previewHeight);
                 var args = ExportArgBuilders.BuildBackgroundRenderVideoArgs(
                     inputName, segmentName, start, end, videoClip.Speed, settings,
                     volumeFilter, videoClip.Effects, videoClip.MuteAudio,
                     extraVf: string.IsNullOrEmpty(appliedVf) ? null : appliedVf,
-                    outputWidth: previewWidth, outputHeight: previewHeight);
+                    outputWidth: previewWidth, outputHeight: previewHeight,
+                    sourceHasAudio: videoClip.HasAudio);
 
                 var code = await _worker.ExecAsync(args);
                 if (code != 0) return RenderJobResult.Failed($"ffmpeg exit code {code}");
@@ -87,7 +89,8 @@ public sealed class RenderWorkerBackend : IRenderBackend
                 else if (imageClip.OpfsExt is not null) mountedClipId = imageClip.Id;
 
                 var duration = imageClip.Duration > 0 ? imageClip.Duration : 5.0;
-                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(imageClip.AppliedEffects, _effectRegistry, duration);
+                var appliedVf = ExportArgBuilders.BuildAppliedEffectsFilter(
+                    imageClip.AppliedEffects, _effectRegistry, duration, 1.0, previewWidth, previewHeight);
                 var args = ExportArgBuilders.BuildBackgroundRenderImageArgs(
                     inputName, segmentName, duration, settings,
                     outputWidth: previewWidth, outputHeight: previewHeight,

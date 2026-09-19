@@ -43,7 +43,7 @@ public sealed class FfmpegServiceRecoveryTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
-            if (identifier == "import" && args?[0] is string path)
+            if (identifier == "benImportEditorModule" && args?[0] is string path)
             {
                 if (path.Contains("ffmpegInterop")) return ValueTask.FromResult((TValue)(object)FfmpegModule);
                 if (path.Contains("opfsInterop")) return ValueTask.FromResult((TValue)(object)OpfsModule);
@@ -53,6 +53,150 @@ public sealed class FfmpegServiceRecoveryTests
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
             => InvokeAsync<TValue>(identifier, args);
+    }
+
+    // ── A failed command must not leave the service pinned at Processing ─────
+    // Backlog item 94. A background render froze at a percentage with Export disabled behind it
+    // and no ffmpeg operation in flight — the state machine had entered Processing and never
+    // come out, because every escape from a command that fails (a throw from the module, or a
+    // non-zero exit code) bypassed the SetState(Ready) that only sat on the success path.
+    //
+    // A failing command is ordinary — a bad filter, a stream that is not there — and the core
+    // survives it. What must not survive it is a status chip that says "Processing… 64%" forever.
+
+    [Fact]
+    public async Task ExecAsync_WhenTheModuleThrows_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.ThrowingIdentifiers.Add("exec");
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ExecAsync(["-i", "in.mp4", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ExecAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["exec"] = 1;          // ffmpeg refused the command
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ExecAsync(["-i", "in.mp4", "-map", "0:a", "out.mp4"]));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    [Fact]
+    public async Task ConcatCopyAsync_WhenFfmpegExitsNonZero_ReturnsToReady()
+    {
+        var js = new MultiModuleFakeJsRuntime();
+        js.FfmpegModule.Results["concatCopy"] = 1;
+
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ConcatCopyAsync(["a.mp4", "b.mp4"], "out.mp4"));
+
+        Assert.NotEqual(FfmpegState.Processing, svc.State);
+    }
+
+    // ── A crashed engine has to announce itself ──────────────────────────────
+    // 2026-09-05 audit, F7. Every failure went to Error and stayed there until somebody pressed
+    // Initialize again, and nothing said so — the preview stopped refreshing, exports refused to
+    // start, and the only clue was a status chip most people never look at. A trap and a bad
+    // command are not the same thing, and the difference decides whether the editor can put itself
+    // right.
+
+    private sealed class ThrowingModule : IJSObjectReference
+    {
+        public required Exception Failure { get; init; }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            if (identifier == "exec") throw Failure;
+            return ValueTask.FromResult(default(TValue)!);
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SingleModuleJsRuntime(IJSObjectReference module) : IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+            => ValueTask.FromResult((TValue)module);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)
+            => InvokeAsync<TValue>(identifier, args);
+    }
+
+    private static async Task<(FfmpegService Service, List<WorkerFailureKind> Crashes)>
+        RunFailingExecAsync(Exception failure)
+    {
+        var js  = new SingleModuleJsRuntime(new ThrowingModule { Failure = failure });
+        var svc = new FfmpegService(js, new ErrorLogService(), new MemFsLedger(), new WorkerWatchdog());
+        await svc.LoadAsync();
+
+        var crashes = new List<WorkerFailureKind>();
+        svc.OnWorkerCrashed += kind => crashes.Add(kind);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.ExecAsync(["-i", "in.mp4", "out.mp4"]));
+        return (svc, crashes);
+    }
+
+    [Fact]
+    public async Task RecordFailure_WasmRuntimeError_RaisesOnWorkerCrashed()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("RuntimeError: memory access out of bounds"));
+
+        Assert.Equal(WorkerFailureKind.Crashed, svc.LastFailureKind);
+        Assert.Equal([WorkerFailureKind.Crashed], crashes);
+    }
+
+    [Fact]
+    public async Task RecordFailure_OutOfMemory_IsToldApartFromATrap()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("Aborted(). Cannot enlarge memory arrays"));
+
+        Assert.Equal(WorkerFailureKind.OutOfMemory, svc.LastFailureKind);
+        Assert.Equal([WorkerFailureKind.OutOfMemory], crashes);
+    }
+
+    /// <summary>
+    /// An ordinary failure must not set off a restart. Restarting the engine every time a filter
+    /// argument is wrong would be its own kind of broken.
+    /// </summary>
+    [Fact]
+    public async Task RecordFailure_AnOrdinaryError_RaisesNothing()
+    {
+        var (svc, crashes) = await RunFailingExecAsync(
+            new InvalidOperationException("No such file or directory"));
+
+        Assert.Equal(WorkerFailureKind.Recoverable, svc.LastFailureKind);
+        Assert.Empty(crashes);
+    }
+
+    [Fact]
+    public async Task ResetWorkerAsync_ClearsTheFailureAndTheWedge()
+    {
+        var (svc, _) = await RunFailingExecAsync(
+            new InvalidOperationException("RuntimeError: unreachable"));
+
+        await svc.ResetWorkerAsync();
+
+        Assert.Equal(WorkerFailureKind.Recoverable, svc.LastFailureKind);
+        Assert.False(svc.IsWorkerWedged);
+        Assert.Equal(FfmpegState.Idle, svc.State);
     }
 
     // ── ExtractAudioAsync nested-state bug ───────────────────────────────────
@@ -183,7 +327,7 @@ public sealed class FfmpegServiceRecoveryTests
     {
         public GatedFakeModule Module { get; } = new();
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
-            => identifier == "import"
+            => identifier == "benImportEditorModule"
                 ? ValueTask.FromResult((TValue)(object)Module)
                 : throw new NotSupportedException(identifier);
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args)

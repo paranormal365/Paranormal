@@ -31,11 +31,35 @@ replaced by whatever name they chose.
 | A group member | Work cases, record findings, attend investigations. |
 | A group owner or administrator | Configure the group, manage members, accept or decline requests. |
 
+## The map of published cases
+
+Below the search on the home page, every case a group has published is on a map, with the same
+cases listed beneath it. Pins that sit close together at the zoom you are looking at gather into a
+single pin showing how many are there; zoom in and they separate. Click a pin to see the case, or
+the cases, at that spot. Pan or zoom and the list beneath follows the part of the map you are
+looking at.
+
+![The map of published cases](/help/media/getting-started/public-map.png)
+*Three cases near Nashville, gathered into one pin at this zoom.*
+
+If your browser is allowed to say where you are, the map starts there; if not, it starts on the
+whole country and works just the same. A pin marks the area a case is in, not a front door — the
+site deliberately places it a little way off.
+
 ## Voting on a published case
 
 Anyone with an account can vote on a published case, and on individual pieces of evidence within
 it. There are three answers: **confirms**, **inconclusive**, and **disputes**. You get one vote,
 and changing your mind replaces it rather than adding a second.
+
+![The vote button with its three choices open, and the row of actions beside it](/help/media/getting-started/case-actions.png)
+*One button to vote with, and the choices it offers. Everything in the row explains itself when you
+hover over it.*
+
+Voting is **one button**, under the counts. It carries a hollow thumb until you have voted, and the
+filled mark of your own answer afterwards, so you can always see what you said without reading a
+legend. Press it and the three choices appear underneath; pause on one and it tells you what it
+means. Pressing your own answer again takes the vote back.
 
 Alongside the three counts you will see a single **score**. It is the votes added up, with confirms
 counting **+1**, disputes **−1**, and inconclusive **0** — so a green **+4** means the people who
@@ -48,15 +72,67 @@ The score is always shown with the number of votes behind it, because **+4** fro
 **+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.
 
+### The other buttons beside it
+
+Four more buttons sit in the same row, all the same height, and none of them carries a word — hover
+over one and it says what it is.
+
+- **Share** opens the places a case can go when you hover over it: Facebook, X, Bluesky, Reddit,
+  WhatsApp, email, and **Copy link**. On a phone, where there is nothing to hover over, pressing the
+  button opens your own share sheet instead.
+- **Repost** puts the case on the feed as a post by you. It is a link to the case — posting on
+  behalf of a group takes permission, and this is one person saying *look at this*.
+- **Comments** takes you straight down to the comments on this page, with the number on it.
+- **Report** flags the case for a site moderator. Reporting never hides anything by itself.
+
+If you are not signed in the counts are still there, with **Sign in** under them.
+
+## Commenting on a published case
+
+Under a published case is a box to say something about it. Comments are plain text — no formatting,
+no attachments — and yours can be deleted by you at any time. Somebody else's can be reported, which
+sends it to the same moderation queue as anything else.
+
+A web address typed into a comment, a message or a feed post gets a small card under it showing what
+it points at. Cards are only ever built for addresses **on this site** — a case, a tour, an event or
+a group — out of records we already hold, so they stay correct when something is renamed. A link
+somewhere else stays a link, with the site it belongs to named under it.
+
 ## Finding what's near you
 
 ![The Find Groups page listing nearby groups](/help/media/getting-started/find-groups.png)
 *Browse Groups lists every group, closest first once you have given it a place to measure from.*
 
-The home page shows what's happening close to you — groups that serve your area, and public events
-you could attend. If your browser allows it, this uses your current location automatically; if not,
-type a city, address, or zip code instead. Either way, choose how far to look with the distance
-dropdown.
+The home page shows what's happening close to you — walks you could book, public events you could
+attend, and groups that serve your area. If your browser allows it, this uses your current location
+automatically; if not, type a city, address, or zip code instead. Either way, choose how far to look
+with the distance dropdown.
+
+![What's near you, with tours, events and groups on separate tabs](/help/media/getting-started/whats-near-you.png)
+*Each tab carries its count, so you can see the shape of what was found before opening anything.
+A tab only appears when there is something behind it.*
+
+**Places** is the fourth tab, and it is a different kind of answer from the other three. A place is a
+location rather than an organisation or a date — a cave, a mill, a hotel — and the tab lists the
+ones near you that groups have actually published work at. Opening one shows everything anybody has
+shared about that location: which groups have investigated there, what they concluded, recorded
+sessions, photographs from events held there, and what visitors have posted.
+
+A place only appears once there is something to read at it. A location gets a record the moment the
+first group types its address, so listing every one of them would be a directory of addresses
+rather than somewhere worth going. **Private residences never appear**, whatever has happened at
+them.
+
+Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
+Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
+own name, so it is the same colour here, on the group's page, and on the tour's own page.
+
+Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
+open cases in your groups (yours first), how many messages and requests are waiting, and any gear
+checked out to you with its due date. Each tile opens exactly what it counts. A group that has not
+written its own public page yet gets one built from what it has already told us — what kind of
+group it is, the area it serves, how many members, its public cases, whether it is taking new
+cases, and its next public event.
 
 Groups and events are shown differently on purpose. A group that has opted in to being found is
 shown exactly where it is — that is the whole point of being listed. An event's location is only
@@ -68,22 +144,234 @@ not shown until you are actually attending.
 Everything you can reach is in the **menu down the left**. It only ever lists what applies to you,
 so it grows once you sign in and grows again if you run a group.
 
-A few things there are worth knowing about:
+Signed out it is a short list. Signed in, most of it is **grouped by subject**, so the menu stays
+about eight rows however much you can reach:
 
-- **Filter** at the top of the menu narrows it as you type. Useful once the list is long.
+- **Your groups come first.** Directly below Home sits a link to each group you belong to, by
+  name. Belong to more than five and they fold into one **Your Organizations** entry that opens
+  into the list — the menu stays a menu, however many groups you join.
+- **Notifications** and **Organizations** stay at the top level — you check those constantly, and
+  they should not be behind anything.
+- **My Work** — your cases, your investigations, your requests.
+- **Equipment** — the public catalogue, your own gear, what you have out on loan, and gear questions.
+- **Media** — uploaded files (see *Your Files* for what deleting one means), the media library, your videos.
+- **Community** — the feed, publications, finding a group, and requesting an investigation.
+- **Administration**, for site administrators, holding the site-wide tools grouped by what they
+  are for.
+
+A few things worth knowing:
+
+- **Filter** at the top of the menu narrows it as you type, and looks *inside* the groups. Type
+  "checkouts" and you get the one entry, with its group opened for you.
+- Entries with a **chevron** open into a group rather than going somewhere. Click the name to open
+  or close it.
+- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
+  **A closed group shows the total of everything inside it**, so nothing is ever hidden by being
+  grouped — open it and each entry shows its own share.
 - The **arrow beside the site name** collapses the menu to icons and back, if you would rather give
   the page the width.
-- Entries with a **chevron** open into a group rather than going somewhere — **Administration**
-  works this way, holding the site-wide tools grouped by what they are for.
-- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
 
 Along the top right are the display controls: a **sun or moon** switches between light and dark,
 and the **arrows** expand the page to fill the screen. Both are remembered on this device.
 
 ## Getting an account
 
-You need an account to request an investigation or join a group. Accounts are free, and the
-address you sign in with is never shown publicly.
+Accounts are free, and the address you sign in with is never shown publicly.
+
+**You do not need one first to ask for help.** The investigation request form opens to everybody:
+fill it in, and the last step asks your name, email and a password so the group has somewhere to
+write back. The account is made from the request itself — see
+[Requesting an Investigation](/help/requesting-an-investigation). You do need an account before
+you can join a group.
+
+![The sign-up form](/help/media/getting-started/signup.png)
+*The @name is checked as you type, so you find out it is taken before you fill in the rest.*
+
+**To create one on its own**, use the sign-in page — *New here? Create an account* — or go
+straight to `/signup`. You'll be asked for four things:
+
+| | |
+|---|---|
+| **Your name** | What people see on your posts and your profile. Change it whenever you like. |
+| **Your @name** | How people mention you. **Chosen once and permanent** — see below. |
+| **Email** | Where we send the confirmation link. Never shown publicly. |
+| **Password** | At least 8 characters, with an upper-case letter, a lower-case letter and a digit. |
+
+### Your @name
+
+Your **@name** is your handle — `@sarahmitchell` — and it is how somebody writes to you or about
+you. Letters, numbers and underscores only, and it has to be one nobody else has taken; the page
+tells you as you type.
+
+**It cannot be changed afterwards.** That is deliberate: your @name ends up written inside other
+people's posts, and letting it move would leave those posts pointing at somebody who is no longer
+you. Pick one you will still want in a year.
+
+### Confirming your email
+
+You cannot sign in until you have. We send a link; open it and press the button on the page it
+takes you to. If your account came from an investigation request, that page also tells you where
+your request stands and shows you the @name we chose for you.
+
+The button matters — we do not confirm your address just because the link was opened. Mail scanners
+and security filters visit every link they find in a message, and a confirmation that happened on
+opening would be one they could complete for you, which would prove nothing about whether the
+address reaches a person.
+
+**If the email never arrives**, do not sign up a second time — a second account on the same address
+is refused anyway, and so is a second investigation request under it. Try to sign in instead. The message that stops you says *"Confirm your email
+address first"*, and it now carries a **Send the email again** button; press that and a new link
+goes out.
+
+The reply is the same sentence whatever happens behind it: *"If that address has an unconfirmed
+account, a new link is on its way."* It says nothing about whether the address is registered, on
+purpose — anyone can type any address into that box, and a page that answered differently for a
+real one would be a way to discover who has an account here. Check your spam folder too; a message
+carrying a link is exactly what filters are suspicious of.
+
+There is a minute's wait between requests, so pressing it repeatedly will not send more mail.
+
+If the link itself has expired, use the same button for a fresh one.
+
+## Signing in with Apple or Microsoft
+
+The sign-in page also offers **Sign in with Apple** and **Sign in with Microsoft**. Either one
+signs you in with an account you already hold there, and no password of ours is involved.
+
+The first time, we need to know who you are here. You can **make a new account** — a display
+name and a permanent @name are all it asks — or, if you already have an account here under some
+other address, **link it instead**: give that account's email and password (and its code, if it
+has two-step sign-in). Linking is always offered, because the address Apple or Microsoft gives us
+is often not the one you signed up with, and we would rather join your accounts than make you a
+second one that has none of your history.
+
+Apple lets you **hide your email**. If you do, we receive a forwarding address that reaches you
+only while Apple allows it, and your profile says so rather than showing an address you would not
+recognise. If you give us no address at all, your profile warns you: Apple is then the only way
+into your account, and there is no reset link to fall back on until you add one.
+
+## Your first minute
+
+Right after your first sign-in, a short welcome walks you through the basics: what people
+should call you, what brought you here (it drops you at the right door — requesting an
+investigation, finding a group, or starting one), and a ten-second tour of where everything
+lives. Every step is skippable, and skipping means it never asks again.
+
+## Two-step sign-in
+
+You can ask us for a code from your phone as well as your password. It is **entirely optional** and
+off unless you turn it on, under **Security** on your profile. Nobody else can turn it on or off for
+you — not an administrator either, because only you have the app that makes the codes.
+
+![Turning on two-step sign-in](/help/media/getting-started/two-step.png)
+*Scan the square with your app, or type the key beside it in by hand.*
+
+Any authenticator app works — **Duo Mobile**, **Okta Verify**, Google Authenticator, Microsoft
+Authenticator, 1Password. Scan the square code with the app, type the six digits it shows, and it is
+on. If you cannot scan, the key is printed beside the code to type in by hand.
+
+**Save the recovery codes.** They are shown once, and once only — we keep a scrambled copy that
+cannot be read back, so nobody can recover them for you afterwards. Each one signs you in a single
+time if you lose your phone. Print them, or put them somewhere that is not the phone.
+
+Turning it off again needs a current code from your app, which is what stops somebody at your
+unlocked computer removing it.
+
+### Signing in once it is on
+
+Enter your email and password as usual. We then ask for the six-digit code — on a phone the keyboard
+offers it straight from the notification, so you rarely have to read it across.
+
+If you have lost your phone, choose **I can't use my app** and enter one of your recovery codes
+instead. Each one works once.
+
+## When sign-in will not let you in
+
+The message says which of these it is, because the answer is different every time:
+
+| What it says | What to do |
+|---|---|
+| Invalid email or password | Check both — or see the note below if you usually sign in with Microsoft. |
+| Confirm your email address first | Open the link we emailed you when you signed up — or press **Send the email again** in that message if it never arrived. |
+| This account is locked for a few minutes | Too many attempts. **Wait** — resetting your password will not help, because it was not the problem. |
+| Too many sign-in attempts | The same, but counted across the whole site rather than your account. Wait a minute. |
+| Couldn't reach the sign-in service | Nothing is wrong with your password — it was never checked. The site could not reach the service behind it. Try again shortly. |
+
+If you are asked for a code, nothing has gone wrong at all — your password was right, and that is
+simply the second step.
+
+## Forgot your password — or never had one
+
+**Forgot your password?** on the sign-in page emails you a link to choose a new one. The link
+brings you back to the site; if your mail app breaks the link, the email also carries a code you
+can paste in by hand.
+
+The same flow covers a case that does not look like "forgot" at all: **an account created by
+signing in with Microsoft has no password**. Password sign-in against it says "invalid email or
+password", which is true but unhelpful — there is nothing to be wrong yet. Use the reset link to
+add a password, and both ways of signing in will work from then on.
+
+One thing first: the reset link only goes to a **confirmed** address, and a Microsoft-made account
+starts with its address unconfirmed — we sent a confirmation link when the account was made. If
+you never followed it, sign in with Microsoft, open your profile, and press **Send the link
+again** in the notice at the top.
+
+Already signed in? **Profile → Security → Password** does the same job without the email round
+trip: it offers *Add password* if your account has none, and an ordinary change-password form if
+it does.
+
+## Empty, or broken?
+
+A list that shows nothing is telling you one of two different things, and the page says which.
+
+**"Nothing here yet"**, or a sentence like *"This group hasn't shared any files yet"*, is an
+answer. The list really is empty. Nothing is wrong, and there is nothing to retry.
+
+**"Couldn't load this"**, in a bordered box with a **Try again** button, means the page could not
+fetch the list at all. What you were looking for is still there — the site could not reach it, or
+was not allowed to. Try again first. If it keeps happening, the box usually names the reason, and
+quoting that on the contact form saves a great deal of guessing.
+
+The difference matters because these used to look identical: anything that failed to load simply
+showed an empty list, so the site would tell you your group had no members when it had four and
+had merely refused to say so.
+
+## Notifications
+
+The **bell** in the top bar counts everything waiting on you, and the number is a total across
+several different kinds of thing. Open it, or the **Notifications** page, to see which.
+
+The sidebar's **Notifications** entry, the bell and the page all report the same number, and that
+number is always the sum of the rows underneath it. If the bell says four, four things are listed.
+
+| | |
+|---|---|
+| Replies on your cases | A group has written back about a case of yours. |
+| Client messages awaiting a reply | Somebody has written to a group you belong to. |
+| Unread group messages | Internal mail at one of your groups. |
+| File permission requests | Somebody wants access to a file you own, and is waiting on your answer. |
+| Equipment requests & overdue gear | Waiting on your decision, or late back. |
+| Posts that mention you | Somebody named you with an **@name** in the feed. |
+| Unread messages | Sent to you through the platform. |
+| Bookings waiting on you | Somebody asked for, or picked, a place at an event you decide bookings for. |
+| Holds running out | Places picked at your event that lapse within a day unless somebody confirms them. |
+| A venue answered you | Your booking at an event has been decided. |
+| Your hold is running out | You picked places, the venue has not confirmed them, and they lapse within a day. |
+
+![The notifications page](/help/media/getting-started/notifications.png)
+*Everything waiting on you, grouped by what it is.*
+
+Buckets with nothing in them are not shown. The page is a list of things to do, not a dashboard of
+zeroes.
+
+**The colour means age, not importance.** A single item from last week is coloured more urgently
+than five from this morning, because the old one is the one somebody is still waiting on.
+
+If you decide bookings for a group, the page also has **Letters about bookings**, where you choose
+how often that group writes to you about them.
+
+Opening something is what clears it — a message you have read, a post you have opened, a request you
+have answered. Nothing disappears before you have seen it.
 
 ## Finding help
 
@@ -104,3 +392,159 @@ You do not need an account to write in. After you send the form you are given a 
 keep it. It is how you read the reply and see whether the message has been picked up, and it is the
 only way back to a message sent without an account. If you were signed in when you wrote, the
 message is attached to your account as well.
+
+## Joining a group — or starting your own
+
+On a group's public page, signed in, there's an **Apply to join** box (when the group is taking
+applications). Say a line about yourself if you like, send it, and the group answers — you'll see
+the state of your application right there on their page.
+
+Or found your own: **Organizations → Start a Group** walks you through it in four short steps —
+what you're starting and its name and web address, where you work (optional, it feeds the "near
+you" search), whether you're taking applications, then a review. Only the first step is required,
+and closing the tab keeps a draft so you can pick up where you left off.
+
+You can also start from the **Pricing** page: each plan's **Start a group on this plan** button
+opens the same steps with that plan named at the top, and when the group is created you go to its
+billing page to confirm the plan. Starting on the free plan works the same way, with nothing to pay.
+
+The first question is **what kind of group this is**, because it decides what everything else
+starts as:
+
+| | |
+|---|---|
+| **Investigation group** | Starts **private**: your address is hidden from the public and your calendar is members-only. Cases stay between you and your clients. This is what most groups are, and it's the default. |
+| **Ghost walking tour** | Starts **public**: your meeting point is shown and searchable, and the tours you schedule are visible to everyone with no account needed. A tour nobody can find is worth nothing, so it doesn't start hidden. |
+
+Neither choice locks anything away — a tour company can take investigation requests, and an
+investigation group can run public tours. It's a starting point, and every part of it is
+changeable from your group's settings afterwards. If you run tours as well as investigations,
+turn on **runs public tours** in your settings and you'll be listed under walking tours in the
+group finder while your badge still says what you mainly are. You're the owner from the first
+moment, and your new group's page offers a quick tour of what to do next — relaunch it any time
+from the **?** button on your group's page.
+
+### What you'll see as a new member
+
+Once a group accepts you, its hub shows you the member baseline: the group's details, the
+member list, the calendar, messages, and files. **Cases and investigations are not part of the
+baseline** — those tabs appear when the group hands you a role that opens them (many groups use
+an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior Investigator*
+are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
+role you're missing, not a bug — ask whoever runs your group.
+
+## Investigating on your own
+
+You do not need a group. Open any **public location's** page — a landmark, a cemetery, a museum —
+and, signed in with no group of your own, it offers **Start investigating on your own**.
+
+Pressing it explains the bargain before anything happens, and then does two things at once: it
+creates a private space of your own to keep investigations in, and it opens the form to schedule
+your first visit to the place you were already looking at. The space is free, it is yours, nobody
+else joins it, and it never appears in any list of groups — it exists so the rest of the site has
+somewhere to hang your work, because investigations, evidence and reports all belong to something.
+
+![Starting on your own](/help/media/getting-started/investigate-alone.png)
+*What the button explains before it does anything: a space of your own, free, and what you record at
+a public place is public.*
+
+**What you record at a public location is public.** That is the bargain and it is worth
+understanding before you start: your visit joins that place's own page, where anybody can read it.
+One person's night somewhere is an anecdote; the same place recorded by eleven people is a record
+worth having, and free accounts are what fill it. A plan is what makes your work yours instead —
+see [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+Somebody's home is never part of this. Private-residence work is client work, it belongs to the
+paid lane, and a home's page offers none of these buttons.
+
+You can also simply **post** about a public place, with no space and no visit: see
+[Posting about a place](the-feed#posting-about-a-place). And what you record on the phone can be
+published to a place's archive the same way — see [the mobile apps](the-mobile-apps).
+
+## A group's own pages
+
+Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a
+strip of pills across the top takes you to their **Cases**, their **Events**, any pages they have
+written, and back to their home.
+
+![A group's public page](/help/media/getting-started/group-page.png)
+*What the group is, where it works, how many people, and the next night you could turn up to.*
+
+**Cases** is what they have published of their investigations.
+
+![A group's published investigations](/help/media/getting-started/group-cases.png)
+*A case the group concluded is haunted is marked down its left edge. The whole card opens it.*
+
+Each case has a page with the group's summary, what they found if they chose to publish it, a
+timeline of what happened and when, and a community rating you can vote in once you are signed in.
+
+## What's on
+
+**What's On** in the menu lists every public night any group has opened to anyone — walks,
+investigations and open meetings together, soonest first.
+
+![What's on, grouped by the night each event happens](/help/media/getting-started/whats-on.png)
+*Grouped by the day, so the date is said once and each night under it only has to tell you what is
+different about it. The bar on the right is how full it is.*
+
+**Every time is the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+in the world you are reading it, with the zone named beside it — so this page, the event's page, the
+email you are sent and the calendar file all agree. An event whose group has not said which zone it
+runs on is shown in UTC and says so.
+
+## Going to a group's public event
+
+Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
+Say you're coming with your email address, click the link we send, and you're on the list (that
+also creates you an account, with no password to invent).
+
+![One public event, with the date, the sign-up and where to meet](/help/media/getting-started/event-page.png)
+*Coming along is the first thing on the page. Where you meet is drawn on a map when the event is a
+tour date, because a walk's meeting point is exact; an ordinary event only gives a town.*
+
+Afterwards, if you captured something, the event's page lets you **offer it to the group**. A
+member reviews every submission. If yours is accepted it becomes part of that event's public
+record, credited to you; if it's declined you're told why, and your file stays private. You can
+see where each of your submissions stands on the same page.
+
+## Ghost walks and tours
+
+A tour is a walk somebody sells: it has a meeting point, a length, and dates you can sign up for.
+They show up on the map on the front page, in **What's near you**, and on the business's own page,
+and each has a page of its own with its pictures, its guides, and when it runs.
+
+![A tour's page](/help/media/getting-started/tour-page.png)
+
+### Asking for a place
+
+You **ask** for a place on a walk, and the tour confirms it. Say how many of you are coming — a
+sign-up can hold several places — and the page will say *your seat is with the tour* until somebody
+there decides.
+
+![Your seat on a walk](/help/media/getting-started/tour-seat.png)
+*Two places reserved, and the optional way to say you have seen it.*
+
+When it is approved you get an email with the meeting point, the time in the tour's own zone, who
+is leading it and what they look like, and a calendar file so your phone reminds you. You get the
+same again the night before. If you are asked for something the tour cannot fit, they will say so
+and you can try another night.
+
+**Money is arranged with the business.** Nothing is taken through this site; the tour's page and
+the email say how they want to be paid, and approving your seat is them saying that side of it is
+settled between you.
+
+Once a seat is reserved, **Got it** tells the tour you have seen it. That is entirely optional —
+your place is held either way — and it simply lets them know you are expecting to be there.
+
+A walk that is full still takes requests. It becomes a waiting list rather than a closed door, and
+the tour will come back to you if room appears.
+
+Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
+night is on the tour's page for you to download.
+
+**Times are the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+you are reading it, with the zone named beside it, so the page, the email and the calendar file
+all agree. An event whose group has not said which zone it runs on is shown in UTC and says so.
+
+At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
+YouTube and so on — if the business has added them.

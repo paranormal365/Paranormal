@@ -30,7 +30,7 @@ namespace Ben.Video.Editor.Services;
 /// </summary>
 public sealed class SidecarTransport(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/_content/Ben.Video.Editor/js/sidecarInterop.js";
+    private const string ModulePath = "js/sidecarInterop.js";
 
     private IJSObjectReference? _module;
     private readonly SemaphoreSlim _moduleGate = new(1, 1);
@@ -156,7 +156,7 @@ public sealed class SidecarTransport(IJSRuntime js) : IAsyncDisposable
             // Cached for the lifetime of the service rather than imported per call: the poll loops
             // issue a request every 250-500ms, and a dynamic import each time is pure overhead
             // (the browser caches the module, but the interop round trip is not free).
-            return _module ??= await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            return _module ??= await js.InvokeAsync<IJSObjectReference>("benImportEditorModule", ModulePath);
         }
         finally
         {

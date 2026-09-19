@@ -1,4 +1,7 @@
 @namespace Ben.Web.Website.Library.Organization
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Service.Models.Entities
 
 @inject IBenAdminClient AdminClient
 
@@ -11,24 +14,259 @@ else
     @if (_errorMessage is not null) { <div class="alert alert-danger mb-3">@_errorMessage</div> }
     @if (_successMessage is not null) { <div class="alert alert-success mb-3">@_successMessage</div> }
 
-    <div class="card">
+    @* ── W-O2 (site evaluation 2026-09-06) ─────────────────────────────────
+       Settings is one very long page: billing, promotion, attribution, address display, media
+       privacy, group kind, walking tours, the starting role, event types, the title ladder,
+       duties and the eligibility matrix. Everything on it belongs here — it is the group's own
+       configuration — but an owner who came to change one thing had to scroll past eleven others
+       to find out whether it was even on this page.
+
+       An index, not tabs. Tabs would hide ten sections to show one and break the reading of a
+       page whose whole job is "here is everything you can set"; the anchors leave the page intact
+       and answer "is it here, and where". *@
+    <nav class="mb-3" aria-label="Settings sections">
+        <div class="d-flex flex-wrap gap-2 small">
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-billing">Billing</a>
+            @if (_runsPublicTours || _kind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour
+                                  || _kind == Ben.Data.Common.Enums.OrganizationKind.PublicEventProvider)
+            {
+                <a class="btn btn-outline-secondary btn-sm" href="#settings-tours">Tours</a>
+            }
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-events">Hosted events</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-promote">Promotion</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-attribution">Feed attribution</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-group">Group &amp; addresses</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-event-types">Event types</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-member-levels">Member titles</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-duties">Duties</a>
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-duty-matrix">Who can do what</a>
+        </div>
+    </nav>
+
+    @* The door to billing — its own page, not a card here: a payment flow, plan, history and
+       receipts are a manage-everything surface (pages-over-windows), and half of it was
+       write-only until the page existed. *@
+    <div class="card mb-3" id="settings-billing">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="credit-card" Class="fs-4 text-success" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Billing &amp; subscription</h6>
+                <span class="small text-secondary">Your plan, payments, receipts — and where to subscribe.</span>
+            </div>
+            <a class="btn btn-outline-primary" href="/organizations/@OrgId/billing">Open billing</a>
+        </div>
+    </div>
+
+    @* Item 233: the door to tours. Its own page, and a page per tour behind that — a tour
+       carries its guides, its dates, its guest email, its gallery and its reviews, and a card
+       here would be the tallest thing on this screen. Shown only to a group that runs tours,
+       because for everybody else it is a door to an empty room. *@
+    @if (_runsPublicTours || _kind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour
+                          || _kind == Ben.Data.Common.Enums.OrganizationKind.PublicEventProvider)
+    {
+        <div class="card mb-3" id="settings-tours">
+            <div class="card-body d-flex align-items-center gap-3">
+                <BenIcon Name="map" Class="fs-4 text-primary" />
+                <div class="flex-grow-1">
+                    <h6 class="card-title mb-0">Tours</h6>
+                    <span class="small text-secondary">
+                        The walks you sell, who guides them, and what your guests are sent.
+                    </span>
+                </div>
+                <a class="btn btn-outline-primary" id="org-tours-link"
+                   href="@($"/organizations/{OrgId}/tours")">Open tours</a>
+            </div>
+        </div>
+    }
+
+    @* Item 235: the door to hosted events, for the same reason tours got one — an event carries
+       its dates, its rooms, its bookings and its menus, and a card here would dwarf the page. It
+       is deliberately NOT gated the way the tours card is: there is no "we host events" switch,
+       hosting is meant for every kind of group (a retreat and a lock-in are the same record as a
+       ghost hunt), and the events page itself says what publishing costs and holds the credits.
+       Hiding the door on kind would leave a page every group may use reachable only by typing its
+       address — the write-only shape this codebase keeps finding. *@
+    <div class="card mb-3" id="settings-events">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="calendar" Class="fs-4 text-primary" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Hosted events</h6>
+                <span class="small text-secondary">
+                    The weekends, dinners and runs of dates you put on, and the rooms, bookings and menus behind them.
+                </span>
+            </div>
+            <a class="btn btn-outline-primary" id="org-events-link"
+               href="@($"/organizations/{OrgId}/events")">Open events</a>
+        </div>
+    </div>
+
+    @* Item 235 phase 9: the door to running a place as a venue — describing it, and answering the
+       groups that ask to hold events there. *@
+    <div class="card mb-3" id="settings-venue">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <BenIcon Name="map-pin" Class="fs-4 text-primary" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Your venue</h6>
+                <span class="small text-secondary">
+                    Places your group runs, and other groups asking to hold events there.
+                </span>
+            </div>
+            <a class="btn btn-outline-secondary" id="org-venue-requests-link"
+               href="@($"/organizations/{OrgId}/venue-requests")">Hosting requests</a>
+            <a class="btn btn-outline-primary" id="org-venue-link"
+               href="@($"/organizations/{OrgId}/venue")">Open your venue</a>
+        </div>
+    </div>
+
+    @* Item 166 W3: the door to the promotion wizard. *@
+    <div class="card mb-3" id="settings-promote">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="star" Class="fs-4 text-warning" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Promote your group</h6>
+                <span class="small text-secondary">A reviewed card in the group finder and on the home page.</span>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" id="org-promote-link" href="@($"/organizations/{OrgId}/promote")">Open</a>
+        </div>
+    </div>
+
+    @* Item 186 F7: the door to the feed-attribution queue — a link always shows something,
+       so this leads to the page's own honest empty state rather than hiding until needed. *@
+    <div class="card mb-3" id="settings-attribution">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="film" Class="fs-4 text-info" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Feed attribution</h6>
+                <span class="small text-secondary">Decide which feed videos from your cases link back to this group.</span>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" id="org-feed-attributions-link"
+               href="@($"/organizations/{OrgId}/feed-attributions")">Open</a>
+        </div>
+    </div>
+
+    <div class="card" id="settings-group">
         <div class="card-body">
-            <h6 class="card-title mb-3">Address Display Features</h6>
+            @* The heading said "Address Display Features" while the card also held media privacy,
+               the group's kind, walking tours and the starting role — three of which arrived after
+               it was written. A heading that names a third of what is under it is how a section
+               becomes unfindable. *@
+            <h6 class="card-title mb-3">Group settings</h6>
             <div class="row g-3">
-                <div class="col-12 d-flex align-items-center gap-2">
-                    <input type="checkbox" class="form-check-input" id="set-map" @bind="@_showAddressMap" />
-                    <label for="set-map" class="form-label mb-0">
-                        Enable map display for org addresses
-                        <div class="text-secondary small">Shows map pins and region circles on the public org page and in address lists.</div>
+                @* Two switches were here — "Enable map display for org addresses" and "Enable
+                   directions for org addresses" — and the 2026-09-17 audit found that nothing in
+                   the tree read either one. They saved, reported success, and changed nothing.
+
+                   Withdrawn rather than wired, because the surfaces their own labels described do
+                   not exist: there is no address map on the public group page, and the address
+                   list has neither a map nor a Directions button. Wiring them would have meant
+                   inventing both, which is a feature nobody asked for; the alternative — gating
+                   the geocode preview inside the edit form — would have broken address editing to
+                   satisfy a label.
+
+                   The COLUMNS and the API field stay, so the day either surface is built these go
+                   back with no migration. What is gone is the promise.
+
+                   ShowAddressMap / ShowAddressDirections on Organization; OrganizationSettings-
+                   Controller:57-58 still accepts them. *@
+                @* ── Item 181: media privacy ───────────────────────────────── *@
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1" id="set-strip-av"
+                           @bind="@_stripMediaMetadata" disabled="@(!_stripAvailable)" />
+                    <label for="set-strip-av" class="form-label mb-0">
+                        Remove location data from audio and video
+                        <div class="text-secondary small">
+                            Recordings often carry the coordinates of the place they were made. With this
+                            on, the copy people download has them removed. Photographs are always cleaned,
+                            for every group — and whatever is removed is still recorded for your own
+                            reference, so nothing is lost to you.
+                        </div>
+                        @if (_stripReason is not null)
+                        {
+                            <div class="small mt-1 @(_stripNeedsUpgrade ? "text-warning" : "text-secondary")">
+                                @_stripReason
+                                @if (_stripNeedsUpgrade)
+                                {
+                                    <a href="/pricing" class="ms-1">See plans</a>
+                                }
+                            </div>
+                        }
                     </label>
                 </div>
-                <div class="col-12 d-flex align-items-center gap-2">
-                    <input type="checkbox" class="form-check-input" id="set-dir" @bind="@_showAddressDirections" />
-                    <label for="set-dir" class="form-label mb-0">
-                        Enable directions for org addresses
-                        <div class="text-secondary small">Shows the Directions button on address lists for org members and admins.</div>
+
+                @* What kind of group this is (2026-08-24). It decided the defaults this group
+                   started with; changing it now re-badges the group and is otherwise harmless —
+                   nothing is withheld from any kind. *@
+                <div class="col-12 col-md-6">
+                    <label class="form-label" for="set-org-kind">What kind of group is this?</label>
+                    <select id="set-org-kind" class="form-select"
+                            value="@((int)_kind)"
+                            @onchange="@(e => _kind = (OrganizationKind)int.Parse(e.Value?.ToString() ?? "0"))">
+                        @* Enumerated, not listed. Two hardcoded options is how a kind added to the
+                           enum becomes unreachable from the one screen that can change it — the
+                           write-only pattern this codebase keeps finding. Adding a value to
+                           OrganizationKind now puts it here on its own. *@
+                        @foreach (var kind in Enum.GetValues<OrganizationKind>())
+                        {
+                            <option value="@((int)kind)">
+                                @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(kind)
+                            </option>
+                        }
+                    </select>
+                    <div class="form-text">
+                        Shown as a badge on your public page and in the group finder. It set the
+                        defaults when the group was created; changing it now doesn't move anything
+                        you've already configured.
+                    </div>
+                </div>
+
+                <div class="col-12 d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1" id="set-runs-tours"
+                           @bind="@_runsPublicTours" />
+                    <label for="set-runs-tours" class="form-label mb-0">
+                        We run public walking tours
+                        <div class="text-secondary small">
+                            Lists your group under <strong>Walking tours</strong> in the group finder,
+                            whatever kind you are — so an investigation group that also runs tours is
+                            found by people looking for one, without having to register twice.
+                        </div>
                     </label>
                 </div>
+
+                @* ── W-M1 (site evaluation 2026-09-06) ─────────────────────────
+                   Membership rank alone opens nothing below Administrator, so a group whose new
+                   members start on no functional role hands them a desk full of case links that
+                   answer 403. This is the one place that decides what they start with. *@
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label" for="set-default-member-role">New members start as</label>
+                    <select id="set-default-member-role" class="form-select"
+                            value="@(_defaultMemberRoleId?.ToString() ?? "")"
+                            @onchange="@(e => _defaultMemberRoleId = Guid.TryParse(e.Value?.ToString(), out var picked) ? picked : null)">
+                        <option value="">Nothing — I'll assign roles myself</option>
+                        @foreach (var role in _roles)
+                        {
+                            <option value="@role.Id">@role.Name</option>
+                        }
+                    </select>
+                    @if (_rolesResult.Failed)
+                    {
+                        <div class="alert alert-warning py-1 px-2 small mt-1 mb-0">
+                            @(_rolesResult.Reason ?? "Couldn't load this group's roles, so the list above is incomplete.")
+                        </div>
+                    }
+                    <div class="form-text">
+                        The role somebody is given the moment they join, whether you add them
+                        yourself or accept their application. <strong>Investigator Role</strong> is
+                        what a new group starts with: it lets a member read the cases and
+                        investigations they are put on. Owners and administrators are skipped —
+                        their rank already opens everything.
+                        <br />
+                        Changing this affects people who join <em>from now on</em>. It does not
+                        touch anybody already on your roster.
+                    </div>
+                </div>
+
                 <div class="col-12 mt-2">
                     <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(!(!_saving))"><BenIcon Name="save" Class="me-1" />
                         @(_saving ? "Saving…" : "Save Settings")
@@ -40,7 +278,14 @@ else
 
     @* Loads and saves independently of the settings above — its own permission failure has no
        business blocking the address toggles. *@
-    <OrgCalendarEventTypesManager OrgId="@OrgId" />
+    <div id="settings-event-types"><OrgCalendarEventTypesManager OrgId="@OrgId" /></div>
+
+    <div id="settings-member-levels"><OrgMemberLevelsManager OrgId="@OrgId" /></div>
+
+    <div id="settings-duties"><OrgInvestigationDutiesManager OrgId="@OrgId" /></div>
+
+    @* Directly under the ladder and the duties, because it is about both (item 160). *@
+    <div id="settings-duty-matrix"><OrgDutyEligibilityMatrixManager OrgId="@OrgId" /></div>
 }
 
 @code {
@@ -49,7 +294,21 @@ else
     private bool    _loading  = true;
     private bool    _saving;
     private bool    _showAddressMap;
+    private bool    _stripMediaMetadata = true;
+    private bool    _stripAvailable;
+    private string? _stripReason;
+    private bool    _stripNeedsUpgrade;
     private bool    _showAddressDirections;
+    private OrganizationKind _kind = OrganizationKind.InvestigationGroup;
+    private bool    _runsPublicTours;
+    /// <summary>Kept so the org update can send Name/UrlName unchanged — that endpoint takes
+    /// them as required values, and inventing them here would rename the group.</summary>
+    private string  _orgName = string.Empty;
+    private string  _orgUrlName = string.Empty;
+    private bool    _orgAcceptingApplications;
+    private Guid?   _defaultMemberRoleId;
+    private IReadOnlyList<OrganizationRoleRecord> _roles = [];
+    private LoadResult<OrganizationRoleRecord> _rolesResult;
     private string? _errorMessage;
     private string? _successMessage;
 
@@ -61,7 +320,35 @@ else
         {
             _showAddressMap        = s.ShowAddressMap;
             _showAddressDirections = s.ShowAddressDirections;
+            _stripMediaMetadata    = s.StripMediaMetadata;
+            _stripReason           = s.StripMediaMetadataReason;
+            _stripNeedsUpgrade     = s.StripMediaMetadataNeedsUpgrade;
+            // Editable only where the choice can actually take effect. A control that saves a
+            // preference nothing honours is the write-only shape; the sentence beside it says why.
+            _stripAvailable        = s.StripMediaMetadataCanChoose;
         }
+
+        // The kind and the tours flag live on the organization itself, not the settings row.
+        var org = await AdminClient.GetOrganizationAsync(OrgId);
+        if (org is not null)
+        {
+            _kind                     = org.Kind;
+            _runsPublicTours          = org.RunsPublicTours;
+            _orgName                  = org.Name;
+            _orgUrlName               = org.UrlName;
+            _orgAcceptingApplications = org.IsAcceptingApplications;
+            _defaultMemberRoleId      = org.DefaultMemberRoleId;
+        }
+
+        // The list the picker offers. A refusal is SHOWN rather than swallowed: an empty picker
+        // beside "New members start as" reads as "this group has no roles", which would send an
+        // owner to the Roles screen to create ones they already have.
+        _rolesResult = await AdminClient.GetOrgRolesAsync(OrgId);
+        _roles = _rolesResult.Items
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ToList();
+
         _loading = false;
     }
 
@@ -72,10 +359,32 @@ else
         _successMessage = null;
         StateHasChanged();
 
-        var result = await AdminClient.UpdateOrgSettingsAsync(OrgId, new OrgSettingsRequest(_showAddressMap, _showAddressDirections));
+        var result = await AdminClient.UpdateOrgSettingsAsync(OrgId, new OrgSettingsRequest(_showAddressMap, _showAddressDirections, _stripMediaMetadata));
+
+        // The kind and tours flag are on the organization, a different endpoint. Name, web
+        // address and the applications flag are echoed back UNCHANGED — that endpoint takes
+        // them as required values, and omitting them would blank the group's identity.
+        string? orgError = null;
+        var orgSaved = true;
+        if (_orgName.Length > 0)
+        {
+            var (saved, error) = await AdminClient.UpdateOrganizationAsync(OrgId,
+                   new AdminUpdateOrganizationRequest(_orgName, _orgUrlName,
+                       IsAcceptingApplications: _orgAcceptingApplications,
+                       Kind: _kind,
+                       RunsPublicTours: _runsPublicTours,
+                       // Sent literally, including when it is null: the flag is what lets an
+                       // owner CLEAR the starting role, which a bare null could not say.
+                       DefaultMemberRoleId: _defaultMemberRoleId,
+                       SetDefaultMemberRole: true));
+            orgSaved = saved is not null;
+            orgError = error;
+        }
+
         _saving = false;
 
-        if (result is not null) _successMessage = "Settings saved.";
-        else _errorMessage = "Save failed. You may not have permission to update org settings.";
+        if (result is not null && orgSaved) _successMessage = "Settings saved.";
+        // The server's reason when there is one — see UpdateOrganizationAsync.
+        else _errorMessage = orgError ?? "Save failed. You may not have permission to update org settings.";
     }
 }

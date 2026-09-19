@@ -42,8 +42,11 @@ public class LabelAssociationTests
             var text = File.ReadAllText(file);
             scanned++;
 
+            // Telerik input components take an `Id` parameter - capital I - and render it as the
+            // `id` on the <input> they wrap, so a `for=` aimed at one is a real association and
+            // has to count as a control that exists.
             var ids = new HashSet<string>(
-                Regex.Matches(text, @"\bid=""([^""]+)""").Select(m => m.Groups[1].Value),
+                Regex.Matches(text, @"\b[Ii]d=""([^""]+)""").Select(m => m.Groups[1].Value),
                 StringComparer.Ordinal);
 
             foreach (Match m in Regex.Matches(text, @"\bfor=""([^""]+)"""))

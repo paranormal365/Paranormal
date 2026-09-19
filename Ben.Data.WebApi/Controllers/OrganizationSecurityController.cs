@@ -80,6 +80,18 @@ public class OrganizationSecurityController(IOrganizationSecurityService organiz
         }));
     }
 
+    /// <summary>Adds somebody to a group, or changes what they are in it.</summary>
+    /// <remarks>
+    /// <b>The plan gate applies here too.</b> Two other doors ask
+    /// <c>PaidPlan.WhyCannotAddMemberAsync</c> before a membership is created — opening
+    /// applications, and accepting one — and this one did not, so the rule depended on which door
+    /// somebody walked through. No screen uses this route, which is exactly why it went unnoticed
+    /// (2026-09-04 sweep). The gate is about the group, not about the door.
+    ///
+    /// Only a NEW active membership is gated: changing an existing member's role, or deactivating
+    /// one, is not "adding somebody new" and must keep working on any plan — the same shape as
+    /// the rule itself, which never removes anybody.
+    /// </remarks>
     [HttpPut("users/{targetUserId:guid}/membership")]
     public async Task<ActionResult<OrganizationUserMembershipResponse>> UpsertMembership(
         Guid organizationId,
@@ -88,6 +100,21 @@ public class OrganizationSecurityController(IOrganizationSecurityService organiz
         CancellationToken cancellationToken)
     {
         var actingUserId = GetCurrentUserIdOrThrow();
+
+        if (request.IsActive)
+        {
+            await using var gateDb = await dbFactory.CreateDbContextAsync(cancellationToken);
+            var alreadyMember = await gateDb.OrganizationUserMemberships.AsNoTracking().AnyAsync(
+                m => m.OrganizationId == organizationId && m.AppUserId == targetUserId && m.IsActive,
+                cancellationToken);
+
+            if (!alreadyMember
+                && await Services.Billing.PaidPlan.WhyCannotAddMemberAsync(gateDb, organizationId, cancellationToken)
+                       is { } needsPlan)
+            {
+                return StatusCode(StatusCodes.Status402PaymentRequired, needsPlan);
+            }
+        }
 
         var membership = await _organizationSecurityService.UpsertMembershipAsync(
             organizationId,

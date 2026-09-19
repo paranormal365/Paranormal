@@ -2,7 +2,15 @@ namespace Ben.Web.Services.WebApi;
 
 public interface IWebApiAuthService
 {
-    Task<bool> LoginAsync(string email, string password, CancellationToken token = default);
+    /// <summary>
+    /// Signs in. Two-factor authentication is <b>opt-in per account</b>: leave both code
+    /// parameters null for the ordinary case, and supply one only after a previous attempt
+    /// reported <see cref="LoginFailure.RequiresTwoFactor"/>.
+    /// </summary>
+    Task<bool> LoginAsync(
+        string email, string password,
+        string? twoFactorCode = null, string? recoveryCode = null,
+        CancellationToken token = default);
 
     /// <summary>
     /// Why the last <see cref="LoginAsync"/> returned false, or null when it succeeded. Lets a
@@ -10,18 +18,24 @@ public interface IWebApiAuthService
     /// </summary>
     LoginFailure? LastLoginFailure { get; }
     Task<bool> RefreshIfNeededAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Takes on a session an external provider produced — Sign in with Apple — and resolves who it
+    /// belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The Apple endpoint answers with our own Identity tokens, byte-identical to what
+    /// <c>/login</c> returns, so there is nothing special about the session that comes out of it.
+    /// Separate from <see cref="LoginAsync"/> only because there is no password to judge, and so no
+    /// <see cref="LoginFailure"/> to report.
+    /// </remarks>
+    Task AdoptExternalSignInAsync(WebApiTokenResponse response, CancellationToken token = default);
     void Logout();
 
     Task<bool> ImpersonateAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default);
-    Task StopImpersonatingAsync(CancellationToken token = default);
-}
-
-/// <summary>What stopped the last sign-in.</summary>
-public enum LoginFailure
-{
-    /// <summary>The server rejected the email or password.</summary>
-    InvalidCredentials,
-
-    /// <summary>Too many attempts in the window; the caller should wait, not re-type.</summary>
-    RateLimited,
+    /// <summary>
+    /// Returns to the caller's own identity. False means they are themselves again but their
+    /// roles could not be confirmed, so Administration will refuse them until they sign in again.
+    /// </summary>
+    Task<bool> StopImpersonatingAsync(CancellationToken token = default);
 }

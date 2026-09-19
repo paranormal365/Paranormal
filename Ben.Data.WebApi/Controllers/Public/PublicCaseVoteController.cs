@@ -18,6 +18,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// </remarks>
 [ApiController]
 [Route("api/public/cases/{caseId:guid}/votes")]
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureVoting)]
 public sealed class PublicCaseVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

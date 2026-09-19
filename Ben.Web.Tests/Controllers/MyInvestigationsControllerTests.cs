@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Security.Claims;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Controllers;
@@ -31,9 +32,25 @@ public class MyInvestigationsControllerTests
         return new SimpleFactory(opts);
     }
 
-    private static MyInvestigationsController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
+
+    /// <summary>
+    /// A permission service that says yes. These tests are about what the endpoint returns for
+    /// somebody who may read the group's cases; the refusal path has tests of its own.
+    /// </summary>
+    private static Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService
+        SecurityAllowing(bool allowed = true)
     {
-        var ctrl = new MyInvestigationsController(factory);
+        var security = new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(Moq.It.IsAny<Guid>(), Moq.It.IsAny<Guid>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityTable>(),
+            Moq.It.IsAny<Ben.Data.Common.Enums.OrganizationSecurityAction>(), Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allowed);
+        return security.Object;
+    }
+
+    private static MyInvestigationsController Build(IDbContextFactory<BenDataContext> factory, Guid userId, bool canReadCases = true)
+    {
+        var ctrl = new MyInvestigationsController(factory, SecurityAllowing(canReadCases));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -47,7 +64,7 @@ public class MyInvestigationsControllerTests
 
     private static MyInvestigationsController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new MyInvestigationsController(factory);
+        var ctrl = new MyInvestigationsController(factory, SecurityAllowing());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -99,6 +116,37 @@ public class MyInvestigationsControllerTests
         Assert.Equal(userId, item.AttendeeId == Guid.Empty ? userId : userId); // sanity check
         Assert.Equal("Night Visit", item.Title);
         Assert.Equal("Test Org", item.OrgName);
+    }
+
+    [Fact]
+    public async Task GetMyInvestigations_StillNamesTheCase_WhenTheReaderMayOpenIt()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetMyInvestigations(default)).Result);
+        var item = Assert.Single((IEnumerable<MyInvestigationItem>)ok.Value!);
+
+        Assert.NotNull(item.CaseId);
+        Assert.Equal("Test Case", item.CaseTitle);
+        Assert.Equal("#2026-001", item.CaseReference);
+    }
+
+    [Fact]
+    public async Task GetMyInvestigations_WithholdsTheCase_WhenTheReaderCannotOpenIt()
+    {
+        // W-M1 (site evaluation 2026-09-06): the roster named somebody Lead Investigator on a
+        // case and offered its reference as the way in, while a membership rank on its own
+        // grants nothing below Administrator — so the link answered 403 and the page went blank.
+        // The visit itself still belongs here, and still opens: without a case it lands on the
+        // group's Investigations tab, exactly as a case-less visit always has.
+        var (factory, userId, _, _) = await SeedAsync();
+        var ok = Assert.IsType<OkObjectResult>(
+            (await Build(factory, userId, canReadCases: false).GetMyInvestigations(default)).Result);
+        var item = Assert.Single((IEnumerable<MyInvestigationItem>)ok.Value!);
+
+        Assert.Equal("Night Visit", item.Title);   // the visit is still theirs to see
+        Assert.Null(item.CaseId);                  // but the door to the case is not offered
+        Assert.Null(item.CaseTitle);
+        Assert.Null(item.CaseReference);
     }
 
     [Fact]

@@ -35,8 +35,17 @@ public interface IClipEffect
     /// <param name="parameters">Current values keyed by <see cref="ClipEffectParameter.Key"/>.</param>
     /// <param name="clipDuration">Wall-clock duration of the clip after trim and speed.</param>
     /// <param name="speed">Playback speed multiplier (1.0 = normal).</param>
+    /// <param name="canvasWidth">
+    /// Width in pixels of the frame this effect will run against, or 0 when the caller does not
+    /// know it. ffmpeg's <c>zoompan</c> needs a literal output size — it cannot be written as an
+    /// expression, and left out it silently resizes the frame to 1280x720 — so an effect that
+    /// zooms has to be told. Effects that do not zoom ignore it.
+    /// </param>
+    /// <param name="canvasHeight">Height in pixels, alongside <paramref name="canvasWidth"/>.</param>
     string BuildFilterFragment(
         IReadOnlyDictionary<string, double> parameters,
         double clipDuration,
-        double speed = 1.0);
+        double speed = 1.0,
+        int canvasWidth = 0,
+        int canvasHeight = 0);
 }

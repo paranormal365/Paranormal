@@ -50,6 +50,23 @@ public sealed record ClipArtClip : TrackItem
     /// <summary>Height as a fraction of the frame height. -1 = preserve aspect ratio from Width.</summary>
     public double Height { get; set; } = -1.0;
 
+    /// <summary>The artwork's own pixel width and height, when they are known.</summary>
+    /// <remarks>
+    /// <para>What <see cref="Height"/>'s "preserve aspect ratio" needs in order to mean anything.
+    /// Without them, three places each guessed differently: the selection box and the live preview
+    /// treated the missing height as equal to <see cref="Width"/> — a fraction, so a wide rectangle
+    /// on a 16:9 frame — while the export treated it as equal to the width in <i>pixels</i>, a
+    /// square. A piece of clip art was therefore drawn at one shape, selected at another, and
+    /// rendered at a third (2026-09-05 audit, callouts-10).</para>
+    ///
+    /// <para>Null when the asset never reported its size. <see cref="Services.ClipArtGeometry"/>
+    /// then falls back to a square on screen — one answer, used by all three.</para>
+    /// </remarks>
+    public int? NativeWidth  { get; set; }
+
+    /// <inheritdoc cref="NativeWidth"/>
+    public int? NativeHeight { get; set; }
+
     /// <summary>Rotation in degrees (clockwise).</summary>
     public double Rotation { get; set; }
 

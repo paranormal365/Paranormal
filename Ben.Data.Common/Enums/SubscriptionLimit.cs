@@ -1,0 +1,148 @@
+namespace Ben.Data.Common.Enums;
+
+/// <summary>
+/// A thing a subscription band can cap. The key half of a keyed limit.
+/// </summary>
+/// <remarks>
+/// <para><b>Why an enum and a row rather than columns on the tier.</b> Ben's list — equipment,
+/// equipment loans, open cases — is explicitly a starting point, not a specification. Columns would
+/// mean a migration and a price-list screen change for every idea anybody has; a keyed row means a
+/// new cap is a value here, a row a SuperAdmin types, and one call at the place it applies.</para>
+///
+/// <para><b>Numbered explicitly and never renumbered.</b> These end up in rows that outlive the
+/// deployment that wrote them, and a reordered enum silently turns an equipment cap into a case
+/// cap — which would read as a bug in whatever feature noticed first.</para>
+///
+/// <para><b>What belongs here.</b> A countable thing a group accumulates, where the count is cheap
+/// to take and refusing the next one is a sentence somebody can act on. Member count deliberately
+/// does <b>not</b> belong: it decides which band you are on rather than being capped inside a band,
+/// and modelling it twice would let the two disagree.</para>
+/// </remarks>
+public enum SubscriptionLimit
+{
+    /// <summary>Cases that are open at one time. Closed and archived cases do not count.</summary>
+    /// <remarks>
+    /// A cap on <i>concurrent</i> work rather than total history. Capping the total would mean a
+    /// group's own past eventually locks them out, and asking somebody to delete last year's
+    /// investigation to start this year's is not a subscription prompt, it is data loss.
+    /// </remarks>
+    OpenCases = 1,
+
+    /// <summary>Pieces of equipment on the group's books.</summary>
+    EquipmentItems = 2,
+
+    /// <summary>Equipment loans out at one time.</summary>
+    /// <remarks>
+    /// Separate from <see cref="EquipmentItems"/> because lending is the part that costs the
+    /// platform something to coordinate, and a group with ten items lending nine of them is doing
+    /// more with the feature than a group with fifty sitting in a cupboard.
+    /// </remarks>
+    ActiveEquipmentLoans = 3,
+
+    /// <summary>Investigations open at one time.</summary>
+    OpenInvestigations = 4,
+
+    /// <summary>People invited to a group but not yet accepted.</summary>
+    /// <remarks>
+    /// Not a monetisation lever so much as an abuse one — an unbounded invite list is a way to send
+    /// mail through the platform. It sits here because the mechanism is identical.
+    /// </remarks>
+    PendingInvites = 5,
+
+    /// <summary>Total uploaded file storage, in megabytes.</summary>
+    /// <remarks>
+    /// The one cap here that is a real cost rather than a packaging decision, and the one most
+    /// likely to need a different band shape than the rest.
+    /// </remarks>
+    StorageMegabytes = 6,
+
+    /// <summary>Public pages the group may publish.</summary>
+    PublishedPages = 7,
+
+    /// <summary>
+    /// New cases that may be STARTED in one billing period — an allowance, not a ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The first limit here that is not a concurrent count</b>, and the distinction is the
+    /// whole point of it. <see cref="OpenCases"/> asks "how many are open right now", so closing
+    /// one makes room immediately. This asks "how many did you start since your period began", so
+    /// closing one makes no room at all until the period rolls over.</para>
+    ///
+    /// <para>Written for the solo tier (Ben, 2026-08-30: "one open case per month"), where the
+    /// thing being sold is a rate of work rather than a stock of it. A single investigator who
+    /// could close and reopen freely would have an unlimited plan with extra steps.</para>
+    ///
+    /// <para><b>The period is the BILLING period, not the calendar month.</b> It is what the
+    /// person is paying for, the dates already exist on the subscription, and it means the
+    /// allowance resets on a date the site can name in the refusal rather than one the reader has
+    /// to work out. An organization with no subscription has no period and so is not metered —
+    /// fail open, like every other cap here.</para>
+    /// </remarks>
+    CasesPerPeriod = 9,
+
+    // ── Media retention (item 233) ───────────────────────────────────────────
+    //
+    // Ben, 2026-09-10: "Evidence collected - unless marked to save - only lasts a week for
+    // everything but photos. Photos stay a month." Written as limits rather than as constants
+    // because they belong to a PLAN: the tour plan sets them, every other plan leaves the rows
+    // out, and no row means no clock — which is how the site has always worked and must keep
+    // working for everybody who is not a tour business.
+
+    /// <summary>Days a photograph is kept before it goes, unless it is kept deliberately.</summary>
+    /// <remarks>
+    /// A month on the tour plan. Photographs outlive recordings because they are what a guest
+    /// actually wants afterwards and cost almost nothing to hold.
+    /// </remarks>
+    PhotoRetentionDays = 10,
+
+    /// <summary>Days a recording is kept before it goes, unless it is kept deliberately.</summary>
+    /// <remarks>A week on the tour plan. Video and audio are the expensive half of the storage.</remarks>
+    RecordingRetentionDays = 11,
+
+    /// <summary>The longest a single recording may be, in minutes.</summary>
+    /// <remarks>
+    /// Five on the tour plan, refused at the door rather than trimmed silently: the phone can
+    /// already trim before sending, so the honest answer is to say so and let somebody choose the
+    /// part that matters.
+    /// </remarks>
+    RecordingMinutes = 12,
+
+    /// <summary>Pictures one tour may keep on its page.</summary>
+    /// <remarks>
+    /// Fifty, Ben's number. Also the KEEP for a photograph: putting a guest's picture on the page
+    /// is what stops its clock, so this cap is what stops "keep everything" being a gallery.
+    /// </remarks>
+    TourGalleryImages = 13,
+
+    /// <summary>Custom roles the group can define for itself.</summary>
+    /// <remarks>
+    /// In the enum because Ben raised it; probably best left unset on every band. Ben's own
+    /// principle for these — maximise earnings without turning people off — cuts against it:
+    /// caps on <i>scale</i> (storage, cases, equipment) charge groups that are getting value,
+    /// while caps on <i>organising yourselves</i> read as petty and cost goodwill for pennies.
+    /// A row nobody writes is exactly what the no-row-no-cap default is for.
+    /// </remarks>
+    CustomRoles = 8,
+
+
+    /// <summary>Hosted events a group may have on the go at once (item 235).</summary>
+    /// <remarks>
+    /// Read only for a group on the member ladder. A business kind pays per active event instead,
+    /// so no cap applies to it — the price is the cap.
+    /// </remarks>
+    ActiveHostedEvents = 14,
+
+    /// <summary>Sessions and classes one event's programme may hold.</summary>
+    EventSessions = 15,
+
+    /// <summary>People one event may have on its staff, members and helpers alike.</summary>
+    EventStaff = 16,
+
+    /// <summary>Megabytes of files one event may keep.</summary>
+    /// <remarks>
+    /// Beside the account-wide <see cref="StorageMegabytes"/>, not instead of it: a slide deck for
+    /// one weekend is a different thing from a group's whole archive, and a venue that runs twelve
+    /// events a year would otherwise spend its storage on last spring.
+    /// </remarks>
+    EventFilesMegabytes = 17,
+}

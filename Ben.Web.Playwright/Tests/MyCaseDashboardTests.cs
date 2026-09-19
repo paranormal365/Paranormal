@@ -13,8 +13,6 @@ namespace Ben.Web.Playwright.Tests;
 public class MyCaseDashboardTests : BenTestBase
 {
     // Daniel Park is seeded with an accepted case; use his creds for client-perspective tests
-    private const string ClientEmail    = "daniel.park@benco.dev";
-    private const string ClientPassword = "D@niel!Park2026";
 
     // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -24,9 +22,10 @@ public class MyCaseDashboardTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var myCasesLink = Page.GetByRole(AriaRole.Link, new() { Name = "My Cases" })
-                              .Or(Page.GetByText("My Cases", new() { Exact = true }));
-        await Expect(myCasesLink.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        // "Visible" now means reachable: the entry lives inside the collapsed My Work group, and
+        // FindSidebarLinkAsync surfaces it through the nav filter the way a person would.
+        var myCasesLink = await FindSidebarLinkAsync("My Cases");
+        await Expect(myCasesLink).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
     [Test]
@@ -67,8 +66,9 @@ public class MyCaseDashboardTests : BenTestBase
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // DevelopmentDataSeeder creates "Park Residence, Nashville TN" for Daniel
-        var caseCard = Page.GetByText("Park Residence", new() { Exact = false })
+        // DevelopmentDataSeeder titles Daniel's case "Belmont Boulevard Residence" — renamed from
+        // "Park Residence" by item 178, because Park is the client's surname and the title leaked it.
+        var caseCard = Page.GetByText("Belmont Boulevard Residence", new() { Exact = false })
                            .Or(Page.GetByText("Nashville", new() { Exact = false }).First)
                            .First;
         await Expect(caseCard).ToBeVisibleAsync(new() { Timeout = 12_000 });
@@ -133,10 +133,16 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        // Should show "Park Residence" or the case reference
-        var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Contain("Nashville").Or.Contain("Park").Or.Contain("#2026"),
-            "Expected case title or reference on detail page.");
+        // Waited for, not read once. Every sibling test in this file uses an auto-waiting
+        // Expect; this one alone took a single snapshot of the body, which passed only because
+        // the card used to be a div whose @onclick could not fire until the circuit was live —
+        // so the app was always warm by the time the detail page loaded. The card became a real
+        // anchor in the 2026-09-06 evaluation's phase 1 (W-CL5), so the navigation now happens
+        // on the first click, and the snapshot started landing before the case had loaded.
+        // WaitUntilLoadedAsync cannot cover it: it returns as soon as no "Loading" text is on
+        // the page, which is also true a moment before the page renders anything at all.
+        await Expect(Main.GetByText("Nashville").Or(Main.GetByText("Park")).Or(Main.GetByText("#2026")).First)
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     [Test]
@@ -150,7 +156,9 @@ public class MyCaseDashboardTests : BenTestBase
         await ClickUntilUrlAsync(card, @"/my-cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
-        var logBtn = Page.GetByText("Log Occurrence", new() { Exact = false });
+        // The ROLE, not the text: the log dialog's title is also "Log Occurrence" and BenModal
+        // keeps it in the DOM while hidden, so a text match resolves to two elements.
+        var logBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Log Occurrence" });
         await Expect(logBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 

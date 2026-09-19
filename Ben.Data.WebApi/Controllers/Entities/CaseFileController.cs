@@ -21,18 +21,31 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class CaseFileController : BenControllerBase
 {
     // Fixed "Case Evidence" UploadFileType — same one used by MyCaseController/CaseResearchController.
-    private static readonly Guid CaseEvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+    internal static readonly Guid CaseEvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
+    private readonly IMediaIngestService _mediaIngest;
+    private readonly IAvMetadataStripper _avStripper;
 
-    public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage, IAuditLogService auditLog)
+    private readonly Services.Billing.SubscriptionLimitGuard _limits;
+
+    public CaseFileController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
+        IAuditLogService auditLog, Services.Billing.SubscriptionLimitGuard limits,
+        IMediaIngestService mediaIngest, IAvMetadataStripper avStripper,
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
     {
         _db = db;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
+        _limits = limits;
+        _mediaIngest = mediaIngest;
+        _avStripper  = avStripper;
+        _security = security;
     }
+
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseFileRecord>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -47,35 +60,71 @@ public sealed class CaseFileController : BenControllerBase
             .OrderByDescending(f => f.DateCreated)
             .ToListAsync(ct);
 
-        return Ok(files.Select(ToRecord));
+        // How long each one is, for the callers that lay files out on a timeline. One query for the
+        // whole page rather than one per file — the mixer asks for every audio file on a case.
+        var fileIds  = files.Select(f => f.UploadFileId).ToList();
+        var durations = await db.UploadFileMetadata.AsNoTracking()
+            .Where(m => fileIds.Contains(m.UploadFileId) && m.DurationSeconds != null)
+            .ToDictionaryAsync(m => m.UploadFileId, m => m.DurationSeconds, ct);
+
+        // What kind of upload each one is, in the site's own words, so the Files tab can mark the ones
+        // a research board is built from. One lookup for the page, like the durations above.
+        var typeIds = files.Select(f => f.UploadFile.UploadFileTypeId).Distinct().ToList();
+        var typeNames = await db.UploadFileTypes.AsNoTracking()
+            .Where(t => typeIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
+        return Ok(files.Select(f => ToRecord(f, durations.GetValueOrDefault(f.UploadFileId),
+                                             typeNames.GetValueOrDefault(f.UploadFile.UploadFileTypeId))));
     }
 
     [HttpPost]
     [Consumes("multipart/form-data")]
     [DisableRequestSizeLimit]
     public async Task<ActionResult<CaseFileRecord>> Upload(
-        Guid orgId, Guid caseId, [FromForm] string? description, IFormFile file, CancellationToken ct)
+        Guid orgId, Guid caseId, [FromForm] string? description, IFormFile file, CancellationToken ct,
+        [FromForm] string? origin = null)
     {
         if (file.Length == 0) return BadRequest("File is empty.");
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"files/{storedName}");
-        await _fileStorage.WriteFormFileAsync(storagePath, file, ct);
+
+        // Ben's rule (2026-08-24): EXIF comes off on ANY upload, and what came off is kept in the
+        // metadata table beside the record. Case evidence is the most sensitive upload on the
+        // site — a photo taken inside somebody's home — and until now it wrote raw bytes and
+        // extracted nothing. The ORIGINAL is still stored untouched; the stripped derivative is
+        // what every serve path returns (item 179).
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct,
+                (await MediaStrippingPolicy.ForOrganizationAsync(db, _avStripper, orgId, ct)).Strips);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var uploadFile = new UploadFile
         {
-            Id = Guid.NewGuid(), UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
+            Id = uploadFileId, UploadFileTypeId = FileTypeFor(origin), AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
-            ContentType = file.ContentType, FileSize = file.Length,
+            // The served copy's type and size belong on the row; the original's are recorded in
+            // the metadata table beside its EXIF.
+            ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.UploadFiles.Add(uploadFile);
+        db.UploadFileMetadata.Add(ingested.Metadata);
 
         var caseFile = new CaseFile
         {
@@ -103,8 +152,9 @@ public sealed class CaseFileController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Create, ct)) return Forbid();
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct)) return NotFound();
+        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var sourceFile = await db.UploadFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == uploadFileId, ct);
         if (sourceFile is null) return NotFound("File not found.");
@@ -148,6 +198,15 @@ public sealed class CaseFileController : BenControllerBase
         };
         db.UploadFiles.Add(copy);
 
+        // Copy-on-attach mints a NEW file row, so it needs its own metadata row — carried from
+        // the source, since the bytes are identical and were captured in the same place. Without
+        // this, attaching a photo to a case silently dropped where it was taken.
+        if (await _mediaIngest.DeriveMetadataAsync(db, sourceFile.Id, copy.Id,
+                MediaKindFor(sourceFile.ContentType), ct) is { } derived)
+        {
+            db.UploadFileMetadata.Add(derived);
+        }
+
         var caseFile = new CaseFile
         {
             Id = Guid.NewGuid(), CaseId = caseId, UploadFileId = copy.Id,
@@ -162,12 +221,21 @@ public sealed class CaseFileController : BenControllerBase
         return Ok(ToRecord(caseFile));
     }
 
+    /// <summary>The metadata table's coarse kind, from a content type.</summary>
+    private static string MediaKindFor(string? contentType) => contentType switch
+    {
+        not null when contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => "Image",
+        not null when contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => "Audio",
+        not null when contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => "Video",
+        _ => "Unknown",
+    };
+
     [HttpDelete("{caseFileId:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid caseId, Guid caseFileId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
 
         var caseFile = await db.CaseFiles.FirstOrDefaultAsync(f => f.Id == caseFileId && f.CaseId == caseId, ct);
         if (caseFile is null) return NotFound();
@@ -177,12 +245,47 @@ public sealed class CaseFileController : BenControllerBase
         return NoContent();
     }
 
-    private static async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
-        => await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+    // Item 156 Phase D: bare membership stopped being the rule here. Case surfaces answer to
+    // HasAccessAsync(Case, Read) — which carries the SuperAdmin and owner/admin bypasses, the
+    // tier area gate, and the grants (the grandfather bridge included), all in one place.
+    /// <summary>
+    /// May the caller take this action here?
+    /// </summary>
+    /// <remarks>
+    /// Create, update and delete used to ask for Case.READ — through a helper named for
+    /// membership, which is neither what it asked nor what it meant: anybody who could SEE a case
+    /// could destroy the things hanging off it. Survivable while every member was auto-granted
+    /// case read; not survivable now that Ben ended the grandfathering (2026-08-26) and a read
+    /// grant is a deliberate act. Owners and administrators still pass above this.
+    /// </remarks>
+    private Task<bool> MayAsync(Guid orgId, Ben.Data.Common.Enums.OrganizationSecurityAction action, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            ? Task.FromResult(true)
+            : _security.MayAsync(GetCurrentUserId(), orgId,
+                Ben.Data.Common.Enums.OrganizationPermissionArea.Cases, action, ct);
 
-    private static CaseFileRecord ToRecord(CaseFile f) => new()
+    private async Task<bool> IsOrgMember(BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+        => User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+        || await _security.HasAccessAsync(userId, orgId,
+               Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
+               Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
+
+    /// <summary>
+    /// Which kind of upload a posted file is. Only the research board names itself; everything else
+    /// is case evidence, which is what every caller before this one meant and still means.
+    /// </summary>
+    /// <remarks>
+    /// A word rather than a file-type id on purpose: the ids are ours, and an endpoint that took one
+    /// from the form would let a caller file anything as anything (Ben, 2026-09-17).
+    /// </remarks>
+    internal static Guid FileTypeFor(string? origin) =>
+        string.Equals(origin, "research", StringComparison.OrdinalIgnoreCase)
+            ? SeedData.UploadFileTypeSeeder.ResearchFileTypeId
+            : CaseEvidenceFileTypeId;
+
+    private static CaseFileRecord ToRecord(CaseFile f, double? durationSeconds = null, string? typeName = null) => new()
     {
+        DurationSeconds = durationSeconds,
         Id = f.Id,
         CaseId = f.CaseId,
         UploadFileId = f.UploadFileId,
@@ -192,5 +295,6 @@ public sealed class CaseFileController : BenControllerBase
         Description = f.Description,
         DateCreated = f.DateCreated,
         CreatedByAppUserId = f.CreatedByAppUserId,
+        TypeName = typeName,
     };
 }

@@ -50,10 +50,25 @@ var layoutSettings = (function () {
 
     // Layout modifier classes. Only `set-*` survives the filter, so a tampered value cannot
     // inject arbitrary classes onto the document element.
+    var kept = [];
     if (s.htmlRoot) {
-        var kept = String(s.htmlRoot).split(/[^\w-]+/).filter(function (c) { return /^set-/i.test(c); });
-        if (kept.length) htmlRoot.className = (htmlRoot.className + ' ' + kept.join(' ')).trim();
+        kept = String(s.htmlRoot).split(/[^\w-]+/).filter(function (c) { return /^set-/i.test(c); });
     }
+
+    // The template's dark navigation treatment, which its own demos ship. Its rules apply only in
+    // light mode (`.set-nav-dark:not([data-bs-theme=dark])`) and carry far more than a background:
+    // the nav text, hover and active states, the active indicator and the logo panel all change
+    // with it. That is why this is switched on rather than just recolouring the sidebar — a dark
+    // background alone would leave the template's dark-on-light nav text sitting on it.
+    //
+    // app.css then greys the background off the palette; see --app-nav-bg there.
+    //
+    // A stored choice still wins, so this can be turned off per browser without a rebuild.
+    if (!kept.some(function (c) { return /^set-nav-(dark|light)$/i.test(c); })) {
+        kept.push('set-nav-dark');
+    }
+
+    if (kept.length) htmlRoot.className = (htmlRoot.className + ' ' + kept.join(' ')).trim();
 
     return s;
 })();
