@@ -431,6 +431,12 @@
             new NavItem("Sidecar Installs", "download", "/admin/sidecar-telemetry"),
             new NavItem("Rate Limits", "shield", "/admin/rate-limits"),
             new NavItem("Outgoing Mail", "send", "/admin/mail"),
+
+            // Beside Outgoing Mail, because the two answer halves of one question: what went out,
+            // and what it said. Without an entry here the screen existed and nothing on the site
+            // led to it — reachable only by typing the URL, which is the same dead end this
+            // codebase keeps finding from the other direction (item 246).
+            new NavItem("Email Templates", "edit-3", "/admin/email-templates"),
         }),
     };
 

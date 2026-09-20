@@ -111,4 +111,58 @@ public sealed class EveryAdminScreenIsWalkedTests
             Assert.True(pair.Value.Length > 40,
                 $"{pair.Key}'s reason is too short to be one.");
         });
+
+    /// <summary>
+    /// Every administration screen has something on the site that leads to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>A page reachable only by typing its URL is a feature nobody will find. This codebase
+    /// keeps meeting the same fault from the other direction — an endpoint written with no screen —
+    /// and <c>ModerationQueuesHaveAnEntranceTests</c> guards that half. This is the near side: a
+    /// screen with no way in.</para>
+    ///
+    /// <para>It is not hypothetical. <c>/admin/email-templates</c> was built, tested, walked,
+    /// screenshotted and merged to master with nothing anywhere linking to it (2026-09-20). Every
+    /// check passed, because every check knew the URL.</para>
+    ///
+    /// <para>A link from anywhere counts — the navigation, a button on a related screen, a card on
+    /// a dashboard. What does not count is the page naming its own route.</para>
+    /// </remarks>
+    [Fact]
+    public void Every_admin_screen_has_a_way_in()
+    {
+        var root = RepoRoot();
+        var files = new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }
+            .Select(p => Path.Combine(root, p))
+            .Where(Directory.Exists)
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+                      || f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToDictionary(f => f, File.ReadAllText);
+
+        var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (file, text) in files)
+            foreach (Match m in Regex.Matches(text, @"^@page\s+""([^""]+)""", RegexOptions.Multiline))
+            {
+                var route = m.Groups[1].Value;
+                if (route.StartsWith("/admin", StringComparison.OrdinalIgnoreCase) && !route.Contains('{'))
+                    owners[route] = file;
+            }
+
+        var orphans = owners
+            .Where(pair => !files.Any(f => f.Key != pair.Value
+                                        && f.Value.Contains(pair.Key, StringComparison.Ordinal)))
+            .Select(pair => pair.Key)
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            "These administration screens exist but nothing on the site leads to them, so they "
+          + "can only be reached by typing the URL:" + Environment.NewLine + "  "
+          + string.Join(Environment.NewLine + "  ", orphans)
+          + Environment.NewLine + Environment.NewLine
+          + "Add a navigation entry, or a link from the screen somebody would look on.");
+    }
 }
