@@ -114,10 +114,22 @@
                             }
                             @if (!PickerMode)
                             {
-                                <div @onclick:stopPropagation="true">
+                                <div class="d-flex gap-2" @onclick:stopPropagation="true">
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDetail(file))"><BenIcon Name="message-square" Class="me-1" />
                                         Comments
                                     </button>
+                                    @* Only on a file this person owns. The server decides too —
+                                       FileAudienceAccess.CanManageFileAsync — but a button that is
+                                       offered and then refuses is the dead-end click items 149 and
+                                       150 ruled out, so it is not offered at all on somebody
+                                       else's file. *@
+                                    @if (MayDelete(file))
+                                    {
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                                title="Delete this file" aria-label="Delete this file"
+                                                data-testid="library-delete"
+                                                @onclick="@(() => DeleteAsync(file))"><BenIcon Name="trash-2" /></button>
+                                    }
                                 </div>
                             }
                         </div>
@@ -168,6 +180,11 @@
                         <Template>
                             @{ var row4 = (UploadFileRecord)context; }
                             <BenGridAction Icon="message-square" Label="Comments" OnClick="@(() => OpenDetail(row4))" />
+                            @if (MayDelete(row4))
+                            {
+                                <BenGridAction Icon="trash-2" Label="Delete this file" Tone="GridActionTone.Danger"
+                                               OnClick="@(() => DeleteAsync(row4))" />
+                            }
                         </Template>
                     </GridColumn>
                 }
@@ -215,6 +232,14 @@
         </div>
     }
 </div>
+
+@* Mounted once for the whole grid rather than per card: it is a pair of dialogs with a file in
+   them, and one of those is all a page can show. Never in picker mode — a dialog that deletes
+   somebody's file has no business inside a dialog that is choosing one. *@
+@if (!PickerMode)
+{
+    <BenFileDeleteFlow @ref="_deleteFlow" OnGone="@ForgetDeletedFile" />
+}
 
 @code {
     [Parameter] public MediaLibraryViewMode ViewMode { get; set; } = MediaLibraryViewMode.Grid;
@@ -280,6 +305,44 @@
             if (!MultiSelect) _selectedIds.Clear();
             _selectedIds.Add(file.Id);
         }
+    }
+
+    // ── Deleting a file you own (item 180 Phase B's door, opened here 2026-09-19) ──
+    //
+    // The server has been able to do this since 2026-08-23 and nothing could ask it from the
+    // library: the flow had a screen on /upload-files and nowhere else, which is the write-only
+    // door this codebase keeps finding. Ben, 2026-09-19: "allow an owner of the files the ability
+    // to delete them. I see a bunch that cannot be loaded which could be because they do not
+    // really exist anymore."
+    private BenFileDeleteFlow? _deleteFlow;
+
+    /// <summary>
+    /// Whether to OFFER the delete. The server decides whether to allow it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Personal ownership only, deliberately. A file handed to a group
+    /// (<c>OwnerOrganizationId</c>) is deleted by somebody with that group's permission, which is
+    /// a question only the server can answer — so the button is not offered here rather than
+    /// offered and refused.</para>
+    ///
+    /// <para>SuperAdmin is not special-cased either: moderation has its own door, and putting a
+    /// delete on every row of the library for one account would make the common view the
+    /// dangerous one.</para>
+    /// </remarks>
+    private bool MayDelete(UploadFileRecord file)
+        => !PickerMode && file.AppUserId is { } owner && owner == UserState.UserId;
+
+    private async Task DeleteAsync(UploadFileRecord file)
+    {
+        if (_deleteFlow is not null) await _deleteFlow.StartAsync(file);
+    }
+
+    /// <summary>Takes a file out of the library once it has left this person's files.</summary>
+    private void ForgetDeletedFile(Guid fileId)
+    {
+        _allFiles = [.. _allFiles.Where(f => f.Id != fileId)];
+        _selectedIds.Remove(fileId);
+        StateHasChanged();
     }
 
     private void OpenDetail(UploadFileRecord file)
