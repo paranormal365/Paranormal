@@ -263,6 +263,101 @@ try {
     if ($LASTEXITCODE -ne 0) { $script:DeployCommit = '' }
 } catch { $script:DeployCommit = '' }
 
+# Starts the API that was just staged, on a loopback port of its own, and asks it for three things
+# before a single file is copied over the working one.
+#
+# THIS EXISTS BECAUSE OF A REAL OUTAGE, 2026-09-20. A service was given a constructor parameter the
+# container could not resolve. It compiled. Every one of 6,601 tests passed, because they exercise
+# the class directly and never build the container. Every staging check passed, because they compare
+# FILES - binaries against the stamp, stamp against git - and a file can be perfectly correct and
+# still be an application that cannot start. It was deployed over a working API and every endpoint
+# answered 500, including one that only reads a constant. The post-deploy smoke checks caught it
+# faithfully, four minutes too late: the working version was already gone.
+#
+# The gap was never "we lacked a check". It was that every check ran against the wrong thing, or at
+# the wrong time. This one runs the artifact, before it can replace anything.
+#
+# What it proves: the host builds, the container resolves every dependency the startup path needs,
+# the EF model builds, the database answers, and routing works. What it does NOT prove: anything
+# about IIS, the app pool identity, or the file copy - those are what the smoke checks after the
+# deploy are for. The two are not redundant; they fail at different things.
+function Test-StagedApi ([string]$outDir) {
+    $exe = Join-Path $outDir 'Ben.Data.WebApi.exe'
+    if (-not (Test-Path $exe)) { throw "no Ben.Data.WebApi.exe in $outDir to test" }
+
+    # A port nothing else is on, picked by asking the operating system for a free one and letting
+    # it go again - the same trick the sidecar uses. Loopback only: this is a second copy of the
+    # API and must not be reachable from anywhere.
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = $listener.LocalEndpoint.Port
+    $listener.Stop()
+
+    Write-Detail "starting the staged API on 127.0.0.1:$port to see whether it runs"
+
+    $log = Join-Path ([IO.Path]::GetTempPath()) "staged-api-$port.log"
+    $err = Join-Path ([IO.Path]::GetTempPath()) "staged-api-$port.err"
+    $previousUrls = $env:ASPNETCORE_URLS
+    $previousEnv  = $env:ASPNETCORE_ENVIRONMENT
+    $env:ASPNETCORE_URLS = "http://127.0.0.1:$port"
+    $env:ASPNETCORE_ENVIRONMENT = 'Production'
+
+    $proc = $null
+    try {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $outDir -PassThru -WindowStyle Hidden `
+                              -RedirectStandardOutput $log -RedirectStandardError $err
+
+        # Generous: this API builds its EF model and runs a file-migration service at startup, and a
+        # cold first run on a loaded build machine is slower than the same code under IIS.
+        $deadline = (Get-Date).AddSeconds(90)
+        $up = $false
+        while (-not $up -and (Get-Date) -lt $deadline) {
+            if ($proc.HasExited) {
+                $why = (Get-Content $err -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
+                throw "the staged API exited with $($proc.ExitCode) instead of serving:`n$why"
+            }
+            Start-Sleep -Milliseconds 700
+            try {
+                $r = Invoke-WebRequest "http://127.0.0.1:$port/api/public/build" -UseBasicParsing -TimeoutSec 10
+                if ([int]$r.StatusCode -eq 200) { $up = $true }
+            } catch { }
+        }
+        if (-not $up) {
+            $why = (Get-Content $err -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
+            throw "the staged API never answered /api/public/build:`n$why"
+        }
+
+        # /api/public/build alone only proves the host started. These two prove the parts that
+        # actually broke: a public route that reaches the database, and an authenticated one that
+        # must refuse rather than fault.
+        $probes = @(
+            @{ path = '/api/public/cases?page=1&pageSize=1'; expect = 200; what = 'a public route that reads the database' },
+            @{ path = '/api/canvas-documents';               expect = 401; what = 'an authenticated route' }
+        )
+        foreach ($probe in $probes) {
+            $status = 0
+            try {
+                $status = [int](Invoke-WebRequest "http://127.0.0.1:$port$($probe.path)" -UseBasicParsing -TimeoutSec 20).StatusCode
+            } catch {
+                $status = [int]($_.Exception.Response.StatusCode.value__)
+            }
+            if ($status -ne $probe.expect) {
+                throw "the staged API answered $status where $($probe.expect) was expected for $($probe.path) - $($probe.what)"
+            }
+        }
+
+        Write-Detail 'the staged API starts, resolves its services and answers - safe to copy'
+    }
+    finally {
+        if ($proc -and -not $proc.HasExited) {
+            try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+        }
+        $env:ASPNETCORE_URLS = $previousUrls
+        $env:ASPNETCORE_ENVIRONMENT = $previousEnv
+        Remove-Item $log, $err -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Publish ([string]$project, [string]$outDir, [switch]$RidSpecific) {
     Write-Detail "publishing $project -> $outDir"
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
@@ -550,6 +645,8 @@ if ($Apps -contains 'webapi') {
     Set-WebConfigEnvironment $webConfig 'ASPNETCORE_ENVIRONMENT' 'Production'
     Set-WebConfigRequestLimit $webConfig 4294967295
     if ($StdoutLog) { Enable-WebConfigStdoutLog $webConfig $webapiOut }
+
+    Test-StagedApi $webapiOut
 }
 
 # ---- Website ----------------------------------------------------------------
