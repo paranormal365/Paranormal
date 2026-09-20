@@ -5,6 +5,7 @@ using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ben.Data.WebApi.Services;
 
