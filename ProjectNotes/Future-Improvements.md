@@ -12998,3 +12998,63 @@ the thing that sends it, and changing a word is a deploy.
   most likely to want to change, and they are the two the outbox already carries a `Kind` for.
 
 Related: [[239]] for the outbox and the list screen it already designed.
+
+
+## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (OPEN — Ben, 2026-09-20)
+
+Ben, while item 246 was being built:
+
+> And qr codes for ghost tour tickets for the staff to scan when they arrive for the tour.
+
+> Maybe the qr code scanned would also link them to be able to use their phone on the investigation
+> for people who are not already able to log into an investigation because they are not official
+> group members on a public investigation, ghost tour or event.
+
+**Two asks, and the second is much larger than the first.** Worth separating before anybody starts.
+
+### What already exists, and what does not
+
+`EventPasses` (item 235) mints a token, renders a PNG with `QRCoder`, serves it anonymously at
+`/api/public/event-passes/{token}.png`, and `EventGuestMailer` draws it into the letter **as a data
+URI first** with a linked copy as the fallback — *"a linked picture that a mail client blocked is a
+guest with no pass"*. That machinery is done and is the right thing to copy.
+
+**A tour has none of it.** A tour's attendance hangs off `OrgCalendarEvent` through
+`OrgCalendarEventAttendee`, which has an `Id` and no token; `TourGuestMailer.SendSignUpAsync` takes
+an address and a name and knows nothing about a per-person credential. So the first ask needs: a
+token on the attendee (or a pass table beside it), the PNG endpoint, minting at sign-up, the token
+in the letter, and **something for a guide to scan it with** — the last being the part with no
+equivalent at all, since a hosted event's door is a screen built for staff at a venue.
+
+**Item 246 is ready for the letter half.** `MailKindInfo.Supplied` already carries per-letter values,
+`{PassImage}` and `{PassUrl}` are declared for `booking-decided`, and `TourSignUp` gains the same
+two the moment a tour has a pass to put in them.
+
+### The second ask is a different feature
+
+A scanned code that **admits somebody to the working session on their phone** — a guest on a public
+investigation, a walk, or an event — is not a ticket check. It is a **credential**, and it has to
+answer questions a ticket does not:
+
+- **What may they do?** Contribute photos and readings to that session only, presumably, and not
+  see the group's case, its client, or anything that outlives the night.
+- **For how long?** A pass scanned at 7pm should not still open anything next March. The session's
+  own window is the obvious bound.
+- **Who is it, and does it matter?** A walk-up guest may have no account at all
+  (`project_walkup_guest_signup` built exactly that path), so the credential cannot assume one.
+- **What happens to what they contribute** when the night ends and they were never a member? The
+  field archive rule already has an answer for public places; this is the same question from the
+  other side.
+- **What if the code is photographed and shared?** A ticket that is copied gets somebody in twice;
+  a credential that is copied gets a stranger into the session. That difference decides whether
+  scanning binds the pass to a device, and whether a guide can revoke one.
+
+**None of that is decided**, and it touches Field Kit, the public-investigation rules and the
+walk-up guest path. It should not be squeezed into a mail-template branch — the ticket half can
+ship on its own and is useful on its own, and this half deserves its own design conversation.
+
+### Suggested order
+
+1. Tour passes: token, PNG, minting at sign-up, `{PassImage}`/`{PassUrl}` on the tour letter.
+2. A guide's scanning screen — the smallest thing that answers "is this person on tonight's walk".
+3. Then, separately, the credential question above.
