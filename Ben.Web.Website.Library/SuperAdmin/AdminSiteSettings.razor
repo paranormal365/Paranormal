@@ -40,10 +40,33 @@
            server beside the settings themselves, so adding a setting files it without touching
            this page — and a setting filed nowhere is refused there rather than quietly dropped
            here. *@
-        @foreach (var section in Sections)
+        @* Tabs rather than one long scroll. Twenty-seven settings under six headings meant the
+           last of them was a screen and a half below the first, and somebody changing one at the
+           bottom could not see what they had already changed at the top.
+
+           Driven by Blazor, not by data-bs-toggle: Bootstrap's own tab script fights the renderer
+           over which pane is shown, and the site's other tabbed page (the dashboard) settled this
+           the same way. Only the chosen section is rendered, so the inputs of the other five are
+           not in the DOM at all. *@
+        <ul class="nav nav-tabs mb-3" role="tablist" id="site-settings-tabs">
+            @foreach (var section in Sections)
+            {
+                var key = section.Key;
+                var chosen = key == CurrentTab;
+                <li class="nav-item" role="presentation">
+                    <button type="button" role="tab"
+                            id="@($"settings-tab-{Slug(key)}")"
+                            data-testid="settings-tab"
+                            aria-selected="@chosen"
+                            class="nav-link @(chosen ? "active" : null)"
+                            @onclick="@(() => _tab = key)">@key</button>
+                </li>
+            }
+        </ul>
+
+        @foreach (var section in Sections.Where(g => g.Key == CurrentTab))
         {
             <div class="mb-2">
-                <h5 class="mb-1 pt-2">@section.Key</h5>
                 <p class="text-secondary small mb-3">
                     @(string.IsNullOrWhiteSpace(section.First().GroupBlurb)
                         ? "Settings the site has not filed under a heading."
@@ -169,6 +192,27 @@
     /// vanishing. A setting nobody can find is the same as a setting that does not exist, and a
     /// page that silently drops one is worse than an ugly page.
     /// </remarks>
+    /// <summary>Which section is open. Null until somebody chooses, meaning the first.</summary>
+    private string? _tab;
+
+    /// <summary>
+    /// The open section, defaulting to the first the server sent.
+    /// </summary>
+    /// <remarks>
+    /// Resolved on read rather than set when the settings load: the sections come from the server,
+    /// so there is no first section to point at until they have arrived, and a field set in
+    /// OnInitialized would still be null when the tabs first render.
+    /// </remarks>
+    private string? CurrentTab
+        => _tab is { } chosen && Sections.Any(g => g.Key == chosen)
+            ? chosen
+            : Sections.Select(g => g.Key).FirstOrDefault();
+
+    /// <summary>A section's name as an element id.</summary>
+    private static string Slug(string name)
+        => new string(name.ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+
     private IEnumerable<IGrouping<string, SiteSettingRecord>> Sections
         => (_settings ?? [])
             .GroupBy(s => string.IsNullOrWhiteSpace(s.Group) ? "Other" : s.Group)

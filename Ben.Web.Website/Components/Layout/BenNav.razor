@@ -370,39 +370,55 @@
             // moderation queue. Ben, 2026-09-16.
             new NavItem("Session Files",      "package",  "/admin/session-files"),
         }),
-        new NavItem("Content", "layers", children: new[]
+        // Four groups where there used to be one called "Content" holding seventeen entries —
+        // taxonomy, moderation, group housekeeping and three destructive deletes in a single list
+        // somebody had to read to the end of. Nothing here is new or renamed; it is the same
+        // entries under headings that say what they are, the way System already reads.
+        new NavItem("Content Types", "layers", children: new[]
         {
             new NavItem("File Types",           "file",   "/admin/file-types"),
             new NavItem("Lookup Types",         "list",   "/admin/lookup-types"),
             new NavItem("Clipart Library",      "image",  "/admin/video-assets"),
             new NavItem("Experience Taxonomy",  "layers", "/admin/experience-taxonomy"),
             new NavItem("Equipment Taxonomy",   "tool",   "/admin/equipment-taxonomy"),
+        }),
+        // A SuperAdmin never sees the top-level Moderation section — that one exists for somebody
+        // who moderates WITHOUT running the site — so the name is free to mean the same thing here.
+        new NavItem("Moderation", "shield", children: new[]
+        {
             // Left in place when the feed is switched off, unlike the reader-facing entries: a
             // feed that has been turned off may still have reports somebody never got to, and
             // hiding the only way to see them would strand them.
-            new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
-            new NavItem("Media Review",         "image",  "/moderation/media"),
+            new NavItem("Reported Posts",       "flag",    "/admin/feed-reports"),
+            new NavItem("Media Review",         "image",   "/moderation/media"),
             new NavItem("Place Archive",        "archive", "/moderation/archive"),
-            new NavItem("Group Ads",            "star",   "/admin/org-ads"),
-            new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
-            new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
-            // Item 235 phase 9: who runs a place, when a code could not settle it.
-            new NavItem("Venue Claims",         "key",    "/admin/venue-claims"),
-            // Sessions whose readings are not on this server — a Playwright run against a shared
-            // database leaves the row here and the bytes on the machine that ran it.
-            new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
             // Feed posts by the seeded accounts — what a Playwright run leaves on the live feed.
             // Hidden, not deleted, and reversible from the same page.
             new NavItem("Test Posts",           "eye-off", "/admin/test-posts"),
-            // Last in the group, and named for what it does rather than something softer:
-            // it destroys a group and everything belonging to it, and a menu entry that
-            // read "Tidy up" would be the first half of an accident.
-            new NavItem("Delete a Group",       "trash-2", "/admin/delete-group"),
-            // Same reasoning, same bluntness. The users grid links straight into this page with
-            // an account chosen; the menu entry is for arriving at it deliberately.
-            new NavItem("Delete a Person",      "user-x",  "/admin/delete-user"),
-            // Item 183. A group closes a case; only this page deletes one, and the all-cases
-            // grid links in with the case already chosen.
+        }),
+        new NavItem("Groups & Places", "map-pin", children: new[]
+        {
+            new NavItem("Group Ads",            "star",      "/admin/org-ads"),
+            new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
+            new NavItem("Duplicate Places",     "map-pin",   "/admin/place-duplicates"),
+            // Item 235 phase 9: who runs a place, when a code could not settle it.
+            new NavItem("Venue Claims",         "key",       "/admin/venue-claims"),
+            // Sessions whose readings are not on this server — a Playwright run against a shared
+            // database leaves the row here and the bytes on the machine that ran it.
+            new NavItem("Orphaned Sessions",    "slash",     "/admin/orphaned-sessions"),
+        }),
+        // Their own group, and last, because that is the whole point: the three entries that
+        // destroy something sat in the middle of a list of taxonomy editors, one mis-click from
+        // "Duplicate Places". Named for what they do rather than something softer — a menu entry
+        // reading "Tidy up" would be the first half of an accident.
+        new NavItem("Deleting", "trash-2", children: new[]
+        {
+            new NavItem("Delete a Group",       "trash-2",      "/admin/delete-group"),
+            // The users grid links straight into this page with an account chosen; the menu entry
+            // is for arriving at it deliberately.
+            new NavItem("Delete a Person",      "user-x",       "/admin/delete-user"),
+            // Item 183. A group closes a case; only this page deletes one, and the all-cases grid
+            // links in with the case already chosen.
             new NavItem("Delete a Case",        "folder-minus", "/admin/delete-case"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
