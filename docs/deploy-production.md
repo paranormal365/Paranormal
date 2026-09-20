@@ -164,9 +164,27 @@ Mac formats need Mac tooling and the Windows one needs Inno Setup.
 | `BenVideoSidecar-osx-arm64.dmg` | macOS | `hdiutil` makes the disk image, `pkgbuild` the package, and the SDK ad-hoc-signs the apphost |
 | `BenVideoSidecar-osx-x64.dmg` | macOS | same |
 | `BenVideoSidecar-win-x64.exe` | Windows | `build-installer.ps1` needs Inno Setup's `ISCC.exe` |
+| `BenVideoSidecar-win-x64.msix` | Windows | `build-msix.ps1` needs the Windows SDK's `makeappx.exe`; Store only, see §5 |
 
 The .NET payload itself cross-publishes, so `build.sh` runs anywhere. It is only the packaging that
 is tied to a platform.
+
+**Fetch ffmpeg first, every time, on every machine.** `ffmpeg/` is gitignored, so a clone has none,
+and — less obviously — a machine that built a release months ago holds the binaries of whatever pin
+was current *then*. `FfmpegLocator.VerifyIntegrity` re-hashes them at startup against the manifest,
+so a stale copy produces a package that installs, passes its health check, and refuses every job
+with a 503: a failure that reads as a broken sidecar rather than a broken build. The Windows pin
+moved on 2026-09-20 (the old dated autobuild tag 404'd inside five weeks), and the first build after
+that re-pin would have shipped exactly that package if the fetch had been skipped.
+
+```bash
+Ben.Video.Sidecar/scripts/fetch-ffmpeg.sh  win-x64      # or .ps1 on Windows
+Ben.Video.Sidecar/scripts/fetch-ffmpeg.sh  osx-arm64
+Ben.Video.Sidecar/scripts/fetch-ffmpeg.sh  osx-x64
+```
+
+The script verifies the downloaded archive AND each extracted binary against the manifest, so a
+mismatch stops there rather than at a user's machine.
 
 ```bash
 # macOS, once per architecture
@@ -198,6 +216,53 @@ what the update notice sends people to.
 - `https://ishaunted.com/files/sidecar-video/osx-arm64/BenVideoSidecar-osx-arm64.dmg` downloads
 - its `checksums.txt` matches `shasum -a 256` of the file you built
 - the editor's Native acceleration panel, against an OLD sidecar, offers the update
+
+### 5. The Microsoft Store package (a separate route, not a fourth artifact)
+
+The `.msix` is **not** staged by the deploy and never appears on the downloads page. It goes to
+Partner Center, and Microsoft serves it. Everything in §3 and §4 is about the files we host
+ourselves; this section is the other path.
+
+It is a different payload from the `.exe` beside it, in two ways that both matter:
+
+**ffmpeg is the LGPL build**, pinned separately in `ffmpeg-manifest.store.json`, because a Store
+submission is a redistribution we would rather keep permissively licensed. That file travels into
+the package *as* `ffmpeg-manifest.json`, so the startup integrity check tests the binaries the
+package actually carries. You do not fetch it yourself: `build-msix.ps1` calls `fetch-ffmpeg.ps1`
+with that manifest and its own output folder, kept separate from `ffmpeg/` so the GPL and LGPL
+builds cannot be confused for one another, and downloaded once because it is ~150 MB.
+
+**The LGPL build has no libx264 or libx265.** It carries libopenh264, h264_mf and libkvazaar —
+all three tested on 2026-09-20, all three do produce video. `VideoEncoders` chooses from what
+ffmpeg reports it has, so the app needs no build-time switch. What does need care is *quality*:
+`ArgvFactory` passes x264's `-preset` and `-crf`, which none of the three replacements accept.
+Check an export from the Store build before submitting, not after.
+
+**Identity comes from Partner Center** — Product management → Product identity. Without it the
+script stamps a placeholder and says so; that package is good for testing and cannot be uploaded.
+
+```powershell
+Ben.Video.Sidecar\installer\windows\build-msix.ps1 `
+    -IdentityName <from Partner Center> `
+    -Publisher "CN=<from Partner Center>" `
+    -PublisherDisplayName "<from Partner Center>"
+```
+
+The package version is the app version with a fourth part forced to `0` — the Store reserves the
+revision field for itself.
+
+**Nothing here is signed, and that is the point of the route.** Microsoft re-signs Store packages,
+so a Store install shows no SmartScreen warning, unlike the `.exe` we host. To install the `.msix`
+on your own machine for testing it must be signed with a certificate that machine trusts; trusting
+one needs an administrator, so `-SelfSign` writes the package and prints the two elevated commands
+rather than running them.
+
+**One gap to know about while testing.** The plain zip payload's `install.ps1` does not register the
+`benvideo-sidecar:` scheme — only the Inno installer and the MSIX manifest do. The editor's sidecar
+switch has an asymmetry behind it: *off* is a request to a running program, but *on* can only be an
+OS-handled link, because a web page cannot start a process. So a tester installed from the zip gets
+a switch that turns off and never turns back on. `ProtocolSchemeContractTests` holds the three
+declarations in agreement; it cannot make the zip a fourth one.
 
 ### History
 
