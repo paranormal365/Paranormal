@@ -1,4 +1,5 @@
 using Ben.Data.Common;
+using Ben.Data.Common.Mail;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -89,7 +90,8 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "can sign in.</p>"
               + "<p>If you did not create this account, ignore this message and nothing happens.</p>",
                 buttonText: "Confirm my email", buttonUrl: confirmationLink),
-            linkKind: "confirmation", link: confirmationLink);
+            linkKind: "confirmation", link: confirmationLink,
+            kind: MailKinds.ConfirmYourAddress.Key);
 
     public Task SendPasswordResetLinkAsync(AppUser user, string email, string resetLink)
         => SendAsync(email, "Reset your password",
@@ -98,7 +100,8 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "<p>If you did not request this, ignore this message — your password will not "
               + "change.</p>",
                 buttonText: "Reset password", buttonUrl: resetLink),
-            linkKind: "password reset", link: resetLink);
+            linkKind: "password reset", link: resetLink,
+            kind: MailKinds.ResetYourPassword.Key);
 
     /// <summary>
     /// The reset email carries a finished link, not a bare code.
@@ -124,15 +127,17 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
                  <p>If you did not request this, ignore this message — your password will not change.</p>
                  """,
                 buttonText: "Reset password", buttonUrl: resetUrl),
-            linkKind: "password reset", link: resetUrl);
+            linkKind: "password reset", link: resetUrl,
+            kind: MailKinds.ResetYourPassword.Key);
     }
 
-    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link)
+    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link,
+                                 string? kind = null)
     {
         _lastSendSucceeded = false;
         try
         {
-            await _email.SendAsync(to, subject, htmlBody);
+            await _email.SendAsync(new EmailMessage(to, subject, htmlBody, Kind: kind));
             _lastSendSucceeded = true;
         }
         catch (Exception ex)
