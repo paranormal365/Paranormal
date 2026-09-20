@@ -63,6 +63,27 @@ public sealed class CapabilitiesEndpointTests : IClassFixture<SidecarWebApplicat
         Assert.Equal(first.InstanceId, second!.InstanceId);
     }
 
+    /// <summary>
+    /// A sidecar that can be asked to stop says so, because the editor's "Turn off" button is
+    /// gated on it.
+    /// </summary>
+    /// <remarks>
+    /// Not optional decoration: 1.1.1 is released and installed on people's machines with no
+    /// <c>/v1/shutdown</c> at all. The button appears only where this is advertised — so if it
+    /// stopped being advertised the switch would quietly vanish for everybody, and if the endpoint
+    /// were removed while this stayed, the button would 404 in their faces.
+    /// </remarks>
+    [Fact]
+    public async Task A_sidecar_that_can_be_stopped_advertises_it()
+    {
+        var client = _factory.CreateAuthenticatedClient(token: _factory.ReadGeneratedPairingToken());
+
+        var info = await client.GetFromJsonAsync<CapabilitiesInfo>(
+            "/v1/capabilities", SidecarJsonOptions.Default);
+
+        Assert.Contains(SidecarCapabilities.Shutdown, info!.Capabilities);
+    }
+
     [Fact]
     public async Task Health_StillReportsSameProtocolVersion()
     {

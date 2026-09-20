@@ -1,3 +1,4 @@
+@using Ben.Video.Core.SidecarContracts
 @inject NativeSidecarService NativeSidecar
 @inject Microsoft.Extensions.Options.IOptions<VideoEditorOptions> OptionsAccessor
 
@@ -111,7 +112,12 @@
                         @* Ben, 2026-09-20: a Windows user should be able to turn this off without
                            hunting for it in Task Manager. Off is a request to the sidecar itself;
                            on is a protocol link, which is why only Windows gets the pair of them. *@
-                        @if (NativeSidecar.SwitchIsOffered == true)
+                        @* Gated on the sidecar SAYING it can be stopped, not on the platform alone:
+                           1.1.1 is installed on people's machines and has no such endpoint, so an
+                           ungated button would 404 and look broken. It appears by itself once they
+                           are running a sidecar that can honour it. *@
+                        @if (NativeSidecar.SwitchIsOffered == true
+                             && NativeSidecar.HasCapability(SidecarCapabilities.Shutdown))
                         {
                             <TelerikButton OnClick="TurnOffAsync" Enabled="@(!_busy)"
                                            ThemeColor="@(_forceNextStop ? ThemeConstants.Button.ThemeColor.Error : ThemeConstants.Button.ThemeColor.Base)">
@@ -226,13 +232,14 @@
         try
         {
             var started = await NativeSidecar.StartAsync();
-            // Nothing answering covers three cases we cannot tell apart from here: not installed,
-            // the person dismissed the browser's prompt, or it is still starting. So the wording
-            // does not claim to know which.
+            // Nothing answering covers four cases we cannot tell apart from here: not installed, an
+            // older install that never registered the link, the person dismissed the browser's
+            // prompt, or it is simply still starting. The wording names them instead of guessing.
             _switchMessage = started
                 ? null
-                : "Nothing started. If you dismissed your browser's prompt, try again — and if the "
-                  + "sidecar is not installed yet, download it below.";
+                : "Nothing started. If your browser asked for permission and you dismissed it, try "
+                  + "again. Sidecars installed before this feature cannot be started this way — "
+                  + "start it yourself, or install the latest one below.";
         }
         finally { _busy = false; }
     }

@@ -58,7 +58,18 @@ public static class HealthEndpoints
             // sidecar already holds), so it rides alongside "segment" rather than being gated on
             // ffprobe like probe/thumbnails are. Advertising it is also what tells the client it's
             // safe to send Retain=true: an older sidecar would hard-400 that unknown field.
-            var capabilities = new List<string> { SidecarCapabilities.Segment, SidecarCapabilities.Concat, SidecarCapabilities.ExportAssemble };
+            //
+            // Shutdown is here for a different reason from the rest: not because this build can do
+            // something optional, but because the RELEASED one cannot. 1.1.1 has no /v1/shutdown,
+            // so the editor has to be told which sidecars can be asked to stop before it shows a
+            // button that does it (2026-09-20).
+            var capabilities = new List<string>
+            {
+                SidecarCapabilities.Segment,
+                SidecarCapabilities.Concat,
+                SidecarCapabilities.ExportAssemble,
+                SidecarCapabilities.Shutdown,
+            };
 
             // Probe/thumbnails need a real, integrity-verified ffprobe. Without one this list just
             // omits them and the browser keeps doing that work in wasm — the pre-158 behavior.
