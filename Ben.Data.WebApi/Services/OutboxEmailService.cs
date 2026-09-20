@@ -1,4 +1,6 @@
+using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -37,6 +39,7 @@ public sealed class OutboxEmailService : IEmailService
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _sender;
+    private readonly SiteIdentity _site;
     private readonly ILogger<OutboxEmailService> _log;
 
     /// <summary>
@@ -64,8 +67,9 @@ public sealed class OutboxEmailService : IEmailService
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
+        SiteIdentity site,
         ILogger<OutboxEmailService> log)
-    { _db = db; _sender = sender; _log = log; }
+    { _db = db; _sender = sender; _site = site; _log = log; }
 
     /// <summary>
     /// Whether this machine could actually send. Unchanged in meaning, and still worth asking.
@@ -85,7 +89,7 @@ public sealed class OutboxEmailService : IEmailService
         try
         {
             await using var db = await _db.CreateDbContextAsync(ct);
-            db.OutboxEmails.Add(Row(message, DateTime.UtcNow));
+            db.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
             await db.SaveChangesAsync(ct);
         }
         catch (Exception ex)
@@ -100,12 +104,24 @@ public sealed class OutboxEmailService : IEmailService
     }
 
     /// <summary>
-    /// One letter as a row, with the two size rules applied.
+    /// One letter as a row, with the two size rules applied and the header put on.
     /// </summary>
-    /// <remarks>Internal so a test can read what would be stored without a database.</remarks>
-    internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc)
+    /// <remarks>
+    /// <para>Internal so a test can read what would be stored without a database.</para>
+    ///
+    /// <para><b>This is where the header goes on, and it is the only place it could.</b> Ben asked
+    /// for the header from his templates to be the standard for the letters he had not written a
+    /// template for (2026-09-20) - about forty of them, each a bare <c>&lt;p&gt;</c> fragment built
+    /// in its own mailer. Every one of those passes through here on its way to the queue, so one
+    /// change covers them all; editing forty call sites would have missed the forty-first.</para>
+    ///
+    /// <para><b>A letter that already has a header is left exactly alone</b> - a template from the
+    /// editor, or a body already wrapped in the shell. Two headers stacked up would be worse than
+    /// none, and the check is on the icon's file name, which both carry and nothing else does.</para>
+    /// </remarks>
+    internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc, SiteIdentity? site = null)
     {
-        var body = message.HtmlBody ?? string.Empty;
+        var body = Headed(message.HtmlBody ?? string.Empty, site, message.TimesShownInZone);
         var truncated = body.Length > MaximumBodyBytes;
 
         var row = new OutboxEmail
@@ -155,6 +171,31 @@ public sealed class OutboxEmailService : IEmailService
         }
 
         return row;
+    }
+
+    /// <summary>
+    /// The body with the site's header on it, or unchanged when it has one already.
+    /// </summary>
+    /// <remarks>
+    /// <para>Left alone in three cases, each for its own reason:</para>
+    /// <list type="bullet">
+    ///   <item><b>It already has the header</b> - a template from the editor, or a body the mailer
+    ///   wrapped itself. Two would be worse than none.</item>
+    ///   <item><b>It is a whole HTML document</b>, with its own head and charset. Nesting one
+    ///   document inside another is rendered differently by every client there is.</item>
+    ///   <item><b>There is no site identity to build one from</b>, which is the case in a unit test
+    ///   that only wants to know what the row looks like.</item>
+    /// </list>
+    /// <para>No title is passed: these bodies were written as whole letters and open with their own
+    /// first line, so a heading taken from the subject would say the same thing twice.</para>
+    /// </remarks>
+    private static string Headed(string body, SiteIdentity? site, string? timesShownInZone)
+    {
+        if (site is null) return body;
+        if (string.IsNullOrWhiteSpace(body)) return body;
+        if (MailHeader.IsAlreadyHeaded(body) || MailHeader.IsWholeDocument(body)) return body;
+
+        return BenEmailLayout.Wrap(site, title: "", bodyHtml: body, timesShownInZone: timesShownInZone);
     }
 
     /// <summary>
