@@ -57,14 +57,23 @@ public sealed class PublicClientRequestController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly ILogger<PublicClientRequestController> _logger;
 
+    /// <summary>
+    /// A request's description is drawn as markup on three group screens — the request's own page,
+    /// the pending list and the review screen — and this door takes it from ANYBODY: the form is
+    /// public and needs no account. It was stored with a Trim and nothing else (2026-09-20).
+    /// </summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
     public PublicClientRequestController(
         IDbContextFactory<BenDataContext> db,
         UserManager<AppUser> userManager,
         AccountCreationService accounts,
         IOptions<SiteIdentity> site,
         IConfiguration configuration,
-        ILogger<PublicClientRequestController> logger)
+        ILogger<PublicClientRequestController> logger,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
+        _sanitizer     = sanitizer;
         _db            = db;
         _userManager   = userManager;
         _accounts      = accounts;
@@ -154,7 +163,7 @@ public sealed class PublicClientRequestController : ControllerBase
             Longitude          = request.Longitude,
             Gender             = request.Gender,
             BirthYear          = request.BirthYear,
-            Description        = request.Description?.Trim(),
+            Description        = Entities.CaseController.CleanDescription(request.Description, _sanitizer),
             DateCreated        = now,
             CreatedByAppUserId = user.Id,
         };
@@ -236,7 +245,7 @@ public sealed class PublicClientRequestController : ControllerBase
             Longitude           = request.Longitude,
             Gender              = request.Gender,
             BirthYear           = request.BirthYear,
-            Description         = request.Description?.Trim(),
+            Description         = Entities.CaseController.CleanDescription(request.Description, _sanitizer),
             OrganizationIdsJson = JsonSerializer.Serialize(orgIds),
             DateCreated         = now,
             DateExpires         = now + PendingLifetime,

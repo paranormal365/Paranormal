@@ -37,7 +37,7 @@ public class CaseReportFieldSessionTests
     {
         var ctrl = new CaseReportController(
             factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
-            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
+            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -346,7 +346,7 @@ public class CaseReportFieldSessionTests
                .Returns<string, CancellationToken>((_, _) => Task.FromResult<Stream>(
                    new MemoryStream(System.Text.Encoding.UTF8.GetBytes(document))));
         var ctrl = new CaseReportController(
-            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), storage.Object);
+            factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), storage.Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -454,7 +454,8 @@ public class InvestigationDeleteWithCitedSessionTests
             factory, mapper,
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
-            Ben.Web.Tests.TestMailer.Quiet());
+            Ben.Web.Tests.TestMailer.Quiet(),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

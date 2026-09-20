@@ -26,7 +26,7 @@ public class CaseReportPublishNotificationTests
 
     private static CaseReportController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
+        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

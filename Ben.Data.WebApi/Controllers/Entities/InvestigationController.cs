@@ -38,9 +38,17 @@ public sealed class InvestigationController : BenControllerBase
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Services.ClientStatusMailer clientMail)
+        Services.ClientStatusMailer clientMail,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
-        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security; }
+        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security;
+        _sanitizer = sanitizer; }
+
+    /// <summary>
+    /// An investigation's notes are drawn as markup on the group's case screen
+    /// (<c>InvestigationPanel.razor</c>), so they are sanitized on the way in (2026-09-20).
+    /// </summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -228,7 +236,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.ScheduledDateTime   = request.ScheduledDateTime;
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
-        entity.Notes               = request.Notes?.Trim();
+        entity.Notes               = CaseController.CleanDescription(request.Notes, _sanitizer);
         entity.EvidenceDueDate     = request.EvidenceDueDate;
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;

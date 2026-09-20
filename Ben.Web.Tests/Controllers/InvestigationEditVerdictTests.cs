@@ -58,7 +58,7 @@ public class InvestigationEditVerdictTests
     }
 
     private static InvestigationController Build(IDbContextFactory<BenDataContext> f, Guid userId)
-        => new(f, Mapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), Ben.Web.Tests.TestMailer.Quiet())
+        => new(f, Mapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {
