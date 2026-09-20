@@ -39,26 +39,29 @@ public sealed class EventBookingAlertJob : IScheduledJob
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly Services.Access.HostedEventAccess _access;
     private readonly EventOrganizerMailer _mailer;
+    private readonly EventStaffRoomWriter _room;
     private readonly ILogger<EventBookingAlertJob> _logger;
 
     public EventBookingAlertJob(
         IDbContextFactory<BenDataContext> dbFactory,
         Services.Access.HostedEventAccess access,
         EventOrganizerMailer mailer,
+        EventStaffRoomWriter room,
         ILogger<EventBookingAlertJob> logger)
     {
         _dbFactory = dbFactory;
         _access = access;
         _mailer = mailer;
+        _room = room;
         _logger = logger;
     }
 
     public async Task RunAsync(CancellationToken ct)
     {
-        // Nothing to send with, so nothing to move: the cursors stay where they are and the letters
-        // go the day mail is switched on, rather than being marked as told when nobody was.
-        if (!_mailer.IsConfigured) return;
-
+        // Deliberately NOT gated on the mailer being configured any more (item 238C). It still
+        // gates the LETTERS, inside — nothing is marked as told when nobody was told — but the
+        // staff-room thread needs no mail server, and a site with mail switched off is exactly
+        // where being told at all depends on it.
         await RunAtAsync(DateTime.UtcNow, ct);
     }
 
@@ -106,6 +109,13 @@ public sealed class EventBookingAlertJob : IScheduledJob
 
         var recipients = await EventBookingRecipients.ForAsync(db, _access, ev, ct);
 
+        await PostToTheRoomAsync(db, ev, bookings, recipients, now, ct);
+
+        // The LETTERS need a mail server; the thread above does not. Leaving the cursors alone here
+        // means the letters go the day mail is switched on rather than being marked as told when
+        // nobody was.
+        if (!_mailer.IsConfigured) return;
+
         foreach (var to in recipients.Where(r => r.Mode == EventBookingAlertMode.AsItHappens))
         {
             var state = await db.EventBookingAlertStates
@@ -148,5 +158,49 @@ public sealed class EventBookingAlertJob : IScheduledJob
 
             await db.SaveChangesAsync(ct);
         }
+    }
+
+    /// <summary>
+    /// The same news, into the venue's own thread (item 238C).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>One cursor, not one per person.</b> The thread is a single conversation, so it is
+    /// the event that remembers how far it has been posted about — and the timing rule is the
+    /// letters' own, so the thread and the mail cannot disagree about which weekend was a rush.</para>
+    ///
+    /// <para><b>Everybody who may decide, including the people who turned letters off.</b> Turning
+    /// off mail is a statement about mail. It is also why nobody's own booking is filtered out
+    /// here: one member booking a room IS news to the rest of the venue.</para>
+    /// </remarks>
+    private async Task PostToTheRoomAsync(
+        BenDataContext db,
+        HostedEvent ev,
+        IReadOnlyList<HostedEventBooking> bookings,
+        IReadOnlyList<EventBookingRecipients.Recipient> recipients,
+        DateTime now,
+        CancellationToken ct)
+    {
+        if (recipients.Count == 0) return;
+
+        var decision = EventBookingAlerts.Decide(
+            ev.StaffRoomCoversUpToUtc, ev.StaffRoomLastPostUtc, bookings,
+            excludeLeadAppUserId: null, now);
+
+        if (decision.Send == EventBookingAlerts.Send.Nothing) return;
+
+        var posted = await _room.PostArrivalsAsync(
+            db, ev, decision.Covers, recipients.Select(r => r.AppUserId).ToList(),
+            postAs: ev.CreatedByAppUserId,
+            summary: decision.Send == EventBookingAlerts.Send.Summary,
+            now, ct);
+
+        // The cursor moves ONLY when a post was written, exactly as the letters' does. A thread
+        // that could not be written is a venue that has not been told.
+        if (!posted) return;
+
+        var tracked = await db.HostedEvents.FirstAsync(e => e.Id == ev.Id, ct);
+        tracked.StaffRoomCoversUpToUtc = decision.CoversUpToUtc;
+        tracked.StaffRoomLastPostUtc = now;
+        await db.SaveChangesAsync(ct);
     }
 }

@@ -12283,7 +12283,7 @@ Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 
 that changes what the site knows about people, and it should be a separate decision with its own
 sentence in `/privacy`.
 
-## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (A+B SHIPPED as item 235 phase 8a; C BUILT 2026-09-20)
 
 Ben, 2026-09-12, while phase 2.4 was being built:
 
@@ -12345,6 +12345,57 @@ and so a member with no email still sees it.
 - Whether the digest is per event or per venue when a venue runs several at once.
 - Whether an alert should ever go to a non-member (a hired door manager), which is the same
   question phase 5 asks about non-member staff.
+
+### Where it actually stands (checked 2026-09-20)
+
+**A and B shipped inside item 235**, as phase 8a, "the letters that tell a venue a booking arrived"
+— this entry had gone stale and still said they were open. They are built the way this asked:
+`EventBookingAlertPreference.Mode` is the per-person opt-out; `EventBookingAlertState` holds
+`LastAlertUtc` and `AlertsCoverUpToUtc` **per person per event**, which is the batching; and the
+job finds arrivals by WHEN THEY WERE MADE rather than by a hook in the request door, so an outage
+costs a late letter instead of a lost one. The digest is daily while an event is selling, weekly
+otherwise, and never sent when empty.
+
+**The gate this entry set for itself — "follows phase 5, not phase 2" — was satisfied** before C
+was built: `OrganizationPermissionArea.Events` and `HostedEventStaff` both exist. Phase 5 also
+answered the third open question without anyone revisiting it: `HostedEventStaff.AppUserId` is
+nullable with `Email` and `DisplayName` beside it, so **a hired door manager is already a
+first-class staff row** and an alert can reach one.
+
+**Ben chose per event** for grouping (2026-09-20), which is how the state table was already keyed.
+
+### C, as built (2026-09-20)
+
+- **`OrgMessageChannel.EventStaffRoom = 6`**, deliberately not a flag on `EventRoom`. They are the
+  two audiences a hosted event has; a flag is what somebody forgets in a query, and the cost of
+  forgetting is showing a guest what the staff said about them.
+- **`HostedEvent.StaffRoomCoversUpToUtc` / `StaffRoomLastPostUtc`** — the thread is shared, so its
+  cursor is the event's, mirroring `EventBookingAlertState`'s pair. Migration `EventStaffRoomCursors`,
+  two `AddColumn`s, nothing dropped in `Up`.
+- **`EventBookingAlerts.Decide` was split** so the thread and the letters share one definition of
+  "new", "a rush" and "long enough". Two rules that start identical do not stay identical. The
+  shared-thread call passes no `excludeLeadAppUserId`: one member booking a room IS news to the
+  rest of the venue, where it is not news to that member's own inbox.
+- **No new screen.** The org Messages page lists anything you are a recipient of and already has a
+  Reply button, so the thread arrives where the group talks — which is what this entry meant by
+  "a delivery target rather than a new feature". Only the root carries recipient rows; a reply
+  marks the root unread again, so the bell counts it without the message list growing a row per
+  booking.
+- **The whole job no longer stops when no mail server is configured.** It used to return early;
+  the letters are still gated, inside, but a site with mail switched off is exactly where being
+  told at all depends on the thread.
+- **Found and fixed on the way:** `MessageChannelDisplay` fell through to `channel.ToString()`, so
+  `EventRoom` had been rendering its own enum spelling in a badge since item 235 shipped it.
+  `MessageChannelDisplayTests` now asserts over the enum, so the next appended channel fails at the
+  moment it is cheapest to name.
+- Tests: 7 pure (`EventStaffRoomTests`, including that a post never carries the guest's name and
+  that an event called `<script>` is escaped), 6 end-to-end against SQLite in
+  `EventBookingAlertJobTests`, 5 in `MessageChannelDisplayTests`. The escaping and the unread
+  re-marking were each seen failing with their rule broken. Suite 6,516 pass.
+
+**Still to do before it ships:** the migration is written but **not applied** — applying it was
+refused here, so it needs running against `IsHauntedDb_player` and then production via the runbook.
+No Playwright fixture yet.
 
 
 ## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)

@@ -1733,6 +1733,25 @@ a way a screen does not.
 
 Your own booking is never news to you.
 
+### The event's staff room
+
+**The same arrivals are posted into a thread of the event's own**, in your group's **Messages**, so
+you can talk about a request where the request is. You will see it there as *Event Staff*, named
+after the event — *Bookings — Halloween Lock-In*.
+
+- **One thread for the whole event**, not one per booking, so a weekend that sells out does not
+  bury every other conversation your group is having.
+- **A new arrival brings the thread back to your bell** rather than adding another row to your
+  messages. Reply to it exactly as you would any message.
+- **Everybody who may decide bookings is in it** — including anyone who set their letters to
+  *Nothing*. Turning off letters is a statement about letters, and the room is most of the point
+  for somebody who never reads mail.
+- **It says no more than a letter does**: what was asked for and when, never who. The names are on
+  the booking board.
+
+You do not switch this on, and there is nothing to set up: the thread is made the first time a
+booking arrives. An event nobody asks about never gets one.
+
 ![Choosing how often a group writes to you](help-media:organization-administration/event-booking-letters.png)
 
 **How often** is yours to choose, group by group, on the **Notifications** page under *Letters about
