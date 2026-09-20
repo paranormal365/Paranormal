@@ -880,7 +880,10 @@ public sealed class CaseController : BenControllerBase
             EntryType          = request.EntryType,
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
-            Body               = request.Body?.Trim(),
+            // Sanitized for the same reason the client's are: this lands in a MarkupString on the
+            // case screen, and a member of one group can write an entry a member of another reads
+            // once a case is transferred.
+            Body               = CleanDescription(request.Body, _sanitizer),
             Visibility         = request.Visibility,
             InvestigationId    = request.InvestigationId,
             DateCreated        = DateTime.UtcNow,
@@ -934,7 +937,7 @@ public sealed class CaseController : BenControllerBase
         entry.EntryType          = request.EntryType;
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
-        entry.Body               = request.Body?.Trim();
+        entry.Body               = CleanDescription(request.Body, _sanitizer);
         entry.Visibility         = request.Visibility;
         entry.InvestigationId    = request.InvestigationId;
         entry.DateUpdated        = DateTime.UtcNow;
