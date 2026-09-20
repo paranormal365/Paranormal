@@ -143,8 +143,10 @@ public sealed class PublicClientRequestControllerTests
         var sent = new List<(string, string, string)>();
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(true);
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((to, subject, body, _) => sent.Add((to, subject, body)))
+        // The EmailMessage overload, because AccountCreationService declares a kind now (item 246)
+        // and a message carrying one cannot go through the three-argument convenience call.
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => sent.Add((m.To, m.Subject, m.HtmlBody)))
              .Returns(Task.CompletedTask);
 
         var site = Options.Create(new SiteIdentity { Name = "IsHaunted", BaseUrl = "https://example.test" });

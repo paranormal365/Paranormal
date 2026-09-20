@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -74,7 +75,7 @@ public sealed class TourGuestMailer
                 Attachments: [new EmailAttachment("tour.ics", IcsBuilder.ContentType, calendar)],
                 // A guest hitting reply means to reach the business walking them around a city at
                 // night, not our support address — when the business gave one to reply to.
-                ReplyTo: tour.ReplyTo), ct);
+                ReplyTo: tour.ReplyTo, Kind: MailKinds.TourSignUp.Key), ct);
 
             return true;
         }

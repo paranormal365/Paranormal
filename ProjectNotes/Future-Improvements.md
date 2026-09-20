@@ -13133,3 +13133,60 @@ the guests are.
 
 A SuperAdmin or group screen that generates the code for a session, shows it large enough to scan
 off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
+
+
+## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — 11 letters still unnamed)
+
+Ben's ask is recorded in full at [[245]]; this is what was built for it.
+
+### What works
+
+- **`MailKinds`** declares 35 letters — a stable key, what each is for, and **the tables a template
+  of that kind may read**. The context is the security boundary, not documentation. Ben chose it
+  over "every table with a column allowlist" (2026-09-20).
+- **`MailTokens`** resolves `{AppUsers.DisplayName}`, the ready-made `{Date}` `{Time}` `{FullDate}`
+  `{FullDateTime}` `{Year}` `{SiteName}` `{SiteUrl}`, and per-letter values the mailer hands in.
+  All in the READER's zone; all HTML-escaped except the few the site itself generates.
+- **`EmailTemplates` + `MailComposer`** — draft, publish, revert. **No row means the built-in
+  letter**, which is the whole safety story: a template only replaces one, deleting the row is the
+  revert, and every failure path falls back. A feature for editing letters must not become a way to
+  stop them going.
+- **`MailTemplateSchema`** is the second gate. `AppUser` derives from ASP.NET Identity's
+  `IdentityUser`, so `PasswordHash`, `SecurityStamp` and `ConcurrencyStamp` are real columns on a
+  table letters legitimately carry, and **none of them appears in the entity's own file**. A table
+  allowlist alone offers all three.
+- **`MailBlocks`** — heading, paragraph, card, two columns with the logo either side, button,
+  items-and-total, divider, footer. Tables and inline styles; the tests assert the constraints
+  rather than the markup, because a browser renders unsafe email HTML perfectly and Outlook does
+  not.
+- **`MailStarters`** — seven whole letters to start from, each checked against every kind it is
+  offered for.
+- The **editor** at `/admin/email-templates`, with the table → column → Add token dropdowns, the
+  block palette, the starters, and a preview against invented rows in a sandboxed frame.
+
+### Still to do
+
+- **11 of the 35 kinds are declared but not yet wired to a sender**: AccountMadeForYou,
+  RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable, TourReminder, SessionMoved,
+  SessionCancelled, SessionPromoted, PaymentReceipt, SubscriptionLapsing, PlanChanged. Most go
+  through `PlatformMessageService.SendAsync` rather than `IEmailService` directly — that service
+  sends a letter AND a notification, so giving it a kind is a wider change than adding an argument,
+  and it is the right next slice.
+- **A person still has no time zone.** Everything renders in the site's until one exists; Ben chose
+  "ask the person, default to the site's" (2026-09-20).
+- **Only three letters actually consult a template today** (the two identity ones and the reset).
+  The rest declare a kind, which is what the outbox groups by — consulting the composer is one call
+  per mailer and wants doing where each letter's tables are in hand.
+- The `EmailTemplates` migration is **not applied anywhere**.
+
+### Two mistakes worth not repeating
+
+**Every mailer converted from the three-argument `SendAsync` breaks the tests that mock it.** It
+happened twice (ClientStatusMailer, then AccountCreationService) and will happen again for each of
+the eleven. The fix is mechanical — watch `It.IsAny<EmailMessage>()` instead — but it is not
+optional, and the tests fail in a way that looks like the mail stopped.
+
+**A refusal must be a plain sentence, not a record.** `WebApiClient.SendExpectingReasonAsync` drops
+a non-2xx body starting with `{` so a ProblemDetails blob can never reach a person, and it drops a
+JSON refusal with it. The page then says "couldn't save that" instead of the reason.
+
