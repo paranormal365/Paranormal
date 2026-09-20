@@ -65,13 +65,36 @@ public static class EventBookingAlerts
         IEnumerable<HostedEventBooking> bookings,
         Guid recipientId,
         DateTime now)
+        => Decide(state?.AlertsCoverUpToUtc, state?.LastAlertUtc, bookings, recipientId, now);
+
+    /// <summary>
+    /// The same question without a person attached, for an audience that shares one cursor.
+    /// </summary>
+    /// <remarks>
+    /// The staff-room thread (item 238C) is one conversation for a whole venue, so its cursor is
+    /// the event's rather than each reader's — but "new", "a rush" and "long enough" have to mean
+    /// exactly what they mean for the letters, or the thread and the mail would disagree about the
+    /// same weekend. Hence one rule, called twice, rather than two that start identical.
+    /// </remarks>
+    /// <param name="coversUpToUtc">How far the audience has already been told; null for a first post.</param>
+    /// <param name="lastToldUtc">When they were last told, which is what decides a rush.</param>
+    /// <param name="excludeLeadAppUserId">
+    /// Whose own booking is not news. Null for a shared thread: one member booking a room IS news
+    /// to the rest of the venue, where it would not be news to that member's own inbox.
+    /// </param>
+    public static Decision Decide(
+        DateTime? coversUpToUtc,
+        DateTime? lastToldUtc,
+        IEnumerable<HostedEventBooking> bookings,
+        Guid? excludeLeadAppUserId,
+        DateTime now)
     {
-        var since = state?.AlertsCoverUpToUtc ?? now - FirstLook;
+        var since = coversUpToUtc ?? now - FirstLook;
 
         var fresh = bookings
             .Where(b => IsWaiting(b.Status)
                      && b.DateCreated > since
-                     && b.LeadAppUserId != recipientId)
+                     && (excludeLeadAppUserId is not { } me || b.LeadAppUserId != me))
             .OrderBy(b => b.DateCreated)
             .ToList();
 
@@ -82,7 +105,7 @@ public static class EventBookingAlerts
 
         // A NEW RUSH: nobody has been written to about this event, or the last letter was long
         // enough before these arrived that they are not the same burst. Write now.
-        if (state?.LastAlertUtc is not { } lastLetter || oldest - lastLetter > SameRush)
+        if (lastToldUtc is not { } lastLetter || oldest - lastLetter > SameRush)
             return new Decision(Send.Now, fresh, newest);
 
         // THE SAME RUSH: hold, and send one summary once it has gone quiet — or once it has run

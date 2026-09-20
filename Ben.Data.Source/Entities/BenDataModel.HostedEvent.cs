@@ -320,6 +320,17 @@ namespace Ben.Data.Source.Entities
         /// <summary>When the organizers were last sent a summary of this event's bookings.</summary>
         public DateTime? LastDigestSentUtc { get; set; }
 
+        /// <summary>
+        /// How far the staff-room thread has been written about this event's bookings (item 238C).
+        /// </summary>
+        /// <remarks>
+        /// The thread is shared, so its cursor is the event's rather than each reader's — unlike
+        /// <c>EventBookingAlertState</c>, which is per person because a letter is. Null means
+        /// nothing has been posted yet, and the first post covers only the recent past rather than
+        /// the whole history, for the same reason a new decider is not sent last month's queue.
+        /// </remarks>
+        public DateTime? StaffRoomCoversUpToUtc { get; set; }
+
         /// <summary>The picture at the top of the page.</summary>
         public Guid? CoverUploadFileId { get; set; }
 
