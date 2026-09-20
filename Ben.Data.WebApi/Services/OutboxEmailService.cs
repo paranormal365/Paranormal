@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Common.Mail;
@@ -64,12 +65,21 @@ public sealed class OutboxEmailService : IEmailService
     /// </remarks>
     public const int MaximumAttachmentBytes = 8 * 1024 * 1024;
 
+    /// <param name="site">
+    /// Taken as <c>IOptions</c> and unwrapped here, like every other consumer.
+    /// <para><b>A bare <c>SiteIdentity</c> cannot be resolved</b> — the host registers it with
+    /// <c>Configure&lt;T&gt;</c>, which provides <c>IOptions&lt;T&gt;</c> and nothing else. This
+    /// service is registered as <c>IEmailService</c>, which almost everything depends on, so
+    /// asking for it bare took the API down: it started, passed its health check, and returned 500
+    /// to every request before <c>[Authorize]</c> ran. That is what the production smoke checks
+    /// caught on 2026-09-20, and what <c>OptionsAreNeverInjectedBareTests</c> now refuses.</para>
+    /// </param>
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
-        SiteIdentity site,
+        IOptions<SiteIdentity> site,
         ILogger<OutboxEmailService> log)
-    { _db = db; _sender = sender; _site = site; _log = log; }
+    { _db = db; _sender = sender; _site = site.Value; _log = log; }
 
     /// <summary>
     /// Whether this machine could actually send. Unchanged in meaning, and still worth asking.
