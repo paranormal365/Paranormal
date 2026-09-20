@@ -64,6 +64,21 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+### EventStaffRoomCursors — two nullable columns, and nothing to plan around
+
+`EventStaffRoomCursors` (2026-09-20) adds `StaffRoomCoversUpToUtc` and `StaffRoomLastPostUtc` to
+`HostedEvents`, both nullable `datetime2`. SQL Server adds a nullable column as a metadata change,
+so it does not rewrite the table and does not hold a long lock the way the index migration above
+does. Nothing is dropped and no data changes.
+
+**It has NOT been applied anywhere yet** — not to `IsHauntedDb_player` either. Until it runs, the
+API will not start against that database: EF asks for columns the table does not have, and the
+failure is an immediate `Invalid column name 'StaffRoomCoversUpToUtc'` rather than anything subtle.
+
+Both columns are cursors for the event staff room (item 238C). Null means "nothing posted yet", and
+the first post covers only the recent past rather than the event's whole history, so applying this
+late does not flood a venue's thread with months of old bookings.
+
 ### DashboardDateIndexes — additive, but it writes while it runs
 
 `DashboardDateIndexes` (2026-09-19) adds one index to `AppUsers.DateCreated` and one to
