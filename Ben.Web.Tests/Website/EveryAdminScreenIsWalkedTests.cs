@@ -165,4 +165,122 @@ public sealed class EveryAdminScreenIsWalkedTests
           + Environment.NewLine + Environment.NewLine
           + "Add a navigation entry, or a link from the screen somebody would look on.");
     }
+
+    /// <summary>Screens outside Administration with no link to them, and why each is allowed.</summary>
+    private static readonly Dictionary<string, string> NoLinkNeeded = new()
+    {
+        ["/logout"] =
+            "Reached by BenUserMenu's Sign Out, which calls the sign-out code rather than "
+          + "navigating to a URL. There is nothing to link to.",
+
+        ["/signout"] =
+            "The same page under its other name, for anybody who types the word they expect.",
+
+        ["/styleguide"] =
+            "A reference page for whoever is building the site, deliberately not offered to "
+          + "people using it.",
+
+        ["/organization-security"] =
+            "A LEFTOVER. Its own subtitle calls it a \"Starter management UI\" — scaffolding from "
+          + "the security integration that the real screens replaced. Nothing links to it and "
+          + "nothing references it. The endpoints behind it ARE gated "
+          + "(SetAccessGrantAsync calls EnsureCanManageOrganizationAsync, and the interface says "
+          + "the actor must be a SuperAdmin or an Owner), so this is untidiness rather than a "
+          + "hole — but it is a page that registers groups, searches every user and sets grants, "
+          + "and it should probably be deleted rather than excused. Recorded 2026-09-20.",
+    };
+
+    private static IEnumerable<string> DeclaredPublicRoutes(Dictionary<string, string> files)
+    {
+        foreach (var (file, text) in files)
+        {
+            if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) continue;
+
+            foreach (Match m in Regex.Matches(text, @"^@page\s+""([^""]+)""", RegexOptions.Multiline))
+            {
+                var route = m.Groups[1].Value;
+
+                if (route is "/" || route.Contains('{')) continue;
+                if (route.StartsWith("/admin", StringComparison.OrdinalIgnoreCase)) continue;
+
+                yield return route;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every screen a member or a group uses has something that leads to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same rule as the administration one above, applied to the rest of the site. The
+    /// API and the services are scanned too, not just the two website projects: a confirmation
+    /// link is built where the LETTER is written, so scanning only the site reported
+    /// <c>/confirm-email</c> and <c>/reset-password</c> as orphans when they are reached by
+    /// thousands of people.</para>
+    ///
+    /// <para>Routes carrying a parameter are excluded. They are reached by following a link built
+    /// from a real id, so there is no literal string to find, and a rule that cannot see them
+    /// would either be silent or wrong about all of them.</para>
+    /// </remarks>
+    [Fact]
+    public void Every_member_and_group_screen_has_a_way_in()
+    {
+        var root = RepoRoot();
+        var files = new[] { "Ben.Web.Website.Library", "Ben.Web.Website", "Ben.Data.WebApi", "Ben.Web.Services" }
+            .Select(p => Path.Combine(root, p))
+            .Where(Directory.Exists)
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+                      || f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToDictionary(f => f, File.ReadAllText);
+
+        var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (file, text) in files)
+            foreach (Match m in Regex.Matches(text, @"^@page\s+""([^""]+)""", RegexOptions.Multiline))
+            {
+                var route = m.Groups[1].Value;
+                if (route is "/" || route.Contains('{')) continue;
+                if (route.StartsWith("/admin", StringComparison.OrdinalIgnoreCase)) continue;
+                owners[route] = file;
+            }
+
+        var orphans = owners
+            .Where(pair => !NoLinkNeeded.ContainsKey(pair.Key))
+            .Where(pair => !files.Any(f => f.Key != pair.Value
+                                        && f.Value.Contains(pair.Key, StringComparison.Ordinal)))
+            .Select(pair => pair.Key)
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            "These screens exist but nothing leads to them, so they can only be reached by typing "
+          + "the URL:" + Environment.NewLine + "  "
+          + string.Join(Environment.NewLine + "  ", orphans)
+          + Environment.NewLine + Environment.NewLine
+          + "Add a link from wherever somebody would look, or say why it needs none in "
+          + $"{nameof(NoLinkNeeded)}.");
+    }
+
+    [Fact]
+    public void Every_screen_excused_from_needing_a_link_still_exists()
+    {
+        var root = RepoRoot();
+        var declared = new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }
+            .Select(p => Path.Combine(root, p))
+            .Where(Directory.Exists)
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.razor", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"^@page\s+""([^""]+)""",
+                                           RegexOptions.Multiline)
+                                  .Select(m => m.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var stale = NoLinkNeeded.Keys.Where(r => !declared.Contains(r)).ToList();
+
+        Assert.True(stale.Count == 0,
+            "These are excused from needing a link but no longer exist:" + Environment.NewLine
+          + "  " + string.Join(Environment.NewLine + "  ", stale));
+    }
 }

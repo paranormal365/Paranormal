@@ -13190,3 +13190,37 @@ optional, and the tests fail in a way that looks like the mail stopped.
 a non-2xx body starting with `{` so a ProblemDetails blob can never reach a person, and it drops a
 JSON refusal with it. The page then says "couldn't save that" instead of the reason.
 
+
+
+## 249. `/organization-security`: scaffolding nobody removed (OPEN — found 2026-09-20)
+
+Found while extending the "every screen has a way in" guard past Administration.
+
+**What it is.** `Ben.Web.Website/Components/Pages/OrganizationSecurity.razor`, whose own subtitle
+says it: *"Starter management UI for tenant memberships, grants, and access checks."* Scaffolding
+from the `Ben.Service.Security` integration ([[project_ben_service_security_integration]]) that the
+real screens — the Members tab, Site Roles, the role editor — replaced without anybody deleting it.
+
+**Nothing links to it and nothing references it.** It is reachable only by typing the URL, which is
+why no crawl, walk, test or review had ever looked at it.
+
+**What it can do:** register a group, search every user on the site, add and change memberships, and
+set access grants.
+
+**It is not a hole, and that is worth stating precisely** rather than leaving somebody to worry: the
+endpoints behind it are gated where it matters. `SetAccessGrantAsync` calls
+`EnsureCanManageOrganizationAsync(actingUserId, organizationId)` before touching anything, and
+`IOrganizationSecurityService` documents the rule — *"Must be a SuperAdmin or an Owner/Administrator
+of the organization."* The controllers carry a class-level `[Authorize]`. A signed-in stranger
+typing the URL gets a page that refuses them.
+
+**So this is untidiness, with a sharp edge.** The page has no `[Authorize]` of its own, and it is
+the kind of surface that stops being harmless the day somebody adds an endpoint to it without
+checking what the service does. A scaffold that outlives its purpose is how that happens.
+
+**Recommendation: delete it.** Nothing references it, its replacement shipped, and a page that
+exists only for whoever remembers the URL is not a feature. If any part is still wanted, it belongs
+on an admin screen with a `[Authorize]` and an entry in the menu like everything else.
+
+Until somebody decides, it sits on `EveryAdminScreenIsWalkedTests.NoLinkNeeded` with that reasoning
+written out, so the guard passes without the fact being lost.
