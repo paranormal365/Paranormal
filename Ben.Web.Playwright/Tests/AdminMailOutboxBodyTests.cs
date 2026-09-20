@@ -58,8 +58,12 @@ public class AdminMailOutboxBodyTests : BenTestBase
         if (await frame.CountAsync() == 0)
         {
             // The only other honest outcome: its words were already cleared, which the panel says.
+            // IGNORE rather than PASS — this test covers the sealed frame, and a run that never
+            // saw one has not tested it. Ending green here would report a regression in the
+            // sandbox as a pass (PlaywrightTestsCanFailTests, which caught exactly that).
             await Expect(Page.Locator("[data-testid=letter-scrubbed]")).ToBeVisibleAsync();
-            Assert.Pass("The letter's words had been cleared, and the screen said so.");
+            Assert.Ignore("The newest letter's words had already been cleared, so there was no "
+                        + "body to draw. Nothing about the frame was exercised.");
             return;
         }
 
