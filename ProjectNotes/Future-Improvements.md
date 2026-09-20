@@ -13050,11 +13050,82 @@ answer questions a ticket does not:
   scanning binds the pass to a device, and whether a guide can revoke one.
 
 **None of that is decided**, and it touches Field Kit, the public-investigation rules and the
-walk-up guest path. It should not be squeezed into a mail-template branch — the ticket half can
-ship on its own and is useful on its own, and this half deserves its own design conversation.
+walk-up guest path.
+
+**Ben refined it the same day, and it moved out of this item entirely**: *"It is probably not an
+e-mail... so this is not an email feature but one we have for the staff."* It is now
+**[[248]]** — a code staff generate, show or print, and a guest scans. This item keeps only the
+ticket.
 
 ### Suggested order
 
 1. Tour passes: token, PNG, minting at sign-up, `{PassImage}`/`{PassUrl}` on the tour letter.
 2. A guide's scanning screen — the smallest thing that answers "is this person on tonight's walk".
-3. Then, separately, the credential question above.
+
+
+## 248. A code staff hold up, and a guest's phone joins the investigation (OPEN — Ben, 2026-09-20)
+
+Ben, refining what had been the second half of [[247]]:
+
+> Maybe be able to generate a qr code for the employees to allow someone to scan with their phone
+> which would let the person scanning it to have credentials to use their phone for investigation
+> as well. It is probably not an e-mail. Maybe it is just something we let them generate and print
+> or generate and let others scan off their tablet, computer or phone... so this is not an email
+> feature but one we have for the staff.
+
+> So, if the user scans it and doesn't have the app, it directs them to download it on iphone or
+> ipad and then they have credentials.
+
+**What it is.** Not a ticket and not a letter: a guide or an investigator puts a code on a screen or
+a printed sheet, and anybody on tonight's walk points a phone at it and is working within seconds —
+contributing photos and readings to that session without being a member of the group and, quite
+possibly, without having an account at all.
+
+**Why it is the right shape.** Everything the site has for bringing somebody in assumes the site
+knows them first — an invitation to an address, a sign-up, a membership. The people this is for are
+standing in front of a guide in the dark. Anything needing a typed address, a confirmation letter
+and a password is not going to happen at the gate of a cemetery at 9pm, and that is exactly where
+the guests are.
+
+### What already exists
+
+- **Universal links are shipped** (item 209): `AppleAppSiteAssociation` serves the association file
+  and the app's entitlement covers the domain, with the claimed paths *deliberately narrower than
+  the parser*. `/join/*` would be a **server-side addition** — the file decides which paths open the
+  app, so no new App Store build is needed for the routing itself. (Installed phones cache the
+  association for a while, so it is not instant for existing installs.)
+- **QR rendering** (`EventPasses`, `QRCoder`) mints tokens and writes PNGs already.
+- **Walk-up guest sign-up** already accepts somebody with no account
+  ([[project_walkup_guest_signup]]), which is the closest existing answer to "who is this person".
+- **Field Kit** is the thing they would be using once they are in.
+
+### The three ways a scan can land, and only one is easy
+
+1. **iPhone or iPad with the app** — the universal link opens it, the code is redeemed, they are in.
+   This is the case that works.
+2. **iPhone or iPad without the app** — the link opens Safari instead, which shows a page offering
+   the App Store. **Apple has no deferred deep linking**: after installing, the app does not know
+   what they scanned. Nothing clever fixes this without a third party, so the honest design is that
+   **the printed sheet carries a short typed code beside the QR** and the app has a "have a code?"
+   box. Worth deciding early, because it changes what staff print.
+3. **Android, or a laptop** — no app exists, so the page has to say what this is and offer whatever
+   the browser can do. Possibly nothing, and saying so plainly beats a download link to an app they
+   cannot run.
+
+### What has to be decided
+
+- **What the credential lets them do**, and for how long. A session's own window is the obvious
+  bound; a code scanned at 7pm must not still open anything in March.
+- **Whether it binds to a device on first use.** A code on a printed sheet can be photographed. A
+  copied ticket gets somebody in twice; a copied credential gets a stranger into the session.
+- **Whether a guide can revoke one**, and whether they can see who is holding one tonight.
+- **What becomes of what a guest contributed** when the night ends and they were never a member.
+  The field archive rule answers this for public places; this is the same question from the other
+  side.
+- **Whether the code is per session or per person.** One code on a sheet is far easier for staff;
+  one per person is the only version where revoking means anything.
+
+### Where it would live
+
+A SuperAdmin or group screen that generates the code for a session, shows it large enough to scan
+off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
