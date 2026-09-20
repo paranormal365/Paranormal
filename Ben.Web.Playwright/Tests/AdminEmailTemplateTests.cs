@@ -120,8 +120,12 @@ public class AdminEmailTemplateTests : BenTestBase
     {
         await OpenTheResetLetterAsync();
 
+        // The required token is INCLUDED on purpose. Saving checks "does this letter still work"
+        // before "can it fill these in", so a body without {ResetButton} is refused for the other
+        // reason entirely and never reaches the check this test is about.
         await Page.Locator("[data-testid=template-subject]").FillAsync("Hello");
-        await Page.Locator("[data-testid=template-body]").FillAsync("<p>{Cases.Title}</p>");
+        await Page.Locator("[data-testid=template-body]")
+            .FillAsync("<p>{ResetButton} {Cases.Title}</p>");
 
         await Page.Locator("[data-testid=template-save]").ClickAsync();
 
