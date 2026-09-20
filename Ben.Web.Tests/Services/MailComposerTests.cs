@@ -151,4 +151,36 @@ public sealed class MailComposerTests
         public Task<BenDataContext> CreateDbContextAsync(CancellationToken ct = default)
             => throw new InvalidOperationException("No database today.");
     }
+
+    /// <summary>
+    /// The composer must be resolvable from the root provider.
+    /// </summary>
+    /// <remarks>
+    /// <para>It was registered scoped at first, and the API then refused to START: MapIdentityApi
+    /// resolves <c>IEmailSender</c> from the ROOT provider, and IdentityEmailSender now depends on
+    /// this. Nothing in the unit suite saw it — every test constructs the sender by hand — and
+    /// nothing in the browser suite saw it either, because the host never came up. It was found by
+    /// running a screenshot capture.</para>
+    ///
+    /// <para>So the rule is asserted here rather than left to whoever next starts the app: a
+    /// dependency of a root-resolved service may not be scoped.</para>
+    /// </remarks>
+    [Fact]
+    public void Is_registered_so_a_root_resolved_service_can_depend_on_it()
+    {
+        var program = File.ReadAllText(RepoFile("Ben.Data.WebApi", "Program.cs"));
+
+        Assert.Contains("AddSingleton<Ben.Data.WebApi.Services.Mail.MailComposer>", program);
+        Assert.DoesNotContain("AddScoped<Ben.Data.WebApi.Services.Mail.MailComposer>", program);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);
+        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
+    }
 }

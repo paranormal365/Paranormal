@@ -34,19 +34,35 @@ public static class MailBlocks
     /// <summary>One thing an author can drop into a letter.</summary>
     public sealed record Block(string Key, string Title, string What, string Html);
 
+    /// <summary>
+    /// Tidies a block so somebody can edit around it.
+    /// </summary>
+    /// <remarks>
+    /// The templates below are written across several lines so they can be read HERE; pasted into
+    /// the editor as-is, the wrapped style attributes made the body a thicket an author had to
+    /// pick their way through. Email clients do not care about line breaks inside a tag, so each
+    /// element gets one line and nothing is wrapped.
+    /// </remarks>
+    private static string Tidy(string html)
+    {
+        var oneLinePerTag = System.Text.RegularExpressions.Regex.Replace(html, @"\s*\n\s*", " ");
+        var betweenTags = System.Text.RegularExpressions.Regex.Replace(oneLinePerTag, @">\s+<", ">\n<");
+        return System.Text.RegularExpressions.Regex.Replace(betweenTags, @"[ \t]{2,}", " ").Trim();
+    }
+
     /// <summary>A heading, the size a letter's own section headings are.</summary>
     public static string Heading(string text = "A heading")
-        => $"""
+        => Tidy($"""
             <div style="font-family:{Font};font-size:18px;font-weight:bold;color:{Ink};
                         padding:16px 0 8px 0;">{text}</div>
-            """;
+            """);
 
     /// <summary>Ordinary words.</summary>
     public static string Paragraph(string text = "Something worth saying.")
-        => $"""
+        => Tidy($"""
             <div style="font-family:{Font};font-size:15px;line-height:1.6;color:#374151;
                         padding:0 0 12px 0;">{text}</div>
-            """;
+            """);
 
     /// <summary>
     /// A button.
@@ -56,7 +72,7 @@ public static class MailBlocks
     /// nothing, because there is no form and no script to run.
     /// </remarks>
     public static string Button(string text = "Open it", string url = "{SiteUrl}")
-        => $"""
+        => Tidy($"""
             <table role="presentation" cellpadding="0" cellspacing="0" border="0"
                    style="margin:8px 0 16px 0;">
               <tr><td align="center" bgcolor="{Green}" style="border-radius:6px;">
@@ -66,11 +82,11 @@ public static class MailBlocks
                           text-decoration:none;padding:12px 28px;border-radius:6px;">{text}</a>
               </td></tr>
             </table>
-            """;
+            """);
 
     /// <summary>A bordered box, the way the site's cards read.</summary>
     public static string Card(string title = "A card", string body = "What the card is about.")
-        => $"""
+        => Tidy($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
                    style="border:1px solid {Line};border-radius:8px;background-color:{Paper};
                           margin:0 0 16px 0;">
@@ -82,7 +98,7 @@ public static class MailBlocks
                 </div>
               </td></tr>
             </table>
-            """;
+            """);
 
     /// <summary>
     /// Two columns: something on one side, something on the other.
@@ -108,18 +124,18 @@ public static class MailBlocks
 
         var cells = logoOnTheRight ? wideCell + narrowCell : narrowCell + wideCell;
 
-        return $"""
+        return Tidy($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
                    style="margin:0 0 16px 0;">
               <tr>
             {cells}  </tr>
             </table>
-            """;
+            """);
     }
 
     /// <summary>A line across, for separating one part from the next.</summary>
     public static string Divider()
-        => $"""<div style="border-top:1px solid {Line};line-height:1px;height:1px;margin:16px 0;">&nbsp;</div>""";
+        => Tidy($"""<div style="border-top:1px solid {Line};line-height:1px;height:1px;margin:16px 0;">&nbsp;</div>""");
 
     /// <summary>
     /// A table of things and what they cost, with a total.
@@ -130,7 +146,7 @@ public static class MailBlocks
     /// that survives a client which ignores <c>text-align</c> on a div.
     /// </remarks>
     public static string LineItems()
-        => $"""
+        => Tidy($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
                    style="margin:0 0 16px 0;font-family:{Font};font-size:15px;color:#374151;">
               <tr>
@@ -146,16 +162,16 @@ public static class MailBlocks
                 <td align="right" style="padding:10px 0;font-weight:bold;color:{Ink};">$99.00</td>
               </tr>
             </table>
-            """;
+            """);
 
     /// <summary>Small print at the end.</summary>
     public static string Footer()
-        => $$"""
+        => Tidy($$"""
             <div style="font-family:{{Font}};font-size:12px;line-height:1.5;color:{{Muted}};
                         border-top:1px solid {{Line}};padding:16px 0 0 0;margin-top:16px;">
               Sent by {SiteName} on {FullDate}.
             </div>
-            """;
+            """);
 
     /// <summary>Everything an author can insert, in the order it is offered.</summary>
     public static IReadOnlyList<Block> All =>

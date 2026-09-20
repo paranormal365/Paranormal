@@ -399,6 +399,8 @@ Two letters cannot be sent again, and say so rather than offering a button that 
 the question the rest of the row cannot: not *did it go* but *what did it say* — the one you need
 when somebody reports that a confirmation was wrong, or blank, or meant for somebody else.
 
+![A letter that was sent, opened for reading](help-media:site-administration/reading-a-letter.png)
+
 Three things are worth knowing before you use it.
 
 **Opening a letter is recorded against your account.** A letter is a copy of somebody else's
@@ -432,6 +434,8 @@ replaced when the letter is written.
 Pick a **table**, then a **column**, then **Add token**, and `{AppUsers.DisplayName}` is added to
 the body. Move it where you want it.
 
+![Writing a letter: the table and column dropdowns, the pieces, and the ready-made tokens](help-media:site-administration/email-template-editor.png)
+
 The tables on offer are the ones *that letter* actually has in its hands. A password-reset letter
 carries the person and nothing else, so it offers `AppUsers` alone — and it refuses to save a token
 it could never fill in, rather than sending a letter with a gap in it. Columns that are the site's
@@ -459,6 +463,8 @@ table is treated the same way, so nobody is shown a time they were never in.
 **Preview** fills the tokens in with made-up details — Marguerite Ashdown, at 1201 Del Rio Pike —
 and draws the letter as it would arrive. Nothing real is used, so opening a preview never shows you
 somebody's actual name or address.
+
+![The body of a letter being written, with the preview underneath](help-media:site-administration/email-template-preview.png)
 
 **Save draft** keeps what you are working on without changing anything anybody receives. **Publish**
 is what takes effect, and it applies to the next letter of that kind — nothing already queued is

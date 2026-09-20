@@ -390,7 +390,12 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
 // letter for everybody who would rather not hear as it happens, and the safety net for those who do.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventStaffRoomWriter>();
-builder.Services.AddScoped<Ben.Data.WebApi.Services.Mail.MailComposer>();
+// SINGLETON, not scoped, and this is load-bearing: MapIdentityApi resolves IEmailSender from the
+// ROOT provider, so an IdentityEmailSender depending on a scoped service makes the whole API
+// refuse to start — "cannot resolve from root provider because it requires scoped service". It is
+// safe as a singleton because it holds no per-request state and takes an IDbContextFactory, which
+// is exactly what that factory exists for.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Mail.MailComposer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

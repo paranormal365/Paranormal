@@ -44,7 +44,7 @@
                         <button type="button"
                                 class="list-group-item list-group-item-action @(row.Kind == _openKind ? "active" : "")"
                                 data-testid="template-row"
-                                @onclick="@(() => OpenAsync(row.Kind))">
+                                @onclick="@(() => AskThenOpenAsync(row.Kind))">
                             <div class="d-flex align-items-start gap-2">
                                 <div class="flex-grow-1">
                                     <div>@row.Title</div>
@@ -119,7 +119,7 @@
                                     <button type="button" class="btn btn-sm btn-outline-success me-1 mb-1"
                                             data-testid="insert-supplied"
                                             title="@sp.What"
-                                            @onclick="@(() => AppendToBodyAsync("{" + sp.Name + "}"))">
+                                            @onclick="@(() => AppendToBodyAsync("{" + sp.Name + "}", $"Added {{{sp.Name}}} to the end of the body."))">
                                         {@sp.Name}@(sp.Required ? " *" : "")
                                     </button>
                                 }
@@ -164,13 +164,18 @@
                             }
 
                             <div class="mt-2">
+                                @* outline-info, NOT outline-dark: a dark outline on the dark
+                                   theme is a button nobody can see. The four rows are deliberately
+                                   four tones — starters primary, pieces info, supplied success,
+                                   ready-made secondary — so a reader can tell what kind of thing
+                                   they are inserting without reading each label. *@
                                 <div class="form-label small mb-1">Pieces</div>
                                 @foreach (var b in _open.Blocks)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-dark me-1 mb-1"
+                                    <button type="button" class="btn btn-sm btn-outline-info me-1 mb-1"
                                             data-testid="insert-block"
                                             title="@b.What"
-                                            @onclick="@(() => AppendToBodyAsync(b.Html))">
+                                            @onclick="@(() => AppendToBodyAsync(b.Html, $"Added a {b.Title.ToLowerInvariant()} to the end of the body."))">
                                         @b.Title
                                     </button>
                                 }
@@ -182,7 +187,7 @@
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1"
                                             title="@($"{t.What} Looks like: {t.Looks}")"
-                                            @onclick="@(() => AppendToBodyAsync("{" + t.Name + "}"))">
+                                            @onclick="@(() => AppendToBodyAsync("{" + t.Name + "}", $"Added {{{t.Name}}} to the end of the body."))">
                                         {@t.Name}
                                     </button>
                                 }
@@ -192,7 +197,7 @@
                         <div class="mb-3">
                             <label class="form-label" for="template-subject">Subject</label>
                             <input id="template-subject" class="form-control" data-testid="template-subject"
-                                   @bind="_subject" @bind:event="oninput" />
+                                   @bind="_subject" />
                         </div>
 
                         <div class="mb-3">
@@ -201,9 +206,15 @@
                                every style inline, because Outlook renders with Word's engine and
                                Gmail drops <style> blocks. A rich editor would quietly rewrite
                                exactly the markup that makes a letter survive those clients. *@
+                            @* Bound on change, NOT on input. A letter's body is kilobytes of HTML
+                               and this is Blazor Server: binding per keystroke sends the whole
+                               thing over the circuit on every character, which is felt as lag on
+                               exactly the long templates somebody is most likely to be writing.
+                               Blur fires before a button's click, so pressing Save or Preview
+                               still uses what is on the screen. *@
                             <textarea id="template-body" class="form-control font-monospace" rows="14"
                                       data-testid="template-body"
-                                      @bind="_body" @bind:event="oninput"></textarea>
+                                      @bind="_body"></textarea>
                         </div>
 
                         <div class="d-flex flex-wrap gap-2">
@@ -246,6 +257,16 @@
     </div>
 </div>
 
+<BenModal @bind-Visible="@_confirmLeave" Title="Leave without saving?" Size="sm">
+    <p>You have changes to this letter that have not been saved. Moving to another one loses them.</p>
+    <div class="d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-outline-secondary"
+                @onclick="@(() => { _confirmLeave = false; _pendingKind = null; })">Stay here</button>
+        <button type="button" class="btn btn-danger" data-testid="leave-anyway"
+                @onclick="LeaveAnywayAsync">Leave without saving</button>
+    </div>
+</BenModal>
+
 <BenModal @bind-Visible="@_confirmRevert" Title="Use the site's letter?" Size="sm">
     <p>
         What you wrote for this letter is deleted and the site's own version is used again. The
@@ -272,6 +293,13 @@
     private string? _error;
     private bool _busy;
     private bool _confirmRevert;
+
+    // What was last loaded or saved, so "unsaved changes" means something rather than being a
+    // flag somebody has to remember to set.
+    private string? _loadedSubject;
+    private string? _loadedBody;
+    private bool _confirmLeave;
+    private string? _pendingKind;
 
     private sealed record TableOption(string Value, string Label);
     private sealed record ColumnOption(string Value, string Label);
@@ -305,6 +333,41 @@
         _error = result.Items is null ? "Couldn't load the letters." : null;
     }
 
+    /// <summary>
+    /// Moves to another letter, asking first when this one has unsaved work.
+    /// </summary>
+    /// <remarks>
+    /// The list and the editor are on one screen, so changing letters is a single click next to
+    /// what you were writing. Without this, an author who had written half a letter lost it by
+    /// clicking the wrong row, with nothing said either before or after.
+    /// </remarks>
+    private async Task AskThenOpenAsync(string kind)
+    {
+        if (kind == _openKind) return;
+
+        if (IsDirty)
+        {
+            _pendingKind = kind;
+            _confirmLeave = true;
+            return;
+        }
+
+        await OpenAsync(kind);
+    }
+
+    /// <summary>Whether the boxes differ from what was last loaded into them.</summary>
+    private bool IsDirty
+        => _open is not null
+        && ((_subject ?? string.Empty) != (_loadedSubject ?? string.Empty)
+         || (_body ?? string.Empty) != (_loadedBody ?? string.Empty));
+
+    private async Task LeaveAnywayAsync()
+    {
+        _confirmLeave = false;
+        if (_pendingKind is { } next) await OpenAsync(next);
+        _pendingKind = null;
+    }
+
     private async Task OpenAsync(string kind)
     {
         _openKind = kind;
@@ -319,6 +382,8 @@
 
         _subject = _open.DraftSubject;
         _body = _open.DraftBodyHtml;
+        _loadedSubject = _subject;
+        _loadedBody = _body;
     }
 
     /// <summary>Choosing a table empties the column beside it, which no longer belongs to it.</summary>
@@ -343,7 +408,7 @@
     /// C#, and a JS interop that reached into it would fight Blazor's binding over the same value.
     /// Appending always works, and an author moves it where they want it.
     /// </remarks>
-    private Task AppendToBodyAsync(string snippet)
+    private Task AppendToBodyAsync(string snippet, string? said = null)
     {
         // A block is several lines of markup and a token is one word, so they join differently:
         // a token belongs in the sentence being written, a block belongs on its own line.
@@ -353,7 +418,10 @@
             ? snippet
             : _body.TrimEnd() + (newLine ? "\n\n" : " ") + snippet;
 
-        _status = null;
+        // Every insert says what it did. The body is long enough that a token appended to the end
+        // is usually off-screen, so without this an author clicks a button and sees nothing
+        // happen — which is indistinguishable from a button that does not work.
+        _status = said ?? "Added to the end of the body.";
         return Task.CompletedTask;
     }
 
@@ -379,7 +447,12 @@
                 _openKind!, new SaveEmailTemplateBody(_subject, _body));
 
             _status = result?.Message ?? error ?? "Couldn't save that.";
-            if (result?.Ok == true) await LoadListAsync();
+            if (result?.Ok == true)
+            {
+                _loadedSubject = _subject;
+                _loadedBody = _body;
+                await LoadListAsync();
+            }
         }
         finally { _busy = false; }
     }
@@ -409,8 +482,18 @@
             if (saved?.Ok != true) { _status = saved?.Message ?? saveError ?? "Couldn't save that."; return; }
 
             var (result, error) = await AdminClient.PublishEmailTemplateAsync(_openKind!);
-            _status = result?.Message ?? error ?? "Couldn't publish that.";
-            if (result?.Ok == true) { await LoadListAsync(); await OpenAsync(_openKind!); }
+            var said = result?.Message ?? error ?? "Couldn't publish that.";
+
+            if (result?.Ok == true)
+            {
+                await LoadListAsync();
+                await OpenAsync(_openKind!);
+            }
+
+            // AFTER the reload, not before: OpenAsync clears the status line, so setting it first
+            // meant publishing always appeared to do nothing. The row's badge changed and the
+            // message did not, which is the one combination that reads as a failure.
+            _status = said;
         }
         finally { _busy = false; }
     }
@@ -422,8 +505,15 @@
         try
         {
             var (result, error) = await AdminClient.RevertEmailTemplateAsync(_openKind!);
-            _status = result?.Message ?? error ?? "Couldn't do that.";
-            if (result?.Ok == true) { await LoadListAsync(); await OpenAsync(_openKind!); }
+            var said = result?.Message ?? error ?? "Couldn't do that.";
+
+            if (result?.Ok == true)
+            {
+                await LoadListAsync();
+                await OpenAsync(_openKind!);
+            }
+
+            _status = said;   // after the reload, for the reason above
         }
         finally { _busy = false; }
     }
