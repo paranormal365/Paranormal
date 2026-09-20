@@ -43,12 +43,21 @@ public interface IEmailService
 /// Where a reply should go, when that is not the site. A tour guest hitting reply means to reach
 /// the business that is walking them around a city at night, not our support address.
 /// </param>
+/// <param name="Kind">
+/// Which of <see cref="Mail.MailKinds"/> this is, when the caller knows (item 246).
+/// <para>Trailing and optional, so the twenty callers item 239a deliberately avoided editing stay
+/// unedited until each is given its name. Where it is null the outbox still guesses from the
+/// subject, which is what it has always done — a letter without a declared kind is grouped, but it
+/// cannot carry a template, because a template keyed to a guess stops applying the day somebody
+/// rewords a subject line.</para>
+/// </param>
 public sealed record EmailMessage(
     string To,
     string Subject,
     string HtmlBody,
     IReadOnlyList<EmailAttachment>? Attachments = null,
-    string? ReplyTo = null);
+    string? ReplyTo = null,
+    string? Kind = null);
 
 /// <summary>One file travelling with an email.</summary>
 /// <param name="ContentType">

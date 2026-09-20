@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -197,7 +198,8 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "<p>If it was not you, there is nothing to do. Your account has not changed and "
                 + "nobody has been given access to it.</p>",
                 buttonText: "Sign in", buttonUrl: $"{BaseUrl}/login"),
-            "their address was used in a sign-up attempt", ct);
+            "their address was used in a sign-up attempt", ct,
+            MailKinds.SomebodyUsedYourAddress.Key);
     }
 
     /// <summary>
@@ -225,14 +227,16 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "<p>If it was not you, there is nothing to do. Your account has not changed, and "
                 + "the request will be discarded on its own.</p>",
                 buttonText: "Sign in to finish it", buttonUrl: adoptLink),
-            "an investigation request was made under their address", ct);
+            "an investigation request was made under their address", ct,
+            MailKinds.SomebodyUsedYourAddress.Key);
     }
 
-    private async Task TrySendAsync(AppUser to, string subject, string body, string what, CancellationToken ct)
+    private async Task TrySendAsync(AppUser to, string subject, string body, string what, CancellationToken ct,
+                                    string? kind = null)
     {
         try
         {
-            await _email.SendAsync(to.Email!, subject, body, ct);
+            await _email.SendAsync(new EmailMessage(to.Email!, subject, body, Kind: kind), ct);
         }
         catch (Exception ex)
         {

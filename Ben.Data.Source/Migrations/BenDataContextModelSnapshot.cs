@@ -1799,6 +1799,63 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("CouponRedemptions");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EmailTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BodyHtml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DraftAuthorAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DraftBodyHtml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DraftSavedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DraftSubject")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid?>("PublishedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PublishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates", (string)null);
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EquipmentBrand", b =>
                 {
                     b.Property<Guid>("Id")

@@ -130,6 +130,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventRemoval> HostedEventRemovals { get; set; }
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
+        public virtual DbSet<EmailTemplate> EmailTemplates { get; set; }
         public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
         public virtual DbSet<OrganizationVenueProfile> OrganizationVenueProfiles { get; set; }
         public virtual DbSet<VenueHostingRequest> VenueHostingRequests { get; set; }
@@ -1021,6 +1022,17 @@ namespace Ben.Data.Source.Context
             // Both hang off a person, NoAction, because deleting a person goes through its own
             // purge and must see these rows. The preference cascades from the group — a preference
             // about a group that no longer exists is about nothing — and the state from the event.
+            // One template per kind, and the kind is what a letter is joined to. Unique rather
+            // than "the newest wins": two rows for one kind would mean the letter somebody
+            // receives depends on which row a query happened to order first.
+            modelBuilder.Entity<EmailTemplate>().ToTable("EmailTemplates");
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.Kind).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.Subject).HasMaxLength(300);
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.DraftSubject).HasMaxLength(300);
+            modelBuilder.Entity<EmailTemplate>().HasIndex(t => t.Kind).IsUnique();
+            modelBuilder.Entity<EmailTemplate>().Ignore(t => t.IsLive);
+            modelBuilder.Entity<EmailTemplate>().Ignore(t => t.HasUnpublishedDraft);
+
             modelBuilder.Entity<EventBookingAlertPreference>()
                 .HasOne(p => p.AppUser).WithMany()
                 .HasForeignKey(p => p.AppUserId).OnDelete(DeleteBehavior.NoAction);

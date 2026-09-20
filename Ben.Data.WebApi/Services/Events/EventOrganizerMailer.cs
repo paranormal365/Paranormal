@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
@@ -84,7 +85,7 @@ public sealed class EventOrganizerMailer
         body.Append($"<p><a href=\"{Board(ev)}\">Open the booking board</a></p>");
         body.Append(Footer(ev));
 
-        await _email.SendAsync(new EmailMessage(to.Email, subject, body.ToString()), ct);
+        await _email.SendAsync(new EmailMessage(to.Email, subject, body.ToString(), Kind: MailKinds.BookingsArrived.Key), ct);
         return true;
     }
 
@@ -142,7 +143,7 @@ public sealed class EventOrganizerMailer
         body.Append(Footer(ev));
 
         await _email.SendAsync(new EmailMessage(
-            to.Email, $"Where {ev.Name} stands", body.ToString()), ct);
+            to.Email, $"Where {ev.Name} stands", body.ToString(), Kind: MailKinds.BookingsDigest.Key), ct);
         return true;
     }
 

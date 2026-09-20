@@ -95,7 +95,7 @@ public sealed class OutboxEmailService : IEmailService
             // leave the same silence behind.
             _log.LogError(ex,
                 "Could not queue the {Kind} letter to {To}; it will not be sent.",
-                Kind(message.Subject), message.To);
+                message.Kind ?? Kind(message.Subject), message.To);
         }
     }
 
@@ -114,7 +114,7 @@ public sealed class OutboxEmailService : IEmailService
             To = Clip(message.To, 320),
             Subject = Clip(message.Subject, 400),
             ReplyTo = message.ReplyTo is { Length: > 0 } r ? Clip(r, 320) : null,
-            Kind = Kind(message.Subject),
+            Kind = message.Kind ?? Kind(message.Subject),
             HtmlBody = truncated
                 ? body[..MaximumBodyBytes] + "\n<!-- truncated: the letter was longer than the outbox keeps -->"
                 : body,

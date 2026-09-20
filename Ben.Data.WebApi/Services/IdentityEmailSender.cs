@@ -1,4 +1,5 @@
 using Ben.Data.Common;
+using Ben.Data.Common.Mail;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -45,13 +46,56 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
     private readonly ILogger<IdentityEmailSender> _logger;
 
     private readonly SiteIdentity _site;
+    private readonly Mail.MailComposer _composer;
 
     public IdentityEmailSender(
-        IEmailService email, ILogger<IdentityEmailSender> logger, IOptions<SiteIdentity> site)
+        IEmailService email, ILogger<IdentityEmailSender> logger, IOptions<SiteIdentity> site,
+        Mail.MailComposer composer)
     {
         _email  = email;
         _logger = logger;
         _site   = site.Value;
+        _composer = composer;
+    }
+
+    /// <summary>
+    /// The link and its button, named the way a template refers to them.
+    /// </summary>
+    /// <remarks>
+    /// Both, always: an author who wants the site's own button uses <c>{ConfirmButton}</c> and one
+    /// who wants their own wording wraps <c>{ConfirmUrl}</c> in whatever they like. Offering only
+    /// the URL would mean everybody hand-rolls a button, and a hand-rolled one is exactly what
+    /// renders differently in Outlook.
+    /// </remarks>
+    private static Dictionary<string, (string Value, bool IsHtml)> Links(
+        string urlToken, string buttonToken, string buttonText, string url,
+        params (string Name, string Value)[] extra)
+    {
+        var supplied = new Dictionary<string, (string, bool)>(StringComparer.OrdinalIgnoreCase)
+        {
+            [urlToken] = (url, false),
+            [buttonToken] = (BenEmailLayout.ActionButton(buttonText, url), true),
+        };
+
+        foreach (var (name, value) in extra) supplied[name] = (value, false);
+        return supplied;
+    }
+
+    /// <summary>
+    /// The reader's zone.
+    /// </summary>
+    /// <remarks>
+    /// The site's, for now: a person has no time zone of their own yet (item 246 records that as
+    /// still to do). Identity mail is the one place it matters least — a confirmation link does
+    /// not depend on what time anybody thinks it is.
+    /// </remarks>
+    private static TimeZoneInfo SiteZone
+    {
+        get
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById("America/Chicago"); }
+            catch (TimeZoneNotFoundException) { return TimeZoneInfo.Utc; }
+        }
     }
 
     /// <summary>The confirmation send, with its outcome reported rather than swallowed.</summary>
@@ -89,7 +133,9 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "can sign in.</p>"
               + "<p>If you did not create this account, ignore this message and nothing happens.</p>",
                 buttonText: "Confirm my email", buttonUrl: confirmationLink),
-            linkKind: "confirmation", link: confirmationLink);
+            linkKind: "confirmation", link: confirmationLink,
+            kind: MailKinds.ConfirmYourAddress.Key,
+            supplied: Links("ConfirmUrl", "ConfirmButton", "Confirm my email", confirmationLink));
 
     public Task SendPasswordResetLinkAsync(AppUser user, string email, string resetLink)
         => SendAsync(email, "Reset your password",
@@ -98,7 +144,9 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "<p>If you did not request this, ignore this message — your password will not "
               + "change.</p>",
                 buttonText: "Reset password", buttonUrl: resetLink),
-            linkKind: "password reset", link: resetLink);
+            linkKind: "password reset", link: resetLink,
+            kind: MailKinds.ResetYourPassword.Key,
+            supplied: Links("ResetUrl", "ResetButton", "Reset password", resetLink));
 
     /// <summary>
     /// The reset email carries a finished link, not a bare code.
@@ -124,15 +172,45 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
                  <p>If you did not request this, ignore this message — your password will not change.</p>
                  """,
                 buttonText: "Reset password", buttonUrl: resetUrl),
-            linkKind: "password reset", link: resetUrl);
+            linkKind: "password reset", link: resetUrl,
+            kind: MailKinds.ResetYourPassword.Key,
+            supplied: Links("ResetUrl", "ResetButton", "Reset password", resetUrl,
+                            ("ResetCode", resetCode)));
     }
 
-    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link)
+    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link,
+                                 string? kind = null,
+                                 IReadOnlyDictionary<string, (string Value, bool IsHtml)>? supplied = null,
+                                 string? displayName = null)
     {
         _lastSendSucceeded = false;
         try
         {
-            await _email.SendAsync(to, subject, htmlBody);
+            // A written template replaces the words; the link and its button are handed in, so
+            // whoever wrote it could put the button where they wanted it. A confirmation letter
+            // with no link is refused when the template is saved, not discovered here.
+            if (kind is not null && MailKinds.Find(kind) is { } info && supplied is not null)
+            {
+                var tables = new Dictionary<string, IReadOnlyDictionary<string, object?>>(
+                    StringComparer.OrdinalIgnoreCase)
+                {
+                    ["AppUsers"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["Email"] = to,
+                        ["DisplayName"] = displayName,
+                        ["UserName"] = displayName,
+                    },
+                };
+
+                var (s2, h2) = await _composer.ComposeAsync(
+                    info, tables, SiteZone, subject, htmlBody, DateTime.UtcNow,
+                    CancellationToken.None, supplied);
+
+                subject = s2;
+                htmlBody = h2;
+            }
+
+            await _email.SendAsync(new EmailMessage(to, subject, htmlBody, Kind: kind));
             _lastSendSucceeded = true;
         }
         catch (Exception ex)

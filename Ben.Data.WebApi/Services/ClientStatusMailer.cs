@@ -1,4 +1,5 @@
 using Ben.Data.Common;
+using Ben.Data.Common.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -46,39 +47,45 @@ public sealed class ClientStatusMailer
         var body = $"<p>Your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) is now "
                  + $"<strong>{WebUtility.HtmlEncode(label)}</strong>.</p>"
                  + $"<p>{WebUtility.HtmlEncode(CaseStatusWording.ClientSentence(c.Status))}</p>";
-        await SendToClientsAsync(db, c, $"status {previous} → {c.Status}", subject, $"Your case is now {label}", body, ct);
+        await SendToClientsAsync(db, c, $"status {previous} → {c.Status}", subject, $"Your case is now {label}", body, ct,
+            MailKinds.CaseStatusChanged.Key);
     }
 
     /// <summary>A visit has been put on the calendar for the case.</summary>
     public Task VisitScheduledAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
         => VisitAsync(db, c, visit, "scheduled", "A visit is scheduled for your case",
-            $"<p>The group has scheduled a visit for your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}).</p>", ct);
+            $"<p>The group has scheduled a visit for your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}).</p>", ct,
+            MailKinds.VisitScheduled.Key);
 
     /// <summary>A scheduled visit moved to another time.</summary>
     public Task VisitRescheduledAsync(BenDataContext db, Case c, Investigation visit, DateTime previouslyAt, CancellationToken ct)
         => VisitAsync(db, c, visit, "rescheduled", "A visit to your case has been rescheduled",
             $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) that was set for "
-            + $"{When(previouslyAt)} has moved.</p>", ct);
+            + $"{When(previouslyAt)} has moved.</p>", ct,
+            MailKinds.VisitRescheduled.Key);
 
     /// <summary>A scheduled visit will not happen.</summary>
     public async Task VisitCancelledAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
     {
         var body = $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) "
                  + $"that was set for {When(visit.ScheduledDateTime)} has been cancelled. The group will be in touch about what happens next.</p>";
-        await SendToClientsAsync(db, c, "visit cancelled", $"A visit to your case {Reference(c)} was cancelled", "A visit was cancelled", body, ct);
+        await SendToClientsAsync(db, c, "visit cancelled", $"A visit to your case {Reference(c)} was cancelled", "A visit was cancelled", body, ct,
+            MailKinds.VisitCancelled.Key);
     }
 
-    private async Task VisitAsync(BenDataContext db, Case c, Investigation visit, string kind, string title, string lead, CancellationToken ct)
+    private async Task VisitAsync(BenDataContext db, Case c, Investigation visit, string kind, string title, string lead, CancellationToken ct,
+                                  string? mailKind = null)
     {
         var body = lead
                  + $"<p><strong>{When(visit.ScheduledDateTime)}</strong>"
                  + (visit.EndDateTime is { } end ? $" until {When(end)}" : "")
                  + (string.IsNullOrWhiteSpace(visit.Location) ? "" : $"<br/>{WebUtility.HtmlEncode(visit.Location)}")
                  + "</p><p>Open your case to see it in your own time zone and to message the group.</p>";
-        await SendToClientsAsync(db, c, $"visit {kind}", $"{title}: {Reference(c)}", title, body, ct);
+        await SendToClientsAsync(db, c, $"visit {kind}", $"{title}: {Reference(c)}", title, body, ct, mailKind);
     }
 
-    private async Task SendToClientsAsync(BenDataContext db, Case c, string what, string subject, string title, string bodyHtml, CancellationToken ct)
+    private async Task SendToClientsAsync(BenDataContext db, Case c, string what, string subject, string title, string bodyHtml, CancellationToken ct,
+                                          string? kind = null)
     {
         if (!_email.IsConfigured)
         {
@@ -135,7 +142,7 @@ public sealed class ClientStatusMailer
             }
             try
             {
-                await _email.SendAsync(client.Email, subject, html, ct);
+                await _email.SendAsync(new EmailMessage(client.Email, subject, html, Kind: kind), ct);
                 _log.LogInformation("Client status mail sent to {Recipient} for case {CaseId}: {What}.", client.Email, c.Id, what);
             }
             catch (Exception ex)

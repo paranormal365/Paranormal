@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>18 documents &middot; 6 sections</div>
-      <div>19 September 2026</div>
+      <div>20 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -2999,7 +2999,10 @@ carry the file's location and camera details with them, marked as inherited.</p>
 dialog lists the cases that hold a copy, with how many comments and votes each has, so you can
 see what you are about to change before you do.</p>
 <h2>Deleting</h2>
-<p>Press the trash button on a row. What happens next depends on whether anyone else is using it.</p>
+<p>Press the trash button, on a row of <strong>Your Files</strong> or on a card in the <strong>Media Library</strong>. Both do
+exactly the same thing — the Media Library only offers it on a file that is yours, because a file
+you have handed to a group is deleted by somebody with that group's permission instead.</p>
+<p>What happens next depends on whether anyone else is using it.</p>
 <p><strong>Nobody else is using it.</strong> You are asked once, and it is gone — the file, its details, and any
 shares to individual people.</p>
 <p><strong>A group is using it.</strong> The dialog lists each group and what it holds: shares, copies on cases,
@@ -3222,8 +3225,14 @@ catalog sees the piece with no mention of you at all.</p>
 </ul>
 <p>Site administrators can see equipment records, as they can everywhere else in the application.</p>
 <h2>Adding a piece of equipment</h2>
-<p>Choose a category first — that narrows the makes and models to sensible ones. Then pick the make,
-then the model, then give it a name you will recognise in a list, like "my backup recorder".</p>
+<p>Choose a category first, then the make, then the model, then give it a name you will recognise in
+a list, like "my backup recorder".</p>
+<p>The category sorts the makes rather than cutting them. Makes that already have something in the
+category you picked come first; the rest follow, each saying so — <em>FLIR (no models in this category
+yet)</em>. Every make stays on the list on purpose, because the first person to own a FLIR audio
+recorder has to be able to choose FLIR and add the model under it. Pick one of the labelled makes
+and the model list says it is empty and points at the box that adds one, rather than sitting there
+blank with no explanation.</p>
 <h2>When you don't know the make or model</h2>
 <p>Not everything has a manufacturer and a product name, and you should never have to invent one.</p>
 <ul>
@@ -5390,6 +5399,23 @@ party of 4 has asked for the Blue Room on Fri 10/30</em> and links to the bookin
 is, behind the permission the board checks. Letters get forwarded and left open on shared desks in
 a way a screen does not.</p>
 <p>Your own booking is never news to you.</p>
+<h3>The event's staff room</h3>
+<p><strong>The same arrivals are posted into a thread of the event's own</strong>, in your group's <strong>Messages</strong>, so
+you can talk about a request where the request is. You will see it there as <em>Event Staff</em>, named
+after the event — <em>Bookings — Halloween Lock-In</em>.</p>
+<ul>
+<li><strong>One thread for the whole event</strong>, not one per booking, so a weekend that sells out does not
+  bury every other conversation your group is having.</li>
+<li><strong>A new arrival brings the thread back to your bell</strong> rather than adding another row to your
+  messages. Reply to it exactly as you would any message.</li>
+<li><strong>Everybody who may decide bookings is in it</strong> — including anyone who set their letters to
+  <em>Nothing</em>. Turning off letters is a statement about letters, and the room is most of the point
+  for somebody who never reads mail.</li>
+<li><strong>It says no more than a letter does</strong>: what was asked for and when, never who. The names are on
+  the booking board.</li>
+</ul>
+<p>You do not switch this on, and there is nothing to set up: the thread is made the first time a
+booking arrives. An event nobody asks about never gets one.</p>
 <p><img alt="Choosing how often a group writes to you" src="../Ben.Web.Services/Help/Media/organization-administration/event-booking-letters.png" /></p>
 <p><strong>How often</strong> is yours to choose, group by group, on the <strong>Notifications</strong> page under <em>Letters about
 bookings</em>: <strong>As they arrive</strong> (the default, with the daily letter too), <strong>A daily letter</strong> only, or
@@ -5886,6 +5912,22 @@ different trade, and this switch is about walks.</p>
 record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
 files and site roles. Each tab edits directly, and every change is written to the audit log
 under your name.</p>
+<h3>Last sign-in and how many</h3>
+<p>Two columns on the list answer who is actually using the site. <strong>Last sign-in</strong> is the most
+recent one; <strong>Sign-ins</strong> is how many there have been. Both sort, so a click on either heading
+puts the quietest or the busiest accounts at the top, and an account nobody has ever signed in
+to reads <strong>Never</strong> rather than sitting blank.</p>
+<p>Every way in is counted the same: a password, Sign in with Apple, a Microsoft account, and the
+code that hands a session to the standalone editor.</p>
+<p>Two things worth knowing before you read too much into a number:</p>
+<ul>
+<li><strong>Nothing goes back further than 20 August 2026</strong>, when sign-ins began being recorded. An
+  account older than that has a count from that day, not from the day it was made.</li>
+<li><strong>A Microsoft account is counted once every twelve hours of use</strong>, not once per sign-in. A
+  Microsoft session is a token that arrives with every page rather than a moment somebody signs
+  in, so there is no exact answer — a working day counts as one, and coming back in the evening
+  counts as another. Microsoft sign-ins were not recorded at all before 19 September 2026.</li>
+</ul>
 <p>The <strong>Addresses</strong> tab has two buttons beside each address once it has been placed on the map:
 <strong>Map</strong> shows the address with its region circle, and <strong>Directions</strong> opens the directions
 window.</p>
@@ -6061,7 +6103,97 @@ will requeue.</p>
   door code. That is the trade: the record of the letter is kept for as long as you need it, the
   contents are not. Whatever wrote it has to write it again.</li>
 </ul>
-<p>Bodies are never shown here at all, for the same reason.</p>
+<h3>Reading a letter</h3>
+<p><strong>Read it</strong> on a row opens what the site actually sent, drawn as the person received it. It answers
+the question the rest of the row cannot: not <em>did it go</em> but <em>what did it say</em> — the one you need
+when somebody reports that a confirmation was wrong, or blank, or meant for somebody else.</p>
+<p><img alt="A letter that was sent, opened for reading" src="../Ben.Web.Services/Help/Media/site-administration/reading-a-letter.png" /></p>
+<p>Three things are worth knowing before you use it.</p>
+<p><strong>Opening a letter is recorded against your account.</strong> A letter is a copy of somebody else's
+business: a booking names a guest, a password reset carries a working link, an event pass carries a
+code that opens a door. You may read one — somebody has to be able to answer what was sent — but
+who read whose letter is kept, and it is in the audit log as a <strong>Read</strong>.</p>
+<p><strong>A letter whose words were cleared cannot be read</strong>, and says when they went instead of showing an
+empty frame. An empty frame would read as a letter that was sent blank, which is a far more
+alarming thing than "we no longer keep the words".</p>
+<p><strong>The letter cannot do anything.</strong> It is drawn in a sealed frame that runs nothing — no scripts, no
+requests back out. A letter carries whatever somebody typed into a form somewhere, and an
+administration page that ran it would be a worse problem than the one you opened it to diagnose.</p>
+<h2>Email templates</h2>
+<p>Every letter the site sends is written in code. <strong>Email templates</strong> lets you write your own version
+of one, and that version is used from the moment you publish it.</p>
+<p><strong>Deleting what you wrote puts the original back.</strong> The letter the code writes never left the code
+— your template only stands in front of it — so "Use the site's letter" is a complete undo, and
+there is nothing to restore.</p>
+<h3>Filling in the details</h3>
+<p>A letter says the reader's name, or the date, because of a <strong>token</strong>: a word in braces that is
+replaced when the letter is written.</p>
+<p>Pick a <strong>table</strong>, then a <strong>column</strong>, then <strong>Add token</strong>, and <code>{AppUsers.DisplayName}</code> is added to
+the body. Move it where you want it.</p>
+<p><img alt="Writing a letter: the table and column dropdowns, the pieces, and the ready-made tokens" src="../Ben.Web.Services/Help/Media/site-administration/email-template-editor.png" /></p>
+<p>The tables on offer are the ones <em>that letter</em> actually has in its hands. A password-reset letter
+carries the person and nothing else, so it offers <code>AppUsers</code> alone — and it refuses to save a token
+it could never fill in, rather than sending a letter with a gap in it. Columns that are the site's
+business rather than a reader's — anything holding a password, a security code or a machine's
+bookkeeping — are never offered.</p>
+<p>There are also ready-made ones that need no table:</p>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Looks like</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{Date}</code></td>
+<td>09/20/2026</td>
+</tr>
+<tr>
+<td><code>{Time}</code></td>
+<td>9:05 AM</td>
+</tr>
+<tr>
+<td><code>{FullDate}</code></td>
+<td>September 20, 2026</td>
+</tr>
+<tr>
+<td><code>{FullDateTime}</code></td>
+<td>September 20, 2026 9:05 AM</td>
+</tr>
+<tr>
+<td><code>{Year}</code></td>
+<td>2026</td>
+</tr>
+<tr>
+<td><code>{SiteName}</code></td>
+<td>IsHaunted.com</td>
+</tr>
+<tr>
+<td><code>{SiteUrl}</code></td>
+<td>https://ishaunted.com</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Times are the reader's, not yours.</strong> A letter written at 9:05 in the morning in Tennessee says
+10:05 to somebody in New York and 3:05 in the afternoon to somebody in London. A date column from a
+table is treated the same way, so nobody is shown a time they were never in.</p>
+<h3>Looking at it before anybody gets it</h3>
+<p><strong>Preview</strong> fills the tokens in with made-up details — Marguerite Ashdown, at 1201 Del Rio Pike —
+and draws the letter as it would arrive. Nothing real is used, so opening a preview never shows you
+somebody's actual name or address.</p>
+<p><img alt="The body of a letter being written, with the preview underneath" src="../Ben.Web.Services/Help/Media/site-administration/email-template-preview.png" /></p>
+<p><strong>Save draft</strong> keeps what you are working on without changing anything anybody receives. <strong>Publish</strong>
+is what takes effect, and it applies to the next letter of that kind — nothing already queued is
+rewritten.</p>
+<h3>Writing the body</h3>
+<p>The body is HTML, and email HTML is not web HTML: tables for layout, every style written directly
+on the element, and no stylesheet. Outlook draws mail with Word's engine and Gmail removes style
+blocks, so anything cleverer falls apart somewhere. That is why the box is a plain one rather than
+a word processor — a rich editor would quietly rewrite exactly the markup that makes a letter
+survive those clients.</p>
+<p>If a template ever fails to render, the site sends its own letter instead and records why. Nothing
+you can write here can stop a letter going out.</p>
 <h2>Knowing whether a member was ever emailed</h2>
 <p><strong>Administration → Users</strong> has a <strong>Verified</strong> column, and it distinguishes three things that used
 to look identical:</p>
