@@ -64,6 +64,22 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+### EmailTemplates — one new table, and what happens while it is empty
+
+`EmailTemplates` (2026-09-20) creates one table, keyed uniquely by the letter's `Kind`. Nothing
+else is touched and nothing is dropped in `Up`.
+
+**An empty table is the working state, not an unfinished one.** No row for a kind means the site
+sends the letter its code writes, which is every letter until somebody writes one. So this
+migration changes nothing anybody receives — it only gives the editor somewhere to save.
+
+Applied to `IsHauntedDb_player` on 2026-09-20 and verified by asking the API for the letter list
+(35 returned). **Production has not had it**, and until it does the API will not start against that
+database at all: `/api/admin/email-templates` is the least of it — EF asks for the table on the
+first request that touches it.
+
+Run it with the other two below, in one pass.
+
 ### EventStaffRoomCursors — two nullable columns, and nothing to plan around
 
 `EventStaffRoomCursors` (2026-09-20) adds `StaffRoomCoversUpToUtc` and `StaffRoomLastPostUtc` to
