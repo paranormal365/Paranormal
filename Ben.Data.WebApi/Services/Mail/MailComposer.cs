@@ -52,14 +52,15 @@ public sealed class MailComposer
         string builtInSubject,
         string builtInHtml,
         DateTime nowUtc,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyDictionary<string, (string Value, bool IsHtml)>? supplied = null)
     {
         try
         {
             if (await LiveAsync(kind.Key, ct) is not { } live) return (builtInSubject, builtInHtml);
 
             var context = new MailTokens.Context(
-                tables, zone, nowUtc, _site.Name, _site.AbsoluteUrl("/"));
+                tables, zone, nowUtc, _site.Name, _site.AbsoluteUrl("/"), supplied);
 
             var subject = MailTokens.Render(live.Subject, context);
             var html = MailTokens.Render(live.Html, context);

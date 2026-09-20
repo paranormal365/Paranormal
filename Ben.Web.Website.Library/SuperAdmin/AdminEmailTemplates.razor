@@ -126,6 +126,19 @@
                             }
 
                             <div class="mt-2">
+                                <div class="form-label small mb-1">Pieces</div>
+                                @foreach (var b in _open.Blocks)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-dark me-1 mb-1"
+                                            data-testid="insert-block"
+                                            title="@b.What"
+                                            @onclick="@(() => AppendToBodyAsync(b.Html))">
+                                        @b.Title
+                                    </button>
+                                }
+                            </div>
+
+                            <div class="mt-2">
                                 <div class="form-label small mb-1">Ready-made</div>
                                 @foreach (var t in _open.Common)
                                 {
@@ -292,9 +305,16 @@
     /// C#, and a JS interop that reached into it would fight Blazor's binding over the same value.
     /// Appending always works, and an author moves it where they want it.
     /// </remarks>
-    private Task AppendToBodyAsync(string token)
+    private Task AppendToBodyAsync(string snippet)
     {
-        _body = string.IsNullOrEmpty(_body) ? token : _body.TrimEnd() + " " + token;
+        // A block is several lines of markup and a token is one word, so they join differently:
+        // a token belongs in the sentence being written, a block belongs on its own line.
+        var newLine = snippet.Contains('\n');
+
+        _body = string.IsNullOrEmpty(_body)
+            ? snippet
+            : _body.TrimEnd() + (newLine ? "\n\n" : " ") + snippet;
+
         _status = null;
         return Task.CompletedTask;
     }

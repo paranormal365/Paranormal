@@ -89,7 +89,10 @@ public sealed class AdminEmailTemplateController : ControllerBase
             DraftSavedUtc: row?.DraftSavedUtc,
             Tables: tables.Select(t => new EmailTemplateTable(
                 t.Name, t.Columns.Select(c => new EmailTemplateColumn(c.Name, c.Type)).ToList())).ToList(),
-            Common: MailTokens.Common.Select(c => new EmailTemplateToken(c.Name, c.Looks, c.What)).ToList()));
+            Common: MailTokens.Common.Select(c => new EmailTemplateToken(c.Name, c.Looks, c.What)).ToList(),
+            Blocks: MailBlocks.All.Select(b => new EmailTemplateBlock(b.Key, b.Title, b.What, b.Html)).ToList(),
+            Supplied: kind.Supplied.Select(sp =>
+                new EmailTemplateSupplied(sp.Name, sp.What, sp.Required)).ToList()));
     }
 
     /// <summary>Keeps what the author is working on. Nobody receives it.</summary>
@@ -104,6 +107,12 @@ public sealed class AdminEmailTemplateController : ControllerBase
         var bad = MailTokens.Unresolvable(request.Subject, kind)
             .Concat(MailTokens.Unresolvable(request.BodyHtml, kind))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var missing = MailTokens.MissingRequired(request.Subject, request.BodyHtml, kind);
+        if (missing.Count > 0)
+            return BadRequest(
+                $"This letter does not work without {string.Join(", ", missing.Select(m => "{" + m + "}"))}. "
+              + "Somebody receiving it would have nothing to click.");
 
         if (bad.Count > 0)
             // A plain sentence, not a record: WebApiClient.SendExpectingReasonAsync DROPS a
@@ -204,7 +213,8 @@ public sealed class AdminEmailTemplateController : ControllerBase
         var zone = Zone(request.TimeZoneId);
         var context = new MailTokens.Context(
             MailSampleRows.For(tables), zone, MailSampleRows.WrittenAtUtc,
-            _site.Name, _site.AbsoluteUrl("/"));
+            _site.Name, _site.AbsoluteUrl("/"),
+            MailSampleRows.SuppliedFor(kind, _site));
 
         return Ok(new EmailTemplatePreview(
             MailTokens.Render(request.Subject, context),
@@ -236,13 +246,21 @@ public sealed record EmailTemplateColumn(string Name, string Type);
 public sealed record EmailTemplateTable(string Name, IReadOnlyList<EmailTemplateColumn> Columns);
 public sealed record EmailTemplateToken(string Name, string Looks, string What);
 
+/// <summary>A piece of a letter an author can drop in and then edit.</summary>
+public sealed record EmailTemplateBlock(string Key, string Title, string What, string Html);
+
+/// <summary>A value only this letter's mailer can work out.</summary>
+public sealed record EmailTemplateSupplied(string Name, string What, bool Required);
+
 public sealed record EmailTemplateDetail(
     string Kind, string Title, string Description,
     string? Subject, string? BodyHtml,
     string? DraftSubject, string? DraftBodyHtml,
     DateTime? PublishedUtc, DateTime? DraftSavedUtc,
     IReadOnlyList<EmailTemplateTable> Tables,
-    IReadOnlyList<EmailTemplateToken> Common);
+    IReadOnlyList<EmailTemplateToken> Common,
+    IReadOnlyList<EmailTemplateBlock> Blocks,
+    IReadOnlyList<EmailTemplateSupplied> Supplied);
 
 public sealed record SaveEmailTemplateRequest(string? Subject, string? BodyHtml, string? TimeZoneId = null);
 public sealed record EmailTemplateSaved(bool Ok, string Message, DateTime? At);

@@ -1,3 +1,4 @@
+using Ben.Data.Common;
 using Ben.Data.Common.Mail;
 
 namespace Ben.Data.WebApi.Services.Mail;
@@ -41,6 +42,40 @@ public static class MailSampleRows
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Stand-ins for the values only a mailer can work out.
+    /// </summary>
+    /// <remarks>
+    /// Without these a preview shows a hole exactly where the important part of the letter goes —
+    /// a confirmation with no button, a pass with no code — and an author would reasonably
+    /// conclude their template was broken.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, (string Value, bool IsHtml)> SuppliedFor(
+        MailKindInfo kind, SiteIdentity site)
+    {
+        var sample = new Dictionary<string, (string, bool)>(StringComparer.OrdinalIgnoreCase);
+        var url = site.AbsoluteUrl("/confirm?code=THIS-IS-A-PREVIEW");
+
+        foreach (var token in kind.Supplied)
+        {
+            sample[token.Name] = token.Name switch
+            {
+                "ConfirmButton" or "ResetButton" =>
+                    (MailBlocks.Button(token.Name == "ConfirmButton" ? "Confirm my email" : "Reset password", url), true),
+
+                // A grey square standing in for the real code: the shape and size an author is
+                // laying out around, without minting a pass that would actually admit somebody.
+                "PassImage" => ("""<img src="https://placehold.co/180x180?text=QR" width="180" height="180" """
+                              + """alt="Your entry pass" style="display:block;border:0;" />""", true),
+
+                "ResetCode" => ("A1B2-C3D4", false),
+                _ => (url, false),
+            };
+        }
+
+        return sample;
     }
 
     private static object? Value(string table, MailTemplateSchema.Column column)

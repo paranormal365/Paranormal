@@ -23,11 +23,36 @@ namespace Ben.Data.Common.Mail;
 /// would render blank, and allowing every table would be a way to put a password hash or a live
 /// reset link into an email.</para>
 /// </remarks>
+/// <summary>
+/// A value only the mailer can work out, offered to a template by name (item 246).
+/// </summary>
+/// <remarks>
+/// <para>The third kind of token, and the one without which some letters are pointless: a
+/// confirmation link, a reset code, the QR a guest is admitted on. None of them is a column of
+/// anything — they are minted when the letter is written — so neither the table dropdown nor the
+/// ready-made list can offer them.</para>
+///
+/// <para><b><see cref="Required"/> means the letter does not work without it.</b> A confirmation
+/// email with no link is a letter nobody can act on, and it would look perfectly fine in the
+/// preview. Saving a template that drops one is refused.</para>
+///
+/// <para><b><see cref="IsHtml"/> is a narrow exception to escaping.</b> A pass is an
+/// <c>&lt;img&gt;</c> carrying five kilobytes of base64 that the SITE generated, so it goes in as
+/// markup. Nothing a person typed is ever treated this way — table columns and ready-made tokens
+/// stay escaped without exception.</para>
+/// </remarks>
+public sealed record MailSuppliedToken(string Name, string What, bool Required = false, bool IsHtml = false);
+
 public sealed record MailKindInfo(
     string Key,
     string Title,
     string Description,
-    IReadOnlyList<string> Context);
+    IReadOnlyList<string> Context,
+    IReadOnlyList<MailSuppliedToken>? Supplied = null)
+{
+    /// <summary>Values the mailer hands in when this letter is written.</summary>
+    public IReadOnlyList<MailSuppliedToken> Supplied { get; init; } = Supplied ?? [];
+}
 
 /// <summary>Every letter the site sends, by name.</summary>
 public static class MailKinds
@@ -39,12 +64,17 @@ public static class MailKinds
     public static readonly MailKindInfo ConfirmYourAddress = new(
         "confirm-your-address", "Confirm your address",
         "Sent when somebody signs up, or adds an address to an account.",
-        ["AppUsers"]);
+        ["AppUsers"],
+        [new("ConfirmUrl", "The link that confirms the address. The letter does nothing without it.", Required: true),
+         new("ConfirmButton", "A ready-made button pointing at that link.", IsHtml: true)]);
 
     public static readonly MailKindInfo ResetYourPassword = new(
         "reset-your-password", "Reset your password",
         "The link, or the code, that lets somebody set a new password.",
-        ["AppUsers"]);
+        ["AppUsers"],
+        [new("ResetUrl", "The link that opens the reset page. The letter does nothing without it.", Required: true),
+         new("ResetButton", "A ready-made button pointing at that link.", IsHtml: true),
+         new("ResetCode", "The code to type, for a mail client that mangles links.")]);
 
     public static readonly MailKindInfo AccountMadeForYou = new(
         "account-made-for-you", "An account was made for you",
@@ -113,7 +143,10 @@ public static class MailKinds
     public static readonly MailKindInfo BookingDecided = new(
         "booking-decided", "Your booking is confirmed",
         "The decision on a booking, and the pass when it is a yes.",
-        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"],
+        [new("PassImage", "The entry QR, drawn into the letter itself so a blocked image cannot "
+                        + "leave a guest at the door without one.", IsHtml: true),
+         new("PassUrl", "Where the same code can be opened, if the picture did not load.")]);
 
     public static readonly MailKindInfo HoldPlaced = new(
         "hold-placed", "We are holding your place",

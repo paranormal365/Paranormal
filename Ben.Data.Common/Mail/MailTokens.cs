@@ -55,12 +55,19 @@ public static class MailTokens
     /// The reader's zone. Their own when they have set one, the site's when they have not, which
     /// is the trade Ben chose (2026-09-20): right once somebody says, and never silently personal.
     /// </param>
+    /// <param name="Supplied">
+    /// Values only the mailer could work out — a confirmation link, a reset code, the QR a guest
+    /// is admitted on. Keyed by token name; <c>IsHtml</c> marks the few that go in as markup
+    /// because the SITE generated them (a pass is an img carrying five kilobytes of base64).
+    /// Nothing a person typed ever arrives this way.
+    /// </param>
     public sealed record Context(
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> Tables,
         TimeZoneInfo Zone,
         DateTime NowUtc,
         string SiteName,
-        string SiteUrl);
+        string SiteUrl,
+        IReadOnlyDictionary<string, (string Value, bool IsHtml)>? Supplied = null);
 
     /// <summary>Fills a template in.</summary>
     public static string Render(string? template, Context context)
@@ -70,6 +77,18 @@ public static class MailTokens
         return Pattern.Replace(template, match =>
         {
             var name = match.Groups["name"].Value;
+
+            // Supplied first: the mailer knows things no table does, and a kind's own token name
+            // should win over a coincidence elsewhere.
+            if (context.Supplied is { } supplied)
+            {
+                var hit = supplied.FirstOrDefault(
+                    s => s.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+                if (hit.Key is not null)
+                    return hit.Value.IsHtml ? hit.Value.Value : WebUtility.HtmlEncode(hit.Value.Value);
+            }
+
             var value = Resolve(name, context);
 
             // Null means nothing resolved it. Rendering the token back would show a reader the
@@ -98,6 +117,9 @@ public static class MailTokens
 
             if (Common.Any(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
 
+            if (kind is not null && kind.Supplied.Any(
+                    sp => sp.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+
             var dot = name.IndexOf('.');
             if (dot < 0) { bad.Add(name); continue; }
 
@@ -106,6 +128,27 @@ public static class MailTokens
         }
 
         return bad.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// The tokens this letter cannot work without that the template has dropped.
+    /// </summary>
+    /// <remarks>
+    /// A confirmation email with no confirmation link is a letter nobody can act on — and it looks
+    /// perfectly fine in a preview, which is exactly why this is checked when the template is
+    /// saved rather than left to somebody noticing.
+    /// </remarks>
+    public static IReadOnlyList<string> MissingRequired(string? subject, string? body, MailKindInfo? kind)
+    {
+        if (kind is null) return [];
+
+        var both = (subject ?? string.Empty) + "\n" + (body ?? string.Empty);
+
+        return kind.Supplied
+            .Where(sp => sp.Required)
+            .Where(sp => !both.Contains("{" + sp.Name + "}", StringComparison.OrdinalIgnoreCase))
+            .Select(sp => sp.Name)
+            .ToList();
     }
 
     private static string? Resolve(string name, Context context)
