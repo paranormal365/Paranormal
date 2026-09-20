@@ -55,6 +55,8 @@ builder.Services.AddSingleton(sp =>
     return new FfmpegLocator(baseDir, devOverride, ffprobeDevOverride);
 });
 builder.Services.AddSingleton<FfmpegRunner>();
+// Asked once, lazily, so a build without the GPL encoders can still export - see FfmpegEncoders.
+builder.Services.AddSingleton<FfmpegEncoders>();
 builder.Services.AddSingleton(sp =>
 {
     var store = new PairingTokenStore(sp.GetRequiredService<SidecarPaths>().ConfigDir);

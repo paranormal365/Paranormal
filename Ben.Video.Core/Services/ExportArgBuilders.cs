@@ -303,13 +303,11 @@ internal static class ExportArgBuilders
             args.AddRange(["-vf", string.Join(",", filterParts)]);
         args.AddRange(["-c:v", s.VideoCodec]);
 
-        if (s.UseCrf)
-            args.AddRange(["-crf", s.Crf.ToString()]);
-        else
-            args.AddRange(["-b:v", $"{s.Bitrate}k"]);
-
-        if (!string.IsNullOrEmpty(s.Preset) && s.VideoCodec is "libx264" or "libx265")
-            args.AddRange(["-preset", s.Preset]);
+        // Each encoder is asked for quality in its own language - only x264 and x265 take -crf and
+        // -preset, and an option an encoder does not know makes ffmpeg refuse the whole command.
+        // See VideoEncoders for which takes what, and why VP9 needs -b:v 0 beside its -crf.
+        args.AddRange(VideoEncoders.RateControlArgs(s.VideoCodec, s.UseCrf, s.Crf, s.Bitrate));
+        args.AddRange(VideoEncoders.PresetArgs(s.VideoCodec, s.Preset));
 
         args.AddRange(["-pix_fmt", s.PixelFormat]);
 
@@ -459,14 +457,8 @@ internal static class ExportArgBuilders
         if (s.Fps > 0)
             args.AddRange(["-r", s.Fps.ToString()]);
 
-        if (s.UseCrf)
-            args.AddRange(["-crf", s.Crf.ToString()]);
-        else
-            args.AddRange(["-b:v", $"{s.Bitrate}k"]);
-
-        if (!string.IsNullOrEmpty(s.Preset) &&
-            s.VideoCodec is "libx264" or "libx265")
-            args.AddRange(["-preset", s.Preset]);
+        args.AddRange(VideoEncoders.RateControlArgs(s.VideoCodec, s.UseCrf, s.Crf, s.Bitrate));
+        args.AddRange(VideoEncoders.PresetArgs(s.VideoCodec, s.Preset));
 
         args.AddRange(["-pix_fmt", s.PixelFormat]);
 
@@ -567,12 +559,8 @@ internal static class ExportArgBuilders
         args.AddRange(["-c:v", s.VideoCodec]);
         if (s.Fps > 0)
             args.AddRange(["-r", s.Fps.ToString()]);
-        if (s.UseCrf)
-            args.AddRange(["-crf", s.Crf.ToString()]);
-        else
-            args.AddRange(["-b:v", $"{s.Bitrate}k"]);
-        if (!string.IsNullOrEmpty(s.Preset) && s.VideoCodec is "libx264" or "libx265")
-            args.AddRange(["-preset", s.Preset]);
+        args.AddRange(VideoEncoders.RateControlArgs(s.VideoCodec, s.UseCrf, s.Crf, s.Bitrate));
+        args.AddRange(VideoEncoders.PresetArgs(s.VideoCodec, s.Preset));
         args.AddRange(["-pix_fmt", s.PixelFormat]);
 
         if (hasRealAudio)
@@ -636,12 +624,8 @@ internal static class ExportArgBuilders
             args.AddRange(["-vf", string.Join(",", filterParts)]);
 
         args.AddRange(["-c:v", s.VideoCodec]);
-        if (s.UseCrf)
-            args.AddRange(["-crf", s.Crf.ToString()]);
-        else
-            args.AddRange(["-b:v", $"{s.Bitrate}k"]);
-        if (!string.IsNullOrEmpty(s.Preset) && s.VideoCodec is "libx264" or "libx265")
-            args.AddRange(["-preset", s.Preset]);
+        args.AddRange(VideoEncoders.RateControlArgs(s.VideoCodec, s.UseCrf, s.Crf, s.Bitrate));
+        args.AddRange(VideoEncoders.PresetArgs(s.VideoCodec, s.Preset));
         args.AddRange(["-pix_fmt", s.PixelFormat]);
         args.AddRange(["-c:a", s.AudioCodec, "-b:a", $"{s.AudioBitrate}k"]);
         args.AddRange(["-map", "0:v", "-map", "1:a", "-shortest"]);
@@ -1076,23 +1060,11 @@ internal static class ExportArgBuilders
         yield return "-c:v";
         yield return s.VideoCodec;
 
-        if (s.UseCrf)
-        {
-            yield return "-crf";
-            yield return s.Crf.ToString();
-        }
-        else
-        {
-            yield return "-b:v";
-            yield return $"{s.Bitrate}k";
-        }
+        foreach (var a in VideoEncoders.RateControlArgs(s.VideoCodec, s.UseCrf, s.Crf, s.Bitrate))
+            yield return a;
 
-        if (!string.IsNullOrEmpty(s.Preset) &&
-            s.VideoCodec is "libx264" or "libx265")
-        {
-            yield return "-preset";
-            yield return s.Preset;
-        }
+        foreach (var a in VideoEncoders.PresetArgs(s.VideoCodec, s.Preset))
+            yield return a;
     }
 
     // ── Audio args ───────────────────────────────────────────────────────────
