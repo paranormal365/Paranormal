@@ -13122,8 +13122,12 @@ the guests are.
 - **What becomes of what a guest contributed** when the night ends and they were never a member.
   The field archive rule answers this for public places; this is the same question from the other
   side.
-- **Whether the code is per session or per person.** One code on a sheet is far easier for staff;
-  one per person is the only version where revoking means anything.
+- ~~**Whether the code is per session or per person.**~~ **DECIDED by Ben, 2026-09-20: one per
+  SESSION.** *"And for staff it is one point per session instead of one per person."* Which settles
+  more than it looks: revoking is then per session — a guide can end the night's code, not one
+  person's — and the device-binding question above becomes the only lever against a code that has
+  been photographed and passed on. It also makes the printed sheet a single artefact a guide can
+  hold up to a group, which is the thing that actually works in the dark.
 
 ### Where it would live
 

@@ -1738,6 +1738,13 @@ public sealed record EmailTemplateTokenRecord(string Name, string Looks, string 
 /// <summary>A piece of a letter an author can drop in and then edit.</summary>
 public sealed record EmailTemplateBlockRecord(string Key, string Title, string What, string Html);
 
+/// <summary>A value only this letter's mailer can work out.</summary>
+public sealed record EmailTemplateSuppliedRecord(string Name, string What, bool Required);
+
+/// <summary>A whole letter to start from, rather than a blank box.</summary>
+public sealed record EmailTemplateStarterRecord(
+    string Key, string Title, string What, string Subject, string BodyHtml);
+
 /// <summary>One letter, with everything its author may put in it.</summary>
 public sealed record EmailTemplateDetailRecord(
     string Kind, string Title, string Description,
@@ -1746,7 +1753,9 @@ public sealed record EmailTemplateDetailRecord(
     DateTime? PublishedUtc, DateTime? DraftSavedUtc,
     IReadOnlyList<EmailTemplateTableRecord> Tables,
     IReadOnlyList<EmailTemplateTokenRecord> Common,
-    IReadOnlyList<EmailTemplateBlockRecord> Blocks);
+    IReadOnlyList<EmailTemplateBlockRecord> Blocks,
+    IReadOnlyList<EmailTemplateSuppliedRecord> Supplied,
+    IReadOnlyList<EmailTemplateStarterRecord> Starters);
 
 public sealed record SaveEmailTemplateBody(string? Subject, string? BodyHtml, string? TimeZoneId = null);
 public sealed record EmailTemplateSavedRecord(bool Ok, string Message, DateTime? At);

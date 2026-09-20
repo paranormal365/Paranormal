@@ -92,7 +92,9 @@ public sealed class AdminEmailTemplateController : ControllerBase
             Common: MailTokens.Common.Select(c => new EmailTemplateToken(c.Name, c.Looks, c.What)).ToList(),
             Blocks: MailBlocks.All.Select(b => new EmailTemplateBlock(b.Key, b.Title, b.What, b.Html)).ToList(),
             Supplied: kind.Supplied.Select(sp =>
-                new EmailTemplateSupplied(sp.Name, sp.What, sp.Required)).ToList()));
+                new EmailTemplateSupplied(sp.Name, sp.What, sp.Required)).ToList(),
+            Starters: MailStarters.For(kind).Select(st =>
+                new EmailTemplateStarter(st.Key, st.Title, st.What, st.Subject, st.BodyHtml)).ToList()));
     }
 
     /// <summary>Keeps what the author is working on. Nobody receives it.</summary>
@@ -252,6 +254,10 @@ public sealed record EmailTemplateBlock(string Key, string Title, string What, s
 /// <summary>A value only this letter's mailer can work out.</summary>
 public sealed record EmailTemplateSupplied(string Name, string What, bool Required);
 
+/// <summary>A whole letter to start from, rather than a blank box.</summary>
+public sealed record EmailTemplateStarter(
+    string Key, string Title, string What, string Subject, string BodyHtml);
+
 public sealed record EmailTemplateDetail(
     string Kind, string Title, string Description,
     string? Subject, string? BodyHtml,
@@ -260,7 +266,8 @@ public sealed record EmailTemplateDetail(
     IReadOnlyList<EmailTemplateTable> Tables,
     IReadOnlyList<EmailTemplateToken> Common,
     IReadOnlyList<EmailTemplateBlock> Blocks,
-    IReadOnlyList<EmailTemplateSupplied> Supplied);
+    IReadOnlyList<EmailTemplateSupplied> Supplied,
+    IReadOnlyList<EmailTemplateStarter> Starters);
 
 public sealed record SaveEmailTemplateRequest(string? Subject, string? BodyHtml, string? TimeZoneId = null);
 public sealed record EmailTemplateSaved(bool Ok, string Message, DateTime? At);

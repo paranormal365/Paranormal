@@ -41,7 +41,15 @@ namespace Ben.Data.Common.Mail;
 /// markup. Nothing a person typed is ever treated this way — table columns and ready-made tokens
 /// stay escaped without exception.</para>
 /// </remarks>
-public sealed record MailSuppliedToken(string Name, string What, bool Required = false, bool IsHtml = false);
+/// <param name="Provides">
+/// What this token gives the reader, when more than one token gives the same thing. A confirmation
+/// letter needs a way to confirm — <c>{ConfirmUrl}</c> in the author's own wording, or
+/// <c>{ConfirmButton}</c> as the site's button — and either will do. Without this the required
+/// check asked for one specific spelling and refused a template that used the other, which is
+/// exactly what the starter tests caught.
+/// </param>
+public sealed record MailSuppliedToken(
+    string Name, string What, bool Required = false, bool IsHtml = false, string? Provides = null);
 
 public sealed record MailKindInfo(
     string Key,
@@ -65,15 +73,15 @@ public static class MailKinds
         "confirm-your-address", "Confirm your address",
         "Sent when somebody signs up, or adds an address to an account.",
         ["AppUsers"],
-        [new("ConfirmUrl", "The link that confirms the address. The letter does nothing without it.", Required: true),
-         new("ConfirmButton", "A ready-made button pointing at that link.", IsHtml: true)]);
+        [new("ConfirmUrl", "The link that confirms the address.", Required: true, Provides: "a way to confirm"),
+         new("ConfirmButton", "A ready-made button pointing at that link.", IsHtml: true, Provides: "a way to confirm")]);
 
     public static readonly MailKindInfo ResetYourPassword = new(
         "reset-your-password", "Reset your password",
         "The link, or the code, that lets somebody set a new password.",
         ["AppUsers"],
-        [new("ResetUrl", "The link that opens the reset page. The letter does nothing without it.", Required: true),
-         new("ResetButton", "A ready-made button pointing at that link.", IsHtml: true),
+        [new("ResetUrl", "The link that opens the reset page.", Required: true, Provides: "a way to reset"),
+         new("ResetButton", "A ready-made button pointing at that link.", IsHtml: true, Provides: "a way to reset"),
          new("ResetCode", "The code to type, for a mail client that mangles links.")]);
 
     public static readonly MailKindInfo AccountMadeForYou = new(

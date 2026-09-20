@@ -144,10 +144,17 @@ public static class MailTokens
 
         var both = (subject ?? string.Empty) + "\n" + (body ?? string.Empty);
 
+        // Grouped by what each token GIVES the reader, not by its spelling: a confirmation letter
+        // needs a way to confirm, and {ConfirmUrl} or {ConfirmButton} both are one. Checking names
+        // refused a template that used the other — which the starter tests found immediately.
         return kind.Supplied
             .Where(sp => sp.Required)
-            .Where(sp => !both.Contains("{" + sp.Name + "}", StringComparison.OrdinalIgnoreCase))
-            .Select(sp => sp.Name)
+            .GroupBy(sp => sp.Provides ?? sp.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => !kind.Supplied
+                .Where(sp => string.Equals(sp.Provides ?? sp.Name, group.Key,
+                                           StringComparison.OrdinalIgnoreCase))
+                .Any(sp => both.Contains("{" + sp.Name + "}", StringComparison.OrdinalIgnoreCase)))
+            .Select(group => group.Key)
             .ToList();
     }
 
