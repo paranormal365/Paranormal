@@ -1,3 +1,4 @@
+using Ben.Data.Common.Text;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
@@ -211,7 +212,8 @@ public sealed class MyCaseController : BenControllerBase
             City:                    c.City,
             State:                   c.State,
             Status:                  c.Status,
-            Description:             c.Description,
+            Description:             PlainTextHtml.ToText(c.Description),
+            DescriptionHtml:         c.Description,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
             DateCaseOpened:          c.DateCaseOpened,
             DateCaseClosed:          c.DateCaseClosed,
@@ -1420,6 +1422,13 @@ public sealed record ClientCaseDetail(
     string    City,
     string    State,
     Ben.Data.Common.Enums.CaseStatus Status,
+    /// <param name="Description">
+    /// PLAIN TEXT, always. The iPhone app draws this with SwiftUI's Text, which renders a string
+    /// exactly as given — so when case descriptions became a formatting editor, every client on
+    /// the shipped app started reading "&lt;p&gt;Things going bump in the night&lt;/p&gt;". The app
+    /// cannot be changed until its next build, which is the same reason CaseMessage.Body stays
+    /// plain and CaseMessageBodies exists. Reported by Ben, 2026-09-20.
+    /// </param>
     string?   Description,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
@@ -1436,7 +1445,12 @@ public sealed record ClientCaseDetail(
     bool      IsPrimaryClient = false,
     // Item 158: who the client actually talks to. Explicit contacts when the group set them,
     // otherwise the case manager stands in — never empty while a manager exists.
-    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null);
+    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null,
+    /// <param name="DescriptionHtml">
+    /// The same words with their formatting, for the website. Trailing and optional so the shipped
+    /// app — which has never heard of it — decodes this response exactly as before.
+    /// </param>
+    string?   DescriptionHtml = null);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
