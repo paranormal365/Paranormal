@@ -4,6 +4,7 @@ using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ben.Data.WebApi.Services;
 
@@ -64,12 +65,19 @@ public sealed class OutboxEmailService : IEmailService
     /// </remarks>
     public const int MaximumAttachmentBytes = 8 * 1024 * 1024;
 
+    /// <remarks>
+    /// <see cref="SiteIdentity"/> arrives as <c>IOptions&lt;&gt;</c>, not bare: it is registered with
+    /// <c>Configure&lt;SiteIdentity&gt;</c>, so the container can resolve the options wrapper and
+    /// nothing else. Asking for the bare type compiles, starts, and then fails to resolve on the
+    /// first request that needs an email service — which took the API down with 500s on
+    /// 2026-09-20 while every static check still passed.
+    /// </remarks>
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
-        SiteIdentity site,
+        IOptions<SiteIdentity> site,
         ILogger<OutboxEmailService> log)
-    { _db = db; _sender = sender; _site = site; _log = log; }
+    { _db = db; _sender = sender; _site = site.Value; _log = log; }
 
     /// <summary>
     /// Whether this machine could actually send. Unchanged in meaning, and still worth asking.
