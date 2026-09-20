@@ -1724,6 +1724,16 @@ public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
 /// event, a working door code. <c>AcceptedBySmtpUtc</c> is when the mail server TOOK it, not when
 /// anybody received it — that is only knowable from bounce reports this site does not collect.
 /// </remarks>
+/// <summary>One letter's words, fetched one at a time because every fetch is recorded.</summary>
+public sealed record OutboxLetterBodyRecord(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    string? Html,
+    DateTime? BodyScrubbedUtc);
+
 public sealed record OutboxLetterItem(
     Guid Id,
     string To,

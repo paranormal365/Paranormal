@@ -273,7 +273,16 @@
                                                     </div>
                                                 }
                                             </td>
-                                            <td class="text-end">
+                                            <td class="text-end text-nowrap">
+                                                @if (letter.HasBody)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                                                            disabled="@_bodyBusy"
+                                                            data-testid="outbox-view"
+                                                            @onclick="@(() => OpenBodyAsync(letter))">
+                                                        Read it
+                                                    </button>
+                                                }
                                                 @if (letter.FailedUtc is not null && letter.HasBody)
                                                 {
                                                     <button type="button" class="btn btn-sm btn-outline-primary"
@@ -301,6 +310,57 @@
         </div>
     </div>
 </div>
+
+@* ── Reading one letter ───────────────────────────────────────────────────────
+   The body is rendered inside a SANDBOXED iframe, never as a MarkupString. These
+   are letters the site composed but also letters carrying whatever a person typed
+   into a form, and an administration page that executes them would be a worse bug
+   than the one this screen exists to diagnose. srcdoc with no allow-scripts means
+   it draws and does nothing else. *@
+<BenModal @bind-Visible="@_showBody" Title="@(_body is null ? "Letter" : _body.Subject)" Size="lg">
+    @if (_body is not null)
+    {
+        <dl class="row small mb-3">
+            <dt class="col-sm-3">To</dt>
+            <dd class="col-sm-9 text-break" data-testid="letter-to">@_body.To</dd>
+            <dt class="col-sm-3">Kind</dt>
+            <dd class="col-sm-9">@_body.Kind</dd>
+            <dt class="col-sm-3">Written</dt>
+            <dd class="col-sm-9">@_body.CreatedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</dd>
+        </dl>
+
+        @if (_body.Html is { Length: > 0 } html)
+        {
+            <iframe sandbox="" srcdoc="@AsItArrived(html)" title="The letter"
+                    data-testid="letter-body"
+                    class="w-100 border rounded" style="height: min(60vh, 520px);"></iframe>
+        }
+        else
+        {
+            <div class="alert alert-secondary mb-0" data-testid="letter-scrubbed">
+                @if (_body.BodyScrubbedUtc is { } cleared)
+                {
+                    <text>The words of this letter were cleared on
+                    @cleared.ToViewerLocalTime(UserState).ToDisplayDate(). Its record is kept; the
+                    letter itself is not, which is the trade the clear-out makes.</text>
+                }
+                else
+                {
+                    <text>This letter has no body recorded.</text>
+                }
+            </div>
+        }
+
+        <p class="text-secondary small mt-3 mb-0">
+            Opening a letter is recorded against your account, because a letter is a copy of
+            somebody else's business.
+        </p>
+    }
+    else if (_bodyError is not null)
+    {
+        <div class="alert alert-danger mb-0">@_bodyError</div>
+    }
+</BenModal>
 
 @code {
     private MailSettingsRecord?   _settings;
@@ -333,6 +393,13 @@
     private string? _outboxState = "failed";
 
     private bool _outboxBusy;
+
+    // Reading one letter. Kept apart from _outboxBusy so opening a letter does not grey out the
+    // retry buttons, and so a failed read does not read as a failed queue.
+    private bool _showBody;
+    private bool _bodyBusy;
+    private OutboxLetterBodyRecord? _body;
+    private string? _bodyError;
     private string? _outboxError;
     private string? _outboxMessage;
 
@@ -369,6 +436,61 @@
         }
         finally { _outboxBusy = false; }
     }
+
+    /// <summary>
+    /// Fetches and shows one letter's words.
+    /// </summary>
+    /// <remarks>
+    /// The modal opens BEFORE the fetch returns, so a slow read shows an opening panel rather than
+    /// a button that appears to do nothing — and a failure lands somewhere the reader is already
+    /// looking instead of in a banner behind the table.
+    /// </remarks>
+    private async Task OpenBodyAsync(OutboxLetterItem letter)
+    {
+        _body = null;
+        _bodyError = null;
+        _bodyBusy = true;
+        _showBody = true;
+
+        try
+        {
+            _body = await AdminClient.GetOutboxLetterBodyAsync(letter.Id);
+            if (_body is null)
+                _bodyError = "Couldn't read that letter — the server refused the request or could "
+                           + "not be reached.";
+        }
+        catch (Exception)
+        {
+            _bodyError = "Couldn't read that letter.";
+        }
+        finally
+        {
+            _bodyBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Wraps a letter in the canvas it was written for.
+    /// </summary>
+    /// <remarks>
+    /// <para>The white belongs to the LETTER, not to this page. Mail is composed assuming a white
+    /// background and its text colours are chosen against one, so a letter drawn on the site's own
+    /// dark surface is black text on a dark panel — unreadable, and unreadable in a way that looks
+    /// like the letter itself is broken.</para>
+    ///
+    /// <para>So the background goes inside the iframe's document, where it describes the letter,
+    /// rather than on the iframe element, where it would be this page ignoring the viewer's theme
+    /// (which is what <c>FixedLightUtilityGuardTests</c> exists to catch, and caught here).</para>
+    ///
+    /// <para>Still sandboxed with no allow-scripts: this adds a wrapper, it does not add trust.</para>
+    /// </remarks>
+    private static string AsItArrived(string html)
+        => "<!doctype html><html><head><meta charset=\"utf-8\">"
+         + "<style>html,body{margin:0;padding:12px;background:#fff;color:#111;"
+         + "font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}"
+         + "img{max-width:100%}</style></head><body>"
+         + html
+         + "</body></html>";
 
     private async Task RetryOneAsync(OutboxLetterItem letter)
     {

@@ -439,6 +439,10 @@ public sealed partial class BenAdminClientAdapter
             $"/api/admin/mail/outbox?{string.Join("&", query)}", token);
     }
 
+    public Task<OutboxLetterBodyRecord?> GetOutboxLetterBodyAsync(
+        Guid id, CancellationToken token = default)
+        => _api.GetAsync<OutboxLetterBodyRecord>($"/api/admin/mail/outbox/{id}/body", token);
+
     public Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
         Guid id, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(

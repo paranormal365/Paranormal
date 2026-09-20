@@ -17,5 +17,20 @@ public enum AuditAction
     Update = 2,
 
     /// <summary>An entity was permanently removed; <c>ChangesJson</c> contains a full property snapshot captured before deletion.</summary>
-    Delete = 3
+    Delete = 3,
+
+    /// <summary>
+    /// Somebody LOOKED at something that is a copy of another person's business (item 245).
+    /// </summary>
+    /// <remarks>
+    /// <para>The odd one out, and deliberately so: the other three record a change, and this
+    /// records that no change was needed for the harm to be possible. Reading a queued letter
+    /// hands over a guest's name, a working password-reset link or a pass that opens a door — so
+    /// the question an audit table has to be able to answer about it is not "what changed" but
+    /// "who looked".</para>
+    ///
+    /// <para><c>ChangesJson</c> carries what was looked at rather than a before/after, because
+    /// there is no before and no after.</para>
+    /// </remarks>
+    Read = 4
 }

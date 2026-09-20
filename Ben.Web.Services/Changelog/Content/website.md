@@ -16,6 +16,19 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-20
+
+- Bookings for an event are now posted into a thread of the event's own, in your group's
+  Messages, so you can talk about a request where the request is. One thread per event, and a
+  new arrival brings it back to your bell rather than filling your messages with a row per
+  booking. Everybody who may decide bookings sees it — including anyone who turned the letters
+  off. Like the letters, it says what was asked for and never who.
+- Messages from an event now say which room they came from instead of showing an internal name.
+- Administrators can read a letter the site sent, as the person received it, from the recent
+  letters list. Opening one is recorded against the account that opened it, a letter whose words
+  have already been cleared says so instead of showing an empty page, and the letter is drawn in
+  a sealed frame that runs nothing.
+
 ## 2026-09-19
 
 - Files you own can be deleted from the Media Library, not only from the upload page. If a

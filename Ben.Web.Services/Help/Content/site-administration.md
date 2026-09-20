@@ -393,7 +393,27 @@ Two letters cannot be sent again, and say so rather than offering a button that 
   door code. That is the trade: the record of the letter is kept for as long as you need it, the
   contents are not. Whatever wrote it has to write it again.
 
-Bodies are never shown here at all, for the same reason.
+### Reading a letter
+
+**Read it** on a row opens what the site actually sent, drawn as the person received it. It answers
+the question the rest of the row cannot: not *did it go* but *what did it say* — the one you need
+when somebody reports that a confirmation was wrong, or blank, or meant for somebody else.
+
+Three things are worth knowing before you use it.
+
+**Opening a letter is recorded against your account.** A letter is a copy of somebody else's
+business: a booking names a guest, a password reset carries a working link, an event pass carries a
+code that opens a door. You may read one — somebody has to be able to answer what was sent — but
+who read whose letter is kept, and it is in the audit log as a **Read**.
+
+**A letter whose words were cleared cannot be read**, and says when they went instead of showing an
+empty frame. An empty frame would read as a letter that was sent blank, which is a far more
+alarming thing than "we no longer keep the words".
+
+**The letter cannot do anything.** It is drawn in a sealed frame that runs nothing — no scripts, no
+requests back out. A letter carries whatever somebody typed into a form somewhere, and an
+administration page that ran it would be a worse problem than the one you opened it to diagnose.
+
 
 ## Knowing whether a member was ever emailed
 

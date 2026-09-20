@@ -12283,7 +12283,7 @@ Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 
 that changes what the site knows about people, and it should be a separate decision with its own
 sentence in `/privacy`.
 
-## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (A+B SHIPPED as item 235 phase 8a; C BUILT 2026-09-20)
 
 Ben, 2026-09-12, while phase 2.4 was being built:
 
@@ -12345,6 +12345,57 @@ and so a member with no email still sees it.
 - Whether the digest is per event or per venue when a venue runs several at once.
 - Whether an alert should ever go to a non-member (a hired door manager), which is the same
   question phase 5 asks about non-member staff.
+
+### Where it actually stands (checked 2026-09-20)
+
+**A and B shipped inside item 235**, as phase 8a, "the letters that tell a venue a booking arrived"
+— this entry had gone stale and still said they were open. They are built the way this asked:
+`EventBookingAlertPreference.Mode` is the per-person opt-out; `EventBookingAlertState` holds
+`LastAlertUtc` and `AlertsCoverUpToUtc` **per person per event**, which is the batching; and the
+job finds arrivals by WHEN THEY WERE MADE rather than by a hook in the request door, so an outage
+costs a late letter instead of a lost one. The digest is daily while an event is selling, weekly
+otherwise, and never sent when empty.
+
+**The gate this entry set for itself — "follows phase 5, not phase 2" — was satisfied** before C
+was built: `OrganizationPermissionArea.Events` and `HostedEventStaff` both exist. Phase 5 also
+answered the third open question without anyone revisiting it: `HostedEventStaff.AppUserId` is
+nullable with `Email` and `DisplayName` beside it, so **a hired door manager is already a
+first-class staff row** and an alert can reach one.
+
+**Ben chose per event** for grouping (2026-09-20), which is how the state table was already keyed.
+
+### C, as built (2026-09-20)
+
+- **`OrgMessageChannel.EventStaffRoom = 6`**, deliberately not a flag on `EventRoom`. They are the
+  two audiences a hosted event has; a flag is what somebody forgets in a query, and the cost of
+  forgetting is showing a guest what the staff said about them.
+- **`HostedEvent.StaffRoomCoversUpToUtc` / `StaffRoomLastPostUtc`** — the thread is shared, so its
+  cursor is the event's, mirroring `EventBookingAlertState`'s pair. Migration `EventStaffRoomCursors`,
+  two `AddColumn`s, nothing dropped in `Up`.
+- **`EventBookingAlerts.Decide` was split** so the thread and the letters share one definition of
+  "new", "a rush" and "long enough". Two rules that start identical do not stay identical. The
+  shared-thread call passes no `excludeLeadAppUserId`: one member booking a room IS news to the
+  rest of the venue, where it is not news to that member's own inbox.
+- **No new screen.** The org Messages page lists anything you are a recipient of and already has a
+  Reply button, so the thread arrives where the group talks — which is what this entry meant by
+  "a delivery target rather than a new feature". Only the root carries recipient rows; a reply
+  marks the root unread again, so the bell counts it without the message list growing a row per
+  booking.
+- **The whole job no longer stops when no mail server is configured.** It used to return early;
+  the letters are still gated, inside, but a site with mail switched off is exactly where being
+  told at all depends on the thread.
+- **Found and fixed on the way:** `MessageChannelDisplay` fell through to `channel.ToString()`, so
+  `EventRoom` had been rendering its own enum spelling in a badge since item 235 shipped it.
+  `MessageChannelDisplayTests` now asserts over the enum, so the next appended channel fails at the
+  moment it is cheapest to name.
+- Tests: 7 pure (`EventStaffRoomTests`, including that a post never carries the guest's name and
+  that an event called `<script>` is escaped), 6 end-to-end against SQLite in
+  `EventBookingAlertJobTests`, 5 in `MessageChannelDisplayTests`. The escaping and the unread
+  re-marking were each seen failing with their rule broken. Suite 6,516 pass.
+
+**Still to do before it ships:** the migration is written but **not applied** — applying it was
+refused here, so it needs running against `IsHauntedDb_player` and then production via the runbook.
+No Playwright fixture yet.
 
 
 ## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
@@ -12821,8 +12872,129 @@ written every N minutes would make the dashboard O(1) in table size. That is the
 O(n); only a stored result is constant. SQL Server's indexed views disqualify most of these
 (no `DISTINCT`, no subqueries, `COUNT_BIG` only).
 
+### Measured again 2026-09-20, after Ben said it still takes ~5 seconds
+
+**The server is not the cost, and the rollup would not have helped.** Measured through the real
+page, signed in as SuperAdmin, against `IsHauntedDb_player`:
+
+| | |
+|---|---|
+| navigation | 42–62 ms |
+| first figures on screen | 81–115 ms |
+| **all nine charts drawn** | **789–948 ms** |
+
+| endpoint | cold | warm |
+|---|---|---|
+| summary | 86 ms | 1.3 ms |
+| charts (365 days) | 46 ms | 1.4 ms |
+| sign-ins (365 days) | 120 ms | 1.2 ms |
+
+So ~85% of the load is **drawing charts in the browser**, and the whole page is under a second here
+— which is the first thing to say about the five seconds: **it was not reproduced**. The player copy
+holds 24 users, 12 groups, 7 cases and 1,443 sign-in events, so every count is 4 ms because there is
+nothing to count. Whether the five seconds is production data or something else on the machine was
+never established; Ben chose to watch it rather than chase it (2026-09-20).
+
+### ApexCharts is super-linear in points, because SVG is a DOM node per point
+
+| points | ApexCharts (SVG) | Chart.js (canvas) |
+|---|---|---|
+| 30 | 38 ms | 15 ms |
+| 90 | 55 ms | 5 ms |
+| 180 | 130 ms | 6 ms |
+| 365 | **397 ms** (2,200 nodes) | 6 ms |
+| 730 | **1,329 ms** (4,281 nodes) | 7 ms |
+
+The eight-chart dashboard mix: **ApexCharts 334 ms, Chart.js 33 ms**; library 563 KB against 201 KB.
+Canvas is flat because it is one element and pixels, so it does not get worse as the site
+accumulates history — which the activity chart's 365 points already demonstrate.
+
+**Not a swap:** 6 razor files, the `ApexChart` wrapper, the theming, and **four e2e assertions that
+match `.apexcharts-svg`** — canvas leaves no DOM to assert against, so those need another way to
+prove a chart drew. Canvas also gives up per-element styling, screen-reader text, and crisp scaling
+unless `devicePixelRatio` is handled.
+
+### Cheaper than any of it, and worth doing first
+
+1. **Bucket the 365-point activity series weekly** (~52 points): 397 ms → ~40 ms, no port, no
+   library change, and the chart reads better at that width anyway.
+2. **The three endpoints are fetched in sequence** (`AdminDashboard.razor` `LoadAsync`) — summary,
+   then charts, then sign-ins, each awaiting the last. On production that is three times whatever
+   one costs.
+3. **Defer the charts below the fold** until they scroll into view.
+4. **One query still has no upper bound at all**: the "last ten distinct accounts to arrive" panel
+   groups the ENTIRE `SignInEvents` table with no date filter (`AdminStatsController` ~L315). It is
+   correct as written — somebody quiet for six months could genuinely be in the last ten — but on a
+   busy site the last ten are always recent, so a 90-day bound with a fallback is the same answer
+   for a fraction of the cost. It sits in the slowest endpoint.
+
 **Deliberately not built yet.** The trigger is a measurement, not a feeling: when a cold summary on
 production data stops being comfortable, this is the next step. It costs a table, a job, and a
 staleness story the page has to tell — all of which is worth paying for a real problem and not a
 predicted one.
 
+
+
+## 245. Letters somebody wrote, and a screen that shows what went out (OPEN — Ben, 2026-09-20)
+
+Ben, 2026-09-20:
+
+> I would like to be able to make a template to generate emails instead of relying on it to
+> generate without me seeing them. Also, I would like to create a page in administration where I
+> can see the emails generated, what email they are being sent to, when they were generated, when
+> they are sent and the ability to view their body on the site.
+
+Two asks, and **the second is mostly already built** — worth saying first so nobody builds it twice.
+
+### The screen is item 239b, plus one thing Ben added
+
+`OutboxEmail` (shipped 2026-09-12 as 239a) already records every letter the site produces: `To`,
+`Subject`, `HtmlBody`, `Kind`, `CreatedUtc`, `AcceptedBySmtpUtc`, `Attempts`, `LastError`. Ben's
+"when they were generated, when they are sent" are `CreatedUtc` and `AcceptedBySmtpUtc` — and that
+second name is deliberate: it means the SMTP server accepted it, not that it arrived, because
+nothing here can honestly claim delivery without bounce webhooks.
+
+So the list screen is **239b as already designed** and does not need re-specifying. What is new is
+**viewing the body on the site**, and it carries two questions the list does not:
+
+- **A letter is a copy of somebody's business.** A booking confirmation names a guest; a password
+  reset carries a working link; an event pass carries a QR that opens a door. `OutboxEmail`'s own
+  remarks already say so, which is why `BodyScrubbedUtc` exists. Viewing must therefore be
+  SuperAdmin-only, **audited** (a row in `AuditLogs` saying who read whose letter), and honest when
+  the body is gone: a scrubbed row shows its metadata and says the body was cleared on that date,
+  rather than showing an empty frame.
+- **It is untrusted HTML in an admin page.** Render it in a sandboxed `<iframe srcdoc>` with no
+  allow-scripts, not as a `MarkupString` — an admin screen that runs whatever was in a letter is a
+  worse bug than the one it was built to diagnose.
+
+### The templates are the new work
+
+Today eight files construct an `EmailMessage`, and two of them (`EventOrganizerMailer`,
+`EventGuestMailer`) build HTML with a `StringBuilder`. Nobody can see a letter without triggering
+the thing that sends it, and changing a word is a deploy.
+
+**What would actually help, in order of how much it buys:**
+
+1. **A preview, before any template exists.** Every `Kind` rendered against sample data on a
+   SuperAdmin page — no schema, no authoring, just a way to look. This is most of Ben's *"instead
+   of relying on it to generate without me seeing them"* and is a fraction of the cost. It also
+   makes a template's "before and after" visible, so it should come first either way.
+2. **Templates in the database**, keyed by `Kind`, with a plain-text body carrying named
+   placeholders, a stored default, and a revert. Not a general templating language: a fixed,
+   documented set of placeholders per `Kind`, validated on save, so a typo is refused at authoring
+   time rather than producing `{guestNmae}` in a guest's inbox.
+3. **One layout.** The eight call sites each build their own wrapper; a shared header/footer with
+   the site identity would let a template hold only the part that differs.
+
+**What has to be decided first:**
+
+- **Which letters may be edited at all.** A password reset and an event pass are mechanisms, not
+  prose; a booking confirmation is prose. Letting the first kind be edited invites a template that
+  drops the link. The honest split is probably: editable prose around a non-editable mechanism.
+- **What happens to a letter whose template is broken** — refuse the save, or fall back to the
+  built-in default at send time. Falling back silently is how somebody discovers in a month that
+  their edit never took effect.
+- **Whether the two `StringBuilder` mailers move first.** They are the ones whose wording Ben is
+  most likely to want to change, and they are the two the outbox already carries a `Kind` for.
+
+Related: [[239]] for the outbox and the list screen it already designed.

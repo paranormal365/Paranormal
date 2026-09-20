@@ -59,6 +59,15 @@ public interface IBenPlatformClient
     Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
         string? state = null, string? kind = null, int take = 100, CancellationToken token = default);
 
+    /// <summary>
+    /// The words of one letter.
+    /// </summary>
+    /// <remarks>
+    /// One at a time, and never as part of the list: the server records who read whose letter, and
+    /// a row per list page would record a hundred reads nobody asked to make.
+    /// </remarks>
+    Task<OutboxLetterBodyRecord?> GetOutboxLetterBodyAsync(Guid id, CancellationToken token = default);
+
     /// <summary>Puts one given-up letter back in the queue.</summary>
     Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
         Guid id, CancellationToken token = default);

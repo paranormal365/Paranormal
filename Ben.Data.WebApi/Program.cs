@@ -389,6 +389,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
 // about on the next pass and the rest collapse into one summary; the digest is the daily (or weekly)
 // letter for everybody who would rather not hear as it happens, and the safety net for those who do.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventStaffRoomWriter>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
