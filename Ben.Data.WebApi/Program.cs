@@ -66,6 +66,25 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+// REFUSE TO START rather than fail per request.
+//
+// A missing registration on a scoped or transient service is not found when the app boots — it is
+// found when a request needs it. On 2026-09-20 OutboxEmailService asked for a bare SiteIdentity
+// (the host registers it with Configure<T>, which provides only IOptions<T>). The API started,
+// passed its own health check, and returned 500 to everything before [Authorize] ran: a public
+// endpoint 500ing where 200 was expected, a protected one where 401 was. The deploy's smoke checks
+// were the first thing to notice, in production.
+//
+// ValidateOnBuild walks every registration at startup and throws if one cannot be satisfied, so
+// the same mistake stops the deploy instead of serving errors. ValidateScopes goes with it: a
+// singleton capturing a scoped dependency is the other half of this failure, and it is only ever
+// found by the request that gets a disposed context.
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    options.ValidateOnBuild = true;
+    options.ValidateScopes = true;
+});
+
 /* END LOGGING */
 
 builder.Services.AddControllers();
