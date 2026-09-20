@@ -580,6 +580,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventAttendanceInvite>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.Email });
 
+            // A group's invitation link. Filtered unique for the same reason the event invitation's
+            // token is: the column is null whenever there is no live link, and a pile of nulls
+            // would collide on an ordinary unique index.
+            modelBuilder.Entity<Organization>().Property(e => e.JoinToken).HasMaxLength(128);
+            modelBuilder.Entity<Organization>()
+                .HasIndex(e => e.JoinToken).IsUnique().HasFilter("[JoinToken] IS NOT NULL");
+
             // NoAction: deleting a place must not delete the record that somebody met there.
             modelBuilder.Entity<OrgCalendarEvent>()
                 .HasOne(e => e.Place).WithMany()

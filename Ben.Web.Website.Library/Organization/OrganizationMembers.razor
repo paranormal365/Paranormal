@@ -24,7 +24,7 @@
         @if (!EmbeddedMode)
         {
             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-                <h4 class="mb-0">Members — @_orgName</h4>
+                <h3 class="h4 mb-0">Members — @_orgName</h3>
                 <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
             </div>
         }
@@ -152,8 +152,11 @@
            own group's roster. A surface that is not theirs should be absent, not broken —
            the same shape as the admin-only hub tabs. Caught by the item-109 member walk on its
            first run. *@
+        @* The way IN. It sits above the applications pile on purpose: applications are people
+           the group has never met asking to be let in, and this is the group's own people. *@
         @if (_canManage)
         {
+            <OrganizationInviteCard OrgId="@OrgId" OrgName="@_orgName" />
             <OrganizationMembershipRequests OrgId="@OrgId" />
         }
     }

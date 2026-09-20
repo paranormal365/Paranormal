@@ -100,7 +100,22 @@
                      Sortable="true"
                      Class="org-list-grid">
             <GridColumns>
-                <GridColumn Field="@nameof(OrganizationListItemResponse.Name)" Title="Name" />
+                @* The name is a LINK, not text.
+
+                   Nothing in this row was one: the name and the web address were plain grid cells
+                   and the only way in was an icon button calling NavigateTo, so a group could not
+                   be opened in a new tab, middle-clicked, or have its address copied — and
+                   `BenTestBase.OpenOrganizationAsync` carries a paragraph explaining how to work
+                   around it, which is what a workaround in the harness always means.
+
+                   Sorting still works because the column keeps its Field; only what the cell draws
+                   changes. *@
+                <GridColumn Field="@nameof(OrganizationListItemResponse.Name)" Title="Name">
+                    <Template>
+                        @{ var org = (OrganizationListItemResponse)context; }
+                        <a href="@($"/organizations/{org.Id}")">@org.Name</a>
+                    </Template>
+                </GridColumn>
                 <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
                 <GridColumn Title="Applications" Width="120px">
                     <Template>

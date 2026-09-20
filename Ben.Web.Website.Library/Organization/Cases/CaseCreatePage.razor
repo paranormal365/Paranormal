@@ -193,6 +193,18 @@
             <button type="button" class="btn btn-secondary" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cases"))">
                 Cancel
             </button>
+            @* A disabled button that will not say why is a dead end.
+
+               The first-run walk filled in every field it could see and then sat in front of a
+               grey Open Case with nothing to read: the kind-of-place question is below the fold,
+               and a starred field left empty says nothing beyond the star. The sign-up screen on
+               this same site names every missing field; this now does too. *@
+            @if (!IsValid && !_saving)
+            {
+                <span class="text-secondary small align-self-center me-2" id="case-still-needed">
+                    Still needed: @StillNeeded
+                </span>
+            }
             <button type="button" class="btn btn-primary" @onclick="Submit" disabled="@(!(!_saving && IsValid))">
                 @(_saving ? "Creating…" : "Open Case")
             </button>
@@ -309,6 +321,27 @@
             .Where(p => !string.IsNullOrWhiteSpace(p));
         var described = string.Join(", ", parts);
         return string.IsNullOrWhiteSpace(described) ? "A place with no address on file" : described;
+    }
+
+    /// <summary>What is still stopping Open Case, in the words on the labels.</summary>
+    /// <remarks>
+    /// Read from the same conditions <see cref="IsValid"/> uses rather than a second list, so the
+    /// sentence cannot drift from the rule — a "still needed" line that names the wrong field is
+    /// worse than none.
+    /// </remarks>
+    private string StillNeeded
+    {
+        get
+        {
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(_form.Title))          missing.Add("a case title");
+            if (string.IsNullOrWhiteSpace(_form.StreetAddress1)) missing.Add("a street address");
+            if (string.IsNullOrWhiteSpace(_form.City))           missing.Add("a city");
+            if (string.IsNullOrWhiteSpace(_form.State))          missing.Add("a state");
+            if (string.IsNullOrWhiteSpace(_form.ZipCode))        missing.Add("a ZIP code");
+            if (_chosenPlace is null && _form.PlaceKind is null) missing.Add("what kind of place this is");
+            return string.Join(", ", missing);
+        }
     }
 
     private bool IsValid =>

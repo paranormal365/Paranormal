@@ -248,6 +248,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             return BadRequest(tourRefusal);
 
         await ApplyTourDefaultsAsync(db, entity, request, ct);
+        StampHouseClock(entity);
 
         await EnsurePublicSlugAsync(db, entity, ct);
 
@@ -397,6 +398,22 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (tour.DurationMinutes is { } minutes && entity.EndDateTime <= entity.StartDateTime)
             entity.EndDateTime = entity.StartDateTime.AddMinutes(minutes);
     }
+
+    /// <summary>
+    /// Gives a date the house clock when nothing else has given it one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Last, so a tour's own zone still wins — a walk runs on the tour's clock, and this only
+    /// catches the dates nothing else spoke for. A tour and a hosted event have always been stamped
+    /// this way on create; an ordinary calendar event's zone was left null, and a null zone is what
+    /// published "8:00 PM UTC" for a cave in Tennessee on the public list (first-run walk,
+    /// 2026-09-20).</para>
+    ///
+    /// <para>On update as well as create, because the rows that already exist with no zone are
+    /// fixed the next time somebody edits them rather than waiting on a backfill.</para>
+    /// </remarks>
+    private static void StampHouseClock(OrgCalendarEvent entity)
+        => entity.TimeZoneId ??= HouseClock.ZoneId;
 
     /// <summary>Sets who leads a date, or the refusal naming who cannot.</summary>
     private static async Task<string?> SetGuidesAsync(
@@ -557,6 +574,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         // The same tour defaults as on create, or a date that was edited would lose the clock it
         // was scheduled with the moment somebody changed its title.
         await ApplyTourDefaultsAsync(db, entity, request, ct);
+        StampHouseClock(entity);
 
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
