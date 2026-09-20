@@ -46,6 +46,13 @@
     <Content Remove="installer/**" />
     <None Remove="installer/**" />
 
+    <!-- The Microsoft Store's ffmpeg pin. build-msix.ps1 reads it from the PROJECT directory and
+         copies it into that package as ffmpeg-manifest.json; nothing reads it at runtime. Without
+         this the Web SDK's **/*.json glob swept it into the ordinary installer too, which shipped
+         a second manifest naming a build that installer does not carry. -->
+    <Content Remove="ffmpeg-manifest.store.json" />
+    <None Include="ffmpeg-manifest.store.json" />
+
     <!-- ffmpeg-manifest.json is already auto-included as Content by the SDK's default item globs
          (EnableDefaultContentItems) — Update (not Include) just adds the copy-to-output
          instruction without re-declaring the item and tripping NETSDK1022. -->
