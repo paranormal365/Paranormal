@@ -281,6 +281,32 @@ declarations in agreement; it cannot make the zip a fourth one.
 
 ### History
 
+**1.1.2** — the on/off switch, and an ffmpeg that is chosen rather than assumed.
+
+Windows gains a switch in the editor's Native acceleration panel. **Off** is `POST /v1/shutdown`,
+token-gated like every other endpoint, refused with 409 while a job is running so nobody's export is
+thrown away silently. **On** is a registered `benvideo-sidecar:` link the editor opens, because a web
+page cannot start a program; the installer now writes that handler under `HKCU\Software\Classes`, and
+the Store package declares it in its manifest. macOS is unchanged — launchd already starts it on
+demand and stops it when idle, so a switch there would offer to do what already happens.
+
+**The button is gated on a capability, not on the version.** A sidecar advertises `shutdown` from
+`/v1/capabilities`, and the editor shows "Turn off" only when the connected one does. That is what
+lets a site advertising 1.1.2 sit safely in front of installed 1.1.1s: they simply do not get the
+button, rather than getting one that 404s.
+
+The exporter also no longer assumes libx264. It asks ffmpeg what encoders it has and picks the best
+one present, giving each its own rate-control arguments — which is what allows the permissively
+licensed build the Microsoft Store package needs. On such a build H.264 runs through `h264_mf` and
+VP9 through `libvpx-vp9`; H.265 is refused with a message naming what to pick instead, because the
+only remaining candidate rejects frame sizes that are not a multiple of 8. A VP9 bug went with it:
+`-crf` without `-b:v 0` is a ceiling on libvpx's default 256k bitrate rather than a quality target,
+so VP9 exports came out far worse than asked for.
+
+**Both platforms need the 1.1.2 build before the site advertises it** — the same rule as every
+release below. The Windows installer can go up on its own beforehand; the notice only nags somebody
+whose installed version is *older* than what the site publishes.
+
 **1.1.1** — Windows only, in effect; macOS behaves exactly as 1.1.0 did. 1.1.0 armed its fifteen
 minute idle shutdown on every platform, but only macOS has anything that starts the sidecar again:
 launchd holds the socket and relaunches it on the next connection. The Windows installer starts it
