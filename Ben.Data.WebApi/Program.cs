@@ -281,6 +281,11 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // first pass it finds nothing and writes nothing, so it stays registered rather than being a step
 // somebody has to remember on one deployment and never again.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBackfillService>();
+
+// The same job for the six fields the 2026-09-20 sweep found, two of which reach people who
+// never signed in. Beside the one above because they are the same kind of cleanup and somebody
+// looking for one should find the other.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.MarkupFieldSanitizeBackfillService>();
 // Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
 
