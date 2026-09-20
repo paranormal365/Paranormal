@@ -135,7 +135,25 @@ public sealed class ProductWalk : BenTestBase
         try { text = await Main.InnerTextAsync(new() { Timeout = 10_000 }); }
         catch (Exception) { text = ""; }
 
-        if (text.Contains("An unhandled error has occurred")) problems.Add("unhandled error banner");
+        // Looked for OUTSIDE the page's own content, and through the banner's own element — because
+        // a page is allowed to TALK about an error without being one. /changes carries a line about
+        // the day that phrase stopped appearing, and reading `main` counted the changelog's own
+        // words as proof the changelog was broken. RouteCrawlTests was corrected for exactly this
+        // on 2026-09-19; this copy of the same check was not, and repeated the mistake (2026-09-20).
+        //
+        // Outside is also where a real one lives: #blazor-error-ui is rendered beyond the layout's
+        // content region.
+        var banner = await Page.EvaluateAsync<bool>(@"() => {
+            const main  = document.querySelector('.app-content, main, .content-wrapper');
+            const body  = document.body.innerText || '';
+            const inner = main ? (main.innerText || '') : '';
+            const chrome = inner ? body.split(inner).join(' ') : body;
+            const err = document.querySelector('#blazor-error-ui');
+            const shown = !!err && getComputedStyle(err).display !== 'none';
+            return shown || /An unhandled error has occurred/i.test(chrome);
+        }");
+
+        if (banner) problems.Add("unhandled error banner");
         if (await Page.Locator("#blazor-error-ui").IsVisibleAsync()) problems.Add("Blazor error bar showing");
         if (text.Contains("Page not found") || text.Contains("Sorry, there's nothing at this address")) problems.Add("not found");
         if (text.Trim().Length < 40) problems.Add($"rendered only {text.Trim().Length} characters");
@@ -555,7 +573,8 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",
                      "/admin/org-subscriptions", "/admin/subscription-tiers", "/admin/member-seats", "/admin/coupons",
                      "/admin/billing-ledger", "/admin/tax-rates", "/admin/referrals", "/admin/org-ads", "/admin/roles",
-                     "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/audit-log", "/admin/error-log",
+                     "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/email-templates",
+                     "/admin/audit-log", "/admin/error-log",
                      "/admin/support-tickets", "/admin/feed-reports", "/admin/test-posts", "/admin/venue-claims",
                      "/admin/place-duplicates", "/admin/merge-groups", "/admin/orphaned-sessions", "/admin/video-assets",
                      "/admin/sidecar-telemetry", "/admin/file-types", "/admin/lookup-types", "/admin/equipment-taxonomy",
@@ -567,6 +586,16 @@ public sealed class ProductWalk : BenTestBase
             await GoAsync("/admin/users");
             await FollowAsync("/admin/users/");
         });
+
+        // The route alone proves nothing here: the page renders its list before anything is
+        // chosen, so a broken editor would walk past as a perfectly good screen.
+        await StepAsync("writing one of the site's letters", async () =>
+        {
+            await GoAsync("/admin/email-templates");
+            await ClickUntilAsync(
+                Main.GetByText("Reset your password", new() { Exact = true }).First,
+                Main.Locator("[data-testid=template-body]"));
+        }, Main.Locator("[data-testid=template-body]"));
 
         Finish();
     }
