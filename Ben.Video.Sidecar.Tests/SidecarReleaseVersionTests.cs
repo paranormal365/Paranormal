@@ -38,6 +38,33 @@ public sealed class SidecarReleaseVersionTests
     }
 
     [Fact]
+    public void The_macos_installer_stamps_that_version_rather_than_a_literal()
+    {
+        // The third place the number has to be right, and the one that had silently kept saying
+        // 1.0.0 through the bump to 1.1.1 (2026-09-20). build.sh writes CFBundleVersion,
+        // CFBundleShortVersionString and pkgbuild --version; install.sh then reports
+        // CFBundleShortVersionString to /api/sidecar-telemetry/installs, so a literal here does not
+        // just mislabel a package — it misreports every install on the admin dashboard, as a
+        // version that is real and older, which is the hardest kind of wrong number to notice.
+        var build = File.ReadAllText(RepoFile("Ben.Video.Sidecar", "installer", "macos", "build.sh"));
+
+        foreach (var key in new[] { "CFBundleVersion", "CFBundleShortVersionString" })
+        {
+            var line = build.Split('\n').FirstOrDefault(l => l.Contains($"<key>{key}</key>"));
+            Assert.True(line is not null, $"build.sh no longer writes {key}.");
+            Assert.True(line!.Contains("$VERSION"),
+                $"build.sh stamps a literal into {key}; it must use the $VERSION read from the csproj.");
+        }
+
+        var pkgVersion = build.Split('\n').FirstOrDefault(l => l.TrimStart().StartsWith("--version"));
+        Assert.True(pkgVersion is not null, "build.sh no longer passes --version to pkgbuild.");
+        Assert.True(pkgVersion!.Contains("$VERSION"),
+            "pkgbuild is given a literal --version; it must use the $VERSION read from the csproj.");
+
+        Assert.Contains("Ben.Video.Sidecar.csproj", build);
+    }
+
+    [Fact]
     public void The_running_assembly_reports_that_same_version()
     {
         // The end of the chain: what a user's sidecar actually puts in its health response.
