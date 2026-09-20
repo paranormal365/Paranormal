@@ -163,6 +163,7 @@ app.UseRateLimiter();
 app.UseMiddleware<SecurityMiddleware>();
 
 app.MapHealthEndpoints();
+app.MapLifetimeEndpoints();
 app.MapPairingEndpoints();
 app.MapSourceEndpoints();
 app.MapJobEndpoints();

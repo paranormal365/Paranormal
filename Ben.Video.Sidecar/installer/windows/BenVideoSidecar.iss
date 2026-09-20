@@ -78,6 +78,22 @@ Name: "{app}\logs"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; \
     ValueName: "BenVideoSidecar"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
 
+; The benvideo-sidecar: protocol - the "on" half of the switch in the editor. A web page cannot
+; start a program, so the editor opens this link and Windows runs the sidecar; the browser asks the
+; person the first time. The Store package declares the same scheme in its own manifest instead,
+; because a packaged app cannot write here. Per-user (HKCU), like everything else this installer
+; does, so it needs no UAC prompt.
+;
+; The app is handed the whole URI as an argument and ignores it - see ProtocolActivationTests.
+Root: HKCU; Subkey: "Software\Classes\benvideo-sidecar"; ValueType: string; \
+    ValueName: ""; ValueData: "URL:{#MyAppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\benvideo-sidecar"; ValueType: string; \
+    ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\benvideo-sidecar\DefaultIcon"; ValueType: string; \
+    ValueName: ""; ValueData: """{app}\{#MyAppExeName}"",0"
+Root: HKCU; Subkey: "Software\Classes\benvideo-sidecar\shell\open\command"; ValueType: string; \
+    ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Pairing page"; Filename: "http://127.0.0.1:43117/pair"

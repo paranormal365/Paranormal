@@ -23,7 +23,26 @@
                         @* "Download and run it" with nothing to click. The downloads page existed
                            the whole time, one level below the standalone editor, and nothing here
                            linked to it (2026-09-05 audit, F17). *@
-                        <p>No sidecar found on this machine. Install it, then click Retry.</p>
+                        @* Two different situations look identical from here: not installed, and
+                           installed but not running. On Windows the second one is now fixable from
+                           this panel, so say so rather than sending somebody to reinstall
+                           something they already have. *@
+                        @if (NativeSidecar.SwitchIsOffered == true)
+                        {
+                            <p>No sidecar is running. If it is installed, turn it on here.</p>
+                            <TelerikButton OnClick="TurnOnAsync"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!_busy)">
+                                @(_busy ? "Starting…" : "Turn on")
+                            </TelerikButton>
+                            <p class="bv-sidecar-panel__hint">
+                                Your browser will ask for permission the first time.
+                            </p>
+                        }
+                        else
+                        {
+                            <p>No sidecar found on this machine. Install it, then click Retry.</p>
+                        }
                         @if (Options.SidecarDownloadUrl is { Length: > 0 } downloadUrl)
                         {
                             <p>
@@ -32,7 +51,12 @@
                                 — there is a build for Windows and for Mac.
                             </p>
                         }
-                        <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw">Retry</TelerikButton>
+                        @if (_switchMessage is not null)
+                        {
+                            <p class="bv-sidecar-panel__hint">@_switchMessage</p>
+                        }
+                        <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat">Retry</TelerikButton>
                     </div>
                     break;
 
@@ -84,6 +108,20 @@
                                 ? string.Join(", ", NativeSidecar.Capabilities.Capabilities.Order())
                                 : "none")
                         </p>
+                        @* Ben, 2026-09-20: a Windows user should be able to turn this off without
+                           hunting for it in Task Manager. Off is a request to the sidecar itself;
+                           on is a protocol link, which is why only Windows gets the pair of them. *@
+                        @if (NativeSidecar.SwitchIsOffered == true)
+                        {
+                            <TelerikButton OnClick="TurnOffAsync" Enabled="@(!_busy)"
+                                           ThemeColor="@(_forceNextStop ? ThemeConstants.Button.ThemeColor.Error : ThemeConstants.Button.ThemeColor.Base)">
+                                @(_busy ? "Stopping…" : _forceNextStop ? "Turn off anyway" : "Turn off")
+                            </TelerikButton>
+                        }
+                        @if (_switchMessage is not null)
+                        {
+                            <p class="bv-sidecar-panel__hint">@_switchMessage</p>
+                        }
                         <TelerikButton OnClick="ForgetAsync" FillMode="@ThemeConstants.Button.FillMode.Flat">
                             Forget pairing
                         </TelerikButton>
@@ -137,6 +175,21 @@
     private string _code = string.Empty;
     private bool _pairing;
 
+    /// <summary>A start or stop is in flight — both take long enough to need saying so.</summary>
+    private bool _busy;
+
+    /// <summary>What the last press of the switch did, in words, or nothing to say.</summary>
+    private string? _switchMessage;
+
+    /// <summary>
+    /// The sidecar refused to stop because work is in progress, so the next press means it.
+    /// </summary>
+    /// <remarks>
+    /// The second press is the person's decision after being told what it costs — which is why the
+    /// button changes its wording and its colour rather than quietly doing something different.
+    /// </remarks>
+    private bool _forceNextStop;
+
     /// <summary>
     /// True only when both versions are known and the installed one is genuinely older — see
     /// SidecarUpdateCheck for why every uncertain case answers no.
@@ -154,6 +207,50 @@
     }
 
     private async Task ForgetAsync() => await NativeSidecar.ForgetPairingAsync();
+
+    /// <summary>
+    /// Asked after the first render rather than on initialisation: it is a JS call, and under
+    /// prerendering there is no browser to ask yet.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await NativeSidecar.RefreshSwitchAvailabilityAsync();
+        StateHasChanged();
+    }
+
+    private async Task TurnOnAsync()
+    {
+        _busy = true;
+        _switchMessage = null;
+        try
+        {
+            var started = await NativeSidecar.StartAsync();
+            // Nothing answering covers three cases we cannot tell apart from here: not installed,
+            // the person dismissed the browser's prompt, or it is still starting. So the wording
+            // does not claim to know which.
+            _switchMessage = started
+                ? null
+                : "Nothing started. If you dismissed your browser's prompt, try again — and if the "
+                  + "sidecar is not installed yet, download it below.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task TurnOffAsync()
+    {
+        _busy = true;
+        try
+        {
+            var outcome = await NativeSidecar.StopAsync(force: _forceNextStop);
+            _switchMessage = SidecarSwitch.Explain(outcome, NativeSidecar.LastRefusedJobCount);
+
+            // Armed only by a refusal, and disarmed by anything else — so a "turn off anyway"
+            // button can never be left sitting there after the reason for it has gone.
+            _forceNextStop = outcome == SidecarStopOutcome.WorkInProgress;
+        }
+        finally { _busy = false; }
+    }
 
     private static string Shorten(string ffmpegVersionLine)
     {
