@@ -13,17 +13,27 @@
 #   * Expand-Archive preserves the archive's own layout, and BtbN's Windows zips nest the binaries
 #     under <name>\bin\ — so the extracted ffmpeg.exe never landed at ffmpeg\<rid>\ffmpeg.exe where
 #     FfmpegLocator looks. Extraction now goes to a temp dir and the binaries are located by name.
+#
+# -Manifest and -OutDir were added for the Microsoft Store package, which needs the LGPL build of
+# the same release instead of the GPL one (ffmpeg-manifest.store.json). Both default to what this
+# script has always used, so every existing call is unaffected.
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("win-x64", "osx-x64", "osx-arm64", "linux-x64")]
-    [string]$Rid
+    [string]$Rid,
+
+    [string]$Manifest,
+
+    [string]$OutDir
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
-$Manifest = Join-Path $ProjectDir "ffmpeg-manifest.json"
-$OutDir = Join-Path $ProjectDir "ffmpeg\$Rid"
+if (-not $Manifest) { $Manifest = Join-Path $ProjectDir "ffmpeg-manifest.json" }
+if (-not $OutDir)   { $OutDir   = Join-Path $ProjectDir "ffmpeg\$Rid" }
+if (-not (Test-Path $Manifest)) { Write-Error "No manifest at $Manifest."; exit 1 }
+Write-Host "Manifest: $Manifest"
 
 $ManifestData = Get-Content $Manifest -Raw | ConvertFrom-Json
 $Entry = $ManifestData.$Rid

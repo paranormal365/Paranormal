@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The package manifest for the Microsoft Store build of the sidecar.
+
+  build-msix.ps1 fills in the braced placeholders below and writes the result next to the payload;
+  this file is the reviewable version, so read it here rather than in the generated copy. That
+  script refuses to pack if any placeholder is left unfilled, so do not write one into a comment.
+
+  THE IDENTITY IS NOT OURS TO CHOOSE. Name, Publisher and PublisherDisplayName must match, exactly
+  and character for character, what Partner Center shows under Product identity once the app name
+  is reserved. A package whose identity does not match is rejected at upload. Until that identity
+  exists, build-msix.ps1 stamps an obvious placeholder and says so.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity
+    Name="{IDENTITY_NAME}"
+    Publisher="{PUBLISHER}"
+    Version="{VERSION}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>{DISPLAY_NAME}</DisplayName>
+    <PublisherDisplayName>{PUBLISHER_DISPLAY_NAME}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Renders video exports on this computer for the IsHaunted video editor.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!--
+      1809 is the floor because that is where MSIX itself settled. The app is self-contained .NET,
+      so nothing here depends on a framework package being present on the machine.
+    -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Sidecar" Executable="Ben.Video.Sidecar.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="{DISPLAY_NAME}"
+        Description="Renders video exports on this computer for the IsHaunted video editor."
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        BackgroundColor="transparent">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!--
+          The "on" switch. A web page cannot start a program, so the editor opens this link and
+          Windows starts the sidecar; the browser asks the person the first time. "Off" needs
+          nothing here - the editor asks the running sidecar to shut down over its own API.
+        -->
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="benvideo-sidecar">
+            <uap:DisplayName>{DISPLAY_NAME}</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
+
+        <!--
+          Run at login, DISABLED until the person turns it on. The app asks for it through
+          Windows.ApplicationModel.StartupTask at runtime; Windows shows it in Task Manager's
+          Startup tab, where the person can always override whatever the app asks for.
+        -->
+        <desktop:Extension Category="windows.startupTask" Executable="Ben.Video.Sidecar.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="BenVideoSidecar" Enabled="false" DisplayName="{DISPLAY_NAME}" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      runFullTrust is what makes this a packaged desktop app rather than a UWP one: ordinary Win32
+      code, ordinary sockets. The two network capabilities are declared because the app listens on
+      a socket; a full-trust package is not in an app container, so they are a statement of intent
+      to the Store rather than something Windows enforces here. Proven on 2026-09-20: a package
+      declaring exactly these served the loopback API identically to an unpackaged control.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+</Package>
