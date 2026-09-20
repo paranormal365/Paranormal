@@ -162,7 +162,8 @@ public sealed class PublicClientRequestControllerTests
 
         var ctrl = new PublicClientRequestController(
             factory, users, accounts, site, new ConfigurationBuilder().Build(),
-            NullLogger<PublicClientRequestController>.Instance)
+            NullLogger<PublicClientRequestController>.Instance,
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {

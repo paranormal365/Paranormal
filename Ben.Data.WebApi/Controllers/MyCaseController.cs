@@ -174,7 +174,11 @@ public sealed class MyCaseController : BenControllerBase
             EntryType:     e.EntryType,
             EventDateTime: e.EventDateTime,
             Title:         e.Title,
-            Body:          e.Body,
+            // Plain, for the same reason Description above is: the app draws this with Text.
+            // GroupCaseView already strips tags here with PlainText.from; CaseDetailView did not,
+            // so a client saw what a member did not (2026-09-20).
+            Body:          PlainTextHtml.ToText(e.Body),
+            BodyHtml:      e.Body,
             // Now that org-authored entries can reach this list, the client needs to know which
             // ones are theirs. Without it an investigator's note reads as something they wrote.
             FromInvestigators: e.AuthorAppUserId != userId,
@@ -246,7 +250,11 @@ public sealed class MyCaseController : BenControllerBase
             EntryType          = CaseTimelineEntryType.ClientReport,
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
-            Body               = request.Body?.Trim(),
+            // SANITIZED, because a timeline entry's body is rendered as markup on the group's own
+            // case screen (CaseTimeline.razor). Stored with only a Trim, this was a path from a
+            // client's form straight to a MarkupString in front of an investigator — the same gap
+            // the case description had before beta feedback closed it (2026-09-20).
+            Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer),
             // The client always sees their own reports via the EntryType clause, so OrgOnly here
             // means "not shared onward", not "hidden from its author".
             Visibility         = CaseTimelineVisibility.OrgOnly,
@@ -292,7 +300,7 @@ public sealed class MyCaseController : BenControllerBase
 
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
-        entry.Body               = request.Body?.Trim();
+        entry.Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer);
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
@@ -1463,7 +1471,12 @@ public sealed record ClientCaseOccurrence(
     IReadOnlyList<OccurrenceFileItem> Files,
     // Returned as well as accepted: a tag the client sets but can never see back would be a
     // write-only control, and they'd have no way to tell whether it took.
-    IReadOnlyList<Guid> ExperienceTypeIds);
+    IReadOnlyList<Guid> ExperienceTypeIds,
+    /// <param name="BodyHtml">
+    /// The same words with their formatting, for the website. Trailing and optional, so the
+    /// shipped app decodes this exactly as before.
+    /// </param>
+    string?   BodyHtml = null);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
