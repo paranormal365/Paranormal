@@ -391,7 +391,10 @@ public sealed class EventGuestMailer
             pick.Email,
             $"Hold your places at {ev.Name} within 15 minutes",
             body.ToString(),
-            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.ChooseYourEmails.Key), ct);
+            // This one prints a deadline through AtTheVenue, which labels nothing — so the footer
+            // says which clock that deadline is on. Missing it by hours is the whole risk here.
+            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.ChooseYourEmails.Key,
+            TimesShownInZone: ZoneLabel(ev)), ct);
 
         return true;
     }
@@ -455,6 +458,40 @@ public sealed class EventGuestMailer
         }
 
         return ($"Thank you for coming to {ev.Name}", body.ToString());
+    }
+
+    /// <summary>
+    /// Which clock this event's letters are written on, for the footnote — or null when there is
+    /// nothing worth saying.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-20: say so when a letter only reports UTC. The hazard is specific, and it
+    /// is <see cref="AtTheVenue"/>'s: an event with no <c>TimeZoneId</c> resolves to UTC, the
+    /// conversion SUCCEEDS, and the time is printed with <b>no label at all</b> — so the reader
+    /// sees "7:00 PM" and reads it as their own evening. A mail client, unlike a browser, tells us
+    /// nothing about where the reader is, so the letter has to name the clock it means.</para>
+    ///
+    /// <para>An event WITH a zone still gets a note, worded more quietly: the venue's clock is the
+    /// right one to print, and it is still not necessarily the reader's.</para>
+    /// </remarks>
+    internal static string ZoneLabel(HostedEvent? ev)
+    {
+        if (string.IsNullOrWhiteSpace(ev?.TimeZoneId)) return "UTC";
+
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(ev.TimeZoneId);
+            if (zone == TimeZoneInfo.Utc) return "UTC";
+
+            var name = zone.IsDaylightSavingTime(DateTime.UtcNow) ? zone.DaylightName : zone.StandardName;
+            var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length >= 2 ? new string([.. words.Select(w => w[0])]) : name;
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            // The same fallback AtTheVenue takes, so the footnote cannot disagree with the times.
+            return "UTC";
+        }
     }
 
     /// <summary>A moment on the venue's clock, as the letters write it.</summary>
@@ -1049,8 +1086,11 @@ public sealed class EventGuestMailer
 
             try
             {
+                // WhenAndWhere writes the session's times with no zone beside them, so the footer
+                // has to name the clock — see ZoneLabel.
                 await _email.SendAsync(new EmailMessage(to, subject, greeting + body,
-                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: MailKinds.AppealAnswered.Key), ct);
+                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: MailKinds.AppealAnswered.Key,
+                    TimesShownInZone: ZoneLabel(session.HostedEvent)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)

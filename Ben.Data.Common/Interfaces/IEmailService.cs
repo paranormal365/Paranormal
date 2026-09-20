@@ -51,13 +51,24 @@ public interface IEmailService
 /// cannot carry a template, because a template keyed to a guess stops applying the day somebody
 /// rewords a subject line.</para>
 /// </param>
+/// <param name="TimesShownInZone">
+/// The clock the times in this letter are written on — "UTC", "CDT" — when that is not the reader's
+/// own. The outbox turns it into a line in the footer (Ben, 2026-09-20).
+/// <para>It exists because of a real hazard, not a tidiness wish. An event with no timezone of its
+/// own is written out in UTC, and the formatter prints it with <b>no label at all</b>, so the
+/// reader sees a bare time and reads it as local — which is how somebody arrives hours late. Unlike
+/// a browser, a mail client tells us nothing about where the reader is, so the only honest thing
+/// the letter can do is say which clock it means.</para>
+/// <para>Trailing and optional. Null for the letters with no times in them, which is most of them.</para>
+/// </param>
 public sealed record EmailMessage(
     string To,
     string Subject,
     string HtmlBody,
     IReadOnlyList<EmailAttachment>? Attachments = null,
     string? ReplyTo = null,
-    string? Kind = null);
+    string? Kind = null,
+    string? TimesShownInZone = null);
 
 /// <summary>One file travelling with an email.</summary>
 /// <param name="ContentType">
