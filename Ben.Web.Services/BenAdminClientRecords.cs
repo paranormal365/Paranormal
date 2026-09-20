@@ -1259,7 +1259,12 @@ public sealed record ClientCaseDetail(
     IReadOnlyList<ClientCaseInvestigation> Investigations,
     int       UnreadMessageCount = 0,
     bool      IsPrimaryClient = false,
-    IReadOnlyList<CaseContactItem>? Contacts = null);
+    IReadOnlyList<CaseContactItem>? Contacts = null,
+    /// <param name="DescriptionHtml">
+    /// The description with its formatting. <c>Description</c> beside it is the plain rendering the
+    /// shipped iPhone app draws, and must stay that way until its next build (2026-09-20).
+    /// </param>
+    string?   DescriptionHtml = null);
 
 /// <summary>Someone the client can talk to about their case. <c>IsFallback</c> marks the case
 /// manager standing in because the group set no explicit contact.</summary>

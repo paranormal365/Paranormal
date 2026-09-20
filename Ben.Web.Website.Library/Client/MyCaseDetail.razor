@@ -266,7 +266,10 @@
             {
                 <div class="card mb-3">
                     <div class="card-header fw-semibold">Case Summary</div>
-                    <div class="card-body">@((MarkupString)_case.Description)</div>
+                    @* The formatted copy. Description beside it is plain text for the iPhone app, which draws it
+                           with SwiftUI's Text and showed readers the tags when descriptions became
+                           an editor. Falls back when an older API has not sent one. *@
+                        <div class="card-body">@((MarkupString)(_case.DescriptionHtml ?? _case.Description))</div>
                 </div>
             }
 
