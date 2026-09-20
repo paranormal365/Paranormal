@@ -29,12 +29,20 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
 
-    public UploadFileRegionNoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper, IAuditLogService auditLog)
+    public UploadFileRegionNoteController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper,
+        IAuditLogService auditLog, Services.ICmsMarkupSanitizer sanitizer)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _auditLog = auditLog;
+        _sanitizer = sanitizer;
     }
+
+    /// <summary>
+    /// A region note is drawn as markup where audio is reviewed (<c>AudioFilePreview</c>,
+    /// <c>WsRegionExplorer</c>), and was stored exactly as sent — not even trimmed (2026-09-20).
+    /// </summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<UploadFileRegionNoteRecord>>> GetAll(
@@ -86,7 +94,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
             RegionEnd          = request.RegionEnd,
             RegionLabel        = request.RegionLabel,
             TimeOffset         = request.TimeOffset,
-            NoteHtml           = request.NoteHtml,
+            NoteHtml           = Entities.CaseController.CleanDescription(request.NoteHtml, _sanitizer),
             IsPublic           = request.IsPublic,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -115,7 +123,7 @@ public sealed class UploadFileRegionNoteController : BenControllerBase
             .FirstOrDefaultAsync(n => n.Id == noteId && n.UploadFileId == fileId, ct);
 
         entity!.TimeOffset         = request.TimeOffset;
-        entity.NoteHtml           = request.NoteHtml;
+        entity.NoteHtml           = Entities.CaseController.CleanDescription(request.NoteHtml, _sanitizer);
         entity.IsPublic           = request.IsPublic;
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
