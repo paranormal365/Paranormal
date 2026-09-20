@@ -187,7 +187,7 @@
                                         }
                                         @if (!string.IsNullOrWhiteSpace(o.Body))
                                         {
-                                            <div class="text-secondary small mt-1">@((MarkupString)o.Body)</div>
+                                            <div class="text-secondary small mt-1">@((MarkupString)(o.BodyHtml ?? o.Body))</div>
                                         }
                                         <div class="text-muted" style="font-size:.72rem;">
                                             @((o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).ToDisplayTime())

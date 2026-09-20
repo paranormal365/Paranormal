@@ -1307,7 +1307,11 @@ public sealed record ClientCaseOccurrence(
     IReadOnlyList<OccurrenceFileItem> Files,
     // Returned as well as accepted: a tag the client sets but can never see back would be a
     // write-only control, and they'd have no way to tell whether it took.
-    IReadOnlyList<Guid> ExperienceTypeIds);
+    IReadOnlyList<Guid> ExperienceTypeIds,
+    /// <param name="BodyHtml">
+    /// The formatting. <c>Body</c> beside it is plain for the iPhone app (2026-09-20).
+    /// </param>
+    string?   BodyHtml = null);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
