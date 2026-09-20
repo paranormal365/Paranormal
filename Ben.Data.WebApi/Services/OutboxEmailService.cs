@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Common.Mail;
@@ -65,13 +66,15 @@ public sealed class OutboxEmailService : IEmailService
     /// </remarks>
     public const int MaximumAttachmentBytes = 8 * 1024 * 1024;
 
-    /// <remarks>
-    /// <see cref="SiteIdentity"/> arrives as <c>IOptions&lt;&gt;</c>, not bare: it is registered with
-    /// <c>Configure&lt;SiteIdentity&gt;</c>, so the container can resolve the options wrapper and
-    /// nothing else. Asking for the bare type compiles, starts, and then fails to resolve on the
-    /// first request that needs an email service — which took the API down with 500s on
-    /// 2026-09-20 while every static check still passed.
-    /// </remarks>
+    /// <param name="site">
+    /// Taken as <c>IOptions</c> and unwrapped here, like every other consumer.
+    /// <para><b>A bare <c>SiteIdentity</c> cannot be resolved</b> — the host registers it with
+    /// <c>Configure&lt;T&gt;</c>, which provides <c>IOptions&lt;T&gt;</c> and nothing else. This
+    /// service is registered as <c>IEmailService</c>, which almost everything depends on, so
+    /// asking for it bare took the API down: it started, passed its health check, and returned 500
+    /// to every request before <c>[Authorize]</c> ran. That is what the production smoke checks
+    /// caught on 2026-09-20, and what <c>OptionsAreNeverInjectedBareTests</c> now refuses.</para>
+    /// </param>
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
