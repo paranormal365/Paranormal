@@ -18,6 +18,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-20
 
+- Administrators can write the site's emails. Pick a letter, pick a table and a column, and add a
+  token like {AppUsers.DisplayName} that is filled in when the letter is written. Dates and times
+  are shown in the reader's own time zone. Preview uses made-up details, so nobody's real name
+  appears, and deleting what you wrote puts the site's own letter back.
+
 - Bookings for an event are now posted into a thread of the event's own, in your group's
   Messages, so you can talk about a request where the request is. One thread per event, and a
   new arrival brings it back to your bell rather than filling your messages with a row per

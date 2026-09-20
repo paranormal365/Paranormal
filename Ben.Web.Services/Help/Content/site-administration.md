@@ -415,6 +415,66 @@ requests back out. A letter carries whatever somebody typed into a form somewher
 administration page that ran it would be a worse problem than the one you opened it to diagnose.
 
 
+## Email templates
+
+Every letter the site sends is written in code. **Email templates** lets you write your own version
+of one, and that version is used from the moment you publish it.
+
+**Deleting what you wrote puts the original back.** The letter the code writes never left the code
+— your template only stands in front of it — so "Use the site's letter" is a complete undo, and
+there is nothing to restore.
+
+### Filling in the details
+
+A letter says the reader's name, or the date, because of a **token**: a word in braces that is
+replaced when the letter is written.
+
+Pick a **table**, then a **column**, then **Add token**, and `{AppUsers.DisplayName}` is added to
+the body. Move it where you want it.
+
+The tables on offer are the ones *that letter* actually has in its hands. A password-reset letter
+carries the person and nothing else, so it offers `AppUsers` alone — and it refuses to save a token
+it could never fill in, rather than sending a letter with a gap in it. Columns that are the site's
+business rather than a reader's — anything holding a password, a security code or a machine's
+bookkeeping — are never offered.
+
+There are also ready-made ones that need no table:
+
+| Token | Looks like |
+|---|---|
+| `{Date}` | 09/20/2026 |
+| `{Time}` | 9:05 AM |
+| `{FullDate}` | September 20, 2026 |
+| `{FullDateTime}` | September 20, 2026 9:05 AM |
+| `{Year}` | 2026 |
+| `{SiteName}` | IsHaunted.com |
+| `{SiteUrl}` | https://ishaunted.com |
+
+**Times are the reader's, not yours.** A letter written at 9:05 in the morning in Tennessee says
+10:05 to somebody in New York and 3:05 in the afternoon to somebody in London. A date column from a
+table is treated the same way, so nobody is shown a time they were never in.
+
+### Looking at it before anybody gets it
+
+**Preview** fills the tokens in with made-up details — Marguerite Ashdown, at 1201 Del Rio Pike —
+and draws the letter as it would arrive. Nothing real is used, so opening a preview never shows you
+somebody's actual name or address.
+
+**Save draft** keeps what you are working on without changing anything anybody receives. **Publish**
+is what takes effect, and it applies to the next letter of that kind — nothing already queued is
+rewritten.
+
+### Writing the body
+
+The body is HTML, and email HTML is not web HTML: tables for layout, every style written directly
+on the element, and no stylesheet. Outlook draws mail with Word's engine and Gmail removes style
+blocks, so anything cleverer falls apart somewhere. That is why the box is a plain one rather than
+a word processor — a rich editor would quietly rewrite exactly the markup that makes a letter
+survive those clients.
+
+If a template ever fails to render, the site sends its own letter instead and records why. Nothing
+you can write here can stop a letter going out.
+
 ## Knowing whether a member was ever emailed
 
 **Administration → Users** has a **Verified** column, and it distinguishes three things that used

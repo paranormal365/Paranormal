@@ -106,9 +106,13 @@ public sealed class AdminEmailTemplateController : ControllerBase
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         if (bad.Count > 0)
-            return BadRequest(new EmailTemplateSaved(false,
+            // A plain sentence, not a record: WebApiClient.SendExpectingReasonAsync DROPS a
+            // non-2xx body that starts with "{", so that a framework ProblemDetails blob can never
+            // be shown to a person. A refusal wrapped in JSON is discarded with it, and the page
+            // says "couldn't save that" instead of the reason — which is what happened here first.
+            return BadRequest(
                 $"This letter cannot fill in {string.Join(", ", bad.Select(b => "{" + b + "}"))}. "
-              + "Pick a table it carries, or one of the ready-made tokens.", null));
+              + "Pick a table it carries, or one of the ready-made tokens.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
@@ -145,7 +149,7 @@ public sealed class AdminEmailTemplateController : ControllerBase
         var row = await db.EmailTemplates.FirstOrDefaultAsync(t => t.Kind == kindKey, ct);
 
         if (row is null || string.IsNullOrWhiteSpace(row.DraftSubject) || string.IsNullOrWhiteSpace(row.DraftBodyHtml))
-            return BadRequest(new EmailTemplateSaved(false, "There is nothing written to publish.", null));
+            return BadRequest("There is nothing written to publish.");
 
         var now = DateTime.UtcNow;
         row.Subject = row.DraftSubject;
