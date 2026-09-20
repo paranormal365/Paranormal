@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Files you own can be deleted from the Media Library, not only from the upload page. If a
+  group is using one, it still asks the two questions first — remove it everywhere, or hand
+  it over — rather than deleting something out from under them.
 - The administration dashboard loads in a moment instead of half a second. Its figures are
   worked out every few minutes rather than on every visit, and the page says so.
 - The privacy page now says what is kept when you sign in: that you did, when, and which way
