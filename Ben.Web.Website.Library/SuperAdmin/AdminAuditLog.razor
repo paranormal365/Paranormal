@@ -275,6 +275,7 @@
         new(AuditAction.Create, "Create"),
         new(AuditAction.Update, "Update"),
         new(AuditAction.Delete, "Delete"),
+        new(AuditAction.Read,   "Read"),
     ];
 
     // ── Mail dialog state ──────────────────────────────────────────────────────
@@ -527,6 +528,7 @@
         AuditAction.Create => "Create",
         AuditAction.Update => "Update",
         AuditAction.Delete => "Delete",
+        AuditAction.Read   => "Read",
         _                  => action.ToString()
     };
 
@@ -535,6 +537,7 @@
         AuditAction.Create => "bg-success",
         AuditAction.Update => "bg-warning text-dark",
         AuditAction.Delete => "bg-danger",
+        AuditAction.Read   => "bg-info text-dark",
         _                  => "bg-secondary"
     };
 

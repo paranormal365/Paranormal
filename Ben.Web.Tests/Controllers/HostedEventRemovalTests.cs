@@ -126,6 +126,14 @@ public sealed class HostedEventRemovalTests
         }
 
         public Task LogDeleteAsync(string entityType, Guid entityId, object entity, Guid userId, string source) => Task.CompletedTask;
+
+        // Serialized exactly as the real one does, so a payload this stub would accept and the
+        // live service would choke on cannot pass here.
+        public Task LogReadAsync(string entityType, Guid entityId, object what, Guid userId, string source)
+        {
+            System.Text.Json.JsonSerializer.Serialize(what);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class Mailbox
