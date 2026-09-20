@@ -1724,6 +1724,43 @@ public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
 /// event, a working door code. <c>AcceptedBySmtpUtc</c> is when the mail server TOOK it, not when
 /// anybody received it — that is only knowable from bounce reports this site does not collect.
 /// </remarks>
+// ── Email templates (item 246) ───────────────────────────────────────────────
+
+/// <summary>One letter the site sends, and whether somebody has written one for it.</summary>
+public sealed record EmailTemplateSummaryRecord(
+    string Kind, string Title, string Description,
+    bool IsLive, bool HasUnpublishedDraft, DateTime? PublishedUtc, DateTime? DraftSavedUtc);
+
+public sealed record EmailTemplateColumnRecord(string Name, string Type);
+public sealed record EmailTemplateTableRecord(string Name, IReadOnlyList<EmailTemplateColumnRecord> Columns);
+public sealed record EmailTemplateTokenRecord(string Name, string Looks, string What);
+
+/// <summary>A piece of a letter an author can drop in and then edit.</summary>
+public sealed record EmailTemplateBlockRecord(string Key, string Title, string What, string Html);
+
+/// <summary>A value only this letter's mailer can work out.</summary>
+public sealed record EmailTemplateSuppliedRecord(string Name, string What, bool Required);
+
+/// <summary>A whole letter to start from, rather than a blank box.</summary>
+public sealed record EmailTemplateStarterRecord(
+    string Key, string Title, string What, string Subject, string BodyHtml);
+
+/// <summary>One letter, with everything its author may put in it.</summary>
+public sealed record EmailTemplateDetailRecord(
+    string Kind, string Title, string Description,
+    string? Subject, string? BodyHtml,
+    string? DraftSubject, string? DraftBodyHtml,
+    DateTime? PublishedUtc, DateTime? DraftSavedUtc,
+    IReadOnlyList<EmailTemplateTableRecord> Tables,
+    IReadOnlyList<EmailTemplateTokenRecord> Common,
+    IReadOnlyList<EmailTemplateBlockRecord> Blocks,
+    IReadOnlyList<EmailTemplateSuppliedRecord> Supplied,
+    IReadOnlyList<EmailTemplateStarterRecord> Starters);
+
+public sealed record SaveEmailTemplateBody(string? Subject, string? BodyHtml, string? TimeZoneId = null);
+public sealed record EmailTemplateSavedRecord(bool Ok, string Message, DateTime? At);
+public sealed record EmailTemplatePreviewRecord(string Subject, string Html, string ZoneId);
+
 /// <summary>One letter's words, fetched one at a time because every fetch is recorded.</summary>
 public sealed record OutboxLetterBodyRecord(
     Guid Id,

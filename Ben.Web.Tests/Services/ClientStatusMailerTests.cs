@@ -34,7 +34,7 @@ public sealed class ClientStatusMailerTests
     {
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(configured);
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
              .Returns(Task.CompletedTask);
         var site = Options.Create(new SiteIdentity { Name = "IsHaunted", BaseUrl = "https://ishaunted.test" });
         return (new ClientStatusMailer(email.Object, site, NullLogger<ClientStatusMailer>.Instance), email);
@@ -67,8 +67,8 @@ public sealed class ClientStatusMailerTests
         var (f, c) = await SeedAsync();
         var (mailer, email) = Build();
         string? subject = null, body = null;
-        email.Setup(e => e.SendAsync("client@example.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((_, s, b, _) => { subject = s; body = b; })
+        email.Setup(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "client@example.com"), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => { subject = m.Subject; body = m.HtmlBody; })
              .Returns(Task.CompletedTask);
 
         await using var db = await f.CreateDbContextAsync();
@@ -86,7 +86,7 @@ public sealed class ClientStatusMailerTests
         var (mailer, email) = Build();
         await using var db = await f.CreateDbContextAsync();
         await mailer.CaseStatusChangedAsync(db, c, c.Status, default);
-        email.Verify(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public sealed class ClientStatusMailerTests
         var (mailer, email) = Build();
         await using var db = await f.CreateDbContextAsync();
         await mailer.CaseStatusChangedAsync(db, c, CaseStatus.Proposed, default);
-        email.Verify(e => e.SendAsync("client@example.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-        email.Verify(e => e.SendAsync("unconfirmed@example.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        email.Verify(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "client@example.com"), It.IsAny<CancellationToken>()), Times.Once);
+        email.Verify(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "unconfirmed@example.com"), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class ClientStatusMailerTests
         var (mailer, email) = Build(configured: false);
         await using var db = await f.CreateDbContextAsync();
         await mailer.CaseStatusChangedAsync(db, c, CaseStatus.Proposed, default);
-        email.Verify(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class ClientStatusMailerTests
     {
         var (f, c) = await SeedAsync();
         var (mailer, email) = Build();
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
              .ThrowsAsync(new InvalidOperationException("SMTP said no"));
         await using var db = await f.CreateDbContextAsync();
         await mailer.CaseStatusChangedAsync(db, c, CaseStatus.Proposed, default);   // does not throw
@@ -127,8 +127,8 @@ public sealed class ClientStatusMailerTests
         var (f, c) = await SeedAsync();
         var (mailer, email) = Build();
         string? subject = null, body = null;
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((_, s, b, _) => { subject = s; body = b; })
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => { subject = m.Subject; body = m.HtmlBody; })
              .Returns(Task.CompletedTask);
         var visit = new Investigation { Id = Guid.NewGuid(), CaseId = c.Id, OrganizationId = c.OrganizationId, Title = "First visit",
                                         ScheduledDateTime = new DateTime(2026, 10, 25, 1, 0, 0, DateTimeKind.Utc), Location = "The cellar" };
@@ -192,8 +192,8 @@ public sealed class ClientStatusMailerTests
         var (mailer, email) = Build();
 
         var sentTo = new List<string>();
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((to, _, _, _) => sentTo.Add(to))
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => sentTo.Add(m.To))
              .Returns(Task.CompletedTask);
 
         await using var db = await f.CreateDbContextAsync();
@@ -209,8 +209,8 @@ public sealed class ClientStatusMailerTests
         var (mailer, email) = Build();
 
         var sentTo = new List<string>();
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((to, _, _, _) => sentTo.Add(to))
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => sentTo.Add(m.To))
              .Returns(Task.CompletedTask);
 
         var visit = new Investigation
@@ -248,8 +248,8 @@ public sealed class ClientStatusMailerTests
 
         var (mailer, email) = Build();
         var sentTo = new List<string>();
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .Callback<string, string, string, CancellationToken>((to, _, _, _) => sentTo.Add(to))
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => sentTo.Add(m.To))
              .Returns(Task.CompletedTask);
 
         await using var db = await f.CreateDbContextAsync();

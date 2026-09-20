@@ -75,6 +75,30 @@ public interface IBenPlatformClient
     /// <summary>Puts every given-up letter back in the queue — the button after fixing the relay.</summary>
     Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(CancellationToken token = default);
 
+    // ── Email templates (item 246) ───────────────────────────────────────────
+
+    /// <summary>Every letter the site sends, and whether somebody has written one.</summary>
+    Task<LoadResult<EmailTemplateSummaryRecord>> GetEmailTemplatesAsync(CancellationToken token = default);
+
+    /// <summary>One letter, with the tables, columns and ready-made tokens it may use.</summary>
+    Task<EmailTemplateDetailRecord?> GetEmailTemplateAsync(string kind, CancellationToken token = default);
+
+    /// <summary>Keeps what the author is working on. Nobody receives it.</summary>
+    Task<(EmailTemplateSavedRecord? Result, string? Error)> SaveEmailTemplateDraftAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default);
+
+    /// <summary>Makes the draft the letter people receive.</summary>
+    Task<(EmailTemplateSavedRecord? Result, string? Error)> PublishEmailTemplateAsync(
+        string kind, CancellationToken token = default);
+
+    /// <summary>Goes back to the letter the code writes.</summary>
+    Task<(EmailTemplateSavedRecord? Result, string? Error)> RevertEmailTemplateAsync(
+        string kind, CancellationToken token = default);
+
+    /// <summary>What the draft would look like, against made-up rows.</summary>
+    Task<EmailTemplatePreviewRecord?> PreviewEmailTemplateAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default);
+
     /// <summary>Sends one real test message and reports what the server said.</summary>
     Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
 

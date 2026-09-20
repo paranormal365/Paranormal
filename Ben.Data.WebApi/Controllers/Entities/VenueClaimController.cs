@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -346,7 +347,8 @@ public sealed class VenueClaimController : BenControllerBase
                  + "<p>It works for 24 hours. If you don't know who this is, don't share it — nothing "
                  + "happens without the code.</p>";
 
-        await _email.SendAsync(new EmailMessage(to, $"A code to confirm who runs {placeName}", body), ct);
+        await _email.SendAsync(new EmailMessage(to, $"A code to confirm who runs {placeName}", body,
+            Kind: MailKinds.VenueClaimCode.Key), ct);
     }
 
     private async Task TellReviewersAsync(Guid senderId, string subject, string body, CancellationToken ct)

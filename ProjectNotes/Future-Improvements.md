@@ -12998,3 +12998,195 @@ the thing that sends it, and changing a word is a deploy.
   most likely to want to change, and they are the two the outbox already carries a `Kind` for.
 
 Related: [[239]] for the outbox and the list screen it already designed.
+
+
+## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (OPEN — Ben, 2026-09-20)
+
+Ben, while item 246 was being built:
+
+> And qr codes for ghost tour tickets for the staff to scan when they arrive for the tour.
+
+> Maybe the qr code scanned would also link them to be able to use their phone on the investigation
+> for people who are not already able to log into an investigation because they are not official
+> group members on a public investigation, ghost tour or event.
+
+**Two asks, and the second is much larger than the first.** Worth separating before anybody starts.
+
+### What already exists, and what does not
+
+`EventPasses` (item 235) mints a token, renders a PNG with `QRCoder`, serves it anonymously at
+`/api/public/event-passes/{token}.png`, and `EventGuestMailer` draws it into the letter **as a data
+URI first** with a linked copy as the fallback — *"a linked picture that a mail client blocked is a
+guest with no pass"*. That machinery is done and is the right thing to copy.
+
+**A tour has none of it.** A tour's attendance hangs off `OrgCalendarEvent` through
+`OrgCalendarEventAttendee`, which has an `Id` and no token; `TourGuestMailer.SendSignUpAsync` takes
+an address and a name and knows nothing about a per-person credential. So the first ask needs: a
+token on the attendee (or a pass table beside it), the PNG endpoint, minting at sign-up, the token
+in the letter, and **something for a guide to scan it with** — the last being the part with no
+equivalent at all, since a hosted event's door is a screen built for staff at a venue.
+
+**Item 246 is ready for the letter half.** `MailKindInfo.Supplied` already carries per-letter values,
+`{PassImage}` and `{PassUrl}` are declared for `booking-decided`, and `TourSignUp` gains the same
+two the moment a tour has a pass to put in them.
+
+### The second ask is a different feature
+
+A scanned code that **admits somebody to the working session on their phone** — a guest on a public
+investigation, a walk, or an event — is not a ticket check. It is a **credential**, and it has to
+answer questions a ticket does not:
+
+- **What may they do?** Contribute photos and readings to that session only, presumably, and not
+  see the group's case, its client, or anything that outlives the night.
+- **For how long?** A pass scanned at 7pm should not still open anything next March. The session's
+  own window is the obvious bound.
+- **Who is it, and does it matter?** A walk-up guest may have no account at all
+  (`project_walkup_guest_signup` built exactly that path), so the credential cannot assume one.
+- **What happens to what they contribute** when the night ends and they were never a member? The
+  field archive rule already has an answer for public places; this is the same question from the
+  other side.
+- **What if the code is photographed and shared?** A ticket that is copied gets somebody in twice;
+  a credential that is copied gets a stranger into the session. That difference decides whether
+  scanning binds the pass to a device, and whether a guide can revoke one.
+
+**None of that is decided**, and it touches Field Kit, the public-investigation rules and the
+walk-up guest path.
+
+**Ben refined it the same day, and it moved out of this item entirely**: *"It is probably not an
+e-mail... so this is not an email feature but one we have for the staff."* It is now
+**[[248]]** — a code staff generate, show or print, and a guest scans. This item keeps only the
+ticket.
+
+### Suggested order
+
+1. Tour passes: token, PNG, minting at sign-up, `{PassImage}`/`{PassUrl}` on the tour letter.
+2. A guide's scanning screen — the smallest thing that answers "is this person on tonight's walk".
+
+
+## 248. A code staff hold up, and a guest's phone joins the investigation (OPEN — Ben, 2026-09-20)
+
+Ben, refining what had been the second half of [[247]]:
+
+> Maybe be able to generate a qr code for the employees to allow someone to scan with their phone
+> which would let the person scanning it to have credentials to use their phone for investigation
+> as well. It is probably not an e-mail. Maybe it is just something we let them generate and print
+> or generate and let others scan off their tablet, computer or phone... so this is not an email
+> feature but one we have for the staff.
+
+> So, if the user scans it and doesn't have the app, it directs them to download it on iphone or
+> ipad and then they have credentials.
+
+**What it is.** Not a ticket and not a letter: a guide or an investigator puts a code on a screen or
+a printed sheet, and anybody on tonight's walk points a phone at it and is working within seconds —
+contributing photos and readings to that session without being a member of the group and, quite
+possibly, without having an account at all.
+
+**Why it is the right shape.** Everything the site has for bringing somebody in assumes the site
+knows them first — an invitation to an address, a sign-up, a membership. The people this is for are
+standing in front of a guide in the dark. Anything needing a typed address, a confirmation letter
+and a password is not going to happen at the gate of a cemetery at 9pm, and that is exactly where
+the guests are.
+
+### What already exists
+
+- **Universal links are shipped** (item 209): `AppleAppSiteAssociation` serves the association file
+  and the app's entitlement covers the domain, with the claimed paths *deliberately narrower than
+  the parser*. `/join/*` would be a **server-side addition** — the file decides which paths open the
+  app, so no new App Store build is needed for the routing itself. (Installed phones cache the
+  association for a while, so it is not instant for existing installs.)
+- **QR rendering** (`EventPasses`, `QRCoder`) mints tokens and writes PNGs already.
+- **Walk-up guest sign-up** already accepts somebody with no account
+  ([[project_walkup_guest_signup]]), which is the closest existing answer to "who is this person".
+- **Field Kit** is the thing they would be using once they are in.
+
+### The three ways a scan can land, and only one is easy
+
+1. **iPhone or iPad with the app** — the universal link opens it, the code is redeemed, they are in.
+   This is the case that works.
+2. **iPhone or iPad without the app** — the link opens Safari instead, which shows a page offering
+   the App Store. **Apple has no deferred deep linking**: after installing, the app does not know
+   what they scanned. Nothing clever fixes this without a third party, so the honest design is that
+   **the printed sheet carries a short typed code beside the QR** and the app has a "have a code?"
+   box. Worth deciding early, because it changes what staff print.
+3. **Android, or a laptop** — no app exists, so the page has to say what this is and offer whatever
+   the browser can do. Possibly nothing, and saying so plainly beats a download link to an app they
+   cannot run.
+
+### What has to be decided
+
+- **What the credential lets them do**, and for how long. A session's own window is the obvious
+  bound; a code scanned at 7pm must not still open anything in March.
+- **Whether it binds to a device on first use.** A code on a printed sheet can be photographed. A
+  copied ticket gets somebody in twice; a copied credential gets a stranger into the session.
+- **Whether a guide can revoke one**, and whether they can see who is holding one tonight.
+- **What becomes of what a guest contributed** when the night ends and they were never a member.
+  The field archive rule answers this for public places; this is the same question from the other
+  side.
+- ~~**Whether the code is per session or per person.**~~ **DECIDED by Ben, 2026-09-20: one per
+  SESSION.** *"And for staff it is one point per session instead of one per person."* Which settles
+  more than it looks: revoking is then per session — a guide can end the night's code, not one
+  person's — and the device-binding question above becomes the only lever against a code that has
+  been photographed and passed on. It also makes the printed sheet a single artefact a guide can
+  hold up to a group, which is the thing that actually works in the dark.
+
+### Where it would live
+
+A SuperAdmin or group screen that generates the code for a session, shows it large enough to scan
+off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
+
+
+## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — 11 letters still unnamed)
+
+Ben's ask is recorded in full at [[245]]; this is what was built for it.
+
+### What works
+
+- **`MailKinds`** declares 35 letters — a stable key, what each is for, and **the tables a template
+  of that kind may read**. The context is the security boundary, not documentation. Ben chose it
+  over "every table with a column allowlist" (2026-09-20).
+- **`MailTokens`** resolves `{AppUsers.DisplayName}`, the ready-made `{Date}` `{Time}` `{FullDate}`
+  `{FullDateTime}` `{Year}` `{SiteName}` `{SiteUrl}`, and per-letter values the mailer hands in.
+  All in the READER's zone; all HTML-escaped except the few the site itself generates.
+- **`EmailTemplates` + `MailComposer`** — draft, publish, revert. **No row means the built-in
+  letter**, which is the whole safety story: a template only replaces one, deleting the row is the
+  revert, and every failure path falls back. A feature for editing letters must not become a way to
+  stop them going.
+- **`MailTemplateSchema`** is the second gate. `AppUser` derives from ASP.NET Identity's
+  `IdentityUser`, so `PasswordHash`, `SecurityStamp` and `ConcurrencyStamp` are real columns on a
+  table letters legitimately carry, and **none of them appears in the entity's own file**. A table
+  allowlist alone offers all three.
+- **`MailBlocks`** — heading, paragraph, card, two columns with the logo either side, button,
+  items-and-total, divider, footer. Tables and inline styles; the tests assert the constraints
+  rather than the markup, because a browser renders unsafe email HTML perfectly and Outlook does
+  not.
+- **`MailStarters`** — seven whole letters to start from, each checked against every kind it is
+  offered for.
+- The **editor** at `/admin/email-templates`, with the table → column → Add token dropdowns, the
+  block palette, the starters, and a preview against invented rows in a sandboxed frame.
+
+### Still to do
+
+- **11 of the 35 kinds are declared but not yet wired to a sender**: AccountMadeForYou,
+  RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable, TourReminder, SessionMoved,
+  SessionCancelled, SessionPromoted, PaymentReceipt, SubscriptionLapsing, PlanChanged. Most go
+  through `PlatformMessageService.SendAsync` rather than `IEmailService` directly — that service
+  sends a letter AND a notification, so giving it a kind is a wider change than adding an argument,
+  and it is the right next slice.
+- **A person still has no time zone.** Everything renders in the site's until one exists; Ben chose
+  "ask the person, default to the site's" (2026-09-20).
+- **Only three letters actually consult a template today** (the two identity ones and the reset).
+  The rest declare a kind, which is what the outbox groups by — consulting the composer is one call
+  per mailer and wants doing where each letter's tables are in hand.
+- The `EmailTemplates` migration is **not applied anywhere**.
+
+### Two mistakes worth not repeating
+
+**Every mailer converted from the three-argument `SendAsync` breaks the tests that mock it.** It
+happened twice (ClientStatusMailer, then AccountCreationService) and will happen again for each of
+the eleven. The fix is mechanical — watch `It.IsAny<EmailMessage>()` instead — but it is not
+optional, and the tests fail in a way that looks like the mail stopped.
+
+**A refusal must be a plain sentence, not a record.** `WebApiClient.SendExpectingReasonAsync` drops
+a non-2xx body starting with `{` so a ProblemDetails blob can never reach a person, and it drops a
+JSON refusal with it. The page then says "couldn't save that" instead of the reason.
+

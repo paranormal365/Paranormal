@@ -101,4 +101,24 @@ public static class BenEmailLayout
             </html>
             """;
     }
+
+    /// <summary>
+    /// Just the action button, for a written template that wants the site's own one (item 246).
+    /// </summary>
+    /// <remarks>
+    /// The same markup <see cref="Wrap"/> builds, offered on its own so a template carries an
+    /// identical button rather than an author hand-rolling one that renders differently in
+    /// Outlook — which is the whole failure mode email HTML has.
+    /// </remarks>
+    public static string ActionButton(string text, string url)
+        => $"""
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 16px 0;">
+              <tr><td align="center" bgcolor="#2e6b34" style="border-radius:6px;">
+                <a href="{WebUtility.HtmlEncode(url)}"
+                   style="display:inline-block;background-color:#2e6b34;color:#ffffff;
+                          font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;
+                          text-decoration:none;padding:12px 28px;border-radius:6px;">{WebUtility.HtmlEncode(text)}</a>
+              </td></tr>
+            </table>
+            """;
 }

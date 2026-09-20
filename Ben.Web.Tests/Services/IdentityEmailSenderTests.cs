@@ -37,7 +37,18 @@ public class IdentityEmailSenderTests
     public async Task With_no_mail_server_the_link_is_logged_so_the_flow_can_still_be_finished()
     {
         var log    = new CapturingLogger();
-        var sender = new IdentityEmailSender(new NoMailServer(), log, Options.Create(new SiteIdentity()));
+        // A composer over a database that will not answer, which is the right shape here: this
+        // test is about a missing MAIL server, and the composer must not change that story. It
+        // falls back to the built-in letter on any failure, so the assertions below still read
+        // the words the code writes.
+        var sender = new IdentityEmailSender(new NoMailServer(), log, Options.Create(new SiteIdentity()),
+            new Ben.Data.WebApi.Services.Mail.MailComposer(
+                new NoDatabase(),
+                new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()),
+                Options.Create(new SiteIdentity()),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                    Ben.Data.WebApi.Services.Mail.MailComposer>.Instance));
         var user   = new AppUser { Id = Guid.NewGuid(), Email = "new@example.com", UserName = "new@example.com" };
         const string link = "http://localhost:5078/confirm-email?userId=1&code=abc";
 
@@ -51,5 +62,17 @@ public class IdentityEmailSenderTests
         var warning = Assert.Single(log.Lines, l => l.Level == LogLevel.Warning);
         Assert.Contains("Use this instead", warning.Message);
         Assert.Contains(link, warning.Message);
+    }
+
+    /// <summary>No database, so the composer always falls back — see the note at its use.</summary>
+    private sealed class NoDatabase
+        : Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>
+    {
+        public Ben.Data.Source.Context.BenDataContext CreateDbContext()
+            => throw new InvalidOperationException("No database in this test.");
+
+        public Task<Ben.Data.Source.Context.BenDataContext> CreateDbContextAsync(
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("No database in this test.");
     }
 }

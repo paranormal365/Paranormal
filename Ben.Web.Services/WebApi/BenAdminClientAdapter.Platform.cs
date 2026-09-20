@@ -453,6 +453,37 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
                HttpMethod.Post, "/api/admin/mail/outbox/retry-failed", new { }, token);
 
+    // ── Email templates (item 246) ───────────────────────────────────────────
+
+    public Task<LoadResult<EmailTemplateSummaryRecord>> GetEmailTemplatesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<EmailTemplateSummaryRecord>("/api/admin/email-templates", token);
+
+    public Task<EmailTemplateDetailRecord?> GetEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.GetAsync<EmailTemplateDetailRecord>(
+               $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}", token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> SaveEmailTemplateDraftAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveEmailTemplateBody, EmailTemplateSavedRecord>(
+               HttpMethod.Put, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/draft", body, token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> PublishEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EmailTemplateSavedRecord>(
+               HttpMethod.Post, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/publish", new { }, token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> RevertEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EmailTemplateSavedRecord>(
+               HttpMethod.Delete, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}", new { }, token);
+
+    public Task<EmailTemplatePreviewRecord?> PreviewEmailTemplateAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default)
+        => _api.PostAsync<SaveEmailTemplateBody, EmailTemplatePreviewRecord>(
+               $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/preview", body, token);
+
     public Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default)
         => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);
 

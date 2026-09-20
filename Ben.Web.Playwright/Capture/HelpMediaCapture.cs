@@ -180,6 +180,35 @@ public sealed class HelpMediaCapture : BenTestBase
     /// <summary>An iPhone's height, so a narrow shot is a phone and not a letterbox.</summary>
     private const int PhoneHeight = 812;
 
+    /// <summary>
+    /// Waits for the page to stop moving, without insisting the network goes quiet.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>NetworkIdle can never arrive on this site, and it is not the page's fault.</b>
+    /// Signing in lands on the home page, which starts fetching an 836 KB hero image; navigating
+    /// on to an admin screen cancels it, and a cancelled request can leave the idle state
+    /// unreachable for ever. Measured: one request still counted as in flight five seconds after
+    /// everything had rendered, and it was that image.</para>
+    ///
+    /// <para>So the wait is best-effort and the real guarantee is <c>proves</c> — the words the
+    /// picture is supposed to contain. A capture that hangs for thirty seconds and then fails on a
+    /// page that looks perfect teaches nobody anything, which is the same complaint this fixture
+    /// makes about empty screenshots.</para>
+    /// </remarks>
+    private async Task SettleAsync()
+    {
+        try
+        {
+            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 5_000 });
+        }
+        catch (TimeoutException)
+        {
+            // Expected on any page reached after a login bounce; see above.
+        }
+
+        await WaitUntilLoadedAsync();
+    }
+
     private async Task ShootAtCurrentSizeAsync(
         string slug, string name, bool gated, string? selector, string? proves, Around? around)
     {
@@ -189,14 +218,12 @@ public sealed class HelpMediaCapture : BenTestBase
         // the picture is supposed to show turns that into a failed capture.
         if (proves is not null)
         {
-            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-            await WaitUntilLoadedAsync();
+            await SettleAsync();
             await Expect(Page.GetByText(proves, new() { Exact = false }).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
         }
 
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await WaitUntilLoadedAsync();
+        await SettleAsync();
 
         await Page.AddStyleTagAsync(new() { Content = HideOperatorAvatarCss });
 
@@ -295,7 +322,7 @@ public sealed class HelpMediaCapture : BenTestBase
     private async Task GoAsync(string route)
     {
         await Page.GotoAsync($"{BaseUrl}{route}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await SettleAsync();
     }
 
     // ── Everyone ──────────────────────────────────────────────────────────────
@@ -3246,5 +3273,95 @@ public sealed class HelpMediaCapture : BenTestBase
         }
 
         return (orgId, publicationId!, urlName!, postId!);
+    }
+
+    /// <summary>
+    /// The letters screen: writing one, and reading one that went.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both are SuperAdmin screens, so both are gated — embedded in the services assembly
+    /// rather than served from wwwroot, for the same reason the text is.</para>
+    ///
+    /// <para><b>The editor is photographed with a starter loaded and the dropdowns open on a real
+    /// table</b>, because a picture of an empty editor shows nothing about what the feature is.
+    /// The whole point a reader needs to see is that picking a table fills the column list.</para>
+    ///
+    /// <para><b>No letter is published</b>, and the draft is reverted at the end. A capture run
+    /// that left a template behind would change what every person on this database receives, and
+    /// screenshots are taken on the testing copy that the walk-throughs also use.</para>
+    /// </remarks>
+    [Test]
+    [Description("site-administration: writing a letter, and reading one that was sent.")]
+    public async Task Capture_EmailTemplates()
+    {
+        await LogoutAsync();
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        try
+        {
+            await GoAsync("/admin/email-templates");
+
+            // The reset letter: it has a starter, a required token and a real table behind it, so
+            // one screen shows every part of the feature at once.
+            // ClickUntil, not a plain click: this page is Blazor Server, and a click that lands
+            // before the circuit is live does nothing at all. A capture then waits out its whole
+            // timeout on a page that looks perfectly fine.
+            await ClickUntilAsync(
+                Page.GetByText("Reset your password", new() { Exact = true }).First,
+                Page.Locator("[data-testid=template-body]"));
+
+            await ClickUntilAsync(
+                Page.GetByRole(AriaRole.Button, new() { Name = "Reset a password" }),
+                Page.Locator("[data-testid=insert-supplied]").First);
+
+            await Page.SelectOptionAsync("#token-table", "AppUsers");
+            await Expect(Page.Locator("#token-column option")).Not.ToHaveCountAsync(1);
+            await Page.SelectOptionAsync("#token-column", "DisplayName");
+
+            await ShootAsync("site-administration", "email-template-editor.png",
+                gated: true, proves: "Add token");
+
+            // And what it looks like filled in, which is the answer to "will this work".
+            await ClickUntilAsync(
+                Page.Locator("[data-testid=template-preview]"),
+                Page.Locator("[data-testid=preview-subject]"));
+
+            // Proves on the panel's own caption, NOT on the made-up name: the letter is drawn in a
+            // sandboxed iframe, and GetByText cannot see inside one. Naming a word from the letter
+            // would fail for ever while the picture was perfectly fine.
+            await ShootAsync("site-administration", "email-template-preview.png",
+                gated: true, proves: "Made-up details");
+        }
+        finally
+        {
+            // Never leave a draft behind on a shared database.
+            if (await SuperAdminTokenAsync() is { } token)
+            {
+                using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+                http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+                await http.DeleteAsync("/api/admin/email-templates/reset-your-password");
+            }
+        }
+
+        // Reading a letter that actually went — the other half of the same screen's job.
+        await GoAsync("/admin/mail");
+        var all = Page.GetByRole(AriaRole.Button, new() { Name = "All", Exact = true });
+        if (await all.CountAsync() > 0) await all.First.ClickAsync();
+
+        var read = Page.Locator("[data-testid=outbox-view]");
+        if (await read.CountAsync() > 0)
+        {
+            await ClickUntilAsync(
+                read.First,
+                Page.Locator("[data-testid=letter-body], [data-testid=letter-scrubbed]").First);
+
+            await ShootAsync("site-administration", "reading-a-letter.png",
+                gated: true, proves: "recorded");
+        }
+        else
+        {
+            TestContext.Out.WriteLine(
+                "No letter with a body on this database, so reading-a-letter.png was not taken.");
+        }
     }
 }

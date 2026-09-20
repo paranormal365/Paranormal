@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -97,7 +98,7 @@ public sealed class EventGuestMailer
                 Attachments: attachments,
                 // A guest hitting reply means to reach the venue whose spare room they are sleeping
                 // in, not our support address.
-                ReplyTo: ev?.Organization?.PublicEmail), ct);
+                ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key), ct);
 
             // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
             // can see at a glance whose replacement has not gone out yet.
@@ -249,7 +250,7 @@ public sealed class EventGuestMailer
             to,
             $"The places you chose at {ev?.Name ?? "the event"} have gone back",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldLapsed.Key), ct);
 
         return true;
     }
@@ -292,7 +293,7 @@ public sealed class EventGuestMailer
             to,
             $"We've passed your request for {ev?.Name ?? "the event"} on",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingAsked.Key), ct);
 
         return true;
     }
@@ -336,7 +337,7 @@ public sealed class EventGuestMailer
             to,
             $"Your places at {ev?.Name ?? "the event"} are held",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldPlaced.Key), ct);
 
         return true;
     }
@@ -390,7 +391,7 @@ public sealed class EventGuestMailer
             pick.Email,
             $"Hold your places at {ev.Name} within 15 minutes",
             body.ToString(),
-            ReplyTo: ev.Organization?.PublicEmail), ct);
+            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.ChooseYourEmails.Key), ct);
 
         return true;
     }
@@ -414,7 +415,7 @@ public sealed class EventGuestMailer
 
         var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl);
         await _email.SendAsync(new EmailMessage(to, subject, body,
-            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail), ct);
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventThankYou.Key), ct);
         return true;
     }
 
@@ -519,7 +520,7 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -570,7 +571,7 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -620,7 +621,7 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventGoingAhead.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -691,7 +692,7 @@ public sealed class EventGuestMailer
             to,
             $"Can you help at {ev?.Name ?? "an event"}?",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.StaffInvite.Key), ct);
 
         return true;
     }
@@ -937,7 +938,7 @@ public sealed class EventGuestMailer
                      + $"<a href=\"{page}\">{Safe(ev.Name)}</a>. Reply to write back to {Safe(organizationName)}.</p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo, Kind: MailKinds.EventAnnouncement.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -981,7 +982,7 @@ public sealed class EventGuestMailer
                      + $"<p><a href=\"{appeal}\">Appeal this decision</a></p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body, Kind: MailKinds.GuestRemoved.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1014,7 +1015,7 @@ public sealed class EventGuestMailer
             try
             {
                 await _email.SendAsync(new EmailMessage(to,
-                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body), ct);
+                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body, Kind: MailKinds.AppealAnswered.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1049,7 +1050,7 @@ public sealed class EventGuestMailer
             try
             {
                 await _email.SendAsync(new EmailMessage(to, subject, greeting + body,
-                    ReplyTo: session.HostedEvent.Organization?.PublicEmail), ct);
+                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: MailKinds.AppealAnswered.Key), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
