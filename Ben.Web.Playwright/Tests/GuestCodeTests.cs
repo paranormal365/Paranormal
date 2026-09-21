@@ -48,14 +48,33 @@ public sealed class GuestCodeTests : BenTestBase
         return (orgId, investigationId);
     }
 
-    /// <summary>The code on screen, making one first if the visit has none.</summary>
-    private async Task<string> EnsureACodeAsync()
+    /// <summary>
+    /// A code nobody has used yet.
+    /// </summary>
+    /// <remarks>
+    /// Always a FRESH one, never whatever is on screen. These walks share one seeded
+    /// investigation, and one of them revokes a holder's pass — which is per person per code, so
+    /// a later walk reusing the same sheet was correctly refused with "the guide took that pass
+    /// back" and failed on the product doing exactly what it should. Rotating is also the cheapest
+    /// isolation available here: it is a button the guide already has.
+    /// </remarks>
+    private async Task<string> AFreshCodeAsync()
     {
-        var make = Page.Locator("#join-code-make");
-        if (await make.CountAsync() > 0)
-            await ClickUntilAsync(make, Page.Locator("#join-code-typed"));
-
         var typed = Page.Locator("#join-code-typed");
+        var rotate = Page.Locator("#join-code-rotate");
+
+        if (await rotate.CountAsync() > 0)
+        {
+            var before = (await typed.InnerTextAsync()).Trim();
+            await rotate.ClickAsync();
+            // The sheet is replaced in place, so the only signal is the code itself changing.
+            await Assertions.Expect(typed).Not.ToHaveTextAsync(before);
+        }
+        else
+        {
+            await ClickUntilAsync(Page.Locator("#join-code-make"), typed);
+        }
+
         await Assertions.Expect(typed).ToBeVisibleAsync();
         return (await typed.InnerTextAsync()).Trim();
     }
@@ -85,7 +104,7 @@ public sealed class GuestCodeTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await AnInvestigationAsync();
 
-        var code = await EnsureACodeAsync();
+        var code = await AFreshCodeAsync();
 
         // Both halves, because they are for different people: the camera reads the picture, and
         // somebody who had to install the app first types the short one.
@@ -108,7 +127,7 @@ public sealed class GuestCodeTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         await AnInvestigationAsync();
-        var code = await EnsureACodeAsync();
+        var code = await AFreshCodeAsync();
 
         await LogoutAsync();
 
@@ -136,7 +155,7 @@ public sealed class GuestCodeTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         var (orgId, investigationId) = await AnInvestigationAsync();
-        var code = await EnsureACodeAsync();
+        var code = await AFreshCodeAsync();
 
         await LoginAsync(SoloEmail, SoloPassword);
 
@@ -169,7 +188,7 @@ public sealed class GuestCodeTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         var (orgId, investigationId) = await AnInvestigationAsync();
-        var code = await EnsureACodeAsync();
+        var code = await AFreshCodeAsync();
 
         await LoginAsync(SoloEmail, SoloPassword);
         await TypeTheCodeAsync(code, Page.Locator("#tonight-join"));

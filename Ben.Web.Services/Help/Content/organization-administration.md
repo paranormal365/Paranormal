@@ -294,6 +294,8 @@ phone, or print it and pin it to the gate.
 
 Anybody who scans it is asked to sign in, and then they are on tonight's investigation.
 
+![The sheet a guide holds up](help-media:organization-administration/guest-code.png)
+
 ### What a guest can and cannot do
 
 A guest code is not a way into your group. Somebody holding one can:

@@ -79,7 +79,7 @@
                      class="img-fluid" style="max-width:280px; image-rendering:pixelated;" />
 
                 <div class="mt-3">
-                    <div class="text-secondary small">Or type this at @TypeItAt</div>
+                    <div class="text-secondary small">Or type this at @_code.TypeItAt</div>
                     <div class="fw-bold" id="join-code-typed"
                          style="font-size:2.25rem; letter-spacing:.15em; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">
                         @_code.TypedCode
@@ -177,12 +177,6 @@
 
     private static int HoursText => 12;
 
-    /// <summary>Where somebody types the code when the camera or the app cannot take them there.</summary>
-    /// <remarks>
-    /// Read off the sheet by somebody who has just installed the app, so it is the shortest
-    /// address on the site that can accept a code.
-    /// </remarks>
-    private string TypeItAt => $"{new Uri(NavManager.BaseUri).Host}/tonight";
 
     protected override async Task OnInitializedAsync()
     {

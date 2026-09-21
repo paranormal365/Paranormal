@@ -167,6 +167,34 @@ public sealed class InvestigationJoinCodeController : BenControllerBase
             : Forbid();
     }
 
+    /// <summary>
+    /// Where the sheet sends somebody, as an address a camera and a person can both use.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The site's own address, not the browser's.</b> This is printed and read off paper
+    /// by a stranger on their own phone; whatever host the guide's tablet happens to be using —
+    /// a LAN address, a machine name — is not somewhere that phone can go.</para>
+    ///
+    /// <para>The configured origin first, exactly as every emailed link on the site resolves.
+    /// Falling back to this request's own origin is right for the deployment this site actually
+    /// runs — the API and the website share one origin behind a reverse proxy, which is what the
+    /// empty CORS allow-list means — and it keeps a code scannable on a host where nobody has set
+    /// the origin, instead of putting a relative path in a QR that no camera can follow.</para>
+    /// </remarks>
+    private string JoinUrl(string path)
+    {
+        var configured = _site.AbsoluteUrl(path);
+        if (Uri.IsWellFormedUriString(configured, UriKind.Absolute)) return configured;
+
+        return $"{Request.Scheme}://{Request.Host}{path}";
+    }
+
+    /// <summary>The printed address, without its scheme.</summary>
+    private static string WithoutScheme(string absolute)
+        => Uri.TryCreate(absolute, UriKind.Absolute, out var uri)
+            ? uri.Authority + uri.AbsolutePath
+            : absolute;
+
     private async Task<InvestigationJoinCodeRecord> ToRecordAsync(
         BenDataContext db, Source.Entities.InvestigationJoinCode code, CancellationToken ct)
         => new(code.Id, code.InvestigationId, code.Token, code.TypedCode,
@@ -178,7 +206,10 @@ public sealed class InvestigationJoinCodeController : BenControllerBase
                //
                // Drawn by the same renderer a tour pass and a hosted event's pass use, so "why
                // does my code not scan" has one place to look.
-               Services.Events.EventPasses.DataUri(_site.AbsoluteUrl($"/tonight/{code.Token}"), 6),
+               Services.Events.EventPasses.DataUri(JoinUrl($"/tonight/{code.Token}"), 6),
+               // Host and path only: the sheet is read aloud and typed, so every character that
+               // is not needed to reach the page is a character somebody gets wrong in the dark.
+               WithoutScheme(JoinUrl("/tonight")),
                code.ExpiresUtc, code.RevokedUtc,
                await db.InvestigationGuestPasses
                    .CountAsync(p => p.InvestigationJoinCodeId == code.Id && p.RevokedUtc == null, ct));

@@ -16,6 +16,12 @@ namespace Ben.Service.Models.Entities;
 /// tablet, and would need a door open to anybody holding it; the bytes are a few kilobytes and
 /// the screen already has the record.</para>
 /// </param>
+/// <param name="TypeItAt">
+/// The address printed under the typed code, for somebody to type.
+/// <para>The SITE's own address, not the one the guide's browser happens to be using. This is
+/// read off paper by a stranger on their own phone, where "localhost" or a machine's LAN address
+/// is not somewhere they can go.</para>
+/// </param>
 /// <param name="Holders">How many people are working tonight on the strength of this code.</param>
 public sealed record InvestigationJoinCodeRecord(
     Guid Id,
@@ -23,6 +29,7 @@ public sealed record InvestigationJoinCodeRecord(
     string Token,
     string TypedCode,
     string QrDataUri,
+    string TypeItAt,
     DateTime ExpiresUtc,
     DateTime? RevokedUtc,
     int Holders);
