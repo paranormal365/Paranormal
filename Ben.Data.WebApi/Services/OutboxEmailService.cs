@@ -42,6 +42,7 @@ public sealed class OutboxEmailService : IEmailService
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _sender;
     private readonly SiteIdentity _site;
+    private readonly Mail.MailComposer _composer;
     private readonly ILogger<OutboxEmailService> _log;
 
     /// <summary>
@@ -75,12 +76,20 @@ public sealed class OutboxEmailService : IEmailService
     /// to every request before <c>[Authorize]</c> ran. That is what the production smoke checks
     /// caught on 2026-09-20, and what <c>OptionsAreNeverInjectedBareTests</c> now refuses.</para>
     /// </param>
+    /// <param name="composer">
+    /// What turns a written template into this letter's words.
+    /// <para><b>Here rather than in each mailer</b> (item 246). A letter gains a template by
+    /// consulting the composer before it sends, and three of thirty-five did — because doing it
+    /// meant editing each mailer, and each edit broke the tests mocking its sender. Every letter
+    /// already passes through here, so this is the one place that has to know how.</para>
+    /// </param>
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
         IOptions<SiteIdentity> site,
+        Mail.MailComposer composer,
         ILogger<OutboxEmailService> log)
-    { _db = db; _sender = sender; _site = site.Value; _log = log; }
+    { _db = db; _sender = sender; _site = site.Value; _composer = composer; _log = log; }
 
     /// <summary>
     /// Whether this machine could actually send. Unchanged in meaning, and still worth asking.
@@ -99,6 +108,8 @@ public sealed class OutboxEmailService : IEmailService
     {
         try
         {
+            message = await WithAnyTemplateAsync(message, ct);
+
             await using var db = await _db.CreateDbContextAsync(ct);
             db.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
             await db.SaveChangesAsync(ct);
@@ -130,6 +141,49 @@ public sealed class OutboxEmailService : IEmailService
     /// editor, or a body already wrapped in the shell. Two headers stacked up would be worse than
     /// none, and the check is on the icon's file name, which both carry and nothing else does.</para>
     /// </remarks>
+    /// <summary>
+    /// The letter as a written template would have it, or exactly as it arrived.
+    /// </summary>
+    /// <remarks>
+    /// <para>Applied at QUEUE time, not at send time, because the outbox row is what the
+    /// administration screen shows somebody who asks "what did we actually send" — and a row
+    /// holding the built-in words while the template's words went out would answer that question
+    /// wrongly.</para>
+    ///
+    /// <para>A letter with no declared kind is left alone. The outbox still guesses a kind from
+    /// the subject for grouping, but a template keyed to a guess would stop applying the day
+    /// somebody reworded a subject line, which is a worse failure than having no template.</para>
+    /// </remarks>
+    private async Task<EmailMessage> WithAnyTemplateAsync(EmailMessage message, CancellationToken ct)
+    {
+        if (message.Kind is not { Length: > 0 } kind || MailKinds.Find(kind) is not { } info)
+            return message;
+
+        var tables = message.Payload?.Tables
+            ?? new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+
+        var supplied = message.Payload?.Supplied?.ToDictionary(
+            pair => pair.Key,
+            pair => (pair.Value.Value, pair.Value.IsHtml),
+            StringComparer.OrdinalIgnoreCase);
+
+        var (subject, html) = await _composer.ComposeAsync(
+            info, tables, SiteZone, message.Subject, message.HtmlBody,
+            DateTime.UtcNow, ct, supplied);
+
+        return message with { Subject = subject, HtmlBody = html };
+    }
+
+    /// <summary>The clock the site keeps, for a template's date and time tokens.</summary>
+    private static TimeZoneInfo SiteZone
+    {
+        get
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(Ben.Data.Common.Constants.HouseClock.ZoneId); }
+            catch (Exception) { return TimeZoneInfo.Utc; }
+        }
+    }
+
     internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc, SiteIdentity? site = null)
     {
         var body = Headed(message.HtmlBody ?? string.Empty, site, message.TimesShownInZone);
