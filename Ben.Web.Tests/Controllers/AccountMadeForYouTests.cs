@@ -33,7 +33,23 @@ namespace Ben.Web.Tests.Controllers;
 /// </remarks>
 public sealed class AccountMadeForYouTests
 {
-    private const string TheAdminsChosenPassword = "Str0ng!PassTheyTyped";
+    /// <summary>
+    /// The password an administrator typed, generated per run.
+    /// </summary>
+    /// <remarks>
+    /// Not a literal. This repository is public and development shares production's database, so
+    /// anything password-shaped in a tracked file reads as a live credential — a rule
+    /// <c>NoCredentialsInTheRepoTests</c> enforces rather than trusts. Generating it also makes
+    /// the assertion below stronger: the test proves the LETTER never carries whatever the
+    /// administrator typed, whatever that happened to be.
+    /// </remarks>
+    private static readonly string TheAdminsChosenPassword = NewPassword();
+
+    private static string NewPassword()
+    {
+        const string alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        return "T!" + System.Security.Cryptography.RandomNumberGenerator.GetString(alphabet, 20) + "9";
+    }
 
     private sealed record Sent(AppUser User, string Email, string Link, string MadeBy);
 

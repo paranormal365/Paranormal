@@ -18,6 +18,30 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-21
 
+- You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
+  public location** is on the Places tab of what's near you. Until now a place only appeared as a
+  side effect of somebody's case or investigation, so somewhere nobody had worked yet could not be
+  named at all.
+- On a public location's page, anybody signed in can add a photograph, a recording or a video with
+  a line about what it is. It joins what groups have published from their own investigations there.
+  Everything added is looked at first, and the page tells you whether yours is showing yet.
+- Homes are not added this way, and cannot be. A private residence gets its page through the group
+  a client invited.
+- Evidence at a public location can be voted on — something here, can't tell, or not convinced —
+  and the page adds it up: how many pieces it holds, how many votes, and what share falls each way.
+  A file counts once however it got there, so the same photograph on two routes is one piece of
+  evidence and not two.
+- Places are not ranked against each other, and will not be. A place shows its own figures.
+- A public location's page can say what the place is — when it was built, who lived there, what it
+  is now. Anybody signed in can write it and anybody after them can improve it.
+- You can add photographs of the building itself as well as evidence: the frontage, the grounds,
+  the rooms in daylight. They are kept apart, never voted on and never counted, because a picture
+  showing you what a house looks like and a picture somebody thinks has a figure in it are two
+  different claims.
+- The place's page also charts the evidence added there month by month.
+- Voting on a piece of evidence now answers with the right overall number straight away. It used to
+  come back as zero until the page was reloaded.
+
 - If an account is ever made for you before you asked for one, you are now told. The email names
   who set it up and carries a button that puts the account in your hands alone. It is one of the
   few emails that cannot be turned off.

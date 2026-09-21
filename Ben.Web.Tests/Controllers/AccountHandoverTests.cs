@@ -26,6 +26,13 @@ public sealed class AccountHandoverTests
 {
     private const string Code = "the-reset-token";
 
+    /// <summary>A password per run — see the note in <c>AccountMadeForYouTests</c>.</summary>
+    private static string NewPassword()
+    {
+        const string alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        return "T!" + System.Security.Cryptography.RandomNumberGenerator.GetString(alphabet, 20) + "9";
+    }
+
     private static string Encoded => WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(Code));
 
     private static (PublicAccountHandoverController Ctrl, Mock<UserManager<AppUser>> Users, AppUser User)
@@ -62,7 +69,7 @@ public sealed class AccountHandoverTests
         var (ctrl, _, user) = Build(confirmed: false);
 
         var result = await ctrl.TakeOver(
-            new AccountHandoverRequest("newcomer@example.com", Encoded, "TheOwn3rsChoice!"), default);
+            new AccountHandoverRequest("newcomer@example.com", Encoded, NewPassword()), default);
 
         // The whole reason this endpoint exists. Identity's reset would have refused here.
         Assert.IsType<OkResult>(result);
@@ -74,7 +81,7 @@ public sealed class AccountHandoverTests
         var (ctrl, users, user) = Build(confirmed: false);
 
         await ctrl.TakeOver(
-            new AccountHandoverRequest("newcomer@example.com", Encoded, "TheOwn3rsChoice!"), default);
+            new AccountHandoverRequest("newcomer@example.com", Encoded, NewPassword()), default);
 
         // The code went to that address and nowhere else, so holding it IS the proof. Recording
         // something just demonstrated, not something an administrator asserted.
@@ -90,7 +97,7 @@ public sealed class AccountHandoverTests
         var result = await ctrl.TakeOver(
             new AccountHandoverRequest("newcomer@example.com",
                 WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("a-stale-token")),
-                "TheOwn3rsChoice!"), default);
+                NewPassword()), default);
 
         Assert.IsType<BadRequestObjectResult>(result);
         Assert.False(user.EmailConfirmed);
@@ -103,10 +110,10 @@ public sealed class AccountHandoverTests
         var (ctrl, _, _) = Build();
 
         var unknown = await ctrl.TakeOver(
-            new AccountHandoverRequest("nobody@example.com", Encoded, "TheOwn3rsChoice!"), default);
+            new AccountHandoverRequest("nobody@example.com", Encoded, NewPassword()), default);
         var badCode = await ctrl.TakeOver(
             new AccountHandoverRequest("newcomer@example.com",
-                WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("wrong")), "TheOwn3rsChoice!"),
+                WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("wrong")), NewPassword()),
             default);
 
         // No oracle. Whether an address is registered here is not a thing this may leak, which is
@@ -124,7 +131,7 @@ public sealed class AccountHandoverTests
         // A mail client that wrapped the link mangles the code rather than losing it, and a
         // FormatException escaping here would be a 500 on a page anybody can reach.
         var result = await ctrl.TakeOver(
-            new AccountHandoverRequest("newcomer@example.com", "not!base64url!", "TheOwn3rsChoice!"),
+            new AccountHandoverRequest("newcomer@example.com", "not!base64url!", NewPassword()),
             default);
 
         Assert.IsType<BadRequestObjectResult>(result);

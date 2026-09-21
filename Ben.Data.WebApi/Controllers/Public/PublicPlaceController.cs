@@ -47,7 +47,7 @@ public sealed class PublicPlaceController : ControllerBase
             .Select(p => new
             {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind, p.Description,
             })
             .FirstOrDefaultAsync(ct);
 
@@ -56,7 +56,7 @@ public sealed class PublicPlaceController : ControllerBase
         var place = PlaceDisclosure.Public(
             stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
             stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-            stored.GeocodeNote, stored.Kind);
+            stored.GeocodeNote, stored.Kind, stored.Description);
 
         // An anonymous caller belongs to no organizations and has investigated nowhere, so the
         // shared predicate resolves to "public only" on its own. No second rule to keep in step.
@@ -96,7 +96,25 @@ public sealed class PublicPlaceController : ControllerBase
             // anonymously on purpose, so it cannot know the reader; a signed-in one asks
             // PlaceController.GetPosts instead. Saying so plainly beats a value that looks like an
             // answer and never is.
-            CanPost: false));
+            CanPost: false,
+            // Same set the serving door will hand over, read from the one predicate.
+            AddedEvidence: await PlaceEvidencePublication.Showable(db, id, PlaceMediaKind.Evidence)
+                .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
+                    e.Id, e.UploadFileId, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
+                    e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
+                    e.DateCreated))
+                .ToListAsync(ct),
+            // False for the same reason CanPost is: this endpoint is anonymous and cannot know
+            // the reader. The page asks its own signed-in state and the kind of place, which is
+            // the whole of the rule — anybody signed in may add, at a public location.
+            CanAddEvidence: false,
+            Figures: await PlaceEvidenceTally.ForPlaceAsync(db, id, ct),
+            Pictures: await PlaceEvidencePublication.Showable(db, id, PlaceMediaKind.AboutThePlace)
+                .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
+                    e.Id, e.UploadFileId, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
+                    e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
+                    e.DateCreated))
+                .ToListAsync(ct)));
     }
 
     /// <summary>
@@ -293,7 +311,28 @@ public sealed record PublicPlaceResponse(
     /// <summary>The latest posts about this place (2026-09-17), newest first.</summary>
     IReadOnlyList<FeedPostRecord>? Posts = null,
     /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
-    bool CanPost = false);
+    bool CanPost = false,
+    /// <summary>
+    /// Files people added straight to this place, with no investigation behind them (item 250).
+    /// </summary>
+    /// <remarks>
+    /// Trailing and optional, like every addition before it, so a client built before this simply
+    /// does not draw the section. Distinct from <c>EventEvidence</c>, which is what a guest
+    /// offered at an event — same place, different route, and the page says which.
+    /// </remarks>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
+    /// <summary>Whether this reader may add a file here. False for a visitor and off a public location.</summary>
+    bool CanAddEvidence = false,
+    /// <summary>
+    /// What the evidence here adds up to across every route (item 250). Trailing and optional.
+    /// </summary>
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null,
+    /// <summary>
+    /// Pictures OF the building — the grounds, the rooms, the frontage (item 250). Never evidence,
+    /// never voted on, never counted. What makes the page worth reading for somebody who has never
+    /// been.
+    /// </summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? Pictures = null);
 
 /// <summary>
 /// One published case at a place, as a visitor sees it listed.

@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260921220039_PlaceEvidence")]
+    partial class PlaceEvidence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -8783,10 +8786,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
-
                     b.Property<string>("GeocodeNote")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
@@ -8916,9 +8915,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateUpdated")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("MediaKind")
-                        .HasColumnType("int");
-
                     b.Property<Guid>("PlaceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -8949,7 +8945,7 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("ReviewState", "DateCreated");
 
-                    b.HasIndex("PlaceId", "MediaKind", "ReviewState", "DateCreated");
+                    b.HasIndex("PlaceId", "ReviewState", "DateCreated");
 
                     b.ToTable("PlaceEvidence");
                 });

@@ -551,6 +551,297 @@
             </div>
         }
 
+        @* ── What this place is, and what it looks like (item 250) ────────── *@
+        @* Ben: "we can create a page with information about it, images of it — not evidence but
+           the property and photos inside to show it." The two galleries are kept apart on purpose:
+           a daylight photograph of a staircase and a photograph of the same staircase somebody
+           thinks has a figure on it are different claims, and mixed together the page is useless.
+           Nothing here is voted on or counted. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <div class="mt-4" id="place-about">
+                @if (!string.IsNullOrWhiteSpace(_place.Description) && !_editingAbout)
+                {
+                    @* Plain text, held as plain text and rendered as plain text. The server strips
+                       markup on the way in; this does not hand it back to the browser as HTML. *@
+                    <p style="white-space:pre-wrap;">@_place.Description</p>
+                }
+                else if (!_editingAbout)
+                {
+                    <p class="text-secondary small fst-italic">
+                        Nobody has written about this place yet.
+                    </p>
+                }
+
+                @if (UserState.IsAuthenticated)
+                {
+                    @if (_editingAbout)
+                    {
+                        <textarea id="place-about-text" class="form-control mb-2" rows="5"
+                                  maxlength="4000" @bind="_aboutDraft"
+                                  placeholder="What is this place? When was it built, who lived here, what is it now?"></textarea>
+                        <button type="button" class="btn btn-primary btn-sm me-1"
+                                id="place-about-save" @onclick="SaveAboutAsync" disabled="@_savingAbout">
+                            @(_savingAbout ? "Saving…" : "Save")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="@(() => _editingAbout = false)">Cancel</button>
+                        @if (_aboutSays is { Length: > 0 })
+                        {
+                            <div class="alert alert-warning mt-2 mb-0" id="place-about-says">@_aboutSays</div>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="place-about-edit" @onclick="StartEditingAbout">
+                            <BenIcon Name="edit-2" Class="me-1" />
+                            @(string.IsNullOrWhiteSpace(_place.Description) ? "Describe this place" : "Edit")
+                        </button>
+                    }
+                }
+            </div>
+
+            @if (_pictures is { Count: > 0 })
+            {
+                <h6 class="fw-semibold mt-4">The place itself</h6>
+                <p class="text-secondary small mb-2">
+                    Photographs of the building and its grounds. Not evidence — nobody is claiming
+                    anything about these, and they are not counted or voted on.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach (var pic in _pictures)
+                    {
+                        var picUrl = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, pic.Id);
+                        <figure class="m-0" style="width:220px;">
+                            <a href="@picUrl" target="_blank" rel="noopener">
+                                <img src="@picUrl" alt="@(pic.Caption ?? _place.Name)"
+                                     class="rounded" style="width:220px;height:150px;object-fit:cover;" />
+                            </a>
+                            @if (!string.IsNullOrWhiteSpace(pic.Caption))
+                            {
+                                <figcaption class="small text-secondary mt-1">@pic.Caption</figcaption>
+                            }
+                        </figure>
+                    }
+                </div>
+            }
+        }
+
+        @* ── What the evidence here adds up to (item 250) ─────────────────── *@
+        @* Ben: "positive, negative, unknown and the average of each overall we can track."
+           Per place and never compared across places — he decided against a league table on
+           2026-09-21, because Cragfont is a real building with real owners and "the third most
+           haunted house in Tennessee" is a claim about them.
+
+           One file counts ONCE here whatever route it arrived by; the server does that
+           de-duplication, because three counts added together report more evidence than exists. *@
+        @if (_figures is { EvidenceCount: > 0 })
+        {
+            <div class="card mt-4" id="place-figures">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3">What the evidence here says</h6>
+
+                    <div class="d-flex flex-wrap gap-4 mb-3">
+                        <div>
+                            <div class="h4 mb-0" id="place-figures-evidence">@_figures.EvidenceCount</div>
+                            <div class="text-secondary small">
+                                @(_figures.EvidenceCount == 1 ? "piece of evidence" : "pieces of evidence")
+                            </div>
+                        </div>
+                        <div>
+                            <div class="h4 mb-0" id="place-figures-votes">@_figures.VoteCount</div>
+                            <div class="text-secondary small">
+                                @* The space before "on" is written out. Razor eats the whitespace
+                                   between a @-expression and an @if, which rendered
+                                   "voteson 1 of them" — visible only in a photograph of the page. *@
+                                @(_figures.VoteCount == 1 ? "vote" : "votes")@if (_figures.VoteCount > 0)
+                                {
+                                    <text>&nbsp;on @_figures.VotedOnCount of them</text>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (_figures.VoteCount == 0)
+                    {
+                        @* Not a bar of zeroes. "Nobody has said" and "everybody said no" are
+                           different facts and a chart that draws them alike lies about an empty
+                           place. *@
+                        <p class="text-secondary small fst-italic mb-0">
+                            Nobody has voted on any of it yet.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="progress mb-2" style="height:1.25rem;" role="img"
+                             aria-label="@AriaForShares()">
+                            <div class="progress-bar bg-success"
+                                 style="width:@Pct(_figures.ConfirmsShare)"></div>
+                            <div class="progress-bar bg-secondary"
+                                 style="width:@Pct(_figures.InconclusiveShare)"></div>
+                            <div class="progress-bar bg-danger"
+                                 style="width:@Pct(_figures.DisputesShare)"></div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 small">
+                            <span><span class="badge bg-success">&nbsp;</span>
+                                  Something here — @_figures.Confirms (@Pct(_figures.ConfirmsShare))</span>
+                            <span><span class="badge bg-secondary">&nbsp;</span>
+                                  Can't tell — @_figures.Inconclusive (@Pct(_figures.InconclusiveShare))</span>
+                            <span><span class="badge bg-danger">&nbsp;</span>
+                                  Not convinced — @_figures.Disputes (@Pct(_figures.DisputesShare))</span>
+                        </div>
+                        @* The score never travels without its weight — a sum read on its own says
+                           nothing, which is the rule EvidenceVoteScore sets for every surface. *@
+                        @* A second chart, because "charts" was the ask and a split bar is one.
+                           This is the record accumulating — the thing a permanent public location
+                           is FOR, and the only figure on the page that shows time passing. *@
+                        @if (_byMonth.Count > 1)
+                        {
+                            <div class="mt-3">
+                                <div class="text-secondary small mb-1">Evidence added, by month</div>
+                                <div class="d-flex align-items-end gap-1" style="height:60px;"
+                                     role="img" aria-label="@AriaForMonths()">
+                                    @foreach (var (label, count) in _byMonth)
+                                    {
+                                        var height = _byMonth.Max(m => m.Count) is > 0 and var top
+                                            ? (int)Math.Round(count * 100.0 / top) : 0;
+                                        <div class="flex-fill d-flex flex-column justify-content-end"
+                                             title="@label: @count">
+                                            <div class="bg-primary rounded-top"
+                                                 style="height:@(height)%;min-height:2px;"></div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="d-flex justify-content-between text-secondary"
+                                     style="font-size:.7rem;">
+                                    <span>@_byMonth[0].Label</span>
+                                    <span>@_byMonth[^1].Label</span>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="text-secondary small mt-2" id="place-figures-score">
+                            Overall @(_figures.Score > 0 ? "+" : "")@_figures.Score across
+                            @_figures.VoteCount @(_figures.VoteCount == 1 ? "vote" : "votes").
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* ── What people have added here themselves (item 250) ────────────── *@
+        @* Ben, 2026-09-21: "people don't have to have a dedicated investigation to add files to
+           the public location." Its own section rather than folded into the two above, because
+           the ROUTE is the thing a reader judges evidence by: a night of readings by a group, a
+           photograph from a walk, and something somebody brought back on their own are three
+           different claims, and a page that blurs them is a page you cannot weigh. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <h6 class="fw-semibold mt-4">
+                Added by people who have been here
+                @if (_added is { Count: > 0 })
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis border ms-1"
+                          id="place-added-count">@_added.Count</span>
+                }
+            </h6>
+
+            @if (UserState.IsAuthenticated)
+            {
+                <div class="card mb-3" id="place-add-evidence">
+                    <div class="card-body">
+                        <label class="form-label" for="place-evidence-file">Add something you recorded here</label>
+                        <InputFile id="place-evidence-file" class="form-control mb-2"
+                                   OnChange="OnEvidenceChosen" accept="image/*,audio/*,video/*" />
+                        <label class="form-label" for="place-evidence-kind">What are you adding?</label>
+                        <select id="place-evidence-kind" class="form-select mb-2" @bind="_evidenceKind">
+                            <option value="@Ben.Data.Common.Enums.PlaceMediaKind.Evidence">
+                                Something I recorded here — evidence
+                            </option>
+                            <option value="@Ben.Data.Common.Enums.PlaceMediaKind.AboutThePlace">
+                                A photograph of the place itself
+                            </option>
+                        </select>
+
+                        <label class="form-label" for="place-evidence-caption">What is it?</label>
+                        <input id="place-evidence-caption" class="form-control mb-2" @bind="_evidenceCaption"
+                               maxlength="500"
+                               placeholder="Where in the building, what time, what to listen for" />
+                        <button type="button" class="btn btn-primary" id="place-evidence-add"
+                                @onclick="AddEvidenceAsync" disabled="@(_evidenceFile is null || _addingEvidence)">
+                            <BenIcon Name="upload-cloud" Class="me-1" />
+                            @(_addingEvidence ? "Adding…" : "Add it")
+                        </button>
+                        @* The screener's answer, in the server's own words. "Added" over something
+                           held is what teaches somebody to upload it again. *@
+                        @if (_evidenceSays is { Length: > 0 })
+                        {
+                            <div class="alert @(_evidenceShowing ? "alert-success" : "alert-info") mt-2 mb-0"
+                                 id="place-evidence-says">
+                                @_evidenceSays
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small">
+                    <a href="/login">Sign in</a> to add something you recorded here.
+                </p>
+            }
+
+            @if (_added is { Count: > 0 })
+            {
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach (var item in _added)
+                    {
+                        var url = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, item.Id);
+                        <div class="card" style="width:220px;">
+                            @if (item.ContentType.StartsWith("image/"))
+                            {
+                                <a href="@url" target="_blank" rel="noopener">
+                                    <img src="@url" alt="@(item.Caption ?? item.FileName)"
+                                         class="card-img-top" style="height:150px;object-fit:cover;" />
+                                </a>
+                            }
+                            else if (item.ContentType.StartsWith("video/"))
+                            {
+                                <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
+                            }
+                            else if (item.ContentType.StartsWith("audio/"))
+                            {
+                                <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
+                            }
+                            <div class="card-body p-2">
+                                @if (!string.IsNullOrWhiteSpace(item.Caption))
+                                {
+                                    <div class="small">@item.Caption</div>
+                                }
+                                <div class="text-secondary" style="font-size:.75rem;">
+                                    by @item.AddedBy · @item.AddedUtc.ToLocalTime().ToDisplayDate()
+                                </div>
+                                @* The site's one vote widget, not a second set of buttons. It
+                                   posts to api/evidence-votes, which is keyed on the FILE — so a
+                                   vote cast here is the same vote the file carries anywhere else
+                                   it appears, which is what makes the tally above mean anything. *@
+                                <div class="mt-2">
+                                    <EvidenceVoteWidget UploadFileId="@item.UploadFileId" Compact="true" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small fst-italic">
+                    Nobody has added anything here yet.
+                </p>
+            }
+        }
+
         @* ── Visitor view ─────────────────────────────────────────────────── *@
         @if (_publicRows is not null)
         {
@@ -757,6 +1048,23 @@
     /// <summary>Guest evidence published to this place from public events held here.</summary>
     private List<PlaceEvidenceRow>? _evidence;
 
+    // ── What people added here themselves (item 250) ──────────────────────────
+    private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _added;
+    private Ben.Service.Models.Entities.PlaceEvidenceFigures? _figures;
+    private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _pictures;
+    private Ben.Data.Common.Enums.PlaceMediaKind _evidenceKind =
+        Ben.Data.Common.Enums.PlaceMediaKind.Evidence;
+    private bool _editingAbout;
+    private bool _savingAbout;
+    private string _aboutDraft = string.Empty;
+    private string? _aboutSays;
+    private List<(string Label, int Count)> _byMonth = new();
+    private IBrowserFile? _evidenceFile;
+    private string _evidenceCaption = string.Empty;
+    private bool _addingEvidence;
+    private string? _evidenceSays;
+    private bool _evidenceShowing;
+
     /// <summary>The verified venue here, when there is one.</summary>
     private PlaceVenueRecord? _venue;
 
@@ -832,6 +1140,10 @@
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
+        _added = response.AddedEvidence?.ToList();
+        _figures = response.Figures;
+        _pictures = response.Pictures?.ToList();
+        RebuildMonths();
         _cases = response.Cases?.ToList();
         _posts = response.Posts?.ToList();
         _canPost = response.CanPost;
@@ -851,6 +1163,10 @@
         var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
+        _added = response?.AddedEvidence?.ToList();
+        _figures = response?.Figures;
+        _pictures = response?.Pictures?.ToList();
+        RebuildMonths();
         _cases = response?.Cases?.ToList();
 
         // NOT the posts, and not CanPost. This call is anonymous on purpose, so its answer to
@@ -971,4 +1287,125 @@
         Ben.Data.Common.Enums.InvestigationVisibility.PlaceInvestigators => "bg-primary",
         _ => "bg-secondary",
     };
+
+    private void OnEvidenceChosen(InputFileChangeEventArgs e)
+    {
+        _evidenceFile = e.FileCount > 0 ? e.File : null;
+        _evidenceSays = null;
+    }
+
+    /// <summary>
+    /// Sends one file to this place's evidence.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server's own sentence is shown rather than a word of this page's choosing,
+    /// because whether it is SHOWING is the part that matters and only the screener knows. A page
+    /// that says "added" over something held teaches people to upload it again.</para>
+    ///
+    /// <para>No size cap here on purpose: the account allowance and the server's own limits are
+    /// the rule, and a second number invented in the browser would be a different rule that
+    /// nothing enforces.</para>
+    /// </remarks>
+    private async Task AddEvidenceAsync()
+    {
+        if (_evidenceFile is null || _addingEvidence) return;
+
+        _addingEvidence = true;
+        _evidenceSays = null;
+        try
+        {
+            await using var content = _evidenceFile.OpenReadStream(long.MaxValue);
+            var (added, error) = await AdminClient.AddPlaceEvidenceAsync(
+                PlaceId, content, _evidenceFile.Name,
+                string.IsNullOrWhiteSpace(_evidenceFile.ContentType)
+                    ? "application/octet-stream"
+                    : _evidenceFile.ContentType,
+                _evidenceCaption, _evidenceKind);
+
+            if (added is null)
+            {
+                _evidenceShowing = false;
+                _evidenceSays = error ?? "That could not be added just now. Try again.";
+                return;
+            }
+
+            _evidenceShowing = added.Showing;
+            _evidenceSays = added.Says;
+            _evidenceFile = null;
+            _evidenceCaption = string.Empty;
+
+            // Only an APPROVED file is on the page, so only then is there anything new to fetch.
+            // Reloading after a held one would show the contributor nothing and read as a failure.
+            if (added.Showing) await LoadSignedInAsync();
+        }
+        finally { _addingEvidence = false; }
+    }
+
+    /// <summary>A share as a percentage string, or nothing when nobody has voted.</summary>
+    private static string Pct(double? share)
+        => share is { } value ? $"{value * 100:0}%" : "0%";
+
+    /// <summary>
+    /// The bar in words, for anybody who cannot see it.
+    /// </summary>
+    /// <remarks>
+    /// The bar is the only place three numbers are compared visually, so the alternative has to
+    /// carry the comparison rather than repeat the counts listed beneath it.
+    /// </remarks>
+    private string AriaForShares()
+        => _figures is null
+            ? "No votes yet"
+            : $"Of {_figures.VoteCount} votes: {Pct(_figures.ConfirmsShare)} say something is here, "
+            + $"{Pct(_figures.InconclusiveShare)} cannot tell, "
+            + $"{Pct(_figures.DisputesShare)} are not convinced";
+
+    private void StartEditingAbout()
+    {
+        _aboutDraft = _place?.Description ?? string.Empty;
+        _aboutSays = null;
+        _editingAbout = true;
+    }
+
+    private async Task SaveAboutAsync()
+    {
+        if (_savingAbout) return;
+        _savingAbout = true;
+        _aboutSays = null;
+        try
+        {
+            var (updated, error) = await AdminClient.SetPlaceDescriptionAsync(PlaceId, _aboutDraft);
+            if (updated is null)
+            {
+                _aboutSays = error ?? "That could not be saved just now. Try again.";
+                return;
+            }
+
+            _place = updated;
+            _editingAbout = false;
+        }
+        finally { _savingAbout = false; }
+    }
+
+    /// <summary>
+    /// Evidence added per month, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Built from what the page already holds rather than asked for separately — the list IS the
+    /// data, and a second round trip for the same rows would be a second answer that can disagree
+    /// with the one beside it. Only the directly-added rows carry a date the page knows; the chart
+    /// says "added" rather than "recorded" for that reason.
+    /// </remarks>
+    private void RebuildMonths()
+    {
+        _byMonth = (_added ?? [])
+            .GroupBy(e => new DateTime(e.AddedUtc.Year, e.AddedUtc.Month, 1))
+            .OrderBy(g => g.Key)
+            .Select(g => (Label: g.Key.ToString("MMM yyyy"), Count: g.Count()))
+            .ToList();
+    }
+
+    private string AriaForMonths()
+        => _byMonth.Count == 0
+            ? "Nothing added yet"
+            : "Evidence added by month: " + string.Join(", ", _byMonth.Select(m => $"{m.Label} {m.Count}"));
 }

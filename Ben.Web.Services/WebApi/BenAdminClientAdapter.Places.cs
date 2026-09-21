@@ -285,6 +285,46 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<MergePlaceRequest, PlaceMergeResult>(
             HttpMethod.Post, $"/api/admin/places/{losingPlaceId}/merge",
             new MergePlaceRequest(intoPlaceId), token);
+
+    // ── Evidence added straight to a place (item 250) ─────────────────────────
+
+    public Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
+        Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
+        CancellationToken token = default)
+    {
+        var form = new MultipartFormDataContent();
+        var part = new StreamContent(content);
+        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(part, "file", fileName);
+        if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "caption");
+        form.Add(new StringContent(((int)kind).ToString()), "kind");
+
+        return _api.PostMultipartExpectingReasonAsync<PlaceEvidenceAdded>(
+            $"/api/places/{placeId}/evidence", form, token);
+    }
+
+    public Task<bool> RemovePlaceEvidenceAsync(
+        Guid placeId, Guid evidenceId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/places/{placeId}/evidence/{evidenceId}", token);
+
+    /// <summary>
+    /// Built rather than fetched, and anonymous on purpose: this is an <c>&lt;img&gt;</c> or a
+    /// <c>&lt;video&gt;</c> src on a page a stranger is reading, and neither carries a token.
+    /// </summary>
+    public string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId)
+        => $"{_webApiBaseUrl}/api/public/places/{placeId}/evidence/{evidenceId}/file";
+
+    public Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<NewPublicPlaceRequest, PlaceCreated>(
+            HttpMethod.Post, "/api/places/public-location", request, token);
+
+    public Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetPlaceDescriptionRequest, PlaceRecord>(
+            HttpMethod.Put, $"/api/places/{placeId}/description",
+            new SetPlaceDescriptionRequest(description), token);
 }
 
 /// <summary>The body the merge endpoint expects.</summary>

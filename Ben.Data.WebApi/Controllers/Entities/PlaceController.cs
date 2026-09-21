@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Places;
+using Ben.Service.Models.Entities;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -28,6 +29,155 @@ public sealed class PlaceController : BenControllerBase
 
     public PlaceController(IDbContextFactory<BenDataContext> db) => _db = db;
 
+    /// <summary>
+    /// Creates a public location — a landmark, a business, a cemetery (item 250).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"I would like to be able to create public locations like Cragfont
+    /// in Castillian Springs, TN."</i> Until this, there was <b>no way to create a place at all</b>.
+    /// They appeared only sideways — a case bound one, an investigation bound one, publishing a
+    /// session made one — so a landmark nobody had yet investigated could not be named, and the
+    /// page that gathers what has been found there could not be brought into existence on purpose.
+    /// </para>
+    ///
+    /// <para><b>Public locations only, and the caller cannot choose otherwise.</b> A private
+    /// residence is somebody's home; the routes that make one all run through a client
+    /// relationship — a case somebody asked for, a visit somebody booked — and this door has none.
+    /// Letting anybody type a home address and publish a page about it is the one thing this must
+    /// never be, so the kind is set here rather than accepted.</para>
+    ///
+    /// <para><b>An existing place is returned rather than a second one made.</b> Ben's dedup rule
+    /// is the address (item 88), and two rows for one building split its evidence in half and make
+    /// the merge screen somebody's afternoon. A caller who names an address that already exists
+    /// gets that place back and the answer says so, which is a better outcome than a refusal: they
+    /// wanted a page for Cragfont, and Cragfont is what they get.</para>
+    /// </remarks>
+    [HttpPost("public-location")]
+    public async Task<ActionResult<PlaceCreated>> CreatePublicLocation(
+        [FromBody] NewPublicPlaceRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var name = PlaceFactory.Trimmed(request?.Name);
+        if (name is null || name.Length < 2)
+            return BadRequest("Give the place a name — what people call it.");
+
+        if (PlaceFactory.Trimmed(request!.City) is null || PlaceFactory.Trimmed(request.State) is null)
+            return BadRequest("A town and a state, so people can find it and it lands on the map.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // The address is the identity, per item 88's own rule. Matched on the parts somebody
+        // types rather than on the geocode, because two people describing one building agree on
+        // its street long before they agree on its coordinates.
+        var street = PlaceFactory.Trimmed(request.StreetAddress1);
+        var city = PlaceFactory.Trimmed(request.City)!;
+        var state = PlaceFactory.Trimmed(request.State)!;
+
+        var existing = await db.Places.AsNoTracking()
+            .Where(p => p.City == city && p.State == state
+                     && (street != null ? p.StreetAddress1 == street : p.Name == name))
+            .Select(p => new { p.Id, p.Kind })
+            .FirstOrDefaultAsync(ct);
+
+        if (existing is not null)
+        {
+            // A match that is somebody's home is NOT handed back as a public location. Saying so
+            // plainly beats silently returning a row whose page would then refuse everything.
+            if (existing.Kind != PlaceKind.PublicLocation)
+            {
+                return BadRequest(
+                    "There is already a place at that address, and it is recorded as somebody's "
+                  + "home. If that is wrong, ask a site administrator to correct it.");
+            }
+
+            return Ok(new PlaceCreated(existing.Id, AlreadyExisted: true,
+                "That place is already here — this is its page."));
+        }
+
+        var place = await PlaceFactory.CreateAsync(
+            new NewPlaceRequest(
+                name, street, PlaceFactory.Trimmed(request.StreetAddress2), city, state,
+                PlaceFactory.Trimmed(request.ZipCode), PlaceFactory.Trimmed(request.Country),
+                request.Latitude, request.Longitude,
+                // Never the caller's to choose. See the remarks.
+                PlaceKind.PublicLocation),
+            userId, ct);
+
+        db.Places.Add(place);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new PlaceCreated(place.Id, AlreadyExisted: false, "Added."));
+    }
+
+    /// <summary>
+    /// Writes what this place is, for somebody who has never been (item 250).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"we can create a page with information about it."</i> A list of
+    /// evidence with no account of what the building IS tells a reader nothing they can weigh it
+    /// against.</para>
+    ///
+    /// <para><b>Anybody signed in, at a public location only</b> — the same door as adding
+    /// evidence, and for the same reason: the person who knows what Cragfont is is rarely a member
+    /// of a paranormal group. A private residence has no public page to describe and is refused in
+    /// words.</para>
+    ///
+    /// <para><b>Plain text, and the server enforces it.</b> Whatever arrives is stripped of
+    /// markup: this is written by whoever gets there first, edited by anybody after them, and
+    /// rendered on a page any stranger reads. A field like that must not be able to carry a link,
+    /// a script or a layout, and refusing is worse than cleaning — somebody describing a house
+    /// should not have to know what an angle bracket does.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/description")]
+    public async Task<ActionResult<PlaceRecord>> SetDescription(
+        Guid id, [FromBody] SetPlaceDescriptionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (place is null) return NotFound();
+
+        if (place.Kind != PlaceKind.PublicLocation)
+        {
+            return BadRequest(
+                "Only a public location has a page to describe. This place is somebody's home.");
+        }
+
+        // Script and style ELEMENTS go whole, content and all, before the tags are stripped.
+        // PlainTextHtml.ToText removes tags and keeps what was between them, which is right for
+        // prose — <b>bold</b> should leave "bold" behind — and wrong for these two, where the
+        // content is never something a person meant to write. Pasting a paragraph off a web page
+        // otherwise drops the page's scripts into the description as words. Not a security hole
+        // (this is rendered as text, never as markup) but nobody typed "bad()".
+        //
+        // Done here rather than in the shared helper, which a dozen other callers depend on
+        // behaving exactly as it does.
+        var raw = System.Text.RegularExpressions.Regex.Replace(
+            request?.Description ?? string.Empty,
+            "<(script|style)[^>]*>.*?</\\1>",
+            " ",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+          | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        var text = Ben.Data.Common.Text.PlainTextHtml.ToText(raw).Trim();
+        if (text.Length > 4000) text = text[..4000];
+
+        place.Description = text.Length == 0 ? null : text;
+        place.DateUpdated = DateTime.UtcNow;
+        place.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(PlaceDisclosure.Public(
+            place.Id, place.Name, place.StreetAddress1, place.City, place.State, place.ZipCode,
+            place.Country, place.Latitude, place.Longitude, place.GeocodeNote, place.Kind,
+            place.Description));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PlaceRecord>> GetById(Guid id, CancellationToken ct)
     {
@@ -38,7 +188,7 @@ public sealed class PlaceController : BenControllerBase
             .Select(p => new
             {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind, p.Description,
             })
             .FirstOrDefaultAsync(ct);
 
@@ -52,14 +202,18 @@ public sealed class PlaceController : BenControllerBase
                          db, id, GetCurrentUserId(), await CallerIsSuperAdminAsync(), ct);
 
         return Ok(inFull
+            // The description travels here too. It did not until 2026-09-21, and the signed-in
+            // load is the one the place page actually uses — so somebody wrote a description,
+            // saw it saved, and the next render showed "nobody has written about this place yet"
+            // over the top of it. Found by photographing the page for the help, not by any test.
             ? new PlaceRecord(
                 stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
                 stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-                stored.GeocodeNote, stored.Kind)
+                stored.GeocodeNote, stored.Kind, stored.Description)
             : PlaceDisclosure.Public(
                 stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
                 stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-                stored.GeocodeNote, stored.Kind));
+                stored.GeocodeNote, stored.Kind, stored.Description));
     }
 
     /// <summary>
@@ -334,7 +488,12 @@ public sealed record PlaceRecord(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    PlaceKind Kind);
+    PlaceKind Kind,
+    /// <summary>
+    /// What this place is, for somebody who has never been (item 250). Null on a private
+    /// residence — somebody's home has no public page to describe.
+    /// </summary>
+    string? Description = null);
 
 /// <summary>
 /// One investigation at a place, as seen by somebody who may or may not be in the group that ran it.

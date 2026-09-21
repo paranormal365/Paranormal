@@ -86,6 +86,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
         public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
         public virtual DbSet<Place> Places { get; set; }
+
+        /// <summary>Files added straight to a public place, because of what is in them (item 250).</summary>
+        public virtual DbSet<PlaceEvidence> PlaceEvidence { get; set; }
         public virtual DbSet<Case> Cases { get; set; }
         public virtual DbSet<CaseTimelineEntry> CaseTimelineEntries { get; set; }
         public virtual DbSet<CaseTimelineEntryExperienceType> CaseTimelineEntryExperienceTypes { get; set; }
@@ -4164,6 +4167,38 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Evidence added straight to a public place (item 250) ───────────────────
+            modelBuilder.Entity<Place>().Property(e => e.Description).HasMaxLength(4000);
+
+            modelBuilder.Entity<PlaceEvidence>().Property(e => e.Caption).HasMaxLength(500);
+            modelBuilder.Entity<PlaceEvidence>().Property(e => e.ReviewNote).HasMaxLength(300);
+            // One row per file per place. Ben's rule is that a file counts ONCE at a place
+            // whatever route it arrived by, and a unique key is the only version of that rule a
+            // race cannot get round.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.PlaceId, e.UploadFileId }).IsUnique();
+            // The place page asks for "what may be shown here, newest first" on every visit.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.PlaceId, e.MediaKind, e.ReviewState, e.DateCreated });
+            // The held pile, across every place at once, is the moderator's question.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.ReviewState, e.DateCreated });
+            // Cascade from the place: evidence for a place that no longer exists is a row nobody
+            // can reach, moderate or take down.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            // Cascade from the file, for the same reason the media library does: deleting the
+            // bytes must not leave a row pointing at nothing on a public page.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the person: two cascade paths into AppUser is what SQL Server refuses,
+            // and the person purge sweeps these rows itself.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.AddedByAppUser).WithMany()
+                .HasForeignKey(e => e.AddedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── The guide's code and the guest's credential (item 248) ─────────────────
             // The token is the whole lookup for a scan and the typed code for somebody who typed
