@@ -160,4 +160,44 @@ public interface IBenInvestigationClient
     Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
         string shareToken, CancellationToken token = default);
 
+    // ── The guide's code for a guest's phone (item 248) ───────────────────────
+
+    /// <summary>The live code for this visit, or null when there is none.</summary>
+    Task<InvestigationJoinCodeRecord?> GetInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>Makes a fresh code, retiring whatever the visit had.</summary>
+    Task<InvestigationJoinCodeRecord?> IssueInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, DateTime? expiresUtc, CancellationToken token = default);
+
+    /// <summary>Ends the night: the code stops working, and so does every pass it minted.</summary>
+    Task<bool> RevokeInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>Who is working tonight on the strength of the code.</summary>
+    Task<LoadResult<InvestigationGuestPassRecord>> GetInvestigationGuestPassesAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>Takes one person's credential away, leaving everybody else's alone.</summary>
+    Task<bool> RevokeInvestigationGuestPassAsync(
+        Guid orgId, Guid investigationId, Guid passId, CancellationToken token = default);
+
+    /// <summary>
+    /// What a code is for, before anybody signs in.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous, and it has to be: the reader has just scanned a sheet and has no account yet.
+    /// The answer names the group and the visit and nothing else — see
+    /// <c>PublicInvestigationCodeController</c> for why it is that thin.
+    /// </remarks>
+    Task<InvestigationCodeInvitation?> LookUpInvestigationCodeAsync(
+        string code, CancellationToken token = default);
+
+    /// <summary>Joins tonight's work with a scanned or typed code.</summary>
+    Task<InvestigationCodeRedemption?> RedeemInvestigationCodeAsync(
+        string code, string? displayName, CancellationToken token = default);
+
+    /// <summary>The visits this account may contribute to as a guest right now.</summary>
+    Task<LoadResult<InvestigationCodeInvitation>> GetMyGuestInvestigationsAsync(
+        CancellationToken token = default);
 }

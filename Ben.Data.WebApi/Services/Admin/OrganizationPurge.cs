@@ -313,6 +313,12 @@ public sealed class OrganizationPurge
                 .Where(x => x.InvestigationId != null && investigationIds.Contains(x.InvestigationId.Value)).ExecuteDeleteAsync(ct);
             await db.InvestigationAttendees.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.InvestigationFindings.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            // The guests' credentials before the codes that minted them: the pass cascades from
+            // the code in the schema, but this purge deletes explicitly and in order rather than
+            // leaning on cascades, because a cascade that is not there is a refused DELETE
+            // discovered on production (item 248).
+            await db.InvestigationGuestPasses.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            await db.InvestigationJoinCodes.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.FieldSessionUploads.Where(x => sessionIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
 
             await db.EventAttendanceInvites.Where(x => eventIds.Contains(x.OrgCalendarEventId)).ExecuteDeleteAsync(ct);

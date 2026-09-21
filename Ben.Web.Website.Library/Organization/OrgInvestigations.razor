@@ -304,6 +304,9 @@ else
     /// </remarks>
     private void ToggleTeam(Guid id) => _openTeam = _openTeam == id ? null : id;
 
+    private void GoToJoinCode(Guid id)
+        => NavManager.NavigateTo($"/organizations/{OrgId}/investigations/{id}/join-code");
+
     private void GoToInvestigation(Guid id)
     {
         var row = _rows.FirstOrDefault(r => r.Id == id);
@@ -406,6 +409,18 @@ else
                                       title="You were on this visit — write up what you saw under Team.">
                                     Your write-up
                                 </span>
+                            }
+
+                            @* The sheet a guide holds up so a guest's phone can send tonight's
+                               photographs and recordings up (item 248). Reachable from HERE rather
+                               than only from a case's tab, because the visits that most need it —
+                               a walk, a landmark, an open night — are the ones with no case. *@
+                            @if (row.CanEditRecord)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        title="Show a code guests can scan to send you what they record"
+                                        aria-label="Guest code"
+                                        @onclick="@(() => GoToJoinCode(row.Id))"><BenIcon Name="grid" Class="me-1" />Guest code</button>
                             }
 
                             @* Shown on the server's verdict alone. Working it out here would mean

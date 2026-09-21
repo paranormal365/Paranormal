@@ -1,0 +1,280 @@
+@page "/organizations/{OrgId:guid}/investigations/{InvestigationId:guid}/join-code"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+@*
+    The sheet a guide holds up (item 248).
+
+    ITS OWN PAGE, NOT A DIALOG. This is held up to a crowd, printed, propped against a torch and
+    read off a tablet at arm's length — everything a window inside another screen is bad at. The
+    code is the biggest thing on it, deliberately.
+
+    The typed code is beside the QR because Apple has no deferred deep linking: somebody who scans
+    without the app gets Safari and a download, and the app it installs has no idea what they
+    scanned. The code they can read out is the only thing that works for a fresh install.
+*@
+
+<PageTitle>Guest code</PageTitle>
+
+<div class="container py-3" style="max-width:720px;">
+
+    <div class="d-flex align-items-center gap-2 mb-3 d-print-none">
+        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/investigations")">
+            <BenIcon Name="chevron-left" Class="me-1" />Investigations
+        </a>
+        <h3 class="h5 mb-0">
+            Guest code<HelpLink Slug="organization-administration" Anchor="guest-codes" />
+        </h3>
+    </div>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay />
+    }
+    else if (_refused is { } why)
+    {
+        @* A refusal is a sentence with somewhere to go, not a blank screen. *@
+        <div class="alert alert-warning" id="join-code-refused">
+            @why
+            <div class="mt-2">
+                <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/investigations")">
+                    Back to investigations
+                </a>
+            </div>
+        </div>
+    }
+    else if (_code is null)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <p class="mb-2">
+                    Make a code and anybody on the night can scan it to send you their photographs,
+                    recordings and readings from their own phone. They don't join the group and they
+                    don't see the case — just tonight, and only what they send.
+                </p>
+                <p class="text-secondary small mb-3">
+                    It stops working when you end the night, and by itself after
+                    @HoursText hours.
+                </p>
+                <button type="button" class="btn btn-primary" id="join-code-make"
+                        @onclick="IssueAsync" disabled="@_busy">
+                    <BenIcon Name="plus" Class="me-1" />@(_busy ? "Making it…" : "Make a code")
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card mb-3 text-center" id="join-code-sheet">
+            <div class="card-body">
+                <div class="text-secondary small mb-2">Scan this to join tonight</div>
+
+                @* image-rendering keeps the squares square when it is blown up to fill a tablet
+                   or a printed page; a smoothed QR is a QR that does not scan. *@
+                <img src="@_code.QrDataUri" alt="A code to scan to join tonight's investigation"
+                     class="img-fluid" style="max-width:280px; image-rendering:pixelated;" />
+
+                <div class="mt-3">
+                    <div class="text-secondary small">Or type this at @TypeItAt</div>
+                    <div class="fw-bold" id="join-code-typed"
+                         style="font-size:2.25rem; letter-spacing:.15em; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">
+                        @_code.TypedCode
+                    </div>
+                </div>
+
+                <div class="text-secondary small mt-3">
+                    Stops working @_code.ExpiresUtc.ToLocalTime().ToString("h:mm tt on M/d/yyyy")
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-4 d-print-none">
+            <button type="button" class="btn btn-outline-secondary" id="join-code-print"
+                    @onclick="PrintAsync">
+                <BenIcon Name="printer" Class="me-1" />Print it
+            </button>
+            @* Rotating IS how a sheet left on a pub table is taken back — and people already
+               working keep working, which is why this is not the same button as ending the night. *@
+            <button type="button" class="btn btn-outline-secondary" id="join-code-rotate"
+                    @onclick="IssueAsync" disabled="@_busy">
+                <BenIcon Name="refresh-cw" Class="me-1" />New code
+            </button>
+            <button type="button" class="btn btn-outline-danger ms-auto" id="join-code-end"
+                    @onclick="RevokeAsync" disabled="@_busy">
+                <BenIcon Name="x" Class="me-1" />End the night
+            </button>
+        </div>
+
+        <h4 class="h6 d-print-none">
+            Working tonight
+            <span class="badge bg-body-secondary text-body-emphasis border ms-1" id="join-code-holder-count">@_holders.Count</span>
+        </h4>
+
+        @if (_holders.Count == 0)
+        {
+            <p class="text-secondary small d-print-none">
+                Nobody has scanned it yet. They'll appear here as they join.
+            </p>
+        }
+        else
+        {
+            <div class="table-responsive d-print-none">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Joined</th>
+                            <th scope="col" class="text-center">Sent up</th>
+                            <th scope="col" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var holder in _holders)
+                        {
+                            <tr class="@(holder.RevokedUtc is null ? null : "opacity-50")">
+                                <td>@holder.Name</td>
+                                <td>@holder.IssuedUtc.ToLocalTime().ToString("h:mm tt")</td>
+                                <td class="text-center">@holder.Sessions</td>
+                                <td class="text-end text-nowrap">
+                                    @if (holder.RevokedUtc is null)
+                                    {
+                                        @* One person, not the sheet. What they already sent stays:
+                                           this stops them adding more, it does not erase the night. *@
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                title="Stop this phone sending anything more"
+                                                aria-label="@($"Stop {holder.Name} sending anything more")"
+                                                @onclick="@(() => RevokeHolderAsync(holder.Id))" disabled="@_busy">
+                                            <BenIcon Name="x" />
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary small">Stopped</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid InvestigationId { get; set; }
+
+    private InvestigationJoinCodeRecord? _code;
+    private List<InvestigationGuestPassRecord> _holders = new();
+    private bool _loading = true;
+    private bool _busy;
+    private string? _refused;
+
+    private static int HoursText => 12;
+
+    /// <summary>Where somebody types the code when the camera or the app cannot take them there.</summary>
+    /// <remarks>
+    /// Read off the sheet by somebody who has just installed the app, so it is the shortest
+    /// address on the site that can accept a code.
+    /// </remarks>
+    private string TypeItAt => $"{new Uri(NavManager.BaseUri).Host}/tonight";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Every auth-gated page waits for the circuit before it reads anything: the first render
+        // happens long before the sign-in state arrives, and acting on the gap shows a refusal to
+        // somebody who is signed in.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _code = await AdminClient.GetInvestigationJoinCodeAsync(OrgId, InvestigationId);
+            await LoadHoldersAsync();
+        }
+        catch (Exception)
+        {
+            // A refusal from the server is a sentence rather than an empty screen: this page is
+            // reached from a row that already decided the caller may edit the visit, so landing
+            // here with nothing at all means something has changed under them.
+            _refused = "You can't manage this investigation, or it isn't there any more.";
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadHoldersAsync()
+    {
+        if (_code is null) { _holders = new(); return; }
+
+        var result = await AdminClient.GetInvestigationGuestPassesAsync(OrgId, InvestigationId);
+        _holders = result.Items?.ToList() ?? new();
+    }
+
+    private async Task IssueAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            _code = await AdminClient.IssueInvestigationJoinCodeAsync(OrgId, InvestigationId, null);
+            if (_code is null)
+            {
+                _refused = "That code couldn't be made just now. Try again.";
+                return;
+            }
+            await LoadHoldersAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RevokeAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await AdminClient.RevokeInvestigationJoinCodeAsync(OrgId, InvestigationId);
+            _code = null;
+            _holders = new();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RevokeHolderAsync(Guid passId)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await AdminClient.RevokeInvestigationGuestPassAsync(OrgId, InvestigationId, passId);
+            await LoadHoldersAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>The browser's own print, because the sheet is what is being printed.</summary>
+    /// <remarks>
+    /// Everything that is not the code carries <c>d-print-none</c>, so what comes out is the QR,
+    /// the typed code and when it stops — which is the whole sheet.
+    /// </remarks>
+    private async Task PrintAsync()
+    {
+        try { await JS.InvokeVoidAsync("window.print"); }
+        catch (Exception) { /* a browser that will not print is not a page failure */ }
+    }
+}

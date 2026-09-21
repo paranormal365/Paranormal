@@ -59,7 +59,7 @@ public sealed partial class FieldSessionUploadController
             if (investigation is null) return NotFound();
             // Same answer as absent: whether somebody else's investigation exists is not a thing
             // to let an outsider probe for.
-            if (!await MayContributeAsync(db, target, userId, ct)) return NotFound();
+            if (!await MayWriteAsync(db, target, userId, ct)) return NotFound();
             organizationId = investigation.OrganizationId;
         }
         else

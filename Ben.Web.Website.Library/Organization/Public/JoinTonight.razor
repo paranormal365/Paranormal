@@ -1,0 +1,211 @@
+@page "/tonight"
+@page "/tonight/{Token}"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    The guest's end of a guide's code (item 248).
+
+    THE READER IS STANDING IN A FIELD IN THE DARK. They have just pointed a camera at a sheet, or
+    typed eight characters off it. So the first thing on the screen is what they scanned — the
+    group and the visit — and the second is one button.
+
+    TWO WAYS IN, because Apple has no deferred deep linking. A scan lands here with a token in the
+    address. Somebody who had to install the app first lands here with nothing, and types the short
+    code off the same sheet. Both are the same screen asking the same question.
+
+    SIGNING IN IS NOT SKIPPED. Minting an account from a name typed on a pavement would make an
+    account nobody can sign back into or recover, and would strand the evening's work the moment
+    the phone was closed. What the code removes is the ASKING — nobody has to be found in a member
+    list, emailed, approved or added to the group.
+*@
+
+<PageTitle>Join tonight</PageTitle>
+
+<div class="container py-4" style="max-width:520px;">
+
+    <h1 class="h4 mb-3">Join tonight's investigation</h1>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay />
+    }
+    else if (_joined is { Joined: true } joined)
+    {
+        <div class="alert alert-success" id="tonight-joined">
+            <p class="mb-2"><strong>@joined.Says</strong></p>
+            <p class="mb-0 small">
+                Anything you record goes to @joined.OrganizationName and nobody else. You'll be able
+                to see your own — you won't see the rest of the team's, or anything about the case.
+            </p>
+        </div>
+
+        <div class="d-grid gap-2">
+            <a class="btn btn-primary" href="/my-field-sessions" id="tonight-go">
+                <BenIcon Name="upload-cloud" Class="me-1" />Send something up
+            </a>
+        </div>
+    }
+    else
+    {
+        @* The code is looked up before anybody is asked to do anything, so somebody who scanned
+           the wrong sheet finds out now rather than after signing in. *@
+        @if (_invitation is { Recognised: true } invite)
+        {
+            <div class="card mb-3" id="tonight-invitation">
+                <div class="card-body">
+                    <div class="text-secondary small">@invite.OrganizationName</div>
+                    <div class="h5 mb-1">@invite.InvestigationTitle</div>
+                    @if (invite.ScheduledUtc is { } when)
+                    {
+                        <div class="text-secondary small">
+                            @when.ToLocalTime().ToString("dddd, MMMM d — h:mm tt")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (!UserState.IsAuthenticated)
+            {
+                <div class="alert alert-info small">
+                    You'll need an account so what you send stays yours and you can get back to it.
+                </div>
+                <div class="d-grid gap-2 mb-3">
+                    <a class="btn btn-primary" id="tonight-signin"
+                       href="@Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)">
+                        Sign in and join
+                    </a>
+                    <a class="btn btn-outline-secondary" href="/signup" id="tonight-signup">
+                        Create an account
+                    </a>
+                </div>
+                @* Said plainly, because creating an account ends at a confirmation email and
+                   cannot carry them back here by itself. The sheet is still in front of them. *@
+                <p class="text-secondary small">
+                    Creating one sends you an email to confirm. Once you're in, come back here —
+                    or go to <strong>@TypeItAt</strong> and type <strong>@(_invitation?.Recognised == true ? DisplayedCode : "your code")</strong>.
+                </p>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="tonight-name">What should the guide see you as?</label>
+                    <input id="tonight-name" class="form-control" @bind="_displayName"
+                           maxlength="200" placeholder="Your name" />
+                    <div class="form-text">Optional — your account's name is used if you leave it.</div>
+                </div>
+                <div class="d-grid">
+                    <button type="button" class="btn btn-primary btn-lg" id="tonight-join"
+                            @onclick="RedeemAsync" disabled="@_busy">
+                        @(_busy ? "Joining…" : "Join tonight")
+                    </button>
+                </div>
+            }
+        }
+        else
+        {
+            @if (_says is { } why)
+            {
+                <div class="alert alert-warning" id="tonight-refused">@why</div>
+            }
+
+            @* The typed box is not a fallback — it is the only path that works for somebody who
+               installed the app because of the QR, since the install cannot tell the app what was
+               scanned. *@
+            <div class="card">
+                <div class="card-body">
+                    <label class="form-label" for="tonight-code">The code from the guide's sheet</label>
+                    <div class="input-group">
+                        <input id="tonight-code" class="form-control text-uppercase" @bind="_typed"
+                               maxlength="20" placeholder="ABCD-EFGH"
+                               style="letter-spacing:.1em; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;" />
+                        <button type="button" class="btn btn-primary" id="tonight-check"
+                                @onclick="LookUpTypedAsync" disabled="@_busy">
+                            @(_busy ? "Checking…" : "Check")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string? Token { get; set; }
+
+    private InvestigationCodeInvitation? _invitation;
+    private InvestigationCodeRedemption? _joined;
+    private string _typed = string.Empty;
+    private string _displayName = string.Empty;
+    private string? _says;
+    private bool _loading;
+    private bool _busy;
+
+    /// <summary>What the person would type, when they arrived with a scanned token instead.</summary>
+    private string DisplayedCode => string.IsNullOrWhiteSpace(_typed) ? "your code" : _typed.Trim().ToUpperInvariant();
+
+    private string TypeItAt => $"{new Uri(NavManager.BaseUri).Host}/tonight";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The look-up itself is anonymous, but whether to offer "join" or "sign in" is not — so the
+        // page waits for the circuit before it decides, like every other auth-aware screen here.
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+
+        if (!string.IsNullOrWhiteSpace(Token)) await LookUpAsync(Token!);
+    }
+
+    private async Task LookUpTypedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_typed)) return;
+        await LookUpAsync(_typed.Trim());
+    }
+
+    private async Task LookUpAsync(string code)
+    {
+        if (_busy) return;
+        _busy = true;
+        _loading = _invitation is null;
+        try
+        {
+            var found = await AdminClient.LookUpInvestigationCodeAsync(code);
+            _invitation = found;
+            // The server's own sentence, not one invented here. It is the only thing that knows
+            // whether this was never a code, was replaced, or ran out at midnight.
+            _says = found is { Recognised: true }
+                ? null
+                : found?.Says ?? "That code couldn't be checked just now. Try again.";
+
+            if (found is { Recognised: true }) _typed = code;
+        }
+        finally { _busy = false; _loading = false; }
+    }
+
+    private async Task RedeemAsync()
+    {
+        if (_busy || _invitation is not { Recognised: true }) return;
+
+        _busy = true;
+        try
+        {
+            var code = string.IsNullOrWhiteSpace(Token) ? _typed.Trim() : Token!;
+            var result = await AdminClient.RedeemInvestigationCodeAsync(
+                code, string.IsNullOrWhiteSpace(_displayName) ? null : _displayName.Trim());
+
+            if (result is { Joined: true })
+            {
+                _joined = result;
+                return;
+            }
+
+            // A refusal arrives as a RESULT with the reason in it. The invitation is cleared so
+            // the screen goes back to the code box, which is where they can do something next.
+            _says = result?.Says ?? "That couldn't be done just now. Try again.";
+            _invitation = null;
+        }
+        finally { _busy = false; }
+    }
+}
