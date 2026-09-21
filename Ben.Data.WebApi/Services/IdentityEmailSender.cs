@@ -46,16 +46,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
     private readonly ILogger<IdentityEmailSender> _logger;
 
     private readonly SiteIdentity _site;
-    private readonly Mail.MailComposer _composer;
 
     public IdentityEmailSender(
-        IEmailService email, ILogger<IdentityEmailSender> logger, IOptions<SiteIdentity> site,
-        Mail.MailComposer composer)
+        IEmailService email, ILogger<IdentityEmailSender> logger, IOptions<SiteIdentity> site)
     {
         _email  = email;
         _logger = logger;
         _site   = site.Value;
-        _composer = composer;
     }
 
     /// <summary>
@@ -189,9 +186,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
             // A written template replaces the words; the link and its button are handed in, so
             // whoever wrote it could put the button where they wanted it. A confirmation letter
             // with no link is refused when the template is saved, not discovered here.
-            if (kind is not null && MailKinds.Find(kind) is { } info && supplied is not null)
-            {
-                var tables = new Dictionary<string, IReadOnlyDictionary<string, object?>>(
+            //
+            // The composing itself happens ONCE, where every letter passes — see
+            // OutboxEmailService.WithAnyTemplateAsync. This used to do it here as well, which was
+            // fine while it was the only letter that did; doing both would now render the template
+            // twice, and the second pass has no link to hand it.
+            var payload = new MailPayload(
+                Tables: new Dictionary<string, IReadOnlyDictionary<string, object?>>(
                     StringComparer.OrdinalIgnoreCase)
                 {
                     ["AppUsers"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
@@ -200,17 +201,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
                         ["DisplayName"] = displayName,
                         ["UserName"] = displayName,
                     },
-                };
+                },
+                Supplied: supplied?.ToDictionary(
+                    pair => pair.Key,
+                    pair => new MailSuppliedValue(pair.Value.Value, pair.Value.IsHtml),
+                    StringComparer.OrdinalIgnoreCase));
 
-                var (s2, h2) = await _composer.ComposeAsync(
-                    info, tables, SiteZone, subject, htmlBody, DateTime.UtcNow,
-                    CancellationToken.None, supplied);
-
-                subject = s2;
-                htmlBody = h2;
-            }
-
-            await _email.SendAsync(new EmailMessage(to, subject, htmlBody, Kind: kind));
+            await _email.SendAsync(new EmailMessage(to, subject, htmlBody, Kind: kind, Payload: payload));
             _lastSendSucceeded = true;
         }
         catch (Exception ex)

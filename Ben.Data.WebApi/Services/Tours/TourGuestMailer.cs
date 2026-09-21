@@ -75,7 +75,12 @@ public sealed class TourGuestMailer
                 Attachments: [new EmailAttachment("tour.ics", IcsBuilder.ContentType, calendar)],
                 // A guest hitting reply means to reach the business walking them around a city at
                 // night, not our support address — when the business gave one to reply to.
-                ReplyTo: tour.ReplyTo, Kind: MailKinds.TourSignUp.Key), ct);
+                // The letter says which it IS. One method sends both the sign-up and the
+                // reminder, and it named every one of them a sign-up — so a reminder was filed
+                // under the wrong kind in the outbox, and the tour-reminder template could never
+                // apply to anything (item 246, found 2026-09-21).
+                ReplyTo: tour.ReplyTo,
+                Kind: reminder ? MailKinds.TourReminder.Key : MailKinds.TourSignUp.Key), ct);
 
             return true;
         }
