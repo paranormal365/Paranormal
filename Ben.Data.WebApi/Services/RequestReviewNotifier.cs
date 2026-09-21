@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -90,7 +91,7 @@ public sealed class RequestReviewNotifier
           + "The submission may include photos and other files; all of it is on the review page.</p>"
           + "<p>Other groups may be reviewing this request too — the first group to accept it "
           + "takes the case.</p>",
-            recipients, byUserId, ct);
+            recipients, byUserId, ct, MailKinds.RequestOpenedForReview);
     }
 
     /// <summary>The race is over: tell every OTHER reviewing group it is no longer available.</summary>
@@ -115,7 +116,7 @@ public sealed class RequestReviewNotifier
                 $"<p>The investigation request in {request.City}, {request.State} that your group "
               + "was reviewing has been taken on by another group, so it is no longer available. "
               + "No further action is needed, and any votes cast are simply closed.</p>",
-                recipients, byUserId, ct);
+                recipients, byUserId, ct, MailKinds.RequestNoLongerAvailable);
         }
     }
 
@@ -135,6 +136,6 @@ public sealed class RequestReviewNotifier
           + $"<p>{contactLine}</p>"
           + $"<p><a href=\"/my-cases/{caseId}\">Open your case</a> to see what happens next and to "
           + "send messages to your group from the Messages tab.</p>",
-            [clientUserId], byUserId, ct);
+            [clientUserId], byUserId, ct, MailKinds.RequestAccepted);
     }
 }
