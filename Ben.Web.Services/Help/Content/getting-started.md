@@ -320,6 +320,23 @@ Already signed in? **Profile → Security → Password** does the same job witho
 trip: it offers *Add password* if your account has none, and an ordinary change-password form if
 it does.
 
+## An account somebody else made for you
+
+Sometimes an account exists before you ever asked for one — somebody at IsHaunted.com sets one up
+so you can be added to something. When that happens you get an email saying so, naming who made it.
+
+**Read it even if you were expecting it.** The account was created with a password somebody else
+typed, which means for as long as that password stands, the only person who knows how to get in is
+not you. The email carries a button that lets you choose your own. Doing that replaces theirs, and
+from that moment the account is only yours.
+
+If you were **not** expecting it, choosing a password is still the right first move — it takes the
+account out of anybody else's hands while you work out what happened. Reply to the email if you
+would rather it was removed altogether.
+
+This is one of the few emails you cannot turn off. "An account exists in your name" is not a
+preference, and somebody who had switched everything off would never find out.
+
 ## Empty, or broken?
 
 A list that shows nothing is telling you one of two different things, and the page says which.

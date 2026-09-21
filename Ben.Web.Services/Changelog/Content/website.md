@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-21
 
+- If an account is ever made for you before you asked for one, you are now told. The email names
+  who set it up and carries a button that puts the account in your hands alone. It is one of the
+  few emails that cannot be turned off.
+
 - A guest on the night can send you what their own phone recorded. Open an investigation, press
   **Guest code**, and show the square code it gives you — on a tablet, a phone, or a printed sheet.
   Anybody who scans it signs in and can send photographs, audio, video and readings to that one

@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-21
 
+- An account created for somebody who did not ask for one now writes to them, naming who set it up
+  and carrying a link that hands it over. The letter is essential and cannot be declined.
+
 - The apps can join an investigation from a code a guide is showing, and can ask what a code is
   for before anybody signs in. What a code buys is sending to that one visit; reading is
   unchanged, so a guest gets back only what they sent.
