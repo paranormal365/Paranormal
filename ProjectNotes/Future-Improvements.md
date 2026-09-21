@@ -13000,7 +13000,7 @@ the thing that sends it, and changing a word is a deploy.
 Related: [[239]] for the outbox and the list screen it already designed.
 
 
-## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (OPEN — Ben, 2026-09-20)
+## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (FIRST ASK BUILT 2026-09-21; the second ask is item 248)
 
 Ben, while item 246 was being built:
 

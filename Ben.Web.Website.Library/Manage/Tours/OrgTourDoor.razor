@@ -1,0 +1,124 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/tour-door"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit.Scan
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    The meeting point (item 247).
+
+    THE READER IS STANDING ON A DARK STREET WITH A QUEUE BEHIND THEM. So the camera is the first
+    thing on the screen, the answer is one sentence in type big enough to read at arm's length,
+    and the colour says yes or no before the words are read.
+
+    Every refusal is still a sentence rather than a status, because "we don't recognise that code"
+    tells a guide what to do next and a red cross does not.
+*@
+
+<PageTitle>At the meeting point</PageTitle>
+
+<div class="container py-3" style="max-width:640px;">
+
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/events/{EventId}")">
+            <BenIcon Name="chevron-left" Class="me-1" />The walk
+        </a>
+        <h3 class="h5 mb-0">At the meeting point<HelpLink Slug="organization-administration" Anchor="tour-passes" /></h3>
+    </div>
+
+    @if (_refusedPage is { } why)
+    {
+        <div class="alert alert-warning" id="tour-door-refused">@why</div>
+    }
+    else
+    {
+        <BenQrScanner OnScanned="OnScannedAsync" Class="mb-3" />
+
+        @if (_scan is { } scan)
+        {
+            <div class="card mb-3 @(scan.Admitted ? "border-success" : "border-danger")" id="tour-door-scan">
+                <div class="card-body">
+                    <div class="fs-5 fw-semibold @(scan.Admitted ? "text-success" : "text-danger")">
+                        <BenIcon Name="@(scan.Admitted ? "check" : "x")" Class="me-1" />
+                        @scan.Says
+                    </div>
+                    @if (scan.Admitted && scan.AlreadyIn)
+                    {
+                        @* Said loudly. A guide has to tell a queue-jumper from somebody whose
+                           friend scanned their code a minute ago. *@
+                        <div class="small text-secondary mt-1">
+                            This pass had already been scanned.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* The fallback a guide needs when the camera will not play: a code read out over the
+           phone, or typed from the guest's screen. *@
+        <div class="card">
+            <div class="card-body">
+                <label class="form-label" for="tour-door-code">Or type the code</label>
+                <div class="input-group">
+                    <input id="tour-door-code" class="form-control" @bind="_typed"
+                           placeholder="The code under the guest's pass" />
+                    <button type="button" class="btn btn-primary" id="tour-door-check"
+                            @onclick="@(() => OnScannedAsync(_typed))" disabled="@_busy">
+                        @(_busy ? "Checking…" : "Check")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private TourScanResult? _scan;
+    private string _typed = string.Empty;
+    private bool _busy;
+    private string? _refusedPage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
+        }
+    }
+
+    /// <summary>
+    /// One scan, from the camera or the box.
+    /// </summary>
+    /// <remarks>
+    /// A refused scan arrives as a RESULT and is shown as the guide's sentence. Only a genuine
+    /// failure to reach the server becomes the page's own message — the difference matters,
+    /// because "we don't recognise that code" is an answer and "could not reach the site" is not.
+    /// </remarks>
+    private async Task OnScannedAsync(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code) || _busy) return;
+
+        _busy = true;
+        try
+        {
+            var (result, error) = await AdminClient.ScanTourPassAsync(OrgId, EventId, code.Trim());
+
+            if (result is not null)
+            {
+                _scan = result;
+                _typed = string.Empty;
+            }
+            else
+            {
+                _refusedPage = error ?? "That could not be checked just now. Try again.";
+            }
+        }
+        finally { _busy = false; }
+    }
+}
