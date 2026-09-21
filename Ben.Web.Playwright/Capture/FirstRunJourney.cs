@@ -41,7 +41,16 @@ public sealed class FirstRunJourney : BenTestBase
     private string TeamName => $"Hollow Creek Paranormal {_stamp}";
     private string TeamSlug => $"hollow-creek-{_stamp}";
     private string LeadEmail => $"lead-{_stamp}@example.test";
-    private const string Password = "JourneyPassw0rd!2026";
+    /// <summary>
+    /// Generated per run, never written down.
+    /// </summary>
+    /// <remarks>
+    /// This was an inline literal until <c>NoCredentialsInTheRepoTests</c> caught it. The
+    /// repository is public and development shares production's database, so a password constant
+    /// in a tracked file is a live credential for whatever account the fixture creates with it —
+    /// and the journey deliberately signs somebody up.
+    /// </remarks>
+    private readonly string _password = NewTestPassword();
 
     [OneTimeSetUp]
     public void SkipUnlessAsked()
@@ -182,7 +191,7 @@ public sealed class FirstRunJourney : BenTestBase
             await FillAndConfirmAsync("#signup-name", "Casey Hollow");
             await TypeHandleAsync($"casey{_stamp}");
             await FillAndConfirmAsync("#signup-email", LeadEmail);
-            await FillAndConfirmAsync("#signup-password", Password);
+            await FillAndConfirmAsync("#signup-password", _password);
         });
 
         await StepAsync("create the account", async () =>
