@@ -98,7 +98,23 @@ public static class MailStarters
             MailBlocks.Card("The details", "Written out here: where, when, and anything to bring."),
             MailBlocks.Button("Answer", "{SiteUrl}"),
             MailBlocks.Paragraph("If this was not meant for you, ignore it.")),
-        [MailKinds.StaffInvite.Key, MailKinds.EventAnnouncement.Key, MailKinds.AccountMadeForYou.Key]);
+        [MailKinds.StaffInvite.Key, MailKinds.EventAnnouncement.Key]);
+
+    public static readonly MailStarter AccountMade = new(
+        "account-made", "An account somebody else made",
+        "What happened, who did it, and the button that puts the account in their hands.",
+        "An account was made for you on {SiteName}",
+        Branded(
+            MailBlocks.Heading("An account was made for you"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. {MadeBy} made an account on "
+                               + "{SiteName} using this address. You have not signed in to it."),
+            MailBlocks.Paragraph("Choose your own password below. Until you do, the only password "
+                               + "this account has is the one they typed."),
+            "{SetPasswordButton}",
+            MailBlocks.Paragraph("If you were not expecting this, choosing a password is still the "
+                               + "safest thing to do — it takes the account out of anybody else's "
+                               + "hands. Reply to this message if you would rather it was removed.")),
+        [MailKinds.AccountMadeForYou.Key]);
 
     public static readonly MailStarter BookingConfirmed = new(
         "booking-confirmed", "A booking, with the pass",
@@ -124,7 +140,8 @@ public static class MailStarters
 
     public static readonly IReadOnlyList<MailStarter> All =
     [
-        Confirmation, PasswordReset, Receipt, Invoice, Invitation, BookingConfirmed, Plain,
+        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, BookingConfirmed,
+        Plain,
     ];
 
     /// <summary>

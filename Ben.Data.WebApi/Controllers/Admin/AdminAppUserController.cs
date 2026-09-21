@@ -17,10 +17,19 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
     private readonly UserManager<AppUser> _userManager;
     private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly IAuditLogService _auditLog;
+    private readonly Ben.Data.WebApi.Services.IConfirmationMailer? _mailer;
+    private readonly Ben.Data.Common.SiteIdentity _site;
+    private readonly ILogger<AdminAppUserController>? _log;
 
+    // The mailer, the site's own address and the log are OPTIONAL and TRAILING on purpose. Twenty
+    // test files broke the last time a service gained a required constructor argument, and a
+    // letter is not a reason to make every fixture that builds this controller supply one.
     public AdminAppUserController(IDbContextFactory<BenDataContext> dbContextFactory, IMapper mapper,
         IAuditLogService auditLog, UserManager<AppUser> userManager,
-        Ben.Data.WebApi.Services.UserHandleService handles)
+        Ben.Data.WebApi.Services.UserHandleService handles,
+        Ben.Data.WebApi.Services.IConfirmationMailer? mailer = null,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity>? site = null,
+        ILogger<AdminAppUserController>? log = null)
         : base(dbContextFactory, mapper, auditLog)
     {
         _handles     = handles;
@@ -28,6 +37,9 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         _mapper      = mapper;
         _userManager = userManager;
         _auditLog    = auditLog;
+        _mailer      = mailer;
+        _site        = site?.Value ?? new Ben.Data.Common.SiteIdentity();
+        _log         = log;
     }
 
     /// <summary>Suppresses the base Create(TEntity) route — use CreateUser instead.</summary>
@@ -235,7 +247,80 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         if (request.IsSuperAdmin)
             await _userManager.AddToRoleAsync(user, RoleNames.SuperAdmin);
 
+        await TellThemTheirAccountExistsAsync(user);
+
         return CreatedAtAction(nameof(GetDetail), new { id = user.Id }, _mapper.Map<AppUserAdminRecord>(user));
+    }
+
+    /// <summary>
+    /// Writes to somebody whose account was just made for them.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this is not optional and has no tick box.</b> The account exists under their
+    /// address with a password somebody else chose, and until this letter arrives the only person
+    /// who can get into it is not its owner. "Should we tell them?" is not a question the person
+    /// who made it gets to answer — which is also why the letter itself cannot be declined.</para>
+    ///
+    /// <para><b>A reset link, not the password.</b> Mailing the password would make two people who
+    /// know it rather than one, permanently, in a message that sits in an inbox. The link only
+    /// grants the power to replace it, so it hands the account over instead of copying the key.
+    /// It is the ordinary reset token, so it expires the way every other one does.</para>
+    ///
+    /// <para><b>It never fails the creation.</b> The account is made either way; a letter that
+    /// could not be sent is logged with the link in it, the same fallback every other flow here
+    /// uses, so somebody can still be reached by hand.</para>
+    /// </remarks>
+    private async Task TellThemTheirAccountExistsAsync(AppUser user)
+    {
+        if (_mailer is null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+        try
+        {
+            // BASE64URL, not the raw token. Identity's own /resetPassword decodes what it is
+            // given before checking it, and a raw token makes it throw FormatException and answer
+            // "invalid token" — so the button in the letter would have failed every single time,
+            // for a reason nobody could have diagnosed from the message. Its /forgotPassword
+            // endpoint encodes the same way before mailing, which is the shape the reset page and
+            // this link both have to match.
+            var raw = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var code = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(
+                System.Text.Encoding.UTF8.GetBytes(raw));
+
+            // handover=1 sends the page at the door that accepts an UNCONFIRMED address, which
+            // every account made this way has. Without it the button reads "invalid token" every
+            // single time, and blames the code for a rule about the address.
+            var link = _site.AbsoluteUrl(
+                $"/reset-password?email={Uri.EscapeDataString(user.Email)}"
+              + $"&code={Uri.EscapeDataString(code)}&handover=1");
+
+            // Named rather than anonymous: "Somebody made you an account" is alarming in a way
+            // that a name is not, and the reader has to decide whether they expected this.
+            var madeBy = await WhoIsAskingAsync() ?? _site.Name;
+
+            if (!await _mailer.TrySendAccountMadeForYouAsync(user, user.Email!, link, madeBy))
+            {
+                _log?.LogWarning(
+                    "Could not tell {UserId} that an account was made for them. Their handover link "
+                  + "is {Link}", user.Id, link);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Could not tell {UserId} that an account was made for them.", user.Id);
+        }
+    }
+
+    /// <summary>The name of whoever is making the account, for the letter to say.</summary>
+    private async Task<string?> WhoIsAskingAsync()
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId == Guid.Empty) return null;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.AppUsers.AsNoTracking()
+            .Where(u => u.Id == actorId)
+            .Select(u => u.DisplayName)
+            .FirstOrDefaultAsync();
     }
 
     /// <summary>Updates editable profile fields including audit timestamps.</summary>

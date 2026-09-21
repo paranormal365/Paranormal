@@ -101,10 +101,35 @@ public static class MailKinds
          new("ResetButton", "A ready-made button pointing at that link.", IsHtml: true, Provides: "a way to reset"),
          new("ResetCode", "The code to type, for a mail client that mangles links.")]);
 
+    /// <summary>
+    /// Somebody else made this person an account, and until this letter they had no way to know.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it carries a way to set a password rather than a password.</b> The account was
+    /// made with one somebody else chose and typed, which means the only person who currently
+    /// knows how to get in is not its owner. Mailing that password would make it two people who
+    /// know it, permanently, in a message that sits in an inbox. So the letter carries a link that
+    /// lets the owner choose their own, which takes the account away from whoever set it up —
+    /// which is the whole point of telling them.</para>
+    ///
+    /// <para><b>Not declinable.</b> "An account exists in your name" is not a preference. Somebody
+    /// who has opted out of everything this site sends still has to be told that, or the opt-out
+    /// becomes the reason they never find out.</para>
+    ///
+    /// <para><b>No Organizations table</b>, because the one thing that sends this has no
+    /// organization to name: a group adding somebody sends them an invitation to accept, not an
+    /// account they never asked for. Offering <c>{Organizations.Name}</c> here would be a token
+    /// that renders empty every time.</para>
+    /// </remarks>
     public static readonly MailKindInfo AccountMadeForYou = new(
         "account-made-for-you", "An account was made for you",
-        "Somebody was added by a group or a client, and has not signed in yet.",
-        ["AppUsers", "Organizations"]);
+        "Somebody made an account under this address, and its owner has not signed in yet.",
+        ["AppUsers"],
+        [new("SetPasswordUrl", "The link that lets them choose their own password.",
+             Required: true, Provides: "a way in"),
+         new("SetPasswordButton", "A ready-made button pointing at that link.",
+             IsHtml: true, Provides: "a way in"),
+         new("MadeBy", "Who made the account, as the reader would recognise them.")]);
 
     public static readonly MailKindInfo SomebodyUsedYourAddress = new(
         "somebody-used-your-address", "Somebody tried to use your address",
