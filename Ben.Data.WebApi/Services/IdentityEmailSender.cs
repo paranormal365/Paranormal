@@ -38,6 +38,17 @@ public interface IConfirmationMailer
 {
     /// <summary>Sends the confirmation link. False means it did not leave this machine.</summary>
     Task<bool> TrySendConfirmationAsync(AppUser user, string email, string confirmationLink);
+
+    /// <summary>
+    /// Tells somebody an account was made for them, and hands them the way to take it over.
+    /// </summary>
+    /// <param name="user">The account that now exists.</param>
+    /// <param name="email">Where to write. The account's address, which nobody has proved yet.</param>
+    /// <param name="setPasswordUrl">A reset link, which is how an owner chooses their own password.</param>
+    /// <param name="madeBy">Who made it, as the reader would recognise them.</param>
+    /// <returns>False when it did not leave this machine, which has been logged.</returns>
+    Task<bool> TrySendAccountMadeForYouAsync(
+        AppUser user, string email, string setPasswordUrl, string madeBy);
 }
 
 public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMailer
@@ -144,6 +155,51 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
             linkKind: "password reset", link: resetLink,
             kind: MailKinds.ResetYourPassword.Key,
             supplied: Links("ResetUrl", "ResetButton", "Reset password", resetLink));
+
+    /// <summary>
+    /// An account somebody else made, and the way for its owner to take it over.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The gap this closes.</b> An account could be created for somebody — their address,
+    /// a password a stranger typed — and nothing told them. They held an account on a live site
+    /// they had never heard of, with a password they did not know and could not change, because
+    /// changing it starts with knowing it exists. The letter was declared and sent by nothing for
+    /// as long as the letter list has existed.</para>
+    ///
+    /// <para><b>It carries a reset link, not the password.</b> Mailing the password would make two
+    /// people who know it rather than one, for ever, in a message that sits in an inbox. A reset
+    /// link lets the owner choose their own, which is what takes the account out of the hands of
+    /// whoever set it up.</para>
+    ///
+    /// <para><b>Sent whether or not the address is confirmed</b> — it is precisely the unconfirmed
+    /// case that needs it, since a confirmed one belongs to somebody who has already been here.
+    /// The address may not be theirs at all, which is why the letter never says what the password
+    /// is and the link only ever grants the power to replace it.</para>
+    /// </remarks>
+    public async Task<bool> TrySendAccountMadeForYouAsync(
+        AppUser user, string email, string setPasswordUrl, string madeBy)
+    {
+        var who = WebUtility.HtmlEncode(
+            string.IsNullOrWhiteSpace(madeBy) ? "Somebody" : madeBy.Trim());
+
+        await SendAsync(email, $"An account was made for you on {_site.Name}",
+            BenEmailLayout.Wrap(_site, "An account was made for you",
+                $"<p>{who} made an account on {WebUtility.HtmlEncode(_site.Name)} using this "
+              + "address. You have not signed in to it.</p>"
+              + "<p>Use the button below to choose your own password. Until you do, the only "
+              + "password this account has is the one they typed.</p>"
+              + "<p>If you were not expecting this, choosing a password is still the safest thing "
+              + "to do — it takes the account out of anybody else's hands. Reply to this message "
+              + "if you would rather it was removed.</p>",
+                buttonText: "Choose my password", buttonUrl: setPasswordUrl),
+            linkKind: "account handover", link: setPasswordUrl,
+            kind: MailKinds.AccountMadeForYou.Key,
+            supplied: Links("SetPasswordUrl", "SetPasswordButton", "Choose my password", setPasswordUrl,
+                            ("MadeBy", string.IsNullOrWhiteSpace(madeBy) ? "Somebody" : madeBy.Trim())),
+            displayName: user.DisplayName);
+
+        return _lastSendSucceeded;
+    }
 
     /// <summary>
     /// The reset email carries a finished link, not a bare code.

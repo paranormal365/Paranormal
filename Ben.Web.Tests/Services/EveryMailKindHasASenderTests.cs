@@ -44,7 +44,10 @@ public sealed class EveryMailKindHasASenderTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotSentYet = new(StringComparer.Ordinal)
     {
-        ["AccountMadeForYou"]        = "nothing creates an account FOR somebody and tells them so — the walk-up and client paths make one and send a confirmation instead. It wants a letter written, not a label moved.",
+        // Empty, and it must stay that way. Every declared letter is now sent by something; the
+        // last one out was AccountMadeForYou, which waited from the day this list was written
+        // (2026-09-21) for the one path that really does make an account for somebody else to
+        // start telling them about it.
     };
 
     /// <summary>Every kind named by something that actually sends, anywhere in the API.</summary>
