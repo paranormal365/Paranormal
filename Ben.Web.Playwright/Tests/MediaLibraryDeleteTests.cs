@@ -115,16 +115,25 @@ public class MediaLibraryDeleteTests : BenTestBase
     }
 
     /// <summary>
-    /// Somebody else's file offers no delete at all.
+    /// Nothing in the library belongs to anybody else.
     /// </summary>
     /// <remarks>
-    /// Not offered rather than offered and refused — the dead-end click items 149 and 150 ruled
-    /// out. The library shows public files from everybody, so on a seeded database there is
-    /// something here that is not this person's; if there is not, the test says so instead of
-    /// passing on an empty page.
+    /// <para>This test used to assert the opposite — that among the cards there was one without a
+    /// delete, because the library showed every public file on the site and some of them were
+    /// other people's. That is the behaviour Ben removed on 2026-09-21: <i>"Media library should
+    /// show only library content for the person who is logged in, so 'mine' not public or
+    /// all."</i></para>
+    ///
+    /// <para>So the rule inverts, and it is worth holding in this direction too: every card on
+    /// this page is the viewer's own, which means every card offers a delete. A card here that
+    /// could not be deleted would mean somebody else's file had got back in.</para>
+    ///
+    /// <para>It refuses an empty page rather than passing on one, because "no files" and "no
+    /// files belonging to anybody else" look identical and only one of them is this rule
+    /// working.</para>
     /// </remarks>
     [Test]
-    public async Task Somebody_elses_file_offers_no_delete()
+    public async Task The_library_holds_only_this_persons_own_files()
     {
         await LoginAsync(MemberEmail, MemberPassword);
         await Page.GotoAsync($"{BaseUrl}/media-library");
@@ -137,7 +146,8 @@ public class MediaLibraryDeleteTests : BenTestBase
         var deletes = await Main.Locator("[data-testid=library-delete]").CountAsync();
 
         Assert.That(total, Is.GreaterThan(0), "the library drew no files at all");
-        Assert.That(deletes, Is.LessThan(total),
-            "every file offered a delete — the owner check is not reaching the library");
+        Assert.That(deletes, Is.EqualTo(total),
+            $"{total - deletes} of {total} cards offered no delete, so the library is still "
+          + "showing files this person does not own");
     }
 }
