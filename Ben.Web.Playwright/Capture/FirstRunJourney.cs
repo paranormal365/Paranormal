@@ -57,6 +57,22 @@ public sealed class FirstRunJourney : BenTestBase
     {
         if (Environment.GetEnvironmentVariable("BEN_JOURNEY") != "1")
             Assert.Ignore("Set BEN_JOURNEY=1 to walk the first-run journey. It writes real rows.");
+
+        // Not on the shared scratch database.
+        //
+        // This walk FOUNDS A GROUP every time it runs, and the groups outlive the run. Seven runs
+        // on 2026-09-21 left enough of them in IsHauntedDb_e2e to fail two tests that have nothing
+        // to do with this file — OrgList_ShowsBenCo and AThreadWithNoMessagesOpensWithoutKilling-
+        // ThePage — and cost an hour working out whether the branch under test had broken them.
+        // A fixture that writes rows other tests can see has to say so before it writes them.
+        var db = Environment.GetEnvironmentVariable("BEN_E2E_DB");
+        if (string.IsNullOrWhiteSpace(db) || db == "IsHauntedDb_e2e")
+        {
+            Assert.Ignore(
+                "This walk founds a real group that outlives the run, so it must not share the "
+              + "suite's database. Give it one of its own:  BEN_E2E_DB=IsHauntedDb_journey "
+              + "BEN_JOURNEY=1 scripts/run-e2e.sh --filter FirstRunJourney");
+        }
     }
 
     [OneTimeTearDown]
