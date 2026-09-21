@@ -108,6 +108,8 @@ public sealed class OutboxEmailService : IEmailService
     {
         try
         {
+            if (await WasDeclinedAsync(message, ct)) return;
+
             message = await WithAnyTemplateAsync(message, ct);
 
             await using var db = await _db.CreateDbContextAsync(ct);
@@ -141,6 +143,56 @@ public sealed class OutboxEmailService : IEmailService
     /// editor, or a body already wrapped in the shell. Two headers stacked up would be worse than
     /// none, and the check is on the icon's file name, which both carry and nothing else does.</para>
     /// </remarks>
+    /// <summary>
+    /// Whether this person has asked not to receive this letter.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Here, because here is where every letter passes.</b> A preference enforced at each
+    /// mailer is a preference that holds for the mailers somebody remembered — and the one letter
+    /// that forgot is the one that makes a person stop trusting the switch.</para>
+    ///
+    /// <para><b>The kind's own flag is checked first, and the table second.</b> Proving an address,
+    /// resetting a password and a receipt cannot be declined, so no lookup happens for them at all
+    /// and a stray row could not silence one. The screen never offers them, but this is the rule
+    /// rather than the screen's good manners.</para>
+    ///
+    /// <para>A failure here sends the letter. Someone receiving a notice they had switched off is
+    /// a nuisance; a database hiccup silently swallowing everybody's mail is the failure the whole
+    /// outbox exists to prevent.</para>
+    /// </remarks>
+    private async Task<bool> WasDeclinedAsync(EmailMessage message, CancellationToken ct)
+    {
+        if (message.Kind is not { Length: > 0 } kind) return false;
+        if (MailKinds.Find(kind) is not { CanDecline: true }) return false;
+        if (string.IsNullOrWhiteSpace(message.To)) return false;
+
+        try
+        {
+            await using var db = await _db.CreateDbContextAsync(ct);
+
+            var declined = await db.UserEmailOptOuts.AsNoTracking()
+                .AnyAsync(o => o.Kind == kind
+                            && o.AppUser != null
+                            && o.AppUser.Email == message.To, ct);
+
+            if (declined)
+            {
+                _log.LogInformation(
+                    "The {Kind} letter to {Recipient} was not sent: they asked not to receive it.",
+                    kind, message.To);
+            }
+
+            return declined;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "Could not read email preferences for the {Kind} letter to {Recipient}; it was "
+              + "sent rather than withheld.", kind, message.To);
+            return false;
+        }
+    }
+
     /// <summary>
     /// The letter as a written template would have it, or exactly as it arrived.
     /// </summary>
@@ -186,7 +238,12 @@ public sealed class OutboxEmailService : IEmailService
 
     internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc, SiteIdentity? site = null)
     {
-        var body = Headed(message.HtmlBody ?? string.Empty, site, message.TimesShownInZone);
+        // The footer says where to turn this off, for the letters that may be turned off. A
+        // preference screen nothing links to is one nobody finds.
+        var canDecline = message.Kind is { Length: > 0 } k
+                      && MailKinds.Find(k) is { CanDecline: true };
+
+        var body = Headed(message.HtmlBody ?? string.Empty, site, message.TimesShownInZone, canDecline);
         var truncated = body.Length > MaximumBodyBytes;
 
         var row = new OutboxEmail
@@ -254,13 +311,15 @@ public sealed class OutboxEmailService : IEmailService
     /// <para>No title is passed: these bodies were written as whole letters and open with their own
     /// first line, so a heading taken from the subject would say the same thing twice.</para>
     /// </remarks>
-    private static string Headed(string body, SiteIdentity? site, string? timesShownInZone)
+    private static string Headed(string body, SiteIdentity? site, string? timesShownInZone,
+                                 bool canDecline = false)
     {
         if (site is null) return body;
         if (string.IsNullOrWhiteSpace(body)) return body;
         if (MailHeader.IsAlreadyHeaded(body) || MailHeader.IsWholeDocument(body)) return body;
 
-        return BenEmailLayout.Wrap(site, title: "", bodyHtml: body, timesShownInZone: timesShownInZone);
+        return BenEmailLayout.Wrap(site, title: "", bodyHtml: body, timesShownInZone: timesShownInZone,
+                                   canDecline: canDecline);
     }
 
     /// <summary>

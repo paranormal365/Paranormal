@@ -18,6 +18,14 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-21
+
+- The service records which letters a person has asked not to receive, and stops sending those. The
+  letters that get somebody back into their account, and receipts, cannot be declined.
+- Every letter the service sends can now carry wording written in administration, not only the
+  three that could before.
+- A group can be given a joining link, so its people can be let in without each having to apply.
+
 ## 2026-09-19
 
 - The dashboard's three calls hold their answers for five minutes, keyed by the range asked

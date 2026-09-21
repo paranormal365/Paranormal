@@ -56,10 +56,27 @@ public sealed record MailKindInfo(
     string Title,
     string Description,
     IReadOnlyList<string> Context,
-    IReadOnlyList<MailSuppliedToken>? Supplied = null)
+    IReadOnlyList<MailSuppliedToken>? Supplied = null,
+    bool CanDecline = false)
 {
     /// <summary>Values the mailer hands in when this letter is written.</summary>
     public IReadOnlyList<MailSuppliedToken> Supplied { get; init; } = Supplied ?? [];
+
+    /// <summary>
+    /// Whether somebody may ask not to receive this.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>False unless somebody says otherwise</b>, deliberately. The alternative default
+    /// would make every letter added in future optional the moment it is declared, including the
+    /// next one that turns out to be a password reset — and a preferences screen that lets a
+    /// person switch off the letter they need to get back into their account is a defect wearing
+    /// a feature's clothes.</para>
+    ///
+    /// <para>So the essential ones — proving an address, resetting a password, a receipt, a
+    /// warning that somebody used your address — simply never appear on the screen, and the rest
+    /// are marked one at a time.</para>
+    /// </remarks>
+    public bool CanDecline { get; init; } = CanDecline;
 }
 
 /// <summary>Every letter the site sends, by name.</summary>
@@ -119,7 +136,8 @@ public static class MailKinds
     public static readonly MailKindInfo RequestOpenedForReview = new(
         "request-opened-for-review", "A request is open for review",
         "Tells groups that a new request may be voted on.",
-        ["AppUsers", "Organizations"]);
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo RequestAccepted = new(
         "request-accepted", "A group accepted the request",
@@ -129,18 +147,21 @@ public static class MailKinds
     public static readonly MailKindInfo RequestNoLongerAvailable = new(
         "request-no-longer-available", "A request has gone",
         "Tells the other groups that a request they could see was taken or withdrawn.",
-        ["AppUsers", "Organizations"]);
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
 
     // ── A tour ────────────────────────────────────────────────────────────────
     public static readonly MailKindInfo TourSignUp = new(
         "tour-sign-up", "You're coming on a tour",
         "Confirms a place on a walk, with the details of where and when.",
-        ["AppUsers", "Tours", "Organizations"]);
+        ["AppUsers", "Tours", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo TourReminder = new(
         "tour-reminder", "Your tour is soon",
         "The reminder before a walk.",
-        ["AppUsers", "Tours", "Organizations"]);
+        ["AppUsers", "Tours", "Organizations"],
+        CanDecline: true);
 
     // ── A hosted event, for the guest ─────────────────────────────────────────
     public static readonly MailKindInfo BookingAsked = new(
@@ -169,37 +190,44 @@ public static class MailKinds
     public static readonly MailKindInfo EventGoingAhead = new(
         "event-going-ahead", "The event is going ahead",
         "The go decision, to everybody holding a booking.",
-        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo EventCalledOff = new(
         "event-called-off", "The event is off",
         "The no-go decision, to everybody holding a booking.",
-        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo EventAnnouncement = new(
         "event-announcement", "A message from the organisers",
         "Whatever the organisers wrote to everybody coming.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo SessionMoved = new(
         "session-moved", "A session has moved",
         "Tells somebody signed up to a session that it changed.",
-        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo SessionCancelled = new(
         "session-cancelled", "A session is off",
         "Tells somebody signed up to a session that it will not run.",
-        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo SessionPromoted = new(
         "session-promoted", "A place came free",
         "Tells somebody on a waiting list they are in.",
-        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"]);
+        ["AppUsers", "HostedEvents", "HostedEventSessions", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo EventThankYou = new(
         "event-thank-you", "Thank you for coming",
         "After the event, with anything the organisers left for attendees.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo StaffInvite = new(
         "staff-invite", "You have been asked to help",
@@ -214,7 +242,8 @@ public static class MailKinds
     public static readonly MailKindInfo AppealAnswered = new(
         "appeal-answered", "Your appeal has been answered",
         "The answer to somebody appealing a removal.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo ChooseYourEmails = new(
         "choose-your-emails", "Choose what we send you",
@@ -225,12 +254,14 @@ public static class MailKinds
     public static readonly MailKindInfo BookingsArrived = new(
         "bookings-arrived", "Bookings have arrived",
         "Tells the people who decide bookings that some are waiting.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo BookingsDigest = new(
         "bookings-digest", "Where your event stands",
         "The daily or weekly summary of an event's bookings.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
 
     // ── Money, and the plan ───────────────────────────────────────────────────
     public static readonly MailKindInfo PaymentReceipt = new(
@@ -241,17 +272,20 @@ public static class MailKinds
     public static readonly MailKindInfo SubscriptionLapsing = new(
         "subscription-lapsing", "Your plan is about to lapse",
         "Warns a group that payment has not arrived.",
-        ["AppUsers", "Organizations"]);
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo PlanChanged = new(
         "plan-changed", "Your plan has changed",
         "Tells a group what a change to their band means for them.",
-        ["AppUsers", "Organizations"]);
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
 
     public static readonly MailKindInfo EventCreditExpiring = new(
         "event-credit-expiring", "An event credit expires soon",
         "The warning before a bought credit runs out.",
-        ["AppUsers", "Organizations"]);
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
 
     // ── Looking after a place ─────────────────────────────────────────────────
     public static readonly MailKindInfo VenueClaimCode = new(

@@ -10908,6 +10908,40 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("UserEmails");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserEmailOptOut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("UserEmailOptOuts");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.UserEmailType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -17601,6 +17635,17 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
 
                     b.Navigation("UserEmailType");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.UserEmailOptOut", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.UserEmailType", b =>

@@ -16,6 +16,28 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-21
+
+- You can choose which of the site's emails you get. "Choose your emails" is on your profile and at
+  the foot of every letter you can turn off. Everything is on to begin with, and a switch takes
+  effect on the next letter.
+- A few letters are always sent — the ones that get you back into your account, a warning that
+  somebody used your address, and a receipt for something you paid for. That page says which.
+- More of what the site tells you now arrives by email as well as in the bell: a session cancelled,
+  moved, or a place coming free; an investigation request that went to another group; a plan about
+  to lapse or one that changed. These are the ones worth knowing about when you are not here.
+- A receipt is sent when a payment goes through. Every receipt is still on your group's billing
+  page.
+- What's on: an event you opened from the home page now offers the way back to where you came from,
+  as well as the group hosting it.
+- The help badge beside a heading is a badge again rather than a stray question mark.
+- Times on public event pages are shown on the event's own clock instead of UTC.
+- Your group's name in the list of groups is a link, so it can be opened in a new tab.
+- Opening a new case tells you what is still missing instead of leaving the button greyed out.
+- Starting a group names the address fields it is waiting for.
+- Your media library holds what you uploaded, once each. Profile pictures, the site's default
+  avatars, and files whose contents have gone are no longer listed.
+
 ## 2026-09-20
 
 - Administrators can write the site's emails. Pick a letter, pick a table and a column, and add a
