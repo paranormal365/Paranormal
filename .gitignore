@@ -130,3 +130,11 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
+
+# Built documents. Every one of these is produced from something else in the repo — the help
+# content, the ad copy, the investor HTML — by the scripts in docs/, so the PDF is an output and
+# not a source. Tracking them put a 33 MB binary in the history on every content edit.
+#
+# It also stopped a private document being committed by accident: the business licence was swept
+# in by a broad `git add` on 2026-09-21, on a repository that is public.
+docs/*.pdf
