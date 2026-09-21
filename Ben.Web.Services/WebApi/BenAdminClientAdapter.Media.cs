@@ -28,11 +28,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveShareV2Async(Guid shareId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/upload-file-shares-v2/{shareId}", token);
 
-    public Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default)
+    public Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(
+        string[]? contentTypePrefixes = null, string? scope = null, CancellationToken token = default)
     {
-        var url = "/api/media-library/files";
+        var query = new List<string>();
         if (contentTypePrefixes is { Length: > 0 })
-            url += $"?contentTypePrefixes={Uri.EscapeDataString(string.Join(',', contentTypePrefixes))}";
+            query.Add($"contentTypePrefixes={Uri.EscapeDataString(string.Join(',', contentTypePrefixes))}");
+        // Asked of the SERVER, not filtered in the browser. The library used to fetch every file
+        // the viewer could reach and hide most of them behind a chip, which shipped other people's
+        // file metadata to a page that then refused to show it.
+        if (!string.IsNullOrWhiteSpace(scope)) query.Add($"scope={Uri.EscapeDataString(scope)}");
+
+        var url = "/api/media-library/files" + (query.Count > 0 ? "?" + string.Join('&', query) : "");
         return _api.GetListAsync<UploadFileRecord>(url, token);
     }
 

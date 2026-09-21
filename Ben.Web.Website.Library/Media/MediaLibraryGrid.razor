@@ -261,10 +261,24 @@
     private UploadFileRecord? _detailFile;
     private bool _showCommentSettings;
 
+    /// <summary>
+    /// Which files to ask the server for — "personal" for somebody's own library, null for
+    /// everything they may reach (the picker, which is choosing what to attach to a case).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-21: <i>"Media library should show only library content for the person who is
+    /// logged in, so 'mine' not public or all."</i> Asked of the server rather than filtered here,
+    /// so the page stops receiving files it has no intention of showing.
+    /// </remarks>
+    [Parameter] public string? Scope { get; set; }
+
     // "Shared"/"Org" aren't offered here — the response deliberately doesn't carry per-file scope
     // tags (see MediaLibraryController's doc comment), so only what's derivable from UploadFileRecord
     // itself (owner, IsPublic) can be filtered client-side without an extra per-file lookup.
-    private static readonly string[] _scopeChips = ["All", "Mine", "Public"];
+    //
+    // And when the SERVER was asked for one person's own files, the chips are gone entirely: a
+    // filter offering "All" and "Public" over a list that is neither is three lies in a row.
+    private string[] _scopeChips => Scope is null ? ["All", "Mine", "Public"] : [];
     private string _scopeFilter = "All";
 
     private IEnumerable<UploadFileRecord> _filteredFiles => _scopeFilter switch
@@ -283,7 +297,7 @@
     {
         _loading = true;
         _error = null;
-        try { _allFilesResult = await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes); _allFiles = _allFilesResult.Items.ToList(); }
+        try { _allFilesResult = await AdminClient.GetMediaLibraryFilesAsync(ContentTypePrefixes, Scope); _allFiles = _allFilesResult.Items.ToList(); }
         catch { _error = "Failed to load media files."; }
         _loading = false;
     }
