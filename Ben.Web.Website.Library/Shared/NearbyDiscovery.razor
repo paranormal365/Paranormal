@@ -29,7 +29,7 @@
        page it sits on. *@
     <div class="container-fluid px-3 mt-5" id="nearby" style="max-width:1000px;">
         <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
-            <h4 class="mb-0">What's Near You</h4>
+            <h4 class="mb-0" id="whats-near-you">What's Near You</h4>
             <div class="d-flex align-items-center gap-2">
                 <label class="text-secondary small mb-0" for="nearby-radius">Within</label>
                 <select id="nearby-radius" class="form-select form-select-sm" style="width:110px;"
@@ -215,7 +215,10 @@
                                         <span class="nearby-card__actions">
                                             @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
                                             {
-                                                <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
+                                                @* Carries where it came from, so the event page can
+                                                   offer a way BACK here rather than only onward to
+                                                   the group (Ben, 2026-09-21). *@
+                                                <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}?from=nearby")"
                                                    class="btn btn-sm btn-outline-primary">See this event</a>
                                             }
                                             @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))

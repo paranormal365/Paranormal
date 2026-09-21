@@ -29,7 +29,8 @@
         <div class="flex-grow-1">
             The public feed has <strong>@reminder.FeedPostCount post@(reminder.FeedPostCount == 1 ? "" : "s")</strong>
             and is switched <strong>off</strong> — nobody outside this reminder can see any of it.
-            The switch is at <a class="alert-link" href="/admin/site-settings">Site Settings</a>.
+            The switch is at
+            <a class="alert-link" href="/admin/site-settings?setting=features.public-feed">Site Settings</a>.
             Screening is currently
             <strong>@(reminder.ScreeningIsAutomatic ? "automatic" : "manual-only — every photo and video waits for a moderator")</strong>.
         </div>

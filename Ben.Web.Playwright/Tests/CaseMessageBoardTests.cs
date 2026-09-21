@@ -80,19 +80,35 @@ public class CaseMessageBoardTests : BenTestBase
         if (string.IsNullOrEmpty(orgId)) { Assert.Ignore("Could not read the group from the URL."); return; }
 
         await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/new");
+        await WaitForTheCircuitAsync();
         await WaitUntilLoadedAsync();
 
         var title = $"Unwritten thread {Guid.NewGuid():N}";
-        await Page.FillAsync("#casecreatepage-case-title-b1b1", title);
-        await Page.FillAsync("#casecreatepage-street-address-5b76", "200 Cragfont Rd");
-        await Page.FillAsync("#casecreatepage-city-4662", "Castalian Springs");
-        await Page.FillAsync("#casecreatepage-state-7b45", "TN");
-        await Page.FillAsync("#casecreatepage-zip-code-ba79", "37031");
+        await FillAndConfirmAsync("#casecreatepage-case-title-b1b1", title);
+        await FillAndConfirmAsync("#casecreatepage-street-address-5b76", "200 Cragfont Rd");
+        await FillAndConfirmAsync("#casecreatepage-city-4662", "Castalian Springs");
+        await FillAndConfirmAsync("#casecreatepage-state-7b45", "TN");
+        await FillAndConfirmAsync("#casecreatepage-zip-code-ba79", "37031");
         // A public location, so nothing here depends on the private-engagement plan gate.
         await Page.CheckAsync("#case-place-kind-public");
 
+        // The title again, LAST.
+        //
+        // It is the first field on a freshly navigated page, and this page renders long before
+        // the circuit connects: a value typed in that window is in the DOM and is then overwritten
+        // by the first interactive render with the server's empty one. The keystroke is not
+        // ignored, it is erased — the documented Blazor Server race — and Open Case then stays
+        // disabled for want of a title, which is what made this test fail in a full run and pass
+        // on its own.
+        await FillAndConfirmAsync("#casecreatepage-case-title-b1b1", title);
+
         var open = Main.GetByRole(AriaRole.Button, new() { Name = "Open Case" })
                        .Or(Main.Locator("button.btn-primary")).First;
+
+        // Enabled before pressed, so a form the page has not accepted says so here rather than as
+        // a navigation that never happens.
+        await Expect(open).ToBeEnabledAsync(new() { Timeout = 20_000 });
+
         await ClickUntilUrlAsync(open, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
 
