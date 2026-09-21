@@ -652,10 +652,12 @@
                         <div>
                             <div class="h4 mb-0" id="place-figures-votes">@_figures.VoteCount</div>
                             <div class="text-secondary small">
-                                @(_figures.VoteCount == 1 ? "vote" : "votes")
-                                @if (_figures.VoteCount > 0)
+                                @* The space before "on" is written out. Razor eats the whitespace
+                                   between a @-expression and an @if, which rendered
+                                   "voteson 1 of them" — visible only in a photograph of the page. *@
+                                @(_figures.VoteCount == 1 ? "vote" : "votes")@if (_figures.VoteCount > 0)
                                 {
-                                    <text>on @_figures.VotedOnCount of them</text>
+                                    <text>&nbsp;on @_figures.VotedOnCount of them</text>
                                 }
                             </div>
                         </div>

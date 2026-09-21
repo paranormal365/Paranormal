@@ -31,6 +31,19 @@
         <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
             <h4 class="mb-0" id="whats-near-you">What's Near You</h4>
             <div class="d-flex align-items-center gap-2">
+                @* OUTSIDE the tabs on purpose. It lived inside the Places tab until 2026-09-21,
+                   and the tabs only render once a location search has actually succeeded — so
+                   somebody who declined the browser's location prompt, or whose area has nothing
+                   published, could not reach the one door that would let them add something.
+                   A link to "put a place on the map" must not depend on already having found
+                   places on the map. *@
+                @if (UserState.IsAuthenticated)
+                {
+                    <a class="btn btn-sm btn-outline-secondary" href="/places/new"
+                       data-testid="add-public-place">
+                        <BenIcon Name="map-pin" Class="me-1" />Add a public location
+                    </a>
+                }
                 <label class="text-secondary small mb-0" for="nearby-radius">Within</label>
                 <select id="nearby-radius" class="form-select form-select-sm" style="width:110px;"
                         value="@_radiusMiles"
@@ -141,16 +154,6 @@
                             Locations where groups have published their work. Anyone can add to a
                             public place's record.
                         </p>
-
-                        @if (UserState.IsAuthenticated)
-                        {
-                            <p class="mb-3">
-                                <a class="btn btn-sm btn-outline-secondary" href="/places/new"
-                                   data-testid="add-public-place">
-                                    <BenIcon Name="map-pin" Class="me-1" />Add a public location
-                                </a>
-                            </p>
-                        }
 
                         @if (_places.Count == 0)
                         {

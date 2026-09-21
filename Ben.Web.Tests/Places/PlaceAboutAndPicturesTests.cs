@@ -156,6 +156,25 @@ public sealed class PlaceAboutAndPicturesTests
     }
 
     [Fact]
+    public async Task The_signed_in_load_carries_the_description_too()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        await Controller(sqlite, Contributor).SetDescription(
+            placeId, new SetPlaceDescriptionRequest("Built in 1802 on the Cumberland."), default);
+
+        // The page reads the SIGNED-IN endpoint, not the public one. It did not select the
+        // description until 2026-09-21, so somebody wrote one, watched it save, and the next
+        // render said "nobody has written about this place yet" over the top of it. Both loads
+        // are covered because the page uses whichever matches the reader.
+        var result = await Controller(sqlite, Contributor).GetById(placeId, default);
+        var place = Assert.IsType<PlaceRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal("Built in 1802 on the Cumberland.", place.Description);
+    }
+
+    [Fact]
     public async Task Markup_is_stripped_rather_than_refused()
     {
         var (sqlite, placeId) = await SeedAsync();

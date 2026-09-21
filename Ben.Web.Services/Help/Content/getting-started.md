@@ -351,6 +351,8 @@ that exists rather than making a second one.
 invited, because somebody has to have asked. There is no way to type a home address here and
 publish a page about it, and that is on purpose.
 
+![A public location's page](/help/media/getting-started/public-location.png)
+
 ### Adding what you recorded
 
 On a public location's page, anybody signed in can add a photograph, a recording or a video, with

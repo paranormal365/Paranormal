@@ -188,7 +188,7 @@ public sealed class PlaceController : BenControllerBase
             .Select(p => new
             {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind, p.Description,
             })
             .FirstOrDefaultAsync(ct);
 
@@ -202,14 +202,18 @@ public sealed class PlaceController : BenControllerBase
                          db, id, GetCurrentUserId(), await CallerIsSuperAdminAsync(), ct);
 
         return Ok(inFull
+            // The description travels here too. It did not until 2026-09-21, and the signed-in
+            // load is the one the place page actually uses — so somebody wrote a description,
+            // saw it saved, and the next render showed "nobody has written about this place yet"
+            // over the top of it. Found by photographing the page for the help, not by any test.
             ? new PlaceRecord(
                 stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
                 stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-                stored.GeocodeNote, stored.Kind)
+                stored.GeocodeNote, stored.Kind, stored.Description)
             : PlaceDisclosure.Public(
                 stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
                 stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-                stored.GeocodeNote, stored.Kind));
+                stored.GeocodeNote, stored.Kind, stored.Description));
     }
 
     /// <summary>
