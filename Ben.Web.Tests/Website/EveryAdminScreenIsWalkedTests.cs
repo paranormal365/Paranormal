@@ -180,14 +180,6 @@ public sealed class EveryAdminScreenIsWalkedTests
             "A reference page for whoever is building the site, deliberately not offered to "
           + "people using it.",
 
-        ["/organization-security"] =
-            "A LEFTOVER. Its own subtitle calls it a \"Starter management UI\" — scaffolding from "
-          + "the security integration that the real screens replaced. Nothing links to it and "
-          + "nothing references it. The endpoints behind it ARE gated "
-          + "(SetAccessGrantAsync calls EnsureCanManageOrganizationAsync, and the interface says "
-          + "the actor must be a SuperAdmin or an Owner), so this is untidiness rather than a "
-          + "hole — but it is a page that registers groups, searches every user and sets grants, "
-          + "and it should probably be deleted rather than excused. Recorded 2026-09-20.",
     };
 
     private static IEnumerable<string> DeclaredPublicRoutes(Dictionary<string, string> files)
