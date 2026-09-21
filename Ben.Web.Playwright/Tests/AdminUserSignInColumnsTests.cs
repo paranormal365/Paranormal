@@ -138,9 +138,19 @@ public class AdminUserSignInColumnsTests : BenTestBase
     {
         for (var press = 0; press < 4; press++)
         {
-            if (await header.GetAttributeAsync("aria-sort") == direction) return await FirstRowTextAsync();
+            var before = await header.GetAttributeAsync("aria-sort");
+            if (before == direction) return await FirstRowTextAsync();
+
             await header.ClickAsync();
-            await WaitUntilLoadedAsync();
+
+            // Wait for the SORT to change, not for the page to look idle. A grid re-sorts without
+            // ever showing a spinner, so a settle-based wait returns at once, the next press lands
+            // before the last one has rendered, and two presses collapse into one — which left
+            // this stuck on "ascending" through a whole cycle in a full run while passing on a
+            // quiet machine (2026-09-21).
+            var moved = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < moved && await header.GetAttributeAsync("aria-sort") == before)
+                await Task.Delay(100);
         }
 
         Assert.Fail($"the heading would not sort {direction} after a full cycle of presses — "

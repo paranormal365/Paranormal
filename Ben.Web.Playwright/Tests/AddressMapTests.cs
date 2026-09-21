@@ -44,9 +44,17 @@ public class AddressMapTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/profile");
         await WaitUntilLoadedAsync();
 
-        await ClickUntilAsync(Page.GetByText("Contact", new() { Exact = true }).First,
-            Page.GetByRole(AriaRole.Button, new() { Name = "Add" }).First);
-        await ClickUntilAsync(Page.GetByRole(AriaRole.Button, new() { Name = "Add" }).First,
+        // The TAB, not any text saying "Contact".
+        //
+        // GetByText("Contact").First matched the footer link that every page carries, so the test
+        // navigated to the public Contact Us page and then waited for an Add button that page has
+        // never had. It only bit once the profile's tabs started rendering a moment later than the
+        // footer, at which point the first match flipped from the tab to the link (2026-09-21).
+        var contactTab = Main.GetByRole(AriaRole.Tab, new() { Name = "Contact", Exact = true });
+        await Expect(contactTab).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await ClickUntilAsync(contactTab, Main.GetByRole(AriaRole.Button, new() { Name = "Add" }).First);
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Add" }).First,
             Page.Locator(".ben-map").First);
 
         var map = Page.Locator(".ben-map").First;
