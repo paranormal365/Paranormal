@@ -27,6 +27,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   Everything added is looked at first, and the page tells you whether yours is showing yet.
 - Homes are not added this way, and cannot be. A private residence gets its page through the group
   a client invited.
+- Evidence at a public location can be voted on — something here, can't tell, or not convinced —
+  and the page adds it up: how many pieces it holds, how many votes, and what share falls each way.
+  A file counts once however it got there, so the same photograph on two routes is one piece of
+  evidence and not two.
+- Places are not ranked against each other, and will not be. A place shows its own figures.
+- Voting on a piece of evidence now answers with the right overall number straight away. It used to
+  come back as zero until the page was reloaded.
 
 - If an account is ever made for you before you asked for one, you are now told. The email names
   who set it up and carries a button that puts the account in your hands alone. It is one of the

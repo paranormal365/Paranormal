@@ -41,6 +41,7 @@ public sealed class PublicPlaceEvidenceController : ControllerBase
         var rows = await PlaceEvidencePublication.Showable(db, placeId)
             .Select(e => new PlaceAddedEvidenceRow(
                 e.Id,
+                e.UploadFileId,
                 e.UploadFile!.FileName,
                 e.UploadFile.ContentType,
                 e.Caption,

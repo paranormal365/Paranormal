@@ -100,14 +100,15 @@ public sealed class PublicPlaceController : ControllerBase
             // Same set the serving door will hand over, read from the one predicate.
             AddedEvidence: await PlaceEvidencePublication.Showable(db, id)
                 .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
-                    e.Id, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
+                    e.Id, e.UploadFileId, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
                     e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
                     e.DateCreated))
                 .ToListAsync(ct),
             // False for the same reason CanPost is: this endpoint is anonymous and cannot know
             // the reader. The page asks its own signed-in state and the kind of place, which is
             // the whole of the rule — anybody signed in may add, at a public location.
-            CanAddEvidence: false));
+            CanAddEvidence: false,
+            Figures: await PlaceEvidenceTally.ForPlaceAsync(db, id, ct)));
     }
 
     /// <summary>
@@ -315,7 +316,11 @@ public sealed record PublicPlaceResponse(
     /// </remarks>
     IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
     /// <summary>Whether this reader may add a file here. False for a visitor and off a public location.</summary>
-    bool CanAddEvidence = false);
+    bool CanAddEvidence = false,
+    /// <summary>
+    /// What the evidence here adds up to across every route (item 250). Trailing and optional.
+    /// </summary>
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null);
 
 /// <summary>
 /// One published case at a place, as a visitor sees it listed.

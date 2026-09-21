@@ -9,8 +9,15 @@ namespace Ben.Service.Models.Entities;
 /// apart for two different routes is how a page ends up drawing the wrong list.
 /// </remarks>
 /// <param name="AddedBy">The contributor's name — evidence nobody stands behind is worth less.</param>
+/// <param name="UploadFileId">
+/// The file itself, which is what a vote is keyed on. Carried so a vote cast on a place's page is
+/// the SAME vote the file holds wherever else it appears — the tally above the list means nothing
+/// if the page keeps its own second opinion. It does not open the bytes: those come only through
+/// the place-scoped door, which re-asks the publication rule.
+/// </param>
 public sealed record PlaceAddedEvidenceRow(
     Guid Id,
+    Guid UploadFileId,
     string FileName,
     string ContentType,
     string? Caption,
@@ -48,3 +55,40 @@ public sealed record NewPublicPlaceRequest(
 /// Cragfont, and two rows for one building would split its evidence in half.
 /// </param>
 public sealed record PlaceCreated(Guid Id, bool AlreadyExisted, string Says);
+
+/// <summary>
+/// What the evidence at one place adds up to (item 250).
+/// </summary>
+/// <remarks>
+/// <para>Reported per place and never compared across places: Ben decided 2026-09-21 that the site
+/// shows a place's own figures and does not order one property against another. Cragfont is a real
+/// building with real owners.</para>
+///
+/// <para>The score always travels with <c>VoteCount</c>, which is the rule <c>EvidenceVoteScore</c>
+/// sets — a sum read without its weight says nothing.</para>
+/// </remarks>
+/// <param name="EvidenceCount">Files counted once each, whatever route they arrived by.</param>
+/// <param name="VotedOnCount">
+/// How many of them anybody has weighed in on. Forty files and two votes is a different place from
+/// two files and forty, and a total alone cannot tell them apart.
+/// </param>
+/// <param name="ConfirmsShare">
+/// The share of opinion each way of seeing it holds, 0..1 — null when nobody has voted, because
+/// "nobody has said" and "everybody said no" are different facts.
+/// </param>
+public sealed record PlaceEvidenceFigures(
+    int EvidenceCount,
+    int VotedOnCount,
+    int VoteCount,
+    int Confirms,
+    int Disputes,
+    int Inconclusive,
+    int Score,
+    double? ConfirmsShare,
+    double? DisputesShare,
+    double? InconclusiveShare)
+{
+    /// <summary>A place nobody has contributed to yet.</summary>
+    public static readonly PlaceEvidenceFigures Nothing =
+        new(0, 0, 0, 0, 0, 0, 0, null, null, null);
+}

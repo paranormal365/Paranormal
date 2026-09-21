@@ -389,7 +389,9 @@ public sealed record PublicPlaceResponse(
     /// <summary>Files added straight to this place, no investigation behind them (item 250).</summary>
     IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
     /// <summary>Whether this reader may add a file here.</summary>
-    bool CanAddEvidence = false);
+    bool CanAddEvidence = false,
+    /// <summary>What the evidence here adds up to across every route (item 250).</summary>
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null);
 
 /// <summary>
 /// The personal organization behind one account's own investigating (2026-09-17).

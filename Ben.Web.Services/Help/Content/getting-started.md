@@ -360,6 +360,24 @@ evidence for that place alongside what groups have published from their own inve
 Everything added is looked at before it appears. Most things go straight on; if yours is held, the
 page tells you so rather than pretending it is showing. You can take back anything you added.
 
+### What the evidence says
+
+Anybody signed in can vote on a piece of evidence — **something here**, **can't tell**, or **not
+convinced**. The place's page adds those up above the list: how many pieces of evidence it holds,
+how many votes have been cast, and what share of opinion falls each way.
+
+A file counts **once**, however it got there. The same photograph published in an investigation and
+added to the place directly is one piece of evidence, not two — otherwise a place would look like
+it held more than it does.
+
+**There is no league table.** A place shows its own figures and the site does not rank one property
+against another. These are real buildings with real owners, and "the third most haunted house in
+Tennessee" is a claim about them that a pile of votes is not entitled to make.
+
+The overall number is a simple sum — **+1** for something here, **0** for can't tell, **−1** for not
+convinced — and it is always shown beside the number of votes, because a score with no weight
+behind it says nothing.
+
 ## Empty, or broken?
 
 A list that shows nothing is telling you one of two different things, and the page says which.
