@@ -13276,7 +13276,25 @@ summary. What was scaffolding was the screen in front of it.
 
 
 
-## 250. Public places as permanent evidence pages, with voting and a hauntedness ranking (OPEN — Ben, 2026-09-21)
+## 250. Public places as permanent evidence pages, with voting and a hauntedness ranking (CLOSED — shipped 2026-09-21)
+
+**Shipped in three slices**, all merged to master the same day. Ben's three decisions: anyone
+signed in may add, screened through the feed's held pile; figures per place and **no league
+table**; one file counted once whatever route it arrived by.
+
+- **P1** — `/places/new` (there had been no way to create a place at all; they only appeared as a
+  side effect of a case or investigation), and evidence added straight to a public location with
+  no investigation behind it. `PlaceEvidence` table, `PlaceEvidencePublication` re-asks the place
+  kind on every read.
+- **P2** — `PlaceEvidenceTally` across the three routes (direct, published session, event
+  evidence), de-duplicated by file id; the site's own vote widget on each piece. Found that casting
+  a vote answered with a score of 0 (the argument was never passed).
+- **P3** — `Place.Description` (plain text, server-stripped), `PlaceMediaKind` keeping pictures OF
+  the building apart from evidence by a required argument, and a by-month chart.
+
+The "hauntedness ranking" in the title was decided against: a place shows its own figures and the
+site does not order one property against another.
+
 
 Ben's words: *"I would like to be able to create public locations like Cragfont in Castillian
 Springs, TN. Where people don't have to have a dedicated investigation to add files to the public
