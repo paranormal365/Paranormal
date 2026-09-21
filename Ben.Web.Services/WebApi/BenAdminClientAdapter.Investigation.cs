@@ -188,4 +188,51 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
             $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
 
+    // ── The guide's code for a guest's phone (item 248) ───────────────────────
+
+    public Task<InvestigationJoinCodeRecord?> GetInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetAsync<InvestigationJoinCodeRecord>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/join-code", token);
+
+    public Task<InvestigationJoinCodeRecord?> IssueInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, DateTime? expiresUtc, CancellationToken token = default)
+        => _api.PostAsync<object, InvestigationJoinCodeRecord>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/join-code",
+            new { ExpiresUtc = expiresUtc }, token);
+
+    public Task<bool> RevokeInvestigationJoinCodeAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.DeleteAsync(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/join-code", token);
+
+    public Task<LoadResult<InvestigationGuestPassRecord>> GetInvestigationGuestPassesAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetListAsync<InvestigationGuestPassRecord>(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/join-code/holders", token);
+
+    public Task<bool> RevokeInvestigationGuestPassAsync(
+        Guid orgId, Guid investigationId, Guid passId, CancellationToken token = default)
+        => _api.DeleteAsync(
+            $"/api/organizations/{orgId}/investigations/{investigationId}/join-code/holders/{passId}", token);
+
+    /// <summary>
+    /// Anonymous, and it must stay that way: the reader has just scanned a sheet in a field and
+    /// does not have an account yet. The join page is the screen that asks them to get one.
+    /// </summary>
+    public Task<InvestigationCodeInvitation?> LookUpInvestigationCodeAsync(
+        string code, CancellationToken token = default)
+        => _api.GetAnonymousAsync<InvestigationCodeInvitation>(
+            $"/api/public/investigation-codes/{Uri.EscapeDataString(code)}", token);
+
+    public Task<InvestigationCodeRedemption?> RedeemInvestigationCodeAsync(
+        string code, string? displayName, CancellationToken token = default)
+        => _api.PostAsync<object, InvestigationCodeRedemption>(
+            "/api/public/investigation-codes/redeem",
+            new { Code = code, DisplayName = displayName }, token);
+
+    public Task<LoadResult<InvestigationCodeInvitation>> GetMyGuestInvestigationsAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<InvestigationCodeInvitation>(
+            "/api/public/investigation-codes/mine", token);
 }

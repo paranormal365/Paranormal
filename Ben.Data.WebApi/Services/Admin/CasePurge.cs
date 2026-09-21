@@ -262,6 +262,11 @@ public sealed class CasePurge
             await db.InvestigationDutyAssignments.Where(x => attendeeIds.Contains(x.InvestigationAttendeeId)).ExecuteDeleteAsync(ct);
             await db.InvestigationAttendees.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.InvestigationFindings.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            // Guests' credentials, then the codes that minted them (item 248). Explicit and in
+            // order, like everything else here: leaning on the schema's cascade is how a purge
+            // finds out on production that one was never configured.
+            await db.InvestigationGuestPasses.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            await db.InvestigationJoinCodes.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.InvestigationScheduleProposals.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.Investigations.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
 

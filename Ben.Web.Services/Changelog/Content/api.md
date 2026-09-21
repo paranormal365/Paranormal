@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-21
 
+- The apps can join an investigation from a code a guide is showing, and can ask what a code is
+  for before anybody signs in. What a code buys is sending to that one visit; reading is
+  unchanged, so a guest gets back only what they sent.
 - The service records which letters a person has asked not to receive, and stops sending those. The
   letters that get somebody back into their account, and receipts, cannot be declined.
 - Every letter the service sends can now carry wording the site has on file for it, not only the

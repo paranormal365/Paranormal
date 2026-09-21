@@ -255,6 +255,11 @@ public sealed class AppUserPurge
             // Their agreement to event photos being shown (phase 11): about photos that are theirs, which the
             // purge's own rules decide; the agreement means nothing once the person is gone.
             await db.EventPhotoConsents.Where(c => c.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // A guest's credential for one night (item 248). Swept whole, because it is ABOUT this
+            // person and is worth nothing to anybody once they are gone — and because its key to
+            // AppUser is NoAction, so leaving it would have made every walk-up who ever scanned a
+            // code permanently undeletable, with the census correctly and uselessly reporting why.
+            await db.InvestigationGuestPasses.Where(p => p.AppUserId == userId).ExecuteDeleteAsync(ct);
 
             // ── the person ────────────────────────────────────────────────────
             // Shared with self-service closure rather than restated. Two copies of these rules
@@ -434,6 +439,7 @@ public sealed class AppUserPurge
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),
             nameof(EventBookingAlertPreference), nameof(EventBookingAlertState), nameof(EventPhotoConsent),
+            nameof(InvestigationGuestPass),
         };
 
         var total = 0;

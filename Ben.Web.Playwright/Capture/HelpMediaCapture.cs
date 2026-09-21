@@ -769,6 +769,32 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     [Test]
+    [Description("organization-administration: the sheet a guide holds up so a guest's phone can join.")]
+    public async Task Capture_GuestCode()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await GoAsync($"/organizations/{orgId}?tab=investigations");
+
+        var codeButton = Main.GetByRole(AriaRole.Button, new() { Name = "Guest code" }).First;
+        Assert.That(await codeButton.CountAsync(), Is.GreaterThan(0),
+            "the seeded administrator should be able to make a code for a seeded investigation");
+        await ClickUntilUrlAsync(codeButton, @"/investigations/[0-9a-f\-]+/join-code");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        var make = Page.Locator("#join-code-make");
+        if (await make.CountAsync() > 0)
+            await ClickUntilAsync(make, Page.Locator("#join-code-typed"));
+
+        // "proves" is the picture's own claim: a shot of this screen with no code on it would be
+        // a photograph of the button that makes one, which is not what the help paragraph says.
+        await ShootAsync("organization-administration", "guest-code.png",
+                         gated: true, proves: "Stops working");
+    }
+
+    [Test]
     [Description("getting-started: the vote button and the actions beside it on a published case.")]
     public async Task Capture_CaseActions()
     {

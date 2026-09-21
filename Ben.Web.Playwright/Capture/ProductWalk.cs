@@ -535,7 +535,17 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("events", () => GoAsync($"/organizations/{org}/events"));
         await StepAsync("an event", () => FollowAsync($"/organizations/{org}/events/"));
         await StepAsync("the venue", () => GoAsync($"/organizations/{org}/venue"));
-        await StepAsync("organization security", () => GoAsync("/organization-security"));
+        // /organization-security was deleted on 2026-09-21 — a scaffold from the security
+        // library that nothing linked to. The walk kept visiting it, which would now report a
+        // "Page not found" as a finding about the product rather than about this list.
+        await StepAsync("a guest code", async () =>
+        {
+            // The sheet a guide holds up (item 248). Reached by its own address rather than by
+            // pressing the button, because the walk visits screens and the button needs a row.
+            await GoAsync($"/organizations/{org}?tab=investigations");
+            await FollowIfAnyAsync($"/organizations/{org}/investigations/");
+        });
+        await StepAsync("joining with a code", () => GoAsync("/tonight"));
         await StepAsync("start another group", () => GoAsync("/organizations/new"));
         await StepAsync("case video editor", async () =>
         {
