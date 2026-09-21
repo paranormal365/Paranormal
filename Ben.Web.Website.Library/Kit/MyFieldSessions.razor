@@ -291,24 +291,43 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
 
-        var result = await AdminClient.GetMyFieldSessionsAsync();
-
-        if (result.SessionExpired)
-            _refusal = "You have been signed out. Sign in again to see your sessions.";
-        else if (result.Failed)
-            _refusal = result.Reason ?? "Couldn't load your field sessions just now.";
-        else
+        // Everything below is inside a finally that clears the spinner, because the ONLY thing a
+        // page must never do is keep saying "loading" forever. This one did, for every signed-in
+        // person, on every seat the sweep walked (2026-09-21): LoadMapAsync is described two
+        // paragraphs down as best-effort and was called without a guard, so a map that threw took
+        // `_loading = false` with it and the page span until somebody navigated away.
+        try
         {
-            _rows = result.Items;
-            await LoadMapAsync();
+            var result = await AdminClient.GetMyFieldSessionsAsync();
+
+            if (result.SessionExpired)
+                _refusal = "You have been signed out. Sign in again to see your sessions.";
+            else if (result.Failed)
+                _refusal = result.Reason ?? "Couldn't load your field sessions just now.";
+            else
+            {
+                _rows = result.Items;
+
+                // Best-effort, as its own summary says. A map that cannot load leaves the map out;
+                // it does not take the list of sessions with it.
+                try { await LoadMapAsync(); }
+                catch { _pins = []; _mapShown = false; }
+            }
+
+            // Best-effort, like the map: a figure that cannot be fetched is not a reason to
+            // withhold the list, and the section simply does not appear.
+            try { _storage = await AdminClient.GetMyStorageAsync(); }
+            catch { _storage = null; }
         }
-
-        // Best-effort, like the map: a figure that cannot be fetched is not a reason to withhold
-        // the list, and the section simply does not appear.
-        try { _storage = await AdminClient.GetMyStorageAsync(); }
-        catch { _storage = null; }
-
-        _loading = false;
+        catch (Exception)
+        {
+            // A page that cannot say what went wrong still has to stop pretending to work.
+            _refusal ??= "Couldn't load your field sessions just now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     /// <summary>

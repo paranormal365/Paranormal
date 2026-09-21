@@ -271,14 +271,21 @@ public class ParameterisedRouteCrawlTests : BenTestBase
                 await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await WaitUntilLoadedAsync(10_000);
 
+                // Read from the CHROME, not the whole body — the same fix the plain crawl took on
+                // 2026-09-19 and this half never got. A page is allowed to talk about an error
+                // without being one: /changes quotes "An unhandled error has occurred" in a line
+                // about the day that phrase stopped appearing, and a whole-body regex reads the
+                // changelog's own words as proof the changelog is broken.
                 var state = await Page.EvaluateAsync<JsonElement>(@"() => {
                     const main = document.querySelector('.app-content, main, .content-wrapper');
                     const body = document.body.innerText || '';
+                    const inner = main ? (main.innerText || '') : '';
+                    const chrome = inner ? body.split(inner).join(' ') : body;
                     const err  = document.querySelector('#blazor-error-ui');
                     return {
-                        content: main ? (main.innerText || '').trim().length : 0,
-                        unhandled: /An unhandled error has occurred/i.test(body),
-                        notFound: /Page not found/i.test(body),
+                        content: main ? inner.trim().length : 0,
+                        unhandled: /An unhandled error has occurred/i.test(chrome),
+                        notFound: /Page not found|There is nothing at this address/i.test(body),
                         circuitDown: !!err && getComputedStyle(err).display !== 'none'
                     };
                 }");

@@ -13224,3 +13224,64 @@ on an admin screen with a `[Authorize]` and an entry in the menu like everything
 
 Until somebody decides, it sits on `EveryAdminScreenIsWalkedTests.NoLinkNeeded` with that reasoning
 written out, so the guard passes without the fact being lost.
+
+
+
+## 250. Public places as permanent evidence pages, with voting and a hauntedness ranking (OPEN — Ben, 2026-09-21)
+
+Ben's words: *"I would like to be able to create public locations like Cragfont in Castillian
+Springs, TN. Where people don't have to have a dedicated investigation to add files to the public
+location. They can add files to the location which can be voted on. All the files at a location
+becomes evidence where a person can then look up Cragfont and see all public files and vote on
+them. Then, we can count the number of files of evidence public — which even events or
+investigations with public evidence is there as well. We can count the number of votes. Then
+positive, negative, unknown and the average of each overall we can track. This helps determine
+their ranking and overall hauntedness. For this new type of permanent public location like
+cragfont, we can create a page with information about it, images of it — not evidence but the
+property and photos inside to show it. Then they will have charts of where the evidence stands and
+then lists of evidence."*
+
+### The shape
+
+A **public location** is a place that stands on its own rather than behind somebody's
+investigation. Anybody may add a file to it; every file added becomes evidence; every piece of
+evidence may be voted on; and the place's page reports what the evidence says.
+
+Two kinds of picture, and the distinction is the whole design — the page is useless if they mix:
+
+- **About the place.** The house, the grounds, the rooms. Not evidence, never voted on, and the
+  thing that makes the page worth reading for somebody who has never been.
+- **Evidence.** Files people added because of what is in them. Voted on, counted, charted.
+
+### What it counts
+
+Per place: how many public pieces of evidence (including evidence from events and from
+investigations that published theirs — one place, one total, whatever route the file arrived by);
+how many votes; the split of positive / negative / unknown; and the average of each. Those figures
+are what produce a **ranking** and an **overall hauntedness** for the place.
+
+### What already exists, and what does not
+
+Worth checking before this is designed, because a good deal of it is built:
+
+- `Place` and `/places/{id}` exist ([[project_area9_places_investigations]], item 88), including the
+  address-based dedup rule and the public place page.
+- Evidence **voting** exists on public cases — `PublicCaseCommentController` and the vote counts on
+  the home page's case cards (the "✓ 4 ✗ 0 ? 0" row) — so the positive / negative / unknown
+  vocabulary is already the site's.
+- The **field archive** already accumulates sessions published to a public place
+  ([[project_field_archive]]), which is the closest thing to "evidence gathers at a location".
+
+What does not exist: adding a file **to a place** without an investigation or a case behind it; the
+per-place evidence total across every route a file can arrive by; the vote aggregates and averages;
+the ranking; and the place page's charts and evidence list.
+
+### Things to decide before building
+
+- **Who may add.** Anybody signed in, or members of a group? An open door on a public page is a
+  moderation surface — the feed already has a screener and a held pile (item 217) and this would
+  need the same or a reason why not.
+- **Ranking is comparative and public**, so it says one place is more haunted than another. Worth
+  deciding deliberately whether that is a claim the site makes.
+- **How a file reaches a place** when it also belongs to a case or an event — the same file must
+  not count twice, which is the shape of the duplicate problem already open in the media library.

@@ -82,7 +82,17 @@ public sealed class PublicEventController : BenControllerBase
         //
         // End, not start: something happening right now is still worth showing somebody.
         var now = DateTime.UtcNow;
-        var query = VisibleEvents(db).Where(e => e.EndDateTime >= now);
+
+        // A listed night must have somewhere to go. The website renders a row's title as plain
+        // text when the event has no slug, so an event that never got one appeared on the public
+        // What's On list as an un-openable line — a dead row on the front door of the whole
+        // ticket journey. Rows are GIVEN a slug on create and update
+        // (OrgCalendarController.EnsurePublicSlugAsync) and backfilled for anything older, so this
+        // filter should never exclude anything; it is here so that "should never" is not the only
+        // thing standing between a visitor and a line they cannot click.
+        var query = VisibleEvents(db)
+            .Where(e => e.EndDateTime >= now)
+            .Where(e => e.UrlName != null);
 
         if (!string.IsNullOrWhiteSpace(orgUrlName))
         {

@@ -33,7 +33,7 @@ public interface IBenMediaClient
     /// org, public, case-linked). Pass <paramref name="contentTypePrefixes"/> (e.g. "video/","image/")
     /// to narrow the result; omit for everything.
     /// </summary>
-    Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, CancellationToken token = default);
+    Task<LoadResult<UploadFileRecord>> GetMediaLibraryFilesAsync(string[]? contentTypePrefixes = null, string? scope = null, CancellationToken token = default);
 
     // ── File Types ────────────────────────────────────────────────────────────
 

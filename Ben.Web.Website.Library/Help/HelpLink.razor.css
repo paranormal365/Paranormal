@@ -1,0 +1,42 @@
+/* The badge the component has always described itself as, and never had.
+
+   `help-link-badge` was styled in no stylesheet in this repo — one grep hit, the class attribute
+   itself — so ninety-six screens rendered a bare underlined "?" welded to the end of their
+   heading. The first-run walk read the headings back as "Pricing?", "Events?", "Start a group?"
+   and, worst of all, a case called "#2026-001 — Hollow Creek Road, Franklin TN?".
+
+   A circle, set apart from the words, at the weight of secondary text: present where somebody
+   looks for it and never part of the sentence it sits beside. */
+
+.help-link-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    /* Its own space. The glue to the preceding word is the whole bug. */
+    margin-inline-start: .4rem;
+    /* Headings are large; the badge stays badge-sized beside any of them. */
+    vertical-align: middle;
+
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 50%;
+
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1;
+    /* Never inherits the heading's size or weight. */
+    font-family: var(--bs-body-font-family);
+
+    color: var(--bs-secondary-color);
+    background: var(--bs-secondary-bg);
+    text-decoration: none;
+}
+
+.help-link-badge:hover,
+.help-link-badge:focus-visible {
+    color: var(--bs-body-color);
+    border-color: var(--bs-secondary-color);
+    text-decoration: none;
+}
