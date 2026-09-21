@@ -973,18 +973,12 @@ public abstract class BenTestBase : PageTest
         {
             try
             {
-                if (await Spinners.CountAsync() == 0
-                 && await Main.GetByText("Loading", new() { Exact = false }).CountAsync() == 0)
-                {
-                    return;
-                }
-
-                // A page whose only remaining match is prose rather than a spinner is loaded.
-                if (await Spinners.CountAsync() == 0
-                 && DateTime.UtcNow > deadline.AddMilliseconds(-timeoutMs / 2.0))
-                {
-                    return;
-                }
+                // The spinner alone, and nothing about the words. BenLoaderOverlay is the one
+                // loading marker on this site and ALWAYS renders a .spinner-border — including
+                // behind BenListState — so a page with no spinner has finished, whatever its prose
+                // happens to say. Consulting the text as well only reintroduced the /changes bug
+                // from the other direction, and made every page that mentions loading wait.
+                if (await Spinners.CountAsync() == 0) return;
             }
             catch (Exception) { return; }   // the page went away; the caller's assertion will say so
             await Task.Delay(150);
