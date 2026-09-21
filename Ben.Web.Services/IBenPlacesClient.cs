@@ -333,4 +333,23 @@ public interface IBenPlacesClient
     /// </summary>
     Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
         Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default);
+
+    // ── Evidence added straight to a place (item 250) ─────────────────────────
+
+    /// <summary>
+    /// Adds one file to a public place's evidence.
+    /// </summary>
+    /// <returns>
+    /// What the server says, including whether it is showing yet — held is not a failure and the
+    /// page must not report it as one.
+    /// </returns>
+    Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
+        Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        CancellationToken token = default);
+
+    /// <summary>Takes back something this account added. Only ever their own.</summary>
+    Task<bool> RemovePlaceEvidenceAsync(Guid placeId, Guid evidenceId, CancellationToken token = default);
+
+    /// <summary>Where a browser fetches one piece of a place's evidence. Anonymous by design.</summary>
+    string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId);
 }

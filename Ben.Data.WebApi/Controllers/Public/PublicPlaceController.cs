@@ -96,7 +96,18 @@ public sealed class PublicPlaceController : ControllerBase
             // anonymously on purpose, so it cannot know the reader; a signed-in one asks
             // PlaceController.GetPosts instead. Saying so plainly beats a value that looks like an
             // answer and never is.
-            CanPost: false));
+            CanPost: false,
+            // Same set the serving door will hand over, read from the one predicate.
+            AddedEvidence: await PlaceEvidencePublication.Showable(db, id)
+                .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
+                    e.Id, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
+                    e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
+                    e.DateCreated))
+                .ToListAsync(ct),
+            // False for the same reason CanPost is: this endpoint is anonymous and cannot know
+            // the reader. The page asks its own signed-in state and the kind of place, which is
+            // the whole of the rule — anybody signed in may add, at a public location.
+            CanAddEvidence: false));
     }
 
     /// <summary>
@@ -293,7 +304,18 @@ public sealed record PublicPlaceResponse(
     /// <summary>The latest posts about this place (2026-09-17), newest first.</summary>
     IReadOnlyList<FeedPostRecord>? Posts = null,
     /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
-    bool CanPost = false);
+    bool CanPost = false,
+    /// <summary>
+    /// Files people added straight to this place, with no investigation behind them (item 250).
+    /// </summary>
+    /// <remarks>
+    /// Trailing and optional, like every addition before it, so a client built before this simply
+    /// does not draw the section. Distinct from <c>EventEvidence</c>, which is what a guest
+    /// offered at an event — same place, different route, and the page says which.
+    /// </remarks>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
+    /// <summary>Whether this reader may add a file here. False for a visitor and off a public location.</summary>
+    bool CanAddEvidence = false);
 
 /// <summary>
 /// One published case at a place, as a visitor sees it listed.

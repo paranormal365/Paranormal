@@ -385,7 +385,11 @@ public sealed record PublicPlaceResponse(
     /// <summary>The latest posts about this place, newest first.</summary>
     IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord>? Posts = null,
     /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
-    bool CanPost = false);
+    bool CanPost = false,
+    /// <summary>Files added straight to this place, no investigation behind them (item 250).</summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
+    /// <summary>Whether this reader may add a file here.</summary>
+    bool CanAddEvidence = false);
 
 /// <summary>
 /// The personal organization behind one account's own investigating (2026-09-17).

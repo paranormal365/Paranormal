@@ -551,6 +551,101 @@
             </div>
         }
 
+        @* ── What people have added here themselves (item 250) ────────────── *@
+        @* Ben, 2026-09-21: "people don't have to have a dedicated investigation to add files to
+           the public location." Its own section rather than folded into the two above, because
+           the ROUTE is the thing a reader judges evidence by: a night of readings by a group, a
+           photograph from a walk, and something somebody brought back on their own are three
+           different claims, and a page that blurs them is a page you cannot weigh. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <h6 class="fw-semibold mt-4">
+                Added by people who have been here
+                @if (_added is { Count: > 0 })
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis border ms-1"
+                          id="place-added-count">@_added.Count</span>
+                }
+            </h6>
+
+            @if (UserState.IsAuthenticated)
+            {
+                <div class="card mb-3" id="place-add-evidence">
+                    <div class="card-body">
+                        <label class="form-label" for="place-evidence-file">Add something you recorded here</label>
+                        <InputFile id="place-evidence-file" class="form-control mb-2"
+                                   OnChange="OnEvidenceChosen" accept="image/*,audio/*,video/*" />
+                        <label class="form-label" for="place-evidence-caption">What is it?</label>
+                        <input id="place-evidence-caption" class="form-control mb-2" @bind="_evidenceCaption"
+                               maxlength="500"
+                               placeholder="Where in the building, what time, what to listen for" />
+                        <button type="button" class="btn btn-primary" id="place-evidence-add"
+                                @onclick="AddEvidenceAsync" disabled="@(_evidenceFile is null || _addingEvidence)">
+                            <BenIcon Name="upload-cloud" Class="me-1" />
+                            @(_addingEvidence ? "Adding…" : "Add it")
+                        </button>
+                        @* The screener's answer, in the server's own words. "Added" over something
+                           held is what teaches somebody to upload it again. *@
+                        @if (_evidenceSays is { Length: > 0 })
+                        {
+                            <div class="alert @(_evidenceShowing ? "alert-success" : "alert-info") mt-2 mb-0"
+                                 id="place-evidence-says">
+                                @_evidenceSays
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small">
+                    <a href="/login">Sign in</a> to add something you recorded here.
+                </p>
+            }
+
+            @if (_added is { Count: > 0 })
+            {
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach (var item in _added)
+                    {
+                        var url = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, item.Id);
+                        <div class="card" style="width:220px;">
+                            @if (item.ContentType.StartsWith("image/"))
+                            {
+                                <a href="@url" target="_blank" rel="noopener">
+                                    <img src="@url" alt="@(item.Caption ?? item.FileName)"
+                                         class="card-img-top" style="height:150px;object-fit:cover;" />
+                                </a>
+                            }
+                            else if (item.ContentType.StartsWith("video/"))
+                            {
+                                <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
+                            }
+                            else if (item.ContentType.StartsWith("audio/"))
+                            {
+                                <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
+                            }
+                            <div class="card-body p-2">
+                                @if (!string.IsNullOrWhiteSpace(item.Caption))
+                                {
+                                    <div class="small">@item.Caption</div>
+                                }
+                                <div class="text-secondary" style="font-size:.75rem;">
+                                    by @item.AddedBy · @item.AddedUtc.ToLocalTime().ToDisplayDate()
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small fst-italic">
+                    Nobody has added anything here yet.
+                </p>
+            }
+        }
+
         @* ── Visitor view ─────────────────────────────────────────────────── *@
         @if (_publicRows is not null)
         {
@@ -757,6 +852,14 @@
     /// <summary>Guest evidence published to this place from public events held here.</summary>
     private List<PlaceEvidenceRow>? _evidence;
 
+    // ── What people added here themselves (item 250) ──────────────────────────
+    private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _added;
+    private IBrowserFile? _evidenceFile;
+    private string _evidenceCaption = string.Empty;
+    private bool _addingEvidence;
+    private string? _evidenceSays;
+    private bool _evidenceShowing;
+
     /// <summary>The verified venue here, when there is one.</summary>
     private PlaceVenueRecord? _venue;
 
@@ -832,6 +935,7 @@
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
+        _added = response.AddedEvidence?.ToList();
         _cases = response.Cases?.ToList();
         _posts = response.Posts?.ToList();
         _canPost = response.CanPost;
@@ -851,6 +955,7 @@
         var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
+        _added = response?.AddedEvidence?.ToList();
         _cases = response?.Cases?.ToList();
 
         // NOT the posts, and not CanPost. This call is anonymous on purpose, so its answer to
@@ -971,4 +1076,57 @@
         Ben.Data.Common.Enums.InvestigationVisibility.PlaceInvestigators => "bg-primary",
         _ => "bg-secondary",
     };
+
+    private void OnEvidenceChosen(InputFileChangeEventArgs e)
+    {
+        _evidenceFile = e.FileCount > 0 ? e.File : null;
+        _evidenceSays = null;
+    }
+
+    /// <summary>
+    /// Sends one file to this place's evidence.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server's own sentence is shown rather than a word of this page's choosing,
+    /// because whether it is SHOWING is the part that matters and only the screener knows. A page
+    /// that says "added" over something held teaches people to upload it again.</para>
+    ///
+    /// <para>No size cap here on purpose: the account allowance and the server's own limits are
+    /// the rule, and a second number invented in the browser would be a different rule that
+    /// nothing enforces.</para>
+    /// </remarks>
+    private async Task AddEvidenceAsync()
+    {
+        if (_evidenceFile is null || _addingEvidence) return;
+
+        _addingEvidence = true;
+        _evidenceSays = null;
+        try
+        {
+            await using var content = _evidenceFile.OpenReadStream(long.MaxValue);
+            var (added, error) = await AdminClient.AddPlaceEvidenceAsync(
+                PlaceId, content, _evidenceFile.Name,
+                string.IsNullOrWhiteSpace(_evidenceFile.ContentType)
+                    ? "application/octet-stream"
+                    : _evidenceFile.ContentType,
+                _evidenceCaption);
+
+            if (added is null)
+            {
+                _evidenceShowing = false;
+                _evidenceSays = error ?? "That could not be added just now. Try again.";
+                return;
+            }
+
+            _evidenceShowing = added.Showing;
+            _evidenceSays = added.Says;
+            _evidenceFile = null;
+            _evidenceCaption = string.Empty;
+
+            // Only an APPROVED file is on the page, so only then is there anything new to fetch.
+            // Reloading after a held one would show the contributor nothing and read as a failure.
+            if (added.Showing) await LoadSignedInAsync();
+        }
+        finally { _addingEvidence = false; }
+    }
 }
