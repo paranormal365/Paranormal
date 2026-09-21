@@ -932,7 +932,7 @@ public sealed class EventGuestMailer
                 $"<p>A place came free in <strong>{Safe(session.Title)}</strong> at "
                 + $"{Safe(session.HostedEvent.Name)}, and it's yours — {Safe(when)}.</p>"
                 + "<p>If you can't come after all, leave it from the programme so the next person gets it.</p>"),
-            ct);
+            MailKinds.SessionPromoted, ct);
 
     /// <summary>Tells everybody signed up — or waiting — that a session is off.</summary>
     public Task<int> SendSessionCancelledAsync(BenDataContext db, Guid sessionId, string? reason, CancellationToken ct)
@@ -942,7 +942,7 @@ public sealed class EventGuestMailer
                 + "has been cancelled.</p>"
                 + (Trimmed(reason) is { } why ? $"<p>{Safe(session.HostedEvent.Organization?.Name ?? "The organizers")} said: “{Safe(why)}”</p>" : "")
                 + "<p>Your place at the event itself is unchanged.</p>"),
-            ct);
+            MailKinds.SessionCancelled, ct);
 
     /// <summary>Tells everybody signed up that a session's time or place has changed.</summary>
     public Task<int> SendSessionMovedAsync(BenDataContext db, Guid sessionId, CancellationToken ct)
@@ -950,7 +950,7 @@ public sealed class EventGuestMailer
             (session, when) => ($"Changed: {session.Title}",
                 $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} has moved. "
                 + $"It is now {Safe(when)}.</p><p>You still have your place.</p>"),
-            ct);
+            MailKinds.SessionMoved, ct);
 
     /// <summary>
     /// A host's letter to the people coming (phase 17a, audit finding A4). One letter per party's lead; returns how many
@@ -1065,7 +1065,8 @@ public sealed class EventGuestMailer
 
     private async Task<int> SendToSignUpsAsync(
         BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEventSessionSignUp, bool>> which,
-        Func<HostedEventSession, string, (string Subject, string Body)> write, CancellationToken ct)
+        Func<HostedEventSession, string, (string Subject, string Body)> write,
+        MailKindInfo kind, CancellationToken ct)
     {
         if (!_email.IsConfigured) return 0;
 
@@ -1089,7 +1090,12 @@ public sealed class EventGuestMailer
                 // WhenAndWhere writes the session's times with no zone beside them, so the footer
                 // has to name the clock — see ZoneLabel.
                 await _email.SendAsync(new EmailMessage(to, subject, greeting + body,
-                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: MailKinds.AppealAnswered.Key,
+                    // The kind the CALLER named. Every letter this method sends — promoted,
+                    // cancelled, moved — went out as AppealAnswered, a kind about a moderation
+                    // appeal and nothing to do with a session. So three of the site's letters were
+                    // filed under an unrelated heading in the outbox, and no template written for
+                    // any of them could ever apply (item 246, found 2026-09-21).
+                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: kind.Key,
                     TimesShownInZone: ZoneLabel(session.HostedEvent)), ct);
                 sent++;
             }

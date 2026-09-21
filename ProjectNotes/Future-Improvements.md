@@ -13166,7 +13166,14 @@ Ben's ask is recorded in full at [[245]]; this is what was built for it.
 
 ### Still to do
 
-- **11 of the 35 kinds are declared but not yet wired to a sender**: AccountMadeForYou,
+- ~~**11 of the 35 kinds are declared but not yet wired to a sender**~~ — **one** is left
+  (`AccountMadeForYou`), done 2026-09-21. Two of the ten were not gaps but defects: all three
+  session letters went out as `AppealAnswered`, and the tour reminder as `TourSignUp`, so five of
+  the site's letters were filed under headings that had nothing to do with them and no template
+  written for any of them could ever have applied. The receipt is now posted too — the ledger has
+  carried receipt numbers since item 168 and nothing ever put one in front of the person who paid.
+  `AccountMadeForYou` remains because it wants a letter WRITTEN rather than a label moved.
+  Originally: **11 of the 35 kinds are declared but not yet wired to a sender**: AccountMadeForYou,
   RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable, TourReminder, SessionMoved,
   SessionCancelled, SessionPromoted, PaymentReceipt, SubscriptionLapsing, PlanChanged. Most go
   through `PlatformMessageService.SendAsync` rather than `IEmailService` directly — that service

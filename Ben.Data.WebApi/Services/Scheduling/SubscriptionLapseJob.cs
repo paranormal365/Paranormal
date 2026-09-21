@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Billing;
@@ -257,8 +258,10 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                       + "ends without renewal, your group keeps read access to everything, but "
                       + "nothing new can be added and open cases are paused for your clients.";
 
+                // Posted as well as shown. A plan about to lapse is the notice a group most needs
+                // while they are NOT on the site — by the time they next sign in, it has lapsed.
                 await _messages.SendAsync(subject, body + unpublishWarning,
-                    recipients, sub.CreatedByAppUserId, ct);
+                    recipients, sub.CreatedByAppUserId, ct, MailKinds.SubscriptionLapsing);
 
                 // Saved immediately, not after the loop (2026-09-17 audit). The mail commits in
                 // its own context, so a later organization throwing used to discard this marker
