@@ -1,3 +1,5 @@
+using Ben.Data.Common.Constants;
+
 namespace Ben.Web.Services;
 
 /// <summary>
@@ -16,10 +18,17 @@ namespace Ben.Web.Services;
 /// clock in particular. The zone is always NAMED beside the time, so a reader never has to guess
 /// whose seven o'clock they are looking at.</para>
 ///
-/// <para>Today only a tour records its zone (<c>Tour.TimeZoneId</c>), so a tour date reads in the
-/// walk's own time and any other event reads in UTC. Giving an ordinary calendar event a zone of
-/// its own is the follow-on; nothing here changes when it arrives, because everything already asks
-/// this one method.</para>
+/// <para><b>An event with no zone reads in the house zone, not UTC</b> (2026-09-20). The
+/// first-run walk found the public What's On list and the event's own public page both printing
+/// "8:00 PM UTC" for a night walk at a cave in Adams, Tennessee — five hours out, to a stranger
+/// deciding whether to come. UTC was chosen here as the safe answer for a missing zone, and it is
+/// safe for arithmetic and wrong for a published time: nobody on this site runs an event on
+/// Greenwich's clock. <c>TourController</c> and <c>HostedEventController</c> have always stamped
+/// <c>America/Chicago</c> when no zone is given, so the house already has a default; this uses the
+/// same one rather than inventing a second.</para>
+///
+/// <para>The guess is never silent: the zone is still NAMED beside every time, so a reader in
+/// Nashville sees "CDT" and a reader who knows better can see that the site has assumed.</para>
 /// </remarks>
 public static class EventClock
 {
@@ -37,20 +46,29 @@ public static class EventClock
     public static DateTime At(DateTime utc, string? ianaZoneId) => InPlaceTime(utc, ianaZoneId).At;
 
     /// <summary>
-    /// The zone by its IANA id, or UTC when the id is missing or this machine has never heard of
-    /// it.
+    /// The zone by its IANA id; the house zone when the id is missing or this machine has never
+    /// heard of it.
     /// </summary>
     /// <remarks>
-    /// Never throws. A page that shows a time in the wrong zone is bad; a page that will not
-    /// render at all because a zone database is missing an entry is worse.
+    /// <para>Never throws. A page that shows a time in the wrong zone is bad; a page that will not
+    /// render at all because a zone database is missing an entry is worse.</para>
+    ///
+    /// <para>UTC survives as the answer of last resort, for a machine whose zone database does not
+    /// contain the house zone either. At that point there is nothing left to guess with, and a
+    /// clock labelled UTC is at least labelled honestly.</para>
     /// </remarks>
     public static TimeZoneInfo ZoneOf(string? id)
     {
-        if (string.IsNullOrWhiteSpace(id)) return TimeZoneInfo.Utc;
+        if (!string.IsNullOrWhiteSpace(id) && Find(id) is { } named) return named;
+        return Find(HouseClock.ZoneId) ?? TimeZoneInfo.Utc;
+    }
+
+    private static TimeZoneInfo? Find(string id)
+    {
         try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
         catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            return TimeZoneInfo.Utc;
+            return null;
         }
     }
 

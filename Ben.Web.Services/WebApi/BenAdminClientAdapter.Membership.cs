@@ -43,6 +43,24 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/membership-requests/{requestId}", token);
 
+    // ── The group's invitation link ───────────────────────────────────────────
+
+    public Task<OrganizationJoinLinkRecord?> GetJoinLinkAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<OrganizationJoinLinkRecord>($"/api/organizations/{orgId}/join-link", token);
+
+    public Task<OrganizationJoinLinkRecord?> IssueJoinLinkAsync(Guid orgId, CancellationToken token = default)
+        => _api.PostAsync<object, OrganizationJoinLinkRecord>($"/api/organizations/{orgId}/join-link", new { }, token);
+
+    public Task<bool> RevokeJoinLinkAsync(Guid orgId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/join-link", token);
+
+    public Task<OrganizationJoinInviteRecord?> GetJoinInviteAsync(string inviteToken, CancellationToken token = default)
+        => _api.GetAsync<OrganizationJoinInviteRecord>($"/api/public/join/{Uri.EscapeDataString(inviteToken)}", token);
+
+    public Task<(OrganizationJoinInviteRecord? Result, string? Error)> AcceptJoinInviteAsync(string inviteToken, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationJoinInviteRecord>(
+               HttpMethod.Post, $"/api/public/join/{Uri.EscapeDataString(inviteToken)}", new { }, token);
+
     // ── Membership Questions (Phase 3) ────────────────────────────────────────
 
     public Task<LoadResult<OrganizationMembershipQuestionRecord>> GetMembershipQuestionsAsync(Guid orgId, CancellationToken token = default)

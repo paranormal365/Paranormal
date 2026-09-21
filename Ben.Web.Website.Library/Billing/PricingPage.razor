@@ -100,12 +100,18 @@
                                 <h3 class="pricing-band__name">@tier.Name</h3>
                                 @* Free is a choice, not a size (Ben, 2026-08-27): "a free version doesn't care about the
                                    number of people, it only cares about privacy". Member bands price the PAID plans;
-                                   showing a headcount range on the free one said the opposite. *@
+                                   showing a headcount range on the free one said the opposite.
+
+                                   But "Any size group" was not true either, and it is the first thing a visitor
+                                   reads on this page. `PaidPlan.WhyCannotAddMemberAsync` refuses the SECOND member
+                                   on a free group — "one person is free; working with other people is the paid
+                                   part" — so the page was advertising the one thing the server will not do
+                                   (first-run walk, 2026-09-20). It says what is free instead of guessing at a size. *@
                                 <p class="pricing-band__who">
                                     @(!tier.IsBandedByMembers
                                         ? "Tour and event businesses"
                                         : IsFree(tier)
-                                            ? "Any size group"
+                                            ? "One person, public work"
                                             : tier.MaxMembers is { } max
                                                 ? $"{tier.MinMembers}–{max} active members"
                                                 : $"{tier.MinMembers}+ active members")

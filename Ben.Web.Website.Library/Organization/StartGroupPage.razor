@@ -414,7 +414,19 @@
             _serviceArea = string.IsNullOrWhiteSpace(_state) ? _city.Trim() : $"{_city.Trim()}, {_state.Trim()}";
 
         if (filled is 0 or 4) return Task.FromResult<string?>(null);
-        return Task.FromResult<string?>("Either fill in the whole address, or leave all four fields empty to add it later.");
+
+        // Name the empty ones. The sentence used to say "fill in the whole address, or leave all
+        // four empty" without marking which two were blank, so somebody who typed a city and a
+        // state was stopped and told to go looking (first-run walk, 2026-09-20).
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(_street)) missing.Add("street address");
+        if (string.IsNullOrWhiteSpace(_city))   missing.Add("city");
+        if (string.IsNullOrWhiteSpace(_state))  missing.Add("state");
+        if (string.IsNullOrWhiteSpace(_zip))    missing.Add("ZIP");
+
+        return Task.FromResult<string?>(
+            $"Still to fill in: {string.Join(", ", missing)}. Or clear the address altogether and "
+            + "add it later — it is all four or none.");
     }
 
     private Task<string?> SettingsGateAsync()

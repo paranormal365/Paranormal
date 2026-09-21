@@ -41,13 +41,38 @@ public sealed class FirstRunJourney : BenTestBase
     private string TeamName => $"Hollow Creek Paranormal {_stamp}";
     private string TeamSlug => $"hollow-creek-{_stamp}";
     private string LeadEmail => $"lead-{_stamp}@example.test";
-    private const string Password = "JourneyPassw0rd!2026";
+    /// <summary>
+    /// Generated per run, never written down.
+    /// </summary>
+    /// <remarks>
+    /// This was an inline literal until <c>NoCredentialsInTheRepoTests</c> caught it. The
+    /// repository is public and development shares production's database, so a password constant
+    /// in a tracked file is a live credential for whatever account the fixture creates with it —
+    /// and the journey deliberately signs somebody up.
+    /// </remarks>
+    private readonly string _password = NewTestPassword();
 
     [OneTimeSetUp]
     public void SkipUnlessAsked()
     {
         if (Environment.GetEnvironmentVariable("BEN_JOURNEY") != "1")
             Assert.Ignore("Set BEN_JOURNEY=1 to walk the first-run journey. It writes real rows.");
+
+        // Not on the shared scratch database.
+        //
+        // This walk FOUNDS A GROUP every time it runs, and the groups outlive the run. Seven runs
+        // on 2026-09-21 left enough of them in IsHauntedDb_e2e to fail two tests that have nothing
+        // to do with this file — OrgList_ShowsBenCo and AThreadWithNoMessagesOpensWithoutKilling-
+        // ThePage — and cost an hour working out whether the branch under test had broken them.
+        // A fixture that writes rows other tests can see has to say so before it writes them.
+        var db = Environment.GetEnvironmentVariable("BEN_E2E_DB");
+        if (string.IsNullOrWhiteSpace(db) || db == "IsHauntedDb_e2e")
+        {
+            Assert.Ignore(
+                "This walk founds a real group that outlives the run, so it must not share the "
+              + "suite's database. Give it one of its own:  BEN_E2E_DB=IsHauntedDb_journey "
+              + "BEN_JOURNEY=1 scripts/run-e2e.sh --filter FirstRunJourney");
+        }
     }
 
     [OneTimeTearDown]
@@ -182,7 +207,7 @@ public sealed class FirstRunJourney : BenTestBase
             await FillAndConfirmAsync("#signup-name", "Casey Hollow");
             await TypeHandleAsync($"casey{_stamp}");
             await FillAndConfirmAsync("#signup-email", LeadEmail);
-            await FillAndConfirmAsync("#signup-password", Password);
+            await FillAndConfirmAsync("#signup-password", _password);
         });
 
         await StepAsync("create the account", async () =>

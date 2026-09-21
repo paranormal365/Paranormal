@@ -34,7 +34,7 @@ public class MediaLibraryTests : BenTestBase
     public async Task Page_RendersWithoutError()
     {
         await NavigateToMediaLibraryAsync();
-        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+        await Expect(Main.GetByText("Everything you have uploaded", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
         var body = await Page.InnerTextAsync("body");
@@ -213,23 +213,42 @@ public class MediaLibraryTests : BenTestBase
     }
 
     [Test]
-    public async Task Page_HasScopeFilterChips()
+    /// <summary>
+    /// There is nothing to filter by, because everything here is already yours.
+    /// </summary>
+    /// <remarks>
+    /// This asserted the presence of All / Mine / Public chips. The library now asks the server
+    /// for one person's own files (Ben, 2026-09-21: <i>"'mine' not public or all"</i>), so a
+    /// filter offering "All" and "Public" over a list that is neither would be three lies in a
+    /// row — and a chip that narrows nothing is worse than no chip.
+    /// </remarks>
+    public async Task Page_OffersNoScopeChipsBecauseEverythingIsYours()
     {
         await NavigateToMediaLibraryAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "All", Exact = true }))
-            .ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Mine", Exact = true }))
-            .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Public", Exact = true }))
-            .ToBeVisibleAsync();
+        await Expect(Main.GetByText("Everything you have uploaded", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        foreach (var gone in new[] { "All", "Public" })
+        {
+            await Expect(Main.GetByRole(AriaRole.Button, new() { Name = gone, Exact = true }))
+                .ToHaveCountAsync(0);
+        }
     }
 
     [Test]
-    public async Task ScopeFilter_ClickMine_DoesNotCrash()
+    /// <summary>
+    /// The library comes up clean with no filtering to do.
+    /// </summary>
+    /// <remarks>
+    /// This clicked the "Mine" chip, which no longer exists — the server is asked for that scope
+    /// instead. What the test was really guarding is that the page survives being looked at, so
+    /// that is what it does now.
+    /// </remarks>
+    public async Task The_library_comes_up_without_an_error()
     {
         await NavigateToMediaLibraryAsync();
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Mine", Exact = true }).ClickAsync();
-        await Page.WaitForTimeoutAsync(300);
+        await Expect(Main.GetByText("Everything you have uploaded", new() { Exact = false }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
     }
@@ -261,7 +280,7 @@ public class MediaLibraryTests : BenTestBase
         // rendered, so reading once caught the home page's text and reported the media library as
         // missing its own copy. Verified against the running app — both soft and hard navigation
         // to /media-library render correctly; only the test was early.
-        await Expect(Main.GetByText("Everything you own", new() { Exact = false }))
+        await Expect(Main.GetByText("Everything you have uploaded", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
