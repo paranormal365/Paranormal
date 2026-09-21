@@ -44,16 +44,7 @@ public sealed class EveryMailKindHasASenderTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotSentYet = new(StringComparer.Ordinal)
     {
-        ["AccountMadeForYou"]        = "AccountRegistrationController and PublicClientRequestController both make accounts for somebody; neither tells them so by name.",
-        ["RequestOpenedForReview"]   = "the review flow notifies in-app only.",
-        ["RequestAccepted"]          = "ditto — acceptance is a platform message, not a letter.",
-        ["RequestNoLongerAvailable"] = "ditto.",
-        ["SessionMoved"]             = "session changes notify in-app; no letter is written.",
-        ["SessionCancelled"]         = "ditto.",
-        ["SessionPromoted"]          = "ditto.",
-        ["PaymentReceipt"]           = "receipts exist in the billing ledger and on screen; none is posted.",
-        ["SubscriptionLapsing"]      = "the lapse warning is a platform message today.",
-        ["PlanChanged"]              = "TierChangeNotifier sends a platform message rather than a letter.",
+        ["AccountMadeForYou"]        = "nothing creates an account FOR somebody and tells them so — the walk-up and client paths make one and send a confirmation instead. It wants a letter written, not a label moved.",
     };
 
     /// <summary>Every kind named by something that actually sends, anywhere in the API.</summary>
