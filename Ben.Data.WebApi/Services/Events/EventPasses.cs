@@ -213,6 +213,6 @@ public static class EventPasses
     /// mode than mixed case — the same secret in fewer squares, which is a code that scans in
     /// worse light.
     /// </remarks>
-    private static string NewToken()
+    internal static string NewToken()
         => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 }

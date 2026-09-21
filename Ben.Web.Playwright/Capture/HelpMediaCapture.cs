@@ -1046,6 +1046,52 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     [Test]
+    [Description("organization-administration: the meeting point, where a guide scans guests in.")]
+    public async Task Capture_TourDoor()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        // A date to stand at. The door is per-event, so the picture needs a real walk rather than
+        // a made-up id — a "that date could not be found" card teaches nobody anything.
+        var eventId = await AnyTourDateAsync(orgId);
+        if (eventId is null) Assert.Ignore("no tour date in the seed to stand a door at");
+
+        await GoAsync($"/organizations/{orgId}/events/{eventId}/tour-door");
+
+        // Wait for the box, not the page: the heading renders before the scanner does, and a shot
+        // between the two is a door with no door in it.
+        await Page.Locator("#tour-door-code")
+                  .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
+
+        await ShootAsync("organization-administration", "tour-door.png",
+                         gated: true, proves: "Or type the code");
+    }
+
+    /// <summary>Any published tour date on this group, or null.</summary>
+    private async Task<string?> AnyTourDateAsync(string orgId)
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+
+        var response = await Page.APIRequest.GetAsync(
+            $"{ApiUrl}/api/organizations/{orgId}/calendar",
+            new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+        if (!response.Ok) return null;
+
+        var json = await response.JsonAsync();
+        if (json is not { ValueKind: System.Text.Json.JsonValueKind.Array } rows) return null;
+
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.TryGetProperty("id", out var id) && id.GetString() is { Length: > 0 } value)
+                return value;
+        }
+        return null;
+    }
+
+    [Test]
     [Description("your-profile: choosing which of the site's emails you get.")]
     public async Task Capture_YourEmails()
     {

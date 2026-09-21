@@ -18,6 +18,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-21
 
+- Your place on a walk comes with a pass. It is in your confirmation email as a square code, drawn
+  into the letter itself so it still shows if your mail program blocks pictures, with a link under
+  it in case it strips the code instead.
+- At the meeting point your guide scans it and is told in one line whether you are on tonight's
+  walk, how many places you booked, and whether somebody has already scanned that pass. A pass for
+  a different night says which night, rather than "not recognised".
 - You can choose which of the site's emails you get. "Choose your emails" is on your profile and at
   the foot of every letter you can turn off. Everything is on to begin with, and a switch takes
   effect on the next letter.

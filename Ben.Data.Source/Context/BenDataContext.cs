@@ -583,6 +583,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventAttendanceInvite>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.Email });
 
+            // A tour pass is resolved BY its token, on a table with a row per guest per walk, so
+            // the lookup wants an index. Filtered because the column is null until a pass is
+            // minted and a pile of nulls would collide on a unique one.
+            modelBuilder.Entity<OrgCalendarEventAttendee>().Property(e => e.PassToken).HasMaxLength(128);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasIndex(e => e.PassToken).IsUnique().HasFilter("[PassToken] IS NOT NULL");
+
             // One row per person per declined letter, and never two. The unique index is what
             // makes "switch it off" idempotent — a double click, a retried request and two tabs
             // all mean the same thing, and none of them should make a second row.
