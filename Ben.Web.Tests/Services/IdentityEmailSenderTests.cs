@@ -37,18 +37,11 @@ public class IdentityEmailSenderTests
     public async Task With_no_mail_server_the_link_is_logged_so_the_flow_can_still_be_finished()
     {
         var log    = new CapturingLogger();
-        // A composer over a database that will not answer, which is the right shape here: this
-        // test is about a missing MAIL server, and the composer must not change that story. It
-        // falls back to the built-in letter on any failure, so the assertions below still read
-        // the words the code writes.
-        var sender = new IdentityEmailSender(new NoMailServer(), log, Options.Create(new SiteIdentity()),
-            new Ben.Data.WebApi.Services.Mail.MailComposer(
-                new NoDatabase(),
-                new Microsoft.Extensions.Caching.Memory.MemoryCache(
-                    new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()),
-                Options.Create(new SiteIdentity()),
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<
-                    Ben.Data.WebApi.Services.Mail.MailComposer>.Instance));
+        // No composer here any more. Applying a written template moved to the one place every
+        // letter passes through — OutboxEmailService — so this sender hands its rows over on the
+        // message and nothing about templates happens in it. The story this test tells, about a
+        // missing MAIL server, is unchanged.
+        var sender = new IdentityEmailSender(new NoMailServer(), log, Options.Create(new SiteIdentity()));
         var user   = new AppUser { Id = Guid.NewGuid(), Email = "new@example.com", UserName = "new@example.com" };
         const string link = "http://localhost:5078/confirm-email?userId=1&code=abc";
 

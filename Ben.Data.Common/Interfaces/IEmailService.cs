@@ -68,7 +68,41 @@ public sealed record EmailMessage(
     IReadOnlyList<EmailAttachment>? Attachments = null,
     string? ReplyTo = null,
     string? Kind = null,
-    string? TimesShownInZone = null);
+    string? TimesShownInZone = null,
+    MailPayload? Payload = null);
+
+/// <summary>
+/// The rows a letter is carrying, for a template to read.
+/// </summary>
+/// <remarks>
+/// <para><b>Why this travels on the message rather than living in each mailer.</b> A letter gains a
+/// written template by consulting <c>MailComposer</c> before it sends, and for a long time exactly
+/// three of thirty-five letters did — because doing it meant editing each mailer, and each edit
+/// broke the tests that mock the sender. Carrying the rows here instead means the composing happens
+/// in ONE place, where every letter already passes, and a mailer opts in by saying what it is
+/// holding rather than by learning how templates work.</para>
+///
+/// <para>Both halves are optional. A letter that supplies nothing still gets a template — one
+/// written with only <c>{SiteName}</c>, <c>{Date}</c> or plain words needs no rows at all.</para>
+/// </remarks>
+/// <param name="Tables">
+/// Rows by table name, as a template addresses them: <c>{AppUsers.FirstName}</c> reads
+/// <c>Tables["AppUsers"]["FirstName"]</c>.
+/// </param>
+/// <param name="Supplied">
+/// Values only the sending code can know — a confirmation link, a ready-made button — keyed by the
+/// token name the letter's kind declares.
+/// </param>
+public sealed record MailPayload(
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? Tables = null,
+    IReadOnlyDictionary<string, MailSuppliedValue>? Supplied = null);
+
+/// <summary>One supplied value, and whether it is markup rather than words.</summary>
+/// <remarks>
+/// A named record rather than a tuple, because this crosses an assembly boundary and appears in a
+/// public signature: <c>(string, bool)</c> tells a reader nothing at the call site.
+/// </remarks>
+public sealed record MailSuppliedValue(string Value, bool IsHtml = false);
 
 /// <summary>One file travelling with an email.</summary>
 /// <param name="ContentType">
