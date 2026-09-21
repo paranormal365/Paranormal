@@ -337,6 +337,65 @@ would rather it was removed altogether.
 This is one of the few emails you cannot turn off. "An account exists in your name" is not a
 preference, and somebody who had switched everything off would never find out.
 
+## Public locations
+
+Some places are not anybody's house — a landmark, a cemetery, a bridge, a business that lets
+people in. Anyone signed in can put one on the map: **Add a public location**, on the Places tab
+of what's near you.
+
+Give it a name and a town. A street helps, and is what stops two people naming the same building
+from ending up with two pages for it — if the address is already here you are taken to the page
+that exists rather than making a second one.
+
+**Homes are not added this way.** A private residence gets its page through the group a client
+invited, because somebody has to have asked. There is no way to type a home address here and
+publish a page about it, and that is on purpose.
+
+![A public location's page](/help/media/getting-started/public-location.png)
+
+### Adding what you recorded
+
+On a public location's page, anybody signed in can add a photograph, a recording or a video, with
+a line saying what it is — where in the building, what time, what to listen for. It joins the
+evidence for that place alongside what groups have published from their own investigations.
+
+Everything added is looked at before it appears. Most things go straight on; if yours is held, the
+page tells you so rather than pretending it is showing. You can take back anything you added.
+
+### The place itself
+
+A public location's page has room for what the place **is** — when it was built, who lived there,
+what it is now. Anybody signed in can write it, and anybody after them can improve it. It is plain
+text on purpose: a page any stranger reads is not somewhere a stray link or a pasted layout should
+be able to land.
+
+You can also add **photographs of the building** — the frontage, the grounds, the rooms in
+daylight. Choose "a photograph of the place itself" when you add it.
+
+**These are kept apart from evidence, and that is the whole point.** A daylight photograph of a
+staircase showing a reader what the house looks like, and a photograph of the same staircase
+somebody thinks has a figure on it, are two different claims. Pictures of the place are never
+voted on and never counted — mixed in with evidence, every number on the page would be wrong and
+nobody could tell what was being asserted.
+
+### What the evidence says
+
+Anybody signed in can vote on a piece of evidence — **something here**, **can't tell**, or **not
+convinced**. The place's page adds those up above the list: how many pieces of evidence it holds,
+how many votes have been cast, and what share of opinion falls each way.
+
+A file counts **once**, however it got there. The same photograph published in an investigation and
+added to the place directly is one piece of evidence, not two — otherwise a place would look like
+it held more than it does.
+
+**There is no league table.** A place shows its own figures and the site does not rank one property
+against another. These are real buildings with real owners, and "the third most haunted house in
+Tennessee" is a claim about them that a pile of votes is not entitled to make.
+
+The overall number is a simple sum — **+1** for something here, **0** for can't tell, **−1** for not
+convinced — and it is always shown beside the number of votes, because a score with no weight
+behind it says nothing.
+
 ## Empty, or broken?
 
 A list that shows nothing is telling you one of two different things, and the page says which.

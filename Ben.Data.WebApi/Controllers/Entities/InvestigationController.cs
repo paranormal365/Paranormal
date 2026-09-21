@@ -672,13 +672,20 @@ public sealed class EvidenceVoteController : BenControllerBase
         // Return updated summary
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Where(v => v.UploadFileId == uploadFileId).ToListAsync(ct);
+        // Score included, which it was not until 2026-09-21. The record's own note says it is
+        // "computed server-side and rendered as given — never re-derived from the counts", and
+        // leaving the argument off did not re-derive it either: it took the default of ZERO. So
+        // casting a vote answered with a score of 0 however the votes stood, and the widget
+        // showed that until something reloaded the page. The GET beside this has always been
+        // right, which is why nothing noticed.
         return Ok(new EvidenceVoteSummary(
             uploadFileId,
             votes.Count(v => v.VoteType == EvidenceVoteType.Confirms),
             votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             votes.Count,
-            request.VoteType));
+            request.VoteType,
+            EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>Remove the current user's vote.</summary>

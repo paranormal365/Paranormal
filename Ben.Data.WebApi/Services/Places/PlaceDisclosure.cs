@@ -47,12 +47,12 @@ internal static class PlaceDisclosure
     internal static PlaceRecord Public(
         Guid id, string? name, string? streetAddress1, string? city, string? state,
         string? zipCode, string? country, decimal? latitude, decimal? longitude,
-        string? geocodeNote, PlaceKind kind)
+        string? geocodeNote, PlaceKind kind, string? description = null)
     {
         if (kind != PlaceKind.PrivateResidence)
             return new PlaceRecord(
                 id, name, streetAddress1, city, state, zipCode, country,
-                latitude, longitude, geocodeNote, kind);
+                latitude, longitude, geocodeNote, kind, description);
 
         // Snapped to a grid rather than dropped, so the page can still say roughly where this is
         // without the pin being an address lookup. PublicCoordinates owns how coarse that is.
@@ -72,7 +72,10 @@ internal static class PlaceDisclosure
             Longitude: approxLon,
             // The geocoder's own note quotes back what it matched, which is the address.
             GeocodeNote: null,
-            Kind: kind);
+            Kind: kind,
+            // Withheld with the rest of it. A description of somebody's home is a description of
+            // somebody's home however carefully it was written.
+            Description: null);
     }
 
     /// <summary>

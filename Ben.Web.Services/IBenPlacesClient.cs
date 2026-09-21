@@ -333,4 +333,39 @@ public interface IBenPlacesClient
     /// </summary>
     Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
         Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default);
+
+    // ── Evidence added straight to a place (item 250) ─────────────────────────
+
+    /// <summary>
+    /// Adds one file to a public place's evidence.
+    /// </summary>
+    /// <returns>
+    /// What the server says, including whether it is showing yet — held is not a failure and the
+    /// page must not report it as one.
+    /// </returns>
+    Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
+        Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
+        CancellationToken token = default);
+
+    /// <summary>Takes back something this account added. Only ever their own.</summary>
+    Task<bool> RemovePlaceEvidenceAsync(Guid placeId, Guid evidenceId, CancellationToken token = default);
+
+    /// <summary>Where a browser fetches one piece of a place's evidence. Anonymous by design.</summary>
+    string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId);
+
+    /// <summary>
+    /// Puts a public location on the map — a landmark, a business, a cemetery (item 250).
+    /// </summary>
+    /// <remarks>
+    /// Until this there was no way to create a place at all; they only ever appeared sideways,
+    /// when a case or an investigation happened to bind one. A landmark nobody had yet
+    /// investigated could not be named.
+    /// </remarks>
+    Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default);
+
+    /// <summary>Writes what a public location is, for somebody who has never been (item 250).</summary>
+    Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default);
 }

@@ -769,6 +769,103 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     [Test]
+    [Description("getting-started: a public location's page — what it is, its evidence and the figures.")]
+    public async Task Capture_PublicLocation()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        // Founded for the shot rather than borrowed from the seed: the picture has to show a page
+        // with a description, both kinds of picture and some votes on it, and no seeded place has
+        // all three. It is a public location like any other afterwards.
+        await GoAsync("/places/new");
+        await Page.Locator("#newplace-name").FillAsync("Cragfont");
+        await Page.Locator("#newplace-street").FillAsync("200 Cragfont Road");
+        await Page.Locator("#newplace-city").FillAsync("Castalian Springs");
+        await Page.Locator("#newplace-state").FillAsync("TN");
+        await ClickUntilUrlAsync(Page.Locator("#newplace-add"), @"/places/[0-9a-f\-]{36}");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        await ClickUntilAsync(Page.Locator("#place-about-edit"), Page.Locator("#place-about-text"));
+        await Page.Locator("#place-about-text").FillAsync(
+            "Built in 1802 by General James Winchester, on a bluff above the Cumberland. "
+          + "Lived in by the family until 1864 and held by the state since.");
+        await ClickUntilAsync(Page.Locator("#place-about-save"), Page.Locator("#place-about-edit"));
+
+        foreach (var (caption, kind) in new[]
+        {
+            ("The upstairs corridor, about 11pm", "Evidence"),
+            ("The frontage from the drive", "AboutThePlace"),
+        })
+        {
+            // A real photograph, not the one-pixel PNG the walks use. Scaled up it renders as a
+            // black rectangle, and a help picture showing two black rectangles teaches the reader
+            // that the feature is broken.
+            await Page.Locator("#place-evidence-file").SetInputFilesAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#place-evidence-caption").FillAsync(caption);
+            await Page.Locator("#place-evidence-kind").SelectOptionAsync(kind);
+            await ClickUntilAsync(Page.Locator("#place-evidence-add"),
+                                  Page.Locator("#place-evidence-says"));
+        }
+
+        // Votes, so the picture shows what the paragraph beside it describes. A shot reading
+        // "nobody has voted on any of it yet" illustrates the empty case, which is the one the
+        // help does not need a photograph of.
+        // Asked of the API directly. A fetch() from the page hits the WEBSITE's origin, where
+        // /api/... is not an API at all — it is the Blazor shell, and the answer is a DOCTYPE.
+        var placeId = System.Text.RegularExpressions.Regex
+            .Match(Page.Url, @"/places/([0-9a-f\-]{36})").Groups[1].Value;
+
+        var reader = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var listed = await reader.GetAsync($"/api/public/places/{placeId}/evidence");
+        var fileId = listed.Ok
+            ? (await listed.JsonAsync())!.Value.EnumerateArray().FirstOrDefault()
+                .GetProperty("uploadFileId").GetString()
+            : null;
+        await reader.DisposeAsync();
+
+        if (fileId is { Length: > 0 })
+        {
+            foreach (var (email, password, vote) in new[]
+            {
+                (UserEmail, UserPassword, 0),
+                (MemberEmail, MemberPassword, 0),
+                (ClientEmail, ClientPassword, 1),
+            })
+            {
+                var token = await TokenForCaptureAsync(email, password);
+                if (token is null) continue;
+
+                var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+                await api.PostAsync($"/api/evidence-votes/{fileId}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+                    DataObject = new { voteType = vote },
+                });
+                await api.DisposeAsync();
+            }
+        }
+
+        await Page.ReloadAsync();
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        // SELECTOR, not the whole page. The first version shot the viewport and "proves" passed on
+        // text that was eight hundred pixels below the fold — the figures and both galleries were
+        // in the DOM and out of frame, so the picture showed a map and a contact card while the
+        // paragraph beside it talked about evidence. A proof that reads the DOM says nothing about
+        // what is in the photograph.
+        //
+        // Around widens it to take the evidence and the pictures underneath the figures panel,
+        // which is what the help is actually describing.
+        await ShootAsync("getting-started", "public-location.png",
+                         selector: "#place-figures",
+                         around: new Around(Top: 340, Bottom: 420, Left: 12, Right: 12),
+                         proves: "What the evidence here says");
+    }
+
+    [Test]
     [Description("organization-administration: the sheet a guide holds up so a guest's phone can join.")]
     public async Task Capture_GuestCode()
     {
