@@ -1046,6 +1046,24 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     [Test]
+    [Description("your-profile: choosing which of the site's emails you get.")]
+    public async Task Capture_YourEmails()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        await GoAsync("/email-preferences");
+
+        // Wait for the LIST, not the page. The heading and the closing paragraph render before the
+        // preferences arrive, so a shot taken between the two is a page of prose about switches
+        // with no switches in it — which is the picture, and the wrong one.
+        await Page.Locator("#email-preferences .form-check-input").First
+                  .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
+
+        await ShootAsync("your-profile", "your-emails.png",
+                         proves: "Some letters are always sent");
+    }
+
+    [Test]
     [Description("your-case: the client's own view of a case.")]
     public async Task Capture_YourCase()
     {

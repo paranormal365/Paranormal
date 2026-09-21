@@ -188,6 +188,15 @@ public interface IBenUserClient
     Task<LoadResult<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
+    // ── Which letters somebody wants ──────────────────────────────────────────
+
+    /// <summary>Every letter this person may turn off, and whether they have.</summary>
+    Task<LoadResult<EmailPreferenceRecord>> GetMyEmailPreferencesAsync(CancellationToken token = default);
+
+    /// <summary>Says whether one letter is wanted; returns the server's sentence when it refuses.</summary>
+    Task<(EmailPreferenceRecord? Result, string? Error)> SetMyEmailPreferenceAsync(
+        string kind, bool wanted, CancellationToken token = default);
+
     Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
     Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
     Task<bool> CreateUserPhoneTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);

@@ -1,0 +1,136 @@
+@page "/email-preferences"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Which letters somebody wants.
+
+    Item 246 gave nine notices a letter as well as a bell, because a cancelled session and a card
+    that did not go through are no use in a bell read next Tuesday. That is the right default and
+    it is not a licence — this is where somebody says otherwise.
+
+    The letters that are NOT here are the point of the screen as much as the ones that are:
+    proving an address, resetting a password and a receipt are not choices, and offering to switch
+    off the letter you need to get back into your account would be a defect wearing a feature's
+    clothes. The send path enforces the same rule, so this does not depend on the screen's good
+    manners.
+*@
+
+<PageTitle>Your emails</PageTitle>
+
+<div class="container py-3" style="max-width:720px;">
+    <h3 class="mb-1">Your emails<HelpLink Slug="your-profile" Anchor="your-emails" /></h3>
+    <p class="text-secondary small mb-4">
+        Everything here is sent to <strong>@(_address ?? "your address")</strong>. Turn off
+        anything you would rather catch up on when you next visit.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" id="prefs-error">@_error</div>
+    }
+
+    <BenListState TItem="EmailPreferenceRecord" Result="@_prefs" Loading="@_loading"
+                  LoadingText="Loading your emails…"
+                  EmptyText="There is nothing here you can turn off — every letter the site sends you is one you need."
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <div class="list-group" id="email-preferences">
+                @foreach (var pref in _prefs.Items)
+                {
+                    var row = pref;
+                    <div class="list-group-item d-flex align-items-start justify-content-between gap-3">
+                        <div>
+                            <label class="form-check-label fw-semibold" for="@($"pref-{Slug(row.Kind)}")">
+                                @row.Title
+                            </label>
+                            <div class="text-secondary small">@row.Description</div>
+                        </div>
+                        <div class="form-check form-switch flex-shrink-0">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="@($"pref-{Slug(row.Kind)}")"
+                                   checked="@row.Wanted"
+                                   disabled="@_busy"
+                                   @onchange="@(e => SetAsync(row, e.Value is true))" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </ChildContent>
+    </BenListState>
+
+    @* Said plainly, because the absence of these from the list above is otherwise a silence
+       somebody has to interpret. *@
+    <p class="text-secondary small mt-3 mb-0" id="always-sent">
+        Some letters are always sent: confirming your address, resetting your password, a receipt
+        for something you paid for, and a warning if somebody uses your address. Those are how you
+        get into your account and what you keep for your records.
+    </p>
+</div>
+
+@code {
+    private LoadResult<EmailPreferenceRecord> _prefs;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _address;
+
+    private static string Slug(string kind) => kind.Replace('.', '-');
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
+            return;
+        }
+
+        _address = UserState.UserEmail;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _prefs = await AdminClient.GetMyEmailPreferencesAsync(); }
+        finally { _loading = false; }
+    }
+
+    /// <summary>
+    /// Saves at once, and puts the switch back if the server refuses.
+    /// </summary>
+    /// <remarks>
+    /// No Save button: one switch is the whole decision, and a screen of switches with a Save is a
+    /// screen somebody leaves without pressing it. The refusal moves the switch back rather than
+    /// leaving it showing a state the server does not hold.
+    /// </remarks>
+    private async Task SetAsync(EmailPreferenceRecord row, bool wanted)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (result, error) = await AdminClient.SetMyEmailPreferenceAsync(row.Kind, wanted);
+            if (result is null)
+            {
+                _error = error ?? "That could not be saved. Please try again.";
+                await LoadAsync();
+            }
+            else
+            {
+                // Rebuilt rather than mutated: LoadResult is a value that carries "did this load"
+                // as well as the rows, and a list swapped underneath it would lose that.
+                _prefs = LoadResult<EmailPreferenceRecord>.Ok(
+                    _prefs.Items
+                        .Select(p => p.Kind == row.Kind ? p with { Wanted = wanted } : p)
+                        .ToList());
+            }
+        }
+        finally { _busy = false; }
+    }
+}

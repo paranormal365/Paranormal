@@ -147,6 +147,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventDiningSeat> HostedEventDiningSeats { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
+
+        /// <summary>Letters people have asked not to receive. Absence means wanted.</summary>
+        public virtual DbSet<UserEmailOptOut> UserEmailOptOuts { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
@@ -579,6 +582,17 @@ namespace Ben.Data.Source.Context
             // this is what lets a resend reuse the row rather than litter.
             modelBuilder.Entity<EventAttendanceInvite>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.Email });
+
+            // One row per person per declined letter, and never two. The unique index is what
+            // makes "switch it off" idempotent — a double click, a retried request and two tabs
+            // all mean the same thing, and none of them should make a second row.
+            modelBuilder.Entity<UserEmailOptOut>().Property(e => e.Kind).HasMaxLength(60);
+            modelBuilder.Entity<UserEmailOptOut>()
+                .HasIndex(e => new { e.AppUserId, e.Kind }).IsUnique();
+            // Cascade: somebody's preferences are theirs, and mean nothing once the account is gone.
+            modelBuilder.Entity<UserEmailOptOut>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
 
             // A group's invitation link. Filtered unique for the same reason the event invitation's
             // token is: the column is null whenever there is no live link, and a pile of nulls

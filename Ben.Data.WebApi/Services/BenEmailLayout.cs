@@ -37,9 +37,16 @@ public static class BenEmailLayout
     /// <param name="timesShownInZone">The clock the times in the letter are written in — "UTC",
     /// "CDT" — when that is not the reader's own. Adds a line to the footer saying so. Null for a
     /// letter with no times in it.</param>
+    /// <param name="canDecline">
+    /// Whether this letter is one somebody may turn off, in which case the footer says where.
+    /// <para>A preference screen nothing links to is a preference screen nobody finds, and the one
+    /// place a person is definitely thinking about a letter is while reading it. The line is
+    /// absent for the letters that cannot be declined rather than present and untrue.</para>
+    /// </param>
     public static string Wrap(SiteIdentity site, string title, string bodyHtml,
                               string? buttonText = null, string? buttonUrl = null,
-                              string? timesShownInZone = null)
+                              string? timesShownInZone = null,
+                              bool canDecline = false)
     {
         var name = WebUtility.HtmlEncode(site.Name);
 
@@ -57,6 +64,15 @@ public static class BenEmailLayout
 
         var zoneNote = MailHeader.TimeZoneNote(timesShownInZone) is { } note
             ? $"""<div style="padding-top:6px;">{note}</div>"""
+            : "";
+
+        var chooseNote = canDecline
+            ? $"""
+              <div style="padding-top:6px;">
+                <a href="{WebUtility.HtmlEncode(site.AbsoluteUrl("/email-preferences"))}"
+                   style="color:#9ca3af;">Choose which emails you get</a>
+              </div>
+              """
             : "";
 
         var button = "";
@@ -109,6 +125,7 @@ public static class BenEmailLayout
                       {name} — {WebUtility.HtmlEncode(site.Tagline)}<br/>
                       If you weren't expecting this message, you can ignore it.
                       {zoneNote}
+                      {chooseNote}
                     </td></tr>
                   </table>
                 </td></tr>
