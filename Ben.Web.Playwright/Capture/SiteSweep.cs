@@ -56,6 +56,19 @@ public sealed class SiteSweep : BenTestBase
     private sealed record Finding(string Who, string Url, string What, string Detail);
 
     private readonly List<Finding> _found = [];
+
+    /// <summary>
+    /// How many screens were actually opened.
+    /// </summary>
+    /// <remarks>
+    /// Because "0 findings" and "visited nothing" produce the same report, and this repository has
+    /// a long history of the second being read as the first. The report leads with this number and
+    /// the run fails outright when it is zero.
+    /// </remarks>
+    private int _visits;
+
+    /// <summary>How many addresses it set out to open, written to the report before it starts.</summary>
+    private int _urlCount;
     private readonly List<string> _consoleErrors = [];
     private readonly List<string> _failedCalls = [];
 
@@ -126,11 +139,21 @@ public sealed class SiteSweep : BenTestBase
         _consoleErrors.Clear();
         _failedCalls.Clear();
 
+        _visits++;
+
         try
         {
-            await Page.GotoAsync($"{BaseUrl}{url}", new() { Timeout = 25_000 });
+            var response = await Page.GotoAsync($"{BaseUrl}{url}", new() { Timeout = 25_000 });
             await WaitForTheCircuitAsync();
-            await SettleAsync();
+
+            // The result was computed and thrown away in the first version of this, so a page that
+            // sat on a spinner for twenty seconds produced no finding at all — the same shape as
+            // the wait that only looked for the word "Loading". A discarded answer is not a check.
+            if (await SettleAsync() is string stuck)
+                _found.Add(new(who, url, "never finished loading", stuck));
+
+            if (response is not null && response.Status >= 400)
+                _found.Add(new(who, url, "the page itself answered", response.Status.ToString()));
         }
         catch (Exception ex)
         {
@@ -177,7 +200,22 @@ public sealed class SiteSweep : BenTestBase
             _found.Add(new(who, url, "request failed", f));
     }
 
-    /// <summary>Waits for the page to stop saying it is loading — spinner as well as the word.</summary>
+    /// <summary>
+    /// Waits for the page to stop being busy, read from the markup rather than the prose.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Never by searching for the word.</b> The first version looked for "Loading"
+    /// anywhere in the page and duly reported <c>/changes</c> as hung on every one of six seats:
+    /// the changelog renders the line "…no longer says there are no accounts while it is still
+    /// loading", and a page is allowed to talk about loading without doing it. That is the third
+    /// time a check in this repository has read a page's own words as evidence about the page —
+    /// twice before for "An unhandled error has occurred" — so this one reads structure instead.
+    /// </para>
+    ///
+    /// <para><c>BenLoaderOverlay</c> is the site's one loading marker and always renders a
+    /// <c>.spinner-border</c> inside a <c>role="status"</c>, so a spinner is the signal and text
+    /// never is.</para>
+    /// </remarks>
     private async Task<string?> SettleAsync(int timeoutMs = 20_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -185,13 +223,55 @@ public sealed class SiteSweep : BenTestBase
         {
             try
             {
-                if (await Main.GetByText("Loading", new() { Exact = false }).CountAsync() == 0
-                 && await Spinners.CountAsync() == 0) return null;
+                if (await Spinners.CountAsync() == 0) return null;
             }
             catch (Exception) { return null; }
             await Task.Delay(200);
         }
-        return "still loading";
+        return $"still loading after {timeoutMs / 1000}s";
+    }
+
+    /// <summary>
+    /// Proves the sweep can see before believing that it saw nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>The first two runs of this fixture opened 644 screens as six different people and
+    /// reported a perfectly clean site. That is not a result, it is the shape of a check that
+    /// cannot fail — and this repository has produced that shape often enough to have a test named
+    /// after it. A sweep whose console and network watchers are silently attached to nothing
+    /// reports exactly what a flawless site reports.</para>
+    ///
+    /// <para>So: make the site emit one console error and one failed request on purpose, and
+    /// refuse to run if the watchers did not notice. A clean report is then worth something,
+    /// because the instrument was shown working immediately before it produced one.</para>
+    /// </remarks>
+    private async Task ProveItCanSeeAsync()
+    {
+        await Page.GotoAsync($"{BaseUrl}/");
+        await WaitForTheCircuitAsync();
+
+        _consoleErrors.Clear();
+        _failedCalls.Clear();
+
+        await Page.EvaluateAsync("() => console.error('sweep self-test')");
+        await Page.EvaluateAsync(
+            "async () => { try { await fetch('/__sweep-self-test__.json'); } catch (e) { } }");
+
+        // The events are raised on the browser's own schedule, so give them a moment rather than
+        // reading an empty list and concluding the instrument is broken.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline && (_consoleErrors.Count == 0 || _failedCalls.Count == 0))
+            await Task.Delay(200);
+
+        Assert.That(_consoleErrors, Is.Not.Empty,
+            "the console watcher saw nothing when the page was made to log an error — every "
+          + "'no console errors' this fixture reports would be meaningless.");
+        Assert.That(_failedCalls, Is.Not.Empty,
+            "the network watcher saw nothing when the page was made to request a missing file — "
+          + "every 'no failed requests' this fixture reports would be meaningless.");
+
+        _consoleErrors.Clear();
+        _failedCalls.Clear();
     }
 
     [Test]
@@ -199,11 +279,14 @@ public sealed class SiteSweep : BenTestBase
     public async Task Every_screen_as_everybody()
     {
         Watch();
+        await ProveItCanSeeAsync();
 
         // Ids come from the admin seat once, so the URLs are the same for everybody — the point is
         // what each person is shown at the SAME address, not a different tour per seat.
         var urls = await UrlsAsync();
-        TestContext.Out.WriteLine($"{urls.Count} urls");
+        _urlCount = urls.Count;
+        Write();   // the header, before a single page is opened, so "what did it look at" is never a guess
+        Assert.That(urls, Is.Not.Empty, "no routes were discovered — the sweep would report a clean site having looked at nothing");
 
         foreach (var seat in Seats())
         {
@@ -232,6 +315,8 @@ public sealed class SiteSweep : BenTestBase
         await Page.SetViewportSizeAsync(1280, 720);
 
         Write();
+        TestContext.Out.WriteLine($"{_visits} visits, {_found.Count} findings");
+        Assert.That(_visits, Is.GreaterThan(0), "the sweep opened nothing at all");
     }
 
     private static bool IsPublic(string url)
@@ -273,7 +358,7 @@ public sealed class SiteSweep : BenTestBase
         var report = new StringBuilder();
         report.AppendLine("# The whole site, as everybody");
         report.AppendLine();
-        report.AppendLine($"{_found.Count} finding(s).");
+        report.AppendLine($"{_urlCount} address(es) to walk, {_visits} screen(s) opened, {_found.Count} finding(s).");
         report.AppendLine();
 
         foreach (var group in _found.GroupBy(f => f.Who))

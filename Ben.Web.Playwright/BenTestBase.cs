@@ -959,15 +959,38 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected async Task WaitUntilLoadedAsync(int timeoutMs = 15_000)
     {
-        var placeholder = Main.GetByText("Loading", new() { Exact = false });
+        // The SPINNER is the signal, and the word is a hint at best.
+        //
+        // Both halves of that mattered. Several screens spin with no words at all, so a
+        // text-only wait returned immediately and callers photographed and asserted against a
+        // placeholder — that is how the first-run walk came back "ok" on a page still loading.
+        // And a page is allowed to TALK about loading without doing it: /changes renders the
+        // changelog line "…no longer says there are no accounts while it is still loading", which
+        // a text-only wait reads as a page that never came up. BenLoaderOverlay is this site's one
+        // loading marker and always renders a .spinner-border, so structure answers both.
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)
         {
-            if (await placeholder.CountAsync() == 0) return;
+            try
+            {
+                if (await Spinners.CountAsync() == 0
+                 && await Main.GetByText("Loading", new() { Exact = false }).CountAsync() == 0)
+                {
+                    return;
+                }
+
+                // A page whose only remaining match is prose rather than a spinner is loaded.
+                if (await Spinners.CountAsync() == 0
+                 && DateTime.UtcNow > deadline.AddMilliseconds(-timeoutMs / 2.0))
+                {
+                    return;
+                }
+            }
+            catch (Exception) { return; }   // the page went away; the caller's assertion will say so
             await Task.Delay(150);
         }
-        // Deliberately does not throw: some pages keep a permanent element containing the word,
-        // and a caller's own assertion is a better failure message than a generic timeout here.
+        // Deliberately does not throw: a caller's own assertion is a better failure message than
+        // a generic timeout here.
     }
 
     /// <summary>
