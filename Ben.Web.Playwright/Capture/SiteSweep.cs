@@ -326,29 +326,115 @@ public sealed class SiteSweep : BenTestBase
         || url.StartsWith("/help", StringComparison.Ordinal);
 
     /// <summary>Every plain route, plus every parameterised route that a real id can fill.</summary>
+    /// <remarks>
+    /// The first version resolved only <c>{OrgId}</c>, which skipped every case, place, event,
+    /// person and help screen on the site — the pages where the product actually lives. Each id
+    /// below is best-effort and independent, so one endpoint that answers nothing costs its own
+    /// routes rather than all of them.
+    /// </remarks>
     private async Task<List<string>> UrlsAsync()
     {
         var urls = new List<string>(RouteCrawlHelper.PlainRoutes(["/logout"]));
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        // One real group and one real case, resolved the way the parameterised crawl does, so the
-        // sweep follows the seed rather than going stale against it.
         try
         {
-            var orgId = await OrgIdBySlugAsync("paranormal365");
-            var ids = new Dictionary<string, string> { ["OrgId"] = orgId };
+            var token = await AdminTokenAsync();
 
-            foreach (var route in RouteCrawlHelper.ParameterisedRoutes())
+            var orgs = await ApiArrayAsync("/api/organizations", token);
+            if (First(orgs, "id") is { } orgId)
             {
-                if (route.Contains("{Token}") || route.Contains("{AccessToken")) continue;
-                if (RouteCrawlHelper.Fill(route, ids) is { } filled) urls.Add(filled);
+                ids["OrgId"] = orgId;
+
+                if (First(await ApiArrayAsync($"/api/organizations/{orgId}/cases", token), "id") is { } caseId)
+                    ids["CaseId"] = caseId;
             }
+            if (First(orgs, "urlName") is { } orgSlug) ids["UrlName"] = orgSlug;
+
+            if (First(await ApiArrayAsync("/api/public/places", token), "id") is { } placeId)
+                ids["PlaceId"] = placeId;
+
+            if (First(await ApiArrayAsync("/api/public/hosted-events", token), "id") is { } eventId)
+                ids["EventId"] = eventId;
+
+            if (First(await ApiArrayAsync("/api/admin/app-users", token), "id") is { } userId)
+            {
+                ids["UserId"] = userId;
+                ids["AppUserId"] = userId;
+            }
+
+            // Help topics are embedded in the app rather than served by the API, so the slug comes
+            // from the index page's own links — the route a reader would follow.
+            await Page.GotoAsync($"{BaseUrl}/help");
+            var firstHelp = Page.Locator("a[href^='/help/']").First;
+            try
+            {
+                await firstHelp.WaitForAsync(new() { State = WaitForSelectorState.Attached, Timeout = 10_000 });
+                if (await firstHelp.GetAttributeAsync("href") is { Length: > 6 } href)
+                    ids["Slug"] = href["/help/".Length..];
+            }
+            catch (Exception) { /* no topics visible is a legitimate state; those routes are skipped */ }
         }
         catch (Exception ex)
         {
-            TestContext.Out.WriteLine("no ids: " + ex.Message.Split('\n')[0]);
+            _found.Add(new("the sweep itself", "(resolving ids)", "could not resolve ids",
+                ex.Message.Split('\n')[0].Trim()));
+        }
+
+        _resolved = string.Join(", ", ids.Keys.OrderBy(k => k));
+
+        foreach (var route in RouteCrawlHelper.ParameterisedRoutes())
+        {
+            if (route.Contains("{Token}") || route.Contains("{AccessToken")) continue;
+            if (RouteCrawlHelper.Fill(route, ids) is { } filled) urls.Add(filled);
         }
 
         return urls;
+    }
+
+    /// <summary>The ids that could be resolved, named in the report so a thin sweep is visible.</summary>
+    private string _resolved = "";
+
+    private async Task<string> AdminTokenAsync()
+    {
+        var login = await Page.APIRequest.PostAsync($"{ApiUrl}/login",
+            new() { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
+        Assert.That(login.Ok, Is.True, "could not sign in to the API to resolve ids");
+        return (await login.JsonAsync())?.GetProperty("accessToken").GetString() ?? "";
+    }
+
+    private async Task<JsonElement?> ApiArrayAsync(string path, string token)
+    {
+        try
+        {
+            var response = await Page.APIRequest.GetAsync($"{ApiUrl}{path}",
+                new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+            if (!response.Ok) return null;
+            return await response.JsonAsync();
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>The first non-empty string value of that property in an array answer.</summary>
+    private static string? First(JsonElement? json, string name)
+    {
+        // Some endpoints answer with a bare array and some with { items: [...] }.
+        var array = json;
+        if (json is { ValueKind: JsonValueKind.Object } obj
+            && obj.TryGetProperty("items", out var items)) array = items;
+
+        if (array is not { ValueKind: JsonValueKind.Array } list) return null;
+
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.TryGetProperty(name, out var v)
+                && v.ValueKind == JsonValueKind.String
+                && v.GetString() is { Length: > 0 } s)
+            {
+                return s;
+            }
+        }
+        return null;
     }
 
     private void Write()
@@ -359,6 +445,8 @@ public sealed class SiteSweep : BenTestBase
         report.AppendLine("# The whole site, as everybody");
         report.AppendLine();
         report.AppendLine($"{_urlCount} address(es) to walk, {_visits} screen(s) opened, {_found.Count} finding(s).");
+        report.AppendLine();
+        report.AppendLine($"Ids resolved: {(_resolved.Length == 0 ? "none" : _resolved)}");
         report.AppendLine();
 
         foreach (var group in _found.GroupBy(f => f.Who))
