@@ -216,6 +216,11 @@ public sealed class SiteSweep : BenTestBase
 
             foreach (var url in urls) await VisitAsync(seat.Who, url);
             TestContext.Out.WriteLine($"{seat.Who}: {_found.Count(f => f.Who == seat.Who)} finding(s)");
+
+            // Written after every seat rather than at the end. A sweep that takes half an hour and
+            // shows nothing until it finishes is a sweep nobody runs twice — and if it dies on the
+            // fifth seat, the first four were still worth having.
+            Write();
         }
 
         // The phone, once, as a visitor — every public screen, because that is where most people
