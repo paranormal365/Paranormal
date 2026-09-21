@@ -24,3 +24,27 @@ public sealed record PlaceAddedEvidenceRow(
 /// sentence says so.
 /// </param>
 public sealed record PlaceEvidenceAdded(Guid Id, bool Showing, string Says);
+
+/// <summary>What somebody types to put a public location on the map (item 250).</summary>
+/// <remarks>
+/// There is deliberately no <c>Kind</c> on this. A private residence is somebody's home and every
+/// route that makes one runs through a client relationship; this door has none, so the kind is set
+/// by the server and is not the caller's to offer.
+/// </remarks>
+public sealed record NewPublicPlaceRequest(
+    string? Name,
+    string? StreetAddress1,
+    string? StreetAddress2,
+    string? City,
+    string? State,
+    string? ZipCode,
+    string? Country,
+    decimal? Latitude = null,
+    decimal? Longitude = null);
+
+/// <summary>The answer to creating one.</summary>
+/// <param name="AlreadyExisted">
+/// The address was already here. Not a failure: somebody wanting a page for Cragfont gets
+/// Cragfont, and two rows for one building would split its evidence in half.
+/// </param>
+public sealed record PlaceCreated(Guid Id, bool AlreadyExisted, string Says);

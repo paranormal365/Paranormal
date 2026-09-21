@@ -130,13 +130,35 @@
                    Exact positions here, unlike events: a public location is a landmark, and only
                    places with published work at them are listed, so this is never a directory of
                    addresses somebody once typed into a form. *@
-                @if (_places.Count > 0)
+                @* The tab shows for a signed-in reader even with nothing nearby, which it did not
+                   until 2026-09-21. "Anyone can add to a public place's record" was true and
+                   unreachable: the only way to reach the ADD door was through a place that already
+                   existed, so somewhere with none — which is most of the map — had no first step. *@
+                @if (_places.Count > 0 || UserState.IsAuthenticated)
                 {
                     <BenTab Title="Places" Id="places" Badge="@_places.Count">
                         <p class="text-secondary small mb-3">
                             Locations where groups have published their work. Anyone can add to a
                             public place's record.
                         </p>
+
+                        @if (UserState.IsAuthenticated)
+                        {
+                            <p class="mb-3">
+                                <a class="btn btn-sm btn-outline-secondary" href="/places/new"
+                                   data-testid="add-public-place">
+                                    <BenIcon Name="map-pin" Class="me-1" />Add a public location
+                                </a>
+                            </p>
+                        }
+
+                        @if (_places.Count == 0)
+                        {
+                            <p class="text-secondary small fst-italic">
+                                Nothing published near you yet. A landmark, a cemetery, a bridge —
+                                if you know one, put it on the map.
+                            </p>
+                        }
                         <div class="row g-3">
                             @foreach (var place in _places)
                             {
@@ -282,6 +304,19 @@
     // ── JS interop ───────────────────────────────────────────────────────────
     private IJSObjectReference? _module;
     private DotNetObjectReference<NearbyDiscovery>? _dotnetRef;
+
+    /// <summary>
+    /// Waits for the sign-in state before deciding what this component offers.
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-09-21 with the "Add a public location" link. This component reads
+    /// <c>UserState.IsAuthenticated</c>, and a page renders long before the circuit resolves it —
+    /// so without this a signed-in reader arriving by hard navigation would be shown the
+    /// anonymous variant and never the button, for the whole visit. The guard that names this is
+    /// <c>AuthReadyPrerenderGuardTests</c>, and it caught exactly that here.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+        => await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

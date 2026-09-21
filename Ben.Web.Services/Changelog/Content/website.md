@@ -18,6 +18,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-21
 
+- You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
+  public location** is on the Places tab of what's near you. Until now a place only appeared as a
+  side effect of somebody's case or investigation, so somewhere nobody had worked yet could not be
+  named at all.
+- On a public location's page, anybody signed in can add a photograph, a recording or a video with
+  a line about what it is. It joins what groups have published from their own investigations there.
+  Everything added is looked at first, and the page tells you whether yours is showing yet.
+- Homes are not added this way, and cannot be. A private residence gets its page through the group
+  a client invited.
+
 - If an account is ever made for you before you asked for one, you are now told. The email names
   who set it up and carries a button that puts the account in your hands alone. It is one of the
   few emails that cannot be turned off.

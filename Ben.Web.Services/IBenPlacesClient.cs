@@ -352,4 +352,15 @@ public interface IBenPlacesClient
 
     /// <summary>Where a browser fetches one piece of a place's evidence. Anonymous by design.</summary>
     string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId);
+
+    /// <summary>
+    /// Puts a public location on the map — a landmark, a business, a cemetery (item 250).
+    /// </summary>
+    /// <remarks>
+    /// Until this there was no way to create a place at all; they only ever appeared sideways,
+    /// when a case or an investigation happened to bind one. A landmark nobody had yet
+    /// investigated could not be named.
+    /// </remarks>
+    Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default);
 }

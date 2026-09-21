@@ -337,6 +337,29 @@ would rather it was removed altogether.
 This is one of the few emails you cannot turn off. "An account exists in your name" is not a
 preference, and somebody who had switched everything off would never find out.
 
+## Public locations
+
+Some places are not anybody's house — a landmark, a cemetery, a bridge, a business that lets
+people in. Anyone signed in can put one on the map: **Add a public location**, on the Places tab
+of what's near you.
+
+Give it a name and a town. A street helps, and is what stops two people naming the same building
+from ending up with two pages for it — if the address is already here you are taken to the page
+that exists rather than making a second one.
+
+**Homes are not added this way.** A private residence gets its page through the group a client
+invited, because somebody has to have asked. There is no way to type a home address here and
+publish a page about it, and that is on purpose.
+
+### Adding what you recorded
+
+On a public location's page, anybody signed in can add a photograph, a recording or a video, with
+a line saying what it is — where in the building, what time, what to listen for. It joins the
+evidence for that place alongside what groups have published from their own investigations.
+
+Everything added is looked at before it appears. Most things go straight on; if yours is held, the
+page tells you so rather than pretending it is showing. You can take back anything you added.
+
 ## Empty, or broken?
 
 A list that shows nothing is telling you one of two different things, and the page says which.

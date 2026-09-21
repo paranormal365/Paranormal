@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Places;
+using Ben.Service.Models.Entities;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -27,6 +28,88 @@ public sealed class PlaceController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
 
     public PlaceController(IDbContextFactory<BenDataContext> db) => _db = db;
+
+    /// <summary>
+    /// Creates a public location — a landmark, a business, a cemetery (item 250).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"I would like to be able to create public locations like Cragfont
+    /// in Castillian Springs, TN."</i> Until this, there was <b>no way to create a place at all</b>.
+    /// They appeared only sideways — a case bound one, an investigation bound one, publishing a
+    /// session made one — so a landmark nobody had yet investigated could not be named, and the
+    /// page that gathers what has been found there could not be brought into existence on purpose.
+    /// </para>
+    ///
+    /// <para><b>Public locations only, and the caller cannot choose otherwise.</b> A private
+    /// residence is somebody's home; the routes that make one all run through a client
+    /// relationship — a case somebody asked for, a visit somebody booked — and this door has none.
+    /// Letting anybody type a home address and publish a page about it is the one thing this must
+    /// never be, so the kind is set here rather than accepted.</para>
+    ///
+    /// <para><b>An existing place is returned rather than a second one made.</b> Ben's dedup rule
+    /// is the address (item 88), and two rows for one building split its evidence in half and make
+    /// the merge screen somebody's afternoon. A caller who names an address that already exists
+    /// gets that place back and the answer says so, which is a better outcome than a refusal: they
+    /// wanted a page for Cragfont, and Cragfont is what they get.</para>
+    /// </remarks>
+    [HttpPost("public-location")]
+    public async Task<ActionResult<PlaceCreated>> CreatePublicLocation(
+        [FromBody] NewPublicPlaceRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var name = PlaceFactory.Trimmed(request?.Name);
+        if (name is null || name.Length < 2)
+            return BadRequest("Give the place a name — what people call it.");
+
+        if (PlaceFactory.Trimmed(request!.City) is null || PlaceFactory.Trimmed(request.State) is null)
+            return BadRequest("A town and a state, so people can find it and it lands on the map.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // The address is the identity, per item 88's own rule. Matched on the parts somebody
+        // types rather than on the geocode, because two people describing one building agree on
+        // its street long before they agree on its coordinates.
+        var street = PlaceFactory.Trimmed(request.StreetAddress1);
+        var city = PlaceFactory.Trimmed(request.City)!;
+        var state = PlaceFactory.Trimmed(request.State)!;
+
+        var existing = await db.Places.AsNoTracking()
+            .Where(p => p.City == city && p.State == state
+                     && (street != null ? p.StreetAddress1 == street : p.Name == name))
+            .Select(p => new { p.Id, p.Kind })
+            .FirstOrDefaultAsync(ct);
+
+        if (existing is not null)
+        {
+            // A match that is somebody's home is NOT handed back as a public location. Saying so
+            // plainly beats silently returning a row whose page would then refuse everything.
+            if (existing.Kind != PlaceKind.PublicLocation)
+            {
+                return BadRequest(
+                    "There is already a place at that address, and it is recorded as somebody's "
+                  + "home. If that is wrong, ask a site administrator to correct it.");
+            }
+
+            return Ok(new PlaceCreated(existing.Id, AlreadyExisted: true,
+                "That place is already here — this is its page."));
+        }
+
+        var place = await PlaceFactory.CreateAsync(
+            new NewPlaceRequest(
+                name, street, PlaceFactory.Trimmed(request.StreetAddress2), city, state,
+                PlaceFactory.Trimmed(request.ZipCode), PlaceFactory.Trimmed(request.Country),
+                request.Latitude, request.Longitude,
+                // Never the caller's to choose. See the remarks.
+                PlaceKind.PublicLocation),
+            userId, ct);
+
+        db.Places.Add(place);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new PlaceCreated(place.Id, AlreadyExisted: false, "Added."));
+    }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PlaceRecord>> GetById(Guid id, CancellationToken ct)

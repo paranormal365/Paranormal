@@ -312,6 +312,11 @@ public sealed partial class BenAdminClientAdapter
     /// </summary>
     public string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId)
         => $"{_webApiBaseUrl}/api/public/places/{placeId}/evidence/{evidenceId}/file";
+
+    public Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<NewPublicPlaceRequest, PlaceCreated>(
+            HttpMethod.Post, "/api/places/public-location", request, token);
 }
 
 /// <summary>The body the merge endpoint expects.</summary>
