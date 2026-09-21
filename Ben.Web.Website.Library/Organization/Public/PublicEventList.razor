@@ -101,7 +101,7 @@
                             <span class="ev-row__title">
                                 @if (item.UrlName is string slug)
                                 {
-                                    <a href="@($"/o/{item.OrganizationUrlName}/events/{slug}")">@item.Title</a>
+                                    <a href="@($"/o/{item.OrganizationUrlName}/events/{slug}?from=events")">@item.Title</a>
                                 }
                                 else
                                 {
