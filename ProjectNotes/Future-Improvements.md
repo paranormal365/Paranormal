@@ -13063,7 +13063,29 @@ ticket.
 2. A guide's scanning screen — the smallest thing that answers "is this person on tonight's walk".
 
 
-## 248. A code staff hold up, and a guest's phone joins the investigation (OPEN — Ben, 2026-09-20)
+## 248. A code staff hold up, and a guest's phone joins the investigation (CLOSED — shipped 2026-09-21)
+
+**Shipped.** Staff press **Guest code** on an investigation and get a QR plus a short typed code
+to show or print. Anybody who scans it signs in and may send photographs, audio, video and
+readings to that one visit — and see only what they sent. Not the case, not the client, not the
+address, not anybody else's evidence, and nothing after the code expires (24 hours at the outside).
+
+Ben's three decisions (2026-09-21): contribute-only to tonight; one shared code minting a
+per-person credential; QR **plus** a typed code, because Apple has no deferred deep linking and a
+fresh install cannot know what was scanned.
+
+**The rule it is built around:** the guest door is deliberately NOT in `MayContributeAsync`, which
+is also the READ door — the shortcut would have handed a walk-up from the pavement every recording
+the team made inside somebody's house. `GuestPassReadDoorTests` was written against that shortcut
+first and seen to fail.
+
+Three faults surfaced only by opening the page: a back link to an address that is a tab, a
+controller asking for a bare `SiteIdentity` (the same mistake that reached production on
+2026-09-20 — `ValidateOnBuild` does not walk controllers, so `AddControllersAsServices` now puts
+them in it), and a Playwright fixture that skipped itself. The full suite then found a fourth,
+unrelated: a site-wide announcement nobody could withdraw, because two snapshot refreshes raced
+and the slower won.
+
 
 Ben, refining what had been the second half of [[247]]:
 
