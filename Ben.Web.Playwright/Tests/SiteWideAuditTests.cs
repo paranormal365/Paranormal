@@ -232,7 +232,6 @@ public class SiteWideAuditTests : BenTestBase
             ($"/organizations/{TghId}/messages", null),
             ($"/organizations/{TghId}/promote", null),
             ($"/organizations/{TghId}/cases/new", null),
-            ("/organization-security", null),
             ("/pricing", "Pricing"),
         ], findings);
 
@@ -255,7 +254,6 @@ public class SiteWideAuditTests : BenTestBase
             ($"/organizations/{TghId}", null),
             ($"/organizations/{TghId}/edit", null),
             ($"/organizations/{TghId}/members", null),
-            ("/organization-security", null),
             ("/pricing", "Pricing"),
         ], findings);
 

@@ -1880,6 +1880,35 @@ bookings, and withheld from members who can't — an ordinary member of your gro
 read a stranger's allergy list. They never reach a public page, and the printed sheet is for the
 kitchen rather than the notice board.
 
+## Tour passes
+
+When you approve somebody's place on a walk, they are sent a pass — a square code in their
+confirmation letter, drawn into the letter itself so it still shows if their mail program blocks
+pictures. There is a link under it for the guest whose program strips the code instead.
+
+![Scanning guests in at the meeting point](help-media:organization-administration/tour-door.png)
+
+On the night, open the date from your tour and press **Scan guests in**. Point the camera at a
+guest's pass and the screen answers in one line:
+
+- **"Casey Hollow. Let them in."** — they hold a place on tonight's walk.
+- **"Casey Hollow — 3 places. Let them in."** — they booked for more than one person.
+- **"Casey Hollow is already in — scanned at 7.42."** — somebody has already scanned this pass.
+  Not a refusal; it is there so you can tell a queue-jumper from a guest whose friend scanned their
+  code a minute ago.
+- **"That pass is for Friday Night Ghost Walk, not tonight's walk."** — a real booking, the wrong
+  night. This is the commonest honest mistake at a meeting point, so it says which walk rather than
+  telling somebody their code is not recognised.
+- **"We don't recognise that code. Ask them to check the email, or look them up by name."**
+
+If the camera will not start — an old phone, a browser that will not give it permission, no light —
+type the code from the guest's screen into the box underneath instead. It does exactly the same
+thing.
+
+A pass only ever belongs to a place somebody actually holds. A seat that is still only requested,
+or one you turned down, has no pass, so nobody can arrive holding proof of a walk you did not agree
+to take them on.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

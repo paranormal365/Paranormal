@@ -5987,6 +5987,12 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<Guid?>("CheckedInByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CheckedInUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -6001,6 +6007,13 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<Guid>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PassIssuedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PassToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<int>("RsvpStatus")
                         .HasColumnType("int");
@@ -6024,6 +6037,10 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("AppUserId");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("PassToken")
+                        .IsUnique()
+                        .HasFilter("[PassToken] IS NOT NULL");
 
                     b.HasIndex("SeatDecidedByAppUserId");
 

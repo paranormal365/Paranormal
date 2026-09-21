@@ -70,8 +70,40 @@ public sealed class TourGuestMailer
                 ? TourMailRenderer.RenderReminder(tour.SubjectTemplate, tour.BodyTemplate, facts)
                 : TourMailRenderer.Render(tour.SubjectTemplate, tour.BodyTemplate, facts);
 
+            // The pass, when this guest has one (item 247).
+            //
+            // READ, not minted: the token is written where the seat is confirmed, so a guest whose
+            // letter failed still has a pass for the place they hold. A seat with no token — an
+            // ordinary calendar attendee, a seat still only requested — simply supplies nothing,
+            // and a template that mentions the pass renders without it rather than refusing.
+            var body = rendered.HtmlBody;
+            var supplied = new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase);
+
+            if (await PassTokenAsync(db, eventId, toAddress, ct) is { Length: > 0 } pass)
+            {
+                var url = _site.AbsoluteUrl($"/api/public/tour-passes/{pass}.png");
+
+                // Drawn into the letter FIRST, linked second. A linked picture a mail client
+                // blocked is a guest at a meeting point with nothing to show — the same reason
+                // the hosted event's confirmation does it this way round.
+                var image = $"<img src=\"{Events.EventPasses.DataUri(pass)}\" width=\"180\" "
+                          + "height=\"180\" alt=\"Your pass\" style=\"display:block;border:0;\" />";
+
+                supplied["PassImage"] = new MailSuppliedValue(image, IsHtml: true);
+                supplied["PassUrl"] = new MailSuppliedValue(url);
+
+                body += $"""
+                    <hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;" />
+                    <p style="margin:0 0 8px 0;"><strong>Show this when you arrive</strong></p>
+                    {image}
+                    <p style="margin:8px 0 0 0;font-size:12px;color:#6b7280;">
+                      If the picture does not show, <a href="{System.Net.WebUtility.HtmlEncode(url)}">open your pass</a>.
+                    </p>
+                    """;
+            }
+
             await _email.SendAsync(new EmailMessage(
-                toAddress, rendered.Subject, rendered.HtmlBody,
+                toAddress, rendered.Subject, body,
                 Attachments: [new EmailAttachment("tour.ics", IcsBuilder.ContentType, calendar)],
                 // A guest hitting reply means to reach the business walking them around a city at
                 // night, not our support address — when the business gave one to reply to.
@@ -80,7 +112,8 @@ public sealed class TourGuestMailer
                 // under the wrong kind in the outbox, and the tour-reminder template could never
                 // apply to anything (item 246, found 2026-09-21).
                 ReplyTo: tour.ReplyTo,
-                Kind: reminder ? MailKinds.TourReminder.Key : MailKinds.TourSignUp.Key), ct);
+                Kind: reminder ? MailKinds.TourReminder.Key : MailKinds.TourSignUp.Key,
+                Payload: supplied.Count > 0 ? new MailPayload(Supplied: supplied) : null), ct);
 
             return true;
         }
@@ -106,6 +139,21 @@ public sealed class TourGuestMailer
     /// Null rather than a default mail: a group's ordinary public event keeps the wording it has
     /// always had, and this class must not quietly take over every event on the site.
     /// </remarks>
+    /// <summary>This guest's pass for this walk, or null when they have none.</summary>
+    /// <remarks>
+    /// By address, because that is all a mailer is given — and the address is what the seat's
+    /// account carries. A guest with no account, or one whose seat was never confirmed, has no
+    /// token and gets a letter without a pass rather than no letter.
+    /// </remarks>
+    private static Task<string?> PassTokenAsync(
+        BenDataContext db, Guid eventId, string toAddress, CancellationToken ct)
+        => db.OrgCalendarEventAttendees.AsNoTracking()
+            .Where(a => a.OrgCalendarEventId == eventId
+                     && a.PassToken != null
+                     && a.AppUser.Email == toAddress)
+            .Select(a => a.PassToken)
+            .FirstOrDefaultAsync(ct);
+
     private async Task<(TourMailRenderer.TourMailFacts Facts, TourWording Tour, byte[] Calendar)?> GatherAsync(
         BenDataContext db, Guid eventId, string? guestName, CancellationToken ct)
     {

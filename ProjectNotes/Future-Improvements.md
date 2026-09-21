@@ -13000,7 +13000,7 @@ the thing that sends it, and changing a word is a deploy.
 Related: [[239]] for the outbox and the list screen it already designed.
 
 
-## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (OPEN — Ben, 2026-09-20)
+## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (FIRST ASK BUILT 2026-09-21; the second ask is item 248)
 
 Ben, while item 246 was being built:
 
@@ -13214,7 +13214,7 @@ JSON refusal with it. The page then says "couldn't save that" instead of the rea
 
 
 
-## 249. `/organization-security`: scaffolding nobody removed (OPEN — found 2026-09-20)
+## 249. `/organization-security`: scaffolding nobody removed (CLOSED — deleted 2026-09-21)
 
 Found while extending the "every screen has a way in" guard past Administration.
 
@@ -13244,8 +13244,13 @@ checking what the service does. A scaffold that outlives its purpose is how that
 exists only for whoever remembers the URL is not a feature. If any part is still wanted, it belongs
 on an admin screen with a `[Authorize]` and an entry in the menu like everything else.
 
-Until somebody decides, it sits on `EveryAdminScreenIsWalkedTests.NoLinkNeeded` with that reasoning
-written out, so the guard passes without the fact being lost.
+**Deleted 2026-09-21**, at Ben's word. The page, its four browser tests, its two rows in the
+site-wide audit and its entry on `EveryAdminScreenIsWalkedTests.NoLinkNeeded` all went with it —
+an excuse on an allowlist outlives the thing it excuses otherwise.
+
+`OrganizationSecurityController` STAYS. It is not the scaffold: `MembershipDoorsAgreeTests` holds
+it to agreeing with the membership door, and `OrganizationMembershipController` names it in its own
+summary. What was scaffolding was the screen in front of it.
 
 
 
