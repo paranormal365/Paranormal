@@ -20,7 +20,9 @@ public class DefaultAvatarUploadTests : BenTestBase
     public async Task Uploading_a_default_avatar_sets_it_and_shows_the_preview()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        await Page.GotoAsync($"{BaseUrl}/admin/site-settings");
+        // Linked to by key — one section renders at a time, so the avatar settings have to be
+        // asked for rather than assumed to be on the first tab.
+        await Page.GotoAsync($"{BaseUrl}/admin/site-settings?setting=avatar.default.upload-file-id");
         await WaitUntilLoadedAsync();
 
         var card = Main.Locator(".card", new() { HasText = "Default profile picture — woman" }).First;

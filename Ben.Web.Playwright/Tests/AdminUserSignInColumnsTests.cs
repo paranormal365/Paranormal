@@ -80,36 +80,82 @@ public class AdminUserSignInColumnsTests : BenTestBase
     {
         await OpenTheUsersGridAsync();
 
-        Assert.That(await SortingChangesTheOrderAsync("Display Name"), Is.True,
-            "even the long-standing Display Name column did not reorder — this test cannot see sorting at all");
+        var control = await SortingChangesTheOrderAsync("Display Name");
+        Assert.That(control.Reordered, Is.True,
+            "even the long-standing Display Name column did not reorder — this test cannot see "
+          + $"sorting at all.\n  up:   {control.Ascending}\n  down: {control.Descending}");
 
         foreach (var heading in new[] { "Last sign-in", "Sign-ins" })
-            Assert.That(await SortingChangesTheOrderAsync(heading), Is.True,
-                $"the {heading} column did not reorder the grid when its heading was pressed");
+        {
+            var read = await SortingChangesTheOrderAsync(heading);
+
+            // The readings are reported, because "did not reorder" has two very different causes
+            // and the old message could not tell them apart: a column that will not sort, and a
+            // column where every value is the same so there is nothing to reorder.
+            Assert.That(read.Reordered, Is.True,
+                $"the {heading} column did not reorder the grid when its heading was pressed."
+              + $"\n  up:   {read.Ascending}\n  down: {read.Descending}");
+        }
     }
 
     /// <summary>
-    /// Presses a heading twice and answers whether the rows actually moved.
+    /// Sorts a column each way round and answers whether the rows actually moved.
     /// </summary>
     /// <remarks>
-    /// Twice, because one press sorts ascending and the second descending: comparing the two
-    /// readings asks whether this column orders the grid, without needing to know which way round
-    /// it started or what the values mean.
+    /// <para><b>Driven to a named direction, not pressed a fixed number of times.</b> The first
+    /// version pressed the heading twice, on the assumption that one press sorts ascending and
+    /// the next descending. Kendo's cycle has THREE states — ascending, descending, and unsorted
+    /// — so where two presses land depends on where the column already was, and for the Sign-ins
+    /// column they landed on descending and then unsorted. Unsorted restores the order the grid
+    /// was already in, so both readings were identical and the test reported a column that would
+    /// not sort. It sorted perfectly well (2026-09-21).</para>
+    ///
+    /// <para>The other two columns passed on the same flawed method, by luck of where they
+    /// happened to be in the cycle — which is why this is fixed rather than special-cased.</para>
     /// </remarks>
-    private async Task<bool> SortingChangesTheOrderAsync(string heading)
+    private async Task<(bool Reordered, string Ascending, string Descending)> SortingChangesTheOrderAsync(string heading)
     {
         var header = Main.Locator("th", new() { HasTextString = heading }).First;
         await Expect(header).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        await header.ClickAsync();
-        await WaitUntilLoadedAsync();
-        var ascending = await FirstRowTextAsync();
+        var up   = await SortedTopRowAsync(header, "ascending");
+        var down = await SortedTopRowAsync(header, "descending");
 
-        await header.ClickAsync();
-        await WaitUntilLoadedAsync();
-        var descending = await FirstRowTextAsync();
+        return (up != down,
+                $"{up}   [{heading}, ascending]",
+                $"{down}   [{heading}, descending]");
+    }
 
-        return ascending != descending;
+    /// <summary>
+    /// Presses a heading until it is sorted the named way, then reads the top row.
+    /// </summary>
+    /// <remarks>
+    /// At most four presses: three is a whole cycle, and a fourth means the column does not
+    /// answer to being pressed at all — which is a real failure and is reported as one rather
+    /// than looped on.
+    /// </remarks>
+    private async Task<string> SortedTopRowAsync(ILocator header, string direction)
+    {
+        for (var press = 0; press < 4; press++)
+        {
+            var before = await header.GetAttributeAsync("aria-sort");
+            if (before == direction) return await FirstRowTextAsync();
+
+            await header.ClickAsync();
+
+            // Wait for the SORT to change, not for the page to look idle. A grid re-sorts without
+            // ever showing a spinner, so a settle-based wait returns at once, the next press lands
+            // before the last one has rendered, and two presses collapse into one — which left
+            // this stuck on "ascending" through a whole cycle in a full run while passing on a
+            // quiet machine (2026-09-21).
+            var moved = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < moved && await header.GetAttributeAsync("aria-sort") == before)
+                await Task.Delay(100);
+        }
+
+        Assert.Fail($"the heading would not sort {direction} after a full cycle of presses — "
+                  + $"it reports aria-sort={await header.GetAttributeAsync("aria-sort") ?? "(none)"}");
+        return string.Empty;
     }
 
     private async Task<string> FirstRowTextAsync()

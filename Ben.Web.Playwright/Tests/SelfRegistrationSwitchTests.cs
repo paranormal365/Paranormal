@@ -23,7 +23,8 @@ public class SelfRegistrationSwitchTests : BenTestBase
 
     private async Task SetSwitchAsync(bool on)
     {
-        await Page.GotoAsync($"{BaseUrl}/admin/site-settings");
+        // Linked to by key — one section renders at a time, so the switch has to be asked for.
+        await Page.GotoAsync($"{BaseUrl}/admin/site-settings?setting=org.allow-self-registration");
         await Expect(SettingCard).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         var toggle = SettingCard.Locator("input[type=checkbox]");

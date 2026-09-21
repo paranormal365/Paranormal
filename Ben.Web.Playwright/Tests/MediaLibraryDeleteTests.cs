@@ -135,7 +135,11 @@ public class MediaLibraryDeleteTests : BenTestBase
     [Test]
     public async Task The_library_holds_only_this_persons_own_files()
     {
-        await LoginAsync(MemberEmail, MemberPassword);
+        // The seat that OWNS files. The seeded uploads belong to the SuperAdmin, and now that the
+        // library holds only your own, an ordinary member's is legitimately empty — so this test
+        // ran against a blank page and could observe nothing. A test has to be able to reach the
+        // state it is about.
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.GotoAsync($"{BaseUrl}/media-library");
         await WaitUntilLoadedAsync();
 

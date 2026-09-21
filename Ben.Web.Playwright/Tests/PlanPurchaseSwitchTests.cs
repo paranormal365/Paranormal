@@ -21,7 +21,9 @@ public class PlanPurchaseSwitchTests : BenTestBase
 
     private async Task SetSwitchAsync(bool on)
     {
-        await Page.GotoAsync($"{BaseUrl}/admin/site-settings");
+        // Linked to by key. The settings page shows one section at a time, so a plain
+        // visit lands on the first tab and a switch filed elsewhere is not in the DOM at all.
+        await Page.GotoAsync($"{BaseUrl}/admin/site-settings?setting=billing.purchases-enabled");
         var toggle = Page.Locator(SwitchId);
         await Expect(toggle).ToBeVisibleAsync(new() { Timeout = 20_000 });
         if (await toggle.IsCheckedAsync() != on)

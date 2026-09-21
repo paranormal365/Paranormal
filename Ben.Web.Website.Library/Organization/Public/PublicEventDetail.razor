@@ -46,9 +46,20 @@ else if (_event is null)
 else
 {
     <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
-        <div class="mb-3">
+        @* Back to where they came FROM, and onward to the group beside it.
+
+           This offered only the group. Somebody who found this night in "What's Near You" on the
+           home page pressed the one arrow on the page and landed on a group they had never asked
+           about, with no way back to the search they had just run (Ben, 2026-09-21). The group
+           link is still here — it is worth having — but it is no longer pretending to be the way
+           back. *@
+        <div class="mb-3 d-flex flex-wrap gap-3 align-items-center">
+            @if (CameFrom is { } back)
+            {
+                <a href="@back.Href" class="text-decoration-none small">&larr; @back.Words</a>
+            }
             <a href="@($"/o/{_event.OrganizationUrlName}")" class="text-decoration-none small">
-                &larr; @_event.OrganizationName
+                @(CameFrom is null ? "← " : "")@_event.OrganizationName
             </a>
         </div>
 
@@ -746,6 +757,24 @@ else
             _ => $"{hours} hr {rest} min",
         };
     }
+
+    /// <summary>
+    /// Where the visitor came from, when whatever sent them here said so.
+    /// </summary>
+    /// <remarks>
+    /// A name rather than a URL, deliberately: an arbitrary address in a query string is an open
+    /// redirect waiting to happen, and there are only a handful of places that link here. Anything
+    /// unrecognised is treated as no answer at all.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "from")]
+    public string? From { get; set; }
+
+    private (string Href, string Words)? CameFrom => From?.Trim().ToLowerInvariant() switch
+    {
+        "nearby" => ("/#whats-near-you", "Back to what's near you"),
+        "events" => ("/events", "Back to what's on"),
+        _        => null,
+    };
 
     private string _attendEmail = "", _attendName = "";
     private bool _emailSent;

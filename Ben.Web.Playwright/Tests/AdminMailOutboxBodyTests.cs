@@ -34,9 +34,14 @@ public class AdminMailOutboxBodyTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/mail");
         await WaitForTheCircuitAsync();
 
-        // The list opens on "given up on"; a fresh letter is waiting, not failed.
-        var all = Page.GetByRole(AriaRole.Button, new() { Name = "All", Exact = true });
-        if (await all.CountAsync() > 0) await all.First.ClickAsync();
+        // The list opens on "Given up", and a letter queued a moment ago is WAITING — so it was
+        // never in the list this test was reading. It used to press a button called "All", which
+        // this screen has never had: the three filters are Given up, Waiting and Accepted, so the
+        // click found nothing, did nothing, and the failure pointed at the missing Read-it button
+        // several steps later.
+        var waiting = Page.GetByRole(AriaRole.Button, new() { Name = "Waiting", Exact = true });
+        await Expect(waiting).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ClickUntilAsync(waiting, Page.Locator("[data-testid=outbox-view]").First);
 
         await Expect(Page.Locator("[data-testid=outbox-view]").First)
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
