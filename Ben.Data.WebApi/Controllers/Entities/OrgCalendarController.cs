@@ -969,6 +969,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
         seat.SeatDecidedUtc         = DateTime.UtcNow;
         seat.SeatDecidedByAppUserId = GetCurrentUserId();
         seat.GuestAcknowledgedUtc   = null;
+
+        // The pass is minted HERE, in the same save that gives them the place — not in the mailer
+        // that tells them about it (item 247). A pass written by the letter would not exist for a
+        // guest whose letter failed to send, and they would arrive at the meeting point with
+        // nothing to show for a seat they genuinely hold.
+        Services.Tours.TourPasses.Ensure(seat);
+
         await db.SaveChangesAsync(ct);
 
         // Now it is true, so now it is sent.

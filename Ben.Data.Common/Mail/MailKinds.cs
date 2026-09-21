@@ -155,6 +155,11 @@ public static class MailKinds
         "tour-sign-up", "You're coming on a tour",
         "Confirms a place on a walk, with the details of where and when.",
         ["AppUsers", "Tours", "Organizations"],
+        // The same two a hosted event's confirmation carries, so somebody writing either letter
+        // puts the pass where they want it rather than where the code decided (item 247).
+        [new("PassImage", "The pass QR, drawn into the letter itself so a blocked image cannot "
+                        + "leave a guest at the meeting point with nothing to show.", IsHtml: true),
+         new("PassUrl", "Where the same code can be opened, if the picture did not load.")],
         CanDecline: true);
 
     public static readonly MailKindInfo TourReminder = new(
