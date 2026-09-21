@@ -13177,7 +13177,22 @@ Ben's ask is recorded in full at [[245]]; this is what was built for it.
 - **Only three letters actually consult a template today** (the two identity ones and the reset).
   The rest declare a kind, which is what the outbox groups by — consulting the composer is one call
   per mailer and wants doing where each letter's tables are in hand.
-- The `EmailTemplates` migration is **not applied anywhere**.
+- ~~The `EmailTemplates` migration is **not applied anywhere**.~~ Applied to production
+  (`IsHauntedDb`) and verified there 2026-09-21, along with `EventStaffRoomCursors`,
+  `DashboardDateIndexes` and `OrganizationJoinLink`. Nothing is pending on live.
+
+### Done 2026-09-21
+
+- **Every letter can now wear a template**, whether or not its mailer knows templates exist. The
+  composing moved out of the individual mailers and into `OutboxEmailService`, at queue time — one
+  place every letter already passes. A mailer opts in by NAMING ITS KIND; one that wants row tokens
+  hands them over in a `MailPayload` on the message. This is what unblocks the rest: the reason
+  three of thirty-five consulted a template was that doing so meant editing each mailer, and each
+  edit broke the tests mocking its sender.
+- **The tour reminder was filed as a sign-up.** One method sends both and named every letter
+  `TourSignUp`, so no reminder template could ever apply and `TourReminder` was used nowhere.
+- **`EveryMailKindHasASenderTests`** holds the gap open where it can be seen: a declared kind must
+  be sent by something or be listed with what it waits on, and the list may only get shorter.
 
 ### Two mistakes worth not repeating
 
