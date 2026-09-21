@@ -92,3 +92,11 @@ public sealed record PlaceEvidenceFigures(
     public static readonly PlaceEvidenceFigures Nothing =
         new(0, 0, 0, 0, 0, 0, 0, null, null, null);
 }
+
+/// <summary>What somebody writes about a public location (item 250).</summary>
+/// <remarks>
+/// Plain text. The server strips markup rather than refusing it — somebody describing a house
+/// should not have to know what an angle bracket does — because this is written by whoever gets
+/// there first and rendered on a page any stranger reads.
+/// </remarks>
+public sealed record SetPlaceDescriptionRequest(string? Description);

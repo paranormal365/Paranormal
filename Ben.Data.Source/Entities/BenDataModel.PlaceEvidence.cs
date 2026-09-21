@@ -39,6 +39,16 @@ namespace Ben.Data.Source.Entities
         public Guid PlaceId { get; set; }
         public Place? Place { get; set; }
 
+        /// <summary>
+        /// Whether this is evidence or a picture of the building itself (item 250).
+        /// </summary>
+        /// <remarks>
+        /// Every query that reads these takes the kind as a required argument, so nothing returns
+        /// both by accident — which is what keeps a daylight photograph of a staircase out of the
+        /// evidence count.
+        /// </remarks>
+        public PlaceMediaKind MediaKind { get; set; } = PlaceMediaKind.Evidence;
+
         /// <summary>The file itself. One per row, and one row per file per place.</summary>
         public Guid UploadFileId { get; set; }
         public UploadFile? UploadFile { get; set; }

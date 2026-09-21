@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services;
@@ -32,13 +33,19 @@ public sealed class PublicPlaceEvidenceController : ControllerBase
     { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest; }
 
     /// <summary>What has been added to this place and may be shown, newest first.</summary>
+    /// <param name="kind">
+    /// Evidence, or pictures of the building. Named rather than defaulted at the boundary too:
+    /// a caller who does not say gets evidence, which is what every caller before this wanted,
+    /// and one who wants the other has to ask for it.
+    /// </param>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PlaceAddedEvidenceRow>>> List(
-        Guid placeId, CancellationToken ct)
+        Guid placeId, CancellationToken ct,
+        [FromQuery] PlaceMediaKind kind = PlaceMediaKind.Evidence)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var rows = await PlaceEvidencePublication.Showable(db, placeId)
+        var rows = await PlaceEvidencePublication.Showable(db, placeId, kind)
             .Select(e => new PlaceAddedEvidenceRow(
                 e.Id,
                 e.UploadFileId,

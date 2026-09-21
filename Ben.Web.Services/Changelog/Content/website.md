@@ -32,6 +32,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   A file counts once however it got there, so the same photograph on two routes is one piece of
   evidence and not two.
 - Places are not ranked against each other, and will not be. A place shows its own figures.
+- A public location's page can say what the place is — when it was built, who lived there, what it
+  is now. Anybody signed in can write it and anybody after them can improve it.
+- You can add photographs of the building itself as well as evidence: the frontage, the grounds,
+  the rooms in daylight. They are kept apart, never voted on and never counted, because a picture
+  showing you what a house looks like and a picture somebody thinks has a figure in it are two
+  different claims.
+- The place's page also charts the evidence added there month by month.
 - Voting on a piece of evidence now answers with the right overall number straight away. It used to
   come back as zero until the page was reloaded.
 

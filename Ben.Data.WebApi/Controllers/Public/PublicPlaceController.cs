@@ -47,7 +47,7 @@ public sealed class PublicPlaceController : ControllerBase
             .Select(p => new
             {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind, p.Description,
             })
             .FirstOrDefaultAsync(ct);
 
@@ -56,7 +56,7 @@ public sealed class PublicPlaceController : ControllerBase
         var place = PlaceDisclosure.Public(
             stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
             stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
-            stored.GeocodeNote, stored.Kind);
+            stored.GeocodeNote, stored.Kind, stored.Description);
 
         // An anonymous caller belongs to no organizations and has investigated nowhere, so the
         // shared predicate resolves to "public only" on its own. No second rule to keep in step.
@@ -98,7 +98,7 @@ public sealed class PublicPlaceController : ControllerBase
             // answer and never is.
             CanPost: false,
             // Same set the serving door will hand over, read from the one predicate.
-            AddedEvidence: await PlaceEvidencePublication.Showable(db, id)
+            AddedEvidence: await PlaceEvidencePublication.Showable(db, id, PlaceMediaKind.Evidence)
                 .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
                     e.Id, e.UploadFileId, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
                     e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
@@ -108,7 +108,13 @@ public sealed class PublicPlaceController : ControllerBase
             // the reader. The page asks its own signed-in state and the kind of place, which is
             // the whole of the rule — anybody signed in may add, at a public location.
             CanAddEvidence: false,
-            Figures: await PlaceEvidenceTally.ForPlaceAsync(db, id, ct)));
+            Figures: await PlaceEvidenceTally.ForPlaceAsync(db, id, ct),
+            Pictures: await PlaceEvidencePublication.Showable(db, id, PlaceMediaKind.AboutThePlace)
+                .Select(e => new Ben.Service.Models.Entities.PlaceAddedEvidenceRow(
+                    e.Id, e.UploadFileId, e.UploadFile!.FileName, e.UploadFile.ContentType, e.Caption,
+                    e.AddedByAppUser!.DisplayName ?? "Someone", e.AddedByAppUser.Handle,
+                    e.DateCreated))
+                .ToListAsync(ct)));
     }
 
     /// <summary>
@@ -320,7 +326,13 @@ public sealed record PublicPlaceResponse(
     /// <summary>
     /// What the evidence here adds up to across every route (item 250). Trailing and optional.
     /// </summary>
-    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null);
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null,
+    /// <summary>
+    /// Pictures OF the building — the grounds, the rooms, the frontage (item 250). Never evidence,
+    /// never voted on, never counted. What makes the page worth reading for somebody who has never
+    /// been.
+    /// </summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? Pictures = null);
 
 /// <summary>
 /// One published case at a place, as a visitor sees it listed.

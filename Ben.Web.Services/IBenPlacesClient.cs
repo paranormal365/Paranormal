@@ -345,6 +345,7 @@ public interface IBenPlacesClient
     /// </returns>
     Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
         Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
         CancellationToken token = default);
 
     /// <summary>Takes back something this account added. Only ever their own.</summary>
@@ -363,4 +364,8 @@ public interface IBenPlacesClient
     /// </remarks>
     Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
         NewPublicPlaceRequest request, CancellationToken token = default);
+
+    /// <summary>Writes what a public location is, for somebody who has never been (item 250).</summary>
+    Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default);
 }

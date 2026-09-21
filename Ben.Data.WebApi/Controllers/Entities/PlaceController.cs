@@ -111,6 +111,73 @@ public sealed class PlaceController : BenControllerBase
         return Ok(new PlaceCreated(place.Id, AlreadyExisted: false, "Added."));
     }
 
+    /// <summary>
+    /// Writes what this place is, for somebody who has never been (item 250).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"we can create a page with information about it."</i> A list of
+    /// evidence with no account of what the building IS tells a reader nothing they can weigh it
+    /// against.</para>
+    ///
+    /// <para><b>Anybody signed in, at a public location only</b> — the same door as adding
+    /// evidence, and for the same reason: the person who knows what Cragfont is is rarely a member
+    /// of a paranormal group. A private residence has no public page to describe and is refused in
+    /// words.</para>
+    ///
+    /// <para><b>Plain text, and the server enforces it.</b> Whatever arrives is stripped of
+    /// markup: this is written by whoever gets there first, edited by anybody after them, and
+    /// rendered on a page any stranger reads. A field like that must not be able to carry a link,
+    /// a script or a layout, and refusing is worse than cleaning — somebody describing a house
+    /// should not have to know what an angle bracket does.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}/description")]
+    public async Task<ActionResult<PlaceRecord>> SetDescription(
+        Guid id, [FromBody] SetPlaceDescriptionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (place is null) return NotFound();
+
+        if (place.Kind != PlaceKind.PublicLocation)
+        {
+            return BadRequest(
+                "Only a public location has a page to describe. This place is somebody's home.");
+        }
+
+        // Script and style ELEMENTS go whole, content and all, before the tags are stripped.
+        // PlainTextHtml.ToText removes tags and keeps what was between them, which is right for
+        // prose — <b>bold</b> should leave "bold" behind — and wrong for these two, where the
+        // content is never something a person meant to write. Pasting a paragraph off a web page
+        // otherwise drops the page's scripts into the description as words. Not a security hole
+        // (this is rendered as text, never as markup) but nobody typed "bad()".
+        //
+        // Done here rather than in the shared helper, which a dozen other callers depend on
+        // behaving exactly as it does.
+        var raw = System.Text.RegularExpressions.Regex.Replace(
+            request?.Description ?? string.Empty,
+            "<(script|style)[^>]*>.*?</\\1>",
+            " ",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+          | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        var text = Ben.Data.Common.Text.PlainTextHtml.ToText(raw).Trim();
+        if (text.Length > 4000) text = text[..4000];
+
+        place.Description = text.Length == 0 ? null : text;
+        place.DateUpdated = DateTime.UtcNow;
+        place.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(PlaceDisclosure.Public(
+            place.Id, place.Name, place.StreetAddress1, place.City, place.State, place.ZipCode,
+            place.Country, place.Latitude, place.Longitude, place.GeocodeNote, place.Kind,
+            place.Description));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PlaceRecord>> GetById(Guid id, CancellationToken ct)
     {
@@ -417,7 +484,12 @@ public sealed record PlaceRecord(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    PlaceKind Kind);
+    PlaceKind Kind,
+    /// <summary>
+    /// What this place is, for somebody who has never been (item 250). Null on a private
+    /// residence — somebody's home has no public page to describe.
+    /// </summary>
+    string? Description = null);
 
 /// <summary>
 /// One investigation at a place, as seen by somebody who may or may not be in the group that ran it.

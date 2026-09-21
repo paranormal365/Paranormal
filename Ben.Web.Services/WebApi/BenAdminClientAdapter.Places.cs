@@ -290,6 +290,7 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
         Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
         CancellationToken token = default)
     {
         var form = new MultipartFormDataContent();
@@ -297,6 +298,7 @@ public sealed partial class BenAdminClientAdapter
         part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
         form.Add(part, "file", fileName);
         if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "caption");
+        form.Add(new StringContent(((int)kind).ToString()), "kind");
 
         return _api.PostMultipartExpectingReasonAsync<PlaceEvidenceAdded>(
             $"/api/places/{placeId}/evidence", form, token);
@@ -317,6 +319,12 @@ public sealed partial class BenAdminClientAdapter
         NewPublicPlaceRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<NewPublicPlaceRequest, PlaceCreated>(
             HttpMethod.Post, "/api/places/public-location", request, token);
+
+    public Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetPlaceDescriptionRequest, PlaceRecord>(
+            HttpMethod.Put, $"/api/places/{placeId}/description",
+            new SetPlaceDescriptionRequest(description), token);
 }
 
 /// <summary>The body the merge endpoint expects.</summary>

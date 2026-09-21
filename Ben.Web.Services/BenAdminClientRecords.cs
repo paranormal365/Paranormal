@@ -330,7 +330,12 @@ public sealed record PlaceRecord(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    Ben.Data.Common.Enums.PlaceKind Kind);
+    Ben.Data.Common.Enums.PlaceKind Kind,
+    /// <summary>
+    /// What this place is, for somebody who has never been (item 250). Null on a private
+    /// residence — somebody's home has no public page to describe.
+    /// </summary>
+    string? Description = null);
 
 /// <summary><c>IsMine</c> lets the page separate our own visits from what others have shared.</summary>
 public sealed record PlaceInvestigationRow(
@@ -391,7 +396,11 @@ public sealed record PublicPlaceResponse(
     /// <summary>Whether this reader may add a file here.</summary>
     bool CanAddEvidence = false,
     /// <summary>What the evidence here adds up to across every route (item 250).</summary>
-    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null);
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null,
+    /// <summary>
+    /// Pictures OF the building (item 250). Never evidence, never voted on, never counted.
+    /// </summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? Pictures = null);
 
 /// <summary>
 /// The personal organization behind one account's own investigating (2026-09-17).

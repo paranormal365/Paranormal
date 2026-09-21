@@ -44,7 +44,7 @@ public static class PlaceEvidenceTally
         BenDataContext db, Guid placeId, CancellationToken ct)
     {
         // Added straight to the place.
-        var added = await PlaceEvidencePublication.Showable(db, placeId)
+        var added = await PlaceEvidencePublication.Showable(db, placeId, PlaceMediaKind.Evidence)
             .Select(e => e.UploadFileId)
             .ToListAsync(ct);
 

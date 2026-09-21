@@ -4169,6 +4169,8 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // ── Evidence added straight to a public place (item 250) ───────────────────
+            modelBuilder.Entity<Place>().Property(e => e.Description).HasMaxLength(4000);
+
             modelBuilder.Entity<PlaceEvidence>().Property(e => e.Caption).HasMaxLength(500);
             modelBuilder.Entity<PlaceEvidence>().Property(e => e.ReviewNote).HasMaxLength(300);
             // One row per file per place. Ben's rule is that a file counts ONCE at a place
@@ -4178,7 +4180,7 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.PlaceId, e.UploadFileId }).IsUnique();
             // The place page asks for "what may be shown here, newest first" on every visit.
             modelBuilder.Entity<PlaceEvidence>()
-                .HasIndex(e => new { e.PlaceId, e.ReviewState, e.DateCreated });
+                .HasIndex(e => new { e.PlaceId, e.MediaKind, e.ReviewState, e.DateCreated });
             // The held pile, across every place at once, is the moderator's question.
             modelBuilder.Entity<PlaceEvidence>()
                 .HasIndex(e => new { e.ReviewState, e.DateCreated });

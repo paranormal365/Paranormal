@@ -66,7 +66,8 @@ public sealed class PlaceEvidenceController : BenControllerBase
     [Consumes("multipart/form-data")]
     [DisableRequestSizeLimit]
     public async Task<ActionResult<PlaceEvidenceAdded>> Add(
-        Guid placeId, IFormFile file, [FromForm] string? caption, CancellationToken ct)
+        Guid placeId, IFormFile file, [FromForm] string? caption, CancellationToken ct,
+        [FromForm] PlaceMediaKind kind = PlaceMediaKind.Evidence)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -140,6 +141,9 @@ public sealed class PlaceEvidenceController : BenControllerBase
             UploadFileId = uploadFileId,
             AddedByAppUserId = userId,
             Caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(),
+            // Evidence unless somebody says otherwise. A picture OF the building is the deliberate
+            // act; offering something as evidence is what the door is for.
+            MediaKind = kind,
             // Fail-closed by construction. Only a verdict moves it off Pending.
             ReviewState = FeedMediaReviewState.Pending,
             DateCreated = DateTime.UtcNow,

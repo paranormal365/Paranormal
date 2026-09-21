@@ -152,7 +152,7 @@ public sealed class PlaceEvidenceTests
         Assert.Contains("look at this", added.Says);
 
         await using var db = await sqlite.Factory.CreateDbContextAsync();
-        Assert.Empty(await PlaceEvidencePublication.Showable(db, placeId).ToListAsync());
+        Assert.Empty(await PlaceEvidencePublication.Showable(db, placeId, PlaceMediaKind.Evidence).ToListAsync());
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public sealed class PlaceEvidenceTests
 
         await using (var db = await sqlite.Factory.CreateDbContextAsync())
         {
-            Assert.Single(await PlaceEvidencePublication.Showable(db, placeId).ToListAsync());
+            Assert.Single(await PlaceEvidencePublication.Showable(db, placeId, PlaceMediaKind.Evidence).ToListAsync());
 
             var place = await db.Places.FirstAsync(p => p.Id == placeId);
             place.Kind = PlaceKind.PrivateResidence;
@@ -176,7 +176,7 @@ public sealed class PlaceEvidenceTests
         // the same discipline the field-session archive is built on.
         await using (var db = await sqlite.Factory.CreateDbContextAsync())
         {
-            Assert.Empty(await PlaceEvidencePublication.Showable(db, placeId).ToListAsync());
+            Assert.Empty(await PlaceEvidencePublication.Showable(db, placeId, PlaceMediaKind.Evidence).ToListAsync());
             Assert.False(await PlaceEvidencePublication.MayServeAsync(
                 db, placeId, (await db.PlaceEvidence.FirstAsync()).Id, default));
         }

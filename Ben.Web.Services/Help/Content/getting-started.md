@@ -360,6 +360,22 @@ evidence for that place alongside what groups have published from their own inve
 Everything added is looked at before it appears. Most things go straight on; if yours is held, the
 page tells you so rather than pretending it is showing. You can take back anything you added.
 
+### The place itself
+
+A public location's page has room for what the place **is** — when it was built, who lived there,
+what it is now. Anybody signed in can write it, and anybody after them can improve it. It is plain
+text on purpose: a page any stranger reads is not somewhere a stray link or a pasted layout should
+be able to land.
+
+You can also add **photographs of the building** — the frontage, the grounds, the rooms in
+daylight. Choose "a photograph of the place itself" when you add it.
+
+**These are kept apart from evidence, and that is the whole point.** A daylight photograph of a
+staircase showing a reader what the house looks like, and a photograph of the same staircase
+somebody thinks has a figure on it, are two different claims. Pictures of the place are never
+voted on and never counted — mixed in with evidence, every number on the page would be wrong and
+nobody could tell what was being asserted.
+
 ### What the evidence says
 
 Anybody signed in can vote on a piece of evidence — **something here**, **can't tell**, or **not
