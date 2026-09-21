@@ -203,10 +203,43 @@
     /// so there is no first section to point at until they have arrived, and a field set in
     /// OnInitialized would still be null when the tabs first render.
     /// </remarks>
+    /// <summary>
+    /// A setting to open the page at, e.g. <c>?setting=features.public-feed</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Because only the chosen tab is rendered, a link to this page lands on the FIRST
+    /// section and anything filed elsewhere is not on the screen at all — not below the fold,
+    /// absent. The site already had two links that depended on it being there: the feed
+    /// dark-launch reminder says "The switch is at Site Settings", and the announcement banner
+    /// does the same. Both sent somebody to a page that did not contain what the sentence had
+    /// just promised (found 2026-09-21, four browser tests looking for switches in other
+    /// sections).</para>
+    ///
+    /// <para>So a setting can be linked to by key, and the tab holding it opens.</para>
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "setting")]
+    public string? SettingKey { get; set; }
+
+    /// <summary>
+    /// Which section is showing: what somebody clicked, else the one holding the setting they
+    /// were sent to, else the first.
+    /// </summary>
     private string? CurrentTab
-        => _tab is { } chosen && Sections.Any(g => g.Key == chosen)
-            ? chosen
-            : Sections.Select(g => g.Key).FirstOrDefault();
+    {
+        get
+        {
+            if (_tab is { } chosen && Sections.Any(g => g.Key == chosen)) return chosen;
+
+            if (!string.IsNullOrWhiteSpace(SettingKey))
+            {
+                var holding = Sections.FirstOrDefault(
+                    g => g.Any(s => string.Equals(s.Key, SettingKey, StringComparison.OrdinalIgnoreCase)));
+                if (holding is not null) return holding.Key;
+            }
+
+            return Sections.Select(g => g.Key).FirstOrDefault();
+        }
+    }
 
     /// <summary>A section's name as an element id.</summary>
     private static string Slug(string name)
