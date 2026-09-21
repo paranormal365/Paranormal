@@ -30,8 +30,9 @@ public sealed class InvestigationJoinCodeController : BenControllerBase
     private readonly Ben.Data.Common.SiteIdentity _site;
 
     public InvestigationJoinCodeController(
-        IDbContextFactory<BenDataContext> db, Ben.Data.Common.SiteIdentity site)
-    { _db = db; _site = site; }
+        IDbContextFactory<BenDataContext> db,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site)
+    { _db = db; _site = site.Value; }
 
     /// <summary>The live code for this visit, or nothing when there isn't one.</summary>
     [HttpGet]

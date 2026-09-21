@@ -23,7 +23,7 @@
 <div class="container py-3" style="max-width:720px;">
 
     <div class="d-flex align-items-center gap-2 mb-3 d-print-none">
-        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/investigations")">
+        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}?tab=investigations")">
             <BenIcon Name="chevron-left" Class="me-1" />Investigations
         </a>
         <h3 class="h5 mb-0">
@@ -41,7 +41,7 @@
         <div class="alert alert-warning" id="join-code-refused">
             @why
             <div class="mt-2">
-                <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/investigations")">
+                <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}?tab=investigations")">
                     Back to investigations
                 </a>
             </div>
