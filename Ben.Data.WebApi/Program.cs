@@ -87,7 +87,15 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 
 /* END LOGGING */
 
-builder.Services.AddControllers();
+// AddControllersAsServices, not AddControllers alone.
+//
+// ValidateOnBuild above walks every REGISTRATION, and MVC does not register controllers: it
+// activates them itself, resolving their constructor arguments one at a time when a request
+// arrives. So the refuse-to-start guard had a hole exactly the shape of the bug it was added for
+// — on 2026-09-21 a new controller asked for a bare SiteIdentity, the API started clean, and the
+// endpoint 500ed on first use. Registering the controllers as services puts them inside the walk,
+// and the same mistake now stops the host instead of one screen.
+builder.Services.AddControllers().AddControllersAsServices();
 builder.Services.AddMemoryCache();
 builder.Services.AddBenRateLimiting(builder.Configuration);
 

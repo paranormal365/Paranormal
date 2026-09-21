@@ -164,6 +164,12 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
         public virtual DbSet<InvestigationFinding> InvestigationFindings { get; set; }
+
+        /// <summary>The code a guide holds up so a guest's phone can join tonight (item 248).</summary>
+        public virtual DbSet<InvestigationJoinCode> InvestigationJoinCodes { get; set; }
+
+        /// <summary>One guest's contribute-only credential, minted when they scanned (item 248).</summary>
+        public virtual DbSet<InvestigationGuestPass> InvestigationGuestPasses { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
         public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
@@ -4158,6 +4164,47 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── The guide's code and the guest's credential (item 248) ─────────────────
+            // The token is the whole lookup for a scan and the typed code for somebody who typed
+            // it; both are unique because two rows answering to one code would make revocation a
+            // coin toss, and because the typed one is short enough that a collision is a thing
+            // that can actually happen rather than a thing to reason about.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => e.Token).IsUnique();
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => e.TypedCode).IsUnique();
+            modelBuilder.Entity<InvestigationJoinCode>().Property(e => e.Token)
+                .HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<InvestigationJoinCode>().Property(e => e.TypedCode)
+                .HasMaxLength(16).IsRequired();
+            // "Is there a live code for tonight" is asked on every staff screen that shows one.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => new { e.InvestigationId, e.ExpiresUtc });
+            // Cascade from the investigation: a code for a night that no longer exists admits
+            // nobody to anything, and a row nobody can reach is a row nobody can revoke.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InvestigationGuestPass>().Property(e => e.DisplayName)
+                .HasMaxLength(200);
+            // One person holds one pass against one code; the redemption path relies on it.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasIndex(e => new { e.InvestigationJoinCodeId, e.AppUserId }).IsUnique();
+            // The write doors ask "does this person hold a live pass for this investigation",
+            // and ask it on every upload.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasIndex(e => new { e.InvestigationId, e.AppUserId });
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasOne(e => e.InvestigationJoinCode).WithMany()
+                .HasForeignKey(e => e.InvestigationJoinCodeId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the holder: an account deleted out from under a pass must not silently
+            // take the night's rows with it, and AppUser already refuses cascades everywhere else
+            // for the multiple-cascade-paths reason.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── Sharing a session by link (item 207) ─────────────────────────────────────
             // The token is the whole lookup: every anonymous request arrives with nothing else, so

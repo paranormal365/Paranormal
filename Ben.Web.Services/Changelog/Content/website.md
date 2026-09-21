@@ -18,6 +18,20 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-21
 
+- A guest on the night can send you what their own phone recorded. Open an investigation, press
+  **Guest code**, and show the square code it gives you — on a tablet, a phone, or a printed sheet.
+  Anybody who scans it signs in and can send photographs, audio, video and readings to that one
+  visit.
+- A guest code lets somebody give you things. It does not let them look around: they see what they
+  sent and nothing else — not the case, not the client, not the address, and not what anybody else
+  recorded.
+- Two ways to take a code back. **New code** prints a fresh one and retires the old sheet while
+  everybody already working carries on, and **End the night** stops the code and every phone it
+  let in. To stop one person, there is a cross beside their name.
+- A code runs out by itself after about half a day, and can never last more than a day.
+- There is a short code printed beside the square one — something like `H4KP-9RQT` — for anybody
+  who had to install the app after scanning. Type it at the address on the sheet.
+
 - Your place on a walk comes with a pass. It is in your confirmation email as a square code, drawn
   into the letter itself so it still shows if your mail program blocks pictures, with a link under
   it in case it strips the code instead.

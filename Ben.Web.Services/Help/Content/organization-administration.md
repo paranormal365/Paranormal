@@ -279,6 +279,60 @@ somebody leaves halfway through the night. Somebody senior enough to lead every 
 served by the permission above; somebody leading one Saturday is better served by the lead flag,
 which stops mattering on Sunday.
 
+## Guest codes
+
+**A phone on the night that isn't yours.** Some nights the people with the useful phones are not in your group. A walk-up at a tour, a
+homeowner's relative who came along, a volunteer somebody brought, a class on an open night. Their
+photographs and recordings used to be lost to you, because getting them in meant inviting them,
+waiting for an email, and adding them to something.
+
+A **guest code** replaces all of that with a sheet you hold up.
+
+Open **Investigations**, find the visit, and press **Guest code**. You get a square code to scan
+and a short code — something like `H4KP-9RQT` — printed beside it. Show it on a tablet, hold up a
+phone, or print it and pin it to the gate.
+
+Anybody who scans it is asked to sign in, and then they are on tonight's investigation.
+
+![The sheet a guide holds up](help-media:organization-administration/guest-code.png)
+
+### What a guest can and cannot do
+
+A guest code is not a way into your group. Somebody holding one can:
+
+- send you photographs, audio, video and readings against **this one investigation**
+- see what **they** sent
+
+They cannot see the case, the client, the address, what anybody else recorded, or anything at all
+once the night is over. Nothing they get expires into membership: when the code stops working, so
+does everything it gave them.
+
+### Ending the night, and stopping one person
+
+Two different buttons, on purpose.
+
+**New code** prints a fresh sheet and retires the last one — this is what you press when a sheet
+was left on a pub table. Everybody who already scanned the old one *keeps working*, because they
+are standing in the building and deleting their evening is not the remedy.
+
+**End the night** stops the code and every pass it gave out, all at once.
+
+To stop **one** phone, use the cross beside that person in **Working tonight**. Everybody else
+carries on, and you do not have to reprint anything. What they already sent up stays — this stops
+them adding more, it does not erase what happened.
+
+### If the code has run out
+
+A code stops working by itself after about half a day, and never lasts more than a day, whatever
+you ask for. A sheet that still opened something the following March would be worse than no sheet
+at all. Press **New code** and show the new one.
+
+### Somebody who has just installed the app
+
+The short code is there for exactly this. A phone that scans the square code without the app
+installed goes to the App Store, and the app it installs has no way of knowing what was scanned.
+So tell them to open the app, or go to the address on the sheet, and type the short code instead.
+
 ## Being found by clients
 
 A client looking for help searches by where they are. Your group appears in that search only when

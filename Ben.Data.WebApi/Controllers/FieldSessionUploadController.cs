@@ -548,7 +548,7 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             if (investigation is null) return NotFound();
             // Same answer as absent: whether somebody else's investigation exists is not a
             // thing to let an outsider probe for.
-            if (!await MayContributeAsync(db, target, userId, ct)) return NotFound();
+            if (!await MayWriteAsync(db, target, userId, ct)) return NotFound();
             organizationId = investigation.OrganizationId;
         }
         else
@@ -742,7 +742,7 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         // Files follow the session's own door: whoever may contribute to its investigation, or
         // the person whose session it is when there isn't one.
         var allowed = session.InvestigationId is Guid linked
-            ? await MayContributeAsync(db, linked, userId, ct)
+            ? await MayWriteAsync(db, linked, userId, ct)
             : session.SubmittedByAppUserId == userId;
         if (!allowed) return NotFound();
 
@@ -873,6 +873,27 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         return session.InvestigationId is Guid linked
             && await MayContributeAsync(db, linked, userId, ct);
     }
+
+    /// <summary>
+    /// Who may SEND something up against an investigation — the contribute door, widened by a
+    /// guest's code (item 248).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Deliberately not the same method as <see cref="MayContributeAsync"/>.</b> That one
+    /// is also the READ door — <see cref="MayReadAsync"/> and the "everything anyone sent up for
+    /// this investigation" list both run through it — so widening it to admit a guest would have
+    /// handed a walk-up from the pavement every recording the team made in somebody's house. The
+    /// two questions look the same and are not, and keeping them one method is exactly how that
+    /// would have shipped.</para>
+    ///
+    /// <para>A guest pass therefore buys this and only this: sending up their own work. Reading is
+    /// unchanged, so what they get back is what <c>MayReadAsync</c> already gave them — their own
+    /// sessions, and nothing else on the night.</para>
+    /// </remarks>
+    private static async Task<bool> MayWriteAsync(
+        BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
+        => await MayContributeAsync(db, investigationId, userId, ct)
+        || await Services.Investigations.GuestCodes.HoldsALivePassAsync(db, investigationId, userId, ct);
 
     /// <summary>
     /// Who may add a recording to an investigation.
