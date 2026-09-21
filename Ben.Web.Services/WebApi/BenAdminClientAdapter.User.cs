@@ -184,6 +184,17 @@ public sealed partial class BenAdminClientAdapter
 
     // ── User sub-entity type creation ─────────────────────────────────────────
 
+    // ── Which letters somebody wants ──────────────────────────────────────────
+
+    public Task<LoadResult<EmailPreferenceRecord>> GetMyEmailPreferencesAsync(CancellationToken token = default)
+        => _api.GetListAsync<EmailPreferenceRecord>("/api/me/email-preferences", token);
+
+    public Task<(EmailPreferenceRecord? Result, string? Error)> SetMyEmailPreferenceAsync(
+        string kind, bool wanted, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EmailPreferenceRecord>(
+               HttpMethod.Put, $"/api/me/email-preferences/{Uri.EscapeDataString(kind)}",
+               new { Wanted = wanted }, token);
+
     public async Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default)
         => (await _api.PostAsync<object, object>("/api/admin/user-address-types", new { Name = name, Description = description, IsActive = isActive, IsPublic = isPublic, SortOrder = sortOrder, IconClass = iconClass, ColorClass = colorClass }, token)) is not null;
     public async Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default)
