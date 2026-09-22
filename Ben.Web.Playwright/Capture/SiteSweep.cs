@@ -81,6 +81,7 @@ public sealed class SiteSweep : BenTestBase
         // Three minutes of walking is worth nothing if the host is serving a build it cannot
         // finish. This sweep produced 879 findings that way, and 96 once restarted.
         await RefuseAStaleHostAsync();
+        _proved.Add("host: serving the build on disk — every stylesheet it names, it can serve");
 
         var script = Path.Combine(TestContext.CurrentContext.TestDirectory, "Capture", "visual-audit.js");
         Assert.That(File.Exists(script), Is.True, $"the visual auditor is missing: {script}");
@@ -119,6 +120,18 @@ public sealed class SiteSweep : BenTestBase
     /// the table at the top says how wide a cause really is.
     /// </remarks>
     private readonly List<VisualRollUp.Row> _visual = [];
+
+    /// <summary>
+    /// What was shown to be working before this run measured anything.
+    /// </summary>
+    /// <remarks>
+    /// A zero on its own is ambiguous: it is what a clean site reports and also what a sweep whose
+    /// watchers are attached to nothing reports. This fixture already refuses to run unless it can
+    /// prove otherwise — but it proved it into an assertion and then wrote a report that said only
+    /// "0 finding(s)", so a reader had no way to tell the two apart. The proofs are printed beside
+    /// the count now, and the count means something because of what stands next to it (W4).
+    /// </remarks>
+    private readonly List<string> _proved = [];
 
     private async Task AuditVisualsAsync(string who, string url)
     {
@@ -355,6 +368,9 @@ public sealed class SiteSweep : BenTestBase
         Assert.That(_failedCalls, Is.Not.Empty,
             "the network watcher saw nothing when the page was made to request a missing file — "
           + "every 'no failed requests' this fixture reports would be meaningless.");
+
+        _proved.Add($"console watcher: saw the deliberate error ({_consoleErrors.Count} caught)");
+        _proved.Add($"network watcher: saw the deliberate 404 ({_failedCalls.Count} caught)");
 
         _consoleErrors.Clear();
         _failedCalls.Clear();
@@ -598,6 +614,14 @@ public sealed class SiteSweep : BenTestBase
         report.AppendLine($"# The whole site, as everybody — {ThemeName} theme");
         report.AppendLine();
         report.AppendLine($"{_urlCount} address(es) to walk, {_visits} screen(s) opened, {_found.Count} finding(s).");
+        report.AppendLine();
+        report.AppendLine("**Proved before any of it was measured** — so the number above is a result "
+                        + "rather than the shape of a check that cannot fail:");
+        report.AppendLine();
+        if (_proved.Count == 0)
+            report.AppendLine("- nothing. Read the count as unverified.");
+        else
+            foreach (var proof in _proved) report.AppendLine($"- {proof}");
         report.AppendLine();
         report.AppendLine($"Ids resolved: {(_resolved.Length == 0 ? "none" : _resolved)}");
         report.AppendLine();
