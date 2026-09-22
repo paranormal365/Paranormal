@@ -1719,6 +1719,25 @@ public sealed record CreateFieldSessionShareRequest(
 /// <summary>Places close enough to each other to be one place typed twice.</summary>
 public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places);
 
+/// <summary>One page of the place catalogue (C8).</summary>
+public sealed record AdminPlacePage(
+    IReadOnlyList<AdminPlaceRow> Places, int Total, int Page, int PageSize);
+
+/// <summary>A place as the catalogue lists it.</summary>
+/// <param name="Cases">How many cases are sited here.</param>
+/// <param name="Investigations">How many visits are sited here.</param>
+/// <param name="Evidence">How many files people have added to the place itself.</param>
+public sealed record AdminPlaceRow(
+    Guid Id, string? Name, string? City, string? State, PlaceKind Kind,
+    decimal? Latitude, decimal? Longitude, DateTime DateCreated, string? AddedBy,
+    int Cases, int Investigations, int Evidence);
+
+/// <summary>What is holding a place, and whether that leaves it deletable.</summary>
+public sealed record AdminPlaceUsage(int Total, bool CanDelete, string? WhatHoldsIt);
+
+/// <summary>Which kind a place should be.</summary>
+public sealed record SetPlaceKindRequest(PlaceKind Kind);
+
 /// <summary>
 /// A field session whose readings are not on this server — the row exists, the bytes do not.
 /// </summary>

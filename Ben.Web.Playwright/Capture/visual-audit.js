@@ -23,23 +23,51 @@
       before <html> falls through to white and reports dark-on-dark text as 1.3:1. Every footer link
       on the site was "unreadable" until that was corrected; they are 13:1.
 
-      Modern browsers return some colours as "color(srgb 0.7 0.61 0.72)", with components from 0 to 1.
-      Read as 0-255 those are almost black, and every outline button on the site was "1.87:1". They
-      are 4.5:1.
+      Colours do not all arrive as "rgb(r, g, b)". A browser hands back whatever notation the
+      stylesheet used: "color(srgb 0.7 0.61 0.72)" with components from 0 to 1, and — from Telerik's
+      themes — "oklch(1 0 323.021)", which is white. Pulled apart by a regex and read as 0-255 the
+      first is almost black (every outline button on the site was "1.87:1"; they are 4.5:1) and the
+      second is a dark blue-green (the video editor's Preview button was "1.51:1"; it is 9.1:1).
+
+      That happened twice, each time fixed by teaching the parser one more notation, and the second
+      one cost an afternoon of chasing a contrast fault that did not exist. So there is no parser
+      any more: a colour is PAINTED onto a 1x1 canvas and the pixel is read back. Whatever the
+      browser can render, it can render into that pixel, in sRGB bytes, with its alpha — including
+      notations that do not exist yet. Nothing here needs to know their names.
 */
 window.__benVisualAudit = function () {
   const out = [];
   const seen = new Set();
 
-  const rgb = s => {
-    s = s || '';
-    const srgb = s.startsWith('color(srgb');
-    const m = s.match(/[\d.]+/g);
-    if (!m) return null;
-    const v = m.slice(0, 3).map(Number);
-    return srgb ? v.map(x => Math.round(x * 255)) : v;
+  // A colour, whatever notation it arrived in, as sRGB bytes plus alpha. See the trap above.
+  const _canvas = document.createElement('canvas');
+  _canvas.width = _canvas.height = 1;
+  const _ctx = _canvas.getContext('2d', { willReadFrequently: true });
+  const _painted = new Map();
+  const paint = s => {
+    s = (s || '').trim();
+    if (!s) return null;
+    if (_painted.has(s)) return _painted.get(s);
+
+    // fillStyle keeps its previous value when handed something it cannot parse, so a known
+    // starting colour is what tells us the browser accepted this one.
+    _ctx.fillStyle = '#000000';
+    _ctx.fillStyle = s;
+    const rejected = _ctx.fillStyle === '#000000'
+      && !/^(#000|#000000|black|rgba?\(0,\s*0,\s*0(,\s*1)?\))$/i.test(s);
+
+    let v = null;
+    if (!rejected) {
+      _ctx.clearRect(0, 0, 1, 1);
+      _ctx.fillRect(0, 0, 1, 1);
+      const d = _ctx.getImageData(0, 0, 1, 1).data;
+      v = { rgb: [d[0], d[1], d[2]], a: d[3] / 255 };
+    }
+    _painted.set(s, v);
+    return v;
   };
-  const alpha = s => { const m = (s || '').match(/[\d.]+/g); return m && m.length > 3 ? +m[3] : 1; };
+  const rgb = s => paint(s)?.rgb ?? null;
+  const alpha = s => paint(s)?.a ?? 1;
   const lum = c => {
     const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
     return .2126 * r + .7152 * g + .0722 * b;
@@ -47,10 +75,28 @@ window.__benVisualAudit = function () {
   const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
 
   // Up to and INCLUDING <html>: see the trap above.
+  //
+  // Returns what it measured against AND which element painted it. Naming the ancestor is not a
+  // nicety: the dark theme's colours were first tuned against the body (#212529), where they all
+  // read a comfortable 6.2:1, when almost everything on this site sits on div.app-content
+  // (#363c41) and read 4.47 there. A ratio without its backdrop cannot be checked or reproduced.
+  //
+  // A gradient or an image stops the walk ONLY when it is the whole background. That qualifier is
+  // the entire rule: the first cut of this stopped at any background-image at all, and since
+  // aside.app-sidebar paints a faint tint over its solid colour, every nav link on every page
+  // became "not measurable" — 3,730 rows, where the fault it replaced was 39. An image over a
+  // solid colour is still measurable against that colour; an image over nothing is not, and that
+  // is the org banner and the pricing-band heading, where continuing the walk invented "1.00:1".
   const bgOf = el => {
     let n = el;
-    while (n) { const c = getComputedStyle(n).backgroundColor; if (alpha(c) > .5 && rgb(c)) return rgb(c); n = n.parentElement; }
-    return [255, 255, 255];
+    while (n) {
+      const cs = getComputedStyle(n);
+      const c = cs.backgroundColor;
+      if (alpha(c) > .5 && rgb(c)) return { rgb: rgb(c), on: n };
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') return { unmeasurable: n };
+      n = n.parentElement;
+    }
+    return { rgb: [255, 255, 255], on: null };
   };
 
   const path = el => {
@@ -117,12 +163,30 @@ window.__benVisualAudit = function () {
     if (/(^|[^-\w])(color|background(-color)?)\s*:\s*(#[0-9a-f]{3,8}|rgb)/i.test(inline))
       add('colour hard-coded in markup', el, inline.slice(0, 60));
 
-    if (ownText(el) && parseFloat(s.fontSize) >= 10) {
+    // Disabled controls are exempt from the contrast minimum (WCAG 1.4.3 excludes inactive user
+    // interface components), and reporting them buries the faults that matter: 28 of the 60 rows
+    // left in the dark sweep were one greyed-out toolbar and a Preview button on a merge screen
+    // with nothing chosen yet. Bootstrap greys them through --bs-btn-disabled-color, a different
+    // variable from the one a theme fix touches, so they also survive every fix and reappear in
+    // every report looking like a regression.
+    const inert = el.closest(
+      ':disabled, [aria-disabled="true"], .disabled, .k-disabled, fieldset[disabled]') !== null;
+
+    if (!inert && ownText(el) && parseFloat(s.fontSize) >= 10) {
       const fg = rgb(s.color);
       if (fg && alpha(s.color) > .5) {
-        const c = ratio(fg, bgOf(el));
+        const bg = bgOf(el);
         const big = parseFloat(s.fontSize) >= 24 || (parseFloat(s.fontSize) >= 18.66 && +s.fontWeight >= 600);
-        if (c < (big ? 3 : 4.5)) add('low contrast text', el, `${c.toFixed(2)}:1 — "${el.textContent.trim().slice(0, 24)}"`);
+        const quote = `"${el.textContent.trim().slice(0, 24)}"`;
+        if (bg.unmeasurable) {
+          add('contrast not measurable', el,
+              `over a gradient or image on ${path(bg.unmeasurable)} — ${quote} needs checking by eye`);
+        } else {
+          const c = ratio(fg, bg.rgb);
+          if (c < (big ? 3 : 4.5))
+            add('low contrast text', el,
+                `${c.toFixed(2)}:1 on rgb(${bg.rgb}) — ${quote}` + (bg.on ? ` — behind it: ${path(bg.on)}` : ''));
+        }
       }
     }
   }

@@ -400,6 +400,10 @@
         {
             new NavItem("Group Ads",            "star",      "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
+            // C8: the catalogue came after the duplicate finder, because for a long time the only
+            // thing anybody needed to do to a place was fold two of them together. Listing them,
+            // taking one off the public map and removing one are all only reachable from here.
+            new NavItem("Places",               "map",       "/admin/places"),
             new NavItem("Duplicate Places",     "map-pin",   "/admin/place-duplicates"),
             // Item 235 phase 9: who runs a place, when a code could not settle it.
             new NavItem("Venue Claims",         "key",       "/admin/venue-claims"),

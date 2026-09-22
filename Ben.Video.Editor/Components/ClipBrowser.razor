@@ -258,12 +258,21 @@
             "benImportEditorModule", "js/storageInterop.js");
 
 
-    // The grids below (VideoClipGrid/AudioClipGrid/ImageClipGrid/LibraryFileGrid) are built with raw
-    // RenderTreeBuilder calls, so the Razor compiler's CSS-isolation pass never sees these elements and
-    // never stamps them with this component's scope attribute — every ClipBrowser.razor.css rule
-    // silently fails to apply to them (e.g. thumbnails render at native image size instead of the
-    // intended 64×40 box). Adding the attribute by hand here restores scoping for the card visuals.
-    // Value must match the "aside" element's live b-xxxxxxxx attribute if this file is ever moved/renamed.
+    // Everything below built with raw RenderTreeBuilder calls — the grids (VideoClipGrid/
+    // AudioClipGrid/ImageClipGrid/LibraryFileGrid) AND the panes that stand in for them: the empty
+    // states, the loading pane, the sign-in prompt, the error strip. The Razor compiler's
+    // CSS-isolation pass never sees any of it, so it never stamps this component's scope attribute,
+    // so every ClipBrowser.razor.css rule silently fails to apply. Nothing reports it: the classes
+    // are right, the stylesheet is right, and the screen is merely a bit wrong.
+    //
+    // It was found in the grids first (thumbnails at native size instead of 64×40), fixed there, and
+    // the panes kept the fault for another year — the empty state's 1.5rem of padding never applied,
+    // leaving "No video yet." against the tabstrip's border, which is what a visual audit finally
+    // measured on 2026-09-21. ClipBrowserCssScopeTests now holds both halves: that this constant is
+    // still the scope the compiler assigns (it is a literal hash — moving or renaming this file
+    // unhooks every element at once), and that no hand-built element naming a styled class is
+    // missing it. Add the attribute to anything built by hand here, children included: a rule like
+    // ".bv-browser__empty p" compiles the attribute onto the p, not onto the div.
     private const string CssScope = "b-xbjan6uni8";
 
     // ── Parameters ───────────────────────────────────────────────────────────
@@ -577,12 +586,12 @@
         }
         else if (!Clips.BinVideoClips.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No video yet."); __builder.CloseElement();
-            __builder.OpenElement(14, "p");
-            __builder.AddContent(15, "Click ");
-            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
-            __builder.AddContent(18, " to import video files.");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
+            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No video yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.AddContent(18, "Click ");
+            __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
+            __builder.AddContent(21, " to import video files.");
             __builder.CloseElement();
             __builder.CloseElement();
         }
@@ -657,12 +666,12 @@
         var allAudio = Clips.BinAudioClips.ToList();
         if (!allAudio.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No audio yet."); __builder.CloseElement();
-            __builder.OpenElement(14, "p");
-            __builder.AddContent(15, "Click ");
-            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
-            __builder.AddContent(18, " to import audio files.");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
+            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No audio yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.AddContent(18, "Click ");
+            __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
+            __builder.AddContent(21, " to import audio files.");
             __builder.CloseElement();
             __builder.CloseElement();
         }
@@ -722,12 +731,12 @@
         var allImages = Clips.BinImageClips.ToList();
         if (!allImages.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
-            __builder.OpenElement(12, "p"); __builder.AddContent(13, "No pictures yet."); __builder.CloseElement();
-            __builder.OpenElement(14, "p");
-            __builder.AddContent(15, "Click ");
-            __builder.OpenElement(16, "strong"); __builder.AddContent(17, "Add"); __builder.CloseElement();
-            __builder.AddContent(18, " to import image files.");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
+            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No pictures yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.AddContent(18, "Click ");
+            __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
+            __builder.AddContent(21, " to import image files.");
             __builder.CloseElement();
             __builder.CloseElement();
         }
@@ -923,7 +932,7 @@
 
         if (_libraryLoading)
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading"); __builder.AddAttribute(seq++, CssScope, "");
             __builder.OpenComponent<TelerikLoader>(seq++);
             __builder.AddAttribute(seq++, "Type", LoaderType.InfiniteSpinner);
             __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Medium);
@@ -936,8 +945,8 @@
             // A refusal, said as a refusal, with whatever way in the host offers. An empty tab or
             // a raw HTTP message both describe a state that is not true (2026-09-05 audit, F11 and
             // site-11).
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin");
-            __builder.OpenElement(seq++, "p");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin"); __builder.AddAttribute(seq++, CssScope, "");
+            __builder.OpenElement(seq++, "p"); __builder.AddAttribute(seq++, CssScope, "");
             __builder.AddContent(seq++,
                 "Sign in to see the files you have uploaded. Everything else in the editor works "
                 + "signed out.");
@@ -952,13 +961,13 @@
         }
         else if (_libraryError is not null)
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error"); __builder.AddAttribute(seq++, CssScope, "");
             __builder.AddContent(seq++, $"⚠ {_libraryError}");
             __builder.CloseElement();
         }
         else if (!_libraryFiles.Any())
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty"); __builder.AddAttribute(seq++, CssScope, "");
             // Naming the scope matters: "no files in the media library" is alarming and wrong when
             // the person has simply narrowed to a case that has none yet.
             var emptyText = _scopeKind switch
@@ -968,7 +977,7 @@
                 MediaLibraryScopeKind.Personal => "You have not uploaded any media yet.",
                 _                              => "No files in the media library.",
             };
-            __builder.OpenElement(seq++, "p"); __builder.AddContent(seq++, emptyText); __builder.CloseElement();
+            __builder.OpenElement(seq++, "p"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddContent(seq++, emptyText); __builder.CloseElement();
             __builder.CloseElement();
         }
         else

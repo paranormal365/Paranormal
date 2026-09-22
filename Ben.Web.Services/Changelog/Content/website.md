@@ -16,6 +16,26 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-22
+
+- Text across the site is easier to read in dark mode. Links, the coloured words used for status
+  and warnings, and the outline buttons were all too close to the background behind them; they now
+  meet the readability standard on the surfaces they actually sit on.
+- Green badges and buttons — vote counts, "accepting new cases", the editor's Export — had white
+  text on a green too light to carry it. The green is a little deeper now so the words read.
+- On a public location's page, the buttons for voting on a piece of evidence were missing
+  entirely. The page showed the tally and offered no way to add to it. They are there now.
+- A code for tonight cannot be made for a visit to somebody's home, and when one is made the visit
+  is named to a guest the same guarded way the public page names it.
+- Anything you add to a public location now counts towards your own storage, and you are told when
+  you are out of room instead of the upload simply failing.
+- A public location's description has a heading over it, so it is clear what you are reading.
+- If somebody set an account up for you, the page where you finish setting it up no longer sends
+  you to a "request a new link" line that could never have worked for you. It now says to ask
+  whoever created the account to send it again.
+- In the video editor, the "no video yet" and "no pictures yet" panels no longer sit jammed against
+  the edge of their panel.
+
 ## 2026-09-21
 
 - You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
