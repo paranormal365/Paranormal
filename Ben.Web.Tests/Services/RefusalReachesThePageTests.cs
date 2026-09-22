@@ -74,6 +74,44 @@ public sealed class RefusalReachesThePageTests
     }
 
     /// <summary>
+    /// The roles editor, which had the same fault on three buttons at once.
+    /// </summary>
+    /// <remarks>
+    /// Saving a role, adding somebody to one and taking somebody out all wrote "Failed to save
+    /// role.", "Failed to add member." and "Failed to remove member." over whatever the server
+    /// said — and those endpoints refuse in words worth reading: "That role does not belong to
+    /// this group.", "Name is required.", and, on the SuperAdmin side, "You cannot remove your own
+    /// SuperAdmin role. Ask another SuperAdmin to do it." A person told the last of those knows
+    /// exactly what to do next; a person told "Failed to remove member." does not.
+    /// </remarks>
+    [Fact]
+    public async Task The_roles_editors_refusal_survives_the_trip_to_the_page()
+    {
+        const string foreign = "That role does not belong to this group.";
+
+        var (result, error) = await Client(Refusal(HttpStatusCode.BadRequest, foreign))
+            .UpdateOrgRoleExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid(),
+                new UpdateOrgRoleRequest("A role", null, IsActive: true, SortOrder: 0));
+
+        Assert.Null(result);
+        Assert.Equal(foreign, error);
+    }
+
+    /// <summary>Taking somebody out of a role keeps its reason too — a different verb, a different
+    /// path through the client, and the one carrying the best sentence of the three.</summary>
+    [Fact]
+    public async Task Removing_somebody_from_a_role_keeps_its_reason()
+    {
+        const string ownRole = "You cannot remove your own SuperAdmin role. Ask another SuperAdmin to do it.";
+
+        var (removed, error) = await Client(Refusal(HttpStatusCode.Conflict, ownRole))
+            .RemoveOrgRoleMemberExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.False(removed);
+        Assert.Equal(ownRole, error);
+    }
+
+    /// <summary>
     /// A 403 carries no sentence, and the page falls back to its own wording. The point of the
     /// change is not that every refusal now has prose — it is that the page stops inventing one
     /// when the server did supply it.

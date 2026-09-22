@@ -720,6 +720,22 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
 
+    public Task<(OrganizationRoleRecord? Result, string? Error)> UpdateOrgRoleExpectingReasonAsync(
+        Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpdateOrgRoleRequest, OrganizationRoleRecord>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/roles/{roleId}", request, token);
+
+    public Task<(OrganizationRoleMembershipRecord? Result, string? Error)> AddOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationRoleMembershipRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/roles/{roleId}/members",
+            new { OrganizationUserMembershipId = orgUserMembershipId }, token);
+
+    public Task<(bool Removed, string? Error)> RemoveOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync(
+            $"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
+
     // ── Org address member access ──────────────────────────────────────────────
     public async Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default)
     {
