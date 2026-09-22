@@ -568,7 +568,10 @@ public sealed class ProductWalk : BenTestBase
         _persona = "6-superadmin";
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-        await StepAsync("dashboard", () => GoAsync("/admin/dashboard"), expect: "Sign-ins and registrations");
+        // Waits, like its two siblings below, instead of checking a string once after the
+        // screenshot: #site-dashboard appears only when the charts have loaded.
+        await StepAsync("dashboard", () => GoAsync("/admin/dashboard"),
+                        Main.Locator("#site-dashboard"), expect: "Sign-ins and registrations");
         await StepAsync("dashboard, events tab", () => GoAsync("/admin/dashboard?tab=events"), Main.Locator("#events-dashboard"));
         await StepAsync("dashboard, event health tab", () => GoAsync("/admin/dashboard?tab=event-health"), Main.Locator("#event-health"));
         await StepAsync("every screen of one event, from the list", async () =>
