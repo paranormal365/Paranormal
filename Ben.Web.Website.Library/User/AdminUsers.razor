@@ -29,6 +29,25 @@
         {
             <button type="button" class="btn btn-link text-decoration-none flex-shrink-0" @onclick="ClearSearch">Clear</button>
         }
+
+        @* Closing an account anonymises it rather than removing the row, so every former member
+           stays in this table for ever, named "A former member". They are almost never what
+           somebody is here to look at, so they are out by default — and the count beside the box
+           is there so that a search which finds nothing says why, instead of reading as "that
+           person was never here". *@
+        <div class="form-check flex-shrink-0 ms-auto mb-0">
+            <input class="form-check-input" type="checkbox" id="users-include-former"
+                   checked="@_includeFormer"
+                   @onchange="@(e => OnIncludeFormerChanged((bool?)e.Value ?? false))" />
+            <label class="form-check-label text-nowrap" for="users-include-former">
+                Include former members
+                @if (!_includeFormer && _formerCount > 0)
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis border ms-1"
+                          data-testid="former-hidden-count">@_formerCount hidden</span>
+                }
+            </label>
+        </div>
     </div>
 
     @* An empty user grid to a SuperAdmin reads as "this deployment has no accounts", which is
@@ -184,6 +203,12 @@
     /// </summary>
     private bool _loading = true;
     private string _search = string.Empty;
+
+    /// <summary>Off by default: a former member is almost never what somebody came here for.</summary>
+    private bool _includeFormer;
+
+    /// <summary>How many the box is hiding, so an empty search can say why.</summary>
+    private int _formerCount;
     private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -232,7 +257,8 @@
         _loading     = true;
         _usersResult = await AdminClient.GetAllUsersAsync();
         _users       = _usersResult.Items;
-        _filtered    = _users;
+        _formerCount = _users.Count(u => u.DateClosed is not null);
+        ApplyFilters();
 
         // A refusal here is NOT a refusal of the page. The grid's job is the accounts; the
         // sign-in figures are an addition to it, and losing them should cost two columns rather
@@ -258,30 +284,44 @@
                 : new AdminUserRow(u, null, 0))
         ];
 
-    private void ApplySearch()
+    /// <summary>
+    /// The one place the list is narrowed. Both rules, every time.
+    /// </summary>
+    /// <remarks>
+    /// There used to be three assignments to <c>_filtered</c> — search, clear, and load — which is
+    /// three chances for a second rule to be applied to two of them. Adding the former-member rule
+    /// to that shape would have meant closed accounts reappearing whenever somebody pressed Clear.
+    /// </remarks>
+    private void ApplyFilters()
     {
-        if (string.IsNullOrWhiteSpace(_search))
+        IEnumerable<AppUserRecord> rows = _users;
+
+        if (!_includeFormer) rows = rows.Where(u => u.DateClosed is null);
+
+        if (!string.IsNullOrWhiteSpace(_search))
         {
-            _filtered = _users;
-            BuildRows();
-            return;
+            var q = _search.Trim().ToLowerInvariant();
+            rows = rows.Where(u => (u.DisplayName?.ToLowerInvariant().Contains(q) ?? false)
+                                || (u.Email?.ToLowerInvariant().Contains(q) ?? false)
+                                || (u.UserName?.ToLowerInvariant().Contains(q) ?? false));
         }
 
-        var q = _search.Trim().ToLowerInvariant();
-        _filtered = _users
-            .Where(u => (u.DisplayName?.ToLowerInvariant().Contains(q) ?? false)
-                     || (u.Email?.ToLowerInvariant().Contains(q) ?? false)
-                     || (u.UserName?.ToLowerInvariant().Contains(q) ?? false))
-            .ToList();
-
+        _filtered = rows.ToList();
         BuildRows();
     }
 
+    private void ApplySearch() => ApplyFilters();
+
     private void ClearSearch()
     {
-        _search   = string.Empty;
-        _filtered = _users;
-        BuildRows();
+        _search = string.Empty;
+        ApplyFilters();
+    }
+
+    private void OnIncludeFormerChanged(bool include)
+    {
+        _includeFormer = include;
+        ApplyFilters();
     }
 
     private void ViewUser(AppUserRecord user)

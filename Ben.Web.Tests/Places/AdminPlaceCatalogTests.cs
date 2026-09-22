@@ -272,6 +272,137 @@ public sealed class AdminPlaceCatalogTests
         Assert.Equal(PlaceKind.PublicLocation, row.Kind);
     }
 
+    // ── Correcting a place ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CorrectsTheNameAndTheTown()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        var saved = Body(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont House", null, null, "Gallatin", "TN", null, "US",
+                                      null, null), default));
+
+        Assert.Equal("Cragfont House", saved.Name);
+        Assert.Equal("Gallatin", saved.City);
+    }
+
+    /// <summary>
+    /// An edit cannot move a place on top of another record.
+    /// </summary>
+    /// <remarks>
+    /// The rule this endpoint exists to not break. Creating a place matches on city, state and
+    /// street and hands back the existing record rather than making a second one, because two
+    /// records of one building split its evidence. An edit that could land on an occupied address
+    /// would be a second door into exactly the duplicate the first door refuses — and the harder
+    /// one to notice, because it looks like a correction.
+    /// </remarks>
+    [Fact]
+    public async Task RefusesAnEditThatWouldLandOnAnotherPlacesAddress()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        await using (var db = await sqlite.Factory.CreateDbContextAsync())
+        {
+            db.Places.Add(new Place
+            {
+                Id = Guid.NewGuid(), Name = "Wynnewood", StreetAddress1 = "210 Old Highway 25",
+                City = "Castalian Springs", State = "TN", Kind = PlaceKind.PublicLocation,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Admin,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refusal = Refusal(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont", "210 Old Highway 25", null,
+                                      "Castalian Springs", "TN", null, "US", null, null), default));
+
+        Assert.Contains("Wynnewood", refusal);
+        Assert.Contains("Duplicate Places", refusal);
+
+        await using var after = await sqlite.Factory.CreateDbContextAsync();
+        Assert.Null(after.Places.Single(p => p.Id == placeId).StreetAddress1);
+    }
+
+    /// <summary>A public location still needs a town it can be found by.</summary>
+    [Fact]
+    public async Task RefusesAPublicLocationWithNoTown()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        var refusal = Refusal(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont", null, null, null, null, null, "US", null, null),
+            default));
+
+        Assert.Contains("town and a state", refusal);
+    }
+
+    [Fact]
+    public async Task RefusesCoordinatesOffTheGlobe()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        var refusal = Refusal(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont", null, null, "Castalian Springs", "TN", null, "US",
+                                      91m, 0m), default));
+
+        Assert.Contains("-90 to 90", refusal);
+    }
+
+    /// <summary>Coordinates typed by hand are kept exactly.</summary>
+    /// <remarks>
+    /// Somebody correcting a record usually has better information than the geocoder did, so the
+    /// lookup must not overwrite them — <c>trustSuppliedCoordinates</c> is what holds that, and a
+    /// change to it would otherwise be invisible.
+    /// </remarks>
+    [Fact]
+    public async Task KeepsCoordinatesGivenByHand()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        var saved = Body(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont", null, null, "Castalian Springs", "TN", null, "US",
+                                      36.3874m, -86.6994m), default));
+
+        Assert.Equal(36.3874m, saved.Latitude);
+        Assert.Equal(-86.6994m, saved.Longitude);
+    }
+
+    /// <summary>
+    /// Changing the address drops the old pin rather than carrying it over.
+    /// </summary>
+    /// <remarks>
+    /// A stale pin beside a new address is worse than no pin: it is confidently wrong, and nothing
+    /// on the map says which of the two the record actually means.
+    /// </remarks>
+    [Fact]
+    public async Task DropsTheOldPinWhenTheAddressChanges()
+    {
+        var (sqlite, placeId) = await SeedAsync();
+        await using var _ = sqlite;
+
+        await using (var db = await sqlite.Factory.CreateDbContextAsync())
+        {
+            var p = db.Places.Single(x => x.Id == placeId);
+            p.Latitude = 36.3874m; p.Longitude = -86.6994m; p.DateGeocoded = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var saved = Body(await Controller(sqlite).Edit(placeId,
+            new AdminEditPlaceRequest("Cragfont", null, null, "Nashville", "TN", null, "US",
+                                      null, null), default));
+
+        // Either the geocoder found the new town or it found nothing — what must NOT survive is
+        // the pin belonging to the old address.
+        Assert.True(saved.Latitude != 36.3874m,
+            "The coordinates of the previous address survived a move to a different town.");
+    }
+
     // ── The census ───────────────────────────────────────────────────────────
 
     /// <summary>

@@ -1729,8 +1729,26 @@ public sealed record AdminPlacePage(
 /// <param name="Evidence">How many files people have added to the place itself.</param>
 public sealed record AdminPlaceRow(
     Guid Id, string? Name, string? City, string? State, PlaceKind Kind,
-    decimal? Latitude, decimal? Longitude, DateTime DateCreated, string? AddedBy,
+    decimal? Latitude, decimal? Longitude,
+    /// <summary>Why it is not on the map, when it is not. The geocoder's own words.</summary>
+    string? GeocodeNote,
+    DateTime DateCreated, string? AddedBy,
     int Cases, int Investigations, int Evidence);
+
+/// <summary>One place, in full, for the edit form.</summary>
+public sealed record AdminPlaceDetail(
+    Guid Id, string? Name, string? StreetAddress1, string? StreetAddress2, string? City,
+    string? State, string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude,
+    string? GeocodeNote, DateTime? DateGeocoded, PlaceKind Kind);
+
+/// <summary>A correction to a place.</summary>
+/// <param name="Relocate">
+/// Look the address up again even when nothing about it changed — for a record whose coordinates
+/// were never found.
+/// </param>
+public sealed record AdminEditPlaceRequest(
+    string? Name, string? StreetAddress1, string? StreetAddress2, string? City, string? State,
+    string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude, bool Relocate = false);
 
 /// <summary>What is holding a place, and whether that leaves it deletable.</summary>
 public sealed record AdminPlaceUsage(int Total, bool CanDelete, string? WhatHoldsIt);

@@ -491,10 +491,20 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
             if (!isActiveMember) return Forbid();
         }
 
+        // Former members are not on the roster (Ben, 2026-09-22). Closing an account anonymises it
+        // and deliberately LEAVES the membership row, so that the cases and evidence the person
+        // authored stay attributed inside their group — which meant every group's Members page
+        // slowly filled with rows reading "A former member", none of which can be given a role,
+        // invited, or asked to do anything. Joined against live accounts only, so they are gone
+        // from the list without the membership row being touched.
+        //
+        // The site-wide Users list keeps them, behind a checkbox that is off by default: there,
+        // a closed account is sometimes exactly what somebody is looking for.
         var roster = await db.OrganizationUserMemberships.AsNoTracking()
             .Where(m => m.OrganizationId == organizationId)
             .OrderBy(m => m.Role).ThenBy(m => m.DateCreated)
-            .Join(db.AppUsers.AsNoTracking(), m => m.AppUserId, u => u.Id,
+            .Join(db.AppUsers.AsNoTracking().Where(u => u.DateClosed == null),
+                m => m.AppUserId, u => u.Id,
                 (m, u) => new OrgRosterEntry(
                     m.Id, m.OrganizationId, m.AppUserId,
                     u.DisplayName ?? u.Email ?? u.UserName ?? u.Id.ToString(),
