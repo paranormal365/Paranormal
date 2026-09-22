@@ -480,6 +480,8 @@ public sealed class SiteSweep : BenTestBase
             if (First(await ApiArrayAsync("/api/public/hosted-events", token), "id") is { } eventId)
                 ids["EventId"] = eventId;
 
+            if (await MemberSessionIdAsync() is { } sessionId) ids["SessionId"] = sessionId;
+
             if (First(await ApiArrayAsync("/api/admin/app-users", token), "id") is { } userId)
             {
                 ids["UserId"] = userId;
@@ -506,11 +508,23 @@ public sealed class SiteSweep : BenTestBase
 
         _resolved = string.Join(", ", ids.Keys.OrderBy(k => k));
 
+        // A route whose ids do not resolve used to be dropped without a word, so the header could
+        // say "128 addresses to walk" while a whole surface was never in the list — that is how
+        // the place page (W10) and the field-session player (W3) went unwalked by every seat for
+        // as long as they existed. Skipping is fine; skipping quietly is not.
+        var dropped = new List<string>();
         foreach (var route in RouteCrawlHelper.ParameterisedRoutes())
         {
             if (route.Contains("{Token}") || route.Contains("{AccessToken")) continue;
             if (RouteCrawlHelper.Fill(route, ids) is { } filled) urls.Add(filled);
+            else dropped.Add(route);
         }
+
+        if (dropped.Count > 0)
+            _found.Add(new("the sweep itself", "(routes not walked)",
+                $"{dropped.Count} parameterised route(s) had no id to fill them",
+                "nothing at these addresses was looked at by anybody, so no result below covers "
+              + "them: " + string.Join(", ", dropped.Select(r => $"`{r}`"))));
 
         return urls;
     }
@@ -524,6 +538,75 @@ public sealed class SiteSweep : BenTestBase
             new() { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
         Assert.That(login.Ok, Is.True, "could not sign in to the API to resolve ids");
         return (await login.JsonAsync())?.GetProperty("accessToken").GetString() ?? "";
+    }
+
+    private async Task<string?> TokenForAsync(string? email, string? password)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password)) return null;
+        try
+        {
+            var login = await Page.APIRequest.PostAsync($"{ApiUrl}/login",
+                new() { DataObject = new { email, password } });
+            if (!login.Ok) return null;
+            return (await login.JsonAsync())?.GetProperty("accessToken").GetString();
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>A field session belonging to the member, creating one if there is none.</summary>
+    /// <remarks>
+    /// <para>The player at <c>/field-sessions/{SessionId}</c> was never walked by anybody: no id
+    /// resolved, and a parameterised route whose ids do not resolve was dropped in silence, so the
+    /// report could say "128 addresses" while a whole surface was never in the list (W3).</para>
+    ///
+    /// <para>The readout posted below is the one <c>ParameterisedRouteCrawlTests</c> already uses —
+    /// a shape the API accepts rather than one invented here, which is the difference between
+    /// seeding a session and seeding something that merely looks like one. The deviceSessionId is
+    /// fixed so a second sweep re-uses the first one's session instead of adding a row per run.</para>
+    ///
+    /// <para>It belongs to the MEMBER because that is whose Field Kit this is: the member seat then
+    /// walks the populated player, and every other seat walks whatever it is shown at the same
+    /// address, which is the question this fixture exists to ask.</para>
+    /// </remarks>
+    private async Task<string?> MemberSessionIdAsync()
+    {
+        var token = await TokenForAsync(MemberEmail, MemberPassword);
+        if (token is null) return null;
+
+        if (First(await ApiArrayAsync("/api/field-sessions/mine", token), "id") is { } existing)
+            return existing;
+
+            const string document =
+                "{\"format_version\":\"1.0.0\","
+              + "\"device\":{\"manufacturer\":\"Apple\",\"model\":\"iPhone17,1\"},"
+              + "\"session\":{\"started_at\":\"2026-08-01T02:00:00.000Z\","
+              + "\"timezone\":\"America/Chicago\","
+              + "\"ended_at\":\"2026-08-01T02:05:00.000Z\","
+              + "\"location_label\":\"Site sweep fixture\","
+              + "\"trigger\":{\"mode\":\"hybrid\",\"interval_seconds\":2}},"
+              + "\"readings\":[{\"at\":\"2026-08-01T02:00:00.000Z\",\"triggered_by\":\"interval\","
+              + "\"measurements\":{\"emf\":{\"value\":48.0,\"unit\":\"uT\",\"baseline\":48.0}}}]}";
+        try
+        {
+            var form = Context.APIRequest.CreateFormData();
+            form.Append("file", new FilePayload
+            {
+                Name = "data.json",
+                MimeType = "application/json",
+                Buffer = System.Text.Encoding.UTF8.GetBytes(document),
+            });
+            form.Append("deviceSessionId", "7b5a1c90-1f2e-4c3d-9a8b-6d5e4f3a2b10");
+
+            var response = await Page.APIRequest.PostAsync($"{ApiUrl}/api/field-sessions/document",
+                new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+                    Multipart = form,
+                });
+            if (!response.Ok) return null;
+            return (await response.JsonAsync())?.GetProperty("id").GetString();
+        }
+        catch (Exception) { return null; }
     }
 
     private async Task<JsonElement?> ApiArrayAsync(string path, string token)
