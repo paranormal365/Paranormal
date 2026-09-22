@@ -110,12 +110,16 @@ public static class AccountStorageGuard
         // property of the SESSION (published, or attached to an investigation) and not of the
         // file — it cannot be expressed as a condition on UploadFile at all.
         var earnedItsDisk = await db.FieldSessionUploadFiles.AsNoTracking()
-            .Where(f => f.UploadFile.StoragePath != null
+            // The ! on the navigations is for the compiler, not the database: this is an
+            // expression tree, so nothing is dereferenced here — EF turns it into a join and the
+            // null test happens in SQL. Without them the build warns CS8602 twice, and only on
+            // -t:Rebuild, which is how these went unnoticed in the first place (2026-09-04 sweep).
+            .Where(f => f.UploadFile!.StoragePath != null
                      && f.UploadFile.StoragePath.StartsWith(mine)
                      && f.UploadFile.ArchivedFromUploadFileId == null
-                     && (f.FieldSessionUpload.InvestigationId != null
+                     && (f.FieldSessionUpload!.InvestigationId != null
                       || f.FieldSessionUpload.PublishedAtUtc != null))
-            .SumAsync(f => (long?)f.UploadFile.FileSize, ct) ?? 0L;
+            .SumAsync(f => (long?)f.UploadFile!.FileSize, ct) ?? 0L;
 
         return kept - earnedItsDisk;
     }
