@@ -710,7 +710,7 @@
 
     private static string VisibilityBadgeClass(CaseTimelineVisibility v) => v switch
     {
-        CaseTimelineVisibility.Public => "bg-info text-dark",
+        CaseTimelineVisibility.Public => "bg-info",
         CaseTimelineVisibility.Client => "bg-primary",
         _                             => "bg-secondary",
     };

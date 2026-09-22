@@ -144,7 +144,7 @@ else
                 <GridColumn Field="@nameof(OrganizationAddressRecord.Visibility)" Title="Visibility" Width="120px">
                     <Template>
                         @{ var av = (OrganizationAddressRecord)context; }
-                        <span class="badge @(av.Visibility == OrganizationAddressVisibility.Public ? "bg-success" : av.Visibility == OrganizationAddressVisibility.MembersOnly ? "bg-info text-dark" : "bg-secondary")">
+                        <span class="badge @(av.Visibility == OrganizationAddressVisibility.Public ? "bg-success" : av.Visibility == OrganizationAddressVisibility.MembersOnly ? "bg-info" : "bg-secondary")">
                             @av.Visibility
                         </span>
                     </Template>

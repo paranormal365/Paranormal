@@ -878,7 +878,54 @@ html.set-nav-dark .text-secondary {
 
    Scoped away from the night theme, which sets its own value and already passes at 7.31:1 (see
    the rule above). Placeholder text has its own token, --input-placeholder-color, and is left
-   alone here. */
+   alone here.
+
+   2026-09-22: #667380 was chosen against white (4.85) and the #f8f9fa panels (4.60), and those
+   were the only two backgrounds anybody had measured. The fact rail's lead variant sits on
+   #ebeef3, where the same colour is 4.17 — fourteen rows, and invisible until the auditor started
+   naming the element it measured against instead of just printing a ratio. #606c78 is 4.61 there
+   and 5.22 on white, and is still plainly quieter than body text. The lesson is in the auditor
+   now rather than here: a ratio without its backdrop cannot be checked. */
 :root:not([data-bs-theme="dark"]) {
-    --bs-secondary-color: #667380;
+    --bs-secondary-color: #606c78;
+}
+
+/* ── Outline secondary, day theme ───────────────────────────────────────────
+   --bs-secondary (#6c757d) as outline-button text reads 4.45:1 on the #f8f9fa the Kendo toolbars
+   use — the Excel and CSV buttons over the audit grid, and the filter rows beside them. A hair
+   under, and only ever found because the auditor started printing the background it measured
+   against. 97% toward black is 4.70:1 there and darker still on white; the border keeps the
+   original colour, and hover still fills with it. The night theme has its own rule further up. */
+:root:not([data-bs-theme="dark"]) .btn-outline-secondary {
+    --bs-btn-color: color-mix(in srgb, var(--bs-secondary) 97%, #000);
+}
+
+/* ── The day theme's "light" emphasis colour was almost white ────────────────
+   Bootstrap derives --bs-light-text-emphasis from --bs-light, expecting --bs-light to be a pale
+   grey it can darken into readable ink. This template sets --bs-light to #fff, so the derivation
+   produced #b3b3b3 — and .alert-light paints that on --bs-light-bg-subtle, which resolves to
+   plain white. 2.10:1, on twenty-seven screens.
+
+   It is not a decorative corner: .alert-light is how the quiet empty states are drawn — "You're
+   all caught up", "Open the place's own page to add something" — so the message telling somebody
+   there is nothing to do was itself nearly unreadable. #495057 is Bootstrap's own value for this
+   token and measures 8.18:1 on white.
+
+   Day only. The night theme sets #f8f9fa on #343a40 and already reads 10.91:1. */
+:root:not([data-bs-theme="dark"]) {
+    --bs-light-text-emphasis: #495057;
+}
+
+/* ── Links on a coloured alert ───────────────────────────────────────────────
+   An alert picks its own text colour to sit on its own background, and every variant does that
+   correctly — the info alert's text is 6.54:1 on its purple. A plain <a> inside one ignores all
+   of that and takes the global link colour, which was chosen for the page, not for a purple
+   panel: the "Sign in" link on the new-place prompt measured 2.50:1.
+
+   So links inside an alert take the alert's own colour, which is already contrast-checked against
+   the thing behind it, and keep an underline so they are still visibly links without relying on
+   colour to say so. Buttons are excluded — they carry their own colours and their own contrast. */
+.alert a:not(.btn):not(.alert-link) {
+    color: inherit;
+    text-decoration: underline;
 }

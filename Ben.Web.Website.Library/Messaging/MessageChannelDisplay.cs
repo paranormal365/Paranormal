@@ -32,7 +32,7 @@ public static class MessageChannelDisplay
     public static string Badge(OrgMessageChannel channel) => channel switch
     {
         OrgMessageChannel.OrgBroadcast  => "bg-primary",
-        OrgMessageChannel.DirectMessage => "bg-info text-dark",
+        OrgMessageChannel.DirectMessage => "bg-info",
         OrgMessageChannel.CaseTeam      => "bg-warning text-dark",
         OrgMessageChannel.PublicFeed    => "bg-success",
         OrgMessageChannel.PublicCaseComment => "bg-success",
