@@ -37,7 +37,7 @@ namespace Ben.Data.WebApi.Services;
 /// <see cref="IsConfigured"/> still reports the truth about the machine, and the queue fills
 /// regardless.</para>
 /// </remarks>
-public sealed class OutboxEmailService : IEmailService
+public sealed class OutboxEmailService : IEmailService, IOutboxEmailQueue
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _sender;
@@ -125,6 +125,33 @@ public sealed class OutboxEmailService : IEmailService
                 "Could not queue the {Kind} letter to {To}; it will not be sent.",
                 message.Kind ?? Kind(message.Subject), message.To);
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>The same two questions <see cref="SendAsync(EmailMessage, CancellationToken)"/> asks
+    /// — has this person declined this kind of letter, and does the site have wording on file for
+    /// it — then the row goes into the CALLER'S context and is deliberately NOT saved. Their
+    /// <c>SaveChangesAsync</c> commits the letter with whatever it is about.</para>
+    ///
+    /// <para>Declining still wins: a letter somebody has opted out of is not queued, and that is
+    /// not a failure, so the caller's write goes ahead without one.</para>
+    ///
+    /// <para>Nothing is caught here. SendAsync catches because a letter must not take down the
+    /// request that asked for it; this one exists precisely so that it does — an un-queued letter
+    /// means the booking it was about should not commit either (item 239b).</para>
+    /// </remarks>
+    public async Task EnqueueAsync(
+        Ben.Data.Source.Context.BenDataContext callersDb,
+        EmailMessage message,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(callersDb);
+
+        if (await WasDeclinedAsync(message, ct)) return;
+
+        message = await WithAnyTemplateAsync(message, ct);
+        callersDb.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
     }
 
     /// <summary>

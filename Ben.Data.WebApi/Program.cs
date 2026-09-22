@@ -257,6 +257,12 @@ builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.G
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService,
                               Ben.Data.WebApi.Services.OutboxEmailService>();
+// The SAME instance behind both interfaces. A second registration would build a second outbox
+// service, which is harmless today and would quietly stop being harmless the moment either grows
+// state — and "there are two of these" is not a thing anybody would think to check (item 239b).
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IOutboxEmailQueue>(sp =>
+    (Ben.Data.WebApi.Services.OutboxEmailService)
+        sp.GetRequiredService<Ben.Data.Common.Interfaces.IEmailService>());
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
 // ── @names ───────────────────────────────────────────────────────────────────
