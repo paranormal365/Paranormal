@@ -170,6 +170,21 @@ record, in tabs: their profile fields, addresses, emails, phones, links, notes, 
 files and site roles. Each tab edits directly, and every change is written to the audit log
 under your name.
 
+### Former members
+
+Closing an account does not remove it. The person's name, contact details and credentials go, but
+the row stays so that the cases, evidence and messages they wrote for a group remain where that
+group left them, signed "A former member". Deleting the row outright would take a group's record
+of its own work with it.
+
+That means every account ever closed is still in this list. **Include former members**, above the
+grid, decides whether you see them; it is off when you arrive, and a count beside it says how many
+are being hidden — so a search that finds nobody tells you to tick the box rather than reading as
+though that person was never here.
+
+A group's own member list never shows them at all. Nobody there can give a closed account a role,
+invite it or ask it to do anything, so it would only be clutter on a screen people work from.
+
 ### Last sign-in and how many
 
 Two columns on the list answer who is actually using the site. **Last sign-in** is the most
@@ -666,6 +681,30 @@ anything against it is one to merge or make private instead.
 
 **Add a place** opens the same form everybody else uses, so a location you add is matched against
 what already exists rather than becoming a second record of the same building.
+
+### Correcting a place
+
+The pencil on a row opens the place for editing: what it is called, its street, town, state and
+ZIP, and where it sits on the map.
+
+This is the only door there is. The page where somebody adds a public location tells them "there
+is already a place at that address, and it is recorded as somebody's home — if that is wrong, ask
+a site administrator to correct it", and this is where that correction happens.
+
+**An address that already belongs to another record is refused.** Two records of one building
+split its evidence between them, which is the thing the whole archive is built to avoid, so an
+edit that would land on an occupied address stops and names the record already there. Use
+**Duplicate Places** to fold the two together instead.
+
+**Coordinates.** Type them and they are kept exactly as given — somebody correcting a record by
+hand usually knows better than an automatic lookup. Leave them empty and change the address, and
+the old position is thrown away and the new address looked up instead: a pin left over from the
+previous address is worse than no pin, because nothing on the map says it is wrong.
+
+**Look up the address again** re-runs that lookup without changing anything else, which is what a
+row reading "not on the map" needs. When the lookup still cannot place it, the page says why
+rather than showing an empty map — a misspelt street and an address that simply is not in the
+mapping service look identical otherwise.
 
 ### Taking a place off the public map
 

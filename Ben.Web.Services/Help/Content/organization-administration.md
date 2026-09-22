@@ -52,6 +52,12 @@ has decided its people stay unidentified to clients.
 ![The group's members list](help-media:organization-administration/members.png)
 *Members and their roles. Roles decide what each person may do inside the group.*
 
+**People who have left do not appear here.** When somebody closes their account, or has it closed
+for them, they drop off this list straight away — there is nothing useful left to do with the row,
+since a closed account cannot be given a role, invited, or asked to do anything. Everything they
+recorded for the group stays exactly where it was, signed "A former member", so the group's record
+of its own work is unaffected.
+
 | Role | Typically |
 |---|---|
 | Owner | Created the group. Full control. |
