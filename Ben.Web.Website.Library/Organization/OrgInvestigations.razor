@@ -13,7 +13,12 @@
    that belong to no client case at all.
 *@
 
-<div class="d-flex justify-content-between align-items-start mb-3">
+@* flex-wrap and a gap (V7, measured 2026-09-22). Without them the heading and "Schedule an
+   investigation" were laid side by side with no room to give: at 375px the heading ended at x=127
+   and the button started at x=127 — touching, and overlapping for any group whose heading or
+   button label runs a little longer. Wrapping drops the button under the heading on a phone and
+   changes nothing above it, because the two only wrap when they do not fit. *@
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
         <h6 class="mb-1 fw-semibold">Investigations<HelpLink Slug="working-a-case" Anchor="the-investigations-map" /></h6>
         <p class="text-secondary small mb-0">
