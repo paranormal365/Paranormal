@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.SeedData;
@@ -282,6 +283,13 @@ public sealed class MyEquipmentController : BenControllerBase
         if (item is null) return NotFound();
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+
+        // The free account's allowance, asked BEFORE a byte is written (C1, 2026-09-22). Counting
+        // what an account holds is not a cap; a cap is only a cap where somebody asks it, and this
+        // door never did.
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, file.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
         var uploadFileId = Guid.NewGuid();
 

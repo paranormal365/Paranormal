@@ -669,6 +669,28 @@ Turned off:
 Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
 have their own switch, **Sell event credits**.
 
+## The storage ceiling
+
+**Administration → Site Settings → Limits → Free account storage (MB)** is what a free account may
+keep to itself. Leaving the box empty is safe: there is a built-in default of 2048 MB.
+
+Raising it takes effect immediately and needs no deploy, which is the point — when there is more
+disk, this is the one number to change.
+
+![The storage ceiling](help-media:site-administration/storage-ceiling.png)
+*Free account storage, in the Limits group. Empty means the built-in default.*
+
+**What counts against it** is everything stored under the person: recordings, photographs, video
+projects, equipment pictures, place evidence, feed media. What does not: a group's own work, the
+superseded version of a replaced file, and anything published to a public location's archive,
+which earns its space. Members of a group on a paid plan are not capped at all.
+
+**People are warned before they meet it.** A message goes out at 90% used and a stronger one at
+95%, each sent once. Somebody who frees space and drops back under 90% is warned again the next
+time they fill up, rather than being told once in their life and then meeting the limit in
+silence. Lowering the ceiling can therefore put accounts straight into the warned band on the next
+pass, which is the intended behaviour but worth expecting.
+
 ## Places
 
 **Administration → Places** lists every location on the site: the homes groups work in and the

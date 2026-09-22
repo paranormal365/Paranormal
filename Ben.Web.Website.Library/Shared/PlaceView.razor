@@ -66,7 +66,9 @@
            codebase keeps finding. *@
         @if (_myOrgs.Count > 0)
         {
-            <p class="mb-2 small">
+            @* WIDE: the chips, as they have always been. Four actions per group the viewer
+               belongs to, each naming its group when there is more than one. *@
+            <p class="mb-2 small d-none d-md-block">
                 @foreach (var org in _myOrgs)
                 {
                     <a class="btn btn-sm btn-outline-secondary me-1 mb-1"
@@ -119,6 +121,64 @@
                     }
                 }
             </p>
+
+            @* NARROW: one menu per group instead (V2, measured 2026-09-22).
+               The chips are four per group, and somebody in three groups opened this page to
+               twelve of them stacked over eleven lines — 364px of an 812px phone, before a word
+               about the place itself. The actions are unchanged and so is their order; they are
+               behind a disclosure, which is what a phone has room for.
+
+               One menu PER GROUP rather than one menu holding everything: which group you are
+               acting as is the decision being made here, and burying it as a suffix inside a flat
+               list of twelve items is how somebody opens a case on the wrong group's books. *@
+            <div class="d-md-none mb-2">
+                @foreach (var org in _myOrgs)
+                {
+                    <BenDropdown Class="d-inline-block me-1 mb-1"
+                                 ToggleClass="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                 NoArrow="false" AlignEnd="false" MinWidth="220px"
+                                 Title="@($"Work here as {org.Name}")">
+                        <ToggleContent>
+                            <BenIcon Name="briefcase" Class="me-1" />
+                            @(_myOrgs.Count > 1 ? org.Name : "Work here")
+                        </ToggleContent>
+                        <ChildContent>
+                            <li>
+                                <a class="dropdown-item"
+                                   href="@($"/organizations/{org.OrganizationId}/places/{PlaceId}/rooms")">
+                                    <BenIcon Name="home" Class="me-2" />Rooms
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item place-our-venue"
+                                   href="@($"/organizations/{org.OrganizationId}/venue?place={PlaceId}")">
+                                    <BenIcon Name="map-pin" Class="me-2" />Our venue
+                                </a>
+                            </li>
+                            @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                 && _mayOpenCaseIn.Contains(org.OrganizationId))
+                            {
+                                <li>
+                                    <a class="dropdown-item place-open-case"
+                                       href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
+                                        <BenIcon Name="folder-plus" Class="me-2" />Open a case here
+                                    </a>
+                                </li>
+                            }
+                            @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                 && _mayInvestigateIn.Contains(org.OrganizationId))
+                            {
+                                <li>
+                                    <button type="button" class="dropdown-item place-investigate"
+                                            @onclick="@(() => InvestigateWith(org.OrganizationId))">
+                                        <BenIcon Name="calendar" Class="me-2" />Investigate here
+                                    </button>
+                                </li>
+                            }
+                        </ChildContent>
+                    </BenDropdown>
+                }
+            </div>
         }
 
         @* ── The door for somebody in no group at all (2026-09-17) ────────────

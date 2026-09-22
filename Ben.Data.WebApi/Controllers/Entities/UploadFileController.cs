@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -374,6 +375,12 @@ public sealed class UploadFileController : BenControllerBase
         };
 
         // Write to disk first; if this throws the DB record is never committed
+        // The free account's allowance, asked BEFORE a byte is written (C1, 2026-09-22). This is
+        // the site's general personal-upload door and it counted against nothing; the sanitized
+        // size is the one that lands on disk.
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, ownerId, entity.FileSize, cancellationToken) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+
         var relativePath = _fileStorage.UserFilePath(ownerId, entity.StoredFileName);
         if (sanitizedSvg is not null)
             await _fileStorage.WriteBytesAsync(relativePath, sanitizedSvg, cancellationToken);

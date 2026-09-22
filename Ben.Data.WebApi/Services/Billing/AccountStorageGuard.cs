@@ -55,34 +55,69 @@ public static class AccountStorageGuard
     /// space, and RETRACTING a publication is itself a paid feature. A free account cannot publish
     /// to clear its usage and then quietly take the contribution back.</para>
     ///
-    /// <para>Field sessions and place evidence (item 250). Written as its own method so that one
-    /// place decides what "kept to yourself" means rather than two queries that disagree — and
-    /// when the second kind did arrive, on 2026-09-21, it arrived uncounted for a day because the
-    /// door that stores it never asked. Any third kind adds a term HERE and a
-    /// <see cref="WhyCannotStoreAsync"/> call at its own door; neither alone is enough.</para>
+    /// <para><b>Counted by where the bytes live, not by who the row names (C1, 2026-09-22).</b>
+    /// This used to add one term per kind of upload, and its own remarks admitted the cost: place
+    /// evidence arrived uncounted for a day because a term had to be remembered. The obvious fix —
+    /// count every <c>UploadFile</c> whose <c>AppUserId</c> is this person — is WRONG, and the
+    /// entity's own comment is what misleads: it says exactly one of <c>AppUserId</c> and
+    /// <c>OwnerOrganizationId</c> is set, but the latter is only set when a file is HANDED OVER to
+    /// a group (item 180 Phase B). Ordinary group work still sits under whoever uploaded it, so
+    /// counting by ownership charges a member for their group's case evidence.</para>
+    ///
+    /// <para>Storage paths do separate them, totally and with no exceptions: there are exactly
+    /// three builders — <c>users/{id}/</c>, <c>orgs/{id}/</c>, <c>cases/{id}/</c> — every write
+    /// goes through one, and the field-session code already chooses between the first two on
+    /// precisely this question ("a personal session lives under the person, not under a group they
+    /// may not belong to"). So one rule covers every personal door, including doors added later,
+    /// which is the property the per-kind list never had.</para>
+    ///
+    /// <para><b>What is exempt, and the principle behind it: a person is charged for what they can
+    /// SEE and REMOVE.</b></para>
+    ///
+    /// <para>Superseded versions are not counted. Replacing a file archives the old bytes — a row
+    /// carrying <c>ArchivedFromUploadFileId</c>, which every listing filters out and nothing
+    /// prunes. Counting those would mean somebody who cut a 1 GB video down to 100 MB watched
+    /// their usage RISE by their own good behaviour, with nothing on any screen showing the
+    /// difference and no button to remove it. A refusal nobody can act on is worse than storing a
+    /// few bytes we do not charge for; the archives want a retention job, not a surcharge.</para>
+    ///
+    /// <para><b>Clips and edited versions ARE counted, and the difference matters</b> (Ben,
+    /// 2026-09-22: <i>"sometimes videos are clipped or audio creates clips and they don't want to
+    /// delete the original version"</i>). A clip carries <c>ParentFileId</c> and no
+    /// <c>ArchivedFromUploadFileId</c>, so it appears in the listing beside its original and both
+    /// can be deleted. Keeping both is a deliberate choice somebody can undo, so both count —
+    /// and nothing may ever prune them. Any future cleanup keys on
+    /// <c>ArchivedFromUploadFileId</c>; keyed on <c>ParentFileId</c> it would delete exactly the
+    /// originals and clips people meant to keep.</para>
+    ///
+    /// <para>Published sessions stay exempt, for the reason given above.</para>
     /// </remarks>
     public static async Task<long> UsedBytesAsync(
         BenDataContext db, Guid appUserId, CancellationToken ct)
     {
-        var sessions = await db.FieldSessionUploadFiles.AsNoTracking()
-            .Where(f => f.FieldSessionUpload.SubmittedByAppUserId == appUserId
-                     && f.FieldSessionUpload.InvestigationId == null
-                     && f.FieldSessionUpload.PublishedAtUtc == null)
+        // The one discriminator. LocalFileStorageService.UserFilePath builds exactly this, and
+        // including the account id means the prefix is an ownership test as well as a personal-vs-
+        // group one — another person's files cannot match it however the row is otherwise filled in.
+        var mine = $"users/{appUserId}/";
+
+        var kept = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.StoragePath != null
+                     && f.StoragePath.StartsWith(mine)
+                     && f.ArchivedFromUploadFileId == null)
+            .SumAsync(f => (long?)f.FileSize, ct) ?? 0L;
+
+        // Subtracted rather than filtered out of the sum above, because the exemption is a
+        // property of the SESSION (published, or attached to an investigation) and not of the
+        // file — it cannot be expressed as a condition on UploadFile at all.
+        var earnedItsDisk = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.UploadFile.StoragePath != null
+                     && f.UploadFile.StoragePath.StartsWith(mine)
+                     && f.UploadFile.ArchivedFromUploadFileId == null
+                     && (f.FieldSessionUpload.InvestigationId != null
+                      || f.FieldSessionUpload.PublishedAtUtc != null))
             .SumAsync(f => (long?)f.UploadFile.FileSize, ct) ?? 0L;
 
-        // The second kind of personal upload, which this method's own remarks said would come
-        // (item 250, counted from 2026-09-22). Evidence added straight to a public place is stored
-        // under the PERSON — UploadFile.AppUserId, their own directory — so it is theirs on every
-        // definition that matters here, and leaving it out meant the one account with nothing
-        // paying for it could fill the disk through a door nobody was counting.
-        //
-        // Counted whatever its review state: bytes held are bytes held, and a file waiting in the
-        // screener's queue occupies the same disk as one on the page.
-        var placeEvidence = await db.PlaceEvidence.AsNoTracking()
-            .Where(e => e.AddedByAppUserId == appUserId)
-            .SumAsync(e => (long?)e.UploadFile!.FileSize, ct) ?? 0L;
-
-        return sessions + placeEvidence;
+        return kept - earnedItsDisk;
     }
 
     /// <summary>The cap in bytes, from settings, falling back to the built-in default.</summary>

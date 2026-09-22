@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 ﻿using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
@@ -430,6 +431,11 @@ public sealed class FeedController : BenControllerBase
             // paused account cannot even fill the disk. See FeedMediaAbuse for the rule.
             if (await FeedMediaAbuse.IsPausedAsync(db, userId, DateTime.UtcNow, ct))
                 return BadRequest(FeedMediaAbuse.PausedMessage);
+
+            // The free account's allowance, asked BEFORE a byte is written (C1, 2026-09-22).
+            // Feed media is stored under the person and was counted by nothing.
+            if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, media.Length, ct) is { } full)
+                return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
             var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(media.FileName)}";
             var storagePath = _fileStorage.UserFilePath(userId, storedName);

@@ -45,6 +45,16 @@ day-by-day account of building it would say nothing to anyone using it now.
   a dark background and were hard to read. They are white on colour now.
 - A group's member list no longer shows people who have left or closed their account. Everything
   they recorded for the group stays exactly where it was.
+- The site now tells you when your storage is running low — once at about 90% used, and again more
+  firmly at 95%. Clear some space and drop back under 90% and it forgets it warned you, so you are
+  told again if you fill up later rather than meeting the limit in silence.
+- Everything you keep to yourself now counts towards that allowance, not just recorded sessions.
+  A group's own work never does, and neither does the old version of a file you have replaced —
+  cutting a long recording down to a short one lowers what you are using.
+- On a phone, a public location's page no longer opens with a stack of buttons for every group you
+  belong to. Each group now has one menu holding the same choices.
+- On a phone, the heading on a group's Investigations tab no longer sits against its Schedule
+  button.
 
 ## 2026-09-21
 

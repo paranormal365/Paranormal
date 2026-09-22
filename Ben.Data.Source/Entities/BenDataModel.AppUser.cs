@@ -54,5 +54,24 @@ namespace Ben.Data.Source.Entities
         /// never be placed against "sent" — which is what makes a stuck sign-up readable.
         /// </remarks>
         public DateTime? DateEmailConfirmed { get; set; }
+
+        /// <summary>
+        /// The storage warning this account has already been given, as the percentage of its
+        /// allowance that was left when it was sent. Null when it has had none.
+        /// </summary>
+        /// <remarks>
+        /// <para>A notice is worth sending once. Without somewhere to remember that, the only
+        /// choices are to say nothing or to say it on every upload, and a warning repeated every
+        /// time somebody adds a file is one they learn to ignore before it matters.</para>
+        ///
+        /// <para><b>It re-arms.</b> The value is the BAND — 10, then 5 — rather than a flag, so
+        /// crossing from one to the other sends the stronger notice rather than being swallowed as
+        /// "already warned". And when somebody frees space and climbs back above the first band it
+        /// is set to null, so a person who tidies up and fills the account again a year later is
+        /// told again. A one-way flag would warn them once in their life.</para>
+        ///
+        /// <para>Null for every existing row, which is correct: nobody has been warned yet.</para>
+        /// </remarks>
+        public int? StorageWarningBand { get; set; }
     }
 }
