@@ -2,6 +2,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Public;
@@ -27,6 +28,9 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// </remarks>
 [ApiController]
 [Route("api/public/event-passes")]
+// The same rate limit the other anonymous token doors carry. This one renders a picture from a
+// token, so a loop over it is cheap for the caller and not for us.
+[EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AuthPolicy)]
 public sealed class PublicEventPassController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;

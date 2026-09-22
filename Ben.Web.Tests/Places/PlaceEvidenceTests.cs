@@ -5,6 +5,7 @@ using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Data.WebApi.Controllers.Public;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Ben.Data.WebApi.Services.Feed;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
@@ -114,6 +115,26 @@ public sealed class PlaceEvidenceTests
         var row = Assert.Single(await db.PlaceEvidence.ToListAsync());
         Assert.Equal("The upstairs corridor", row.Caption);
         Assert.Equal(FeedMediaReviewState.Approved, row.ReviewState);
+    }
+
+    [Fact]
+    public async Task What_somebody_adds_to_a_place_counts_against_their_allowance()
+    {
+        var (sqlite, placeId) = await SeedAsync(PlaceKind.PublicLocation);
+        await using var _ = sqlite;
+
+        await Controller(sqlite).Add(placeId, AFile(), "The corridor", default);
+
+        await using var db = await sqlite.Factory.CreateDbContextAsync();
+
+        // The guard's own remarks said a second kind of personal upload would come and that one
+        // place would decide what "kept to yourself" means. Item 250 added that second kind and
+        // for a day it was stored under the person and counted by nothing (C1).
+        var used = await AccountStorageGuard.UsedBytesAsync(db, Contributor, default);
+        Assert.True(used > 0, "evidence added to a place is stored under the person and must count");
+
+        var stored = await db.UploadFiles.SumAsync(f => f.FileSize);
+        Assert.Equal(stored, used);
     }
 
     [Fact]

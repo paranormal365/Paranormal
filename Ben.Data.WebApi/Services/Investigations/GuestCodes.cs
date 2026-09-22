@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -150,6 +151,47 @@ public static class GuestCodes
         };
         db.InvestigationJoinCodes.Add(code);
         return code;
+    }
+
+    /// <summary>
+    /// Why this investigation may not have a guest code at all, or null when it may.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Found by crawling the site the day it shipped (C7).</b> Nothing asked where the
+    /// visit was. A guide could print a code for an investigation at somebody's HOME, hold it up,
+    /// and every scan would put a stranger from the pavement inside a private client's case —
+    /// able to upload into its evidence, and told the investigation's title on the way in, which
+    /// for a case-bound visit can carry the client's own name.</para>
+    ///
+    /// <para><b>Two conditions, and they are different questions.</b> The place answers "is this
+    /// somebody's home"; the case answers "did the client ask for this to be private" (item 184).
+    /// A visit can fail either — a private engagement at a public landmark, a residence with no
+    /// case at all — so both are asked and the first that bites gives the sentence.</para>
+    ///
+    /// <para>Sentences, not statuses: the reader is a guide looking at a button that just refused,
+    /// and "403" does not tell them the code exists for public work and this is not public work.</para>
+    /// </remarks>
+    public static async Task<string?> WhyACodeMayNotBeIssuedAsync(
+        BenDataContext db, Investigation investigation, CancellationToken ct)
+    {
+        var atAHome = investigation.PlaceId is { } placeId
+            && await db.Places.AsNoTracking()
+                .AnyAsync(p => p.Id == placeId && p.Kind == PlaceKind.PrivateResidence, ct);
+
+        if (atAHome)
+        {
+            return "This visit is at somebody's home, so it cannot have a guest code. Codes are "
+                 + "for work anybody may join — a landmark, a business, a public night.";
+        }
+
+        if (investigation.CaseId is { } caseId
+            && await db.Cases.AsNoTracking().AnyAsync(c => c.Id == caseId && c.IsPrivateEngagement, ct))
+        {
+            return "This visit belongs to a private engagement, so it cannot have a guest code. "
+                 + "The client asked for this work to stay with the people they invited.";
+        }
+
+        return null;
     }
 
     /// <summary>Takes a code out of use. The first revocation is the one kept.</summary>

@@ -123,23 +123,120 @@
    2026-09-14 found "View" on the home page's case cards reading as a disabled button beside a
    white one, and Ben chose readable. The border keeps more of the true colour, and hover still
    fills with it. */
+/* ── White text on green, in both themes ────────────────────────────────────
+   The palette's --bs-success (#489e48) carries white text at 3.35:1, and small text needs 4.5.
+   179 rows in the 2026-09-22 every-seat audit — the single largest cause on the site, and one of
+   only two that are the same in light and dark. It is one colour doing three jobs: 150 `bg-success`
+   badges (the feed's "+4"/"+5" vote counts, every status pill), the `btn-success` buttons, and the
+   video editor's Export button, which reaches the same value through Kendo (telerik-night.css maps
+   --kendo-color-success onto --bs-success).
+
+   --bs-success itself is NOT changed. It is also the colour of green TEXT and green borders, where
+   darkening it would push those the wrong way on a dark background. Only the surfaces that put
+   white on top of it are darkened, to 83% of the palette green — #3c833c, 4.66:1 — which is still
+   recognisably the same green.
+
+   The exemption argument was considered and rejected: a badge showing a vote tally is content, not
+   decoration, and "+5" is the whole message. */
+:root {
+    --ben-success-behind-white:     #3c833c;
+    --ben-success-behind-white-rgb: 60, 131, 60;
+}
+
+/* Same shape as Bootstrap's own utility, so --bs-bg-opacity keeps working. */
+.bg-success {
+    background-color: rgba(var(--ben-success-behind-white-rgb), var(--bs-bg-opacity, 1)) !important;
+}
+
+.btn-success {
+    --bs-btn-bg:           var(--ben-success-behind-white);
+    --bs-btn-border-color: var(--ben-success-behind-white);
+}
+
+/* Kendo's success fill is remapped in theme/telerik-night.css, which is where every Kendo colour
+   is mapped onto this palette. Putting it here as well would mean two files deciding one colour. */
+
+/* ── Dark theme: links, and the colours used AS TEXT ────────────────────────
+   Found by running the visual audit in dark mode on 2026-09-22 — until then every fixture walked
+   the light site, so these had never been measured. Small text needs 4.5:1.
+
+   EVERY FIGURE HERE IS AGAINST rgb(54,60,65) — `div.app-content`, read off the live page. That
+   matters more than it sounds: the first cut of this block was tuned against the body (#212529),
+   where all of it measures a comfortable 6.2:1. Almost nothing on this site sits on the body.
+   Content sits on .app-content, which is lighter, and against that the same colours came back at
+   4.47 and 4.49 — under the line, on 42 rows, after a fix that was supposed to clear them. If a
+   ratio here is ever re-derived, read the backdrop off the page rather than assuming which one
+   it is.
+
+   LINKS were the widest of them: the night theme sets --bs-link-color to #8796b9, so every link
+   on the site was below AA. Sixty-nine rows in the audit, one variable. Lifted to #9ba8c4 (4.68),
+   which keeps the theme's own blue rather than reverting to Bootstrap's #6ea8fe.
+
+   The COLOUR UTILITIES are a different problem from the buttons below. Every --bs-* colour here
+   was chosen to sit BEHIND white button text, and Bootstrap's .text-* utilities reuse the same
+   variable as ink, where a colour picked for a button background is close to invisible. That is
+   how "Next visit: …" is drawn on a client's own case list. Scoped to the text utilities so the
+   button backgrounds, borders and fills that use the same variables are untouched — the rule this
+   file already follows for .text-secondary below. */
+:root[data-bs-theme="dark"] {
+    --bs-link-color:       #9ba8c4;
+    --bs-link-color-rgb:   155, 168, 196;
+    --bs-link-hover-color: #abb6ce;
+    --bs-link-hover-color-rgb: 171, 182, 206;
+}
+
+/* All five, not the two the audit happened to catch. The audit only reports a colour it finds on
+   screen, so .text-primary and .text-danger were named and .text-info — the worst of the set at
+   1.23:1, which is a colour you cannot see at all — was not, because no walked page drew it. A
+   fix scoped to what was observed leaves the same bug waiting on the next page that uses the
+   utility. Measured on .app-content in dark: primary 1.42, secondary 2.38, success 3.33, info
+   1.23, warning 4.26, danger 2.33 — every one of them below AA as ink.
+
+   .text-secondary is absent here on purpose: it has had its own rule since the 2026-09-14 pass,
+   further down this file. */
+:root[data-bs-theme="dark"] .text-primary { color: color-mix(in srgb, var(--bs-primary) 50%, #fff) !important; } /* 4.68 */
+:root[data-bs-theme="dark"] .text-success { color: color-mix(in srgb, var(--bs-success) 75%, #fff) !important; } /* 4.64 */
+:root[data-bs-theme="dark"] .text-info    { color: color-mix(in srgb, var(--bs-info)    48%, #fff) !important; } /* 4.60 */
+:root[data-bs-theme="dark"] .text-warning { color: color-mix(in srgb, var(--bs-warning) 93%, #fff) !important; } /* 4.63 */
+:root[data-bs-theme="dark"] .text-danger  { color: color-mix(in srgb, var(--bs-danger)  61%, #fff) !important; } /* 4.61 */
+
+/* Light has the same fault in the other direction, on two of them: the palette's green and amber
+   are bright, and bright ink on white is as unreadable as dark ink on charcoal. "✓ Accepting new
+   cases" on a group's public page is the green one. The other four clear AA on white untouched
+   (primary 7.84, info 9.09, danger 4.79, secondary 4.69) and are left alone. */
+:root[data-bs-theme="light"] .text-success { color: color-mix(in srgb, var(--bs-success) 83%, #000) !important; } /* 4.66 */
+:root[data-bs-theme="light"] .text-warning { color: color-mix(in srgb, var(--bs-warning) 73%, #000) !important; } /* 4.65 */
+
+/* .btn-outline-secondary had no rule at all, while its four neighbours below have had one since
+   2026-09-14. At #6c757d it reads 2.40 on the page — and it is the dashboard's date-range toggle
+   ("7 days", "90 days") and the moderation queue's filters, which is to say it is a control
+   people are meant to find. 63% toward white: 4.65. */
+:root[data-bs-theme="dark"] .btn-outline-secondary {
+    --bs-btn-color:        color-mix(in srgb, var(--bs-secondary) 63%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-secondary) 78%, #fff);
+}
+
 :root[data-bs-theme="dark"] .btn-outline-primary {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 52%, #fff);
+    /* 50%: 4.68 on .app-content. Was 52%, which is 4.47 there — see the note above. */
+    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 50%, #fff);
     --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 70%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-info {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 49%, #fff);
+    /* 47%: 4.69. Was 49%, which is 4.49. */
+    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 47%, #fff);
     --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 68%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-danger {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 63%, #fff);
+    /* 61%: 4.61. Was 63%, which is 4.49. */
+    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 61%, #fff);
     --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 80%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-success {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 78%, #fff);
+    /* 75%: 4.64. Was 78%, which is 4.47. */
+    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 75%, #fff);
     --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 88%, #fff);
 }
 

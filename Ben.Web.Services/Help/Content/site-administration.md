@@ -654,6 +654,43 @@ Turned off:
 Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
 have their own switch, **Sell event credits**.
 
+## Places
+
+**Administration → Places** lists every location on the site: the homes groups work in and the
+public locations anybody signed in can contribute to. Search by name, street, town or state, and
+narrow to one kind or the other.
+
+Each row carries the three counts that decide what you can do with it — cases, visits and pieces
+of evidence. A row with nothing against it anywhere is one that can be removed; a row with
+anything against it is one to merge or make private instead.
+
+**Add a place** opens the same form everybody else uses, so a location you add is matched against
+what already exists rather than becoming a second record of the same building.
+
+### Taking a place off the public map
+
+This is the repair for the mistake that matters most: somewhere somebody lives, entered as a
+public location. A public location has a page strangers can read and add photographs to, so a home
+listed that way is a public evidence page for an address a family lives at.
+
+**Make it a private residence** takes the page away and stops anybody adding to it. Nothing
+recorded there is deleted — the group working the case keeps every file, every session and every
+note. It is the safe answer, and it is almost always the right one.
+
+Going the other way, **Make it a public location**, is refused for anything carrying a street
+number. If a genuine landmark has a street address on it, clear the address first. The refusal is
+deliberate: promoting a row on a list of fifty is exactly how somebody's home would end up public.
+
+### Deleting a place
+
+Only possible while nothing at all points at the record — no case, no visit, no evidence, no
+event, no room, no venue profile, no contact, no claim. If anything does, the refusal names it
+("3 cases and 6 pieces of evidence still point at it") so you know what to move first.
+
+For a place that is a duplicate of another, use **Duplicate Places** instead: merging moves
+everything onto the record you keep and then removes the empty one. For a place with real history
+that should not be public, make it private rather than trying to empty it.
+
 ## Merging two groups
 
 **Administration → Groups → Merge Groups** takes two organizations and ends with one. Choose
