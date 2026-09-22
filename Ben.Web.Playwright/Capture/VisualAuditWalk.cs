@@ -63,7 +63,7 @@ public sealed class VisualAuditWalk : BenTestBase
         if (Environment.GetEnvironmentVariable("BEN_VISUAL_AUDIT") != "1")
             Assert.Ignore("Set BEN_VISUAL_AUDIT=1 to walk the site for visual faults.");
 
-        var report = new StringBuilder("# What the site looks like\n\n");
+        var report = new StringBuilder($"# What the site looks like — {ThemeName} theme\n\n");
         var hard = new List<string>();
         var seen = 0;
 
@@ -125,7 +125,8 @@ public sealed class VisualAuditWalk : BenTestBase
         var folder = Environment.GetEnvironmentVariable("BEN_VISUAL_AUDIT_OUT")
                      ?? TestContext.CurrentContext.WorkDirectory;
         Directory.CreateDirectory(folder);
-        var file = Path.Combine(folder, "visual-audit.md");
+        // Named by theme so a dark run does not overwrite the light one it is compared against.
+        var file = Path.Combine(folder, $"visual-audit-{ThemeName}.md");
         File.WriteAllText(file, report.ToString());
         TestContext.Out.WriteLine($"{seen} pages read; report at {file}");
         TestContext.Out.WriteLine(report.ToString());

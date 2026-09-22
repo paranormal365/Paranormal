@@ -37,6 +37,54 @@ namespace Ben.Web.Playwright;
 /// </remarks>
 public abstract class BenTestBase : PageTest
 {
+    // ── Theme ────────────────────────────────────────────────────────────────
+
+    /// <summary>The theme this run is asked to use: <c>BEN_THEME=dark</c>, or nothing.</summary>
+    /// <remarks>
+    /// <para><b>Why a switch in the base rather than a setting per fixture.</b> The site picks its
+    /// theme in <c>ben-boot.js</c>: the <c>layoutSettings</c> localStorage object, then a legacy
+    /// key, then <c>prefers-color-scheme</c>, then light. A Playwright context with no colour
+    /// scheme set reports light, so every fixture that did not say otherwise — the sweep, the
+    /// visual audit — has been walking the LIGHT site, while the walks that set
+    /// <c>ColorScheme.Dark</c> walked the dark one. Two instruments, two themes, and nothing
+    /// said which. Found 2026-09-21 when the audit's contrast figures did not match the CSS.</para>
+    ///
+    /// <para>Set, this does both halves: the colour scheme for a fresh context (so the boot
+    /// script's media-query fallback picks dark) and the <c>layoutSettings</c> object for the very
+    /// first paint (so nothing flashes light first). A derived fixture that overrides
+    /// <see cref="ContextOptions"/> without calling base loses the first half and keeps the
+    /// second, which is enough.</para>
+    /// </remarks>
+    protected static bool DarkThemeRequested
+        => string.Equals(Environment.GetEnvironmentVariable("BEN_THEME"), "dark",
+                         StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>"dark" or "light", for report headings, so a reader knows what was measured.</summary>
+    protected static string ThemeName => DarkThemeRequested ? "dark" : "light";
+
+    public override BrowserNewContextOptions ContextOptions()
+    {
+        var options = base.ContextOptions() ?? new BrowserNewContextOptions();
+        if (DarkThemeRequested) options.ColorScheme = ColorScheme.Dark;
+        return options;
+    }
+
+    [SetUp]
+    public async Task ApplyRequestedThemeAsync()
+    {
+        if (!DarkThemeRequested) return;
+
+        // The same object the help captures seed, for the same reason: the boot script reads it
+        // synchronously from <head>, so this is what makes the FIRST paint dark rather than the
+        // second.
+        await Context.AddInitScriptAsync("""
+            try {
+                localStorage.setItem('layoutSettings', JSON.stringify({ theme: 'dark' }));
+                localStorage.setItem('ben-theme', 'dark');
+            } catch (e) { /* storage blocked; the media-query fallback still applies */ }
+            """);
+    }
+
     /// <summary>
     /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
     /// <para>

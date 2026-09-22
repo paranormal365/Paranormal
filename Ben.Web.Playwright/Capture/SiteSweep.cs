@@ -77,6 +77,65 @@ public sealed class SiteSweep : BenTestBase
     {
         if (Environment.GetEnvironmentVariable("BEN_SWEEP") != "1")
             Assert.Ignore("Set BEN_SWEEP=1 to sweep the whole site as every seat. It is slow.");
+
+        var script = Path.Combine(TestContext.CurrentContext.TestDirectory, "Capture", "visual-audit.js");
+        Assert.That(File.Exists(script), Is.True, $"the visual auditor is missing: {script}");
+        _auditor = File.ReadAllText(script);
+    }
+
+    // ── The visual audit, as every seat (Ben, 2026-09-21: "audit the web app as every type of user") ──
+
+    /// <summary>The same auditor <see cref="VisualAuditWalk"/> runs, read once.</summary>
+    /// <remarks>
+    /// <para>Run here rather than only there because THIS is the instrument that opens every route
+    /// as every seat. The audit's own fixture walks a hand-kept list of forty routes as three seats;
+    /// the sweep resolves ids and opens ~750 screens as six. The shapes the auditor knows —
+    /// contrast, clipped content, text on a card's edge, broken images — are exactly the shapes
+    /// that differ by seat, because a member's page has controls a visitor's does not.</para>
+    ///
+    /// <para><b>It reports, capped, and hard-fails on two.</b> Contrast is a judgement and a badge
+    /// at 3.35:1 may be deliberate; those go in the table, four per kind per screen so one bad
+    /// stylesheet does not bury everything else. A card's text on its own border and a box hiding
+    /// the content somebody asked for are never a choice, and those fail the run — the same rule
+    /// the standalone audit applies.</para>
+    /// </remarks>
+    private string _auditor = "";
+
+    /// <summary>The two that are never a design choice.</summary>
+    private readonly List<string> _hard = [];
+
+    private sealed record VisualFinding(string Kind, string El, string Detail);
+
+    private async Task AuditVisualsAsync(string who, string url)
+    {
+        List<VisualFinding> found;
+        try
+        {
+            var json = await Page.EvaluateAsync<string>(
+                _auditor + "\n JSON.stringify(window.__benVisualAudit())");
+            found = JsonSerializer.Deserialize<List<VisualFinding>>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _found.Add(new(who, url, "visual audit could not run", ex.Message.Split('\n')[0].Trim()));
+            return;
+        }
+
+        // "page scrolls sideways" is already the sweep's own finding, measured the same way; two
+        // rows for one fact is how a report gets skimmed.
+        foreach (var group in found.Where(f => f.Kind != "page scrolls sideways").GroupBy(f => f.Kind))
+        {
+            foreach (var f in group.Take(4))
+                _found.Add(new(who, url, "visual: " + f.Kind, $"`{f.El}` — {f.Detail}"));
+            if (group.Count() > 4)
+                _found.Add(new(who, url, "visual: " + group.Key, $"…and {group.Count() - 4} more"));
+
+            if (group.Key is "text on the card edge" or "content clipped")
+                foreach (var f in group)
+                    _hard.Add($"{who} {url}: {f.Kind} — {f.El} — {f.Detail}");
+        }
+
     }
 
     /// <summary>
@@ -187,6 +246,15 @@ public sealed class SiteSweep : BenTestBase
 
             if (state.GetProperty("wide").GetBoolean())
                 _found.Add(new(who, url, "scrolls sideways", "the page is wider than the window"));
+
+            // Only a page that opened and drew something is worth auditing; a blank or broken one
+            // has already been reported as such, and its "contrast" would be noise.
+            if (!state.GetProperty("unhandled").GetBoolean()
+                && !state.GetProperty("circuitDown").GetBoolean()
+                && state.GetProperty("content").GetInt32() >= 40)
+            {
+                await AuditVisualsAsync(who, url);
+            }
         }
         catch (Exception ex)
         {
@@ -317,10 +385,18 @@ public sealed class SiteSweep : BenTestBase
         Write();
         TestContext.Out.WriteLine($"{_visits} visits, {_found.Count} findings");
         Assert.That(_visits, Is.GreaterThan(0), "the sweep opened nothing at all");
+
+        // After the report is written, so a failing run still leaves the full table to read.
+        Assert.That(_hard, Is.Empty,
+            "these are not design choices — a card's text on its own border, or a box hiding its own "
+          + "content:\n  " + string.Join("\n  ", _hard.Take(40))
+          + (_hard.Count > 40 ? $"\n  …and {_hard.Count - 40} more" : ""));
     }
 
     private static bool IsPublic(string url)
-        => url is "/" or "/pricing" or "/events" or "/find" or "/feed" or "/signup" or "/login"
+        // /tonight added 2026-09-21: the one screen a guest opens on a phone in a field, and the
+        // phone pass had been skipping it.
+        => url is "/" or "/pricing" or "/events" or "/find" or "/feed" or "/signup" or "/login" or "/tonight"
         || url.StartsWith("/o/", StringComparison.Ordinal)
         || url.StartsWith("/places", StringComparison.Ordinal)
         || url.StartsWith("/help", StringComparison.Ordinal);
@@ -442,7 +518,7 @@ public sealed class SiteSweep : BenTestBase
         Directory.CreateDirectory(OutRoot);
 
         var report = new StringBuilder();
-        report.AppendLine("# The whole site, as everybody");
+        report.AppendLine($"# The whole site, as everybody — {ThemeName} theme");
         report.AppendLine();
         report.AppendLine($"{_urlCount} address(es) to walk, {_visits} screen(s) opened, {_found.Count} finding(s).");
         report.AppendLine();

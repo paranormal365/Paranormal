@@ -11736,7 +11736,15 @@ carry guides and capacity, and the guest mail knows how to say all of it.
 
 ---
 
-## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+## 235. Hosted events: the event creator band (SHIPPED through phase 17 — merged; the pieces left on purpose are FUTURE)
+
+**Relabelled 2026-09-21.** This read IN PROGRESS long after every phase had merged; the arc's
+own audit (`FeatureHistory/README-hosted-events-235-audit.md`) records what was left unbuilt and
+why: the waiting list that offers a lapsed place automatically, custom questions at booking,
+checklists and "staff here now", the rota, Apple Wallet, and the 14e reminders/widget/Live
+Activity. Each is its own small item when a venue asks — see `Plan-2026-09-22.md` §7. Payments
+stay out by decision 6.
+
 
 The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
 and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
@@ -12935,7 +12943,14 @@ predicted one.
 
 
 
-## 245. Letters somebody wrote, and a screen that shows what went out (OPEN — Ben, 2026-09-20)
+## 245. Letters somebody wrote, and a screen that shows what went out (BUILT — relabelled 2026-09-21)
+
+**Both asks exist.** Templates keyed by `Kind` with a fixed, validated placeholder set, starters,
+a preview against sample rows, publish and revert (`/admin/email-templates`, item 246's work);
+the outbox list and a sandboxed body viewer with the scrub date shown when the body is gone
+(`/admin/mail`). The remaining piece from 239 — enqueue inside the caller's transaction (239b) —
+is in `Plan-2026-09-22.md` §3.
+
 
 Ben, 2026-09-20:
 
