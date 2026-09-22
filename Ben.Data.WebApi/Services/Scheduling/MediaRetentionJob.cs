@@ -96,23 +96,48 @@ public sealed class MediaRetentionJob : IScheduledJob
 
     // ── the warning ──────────────────────────────────────────────────────────
 
+    /// <summary>The files owed a warning at <paramref name="now"/>.</summary>
+    /// <remarks>
+    /// <para>Told once per window: a file warned a week out is warned again a day out, and never
+    /// twice inside the same window.</para>
+    ///
+    /// <para><b>The last-window test puts the arithmetic on the notice, not on the expiry.</b> It
+    /// read <c>ExpiryNoticeSentAtUtc &lt; ExpiresAtUtc.Value - LastNotice</c>, which means the same
+    /// thing — <c>a &lt; b - d</c> is <c>a + d &lt; b</c> — but EF cannot turn a column minus a
+    /// <see cref="TimeSpan"/> into SQL Server SQL. The query threw on every pass from the day
+    /// expiries shipped (2026-09-10), so no notice was ever sent; and because the warning runs
+    /// before the sweep, nothing was swept on a host with mail either. <c>AddDays</c> becomes
+    /// <c>DATEADD</c>.</para>
+    ///
+    /// <para>It lives out here so <c>MediaRetentionJobTests</c> can run the real query through the
+    /// SQL Server provider. Inlined, the only thing a test could check is a copy of it, which is
+    /// how this survived: the InMemory provider compiles the expression to C# and accepts
+    /// anything.</para>
+    /// </remarks>
+    public static System.Linq.Expressions.Expression<Func<Ben.Data.Source.Entities.UploadFile, bool>>
+        DueForNotice(DateTime now)
+    {
+        var horizon = now + FirstNotice;
+        var lastWindow = now + LastNotice;
+        var lastNoticeDays = LastNotice.TotalDays;
+
+        return f => f.ExpiresAtUtc != null
+                 && f.KeptAtUtc == null
+                 && f.ExpiresAtUtc > now
+                 && f.ExpiresAtUtc <= horizon
+                 && (f.ExpiryNoticeSentAtUtc == null
+                     || (f.ExpiresAtUtc <= lastWindow
+                         && f.ExpiryNoticeSentAtUtc.Value.AddDays(lastNoticeDays) < f.ExpiresAtUtc));
+    }
+
     private async Task WarnAsync(BenDataContext db, CancellationToken ct)
     {
         if (!_email.IsConfigured) return;
 
         var now = DateTime.UtcNow;
-        var horizon = now + FirstNotice;
 
         var due = await db.UploadFiles
-            .Where(f => f.ExpiresAtUtc != null
-                     && f.KeptAtUtc == null
-                     && f.ExpiresAtUtc > now
-                     && f.ExpiresAtUtc <= horizon
-                     // Told once per window: a file warned a week out is warned again a day out,
-                     // and never twice inside the same window.
-                     && (f.ExpiryNoticeSentAtUtc == null
-                         || (f.ExpiresAtUtc <= now + LastNotice
-                             && f.ExpiryNoticeSentAtUtc < f.ExpiresAtUtc!.Value - LastNotice)))
+            .Where(DueForNotice(now))
             .OrderBy(f => f.ExpiresAtUtc)
             .Take(Batch)
             .ToListAsync(ct);
