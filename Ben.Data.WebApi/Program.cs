@@ -343,6 +343,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Tells a free account it is nearly full BEFORE the guard refuses an upload (Ben, 2026-09-22).
+// A limit somebody meets with no warning reads as the site breaking.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.AccountStorageWarningJob>();
 // Link previews (2026-09-14) are week-long snapshots of other sites; this forgets the stale ones.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewRetentionJob>();

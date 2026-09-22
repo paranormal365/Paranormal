@@ -537,6 +537,41 @@ You can also simply **post** about a public place, with no space and no visit: s
 [Posting about a place](the-feed#posting-about-a-place). And what you record on the phone can be
 published to a place's archive the same way — see [the mobile apps](the-mobile-apps).
 
+## How much you can store
+
+A free account has a **storage allowance**, and everything you keep to yourself counts towards it:
+recordings, photographs, video projects, equipment pictures, anything you add to a public
+location, anything you post. The figure is the same for everybody and a site administrator can
+change it.
+
+**Contributing gives the space back.** A recording published to a public location's archive stops
+counting against you, because it has earned its place — it is what makes the archive worth reading
+to somebody who has never been there. A recording nobody but you will ever see does not. So the
+allowance is a nudge rather than a bill: contribute and your room comes back.
+
+**What does not count.** Work that belongs to a group — a case's files, a group's equipment — is
+the group's, not yours, and never counts against you. Nor does the old version of a file you have
+replaced: cutting a long recording down to a short one lowers what you are using, as you would
+expect. And if you belong to a group on a paid plan, none of this applies to you at all.
+
+**What does count, and is worth knowing:** a clip you cut from a recording is a second file. If
+you keep the original as well — which most people want to — you are keeping both, and both count.
+Deleting either gives its space straight back.
+
+### Being told before you run out
+
+You do not have to watch a number. When you have used about 90% of your allowance the site sends
+you a message saying so, with nothing to do yet. If you get to 95% it sends a stronger one,
+because the next upload may be refused.
+
+Each of those arrives **once**. If you clear some space and drop back under 90%, the site forgets
+it warned you — so if you fill up again later, you will be told again rather than meeting the
+limit in silence.
+
+Three things make room, and the messages say so: publish a recording to a public location, delete
+files you no longer need, or join a group on a paid plan, which lifts the limit entirely. Nothing
+is ever deleted to make room — the limit is on what you can add, not on what you already have.
+
 ## A group's own pages
 
 Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a
