@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 using AutoMapper;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
@@ -203,6 +204,16 @@ public sealed class VideoProjectController : BenControllerBase
         var project = await db.VideoProjects
             .FirstOrDefaultAsync(p => p.Id == id && p.CreatedByAppUserId == userId, ct);
         if (project is null) return NotFound();
+
+        // The free account's allowance, asked BEFORE a byte is written (C1, 2026-09-22). Counting
+        // what an account holds is not a cap; a cap is only a cap where somebody asks it, and this
+        // door never did.
+        //
+        // Only when the project is the person's own. A project attached to a case stores under
+        // cases/{id}/ and is the group's work, which this cap has never been about.
+        if (!project.CaseId.HasValue
+            && await AccountStorageGuard.WhyCannotStoreAsync(db, userId, file.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
         var storedName   = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath  = project.CaseId.HasValue

@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using AutoMapper;
@@ -300,6 +301,21 @@ public sealed class ChunkedUploadController : BenControllerBase
                 return Conflict($"Chunks are missing: {string.Join(", ", gaps.Take(10))}.");
             if (manifest.BytesReceived != manifest.TotalBytes)
                 return Conflict($"Received {manifest.BytesReceived:N0} bytes of the declared {manifest.TotalBytes:N0}.");
+
+            // The free account's allowance (C1, 2026-09-22). Asked at assembly rather than per
+            // chunk: the chunks are already on disk by now, but this is the point the bytes become
+            // a file the account keeps, and refusing here is what stops the next one starting.
+            // A per-chunk check is the better shape and wants the manifest to reserve its declared
+            // total up front — worth doing when chunked upload has a second caller.
+            // Its own context, because the one this method uses is not opened until after the
+            // bytes have been concatenated onto disk — and a check that runs after the writing is
+            // not a limit, it is a note.
+            await using (var guardDb = await _dbContextFactory.CreateDbContextAsync(ct))
+            {
+                if (await AccountStorageGuard.WhyCannotStoreAsync(
+                        guardDb, callerId, manifest.TotalBytes, ct) is { } full)
+                    return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+            }
 
             var entity = new UploadFile
             {
