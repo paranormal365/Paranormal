@@ -8,6 +8,25 @@
     flex-direction: column;
 }
 
+/* The wall is black in BOTH themes — it is a display screen, not a page — but .text-secondary
+   follows the SITE theme, so in light mode it resolved to rgb(96,108,120), a grey chosen to sit on
+   white panels, drawn here on #000: 3.91:1, under the 4.5 small text needs. In dark mode the same
+   class composites to #a6a9ac and reads 8.89:1, which is why this only ever failed for half the
+   visitors and why no one photographing the wall in dark mode would have seen it.
+
+   Found on 2026-09-22 by the first audit that ever walked this route: /events/{EventId}/wall could
+   not be reached until EventId resolved (W15), so the wall had never been measured by anybody, on
+   any seat.
+
+   Pinned to a solid rather than left to the theme, for the reason app.css already gives about
+   translucent tokens: a colour that takes its contrast from whatever happens to be behind it gives
+   a different answer in each place it is used, and this surface is always the same black. It
+   covers all three secondary lines on the wall — the refusal, the "Loading…" line and the address
+   under the QR plate — not only the one the audit happened to catch in the state it found. */
+.photo-wall .text-secondary {
+    color: #a6a9ac !important;   /* 8.89:1 on #000, and clearly quieter than the wall's white */
+}
+
 .photo-wall-stage {
     flex: 1 1 auto;
     display: flex;
