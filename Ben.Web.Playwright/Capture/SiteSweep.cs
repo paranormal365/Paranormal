@@ -106,6 +106,16 @@ public sealed class SiteSweep : BenTestBase
 
     private sealed record VisualFinding(string Kind, string El, string Detail);
 
+    /// <summary>
+    /// Every visual finding, uncapped, for the roll-up only.
+    /// </summary>
+    /// <remarks>
+    /// The rows below are capped at four per kind per screen, which is right for reading and wrong
+    /// for counting: a cause on sixty screens would be counted as four. This keeps all of them so
+    /// the table at the top says how wide a cause really is.
+    /// </remarks>
+    private readonly List<VisualRollUp.Row> _visual = [];
+
     private async Task AuditVisualsAsync(string who, string url)
     {
         List<VisualFinding> found;
@@ -124,7 +134,11 @@ public sealed class SiteSweep : BenTestBase
 
         // "page scrolls sideways" is already the sweep's own finding, measured the same way; two
         // rows for one fact is how a report gets skimmed.
-        foreach (var group in found.Where(f => f.Kind != "page scrolls sideways").GroupBy(f => f.Kind))
+        var mine = found.Where(f => f.Kind != "page scrolls sideways").ToList();
+
+        foreach (var f in mine) _visual.Add(new(who + " " + url, f.Kind, f.El, f.Detail));
+
+        foreach (var group in mine.GroupBy(f => f.Kind))
         {
             foreach (var f in group.Take(4))
                 _found.Add(new(who, url, "visual: " + f.Kind, $"`{f.El}` — {f.Detail}"));
@@ -524,6 +538,7 @@ public sealed class SiteSweep : BenTestBase
         report.AppendLine();
         report.AppendLine($"Ids resolved: {(_resolved.Length == 0 ? "none" : _resolved)}");
         report.AppendLine();
+        report.Append(VisualRollUp.Render(_visual));
 
         foreach (var group in _found.GroupBy(f => f.Who))
         {

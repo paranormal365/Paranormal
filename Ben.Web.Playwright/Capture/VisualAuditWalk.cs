@@ -64,6 +64,8 @@ public sealed class VisualAuditWalk : BenTestBase
             Assert.Ignore("Set BEN_VISUAL_AUDIT=1 to walk the site for visual faults.");
 
         var report = new StringBuilder($"# What the site looks like — {ThemeName} theme\n\n");
+        var body = new StringBuilder("## Page by page\n");
+        var all = new List<VisualRollUp.Row>();
         var hard = new List<string>();
         var seen = 0;
 
@@ -77,14 +79,14 @@ public sealed class VisualAuditWalk : BenTestBase
 
                 if (string.IsNullOrWhiteSpace(password))
                 {
-                    report.Append($"\n## {seat}\n\nSkipped: no password in the environment.\n");
+                    body.Append($"\n### {seat}\n\nSkipped: no password in the environment.\n");
                     continue;
                 }
 
                 await LoginAsync(email, password);
             }
 
-            report.Append($"\n## {seat}\n\n");
+            body.Append($"\n### {seat}\n\n");
 
             foreach (var route in routes)
             {
@@ -102,18 +104,19 @@ public sealed class VisualAuditWalk : BenTestBase
                 }
                 catch (Exception ex)
                 {
-                    report.Append($"- `{route}` — could not be read: {ex.Message[..Math.Min(80, ex.Message.Length)]}\n");
+                    body.Append($"- `{route}` — could not be read: {ex.Message[..Math.Min(80, ex.Message.Length)]}\n");
                     continue;
                 }
 
                 seen++;
-                if (found.Count == 0) { report.Append($"- `{route}` — nothing\n"); continue; }
+                foreach (var f in found) all.Add(new(seat + route, f.Kind, f.El, f.Detail));
+                if (found.Count == 0) { body.Append($"- `{route}` — nothing\n"); continue; }
 
-                report.Append($"- `{route}`\n");
+                body.Append($"- `{route}`\n");
                 foreach (var group in found.GroupBy(f => f.Kind).OrderBy(g => g.Key))
                 {
-                    report.Append($"    - **{group.Key}** ({group.Count()})\n");
-                    foreach (var f in group.Take(4)) report.Append($"        - `{f.El}` — {f.Detail}\n");
+                    body.Append($"    - **{group.Key}** ({group.Count()})\n");
+                    foreach (var f in group.Take(4)) body.Append($"        - `{f.El}` — {f.Detail}\n");
                 }
 
                 // The two that are never a design choice.
@@ -121,6 +124,8 @@ public sealed class VisualAuditWalk : BenTestBase
                     hard.Add($"{seat} {route}: {f.Kind} — {f.El} — {f.Detail}");
             }
         }
+
+        report.Append(VisualRollUp.Render(all)).Append(body);
 
         var folder = Environment.GetEnvironmentVariable("BEN_VISUAL_AUDIT_OUT")
                      ?? TestContext.CurrentContext.WorkDirectory;
