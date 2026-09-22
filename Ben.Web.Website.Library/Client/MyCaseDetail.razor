@@ -524,7 +524,7 @@
                             <span class="small fw-semibold">@p.Name</span>
                             @if (p.Age.HasValue) { <span class="small text-secondary"> · Age @p.Age</span> }
                             @if (!string.IsNullOrWhiteSpace(p.Relationship)) { <span class="small text-secondary"> · @p.Relationship</span> }
-                            @if (p.LivesAtProperty) { <span class="badge bg-info text-dark ms-1" style="font-size:.65rem;">Lives here</span> }
+                            @if (p.LivesAtProperty) { <span class="badge bg-info ms-1" style="font-size:.65rem;">Lives here</span> }
                             @if (!string.IsNullOrWhiteSpace(p.Notes))
                             {
                                 <div class="text-secondary small">@p.Notes</div>

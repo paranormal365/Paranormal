@@ -211,7 +211,7 @@
     private static string StatusClass(EquipmentCheckoutRecord loan) => loan.Status switch
     {
         EquipmentCheckoutStatus.Requested  => "bg-warning text-dark",
-        EquipmentCheckoutStatus.Approved   => "bg-info text-dark",
+        EquipmentCheckoutStatus.Approved   => "bg-info",
         EquipmentCheckoutStatus.Denied     => "bg-secondary",
         EquipmentCheckoutStatus.Cancelled  => "bg-secondary",
         EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "bg-danger" : "bg-success",

@@ -341,7 +341,7 @@ else
         Ben.Data.Common.Enums.InvestigationStatus.Completed => "bg-success",
         Ben.Data.Common.Enums.InvestigationStatus.Cancelled => "bg-secondary",
         Ben.Data.Common.Enums.InvestigationStatus.InProgress => "bg-primary",
-        _ => "bg-info text-dark",
+        _ => "bg-info",
     };
 
     private RenderFragment Grid(List<OrgInvestigationRow> rows) =>@<div class="table-responsive">
@@ -405,7 +405,7 @@ else
                             @if (row.CanCompleteMyFindings && row.ScheduledDateTime < DateTime.UtcNow
                                  && _openTeam != row.Id)
                             {
-                                <span class="badge bg-info text-dark ms-1"
+                                <span class="badge bg-info ms-1"
                                       title="You were on this visit — write up what you saw under Team.">
                                     Your write-up
                                 </span>

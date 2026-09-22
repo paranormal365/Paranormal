@@ -353,7 +353,7 @@
                                         <td>
                                             <span class="badge me-1 @(row.Kind switch {
                                                 Ben.Data.Common.Enums.BillingLedgerKind.Payment => "bg-success",
-                                                Ben.Data.Common.Enums.BillingLedgerKind.Adjustment => row.AdjustmentIsCredit ? "bg-info text-dark" : "bg-warning text-dark",
+                                                Ben.Data.Common.Enums.BillingLedgerKind.Adjustment => row.AdjustmentIsCredit ? "bg-info" : "bg-warning text-dark",
                                                 _ => "bg-secondary" })">
                                                 @(row.Kind == Ben.Data.Common.Enums.BillingLedgerKind.Adjustment
                                                     ? (row.AdjustmentIsCredit ? "Credit" : "Debit") : row.Kind.ToString())

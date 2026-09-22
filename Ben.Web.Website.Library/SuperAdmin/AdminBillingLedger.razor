@@ -54,7 +54,7 @@
                         <span class="badge @(e.Kind switch {
                             BillingLedgerKind.Charge => "bg-secondary",
                             BillingLedgerKind.Payment => "bg-success",
-                            BillingLedgerKind.Adjustment => e.AdjustmentIsCredit ? "bg-info text-dark" : "bg-warning text-dark",
+                            BillingLedgerKind.Adjustment => e.AdjustmentIsCredit ? "bg-info" : "bg-warning text-dark",
                             _ => "bg-dark" })">
                             @(e.Kind == BillingLedgerKind.Adjustment ? (e.AdjustmentIsCredit ? "Credit" : "Debit") : e.Kind.ToString())
                         </span>
