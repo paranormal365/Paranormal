@@ -307,6 +307,25 @@ public interface IBenOrganizationClient
     Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
 
+    /// <summary>Saves a role, keeping the server's sentence when it refuses.</summary>
+    /// <remarks>
+    /// The roles endpoints refuse in words worth reading — "That role does not belong to this
+    /// group.", "Name is required." — and the page was writing "Failed to save role." over every
+    /// one of them, because the plain method returns null on any non-success and a null carries no
+    /// reason. Same shape as <c>DeleteInvestigationExpectingReasonAsync</c>: added beside the
+    /// original rather than replacing it, so callers move one at a time.
+    /// </remarks>
+    Task<(OrganizationRoleRecord? Result, string? Error)> UpdateOrgRoleExpectingReasonAsync(
+        Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default);
+
+    /// <summary>Adds somebody to a role, keeping the server's sentence when it refuses.</summary>
+    Task<(OrganizationRoleMembershipRecord? Result, string? Error)> AddOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
+
+    /// <summary>Takes somebody out of a role, keeping the server's sentence when it refuses.</summary>
+    Task<(bool Removed, string? Error)> RemoveOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
+
     // ── Org address member access ──────────────────────────────────────────────
     Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);
     Task<OrganizationAddressMemberAccessRecord?> AddAddressMemberAccessAsync(Guid orgId, Guid addressId, Guid orgUserMembershipId, CancellationToken token = default);
