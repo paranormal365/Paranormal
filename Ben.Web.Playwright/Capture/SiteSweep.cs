@@ -445,8 +445,21 @@ public sealed class SiteSweep : BenTestBase
             }
             if (First(orgs, "urlName") is { } orgSlug) ids["UrlName"] = orgSlug;
 
-            if (First(await ApiArrayAsync("/api/public/places", token), "id") is { } placeId)
-                ids["PlaceId"] = placeId;
+            // /api/public/places serves GET {id} only — it has no listing, so asking it for one
+            // answered 404 and PlaceId silently never resolved. The admin catalogue is the listing
+            // the /admin/places screen itself uses, and it carries the counts, so the place chosen
+            // can be one with something ON it: an empty place renders none of the surface this
+            // route exists to check (the evidence list, the tally, the vote widget).
+            var places = await ApiArrayAsync("/api/admin/places", token);
+            if (PickAPlace(places) is { } picked)
+            {
+                ids["PlaceId"] = picked.Id;
+                if (!picked.Populated)
+                    _found.Add(new("the sweep itself", "/places/{PlaceId}", "walked an empty place",
+                        "no place in this database has any evidence on it, so the evidence list, the "
+                      + "tally and the vote widget were NOT audited — the route was walked, the "
+                      + "surface was not. Seed a public place with evidence (W10)."));
+            }
 
             if (First(await ApiArrayAsync("/api/public/hosted-events", token), "id") is { } eventId)
                 ids["EventId"] = eventId;
@@ -509,13 +522,59 @@ public sealed class SiteSweep : BenTestBase
         catch (Exception) { return null; }
     }
 
+    /// <summary>A place to walk, and whether it has anything on it.</summary>
+    private readonly record struct PickedPlace(string Id, bool Populated);
+
+    /// <summary>
+    /// A public place with evidence on it if there is one, otherwise any place at all.
+    /// </summary>
+    /// <remarks>
+    /// Kind 2 is PublicLocation. A private residence is the wrong choice on purpose: its page is
+    /// redacted for anyone without standing, so walking one measures the refusal rather than the
+    /// screen — the same false pass as a feature switch left off.
+    /// </remarks>
+    private static PickedPlace? PickAPlace(JsonElement? json)
+    {
+        var array = json;
+        if (json is { ValueKind: JsonValueKind.Object } o)
+            foreach (var prop in o.EnumerateObject())
+                if (prop.Value.ValueKind == JsonValueKind.Array) { array = prop.Value; break; }
+        if (array is not { ValueKind: JsonValueKind.Array } list) return null;
+
+        string? anyId = null, publicId = null;
+        foreach (var item in list.EnumerateArray())
+        {
+            if (!item.TryGetProperty("id", out var idv) || idv.GetString() is not { Length: > 0 } id) continue;
+            anyId ??= id;
+
+            var isPublic = item.TryGetProperty("kind", out var k)
+                        && k.ValueKind == JsonValueKind.Number && k.GetInt32() == 2;
+            if (!isPublic) continue;
+            publicId ??= id;
+
+            if (item.TryGetProperty("evidence", out var e)
+                && e.ValueKind == JsonValueKind.Number && e.GetInt32() > 0)
+                return new PickedPlace(id, true);
+        }
+
+        return (publicId ?? anyId) is { } fallback ? new PickedPlace(fallback, false) : null;
+    }
+
     /// <summary>The first non-empty string value of that property in an array answer.</summary>
     private static string? First(JsonElement? json, string name)
     {
-        // Some endpoints answer with a bare array and some with { items: [...] }.
+        // Some endpoints answer with a bare array, some with { items: [...] }, and some with the
+        // collection under its own name — { places: [...], total, page, pageSize }. Only the first
+        // two were understood, so a paged endpoint resolved nothing and said nothing about it:
+        // that is why no /places/{id} page was walked by any seat until 2026-09-22 (W10).
         var array = json;
-        if (json is { ValueKind: JsonValueKind.Object } obj
-            && obj.TryGetProperty("items", out var items)) array = items;
+        if (json is { ValueKind: JsonValueKind.Object } obj)
+        {
+            if (obj.TryGetProperty("items", out var items)) array = items;
+            else
+                foreach (var prop in obj.EnumerateObject())
+                    if (prop.Value.ValueKind == JsonValueKind.Array) { array = prop.Value; break; }
+        }
 
         if (array is not { ValueKind: JsonValueKind.Array } list) return null;
 
