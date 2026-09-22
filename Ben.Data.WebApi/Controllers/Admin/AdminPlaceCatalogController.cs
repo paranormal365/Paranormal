@@ -96,6 +96,10 @@ public sealed class AdminPlaceCatalogController : BenControllerBase
                 p.Kind,
                 p.Latitude,
                 p.Longitude,
+                // Why a row says "not on the map". The geocoder has always written the reason
+                // down and nothing has ever shown it, so an unplaceable address looked the same
+                // as one nobody had tried yet.
+                p.GeocodeNote,
                 p.DateCreated,
                 p.CreatedByAppUser.DisplayName,
                 db.Cases.Count(x => x.PlaceId == p.Id),
@@ -162,10 +166,143 @@ public sealed class AdminPlaceCatalogController : BenControllerBase
 
         return Ok(new AdminPlaceRow(
             place.Id, place.Name, place.City, place.State, place.Kind,
-            place.Latitude, place.Longitude, place.DateCreated, null,
+            place.Latitude, place.Longitude, place.GeocodeNote, place.DateCreated, null,
             await db.Cases.CountAsync(x => x.PlaceId == id, ct),
             await db.Investigations.CountAsync(x => x.PlaceId == id, ct),
             await db.PlaceEvidence.CountAsync(x => x.PlaceId == id, ct)));
+    }
+
+    /// <summary>One place, as the edit form needs it.</summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<AdminPlaceDetail>> Get(Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var place = await db.Places.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (place is null) return NotFound("That place doesn't exist.");
+
+        return Ok(new AdminPlaceDetail(
+            place.Id, place.Name, place.StreetAddress1, place.StreetAddress2, place.City,
+            place.State, place.ZipCode, place.Country, place.Latitude, place.Longitude,
+            place.GeocodeNote, place.DateGeocoded, place.Kind));
+    }
+
+    /// <summary>
+    /// Corrects a place: what it is called, where it is, and where that puts it on the map.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this had to exist.</b> The create door already told people to come here —
+    /// "There is already a place at that address, and it is recorded as somebody's home. If that
+    /// is wrong, ask a site administrator to correct it" — and no site administrator could. A
+    /// mistyped name, a wrong town or an address the geocoder could not place were all permanent.
+    /// Four of the six places in the seeded catalogue read "not on the map" and nothing could
+    /// move them.</para>
+    ///
+    /// <para><b>The duplicate rule is enforced here too, and that is the point.</b> Creating a
+    /// place matches on city, state and street, and hands back the existing record rather than
+    /// making a second one — the archive's whole value is that everybody recording at a building
+    /// lands on one page. An edit that could move a place ON TOP of another address would be a
+    /// second door into exactly the duplicate the first door refuses, so it is refused and points
+    /// at the merge screen, which is the tool for two records of one building.</para>
+    ///
+    /// <para><b>Coordinates.</b> Supplied ones are trusted, because somebody correcting a place by
+    /// hand usually has better information than the geocoder did. Left empty with a changed
+    /// address, the old ones are dropped and the address is looked up again — keeping the previous
+    /// coordinates against a new address is how a pin ends up confidently in the wrong county. The
+    /// geocoder writes down why it could not place something, and that note is handed back so the
+    /// screen can say so instead of showing an empty map.</para>
+    /// </remarks>
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<AdminPlaceDetail>> Edit(
+        Guid id, [FromBody] AdminEditPlaceRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (place is null) return NotFound("That place doesn't exist.");
+
+        var name = Services.Places.PlaceFactory.Trimmed(request.Name);
+        if (name is null || name.Length < 2)
+            return BadRequest("Give the place a name — what people call it.");
+
+        var city = Services.Places.PlaceFactory.Trimmed(request.City);
+        var state = Services.Places.PlaceFactory.Trimmed(request.State);
+        var street = Services.Places.PlaceFactory.Trimmed(request.StreetAddress1);
+
+        // The same requirement the create door makes of a public location, for the same reason:
+        // without a town it cannot be found and cannot land on the map.
+        if (place.Kind == PlaceKind.PublicLocation && (city is null || state is null))
+            return BadRequest("A town and a state, so people can find it and it lands on the map.");
+
+        // Would this move it on top of another record? Matched exactly as creating does.
+        if (city is not null && state is not null)
+        {
+            var clash = await db.Places.AsNoTracking()
+                .Where(p => p.Id != id && p.City == city && p.State == state
+                         && (street != null ? p.StreetAddress1 == street : p.Name == name))
+                .Select(p => new { p.Id, p.Name })
+                .FirstOrDefaultAsync(ct);
+
+            if (clash is not null)
+                return BadRequest(
+                    $"\"{clash.Name}\" is already recorded at that address. Two records of one "
+                  + "building split its evidence in half, so this edit is refused — merge them on "
+                  + "the Duplicate Places screen instead.");
+        }
+
+        var addressChanged =
+            place.StreetAddress1 != street || place.City != city || place.State != state
+            || place.ZipCode != Services.Places.PlaceFactory.Trimmed(request.ZipCode);
+
+        var before = new
+        {
+            place.Name, place.StreetAddress1, place.City, place.State,
+            place.Latitude, place.Longitude,
+        };
+
+        place.Name = name;
+        place.StreetAddress1 = street;
+        place.StreetAddress2 = Services.Places.PlaceFactory.Trimmed(request.StreetAddress2);
+        place.City = city;
+        place.State = state;
+        place.ZipCode = Services.Places.PlaceFactory.Trimmed(request.ZipCode);
+        place.Country = Services.Places.PlaceFactory.Trimmed(request.Country) ?? place.Country;
+
+        if (request.Latitude is { } lat && request.Longitude is { } lon)
+        {
+            if (lat is < -90 or > 90) return BadRequest("A latitude runs from -90 to 90.");
+            if (lon is < -180 or > 180) return BadRequest("A longitude runs from -180 to 180.");
+            place.Latitude = lat;
+            place.Longitude = lon;
+        }
+        else if (addressChanged || request.Relocate)
+        {
+            // Dropped on purpose before the lookup — see the remarks.
+            place.Latitude = null;
+            place.Longitude = null;
+            place.DateGeocoded = null;
+        }
+
+        await Ben.Service.RepositoryService.Services.PlaceGeocoder.GeocodeAsync(
+            place, trustSuppliedCoordinates: true, ct);
+
+        place.DateUpdated = DateTime.UtcNow;
+        place.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        await _auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Place), id,
+            before,
+            new { place.Name, place.StreetAddress1, place.City, place.State,
+                  place.Latitude, place.Longitude },
+            userId, AppSources.WebApi);
+
+        _log.LogInformation("Place {PlaceId} corrected by {UserId}.", id, userId);
+
+        return Ok(new AdminPlaceDetail(
+            place.Id, place.Name, place.StreetAddress1, place.StreetAddress2, place.City,
+            place.State, place.ZipCode, place.Country, place.Latitude, place.Longitude,
+            place.GeocodeNote, place.DateGeocoded, place.Kind));
     }
 
     /// <summary>Removes a place that nothing points at.</summary>
@@ -218,7 +355,8 @@ public sealed record AdminPlacePage(
 /// <summary>A place as the catalogue lists it.</summary>
 public sealed record AdminPlaceRow(
     Guid Id, string? Name, string? City, string? State, PlaceKind Kind,
-    decimal? Latitude, decimal? Longitude, DateTime DateCreated, string? AddedBy,
+    decimal? Latitude, decimal? Longitude, string? GeocodeNote,
+    DateTime DateCreated, string? AddedBy,
     int Cases, int Investigations, int Evidence);
 
 /// <summary>What is holding a place.</summary>
@@ -229,3 +367,18 @@ public sealed record AdminPlaceUsage(int Total, bool CanDelete, string? WhatHold
 
 /// <summary>Which kind a place should be.</summary>
 public sealed record SetPlaceKindRequest(PlaceKind Kind);
+
+/// <summary>One place, in full, for the edit form.</summary>
+public sealed record AdminPlaceDetail(
+    Guid Id, string? Name, string? StreetAddress1, string? StreetAddress2, string? City,
+    string? State, string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude,
+    string? GeocodeNote, DateTime? DateGeocoded, PlaceKind Kind);
+
+/// <summary>A correction to a place.</summary>
+/// <param name="Relocate">
+/// Look the address up again even when nothing about it changed — for a record whose coordinates
+/// were never found, or were found before the address was corrected elsewhere.
+/// </param>
+public sealed record AdminEditPlaceRequest(
+    string? Name, string? StreetAddress1, string? StreetAddress2, string? City, string? State,
+    string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude, bool Relocate = false);

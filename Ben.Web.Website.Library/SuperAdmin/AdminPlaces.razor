@@ -123,7 +123,12 @@
                                     @Where(p)
                                     @if (p.Latitude is null || p.Longitude is null)
                                     {
-                                        <span class="ms-1" title="Nothing has been geocoded for this place, so it cannot appear on a map.">· not on the map</span>
+                                        @* The geocoder has always written down WHY and nothing ever
+                                           showed it, so an address it cannot place looked identical
+                                           to one nobody had tried. *@
+                                        <span class="ms-1" title="@(p.GeocodeNote ?? "Nothing has been worked out for this address yet.")">
+                                            · not on the map
+                                        </span>
                                     }
                                 </div>
                             </td>
@@ -160,6 +165,8 @@
                                     <BenGridAction Icon="globe" Label="Make it a public location"
                                                    OnClick="@(() => AskKindAsync(p, PlaceKind.PublicLocation))" />
                                 }
+                                <BenGridAction Icon="edit-2" Label="Correct this place"
+                                               Href="@($"/admin/places/{p.Id}/edit")" />
                                 <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger"
                                                OnClick="@(() => AskDeleteAsync(p))" />
                             </td>

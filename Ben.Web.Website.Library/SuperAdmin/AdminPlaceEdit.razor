@@ -1,0 +1,269 @@
+@page "/admin/places/{PlaceId:guid}/edit"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Correcting a place.
+
+    Its own page rather than a dialog, per Ben's standing rule: an address is a stack of fields
+    with a map result underneath it, and the result of saving — where the geocoder actually put
+    the pin, or why it could not — is something to read, not to dismiss.
+
+    The page that told people to come here is /places/new: "there is already a place at that
+    address, and it is recorded as somebody's home. If that is wrong, ask a site administrator to
+    correct it." No administrator could, until this.
+
+    WHERE IT IS is the part that needs care. Coordinates typed by hand win, because somebody
+    correcting a record usually knows better than the geocoder did. Left blank against a changed
+    address, the old pin is dropped rather than carried over — a stale pin against a new address
+    is worse than no pin, because it is confidently wrong.
+*@
+
+<PageTitle>@(_loaded?.Name ?? "Place") — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:800px;">
+
+    <div class="mb-2">
+        <a class="text-decoration-none small" href="/admin/places">&larr; Places</a>
+    </div>
+
+    @if (_loading)
+    {
+        <p class="text-secondary fst-italic">Reading the place…</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+    else
+    {
+        <h3 class="mb-1">Correct this place</h3>
+        <p class="text-secondary small mb-3">
+            @if (_loaded!.Kind == PlaceKind.PublicLocation)
+            {
+                <text>
+                    This is a public location, so its page is one strangers read. A town and a state
+                    are required — without them it cannot be found and cannot land on the map.
+                </text>
+            }
+            else
+            {
+                <text>This is a private residence. It has no public page.</text>
+            }
+        </p>
+
+        @if (_says is not null)
+        {
+            <div class="alert @_saysCss d-flex justify-content-between align-items-center" role="alert">
+                <span>@_says</span>
+                <button type="button" class="btn-close" aria-label="Dismiss" @onclick="@(() => _says = null)"></button>
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="place-edit-name">Name</label>
+                    <input id="place-edit-name" class="form-control" maxlength="200" @bind="_name" />
+                    <div class="form-text">What people call it.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="place-edit-street">Street address</label>
+                    <input id="place-edit-street" class="form-control" maxlength="200" @bind="_street" />
+                    @if (_loaded.Kind == PlaceKind.PublicLocation)
+                    {
+                        <div class="form-text">
+                            Leave this empty for a landmark. A street number is what stops somewhere
+                            being made public by mistake.
+                        </div>
+                    }
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label" for="place-edit-city">Town</label>
+                        <input id="place-edit-city" class="form-control" maxlength="100" @bind="_city" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label" for="place-edit-state">State</label>
+                        <input id="place-edit-state" class="form-control" maxlength="50" @bind="_state" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label" for="place-edit-zip">ZIP</label>
+                        <input id="place-edit-zip" class="form-control" maxlength="20" @bind="_zip" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="mb-2">Where it is on the map</h6>
+
+                @if (_loaded.Latitude is null || _loaded.Longitude is null)
+                {
+                    <div class="alert alert-warning py-2" data-testid="place-not-on-map">
+                        <strong>Not on the map.</strong>
+                        @if (!string.IsNullOrWhiteSpace(_loaded.GeocodeNote))
+                        {
+                            <span> @_loaded.GeocodeNote</span>
+                        }
+                        else
+                        {
+                            <span> Nothing has been worked out for this address yet.</span>
+                        }
+                    </div>
+                }
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label" for="place-edit-lat">Latitude</label>
+                        <input id="place-edit-lat" class="form-control" @bind="_latitude" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="place-edit-lon">Longitude</label>
+                        <input id="place-edit-lon" class="form-control" @bind="_longitude" />
+                    </div>
+                </div>
+                <div class="form-text mb-2">
+                    Typed coordinates are kept as given. Clear them and change the address to have
+                    it looked up again, or use Look up the address below.
+                </div>
+
+                <button type="button" id="place-edit-relocate" class="btn btn-sm btn-outline-secondary"
+                        disabled="@_busy" @onclick="@(() => SaveAsync(relocate: true))">
+                    <BenIcon Name="map-pin" Class="me-1" />Look up the address again
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a class="btn btn-secondary" href="/admin/places">Cancel</a>
+            <button type="button" id="place-edit-save" class="btn btn-primary"
+                    disabled="@_busy" @onclick="@(() => SaveAsync(relocate: false))">
+                @(_busy ? "Saving…" : "Save")
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid PlaceId { get; set; }
+
+    private AdminPlaceDetail? _loaded;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _says;
+    private string _saysCss = "alert-success";
+
+    private string? _name, _street, _city, _state, _zip;
+    private string? _latitude, _longitude;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var result = await AdminClient.GetAdminPlaceAsync(PlaceId);
+        if (result.Item is { } place)
+        {
+            _loaded = place;
+            Fill(place);
+            _error = null;
+        }
+        else
+        {
+            _error = result.SessionExpired
+                ? "You have been signed out. Sign in again to correct this place."
+                : result.Reason ?? "That place could not be read.";
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void Fill(AdminPlaceDetail place)
+    {
+        _name = place.Name;
+        _street = place.StreetAddress1;
+        _city = place.City;
+        _state = place.State;
+        _zip = place.ZipCode;
+        // Round-tripped as text so a blank box means "work it out", not "zero".
+        _latitude = place.Latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _longitude = place.Longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private async Task SaveAsync(bool relocate)
+    {
+        if (_busy || _loaded is null) return;
+
+        decimal? lat = null, lon = null;
+        if (!relocate)
+        {
+            // Both or neither. Half a coordinate is not a location, and silently keeping the old
+            // half beside a new one puts the pin somewhere nobody chose.
+            var hasLat = decimal.TryParse(_latitude, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsedLat);
+            var hasLon = decimal.TryParse(_longitude, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsedLon);
+
+            if (!string.IsNullOrWhiteSpace(_latitude) && !hasLat
+             || !string.IsNullOrWhiteSpace(_longitude) && !hasLon)
+            {
+                _saysCss = "alert-danger";
+                _says = "Coordinates have to be numbers, like 36.3874 and -86.6994.";
+                return;
+            }
+
+            if (hasLat != hasLon)
+            {
+                _saysCss = "alert-danger";
+                _says = "Give both a latitude and a longitude, or neither.";
+                return;
+            }
+
+            if (hasLat) { lat = parsedLat; lon = parsedLon; }
+        }
+
+        _busy = true;
+        _says = null;
+
+        var (place, error) = await AdminClient.EditAdminPlaceAsync(PlaceId,
+            new AdminEditPlaceRequest(_name, _street, null, _city, _state, _zip, "US",
+                                      lat, lon, relocate));
+        _busy = false;
+
+        if (place is null)
+        {
+            _saysCss = "alert-danger";
+            _says = error ?? "That could not be saved just now.";
+            return;
+        }
+
+        _loaded = place;
+        Fill(place);
+
+        // The result of a save is worth reading: whether the pin moved, and where to.
+        _saysCss = "alert-success";
+        _says = place.Latitude is not null && place.Longitude is not null
+            ? $"Saved. It sits at {place.Latitude:0.0000}, {place.Longitude:0.0000}."
+            : $"Saved, but still not on the map. {place.GeocodeNote ?? "The address could not be placed."}";
+
+        StateHasChanged();
+    }
+}
