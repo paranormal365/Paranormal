@@ -970,12 +970,15 @@
         _draftBusy = true;
         _errorMessage = null;
 
-        var state = await AdminClient.StartCmsDraftAsync(OrgId, PageId);
+        var (state, startError) = await AdminClient.StartCmsDraftExpectingReasonAsync(OrgId, PageId);
         _draftBusy = false;
 
         if (state?.DraftPageId is not Guid draftId)
         {
-            _errorMessage = "That draft couldn't be started.";
+            // The server's own sentence when it gave one — "That page isn't published, so it can
+            // be edited directly." tells somebody what to do instead; "That draft couldn't be
+            // started." tells them only that it did not.
+            _errorMessage = startError ?? "That draft couldn't be started.";
             return;
         }
 
@@ -990,12 +993,15 @@
         _draftBusy = true;
         _errorMessage = null;
 
-        var published = await AdminClient.PublishCmsDraftAsync(OrgId, _draft.LivePageId);
+        var (published, publishError) = await AdminClient.PublishCmsDraftExpectingReasonAsync(
+            OrgId, _draft.LivePageId);
         _draftBusy = false;
 
         if (!published)
         {
-            _errorMessage = "Those changes couldn't be published.";
+            // "There is no draft to publish." usually means it was published in another tab, which
+            // is worth knowing; the old wording read like a failure to save.
+            _errorMessage = publishError ?? "Those changes couldn't be published.";
             return;
         }
 

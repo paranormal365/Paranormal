@@ -111,6 +111,37 @@ public sealed class RefusalReachesThePageTests
         Assert.Equal(ownRole, error);
     }
 
+    /// <summary>Publishing a draft keeps its reason — the one endpoint here that answers with no
+    /// body at all, so the client has to read the STATUS to tell a refusal from a success.</summary>
+    /// <remarks>
+    /// "There is no draft to publish." usually means somebody published it in another tab. The
+    /// page said "Those changes couldn't be published.", which reads like a failure to save and
+    /// sends the author looking for a fault that is not there.
+    /// </remarks>
+    [Fact]
+    public async Task Publishing_a_cms_draft_keeps_its_reason()
+    {
+        const string noDraft = "There is no draft to publish.";
+
+        var (published, error) = await Client(Refusal(HttpStatusCode.Conflict, noDraft))
+            .PublishCmsDraftExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.False(published);
+        Assert.Equal(noDraft, error);
+    }
+
+    /// <summary>And a publish that succeeds is not read as a refusal, which the status is what
+    /// distinguishes: a 204 and a bodiless refusal look identical to the prose path.</summary>
+    [Fact]
+    public async Task A_publish_that_works_is_not_mistaken_for_a_refusal()
+    {
+        var (published, error) = await Client(new HttpResponseMessage(HttpStatusCode.NoContent))
+            .PublishCmsDraftExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.True(published);
+        Assert.Null(error);
+    }
+
     /// <summary>
     /// A 403 carries no sentence, and the page falls back to its own wording. The point of the
     /// change is not that every refusal now has prose — it is that the page stops inventing one
