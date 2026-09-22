@@ -63,6 +63,10 @@ public sealed class VisualAuditWalk : BenTestBase
         if (Environment.GetEnvironmentVariable("BEN_VISUAL_AUDIT") != "1")
             Assert.Ignore("Set BEN_VISUAL_AUDIT=1 to walk the site for visual faults.");
 
+        // Before anything is measured: a host started before the last build reports faults that
+        // are real on the screen and false about the product. See RefuseAStaleHostAsync.
+        await RefuseAStaleHostAsync();
+
         var report = new StringBuilder($"# What the site looks like — {ThemeName} theme\n\n");
         var body = new StringBuilder("## Page by page\n");
         var all = new List<VisualRollUp.Row>();

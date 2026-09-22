@@ -526,6 +526,74 @@ public abstract class BenTestBase : PageTest
         return null;
     }
 
+    /// <summary>
+    /// Refuses the run unless the host is serving the build that is on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a crawl must not start without this.</b> On 2026-09-22 the every-seat sweep
+    /// reported <b>879 findings and failed</b>, on thirteen "content clipped" rows — one of the two
+    /// shapes the sweep treats as never a design choice. Restarting the host and running the same
+    /// sweep, same code, same minute, gave <b>96 findings and passed</b>. Nothing about the site had
+    /// changed.</para>
+    ///
+    /// <para>The host builds its static-asset URL map once, at startup. A later build that changes a
+    /// fingerprint — <c>c40b809e</c> moved the clip browser's CSS out of isolation, which changed
+    /// <c>Ben.Video.Editor.*.bundle.scp.css</c> — leaves a host that serves the NEW stylesheet text
+    /// from disk while its map still only knows the OLD name. The <c>@import</c> 404s, every scoped
+    /// style in that library is missing from every page, and the pages really are clipped and
+    /// unreadable. The auditor was not wrong. The run was.</para>
+    ///
+    /// <para>That is the worst kind of bad result: not noise, which gets discounted, but a confident
+    /// failure naming real selectors on real screens. It is indistinguishable from a regression
+    /// until somebody restarts the host, and nobody restarts the host because the report looks like
+    /// work to do.</para>
+    ///
+    /// <para>The test is the host's own words: its scoped-CSS bundle names the library bundles it
+    /// expects, so asking the host for each one asks whether it can finish the page it just served.
+    /// A host that cannot is stale, or broken, and either way its screens are not the product.</para>
+    /// </remarks>
+    protected static async Task RefuseAStaleHostAsync()
+    {
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(20) };
+
+        const string bundleUrl = "/Ben.Web.Website.styles.css";
+        string bundle;
+        try
+        {
+            using var got = await probe.GetAsync(bundleUrl);
+            Assert.That(got.IsSuccessStatusCode, Is.True,
+                $"{BaseUrl}{bundleUrl} answered {(int)got.StatusCode}. The host is not serving its own "
+              + "scoped-CSS bundle, so nothing walked would be styled. Start the site before crawling.");
+            bundle = await got.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            Assert.Fail($"Could not reach {BaseUrl}{bundleUrl}: {ex.Message}");
+            return;
+        }
+
+        var imports = System.Text.RegularExpressions.Regex
+            .Matches(bundle, @"@import\s+['""]([^'""]+)['""]")
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToList();
+
+        var missing = new List<string>();
+        foreach (var href in imports)
+        {
+            using var got = await probe.GetAsync("/" + href.TrimStart('/'));
+            if (!got.IsSuccessStatusCode) missing.Add($"{href} → {(int)got.StatusCode}");
+        }
+
+        Assert.That(missing, Is.Empty,
+            "The host is serving a stylesheet that names files it cannot serve, which means it was "
+          + "started before the build now on disk. Every scoped style in those libraries is missing "
+          + "from every page, so a crawl would report real-looking clipping and contrast faults that "
+          + "do not exist — 879 findings instead of 96, on 2026-09-22.\n\n  "
+          + string.Join("\n  ", missing)
+          + "\n\nRestart the site (scripts/run-e2e.sh, or the restart script) and run again.");
+    }
+
     /// <summary>Puts the feed switch back where <see cref="TurnTheFeedOnAsync"/> found it.</summary>
     protected static async Task PutTheFeedBackAsync(bool? wasOn)
     {

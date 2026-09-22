@@ -73,10 +73,14 @@ public sealed class SiteSweep : BenTestBase
     private readonly List<string> _failedCalls = [];
 
     [OneTimeSetUp]
-    public void SkipUnlessAsked()
+    public async Task SkipUnlessAsked()
     {
         if (Environment.GetEnvironmentVariable("BEN_SWEEP") != "1")
             Assert.Ignore("Set BEN_SWEEP=1 to sweep the whole site as every seat. It is slow.");
+
+        // Three minutes of walking is worth nothing if the host is serving a build it cannot
+        // finish. This sweep produced 879 findings that way, and 96 once restarted.
+        await RefuseAStaleHostAsync();
 
         var script = Path.Combine(TestContext.CurrentContext.TestDirectory, "Capture", "visual-audit.js");
         Assert.That(File.Exists(script), Is.True, $"the visual auditor is missing: {script}");
