@@ -122,6 +122,20 @@ public sealed class VisualShots : BenTestBase
         var make = Page.Locator("#join-code-make");
         if (await make.CountAsync() > 0)
             await ClickUntilAsync(make, Page.Locator("#join-code-typed"));
+
+        // The page has a refusal state — "That code couldn't be made just now", or no standing
+        // to manage the investigation — and in it NEITHER the Make button NOR the code exists.
+        // Without this the line below waits on a locator that can never appear and reports a
+        // bare timeout on #join-code-typed, which is what the dark run of 2026-09-22 did. It was
+        // filed as a possible race on the Make button; it is not a race, it is a server that
+        // declined and a fixture with nowhere to put that fact. Four dark runs afterwards passed,
+        // which is exactly what an unexplained refusal looks like from the outside (W8).
+        var refused = Page.Locator("#join-code-refused");
+        if (await refused.CountAsync() > 0)
+            Assert.Fail("the join-code page refused instead of issuing a code, so there was no "
+                      + "code to photograph or to type on /tonight. It said: \""
+                      + (await refused.InnerTextAsync()).Trim().Split('\n')[0] + "\"");
+
         var typed = (await Page.Locator("#join-code-typed").InnerTextAsync()).Trim();
         await ShootAsync("guest-code-sheet");
 
