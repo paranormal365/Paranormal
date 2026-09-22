@@ -35,6 +35,16 @@ day-by-day account of building it would say nothing to anyone using it now.
   whoever created the account to send it again.
 - In the video editor, the "no video yet" and "no pictures yet" panels no longer sit jammed against
   the edge of their panel.
+- In day mode, the quiet messages that tell you there is nothing to do — "you're all caught up",
+  "open the place's own page" — were drawn in a grey so pale they were nearly invisible on white.
+  They read properly now, along with the small print under headings and figures.
+- A link sitting inside a coloured notice took the page's link colour, which barely showed against
+  the notice behind it. Those links now follow the notice's own colour and are underlined, so you
+  can still tell they are links.
+- Badges showing a status — "Public", a member's level, an equipment state — had dark lettering on
+  a dark background and were hard to read. They are white on colour now.
+- A group's member list no longer shows people who have left or closed their account. Everything
+  they recorded for the group stays exactly where it was.
 
 ## 2026-09-21
 
