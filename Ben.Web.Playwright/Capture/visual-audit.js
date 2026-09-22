@@ -222,8 +222,13 @@ window.__benVisualAudit = function () {
   // unaudited and the report said the opposite. Anything walked deliberately and answered with a
   // refusal is a finding about the run, whether the cause is a switch, a missing seed row or a
   // genuinely dead route.
-  const refusal = (document.body.innerText || '').match(
-    /There is nothing at this address|Page not found/i);
+  //
+  // Except on /not-found itself, which is the site's own 404 page: saying "Page not found" is the
+  // whole job there. Flagging it made the first full sweep report six refusals, one per seat, all
+  // of them correct pages — noise introduced by this very check on the day it was written.
+  const refusal = /^\/not-found\/?$/.test(location.pathname)
+    ? null
+    : (document.body.innerText || '').match(/There is nothing at this address|Page not found/i);
   if (refusal)
     out.push({
       kind: 'walked a refusal, not a screen',
