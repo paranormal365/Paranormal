@@ -1848,7 +1848,12 @@ public sealed record DuplicatePlaceRow(
 /// <summary>What a merge moved, so the screen can say so rather than just going quiet.</summary>
 public sealed record PlaceMergeResult(
     Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-    int FieldSessions, int Rooms);
+    int FieldSessions, int Rooms,
+    /// <summary>Hosted events and posts moved with the place. Trailing and defaulted.</summary>
+    int HostedEvents = 0,
+    int Posts = 0,
+    /// <summary>Evidence and pictures added straight to the place, moved with it (item 250).</summary>
+    int Contributions = 0);
 
 
 /// <summary>

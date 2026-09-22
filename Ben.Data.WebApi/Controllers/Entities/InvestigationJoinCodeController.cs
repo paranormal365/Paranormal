@@ -68,6 +68,11 @@ public sealed class InvestigationJoinCodeController : BenControllerBase
             .FirstOrDefaultAsync(i => i.Id == investigationId && i.OrganizationId == orgId, ct);
         if (investigation is null) return NotFound();
 
+        // Asked before anything is made. A code for a visit to somebody's home would admit
+        // strangers to a private client's case, which is the one thing this feature must never do.
+        if (await GuestCodes.WhyACodeMayNotBeIssuedAsync(db, investigation, ct) is { } refused)
+            return BadRequest(refused);
+
         // Twelve hours by default, which covers a visit that runs past midnight; the ceiling is
         // GuestCodes.LongestLife and the caller cannot talk its way past it.
         var expires = request?.ExpiresUtc ?? DateTime.UtcNow.AddHours(12);

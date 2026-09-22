@@ -55,17 +55,35 @@ public static class AccountStorageGuard
     /// space, and RETRACTING a publication is itself a paid feature. A free account cannot publish
     /// to clear its usage and then quietly take the contribution back.</para>
     ///
-    /// <para>Field-session files are the whole of it today. Written as its own method so that when
-    /// a second kind of personal upload appears, one place decides what "kept to yourself" means
-    /// rather than two queries that disagree.</para>
+    /// <para>Field sessions and place evidence (item 250). Written as its own method so that one
+    /// place decides what "kept to yourself" means rather than two queries that disagree — and
+    /// when the second kind did arrive, on 2026-09-21, it arrived uncounted for a day because the
+    /// door that stores it never asked. Any third kind adds a term HERE and a
+    /// <see cref="WhyCannotStoreAsync"/> call at its own door; neither alone is enough.</para>
     /// </remarks>
     public static async Task<long> UsedBytesAsync(
         BenDataContext db, Guid appUserId, CancellationToken ct)
-        => await db.FieldSessionUploadFiles.AsNoTracking()
+    {
+        var sessions = await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUpload.SubmittedByAppUserId == appUserId
                      && f.FieldSessionUpload.InvestigationId == null
                      && f.FieldSessionUpload.PublishedAtUtc == null)
             .SumAsync(f => (long?)f.UploadFile.FileSize, ct) ?? 0L;
+
+        // The second kind of personal upload, which this method's own remarks said would come
+        // (item 250, counted from 2026-09-22). Evidence added straight to a public place is stored
+        // under the PERSON — UploadFile.AppUserId, their own directory — so it is theirs on every
+        // definition that matters here, and leaving it out meant the one account with nothing
+        // paying for it could fill the disk through a door nobody was counting.
+        //
+        // Counted whatever its review state: bytes held are bytes held, and a file waiting in the
+        // screener's queue occupies the same disk as one on the page.
+        var placeEvidence = await db.PlaceEvidence.AsNoTracking()
+            .Where(e => e.AddedByAppUserId == appUserId)
+            .SumAsync(e => (long?)e.UploadFile!.FileSize, ct) ?? 0L;
+
+        return sessions + placeEvidence;
+    }
 
     /// <summary>The cap in bytes, from settings, falling back to the built-in default.</summary>
     public static async Task<long> CapBytesAsync(BenDataContext db, CancellationToken ct)

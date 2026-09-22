@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Ben.Data.WebApi.Services.Feed;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -90,6 +91,13 @@ public sealed class PlaceEvidenceController : BenControllerBase
                 "Evidence can only be added to a public location. This place is somebody's home, "
               + "and work there belongs to the group that was invited.");
         }
+
+        // The free account's allowance, asked BEFORE a byte is written, the way the field-session
+        // door asks it. This was missed when the door was built (C1): the guard's own comment
+        // anticipated "a second kind of personal upload", place evidence is that second kind, and
+        // it arrived without counting against anything. A limit noticed afterwards is not a limit.
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, file.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
         var storedName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         // Stored under the PERSON, not the place. The file belongs to whoever added it — that is

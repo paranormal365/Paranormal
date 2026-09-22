@@ -1,5 +1,7 @@
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services.Investigations;
+using Ben.Data.WebApi.Services.Redaction;
+using Microsoft.AspNetCore.RateLimiting;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -46,6 +48,32 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
         IDbContextFactory<BenDataContext> db, ILogger<PublicInvestigationCodeController> log)
     { _db = db; _log = log; }
 
+    /// <summary>
+    /// An investigation's title as somebody who is not on the team may be told it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a title needs redacting at all (C7).</b> A case-bound visit is titled from its
+    /// case, and a case is titled for its place — which for a private engagement is a client's own
+    /// name or address. The public place page has run this through <c>CaseProseRedactor</c> since
+    /// item 184 for exactly that reason; these three answers were handing it over raw, to a caller
+    /// who has not even signed in.</para>
+    ///
+    /// <para>Belt and braces beside the issue door. Nothing can mint a code on a private
+    /// engagement any more, but codes issued before that rule existed still resolve, and a rule
+    /// enforced only where rows are WRITTEN is one release away from being no rule at all.</para>
+    ///
+    /// <para>A visit with no case redacts to itself: <c>RedactFor</c> returns the text unchanged
+    /// when the case has no roster, and a case that is not a private engagement has none.</para>
+    /// </remarks>
+    private static async Task<string> TitleForAStrangerAsync(
+        BenDataContext db, Guid? caseId, string title, CancellationToken ct)
+    {
+        if (caseId is not { } id) return title;
+
+        var roster = await CaseRedactionRoster.ForCaseAsync(db, id, ct);
+        return (roster is null ? title : CaseProseRedactor.Redact(title, roster)) ?? title;
+    }
+
     /// <summary>What this code is for, before anybody signs in.</summary>
     /// <remarks>
     /// A scanned token and a typed code both arrive here, because the page behind the QR and the
@@ -53,6 +81,10 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
     /// </remarks>
     [HttpGet("{code}")]
     [AllowAnonymous]
+    // Rate limited like the handover door beside it. Guessing a typed code is not a practical way
+    // in — thirty to the eighth, and they expire — but an anonymous lookup anybody can call in a
+    // loop should cost what signing in costs, and the two doors should not differ by accident.
+    [EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AuthPolicy)]
     public async Task<ActionResult<InvestigationCodeInvitation>> Look(string code, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -68,8 +100,9 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
             .FirstOrDefaultAsync(ct);
 
         return Ok(new InvestigationCodeInvitation(
-            true, null, investigation.Id, investigation.Title, orgName,
-            investigation.ScheduledDateTime, found.ExpiresUtc));
+            true, null, investigation.Id,
+            await TitleForAStrangerAsync(db, investigation.CaseId, investigation.Title, ct),
+            orgName, investigation.ScheduledDateTime, found.ExpiresUtc));
     }
 
     /// <summary>
@@ -109,10 +142,12 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
             "Guest {UserId} joined investigation {InvestigationId} with a join code.",
             userId, investigation.Id);
 
+        var title = await TitleForAStrangerAsync(db, investigation.CaseId, investigation.Title, ct);
+
         return Ok(new InvestigationCodeRedemption(
             true,
-            $"You're on {investigation.Title}. Anything you record tonight can go straight to the group.",
-            investigation.Id, investigation.Title, orgName, found.ExpiresUtc));
+            $"You're on {title}. Anything you record tonight can go straight to the group.",
+            investigation.Id, title, orgName, found.ExpiresUtc));
     }
 
     /// <summary>The visits this account may contribute to as a guest right now.</summary>
@@ -134,21 +169,41 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
 
-        var mine = await db.InvestigationGuestPasses.AsNoTracking()
+        // Read first, redact second. The titles cannot be redacted inside the projection — the
+        // roster is two queries of its own — so the rows are materialised and then passed through
+        // the same rule Look and Redeem apply, in one batch.
+        var rows = await db.InvestigationGuestPasses.AsNoTracking()
             .Where(p => p.AppUserId == userId.Value
                      && p.RevokedUtc == null
                      && p.InvestigationJoinCode!.RevokedUtc == null
                      && p.InvestigationJoinCode.ExpiresUtc > now)
             .OrderBy(p => p.InvestigationJoinCode!.ExpiresUtc)
-            .Select(p => new InvestigationCodeInvitation(
-                true, null,
+            .Select(p => new
+            {
                 p.InvestigationId,
                 p.InvestigationJoinCode!.Investigation!.Title,
-                db.Organizations.Where(o => o.Id == p.InvestigationJoinCode.OrganizationId)
-                    .Select(o => o.Name).FirstOrDefault(),
+                p.InvestigationJoinCode.Investigation.CaseId,
                 p.InvestigationJoinCode.Investigation.ScheduledDateTime,
-                p.InvestigationJoinCode.ExpiresUtc))
+                p.InvestigationJoinCode.ExpiresUtc,
+                OrganizationName = db.Organizations
+                    .Where(o => o.Id == p.InvestigationJoinCode.OrganizationId)
+                    .Select(o => o.Name).FirstOrDefault(),
+            })
             .ToListAsync(ct);
+
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, rows.Where(r => r.CaseId != null).Select(r => r.CaseId!.Value).Distinct().ToList(), ct);
+
+        var mine = rows.Select(r => new InvestigationCodeInvitation(
+                true, null,
+                r.InvestigationId,
+                r.CaseId is { } caseId
+                    ? CaseProseRedactor.RedactFor(rosters, caseId, r.Title)
+                    : r.Title,
+                r.OrganizationName,
+                r.ScheduledDateTime,
+                r.ExpiresUtc))
+            .ToList();
 
         return Ok(mine);
     }
