@@ -40,8 +40,10 @@ public sealed class VisualAuditWalk : BenTestBase
     /// <summary>What a seat can reach. Kept short deliberately: breadth of SHAPES beats depth of pages.</summary>
     private static readonly (string Seat, string[] Routes)[] Walks =
     [
-        ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms"]),
-        ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library"]),
+        // /tonight and /places/new added 2026-09-21 with items 248 and 250; a place's own page and
+        // the guest-code sheet need an id and are photographed by VisualShots instead.
+        ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new"]),
+        ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new"]),
         ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals"]),
     ];
 
