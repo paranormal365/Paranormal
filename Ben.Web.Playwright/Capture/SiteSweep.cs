@@ -451,15 +451,34 @@ public sealed class SiteSweep : BenTestBase
         {
             var token = await AdminTokenAsync();
 
+            // The ORG is chosen from the events, not independently of them. EventId is wanted by 22
+            // of the routes that went unwalked, and nearly all of them are org-scoped
+            // (/organizations/{OrgId}/events/{EventId}/...): an event id from one group under
+            // another group's OrgId is a refusal, not a screen, so resolving the two separately
+            // would have walked 22 addresses and audited 22 refusals. /api/admin/hosted-events
+            // carries organizationId, organizationUrlName and the event's own urlName, so one
+            // answer settles OrgId, UrlName, EventId and EventSlug together and they agree (W15).
+            //
+            // The PUBLIC list is the wrong source and is why EventId never resolved: it holds only
+            // published events, and this database's two are unpublished.
+            var events = await ApiArrayAsync("/api/admin/hosted-events", token);
+            var hosting = FirstObject(events);
+
             var orgs = await ApiArrayAsync("/api/organizations", token);
-            if (First(orgs, "id") is { } orgId)
+            var orgId = Str(hosting, "organizationId") ?? First(orgs, "id");
+            if (orgId is not null)
             {
                 ids["OrgId"] = orgId;
 
                 if (First(await ApiArrayAsync($"/api/organizations/{orgId}/cases", token), "id") is { } caseId)
                     ids["CaseId"] = caseId;
             }
-            if (First(orgs, "urlName") is { } orgSlug) ids["UrlName"] = orgSlug;
+
+            if ((Str(hosting, "organizationUrlName") ?? First(orgs, "urlName")) is { } orgSlug)
+                ids["UrlName"] = orgSlug;
+
+            if (Str(hosting, "id") is { } hostedEventId) ids["EventId"] = hostedEventId;
+            if (Str(hosting, "urlName") is { } eventSlug) ids["EventSlug"] = eventSlug;
 
             // /api/public/places serves GET {id} only — it has no listing, so asking it for one
             // answered 404 and PlaceId silently never resolved. The admin catalogue is the listing
@@ -476,9 +495,6 @@ public sealed class SiteSweep : BenTestBase
                       + "tally and the vote widget were NOT audited — the route was walked, the "
                       + "surface was not. Seed a public place with evidence (W10)."));
             }
-
-            if (First(await ApiArrayAsync("/api/public/hosted-events", token), "id") is { } eventId)
-                ids["EventId"] = eventId;
 
             if (await MemberSessionIdAsync() is { } sessionId) ids["SessionId"] = sessionId;
 
@@ -658,6 +674,29 @@ public sealed class SiteSweep : BenTestBase
 
         return (publicId ?? anyId) is { } fallback ? new PickedPlace(fallback, false) : null;
     }
+
+    /// <summary>The first object in an array answer, whatever the collection is called.</summary>
+    private static JsonElement? FirstObject(JsonElement? json)
+    {
+        var array = json;
+        if (json is { ValueKind: JsonValueKind.Object } o)
+        {
+            if (o.TryGetProperty("items", out var items)) array = items;
+            else
+                foreach (var prop in o.EnumerateObject())
+                    if (prop.Value.ValueKind == JsonValueKind.Array) { array = prop.Value; break; }
+        }
+        if (array is not { ValueKind: JsonValueKind.Array } list) return null;
+        foreach (var item in list.EnumerateArray()) return item;
+        return null;
+    }
+
+    /// <summary>A non-empty string property of an object, or null.</summary>
+    private static string? Str(JsonElement? obj, string name)
+        => obj is { ValueKind: JsonValueKind.Object } o
+        && o.TryGetProperty(name, out var v)
+        && v.ValueKind == JsonValueKind.String
+        && v.GetString() is { Length: > 0 } s ? s : null;
 
     /// <summary>The first non-empty string value of that property in an array answer.</summary>
     private static string? First(JsonElement? json, string name)
