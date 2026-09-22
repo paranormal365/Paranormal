@@ -274,11 +274,14 @@
     // missing it. Add the attribute to anything built by hand here, children included: a rule like
     // ".bv-browser__empty p" compiles the attribute onto the p, not onto the div.
     // Read out of obj/<config>/net10.0/scopedcss/Components/ClipBrowser.razor.rz.scp.css, which is
-    // the only place the real value exists. It was "b-xbjan6uni8" when the guard below was written,
-    // and the guard's first run said otherwise: the compiler stamps b-ix6pdo4zfh, so every element
-    // listed above was carrying an attribute the stylesheet does not match — exactly the fault the
-    // constant exists to prevent, sitting inside the fix for it (2026-09-22).
-    private const string CssScope = "b-ix6pdo4zfh";
+    // the only place the real value exists — and read it from a FRESHLY BUILT one. On 2026-09-22
+    // this was changed to "b-ix6pdo4zfh" on the strength of a single run, and that value is not one
+    // the compiler has ever produced: it appears nowhere on disk but this line. A clean rebuild of
+    // both configurations stamps b-xbjan6uni8, so the change silently unhooked every hand-built
+    // element in this file — the exact fault the constant exists to prevent, committed inside the
+    // fix for it and caught by the guard below on the next honest build. Delete the generated file
+    // and rebuild before believing a value that disagrees with this one.
+    private const string CssScope = "b-xbjan6uni8";
 
     // ── Parameters ───────────────────────────────────────────────────────────
     [Parameter] public EventCallback<VideoClip> OnClipSelected   { get; set; }
