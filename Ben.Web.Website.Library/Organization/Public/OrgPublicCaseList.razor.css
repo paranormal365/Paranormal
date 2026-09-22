@@ -49,7 +49,14 @@
     color: var(--bs-secondary-color);
 }
 
-/* Bootstrap's badge classes carry the colour; the shape is ours, to match the pills elsewhere. */
+/* Bootstrap's `.badge` carries the COLOUR — `bg-info` and friends set only the background — and the
+   shape is ours, to match the pills elsewhere. The markup said `case-card__status bg-info` with no
+   `badge`, so the span took the card's dark body text onto a dark fill: 1.13:1 on the public case
+   list, found by the every-seat sweep on 2026-09-22. Seven other call sites of BadgeClass() write
+   `badge` and were always right; this was the one that did not. It read as a Public-status bug
+   because Public was the status the seed data drew — every other status on this card was the same
+   dark-on-dark, waiting for a case to be in it. These rules still win the shape: scoped CSS adds an
+   attribute selector, so they outrank `.badge` on specificity rather than on load order. */
 .case-card__status {
     padding: .1rem .5rem;
     border-radius: 1rem;
