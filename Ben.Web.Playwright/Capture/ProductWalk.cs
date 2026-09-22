@@ -586,7 +586,8 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/email-templates",
                      "/admin/audit-log", "/admin/error-log",
                      "/admin/support-tickets", "/admin/feed-reports", "/admin/test-posts", "/admin/venue-claims",
-                     "/admin/place-duplicates", "/admin/merge-groups", "/admin/orphaned-sessions", "/admin/video-assets",
+                     "/admin/places", "/admin/place-duplicates", "/admin/merge-groups",
+                     "/admin/orphaned-sessions", "/admin/video-assets",
                      "/admin/sidecar-telemetry", "/admin/file-types", "/admin/lookup-types", "/admin/equipment-taxonomy",
                      "/admin/experience-taxonomy", "/admin/delete-case", "/admin/delete-group", "/admin/delete-user",
                  })

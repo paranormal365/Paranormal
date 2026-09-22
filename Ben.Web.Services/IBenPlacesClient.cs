@@ -328,6 +328,33 @@ public interface IBenPlacesClient
 
     Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
 
+    // ── The catalogue: what exists, what kind it is, getting rid of one (C8) ──
+
+    /// <summary>Every place, newest first, narrowed by name, town or kind.</summary>
+    Task<ItemResult<AdminPlacePage>> GetAdminPlacesAsync(
+        string? query = null, PlaceKind? kind = null, int page = 1, int pageSize = 50,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// What is holding a place, asked before the delete button is offered rather than after it is
+    /// pressed.
+    /// </summary>
+    Task<ItemResult<AdminPlaceUsage>> GetAdminPlaceUsageAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Puts a place on the public map or takes it off. Promotion is refused for anything carrying
+    /// a street number.
+    /// </summary>
+    Task<(AdminPlaceRow? Place, string? Error)> SetAdminPlaceKindAsync(
+        Guid placeId, PlaceKind kind, CancellationToken token = default);
+
+    /// <summary>
+    /// Removes a place nothing points at. The refusal names what is in the way.
+    /// </summary>
+    Task<(bool Deleted, string? Error)> DeleteAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default);
+
     /// <summary>
     /// Moves everything off one place onto another and deletes the empty one. Irreversible.
     /// </summary>

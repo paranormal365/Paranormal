@@ -536,7 +536,12 @@ public sealed class SiteSweep : BenTestBase
             report.AppendLine();
         }
 
-        File.WriteAllText(Path.Combine(OutRoot, "report.md"), report.ToString());
-        TestContext.Out.WriteLine($"{_found.Count} finding(s) → {Path.Combine(OutRoot, "report.md")}");
+        // Named for the theme it measured. Both themes used to write "report.md", so sweeping light
+        // and then dark left one file that claimed to be the whole story and was half of it — and
+        // the half that survived was whichever ran last. VisualAuditWalk already did this; this did
+        // not (2026-09-22).
+        var path = Path.Combine(OutRoot, $"report-{ThemeName}.md");
+        File.WriteAllText(path, report.ToString());
+        TestContext.Out.WriteLine($"{_found.Count} finding(s) → {path}");
     }
 }

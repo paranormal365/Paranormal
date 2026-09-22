@@ -1,0 +1,420 @@
+@page "/admin/places"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    The catalogue of places (C8).
+
+    Anybody signed in can put a public location on the map, and until this page nothing could list
+    what that had produced, change a record's mind about itself, or remove one. The only removal
+    path was the duplicate-merge screen, which needs a survivor — so a place typed once, wrongly,
+    could not be removed at all.
+
+    Three verbs, and the middle one is the important one. DEMOTE takes a record off the public map
+    without destroying anything, which is the repair for the mistake that actually matters: a home
+    entered as a public landmark, standing as a public evidence page for an address somebody lives
+    at. DELETE is for the emptier case and is refused, in words, while anything at all points at the
+    record. MERGE is the existing screen, linked rather than rebuilt.
+
+    The counts on each row ARE the decision, the same way they are on the duplicates screen: a row
+    showing nothing anywhere is one that can go, and a row with evidence against it is one to demote
+    or merge. They come from the server rather than being guessed at here.
+*@
+
+<PageTitle>Places — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1200px;">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-1">
+        <h3 class="mb-0">Places</h3>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary" href="/admin/place-duplicates">
+                <BenIcon Name="git-merge" Class="me-1" />Duplicates
+            </a>
+            <a class="btn btn-sm btn-primary" href="/places/new">
+                <BenIcon Name="map-pin" Class="me-1" />Add a place
+            </a>
+        </div>
+    </div>
+    <p class="text-secondary small mb-3">
+        Every location on the site — the homes groups work in and the public locations anybody can
+        contribute to. A public location has a page strangers can read; a private residence does
+        not.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="alert @_messageCss d-flex justify-content-between align-items-center" role="alert">
+            <span>@_message</span>
+            <button type="button" class="btn-close" aria-label="Dismiss" @onclick="@(() => _message = null)"></button>
+        </div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="places-search">Search</label>
+                    <input id="places-search" class="form-control form-control-sm"
+                           placeholder="Name, street, town or state"
+                           value="@_query"
+                           @onchange="@(e => OnQueryChangedAsync(e.Value?.ToString()))" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label small mb-1" for="places-kind">Kind</label>
+                    <select id="places-kind" class="form-select form-select-sm"
+                            value="@(_kind?.ToString() ?? "")"
+                            @onchange="@(e => OnKindChangedAsync(e.Value?.ToString()))">
+                        <option value="">Every kind</option>
+                        <option value="@nameof(PlaceKind.PublicLocation)">Public locations</option>
+                        <option value="@nameof(PlaceKind.PrivateResidence)">Private residences</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-2 text-md-end">
+                    <span class="text-secondary small" data-testid="places-total">
+                        @_total place@(_total == 1 ? "" : "s")
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <p class="text-secondary fst-italic">Reading the catalogue…</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+    else if (_places.Count == 0)
+    {
+        <p class="text-secondary fst-italic">Nothing matches that.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Place</th>
+                        <th scope="col">Kind</th>
+                        <th scope="col" class="text-end">Cases</th>
+                        <th scope="col" class="text-end">Visits</th>
+                        <th scope="col" class="text-end">Evidence</th>
+                        <th scope="col">Added</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var place in _places)
+                    {
+                        var p = place;
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@(string.IsNullOrWhiteSpace(p.Name) ? "(unnamed)" : p.Name)</div>
+                                <div class="text-secondary small">
+                                    @Where(p)
+                                    @if (p.Latitude is null || p.Longitude is null)
+                                    {
+                                        <span class="ms-1" title="Nothing has been geocoded for this place, so it cannot appear on a map.">· not on the map</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                @if (p.Kind == PlaceKind.PublicLocation)
+                                {
+                                    <span class="badge text-bg-primary">Public location</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-body-secondary text-body-emphasis border">Private residence</span>
+                                }
+                            </td>
+                            <td class="text-end">@p.Cases</td>
+                            <td class="text-end">@p.Investigations</td>
+                            <td class="text-end">@p.Evidence</td>
+                            <td class="text-secondary small">
+                                @p.DateCreated.ToLocalTime().ToDisplayDate()
+                                @if (!string.IsNullOrWhiteSpace(p.AddedBy))
+                                {
+                                    <div>by @p.AddedBy</div>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                @if (p.Kind == PlaceKind.PublicLocation)
+                                {
+                                    <BenGridAction Icon="eye" Label="Open the public page"
+                                                   Href="@($"/places/{p.Id}")" />
+                                    <BenGridAction Icon="eye-off" Label="Make it a private residence"
+                                                   OnClick="@(() => AskKindAsync(p, PlaceKind.PrivateResidence))" />
+                                }
+                                else
+                                {
+                                    <BenGridAction Icon="globe" Label="Make it a public location"
+                                                   OnClick="@(() => AskKindAsync(p, PlaceKind.PublicLocation))" />
+                                }
+                                <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger"
+                                               OnClick="@(() => AskDeleteAsync(p))" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_totalPages > 1)
+        {
+            <div class="d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        disabled="@(_page <= 1)" @onclick="@(() => GoToPageAsync(_page - 1))">
+                    Previous
+                </button>
+                <span class="text-secondary small">Page @_page of @_totalPages</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        disabled="@(_page >= _totalPages)" @onclick="@(() => GoToPageAsync(_page + 1))">
+                    Next
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@* The two questions. Both name the place and say what will happen to what is on it, because
+   "are you sure?" is not a question anybody can answer. *@
+<BenModal @bind-Visible="_confirmKindOpen" Title="@_kindTitle" Size="sm">
+    <ChildContent>
+        <p>@_kindBody</p>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-secondary" @onclick="@(() => _confirmKindOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="ConfirmKindAsync">
+            @_kindConfirmLabel
+        </button>
+    </FooterContent>
+</BenModal>
+
+<BenModal @bind-Visible="_confirmDeleteOpen" Title="Delete this place?" Size="sm">
+    <ChildContent>
+    @if (_usage is null)
+    {
+        <p class="text-secondary">Checking what points at it…</p>
+    }
+    else if (_usage.CanDelete)
+    {
+        <p>
+            <strong>@(_target?.Name ?? "This place")</strong> will be removed. Nothing anywhere
+            points at it, so nothing else changes. This cannot be undone.
+        </p>
+    }
+    else
+    {
+        <p>
+            <strong>@(_target?.Name ?? "This place")</strong> can't be deleted:
+            @_usage.WhatHoldsIt still point at it.
+        </p>
+        <p class="mb-0 text-secondary small">
+            Merge it into the record you are keeping, or make it a private residence to take it off
+            the public map without losing anything.
+        </p>
+    }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-secondary" @onclick="@(() => _confirmDeleteOpen = false)">Close</button>
+        @if (_usage?.CanDelete == true)
+        {
+            <button type="button" class="btn btn-danger" disabled="@_busy" @onclick="ConfirmDeleteAsync">
+                Delete it
+            </button>
+        }
+    </FooterContent>
+</BenModal>
+
+@code {
+    private readonly List<AdminPlaceRow> _places = new();
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _message;
+    private string _messageCss = "alert-success";
+
+    private string? _query;
+    private PlaceKind? _kind;
+    private int _page = 1;
+    private int _pageSize = 50;
+    private int _total;
+    private int _totalPages => _pageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_total / (double)_pageSize));
+
+    private AdminPlaceRow? _target;
+    private PlaceKind _targetKind;
+    private bool _confirmKindOpen;
+    private bool _confirmDeleteOpen;
+    private AdminPlaceUsage? _usage;
+
+    private string _kindTitle = "";
+    private string _kindBody = "";
+    private string _kindConfirmLabel = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Every auth-gated page waits for the circuit before it asks the server anything; without
+        // it the first render runs signed out and the page draws itself empty.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        var result = await AdminClient.GetAdminPlacesAsync(_query, _kind, _page, _pageSize);
+        if (result.Item is { } page)
+        {
+            _places.Clear();
+            _places.AddRange(page.Places);
+            _total = page.Total;
+            _page = page.Page;
+            _pageSize = page.PageSize;
+        }
+        else
+        {
+            // A refusal is said out loud. A silent empty list reads as "there are no places",
+            // which is a different and untrue statement — item 141's whole point. Signed-out is
+            // separated because "try again" is the wrong advice for it.
+            _error = result.SessionExpired
+                ? "You have been signed out. Sign in again to read the catalogue."
+                : result.Reason ?? "The catalogue could not be read.";
+            _places.Clear();
+            _total = 0;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private static string Where(AdminPlaceRow p)
+    {
+        var parts = new[] { p.City, p.State }.Where(x => !string.IsNullOrWhiteSpace(x));
+        var where = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(where) ? "Nowhere recorded" : where;
+    }
+
+    private async Task OnQueryChangedAsync(string? value)
+    {
+        _query = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnKindChangedAsync(string? value)
+    {
+        _kind = Enum.TryParse<PlaceKind>(value, out var k) ? k : null;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _page = Math.Clamp(page, 1, _totalPages);
+        await LoadAsync();
+    }
+
+    private Task AskKindAsync(AdminPlaceRow place, PlaceKind kind)
+    {
+        _target = place;
+        _targetKind = kind;
+
+        var name = string.IsNullOrWhiteSpace(place.Name) ? "This place" : place.Name;
+        if (kind == PlaceKind.PrivateResidence)
+        {
+            _kindTitle = "Take it off the public map?";
+            _kindBody =
+                $"{name} will become a private residence. Its public page stops existing and "
+              + "nobody can add to it, but nothing recorded there is deleted — the groups working "
+              + "it keep everything.";
+            _kindConfirmLabel = "Make it private";
+        }
+        else
+        {
+            _kindTitle = "Put it on the public map?";
+            _kindBody =
+                $"{name} will become a public location. It gets a page strangers can read, and "
+              + "anybody signed in can add photographs and recordings to it. Only do this for a "
+              + "genuine landmark — never for somewhere somebody lives.";
+            _kindConfirmLabel = "Make it public";
+        }
+
+        _confirmKindOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmKindAsync()
+    {
+        if (_target is null) return;
+
+        _busy = true;
+        var (row, error) = await AdminClient.SetAdminPlaceKindAsync(_target.Id, _targetKind);
+        _busy = false;
+
+        if (error is not null || row is null)
+        {
+            _messageCss = "alert-danger";
+            _message = error ?? "That could not be changed.";
+        }
+        else
+        {
+            _messageCss = "alert-success";
+            _message = _targetKind == PlaceKind.PrivateResidence
+                ? $"{row.Name} is a private residence now and is off the public map."
+                : $"{row.Name} is a public location now.";
+        }
+
+        _confirmKindOpen = false;
+        await LoadAsync();
+    }
+
+    private async Task AskDeleteAsync(AdminPlaceRow place)
+    {
+        _target = place;
+        _usage = null;
+        _confirmDeleteOpen = true;
+        StateHasChanged();
+
+        // Asked before the button is offered, not after it is pressed. The server answers with the
+        // same count it will enforce with, so the screen cannot promise a delete that is refused.
+        var result = await AdminClient.GetAdminPlaceUsageAsync(place.Id);
+        _usage = result.Item ?? new AdminPlaceUsage(0, false, "something this screen could not read");
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_target is null) return;
+
+        _busy = true;
+        var (deleted, error) = await AdminClient.DeleteAdminPlaceAsync(_target.Id);
+        _busy = false;
+
+        if (!deleted)
+        {
+            _messageCss = "alert-danger";
+            _message = error ?? "That place could not be deleted.";
+        }
+        else
+        {
+            _messageCss = "alert-success";
+            _message = $"{(string.IsNullOrWhiteSpace(_target.Name) ? "The place" : _target.Name)} was deleted.";
+        }
+
+        _confirmDeleteOpen = false;
+        await LoadAsync();
+    }
+}

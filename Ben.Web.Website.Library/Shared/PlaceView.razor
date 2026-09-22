@@ -14,6 +14,7 @@
    afternoon: without this, <NewInvestigationWindow> emitted an empty <newinvestigationwindow>
    element and the button that opens it did nothing at all. *@
 @using Ben.Web.Website.Library.Organization
+@using Ben.Web.Website.Library.Organization.Cases
 
 @*
    A place, and the history of what has happened there.
@@ -560,6 +561,9 @@
         @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
         {
             <div class="mt-4" id="place-about">
+                @* A heading, so a reader knows this paragraph is ABOUT the building rather than a
+                   caption on the map above it (V5). *@
+                <h6 class="fw-semibold">About this place</h6>
                 @if (!string.IsNullOrWhiteSpace(_place.Description) && !_editingAbout)
                 {
                     @* Plain text, held as plain text and rendered as plain text. The server strips

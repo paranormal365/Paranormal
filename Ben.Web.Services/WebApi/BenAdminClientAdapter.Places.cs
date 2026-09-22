@@ -229,6 +229,34 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlacePage>> GetAdminPlacesAsync(
+        string? query = null, PlaceKind? kind = null, int page = 1, int pageSize = 50,
+        CancellationToken token = default)
+    {
+        var url = $"/api/admin/places?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(query)) url += $"&query={Uri.EscapeDataString(query)}";
+        if (kind is { } k) url += $"&kind={(int)k}";
+        return _api.GetItemAsync<AdminPlacePage>(url, token);
+    }
+
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlaceUsage>> GetAdminPlaceUsageAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetItemAsync<AdminPlaceUsage>($"/api/admin/places/{placeId}/usage", token);
+
+    /// <inheritdoc />
+    public Task<(AdminPlaceRow? Place, string? Error)> SetAdminPlaceKindAsync(
+        Guid placeId, PlaceKind kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetPlaceKindRequest, AdminPlaceRow>(
+            HttpMethod.Post, $"/api/admin/places/{placeId}/kind",
+            new SetPlaceKindRequest(kind), token);
+
+    /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/admin/places/{placeId}", token);
+
     public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
         => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
 
