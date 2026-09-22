@@ -46,4 +46,13 @@ public record AppUserRecord
     public string? PhoneNumber { get; init; }
     public bool IsPhoneNumberConfirmed { get; init; }
     public bool IsTwoFactorEnabled { get; init; }
+
+    /// <summary>When the account was closed, or null while it is a live account.</summary>
+    /// <remarks>
+    /// Closing anonymises rather than deletes — the row survives so that the cases, evidence and
+    /// messages the person authored stay where their group left them — so a closed account is
+    /// still a row in every list that reads this table, displayed as "A former member". This is
+    /// how a screen tells the two apart.
+    /// </remarks>
+    public DateTime? DateClosed { get; init; }
 }

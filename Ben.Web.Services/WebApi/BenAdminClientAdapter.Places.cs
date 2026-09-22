@@ -257,6 +257,17 @@ public sealed partial class BenAdminClientAdapter
         Guid placeId, CancellationToken token = default)
         => _api.DeleteExpectingReasonAsync($"/api/admin/places/{placeId}", token);
 
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlaceDetail>> GetAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetItemAsync<AdminPlaceDetail>($"/api/admin/places/{placeId}", token);
+
+    /// <inheritdoc />
+    public Task<(AdminPlaceDetail? Place, string? Error)> EditAdminPlaceAsync(
+        Guid placeId, AdminEditPlaceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminEditPlaceRequest, AdminPlaceDetail>(
+            HttpMethod.Put, $"/api/admin/places/{placeId}", request, token);
+
     public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
         => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
 

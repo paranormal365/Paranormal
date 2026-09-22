@@ -355,6 +355,17 @@ public interface IBenPlacesClient
     Task<(bool Deleted, string? Error)> DeleteAdminPlaceAsync(
         Guid placeId, CancellationToken token = default);
 
+    /// <summary>One place, in full, for the edit form.</summary>
+    Task<ItemResult<AdminPlaceDetail>> GetAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Corrects a place. Refused, in words, when the new address already belongs to another
+    /// record — that is what the merge screen is for.
+    /// </summary>
+    Task<(AdminPlaceDetail? Place, string? Error)> EditAdminPlaceAsync(
+        Guid placeId, AdminEditPlaceRequest request, CancellationToken token = default);
+
     /// <summary>
     /// Moves everything off one place onto another and deletes the empty one. Irreversible.
     /// </summary>
