@@ -129,6 +129,22 @@ Two specific things I went looking for and did not find:
 
 ## 7. Smaller things
 
+> **Triaged 2026-09-22** (this list had never been gone through):
+>
+> - **The case update wipes the description when sent null** — **still true, and the obvious fix is
+>   wrong.** `CaseController:730` still assigns unconditionally while `Title` on the line above is
+>   protected with `?? entity.Title`. But `CleanDescription` now deliberately returns null for an
+>   emptied editor (`<p></p>` is no description), so copying Title's `??` would break clearing a
+>   description on purpose. Telling "field absent" from "field emptied" needs a sentinel or a patch
+>   document, which is a design change rather than a one-liner. Both UI callers still send the
+>   current value, so nothing is losing data today.
+> - **The Playwright run was stopped, not completed** — historical; nothing to do. The numbers in
+>   this document are still not a suite result.
+> - **`A_group_is_told_a_case_is_closed_rather_than_deleted`** — the test still exists
+>   (`AdminDeleteCaseTests.cs:105`). **Not re-run in isolation**, so whether the race persists is
+>   unknown; left open rather than closed on a guess.
+
+
 - **The case update handler wipes the description when it is sent null.** `Title` is protected with
   `?? entity.Title`; `Description` is assigned unconditionally. Both UI call sites send the current
   value, so nothing is losing data today — it is one careless caller away from doing so.

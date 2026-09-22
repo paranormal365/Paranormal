@@ -155,6 +155,22 @@ bypass — but the gate is meant to be about the group, not about which door was
 
 ## 9. Small things, in one place
 
+> **Triaged 2026-09-22** (this list had never been gone through):
+>
+> - **Warnings on `-t:Rebuild`** — still true as a shape, and the count has moved: **7 distinct
+>   codes, ~48 occurrences**, not 35. The `CS8604` named below on
+>   `IFeedMediaScreener.ScreenAsync` is **gone**. Two NEW `CS8602`s had appeared in
+>   `AccountStorageGuard` — code written the same morning this list was triaged, warning invisible
+>   to an ordinary build. Fixed: they are EF navigations inside an expression tree, so nothing is
+>   dereferenced in C# and the `!` is for the compiler. Remaining: 32 × `CS1587` (XML comments on
+>   the wrong thing), 2 × `CS8604`, 2 each of `CS8620`/`CS1734`/`CS0419`/`CS0105`.
+> - **Equipment make list not narrowed by category** — **a decision, not an omission**, as this
+>   list suspected. `OrgEquipmentEditor.razor:22` records why: that editor has no propose path, so
+>   hiding a make would remove a group's only route to gear catalogued under another category.
+> - **Nothing on the card says gear is shared** — **not verified**. Left open rather than guessed.
+> - **Lending rules held up** — no action; kept as the positive record it was written as.
+
+
 - **35 distinct compiler warnings only appear on `-t:Rebuild`.** An ordinary `dotnet build` prints
   0 because nothing recompiles. Mostly XML-comment defects, two xUnit analyzer rules, and a real
   `CS8604` possible-null on `IFeedMediaScreener.ScreenAsync`'s `storagePath`.
