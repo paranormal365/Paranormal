@@ -1,3 +1,23 @@
+/* ClipBrowser's styles, deliberately NOT a scoped ClipBrowser.razor.css.
+ *
+ * Most of that component's panes are built by hand with RenderTreeBuilder, and the Razor compiler
+ * stamps its b-xxxxxxxxxx scope attribute only onto markup it compiles. Hand-built elements came out
+ * with the right class names and none of the styles - not a render error, not a build warning, just
+ * a screen that looks slightly wrong. The fix was a CssScope constant holding the hash, copied by
+ * hand into all sixty hand-built elements.
+ *
+ * That constant could not be right. The hash the compiler produces DIFFERS BETWEEN MACHINES - this
+ * repository's Windows server stamps b-ix6pdo4zfh and the author's Mac stamps b-xbjan6uni8, almost
+ * certainly because it is derived from a path and the separators differ. Two sessions corrected the
+ * constant to opposite values within a day, each measuring honestly, each breaking the other's
+ * build. Whichever machine builds last wins and the other ships unstyled panes.
+ *
+ * So the styles left CSS isolation instead. No attribute, no hash, no machine to be wrong on. Every
+ * class here is used by ClipBrowser and nothing else - checked before the move - so being global
+ * costs nothing. If you add a rule, give it a bv- prefixed class that stays unique to this
+ * component. (2026-09-22)
+ */
+
 /* ── Collapsed (pinned to floating window) ──────────────────────────────── */
 .bv-browser--collapsed {
     width: 0 !important;

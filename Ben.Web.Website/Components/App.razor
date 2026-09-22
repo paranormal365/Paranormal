@@ -65,6 +65,11 @@
        Kendo tokens only the editor reads (--kendo-color-subtle-text alone drives every secondary
        label in its timeline). Without it the editor kept its own dark palette inside the site. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-theme.css" rel="stylesheet" />
+    @* The clip browser's styles, which are NOT scoped: most of that component is built by hand
+       with RenderTreeBuilder, which the compiler never stamps a scope attribute onto, and the
+       scope hash it does produce differs between machines. That file's header has the story.
+       After the theme so it can rely on the --bv-* variables. *@
+    <link href="/_content/Ben.Video.Editor/css/clip-browser.css" rel="stylesheet" />
     @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
        theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
        the template's own layoutSettings convention. *@

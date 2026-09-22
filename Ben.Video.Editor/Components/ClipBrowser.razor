@@ -258,30 +258,20 @@
             "benImportEditorModule", "js/storageInterop.js");
 
 
-    // Everything below built with raw RenderTreeBuilder calls — the grids (VideoClipGrid/
+    // Everything below is built with raw RenderTreeBuilder calls — the grids (VideoClipGrid/
     // AudioClipGrid/ImageClipGrid/LibraryFileGrid) AND the panes that stand in for them: the empty
     // states, the loading pane, the sign-in prompt, the error strip. The Razor compiler's
-    // CSS-isolation pass never sees any of it, so it never stamps this component's scope attribute,
-    // so every ClipBrowser.razor.css rule silently fails to apply. Nothing reports it: the classes
-    // are right, the stylesheet is right, and the screen is merely a bit wrong.
+    // CSS-isolation pass never sees any of it, so it never stamps a scope attribute onto it.
     //
-    // It was found in the grids first (thumbnails at native size instead of 64×40), fixed there, and
-    // the panes kept the fault for another year — the empty state's 1.5rem of padding never applied,
-    // leaving "No video yet." against the tabstrip's border, which is what a visual audit finally
-    // measured on 2026-09-21. ClipBrowserCssScopeTests now holds both halves: that this constant is
-    // still the scope the compiler assigns (it is a literal hash — moving or renaming this file
-    // unhooks every element at once), and that no hand-built element naming a styled class is
-    // missing it. Add the attribute to anything built by hand here, children included: a rule like
-    // ".bv-browser__empty p" compiles the attribute onto the p, not onto the div.
-    // Read out of obj/<config>/net10.0/scopedcss/Components/ClipBrowser.razor.rz.scp.css, which is
-    // the only place the real value exists — and read it from a FRESHLY BUILT one. On 2026-09-22
-    // this was changed to "b-ix6pdo4zfh" on the strength of a single run, and that value is not one
-    // the compiler has ever produced: it appears nowhere on disk but this line. A clean rebuild of
-    // both configurations stamps b-xbjan6uni8, so the change silently unhooked every hand-built
-    // element in this file — the exact fault the constant exists to prevent, committed inside the
-    // fix for it and caught by the guard below on the next honest build. Delete the generated file
-    // and rebuild before believing a value that disagrees with this one.
-    private const string CssScope = "b-xbjan6uni8";
+    // THIS COMPONENT'S STYLES ARE THEREFORE NOT SCOPED. They live in
+    // wwwroot/css/clip-browser.css, linked by both hosts like any ordinary stylesheet, and that
+    // file's header records why. Nothing here needs a scope attribute, and there is no hash to
+    // copy, get wrong, or disagree about — which is what the previous arrangement cost: two
+    // sessions corrected the same constant to opposite values within a day, each measuring
+    // honestly on a different machine, because the hash is derived from a path and the two
+    // platforms spell it differently (2026-09-22).
+    //
+    // If you add markup here, give it a bv- prefixed class and put the rule in that stylesheet.
 
     // ── Parameters ───────────────────────────────────────────────────────────
     [Parameter] public EventCallback<VideoClip> OnClipSelected   { get; set; }
@@ -594,9 +584,9 @@
         }
         else if (!Clips.BinVideoClips.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
-            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No video yet."); __builder.CloseElement();
-            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(13, "p"); __builder.AddContent(15, "No video yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p");
             __builder.AddContent(18, "Click ");
             __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
             __builder.AddContent(21, " to import video files.");
@@ -605,14 +595,13 @@
         }
         else
         {
-            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid");
             int seq = 30;
             foreach (var clip in Clips.BinVideoClips)
             {
                 var c = clip;
                 var cls = $"bv-clip-card {(_selectedId == clip.Id ? "bv-clip-card--selected" : "")} {(_isDragging && _selectedId == clip.Id ? "bv-clip-card--dragging" : "")}";
                 __builder.OpenElement(seq++, "div");
-                __builder.AddAttribute(seq++, CssScope, "");
                 __builder.AddAttribute(seq++, "class", cls);
                 __builder.AddAttribute(seq++, "onpointerdown", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.PointerEventArgs>(this, e => OnClipPointerDown(e, c)));
                 __builder.AddAttribute(seq++, "onclick",       Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => SelectClip(c)));
@@ -620,11 +609,10 @@
                 __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
 
                 // Thumb
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
                 if (clip.ThumbnailUrls.Count > 0)
                 {
                     __builder.OpenElement(seq++, "img");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "src",       clip.ThumbnailUrls[0]);
                     __builder.AddAttribute(seq++, "alt",       clip.Name);
                     __builder.AddAttribute(seq++, "loading",   "lazy");
@@ -633,19 +621,19 @@
                 }
                 else
                 {
-                    __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
+                    __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
                     __builder.AddContent(seq++, "▶"); __builder.CloseElement();
                 }
                 __builder.CloseElement();
 
                 // Info
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.TrimmedDuration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.TrimmedDuration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddToTimelineAsync(c)));
                 __builder.AddAttribute(seq++, "Title",      "Add to timeline");
@@ -674,9 +662,9 @@
         var allAudio = Clips.BinAudioClips.ToList();
         if (!allAudio.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
-            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No audio yet."); __builder.CloseElement();
-            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(13, "p"); __builder.AddContent(15, "No audio yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p");
             __builder.AddContent(18, "Click ");
             __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
             __builder.AddContent(21, " to import audio files.");
@@ -685,32 +673,31 @@
         }
         else
         {
-            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid");
             int seq = 30;
             foreach (var clip in allAudio)
             {
                 var a = clip;
                 __builder.OpenElement(seq++, "div");
-                __builder.AddAttribute(seq++, CssScope, "");
                 __builder.AddAttribute(seq++, "class", "bv-clip-card");
                 __builder.AddAttribute(seq++, "oncontextmenu", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, e => OpenAudioCardMenu(e, a)));
                 __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
 
                 // Thumb — audio icon
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb bv-clip-card__thumb--icon");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb bv-clip-card__thumb--icon");
                 __builder.OpenComponent<TelerikSvgIcon>(seq++);
                 __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.FileAudio);
                 __builder.CloseComponent();
                 __builder.CloseElement();
 
                 // Info
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddAudioToTimelineAsync(a)));
                 __builder.AddAttribute(seq++, "Title",      "Add to timeline");
@@ -739,9 +726,9 @@
         var allImages = Clips.BinImageClips.ToList();
         if (!allImages.Any())
         {
-            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty"); __builder.AddAttribute(12, CssScope, "");
-            __builder.OpenElement(13, "p"); __builder.AddAttribute(14, CssScope, ""); __builder.AddContent(15, "No pictures yet."); __builder.CloseElement();
-            __builder.OpenElement(16, "p"); __builder.AddAttribute(17, CssScope, "");
+            __builder.OpenElement(10, "div"); __builder.AddAttribute(11, "class", "bv-browser__empty");
+            __builder.OpenElement(13, "p"); __builder.AddContent(15, "No pictures yet."); __builder.CloseElement();
+            __builder.OpenElement(16, "p");
             __builder.AddContent(18, "Click ");
             __builder.OpenElement(19, "strong"); __builder.AddContent(20, "Add"); __builder.CloseElement();
             __builder.AddContent(21, " to import image files.");
@@ -750,23 +737,21 @@
         }
         else
         {
-            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid"); __builder.AddAttribute(22, CssScope, "");
+            __builder.OpenElement(20, "div"); __builder.AddAttribute(21, "class", "bv-browser__grid");
             int seq = 30;
             foreach (var clip in allImages)
             {
                 var img = clip;
                 __builder.OpenElement(seq++, "div");
-                __builder.AddAttribute(seq++, CssScope, "");
                 __builder.AddAttribute(seq++, "class", "bv-clip-card");
                 __builder.AddAttribute(seq++, "oncontextmenu", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, e => OpenImageCardMenu(e, img)));
                 __builder.AddEventPreventDefaultAttribute(seq++, "oncontextmenu", true);
 
                 // Thumb
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
                 if (clip.ThumbnailUrl is not null)
                 {
                     __builder.OpenElement(seq++, "img");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "src",     clip.ThumbnailUrl);
                     __builder.AddAttribute(seq++, "alt",     clip.Name);
                     __builder.AddAttribute(seq++, "loading", "lazy");
@@ -774,7 +759,7 @@
                 }
                 else
                 {
-                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb--icon");
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb--icon");
                     __builder.OpenComponent<TelerikSvgIcon>(seq++);
                     __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Image);
                     __builder.CloseComponent();
@@ -783,13 +768,13 @@
                 __builder.CloseElement();
 
                 // Info
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", clip.Name); __builder.AddContent(seq++, clip.Name); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", BinCardState.IsWarning(clip.IsMediaMissing) ? "bv-clip-card__meta bv-clip-card__meta--missing" : "bv-clip-card__meta"); __builder.AddContent(seq++, CardMeta(clip, clip.Duration)); __builder.CloseElement();
                 __builder.CloseElement();
 
                 // Actions
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 __builder.OpenComponent<TelerikButton>(seq++);
                 __builder.AddAttribute(seq++, "OnClick",    Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.MouseEventArgs>(this, _ => AddImageToTimelineAsync(img)));
                 __builder.AddAttribute(seq++, "Title",      "Add to timeline");
@@ -831,12 +816,10 @@
         var hasGroups = _scopeGroups.Count > 0;
 
         __builder.OpenElement(seq++, "div");
-        __builder.AddAttribute(seq++, CssScope, "");
         __builder.AddAttribute(seq++, "class", "bv-browser__scope");
 
         // Which slice.
         __builder.OpenElement(seq++, "select");
-        __builder.AddAttribute(seq++, CssScope, "");
         __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
         __builder.AddAttribute(seq++, "title", "Which files to show");
         __builder.AddAttribute(seq++, "aria-label", "Media scope");
@@ -865,7 +848,6 @@
         {
             // Which case.
             __builder.OpenElement(seq++, "select");
-            __builder.AddAttribute(seq++, CssScope, "");
             __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
             __builder.AddAttribute(seq++, "title", "Which case");
             __builder.AddAttribute(seq++, "aria-label", "Case");
@@ -890,7 +872,6 @@
             if (_scopeCaseId is not null && visits.Count > 0)
             {
                 __builder.OpenElement(seq++, "select");
-                __builder.AddAttribute(seq++, CssScope, "");
                 __builder.AddAttribute(seq++, "class", "bv-browser__scope-select");
                 __builder.AddAttribute(seq++, "title", "Narrow to one visit");
                 __builder.AddAttribute(seq++, "aria-label", "Investigation");
@@ -940,7 +921,7 @@
 
         if (_libraryLoading)
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading"); __builder.AddAttribute(seq++, CssScope, "");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__loading");
             __builder.OpenComponent<TelerikLoader>(seq++);
             __builder.AddAttribute(seq++, "Type", LoaderType.InfiniteSpinner);
             __builder.AddAttribute(seq++, "Size", ThemeConstants.Loader.Size.Medium);
@@ -953,8 +934,8 @@
             // A refusal, said as a refusal, with whatever way in the host offers. An empty tab or
             // a raw HTTP message both describe a state that is not true (2026-09-05 audit, F11 and
             // site-11).
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin"); __builder.AddAttribute(seq++, CssScope, "");
-            __builder.OpenElement(seq++, "p"); __builder.AddAttribute(seq++, CssScope, "");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__signin");
+            __builder.OpenElement(seq++, "p");
             __builder.AddContent(seq++,
                 "Sign in to see the files you have uploaded. Everything else in the editor works "
                 + "signed out.");
@@ -969,13 +950,13 @@
         }
         else if (_libraryError is not null)
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error"); __builder.AddAttribute(seq++, CssScope, "");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__error");
             __builder.AddContent(seq++, $"⚠ {_libraryError}");
             __builder.CloseElement();
         }
         else if (!_libraryFiles.Any())
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty"); __builder.AddAttribute(seq++, CssScope, "");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__empty");
             // Naming the scope matters: "no files in the media library" is alarming and wrong when
             // the person has simply narrowed to a case that has none yet.
             var emptyText = _scopeKind switch
@@ -985,12 +966,12 @@
                 MediaLibraryScopeKind.Personal => "You have not uploaded any media yet.",
                 _                              => "No files in the media library.",
             };
-            __builder.OpenElement(seq++, "p"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddContent(seq++, emptyText); __builder.CloseElement();
+            __builder.OpenElement(seq++, "p"); __builder.AddContent(seq++, emptyText); __builder.CloseElement();
             __builder.CloseElement();
         }
         else
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-browser__grid");
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-browser__grid");
             foreach (var file in _libraryFiles)
             {
                 var f = file;
@@ -1000,24 +981,23 @@
                 var busy        = _libraryImporting.Contains(f.Id);
                 var downloading = _libraryDownloading.Contains(f.Id);
                 var cached      = _libraryCached.Contains(f.Id);
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", $"bv-clip-card {(busy || downloading ? "bv-clip-card--busy" : "")}");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", $"bv-clip-card {(busy || downloading ? "bv-clip-card--busy" : "")}");
                 __builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => OnLibraryCardClickedAsync(f)));
 
                 // Thumb
                 var hasThumb    = _serverThumbnails.TryGetValue(f.Id, out var serverThumbUrl);
                 var thumbLoading = _serverThumbnailsLoading.Contains(f.Id);
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb");
                 if (hasThumb)
                 {
                     __builder.OpenElement(seq++, "img");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "src", serverThumbUrl);
                     __builder.AddAttribute(seq++, "alt", file.FileName);
                     __builder.CloseElement();
                 }
                 else
                 {
-                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__thumb-placeholder");
                     if (thumbLoading)
                     {
                         __builder.OpenComponent<TelerikLoader>(seq++);
@@ -1038,7 +1018,6 @@
                     if (file.IsVideo && !thumbLoading)
                     {
                         __builder.OpenElement(seq++, "button");
-                        __builder.AddAttribute(seq++, CssScope, "");
                         __builder.AddAttribute(seq++, "class", "bv-clip-card__preview-btn");
                         __builder.AddAttribute(seq++, "title", "Load a preview thumbnail");
                         __builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => LoadServerVideoPreviewAsync(f)));
@@ -1053,9 +1032,9 @@
                 __builder.CloseElement(); // thumb
 
                 // Info
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", file.FileName); __builder.AddContent(seq++, file.FileName); __builder.CloseElement();
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, file.FileSizeDisplay); __builder.CloseElement();
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__info");
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__name"); __builder.AddAttribute(seq++, "title", file.FileName); __builder.AddContent(seq++, file.FileName); __builder.CloseElement();
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "bv-clip-card__meta"); __builder.AddContent(seq++, file.FileSizeDisplay); __builder.CloseElement();
                 // V-3: whose it is, and which case it belongs to. The tab spans several people's
                 // files — the evaluation met seven rows all called test-audio.mp3 — and a file
                 // name is not an identity. Omitted entirely when the host knows neither, rather
@@ -1063,7 +1042,6 @@
                 if (file.Provenance is { } provenance)
                 {
                     __builder.OpenElement(seq++, "span");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "class", "bv-clip-card__provenance");
                     __builder.AddAttribute(seq++, "title", provenance);
                     __builder.AddContent(seq++, provenance);
@@ -1072,7 +1050,7 @@
                 __builder.CloseElement();
 
                 // Actions
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__actions");
                 if (busy)
                 {
                     // Adding an already-cached file to the timeline — local/fast, a spinner is enough.
@@ -1085,7 +1063,7 @@
                 {
                     var pct = _libraryDownloadProgress.TryGetValue(f.Id, out var p) ? p : 0;
                     var pctWhole = (double)(int)Math.Round(pct * 100); // whole-number percent — matches the import dialog's own TelerikProgressBar (Value is an int there too)
-                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, CssScope, ""); __builder.AddAttribute(seq++, "class", "bv-clip-card__download-progress");
+                    __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "bv-clip-card__download-progress");
                     __builder.OpenComponent<TelerikProgressBar>(seq++);
                     __builder.AddAttribute(seq++, "Value", pctWhole);
                     __builder.AddAttribute(seq++, "Max", 100.0);
@@ -1105,14 +1083,12 @@
                     // tooltip, and the next step was a second click nobody had been told about.
                     // The word is on the card now.
                     __builder.OpenElement(seq++, "span");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "class", "bv-clip-card__cached-badge");
                     __builder.AddAttribute(seq++, "title", "Downloaded to this browser — click the card to add it to the project");
                     __builder.OpenComponent<TelerikSvgIcon>(seq++);
                     __builder.AddAttribute(seq++, "Icon", (object)SvgIcon.Check);
                     __builder.CloseComponent();
                     __builder.OpenElement(seq++, "span");
-                    __builder.AddAttribute(seq++, CssScope, "");
                     __builder.AddAttribute(seq++, "class", "bv-clip-card__cached-label");
                     __builder.AddContent(seq++, "Click to add");
                     __builder.CloseElement();
