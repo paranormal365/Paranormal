@@ -498,6 +498,43 @@ public sealed class SiteSweep : BenTestBase
 
             if (await MemberSessionIdAsync() is { } sessionId) ids["SessionId"] = sessionId;
 
+            // The tail of W15. Each of these is a listing that already exists with rows already in
+            // it — the ids were missing because nobody had asked, not because the data was absent.
+            if (orgId is not null)
+            {
+                var investigations = await ApiArrayAsync($"/api/organizations/{orgId}/investigations", token);
+                if (First(investigations, "id") is { } investigationId)
+                    ids["InvestigationId"] = investigationId;
+
+                // /my-requests/{Id} and /my-requests/adopt/{Id} both bind a CLIENT REQUEST id, which
+                // is why three routes hung on one placeholder called nothing more specific than Id.
+                // A case carries the request it grew from, and some cases have none, so this takes
+                // the first that does rather than the first case.
+                var cases = await ApiArrayAsync($"/api/organizations/{orgId}/cases", token);
+                if (First(cases, "clientRequestId") is { } requestId)
+                {
+                    ids["ClientRequestId"] = requestId;
+                    ids["Id"] = requestId;
+                }
+            }
+
+            // CaseRef comes from the PUBLIC listing, not the org's own. The org's cases include ones
+            // that are not published, and /o/{UrlName}/cases/{CaseRef} answers "does not exist or is
+            // not publicly available" for those — a refusal, which is a screen this sweep would then
+            // audit as if it were the case page. Checked against the running site: #2026-004 refuses,
+            // #2026-001 renders. The stored reference carries a leading '#', which cannot travel in a
+            // URL path, and the route wants it without.
+            if (ids.TryGetValue("UrlName", out var publicOrg)
+                && First(await ApiArrayAsync($"/api/public/organizations/{publicOrg}/cases", token),
+                         "caseReference") is { } caseRef)
+                ids["CaseRef"] = caseRef.TrimStart('#');
+
+            var feed = await ApiArrayAsync("/api/feed", token);
+            if (First(feed, "id") is { } postId) ids["PostId"] = postId;
+            if (First(feed, "experienceTypeId") is { } typeId) ids["TypeId"] = typeId;
+            if (FirstInArray(feed, "hashtags") is { } tag) ids["Tag"] = tag;
+
+
             if (First(await ApiArrayAsync("/api/admin/app-users", token), "id") is { } userId)
             {
                 ids["UserId"] = userId;
@@ -673,6 +710,34 @@ public sealed class SiteSweep : BenTestBase
         }
 
         return (publicId ?? anyId) is { } fallback ? new PickedPlace(fallback, false) : null;
+    }
+
+    /// <summary>The first non-empty string inside a nested array property, across the rows.</summary>
+    /// <remarks>
+    /// Feed posts carry their tags as <c>hashtags: []</c>, and most rows have none — so the first
+    /// row is the wrong place to look and the first NON-EMPTY one is the right one.
+    /// </remarks>
+    private static string? FirstInArray(JsonElement? json, string name)
+    {
+        var array = json;
+        if (json is { ValueKind: JsonValueKind.Object } o)
+        {
+            if (o.TryGetProperty("items", out var items)) array = items;
+            else
+                foreach (var prop in o.EnumerateObject())
+                    if (prop.Value.ValueKind == JsonValueKind.Array) { array = prop.Value; break; }
+        }
+        if (array is not { ValueKind: JsonValueKind.Array } list) return null;
+
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            if (!item.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array) continue;
+            foreach (var entry in v.EnumerateArray())
+                if (entry.ValueKind == JsonValueKind.String
+                    && entry.GetString() is { Length: > 0 } str) return str;
+        }
+        return null;
     }
 
     /// <summary>The first object in an array answer, whatever the collection is called.</summary>
