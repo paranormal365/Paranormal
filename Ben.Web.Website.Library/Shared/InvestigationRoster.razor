@@ -137,7 +137,7 @@
                                 @foreach (var holder in holders)
                                 {
                                     var entry = _roster.FirstOrDefault(r => r.AttendeeId == holder.AttendeeId);
-                                    <span class="badge bg-info text-dark d-inline-flex align-items-center gap-1" @key="holder.AttendeeId">
+                                    <span class="badge bg-info d-inline-flex align-items-center gap-1" @key="holder.AttendeeId">
                                         @(entry?.DisplayName ?? "—")
                                         @if (holder.EligibilityOverridden)
                                         {

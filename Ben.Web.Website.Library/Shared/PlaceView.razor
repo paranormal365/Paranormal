@@ -55,7 +55,7 @@
             @LocationLine
             @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
             {
-                <span class="badge bg-info text-dark ms-2">Public location</span>
+                <span class="badge bg-info ms-2">Public location</span>
             }
         </p>
 
@@ -1287,7 +1287,7 @@
 
     private static string VisibilityBadge(Ben.Data.Common.Enums.InvestigationVisibility v) => v switch
     {
-        Ben.Data.Common.Enums.InvestigationVisibility.Public => "bg-info text-dark",
+        Ben.Data.Common.Enums.InvestigationVisibility.Public => "bg-info",
         Ben.Data.Common.Enums.InvestigationVisibility.PlaceInvestigators => "bg-primary",
         _ => "bg-secondary",
     };

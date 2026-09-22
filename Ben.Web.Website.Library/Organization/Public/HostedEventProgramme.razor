@@ -48,7 +48,7 @@
                             <div class="text-nowrap fw-semibold" style="min-width:9.5rem;">
                                 @VenueClock.Span(s.StartsAtUtc, s.EndsAtUtc, programme.TimeZoneId)
                                 @if (isNow) { <span class="badge bg-success ms-1">Now</span> }
-                                else if (isNext) { <span class="badge bg-info text-dark ms-1">Next</span> }
+                                else if (isNext) { <span class="badge bg-info ms-1">Next</span> }
                             </div>
                             <div class="flex-grow-1">
                                 <div class="@(s.IsCancelled ? "text-decoration-line-through" : "")">
