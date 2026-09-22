@@ -80,6 +80,24 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DiscardCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default)
         => _api.DeleteAsync($"{DraftBase(orgId, pageId)}", token);
 
+    public Task<(CmsDraftStateResponse? Draft, string? Error)> StartCmsDraftExpectingReasonAsync(
+        Guid orgId, Guid pageId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, CmsDraftStateResponse>(
+            HttpMethod.Post, $"{DraftBase(orgId, pageId)}", new object(), token);
+
+    /// <remarks>
+    /// Through SendWithStatusAsync rather than SendExpectingReasonAsync, because publish answers
+    /// with no body: that helper returns (default, null) for BOTH a 204 success and a refusal
+    /// carrying no prose, so a caller cannot tell them apart. The status can.
+    /// </remarks>
+    public async Task<(bool Published, string? Error)> PublishCmsDraftExpectingReasonAsync(
+        Guid orgId, Guid pageId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(
+            HttpMethod.Post, $"{DraftBase(orgId, pageId)}/publish", new object(), token);
+        return (status is >= 200 and < 300, error);
+    }
+
     private static string DraftBase(Guid orgId, Guid pageId)
         => $"/api/organizations/{orgId}/pages/{pageId}/draft";
 
