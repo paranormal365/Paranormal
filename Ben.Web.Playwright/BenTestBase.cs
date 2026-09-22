@@ -1234,7 +1234,30 @@ public abstract class BenTestBase : PageTest
     protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
 
     /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
-    protected ILocator Spinners => Main.Locator(".spinner-border:visible");
+    /// <summary>Anything on the page that means "not finished yet".</summary>
+    /// <remarks>
+    /// <para>Every walk treats "no spinners" as "the page has settled", so whatever this misses is
+    /// a page photographed, audited and reported while it is still empty — and an empty page has no
+    /// clipping and no contrast fault, so it comes back CLEAN. A false pass, not a flaky one.</para>
+    ///
+    /// <para>It used to be <c>.spinner-border:visible</c> alone. <c>BenLoaderOverlay</c> renders a
+    /// spinner, so its 33 uses were always seen; but **36 places across 34 files** say so with text
+    /// instead — <c>&lt;p class="text-secondary"&gt;Loading…&lt;/p&gt;</c> and its div and span
+    /// variants — and **33 of those files have no spinner anywhere**, so on those screens no walk
+    /// could tell a loading page from a finished one. Found while fixing W2, where exactly that let
+    /// ProductWalk photograph the admin dashboard mid-load and then report that it never said
+    /// "Sign-ins and registrations" (2026-09-22, W13).</para>
+    ///
+    /// <para>Matched by exact text, not a substring: a page is allowed to TALK about loading. All
+    /// 36 use the ellipsis character, and a new one spelled any other way will not be seen —
+    /// <c>LoadingPlaceholdersAreVisibleToTheHarnessTests</c> fails when that happens rather than
+    /// leaving it to be discovered by a report that says a screen is clean.</para>
+    /// </remarks>
+    protected ILocator Spinners => Main.Locator(
+        ".spinner-border:visible, "
+      + "p:text-is(\"Loading…\"):visible, "
+      + "div:text-is(\"Loading…\"):visible, "
+      + "span:text-is(\"Loading…\"):visible");
 
     /// <summary>Waits until the circuit has taken over the server-rendered page.</summary>
     /// <remarks>
