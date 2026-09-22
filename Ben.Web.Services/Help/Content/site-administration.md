@@ -677,6 +677,9 @@ keep to itself. Leaving the box empty is safe: there is a built-in default of 20
 Raising it takes effect immediately and needs no deploy, which is the point — when there is more
 disk, this is the one number to change.
 
+![The storage ceiling](help-media:site-administration/storage-ceiling.png)
+*Free account storage, in the Limits group. Empty means the built-in default.*
+
 **What counts against it** is everything stored under the person: recordings, photographs, video
 projects, equipment pictures, place evidence, feed media. What does not: a group's own work, the
 superseded version of a replaced file, and anything published to a public location's archive,

@@ -2223,6 +2223,19 @@ public sealed class HelpMediaCapture : BenTestBase
         await GoAsync("/admin/site-settings");
         await ShootAsync("site-administration", "site-settings.png", gated: true);
 
+        // The storage ceiling (C1, 2026-09-22). The one number to change when there is more disk,
+        // so the shot is that setting's own card rather than the whole page — where it is one box
+        // of forty and the picture says nothing.
+        //
+        // Reached by ?setting=, because only the chosen tab is RENDERED: without it the page opens
+        // on the first section and this box is not below the fold, it is absent. That deep link
+        // exists precisely because two other links had already been caught promising a switch on a
+        // page that did not contain it.
+        await GoAsync("/admin/site-settings?setting=storage.free-account-megabytes");
+        await ShootAsync("site-administration", "storage-ceiling.png", gated: true,
+                         selector: ".card:has(.font-monospace:text-is('storage.free-account-megabytes'))",
+                         proves: "Free account storage");
+
         await GoAsync("/admin/support-tickets");
         await ShootAsync("site-administration", "support-tickets.png", gated: true);
 

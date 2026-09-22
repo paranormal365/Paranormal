@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>18 documents &middot; 6 sections</div>
-      <div>21 September 2026</div>
+      <div>22 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -664,6 +664,32 @@ paid lane, and a home's page offers none of these buttons.</p>
 <p>You can also simply <strong>post</strong> about a public place, with no space and no visit: see
 <a href="the-feed#posting-about-a-place">Posting about a place</a>. And what you record on the phone can be
 published to a place's archive the same way — see <a href="the-mobile-apps">the mobile apps</a>.</p>
+<h2>How much you can store</h2>
+<p>A free account has a <strong>storage allowance</strong>, and everything you keep to yourself counts towards it:
+recordings, photographs, video projects, equipment pictures, anything you add to a public
+location, anything you post. The figure is the same for everybody and a site administrator can
+change it.</p>
+<p><strong>Contributing gives the space back.</strong> A recording published to a public location's archive stops
+counting against you, because it has earned its place — it is what makes the archive worth reading
+to somebody who has never been there. A recording nobody but you will ever see does not. So the
+allowance is a nudge rather than a bill: contribute and your room comes back.</p>
+<p><strong>What does not count.</strong> Work that belongs to a group — a case's files, a group's equipment — is
+the group's, not yours, and never counts against you. Nor does the old version of a file you have
+replaced: cutting a long recording down to a short one lowers what you are using, as you would
+expect. And if you belong to a group on a paid plan, none of this applies to you at all.</p>
+<p><strong>What does count, and is worth knowing:</strong> a clip you cut from a recording is a second file. If
+you keep the original as well — which most people want to — you are keeping both, and both count.
+Deleting either gives its space straight back.</p>
+<h3>Being told before you run out</h3>
+<p>You do not have to watch a number. When you have used about 90% of your allowance the site sends
+you a message saying so, with nothing to do yet. If you get to 95% it sends a stronger one,
+because the next upload may be refused.</p>
+<p>Each of those arrives <strong>once</strong>. If you clear some space and drop back under 90%, the site forgets
+it warned you — so if you fill up again later, you will be told again rather than meeting the
+limit in silence.</p>
+<p>Three things make room, and the messages say so: publish a recording to a public location, delete
+files you no longer need, or join a group on a paid plan, which lifts the limit entirely. Nothing
+is ever deleted to make room — the limit is on what you can add, not on what you already have.</p>
 <h2>A group's own pages</h2>
 <p>Every group has a page of its own at <code>/o/their-name</code>, and everything they publish hangs off it: a
 strip of pills across the top takes you to their <strong>Cases</strong>, their <strong>Events</strong>, any pages they have
@@ -4157,6 +4183,11 @@ has decided its people stay unidentified to clients.</p>
 <h2>Members and roles</h2>
 <p><img alt="The group's members list" src="../Ben.Web.Services/Help/Media/organization-administration/members.png" />
 <em>Members and their roles. Roles decide what each person may do inside the group.</em></p>
+<p><strong>People who have left do not appear here.</strong> When somebody closes their account, or has it closed
+for them, they drop off this list straight away — there is nothing useful left to do with the row,
+since a closed account cannot be given a role, invited, or asked to do anything. Everything they
+recorded for the group stays exactly where it was, signed "A former member", so the group's record
+of its own work is unaffected.</p>
 <table>
 <thead>
 <tr>
@@ -6044,6 +6075,17 @@ different trade, and this switch is about walks.</p>
 record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
 files and site roles. Each tab edits directly, and every change is written to the audit log
 under your name.</p>
+<h3>Former members</h3>
+<p>Closing an account does not remove it. The person's name, contact details and credentials go, but
+the row stays so that the cases, evidence and messages they wrote for a group remain where that
+group left them, signed "A former member". Deleting the row outright would take a group's record
+of its own work with it.</p>
+<p>That means every account ever closed is still in this list. <strong>Include former members</strong>, above the
+grid, decides whether you see them; it is off when you arrive, and a count beside it says how many
+are being hidden — so a search that finds nobody tells you to tick the box rather than reading as
+though that person was never here.</p>
+<p>A group's own member list never shows them at all. Nobody there can give a closed account a role,
+invite it or ask it to do anything, so it would only be clutter on a screen people work from.</p>
 <h3>Last sign-in and how many</h3>
 <p>Two columns on the list answer who is actually using the site. <strong>Last sign-in</strong> is the most
 recent one; <strong>Sign-ins</strong> is how many there have been. Both sort, so a click on either heading
@@ -6462,6 +6504,66 @@ It is on unless it has been turned off.</p>
 </ul>
 <p>Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
 have their own switch, <strong>Sell event credits</strong>.</p>
+<h2>The storage ceiling</h2>
+<p><strong>Administration → Site Settings → Limits → Free account storage (MB)</strong> is what a free account may
+keep to itself. Leaving the box empty is safe: there is a built-in default of 2048 MB.</p>
+<p>Raising it takes effect immediately and needs no deploy, which is the point — when there is more
+disk, this is the one number to change.</p>
+<p><img alt="The storage ceiling" src="../Ben.Web.Services/Help/Media/site-administration/storage-ceiling.png" />
+<em>Free account storage, in the Limits group. Empty means the built-in default.</em></p>
+<p><strong>What counts against it</strong> is everything stored under the person: recordings, photographs, video
+projects, equipment pictures, place evidence, feed media. What does not: a group's own work, the
+superseded version of a replaced file, and anything published to a public location's archive,
+which earns its space. Members of a group on a paid plan are not capped at all.</p>
+<p><strong>People are warned before they meet it.</strong> A message goes out at 90% used and a stronger one at
+95%, each sent once. Somebody who frees space and drops back under 90% is warned again the next
+time they fill up, rather than being told once in their life and then meeting the limit in
+silence. Lowering the ceiling can therefore put accounts straight into the warned band on the next
+pass, which is the intended behaviour but worth expecting.</p>
+<h2>Places</h2>
+<p><strong>Administration → Places</strong> lists every location on the site: the homes groups work in and the
+public locations anybody signed in can contribute to. Search by name, street, town or state, and
+narrow to one kind or the other.</p>
+<p>Each row carries the three counts that decide what you can do with it — cases, visits and pieces
+of evidence. A row with nothing against it anywhere is one that can be removed; a row with
+anything against it is one to merge or make private instead.</p>
+<p><strong>Add a place</strong> opens the same form everybody else uses, so a location you add is matched against
+what already exists rather than becoming a second record of the same building.</p>
+<h3>Correcting a place</h3>
+<p>The pencil on a row opens the place for editing: what it is called, its street, town, state and
+ZIP, and where it sits on the map.</p>
+<p>This is the only door there is. The page where somebody adds a public location tells them "there
+is already a place at that address, and it is recorded as somebody's home — if that is wrong, ask
+a site administrator to correct it", and this is where that correction happens.</p>
+<p><strong>An address that already belongs to another record is refused.</strong> Two records of one building
+split its evidence between them, which is the thing the whole archive is built to avoid, so an
+edit that would land on an occupied address stops and names the record already there. Use
+<strong>Duplicate Places</strong> to fold the two together instead.</p>
+<p><strong>Coordinates.</strong> Type them and they are kept exactly as given — somebody correcting a record by
+hand usually knows better than an automatic lookup. Leave them empty and change the address, and
+the old position is thrown away and the new address looked up instead: a pin left over from the
+previous address is worse than no pin, because nothing on the map says it is wrong.</p>
+<p><strong>Look up the address again</strong> re-runs that lookup without changing anything else, which is what a
+row reading "not on the map" needs. When the lookup still cannot place it, the page says why
+rather than showing an empty map — a misspelt street and an address that simply is not in the
+mapping service look identical otherwise.</p>
+<h3>Taking a place off the public map</h3>
+<p>This is the repair for the mistake that matters most: somewhere somebody lives, entered as a
+public location. A public location has a page strangers can read and add photographs to, so a home
+listed that way is a public evidence page for an address a family lives at.</p>
+<p><strong>Make it a private residence</strong> takes the page away and stops anybody adding to it. Nothing
+recorded there is deleted — the group working the case keeps every file, every session and every
+note. It is the safe answer, and it is almost always the right one.</p>
+<p>Going the other way, <strong>Make it a public location</strong>, is refused for anything carrying a street
+number. If a genuine landmark has a street address on it, clear the address first. The refusal is
+deliberate: promoting a row on a list of fifty is exactly how somebody's home would end up public.</p>
+<h3>Deleting a place</h3>
+<p>Only possible while nothing at all points at the record — no case, no visit, no evidence, no
+event, no room, no venue profile, no contact, no claim. If anything does, the refusal names it
+("3 cases and 6 pieces of evidence still point at it") so you know what to move first.</p>
+<p>For a place that is a duplicate of another, use <strong>Duplicate Places</strong> instead: merging moves
+everything onto the record you keep and then removes the empty one. For a place with real history
+that should not be public, make it private rather than trying to empty it.</p>
 <h2>Merging two groups</h2>
 <p><strong>Administration → Groups → Merge Groups</strong> takes two organizations and ends with one. Choose
 the <strong>base</strong> — the group that survives, keeping its URL and settings — and the group to merge

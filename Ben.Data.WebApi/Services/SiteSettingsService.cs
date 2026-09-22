@@ -256,7 +256,7 @@ public static class SiteSettingKeys
             "How many audio edits, clips, EVP scans or mix exports one caller may ask for each minute. Each of these decodes a whole recording while the request waits, so a handful at once is what a busy person does and a hundred is a script. Low by design; raise it if somebody working through a long recording reports being turned away. Leave empty for the default."),
 
         (FreeAccountStorageMegabytes, "Free account storage (MB)",
-            "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),
+            "How much somebody with no paid group may keep to themselves — recordings, photographs, video projects, equipment pictures, anything added to a public location. A group's own work never counts against a person, nor does a recording published to a public location, nor the superseded version of a replaced file. Members of a group on a paid plan are not capped at all. People are told at 90% and again at 95%. Leave empty for the built-in default of 2048 MB."),
         (EventRetentionDays, "How long an event's files are kept (days)",
             "Days after an event's last date before its files, gallery pictures and the links to photos in its room are removed. The organizer is written to 30 and 7 days before. Guests' own photos stay in their libraries. Leave empty for the built-in default of 90 days."),
         (EventStorageMegabytes, "Storage for one event (MB)",
