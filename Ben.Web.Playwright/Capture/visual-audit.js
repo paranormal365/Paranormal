@@ -38,6 +38,7 @@
 window.__benVisualAudit = function () {
   const out = [];
   const seen = new Set();
+  const exempt = [];
 
   // A colour, whatever notation it arrived in, as sRGB bytes plus alpha. See the trap above.
   const _canvas = document.createElement('canvas');
@@ -172,23 +173,43 @@ window.__benVisualAudit = function () {
     const inert = el.closest(
       ':disabled, [aria-disabled="true"], .disabled, .k-disabled, fieldset[disabled]') !== null;
 
-    if (!inert && ownText(el) && parseFloat(s.fontSize) >= 10) {
+    // The disabled ones are still MEASURED, and counted at the end. Dropping them in silence is
+    // its own fault: a reader cannot tell a control that passed from one that was never looked at,
+    // and the merge screen's Preview button spent a whole report cycle looking like a fixed fault
+    // when nothing about it had changed.
+    if (ownText(el) && parseFloat(s.fontSize) >= 10) {
       const fg = rgb(s.color);
       if (fg && alpha(s.color) > .5) {
         const bg = bgOf(el);
         const big = parseFloat(s.fontSize) >= 24 || (parseFloat(s.fontSize) >= 18.66 && +s.fontWeight >= 600);
         const quote = `"${el.textContent.trim().slice(0, 24)}"`;
         if (bg.unmeasurable) {
-          add('contrast not measurable', el,
-              `over a gradient or image on ${path(bg.unmeasurable)} — ${quote} needs checking by eye`);
+          if (!inert)
+            add('contrast not measurable', el,
+                `over a gradient or image on ${path(bg.unmeasurable)} — ${quote} needs checking by eye`);
         } else {
           const c = ratio(fg, bg.rgb);
-          if (c < (big ? 3 : 4.5))
-            add('low contrast text', el,
-                `${c.toFixed(2)}:1 on rgb(${bg.rgb}) — ${quote}` + (bg.on ? ` — behind it: ${path(bg.on)}` : ''));
+          if (c < (big ? 3 : 4.5)) {
+            if (inert) exempt.push({ el: path(el), ratio: c });
+            else
+              add('low contrast text', el,
+                  `${c.toFixed(2)}:1 on rgb(${bg.rgb}) — ${quote}` + (bg.on ? ` — behind it: ${path(bg.on)}` : ''));
+          }
         }
       }
     }
+  }
+
+  // One row, not one per element: saying so must not re-bury what it was introduced to surface.
+  if (exempt.length) {
+    const worst = exempt.reduce((a, b) => (b.ratio < a.ratio ? b : a));
+    const names = [...new Set(exempt.map(e => e.el))];
+    out.push({
+      kind: 'contrast exempt (disabled)',
+      el: `${exempt.length} element${exempt.length === 1 ? '' : 's'}`,
+      detail: `under the minimum but disabled, so not counted as faults — worst ${worst.ratio.toFixed(2)}:1 on `
+            + `${worst.el}; ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` and ${names.length - 4} more` : ''}`
+    });
   }
 
   for (const img of document.images)

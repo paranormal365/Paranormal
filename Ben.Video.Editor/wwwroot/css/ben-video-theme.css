@@ -101,7 +101,15 @@
        These stay distinct per panel — that difference is how you tell a video
        clip's editor from an audio clip's at a glance — but they are drawn from
        the template's semantic colours instead of the editor's old pastel set,
-       which clashed with the Night palette. */
+       which clashed with the Night palette.
+
+       ONLY TWO OF THE FIVE ARE READ by any stylesheet today: --bv-title-text
+       (TextOverlayEditor.razor.css) and --bv-title-trans (TransitionEditor.razor.css).
+       The video, audio and image ones are declared here and in ben-video-variables.css and
+       consumed by nothing — the "AudioClip / AudioClipEditor header" in the variables file is
+       stale. Left in place because the set is meant to be per-panel, but do not read those
+       comments as evidence that a colour is on screen: a 2026-09-22 audit finding was filed
+       against the audio one before anyone checked it was drawn. */
     --bv-title-video:   var(--bs-primary, #37508a);
     --bv-title-audio:   var(--bs-success, #489e48);
     --bv-title-text:    var(--bs-danger,  #a85593);
@@ -172,4 +180,23 @@
 .bv-editor .k-tabstrip-items-wrapper .k-tabstrip-item:hover,
 .bv-editor .k-tabstrip-items-wrapper .k-item:hover {
     color: var(--bv-text);
+}
+
+/* ── Panel titles as INK on the dark panel ──────────────────────────────────
+   The five above are FILL colours: every one was picked to sit behind white button text, not to
+   be drawn as ink. Measured on the panel these headings actually sit on — .bv-toe__header and
+   .bv-transition-editor__header both take `var(--kendo-color-surface)`, which the site maps to
+   --bs-tertiary-bg, #2b3035 in dark — the two that are consumed read 2.78:1 and 1.46:1. The
+   transition editor's heading is effectively invisible.
+
+   Lifted toward white by the same method app.css uses for the .text-* utilities. That fix could
+   not reach here: it is scoped to the utility classes, and the editor reads the raw variable in
+   scoped component CSS, so a colour already corrected everywhere else on the site came back at
+   full strength inside the editor.
+
+   Dark only. On the light panel (#f8f9fa) both already clear AA — 4.54 and 8.63 — and lifting
+   them there would wash them out, which is the direction app.css chose for the same reason. */
+:root[data-bs-theme="dark"] {
+    --bv-title-text:    color-mix(in srgb, var(--bs-danger, #a85593) 72%, #fff);  /* 4.59 on #2b3035 */
+    --bv-title-trans:   color-mix(in srgb, var(--bs-info,   #66366c) 55%, #fff);  /* 4.65 on #2b3035 */
 }
