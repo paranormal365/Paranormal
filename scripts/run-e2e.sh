@@ -260,7 +260,13 @@ if [[ -z "${SA_TOKEN:-}" ]]; then
   echo "   could not sign in as $SA_EMAIL — leaving features at their defaults."
   echo "   (walks that visit a gated section will report it as 'not routed')"
 else
-  for feature in features.publications; do
+  # features.public-feed is here for a reason that is easy to undo by accident. FeedTests and
+  # FeedArcTests each turn the feed on and then put it back TO WHAT THEY FOUND. Starting a run with
+  # it off means they turn it on, run, and turn it off again — and every later fixture that visits
+  # /feed walks "There is nothing at this address" instead. That is four phantom failures in a
+  # crawl, and worse in the walks, which report the refusal page as a clean screen. Turning it on
+  # HERE, once, makes every one of those restores a no-op.
+  for feature in features.publications features.public-feed; do
     code=$(curl -fsS -o /dev/null -w "%{http_code}" -X PUT \
       "$API_URL/api/admin/site-settings/$feature" \
       -H "Authorization: Bearer $SA_TOKEN" -H "Content-Type: application/json" \

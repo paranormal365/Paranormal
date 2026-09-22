@@ -216,6 +216,22 @@ window.__benVisualAudit = function () {
     if (img.complete && img.naturalWidth === 0 && img.getBoundingClientRect().width > 4)
       add('broken image', img, img.currentSrc || img.src);
 
+  // A refusal is not a clean screen. With the public feed switched off, /feed renders the gate's
+  // "There is nothing at this address" — no clipping, no contrast fault, nothing hard-coded — and
+  // the walk wrote "`/feed` — nothing", which reads as CHECKED AND FINE. The whole surface was
+  // unaudited and the report said the opposite. Anything walked deliberately and answered with a
+  // refusal is a finding about the run, whether the cause is a switch, a missing seed row or a
+  // genuinely dead route.
+  const refusal = (document.body.innerText || '').match(
+    /There is nothing at this address|Page not found/i);
+  if (refusal)
+    out.push({
+      kind: 'walked a refusal, not a screen',
+      el: 'body',
+      detail: `the page answered "${refusal[0]}" — nothing here was audited, so a clean result `
+            + 'for this route means nothing. A feature switch, a missing seed row, or a dead route'
+    });
+
   const de = document.documentElement;
   if (de.scrollWidth > de.clientWidth + 2)
     out.push({ kind: 'page scrolls sideways', el: 'html', detail: `${de.scrollWidth - de.clientWidth}px` });

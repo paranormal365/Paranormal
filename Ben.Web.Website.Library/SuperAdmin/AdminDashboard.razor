@@ -141,9 +141,16 @@
         </div>
     }
 
+    @* id, like #events-dashboard and #event-health on the other two tabs: it exists only once the
+       charts have arrived, so it is a readiness signal a walk can WAIT for. The site tab was the
+       one without one, so ProductWalk checked it by looking for a string instead — a check made
+       once, after the screenshot, with nothing to wait on. The dashboard's loader is a "Loading…"
+       paragraph rather than a .spinner-border, so the walk's settle logic never saw it either, and
+       the step photographed a loading page and then said it "never said Sign-ins and
+       registrations". (2026-09-22, W2.) *@
     @if (!_loading && _charts is not null)
     {
-        <div class="row g-3">
+        <div class="row g-3" id="site-dashboard">
             <div class="col-xl-8">
                 <div class="card h-100"><div class="card-body">
                     <div class="small text-secondary mb-2">Sign-ins and registrations</div>
