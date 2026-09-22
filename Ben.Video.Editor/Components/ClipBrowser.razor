@@ -273,7 +273,12 @@
     // unhooks every element at once), and that no hand-built element naming a styled class is
     // missing it. Add the attribute to anything built by hand here, children included: a rule like
     // ".bv-browser__empty p" compiles the attribute onto the p, not onto the div.
-    private const string CssScope = "b-xbjan6uni8";
+    // Read out of obj/<config>/net10.0/scopedcss/Components/ClipBrowser.razor.rz.scp.css, which is
+    // the only place the real value exists. It was "b-xbjan6uni8" when the guard below was written,
+    // and the guard's first run said otherwise: the compiler stamps b-ix6pdo4zfh, so every element
+    // listed above was carrying an attribute the stylesheet does not match — exactly the fault the
+    // constant exists to prevent, sitting inside the fix for it (2026-09-22).
+    private const string CssScope = "b-ix6pdo4zfh";
 
     // ── Parameters ───────────────────────────────────────────────────────────
     [Parameter] public EventCallback<VideoClip> OnClipSelected   { get; set; }
