@@ -37,11 +37,20 @@ public sealed class EventGuestMailer
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<EventGuestMailer> _log;
 
+    private readonly IOutboxEmailQueue? _queue;
+
+    /// <param name="queue">
+    /// Optional, and LAST, so the fourteen existing test constructions keep compiling — DI still
+    /// supplies the real one, because it is registered. A method that needs it says so loudly
+    /// rather than falling back to the non-atomic path, which would be the bug quietly restored
+    /// (item 239b).
+    /// </param>
     public EventGuestMailer(
         IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        ILogger<EventGuestMailer> log)
-    { _email = email; _site = site.Value; _log = log; }
+        ILogger<EventGuestMailer> log,
+        IOutboxEmailQueue? queue = null)
+    { _email = email; _site = site.Value; _log = log; _queue = queue; }
 
     /// <summary>Whether a letter could go at all.</summary>
     public bool IsConfigured => _email.IsConfigured;
@@ -289,7 +298,17 @@ public sealed class EventGuestMailer
                   + "they answer.</p>");
         body.Append("<p>Nothing is paid through this site.</p>");
 
-        await _email.SendAsync(new EmailMessage(
+        // Queued into the CALLER'S context, not sent through one of our own (item 239b). This
+        // letter is the one that says "nothing is held yet", so a guest who does not get it
+        // assumes the opposite and turns up with a suitcase — it must not be able to go missing
+        // while the request it describes commits. The caller opens a transaction and saves after
+        // this returns; see PublicHostedEventBookingController and PublicEventAttendanceController.
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendAskedAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or the letter and the "
+          + "request it describes stop being atomic — which is the whole point of item 239b.");
+
+        await queue.EnqueueAsync(db, new EmailMessage(
             to,
             $"We've passed your request for {ev?.Name ?? "the event"} on",
             body.ToString(),
