@@ -63,13 +63,18 @@ What the app deliberately does NOT do with that trust:
 
 ---
 
-## Shorter version, if the field is small
+## The 500-character version - THIS is the one Partner Center takes
 
-IsHaunted.com SideCar is a Win32 desktop app (self-contained .NET) packaged as MSIX, with
-Windows.FullTrustApplication as its entry point; runFullTrust is what declares that. It needs full
-trust for two things an AppContainer forbids: it launches FFmpeg as a child process - the two
-binaries bundled in this package, resolved by absolute path and SHA-256 verified before each run,
-never from PATH - and it listens on a 127.0.0.1 loopback socket so our web video editor can hand it
-rendering work. It requests no elevation, reads and writes only under %LOCALAPPDATA%\BenVideo\
-sidecar and never the user's own directories, makes no outbound network connections at all, starts
-no other process, and does not run at startup unless the user enables it in Windows Settings.
+**Measured, not guessed: the justification field is a hard 500 characters**, found on 2026-09-23 by
+pasting the long answer above and seeing it truncate at 501. Line breaks count, so paste it as a
+single paragraph. The text below is 498.
+
+SideCar is a Win32 desktop app (self-contained .NET), not UWP; runFullTrust declares that. It needs it for two things an AppContainer forbids: launching FFmpeg as a child process - the two binaries bundled in this package, resolved by absolute path and SHA-256 verified, never from PATH - and listening on a 127.0.0.1 socket so our web editor can send it rendering work. No elevation, no files outside %LOCALAPPDATA%\BenVideo\sidecar, no outbound connections, no startup unless the user enables it.
+
+Cut to fit, all true and none load-bearing: the pairing token, the authentication rate limiting, and
+`startupTask Enabled="false"` - which a reviewer can read in the manifest anyway. Kept: the two
+reasons, because they are the question, and the four negatives, because they are what a reviewer is
+actually checking - that the app did not ask for full trust and then help itself to the machine.
+
+The long version above is still worth having. It is the answer if certification comes back and asks
+for more, and it is where the claims are written out in full.
