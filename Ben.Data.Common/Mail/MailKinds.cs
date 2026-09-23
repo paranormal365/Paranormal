@@ -134,7 +134,29 @@ public static class MailKinds
     public static readonly MailKindInfo SomebodyUsedYourAddress = new(
         "somebody-used-your-address", "Somebody tried to use your address",
         "Warns the holder of an address that it was entered on a new sign-up.",
-        ["AppUsers"]);
+        ["AppUsers"],
+        [new("SignInUrl", "The sign-in page, for somebody who forgot they had an account."),
+         new("SignInButton", "A ready-made button pointing at that link.", IsHtml: true)]);
+
+    /// <summary>
+    /// An investigation request made under an address that already has an account, and the one link
+    /// that can claim it.
+    /// </summary>
+    /// <remarks>
+    /// Split from <see cref="SomebodyUsedYourAddress"/> on 2026-09-23. Both letters went out under
+    /// that one kind, so a single template replaced both — and the one published on production had no
+    /// link in it at all, so this letter would have told somebody a request was waiting and given
+    /// them no way to claim it. Its link is REQUIRED here, so a template without it is refused.
+    /// </remarks>
+    public static readonly MailKindInfo RequestMadeUnderYourAddress = new(
+        "request-made-under-your-address", "A request was made using your address",
+        "Tells an account holder that an investigation request was made with their address, and how to claim it.",
+        ["AppUsers"],
+        [new("FinishUrl", "The link that opens the request so they can add it to their account.",
+             Required: true, Provides: "a way to claim the request"),
+         new("FinishButton", "A ready-made button pointing at that link.", IsHtml: true,
+             Provides: "a way to claim the request"),
+         new("StreetAddress", "Where the investigation was asked for — what lets them recognise it.")]);
 
     // ── A case, and its client ────────────────────────────────────────────────
     public static readonly MailKindInfo CaseStatusChanged = new(
@@ -341,15 +363,22 @@ public static class MailKinds
         CanDecline: true);
 
     // ── Looking after a place ─────────────────────────────────────────────────
+    /// <remarks>
+    /// The code is the letter. It was not declared until 2026-09-23, so a template for this kind could
+    /// be saved without it and would have proved nothing; it is REQUIRED now.
+    /// </remarks>
     public static readonly MailKindInfo VenueClaimCode = new(
         "venue-claim-code", "A code to confirm who runs this place",
         "Sent to a venue's own published address to prove a claim.",
-        ["AppUsers", "Places", "Organizations"]);
+        ["AppUsers", "Places", "Organizations"],
+        [new("ClaimCode", "The code to hand to whoever is making the claim.", Required: true,
+             Provides: "the code")]);
 
     /// <summary>Every kind, in the order a person should see them.</summary>
     public static readonly IReadOnlyList<MailKindInfo> All =
     [
         ConfirmYourAddress, ResetYourPassword, AccountMadeForYou, SomebodyUsedYourAddress,
+        RequestMadeUnderYourAddress,
         CaseStatusChanged, VisitScheduled, VisitRescheduled, VisitCancelled,
         RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable,
         TourSignUp, TourReminder,

@@ -203,6 +203,13 @@ public static class MailTokens
         null                 => null,
         string s             => s,
         bool b               => b ? "Yes" : "No",
+        // A CALENDAR DATE, not an instant: StartsOn, EndsOn, a night's Date. Stored at midnight,
+        // and converting that midnight "from UTC" printed the day before at seven in the evening
+        // in Chicago — so a published template saying when an event starts named the wrong day.
+        // An instant landing on midnight to the tick is not a real case; one that did would print
+        // as its date, which is still true.
+        DateTime d when d.Kind != DateTimeKind.Utc && d.TimeOfDay == TimeSpan.Zero
+                             => d.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture),
         DateTime d           => TimeZoneInfo.ConvertTimeFromUtc(
                                     DateTime.SpecifyKind(d, DateTimeKind.Utc), zone)
                                 .ToString("MMMM d, yyyy h:mm tt", CultureInfo.InvariantCulture),

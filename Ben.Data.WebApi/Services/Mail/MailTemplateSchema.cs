@@ -53,7 +53,7 @@ public static class MailTemplateSchema
     /// A Guid is offered because a reference number sometimes IS one, but nothing structural:
     /// byte arrays, collections and owned types have no reading a person would want.
     /// </remarks>
-    private static bool Readable(Type t)
+    internal static bool Readable(Type t)
     {
         var bare = Nullable.GetUnderlyingType(t) ?? t;
         return bare == typeof(string) || bare == typeof(bool) || bare == typeof(Guid)
@@ -62,7 +62,7 @@ public static class MailTemplateSchema
             || bare == typeof(double) || bare == typeof(float) || bare.IsEnum;
     }
 
-    private static bool Secret(string column)
+    internal static bool Secret(string column)
         => NeverOffered.Any(bad => column.Contains(bad, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>What an author of this kind of letter may pick from.</summary>

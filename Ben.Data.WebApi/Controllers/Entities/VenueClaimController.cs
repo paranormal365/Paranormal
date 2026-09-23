@@ -347,8 +347,16 @@ public sealed class VenueClaimController : BenControllerBase
                  + "<p>It works for 24 hours. If you don't know who this is, don't share it — nothing "
                  + "happens without the code.</p>";
 
+        static Services.Mail.MailRows.Manual Named(string table, string name)
+            => new(table, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["Name"] = name });
+
         await _email.SendAsync(new EmailMessage(to, $"A code to confirm who runs {placeName}", body,
-            Kind: MailKinds.VenueClaimCode.Key), ct);
+            Kind: MailKinds.VenueClaimCode.Key,
+            // The code is the letter, so a template of this kind is REQUIRED to carry {ClaimCode};
+            // until 2026-09-23 nothing declared or supplied it.
+            Payload: Services.Mail.MailRows.For(MailKinds.VenueClaimCode,
+                new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase) { ["ClaimCode"] = new(code) },
+                Services.Mail.MailRows.Person(to, null), Named("Places", placeName), Named("Organizations", orgName))), ct);
     }
 
     private async Task TellReviewersAsync(Guid senderId, string subject, string body, CancellationToken ct)

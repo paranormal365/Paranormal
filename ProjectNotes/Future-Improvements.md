@@ -13238,6 +13238,36 @@ Ben's ask is recorded in full at [[245]]; this is what was built for it.
 - **`EveryMailKindHasASenderTests`** holds the gap open where it can be seen: a declared kind must
   be sent by something or be listed with what it waits on, and the list may only get shorter.
 
+### Done 2026-09-23 — templates were armed and would have gone out blank
+
+"A mailer that wants row tokens hands them over in a `MailPayload`" — nineteen named a kind and
+handed over nothing, and a table token with no row renders as an empty string. **Seven templates
+were published on production (`IsHauntedDb`) for such letters**, none sent yet: bookings-arrived,
+guest-removed, case-status-changed, somebody-used-your-address, visit-cancelled, visit-rescheduled,
+visit-scheduled. The editor's preview fills every token with invented rows, so all seven looked
+right.
+
+- **Stopgap (Ben runs it; the session's production write was refused, correctly):** unpublish all
+  seven — `UPDATE dbo.EmailTemplates SET PublishedUtc = NULL … WHERE Kind IN (…seven…)`. Republish
+  each once this branch is live.
+- **`MailRows.For(kind, …entities)`** builds the rows from the entities a letter is about, through
+  the same readable/secret column rules the editor offers, dropping any table the kind does not
+  declare. All nineteen sends now use it; `EveryDeclaredLetterHandsOverItsRowsTests` fails on a
+  `new EmailMessage(… Kind: …)` without `Payload:`.
+- **The request letter was sharing the warning's kind.** A request made under somebody's address
+  and "somebody used your address" both went out as `somebody-used-your-address`, so the published
+  template — which has no link — would have replaced the request letter and dropped its only claim
+  link. It is now `request-made-under-your-address`, whose link is REQUIRED. The warning gained
+  `{SignInUrl}`/`{SignInButton}`; the venue code letter's `{ClaimCode}` is now required.
+- **Calendar dates printed as the evening before.** `HostedEvents.StartsOn` is a date with no zone;
+  rendered as UTC-into-Chicago it read "October 29, 7:00 PM" for the 30th. A non-UTC midnight now
+  prints as its own day.
+- **Before republishing guest-removed:** its `{HostedEvents.CancelledReason}` will always be blank —
+  removal clears it (the reason lives on `HostedEventRemoval.Note`). Edit that template first.
+- **Tests:** `APublishedTemplateFillsInTests` (unit, real outbox, five letters) and
+  `PublishedTemplateFillsInTests` (Playwright: publish, sign up twice with one address, read the
+  outbox). Each was run against the unfixed code and failed for the right reason.
+
 ### Two mistakes worth not repeating
 
 **Every mailer converted from the three-argument `SendAsync` breaks the tests that mock it.** It

@@ -1,4 +1,5 @@
 using Ben.Data.Common.Mail;
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -51,6 +52,16 @@ public sealed class EventGuestMailer
         ILogger<EventGuestMailer> log,
         IOutboxEmailQueue? queue = null)
     { _email = email; _site = site.Value; _log = log; _queue = queue; }
+
+    /// <summary>
+    /// The organization row for a template: the loaded entity when there is one, else just its name.
+    /// </summary>
+    private static object? OrganizationRow(HostedEvent ev, string? organizationName)
+        => (object?)ev.Organization
+        ?? (organizationName is { Length: > 0 }
+            ? new MailRows.Manual("Organizations",
+                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["Name"] = organizationName })
+            : null);
 
     /// <summary>Whether a letter could go at all.</summary>
     public bool IsConfigured => _email.IsConfigured;
@@ -121,12 +132,21 @@ public sealed class EventGuestMailer
         if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
             attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
 
+        // The pass travels in the letter; a template of this kind is promised it as PassImage and
+        // PassUrl (MailKinds.BookingDecided), and until 2026-09-23 was handed neither.
+        var passSupplied = pass is null ? null : new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PassImage"] = new($"<img src=\"{EventPasses.DataUri(pass.Token)}\" alt=\"Your entry pass\" width=\"180\" height=\"180\" />", IsHtml: true),
+            ["PassUrl"] = new(_site.AbsoluteUrl(Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token))),
+        };
+
         await queue.EnqueueAsync(db, new EmailMessage(
             to, subject, body,
             Attachments: attachments,
             // A guest hitting reply means to reach the venue whose spare room they are sleeping
             // in, not our support address.
-            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key,
+            Payload: MailRows.For(MailKinds.BookingDecided, passSupplied, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
         // can see at a glance whose replacement has not gone out yet. Written by the caller's
@@ -266,7 +286,8 @@ public sealed class EventGuestMailer
             to,
             $"The places you chose at {ev?.Name ?? "the event"} have gone back",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldLapsed.Key), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldLapsed.Key,
+            Payload: MailRows.For(MailKinds.HoldLapsed, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -319,7 +340,8 @@ public sealed class EventGuestMailer
             to,
             $"We've passed your request for {ev?.Name ?? "the event"} on",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingAsked.Key), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingAsked.Key,
+            Payload: MailRows.For(MailKinds.BookingAsked, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -363,7 +385,8 @@ public sealed class EventGuestMailer
             to,
             $"Your places at {ev?.Name ?? "the event"} are held",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldPlaced.Key), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldPlaced.Key,
+            Payload: MailRows.For(MailKinds.HoldPlaced, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -480,7 +503,9 @@ public sealed class EventGuestMailer
 
         var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl);
         await _email.SendAsync(new EmailMessage(to, subject, body,
-            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventThankYou.Key), ct);
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventThankYou.Key,
+            Payload: MailRows.For(MailKinds.EventThankYou, booking.LeadAppUser, booking.HostedEvent,
+                                  booking.HostedEvent?.Organization)), ct);
         return true;
     }
 
@@ -619,7 +644,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key,
+                    Payload: MailRows.For(MailKinds.EventCalledOff, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -670,7 +696,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key,
+                    Payload: MailRows.For(MailKinds.EventCalledOff, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -720,7 +747,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventGoingAhead.Key), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventGoingAhead.Key,
+                    Payload: MailRows.For(MailKinds.EventGoingAhead, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -805,7 +833,10 @@ public sealed class EventGuestMailer
             to,
             $"Can you help at {ev?.Name ?? "an event"}?",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.StaffInvite.Key), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.StaffInvite.Key,
+            // An invited helper usually has no account yet: the row is the person as invited.
+            Payload: MailRows.For(MailKinds.StaffInvite,
+                (object?)staff.AppUser ?? MailRows.Person(to, staff.DisplayName), ev, ev?.Organization)), ct);
 
         return true;
     }
@@ -1051,7 +1082,9 @@ public sealed class EventGuestMailer
                      + $"<a href=\"{page}\">{Safe(ev.Name)}</a>. Reply to write back to {Safe(organizationName)}.</p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo, Kind: MailKinds.EventAnnouncement.Key), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo, Kind: MailKinds.EventAnnouncement.Key,
+                    Payload: MailRows.For(MailKinds.EventAnnouncement, MailRows.Person(to, recipient.Name), ev,
+                                          OrganizationRow(ev, organizationName))), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1095,7 +1128,12 @@ public sealed class EventGuestMailer
                      + $"<p><a href=\"{appeal}\">Appeal this decision</a></p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body, Kind: MailKinds.GuestRemoved.Key), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body, Kind: MailKinds.GuestRemoved.Key,
+                    // The rows a template of this kind reads (MailRows). Note for a template's
+                    // author: a removal CLEARS CancelledReason on purpose — the moderator's note is on
+                    // the removal record, which this kind does not carry — so {HostedEvents.CancelledReason}
+                    // is always empty here. CancelledAtUtc is the removal's time.
+                    Payload: MailRows.For(MailKinds.GuestRemoved, MailRows.Person(to, name), ev, ev.Organization)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1128,7 +1166,8 @@ public sealed class EventGuestMailer
             try
             {
                 await _email.SendAsync(new EmailMessage(to,
-                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body, Kind: MailKinds.AppealAnswered.Key), ct);
+                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body, Kind: MailKinds.AppealAnswered.Key,
+                    Payload: MailRows.For(MailKinds.AppealAnswered, MailRows.Person(to, name), ev, ev.Organization)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1172,7 +1211,9 @@ public sealed class EventGuestMailer
                     // filed under an unrelated heading in the outbox, and no template written for
                     // any of them could ever apply (item 246, found 2026-09-21).
                     ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: kind.Key,
-                    TimesShownInZone: ZoneLabel(session.HostedEvent)), ct);
+                    TimesShownInZone: ZoneLabel(session.HostedEvent),
+                    Payload: MailRows.For(kind, signUp.AppUser, session.HostedEvent,
+                                          session.HostedEvent.Organization, session)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)

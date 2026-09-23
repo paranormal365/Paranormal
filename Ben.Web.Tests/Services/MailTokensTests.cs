@@ -47,6 +47,25 @@ public sealed class MailTokensTests
     public void A_time_is_shown_where_the_reader_is(string zone, string expected)
         => Assert.Equal(expected, MailTokens.Render("{Time}", For(zone)));
 
+    /// <summary>
+    /// A calendar date prints as that date — not the evening before.
+    /// </summary>
+    /// <remarks>
+    /// StartsOn, EndsOn and a night's Date are stored at midnight. Every DateTime used to be
+    /// converted as if it were a UTC instant, so in Chicago the published "bookings have arrived"
+    /// template would have said an event starts on the 29th at 7:00 PM when it starts on the 30th.
+    /// </remarks>
+    [Fact]
+    public void A_calendar_date_prints_as_its_own_day_wherever_the_reader_is()
+    {
+        var c = For("America/Chicago", tables: new() { ["HostedEvents"] = new Dictionary<string, object?>
+            { ["StartsOn"] = new DateTime(2026, 10, 30), ["CancelledAtUtc"] = new DateTime(2026, 10, 1, 15, 30, 0) } });
+
+        Assert.Equal("October 30, 2026", MailTokens.Render("{HostedEvents.StartsOn}", c));
+        // An instant is still an instant, and still shown where the reader is.
+        Assert.Equal("October 1, 2026 10:30 AM", MailTokens.Render("{HostedEvents.CancelledAtUtc}", c));
+    }
+
     [Fact]
     public void A_column_is_read_from_the_row_the_letter_carries()
     {
