@@ -208,6 +208,10 @@ $jobs = @()
 if ($Only -in @('all', 'poster')) {
     $jobs += @{ Page = 'poster.html'; W = 1440; H = 2160; Name = 'poster-1440x2160.png' }
     $jobs += @{ Page = 'poster.html'; W = 1080; H = 1080; Name = 'poster-1080x1080.png' }
+    # 16:9, for hero art. The second is exactly twice the first and poster.html is sized in vmin,
+    # so these are one picture at two resolutions - not something to keep in step by hand.
+    $jobs += @{ Page = 'poster.html'; W = 1920; H = 1080; Name = 'poster-1920x1080.png' }
+    $jobs += @{ Page = 'poster.html'; W = 3840; H = 2160; Name = 'poster-3840x2160.png' }
 }
 if ($Only -in @('all', 'icons')) {
     # ONE master, rendered big, then downscaled below. Downsampling a large render is plainly

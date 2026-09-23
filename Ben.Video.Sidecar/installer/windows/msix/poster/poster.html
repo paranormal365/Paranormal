@@ -126,14 +126,52 @@
   }
 
   /* ---- square (1080x1080) ----------------------------------------------
-     Same scale, less air. The portrait has height to spend and the square does not. */
-  @media (min-aspect-ratio: 1/1) {
+     Same scale, less air. The portrait has height to spend and the square does not.
+     Bounded at the top as well as the bottom so 16:9 falls through to the block below rather
+     than inheriting a layout tuned for a frame with no width to spare. */
+  @media (min-aspect-ratio: 1/1) and (max-aspect-ratio: 5/4) {
     .mark       { width: 38vmin; height: 38vmin; }
     .is-haunted-text { font-size: 8.6vmin; margin-top: 2.6vmin; }
     .product    { font-size: 4vmin; margin-top: 2vmin; }
     .rule       { margin-top: 2.8vmin; }
     .tagline    { margin-top: 2.6vmin; font-size: 2.5vmin; max-width: 66vmin; }
     .shot       { background-position: 100% 50%; }
+  }
+
+  /* ---- landscape (1920x1080 and 3840x2160) -----------------------------
+     One layout for both: 3840x2160 is exactly twice 1920x1080, and everything here is in vmin,
+     so the two renders are the same picture at two resolutions rather than two designs.
+
+     Kept CENTRED rather than laid out as logo-left / text-right, which would fill the frame more
+     handsomely. The Store crops hero art differently in different placements and can lay its own
+     title over one side of it; a centred lockup survives that, and an off-centre one is a gamble
+     on a layout we do not control. It also keeps this recognisably the same piece as the poster
+     and the square.
+
+     Everything is a touch larger than the square's scale because a 16:9 frame read at a distance
+     is mostly air, and a lockup sized for a tile disappears into it. */
+  @media (min-aspect-ratio: 5/4) {
+    .mark       { width: 40vmin; height: 40vmin; }
+    .is-haunted-text { font-size: 9.6vmin; margin-top: 2.8vmin; }
+    .product    { font-size: 4.4vmin; margin-top: 2.2vmin; }
+    .rule       { width: 18vmin; margin-top: 3vmin; }
+    .tagline    { margin-top: 3vmin; font-size: 2.6vmin; max-width: 80vmin; }
+    /* At 16:9 the source (2000x1177) is almost the same shape as the frame, so `cover` barely
+       crops it and background-position has nothing to move: the WHOLE editor lands in shot,
+       including its empty 1280x720 preview canvas, which arrives as a hard black rectangle that
+       18px of blur cannot dissolve. So this aspect sets its own background-size to zoom in past
+       the canvas, and only then is there overflow for the position to work with.
+
+       The Y is 22% and not centred for a second reason: vertically centred, this zoom lands on
+       the BODY of the media library, which is empty, and the backdrop came out an almost flat
+       field. 22% brings the panel header, its tabs and the Rendered/Live buttons into shot -
+       the part of the editor that actually has structure to blur.
+
+       The transform is smaller here than the 1.25 above because background-size has already
+       done the zooming; 1.25 on top of it would crop back toward the centre and undo the 88%.
+       It is not 1.0 because a blur still samples past the element's own edge and finds nothing
+       there, so a little scale is what keeps that faded band off-canvas. */
+    .shot       { background-size: 220% auto; background-position: 88% 22%; transform: scale(1.12); }
   }
 </style>
 </head>
