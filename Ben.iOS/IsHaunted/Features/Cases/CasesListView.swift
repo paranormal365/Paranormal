@@ -124,13 +124,20 @@ struct StatusChip: View {
             .foregroundStyle(tint)
     }
 
+    /// A colour for every state the server can actually send.
+    ///
+    /// This switch still named `.pending` and `.declined` after audit fix 13 replaced the invented
+    /// four-value enum with the server's nine, so the app target has not compiled since
+    /// 2026-09-17 — found on 2026-09-23 while re-capturing the iPad guide. The point of the chip
+    /// is the sentence in `status.label`; the colour only says what KIND of state it is, so
+    /// waiting states are warning, live ones ecto, and finished ones fog.
     private var tint: Color {
         switch status {
-        case .active: Theme.ecto
-        case .pending: Theme.warning
-        case .closed: Theme.fog
-        case .declined: Theme.danger
-        case .unknown: Theme.fog
+        case .proposed, .paused: Theme.warning
+        case .accepted, .active: Theme.ecto
+        case .summarized: Theme.warning
+        case .haunted: Theme.haunt
+        case .closed, .publicCase, .transferred, .unknown: Theme.fog
         }
     }
 }
