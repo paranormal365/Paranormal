@@ -266,9 +266,12 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
     /// grants the power to replace it, so it hands the account over instead of copying the key.
     /// It is the ordinary reset token, so it expires the way every other one does.</para>
     ///
-    /// <para><b>It never fails the creation.</b> The account is made either way; a letter that
-    /// could not be sent is logged with the link in it, the same fallback every other flow here
-    /// uses, so somebody can still be reached by hand.</para>
+    /// <para><b>It never fails the creation.</b> The account is made either way. The letter reaches
+    /// the outbox whether or not SMTP is set up, so one that was queued but never delivered can be
+    /// read by a site administrator at /admin/mail and its link passed on by hand. The link is never
+    /// logged: it carries a password-reset token, and whoever held it could set the password. It
+    /// used to be, on the rare path where the letter could not even be queued — and there it is
+    /// simply gone, because nothing else here can send the handover again.</para>
     /// </remarks>
     private async Task TellThemTheirAccountExistsAsync(AppUser user)
     {
@@ -299,9 +302,13 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
 
             if (!await _mailer.TrySendAccountMadeForYouAsync(user, user.Email!, link, madeBy))
             {
+                // No link here: it carries a password-reset token, and whoever held it could
+                // set this account's password (NoCredentialsInLogsTests). False means the letter
+                // was NOT queued, so it is not in the outbox either — say so rather than send
+                // somebody looking.
                 _log?.LogWarning(
-                    "Could not tell {UserId} that an account was made for them. Their handover link "
-                  + "is {Link}", user.Id, link);
+                    "Could not tell {UserId} that an account was made for them: the handover letter "
+                  + "could not be queued, and its owner has no way in until one is sent.", user.Id);
             }
         }
         catch (Exception ex)

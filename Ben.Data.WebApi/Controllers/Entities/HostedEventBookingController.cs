@@ -917,7 +917,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// <para>Unlike the public flow, the truth is told to the caller here. A host is not a
     /// stranger who might be probing for accounts; they are the person who will stand at a door
     /// wondering why nobody came, and "we could not send it" is exactly what they need to know.
-    /// The invitation is saved either way, and the link is in the log.</para>
+    /// The invitation is saved either way. When mail is not set up nothing is sent and the link is
+    /// shown nowhere — not on the board, and not in the log, because whoever held it could ask for
+    /// a place as the guest. Inviting them again once mail works sends a fresh one.</para>
     ///
     /// <para>Not saved here: the caller's save writes the letter with the token it carries, so
     /// true means the letter is in that same write (item 239b).</para>
@@ -932,9 +934,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
 
         if (!_email.IsConfigured)
         {
+            // No link here: used by anybody it asks for a place in the guest's name and burns
+            // their own copy (NoCredentialsInLogsTests).
             _logger.LogInformation(
-                "Email is not configured; the invitation to hosted event {EventId} was not sent. "
-              + "Link: {Link}", ev.Id, link);
+                "Email is not configured; the invitation to hosted event {EventId} was not sent.",
+                ev.Id);
             return false;
         }
 
