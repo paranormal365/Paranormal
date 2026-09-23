@@ -177,11 +177,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // night, which is the queue this whole feature exists to remove.
         await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
 
-        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
-
-        // After the save, and best effort. A guest who is confirmed but whose letter bounced is a
-        // confirmed guest; a letter sent about a confirmation that then failed to save is a lie.
-        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
+        // The confirmation and the letter carrying the pass commit together, or neither does (item
+        // 239b). It used to be "after the save, and best effort" — right while the letter was a
+        // call to a mail system that might not answer, since a confirmed guest whose letter
+        // bounced is still a confirmed guest. The letter is now a row in this database, sent later
+        // by the outbox and retried there. Failing to write it means the database failed, and
+        // then the host is better told "try again" than left believing a guest has their pass.
+        await SaveInOneTransactionAndAuditAsync(db, booking, booking.Id, userId.Value,
+            () => _guestMail.SendDecisionAsync(db, booking.Id, ct), ct);
 
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }
@@ -689,9 +692,23 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return Conflict("This guest's account has no email address, so there is nobody to "
                           + "post the letter to.");
 
-        if (!await _guestMail.SendDecisionAsync(db, booking.Id, ct))
+        // One save for the letter and the pass's EmailedUtc (item 239b), so the board's "not sent
+        // yet" mark clears only when a letter really was queued. It used to clear regardless: the
+        // send swallowed its own failures and returned, the stamp was saved, and the host was told
+        // 200 for a letter that did not exist — the exact thing the paragraph above forbids.
+        try
+        {
+            if (!await _guestMail.SendDecisionAsync(db, booking.Id, ct))
+                return Conflict("The letter could not be sent just now and nothing was posted. Try "
+                              + "again in a minute, or show them the pass from this screen.");
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Could not queue the pass letter for booking {BookingId}.", booking.Id);
             return Conflict("The letter could not be sent just now and nothing was posted. Try "
                           + "again in a minute, or show them the pass from this screen.");
+        }
 
         return Ok(await PassRecordAsync(db, pass.Id, ct));
     }
@@ -966,12 +983,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 ? "The venue could not take this booking."
                 : "The venue released this booking.", ct);
 
-        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
-
         // A guest who is not coming must be told exactly as reliably as one who is, which is why
         // this is the same call the confirmation makes rather than a second path that could quietly
-        // stop being used.
-        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
+        // stop being used — and why it commits with the decision in the same way (item 239b).
+        await SaveInOneTransactionAndAuditAsync(db, booking, booking.Id, userId.Value,
+            () => _guestMail.SendDecisionAsync(db, booking.Id, ct), ct);
 
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }

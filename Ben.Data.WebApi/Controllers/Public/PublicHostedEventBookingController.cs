@@ -6,6 +6,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -341,9 +342,25 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             return Conflict("This site has no outgoing mail set up, so nothing can be posted. The "
                           + "pass on this screen is the same one.");
 
-        if (!await mail.SendDecisionAsync(db, booking.Id, ct))
+        // One save for the letter and the pass's EmailedUtc (item 239b). This used to answer 200
+        // whenever the send returned, and the send swallowed its own failures — so a guest could
+        // be told their pass was on its way when nothing had been queued.
+        try
+        {
+            if (!await mail.SendDecisionAsync(db, booking.Id, ct))
+                return Conflict("The letter could not be sent just now and nothing was posted. Try "
+                              + "again in a minute — the pass on this screen works either way.");
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Error, not Warning: the database log keeps Error and above, and a Warning is how a
+            // letter that never went stayed invisible before (item 239).
+            HttpContext?.RequestServices?.GetService<ILogger<PublicHostedEventBookingController>>()?
+                .LogError(ex, "Could not queue the pass letter for booking {BookingId}.", booking.Id);
             return Conflict("The letter could not be sent just now and nothing was posted. Try "
                           + "again in a minute — the pass on this screen works either way.");
+        }
 
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }

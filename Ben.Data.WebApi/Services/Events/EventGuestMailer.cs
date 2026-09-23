@@ -66,72 +66,79 @@ public sealed class EventGuestMailer
     /// <para><b>The calendar file carries one entry per booked night</b>, each with the room. A
     /// single entry spanning the weekend would sit across it as one block and tell a guest nothing
     /// about where they are sleeping on Saturday.</para>
+    ///
+    /// <para><b>Queued into the caller's context, and NOT saved here (item 239b).</b> The letter,
+    /// and the <c>EmailedUtc</c> stamp on the pass that says it went, are written by the caller's
+    /// own save — for a decision, in the same transaction as the decision itself. So a venue's
+    /// "yes" and the letter carrying the pass commit together, or neither does.</para>
+    ///
+    /// <para>This used to catch everything, on the rule that <i>nothing here may undo a decision
+    /// the venue has made</i> — right when the letter was a call out to a mail system that might
+    /// not answer. It is now a row in the same database, in the same transaction; the sending
+    /// happens later from the outbox and is retried without touching the decision. The only way
+    /// that row fails to write is the database failing, and then the honest outcome is that the
+    /// decision did not happen either and the host is told to try again — not a confirmation the
+    /// guest never hears about. So failures now reach the caller.</para>
     /// </remarks>
-    /// <returns>True when a letter was sent.</returns>
+    /// <returns>
+    /// True when a letter was queued; false when there is nothing to send — no mail set up, no
+    /// booking, no address. Anything that goes wrong beyond that throws.
+    /// </returns>
     public async Task<bool> SendDecisionAsync(
         BenDataContext db, Guid bookingId, CancellationToken ct)
     {
         if (!_email.IsConfigured) return false;
 
-        try
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendDecisionAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or a venue's decision and the "
+          + "letter carrying the pass stop being atomic (item 239b).");
+
+        var booking = await LoadAsync(db, bookingId, ct);
+        if (booking is null) return false;
+
+        var to = booking.LeadAppUser?.Email;
+        if (string.IsNullOrWhiteSpace(to)) return false;
+
+        var ev = booking.HostedEvent;
+        var confirmed = booking.Status == HostedEventBookingStatus.Confirmed;
+
+        var pass = confirmed
+            ? await db.HostedEventPasses.AsNoTracking()
+                .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
+                .OrderByDescending(p => p.IssuedUtc)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var (subject, body) = booking.Status switch
         {
-            var booking = await LoadAsync(db, bookingId, ct);
-            if (booking is null) return false;
+            HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass),
+            HostedEventBookingStatus.TurnedDown => TurnedDown(booking, ev),
+            _                                   => Released(booking, ev),
+        };
 
-            var to = booking.LeadAppUser?.Email;
-            if (string.IsNullOrWhiteSpace(to)) return false;
+        var attachments = new List<EmailAttachment>();
+        if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
+            attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
 
-            var ev = booking.HostedEvent;
-            var confirmed = booking.Status == HostedEventBookingStatus.Confirmed;
+        await queue.EnqueueAsync(db, new EmailMessage(
+            to, subject, body,
+            Attachments: attachments,
+            // A guest hitting reply means to reach the venue whose spare room they are sleeping
+            // in, not our support address.
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key), ct);
 
-            var pass = confirmed
-                ? await db.HostedEventPasses.AsNoTracking()
-                    .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
-                    .OrderByDescending(p => p.IssuedUtc)
-                    .FirstOrDefaultAsync(ct)
-                : null;
-
-            var (subject, body) = booking.Status switch
-            {
-                HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass),
-                HostedEventBookingStatus.TurnedDown => TurnedDown(booking, ev),
-                _                                   => Released(booking, ev),
-            };
-
-            var attachments = new List<EmailAttachment>();
-            if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
-                attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
-
-            await _email.SendAsync(new EmailMessage(
-                to, subject, body,
-                Attachments: attachments,
-                // A guest hitting reply means to reach the venue whose spare room they are sleeping
-                // in, not our support address.
-                ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key), ct);
-
-            // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
-            // can see at a glance whose replacement has not gone out yet.
-            if (pass is not null)
-            {
-                var tracked = await db.HostedEventPasses.FirstOrDefaultAsync(p => p.Id == pass.Id, ct);
-                if (tracked is not null)
-                {
-                    tracked.EmailedUtc = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                }
-            }
-
-            return true;
-        }
-        catch (Exception ex)
+        // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
+        // can see at a glance whose replacement has not gone out yet. Written by the caller's
+        // save with the letter itself, so the mark can no longer clear for a letter that was
+        // never queued — which it did while the send swallowed its own failures.
+        if (pass is not null)
         {
-            // A guest who is confirmed but whose mail bounced is a confirmed guest. Nothing here
-            // may undo a decision the venue has made.
-            _log.LogWarning(ex,
-                "Could not send the decision letter for booking {BookingId}; the decision stands.",
-                bookingId);
-            return false;
+            var tracked = await db.HostedEventPasses.FirstOrDefaultAsync(p => p.Id == pass.Id, ct);
+            if (tracked is not null) tracked.EmailedUtc = DateTime.UtcNow;
         }
+
+        return true;
     }
 
     // ── the letters ──────────────────────────────────────────────────────────
