@@ -116,6 +116,27 @@ public static class MailStarters
                                + "hands. Reply to this message if you would rather it was removed.")),
         [MailKinds.AccountMadeForYou.Key]);
 
+    /// <summary>
+    /// Holding the places somebody picked. Its own starter because the generic one has no hold link
+    /// in it, and <see cref="For"/> rightly will not offer a letter that would be refused on save.
+    /// </summary>
+    public static readonly MailStarter HoldPlaces = new(
+        "hold-places", "Hold the places you picked",
+        "What they picked, when it goes back, and the button that holds it.",
+        "Hold your places at {HostedEvents.Name} within 15 minutes",
+        Branded(
+            MailBlocks.Heading("Hold your places"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}, you picked places at "
+                               + "{HostedEvents.Name}. They are waiting for you until "
+                               + "<strong>{HoldUntil}</strong> — press the button to hold them."),
+            "{Places}",
+            "{HoldButton}",
+            MailBlocks.Paragraph("Once they are held, {Organizations.Name} answers you, and nobody "
+                               + "else can take them in the meantime."),
+            MailBlocks.Paragraph("If this wasn't you, do nothing: the places go back by themselves "
+                               + "and no account is made.")),
+        [MailKinds.HoldYourPlaces.Key]);
+
     public static readonly MailStarter BookingConfirmed = new(
         "booking-confirmed", "A booking, with the pass",
         "The confirmation and the code they are admitted on.",
@@ -140,8 +161,8 @@ public static class MailStarters
 
     public static readonly IReadOnlyList<MailStarter> All =
     [
-        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, BookingConfirmed,
-        Plain,
+        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
+        BookingConfirmed, Plain,
     ];
 
     /// <summary>

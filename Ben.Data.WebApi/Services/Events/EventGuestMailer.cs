@@ -401,12 +401,16 @@ public sealed class EventGuestMailer
         var name = Safe(ev.Name);
         var org = Safe(ev.Organization?.Name ?? "the organizer");
 
+        // Once, for the letter below and for a template's {Places} alike, so the two cannot drift.
+        var placesHtml = places.Count > 0
+            ? $"<ul><li>{string.Join("</li><li>", places.Select(Safe))}</li></ul>"
+            : string.Empty;
+
         var body = new System.Text.StringBuilder();
         body.Append($"<p>Hello {Safe(pick.FirstName)},</p>");
         body.Append($"<p>You picked places at <strong>{name}</strong>. They are waiting for you until "
                   + $"<strong>{AtTheVenue(pick.ExpiresUtc, ev)}</strong> — press the button to hold them.</p>");
-        if (places.Count > 0)
-            body.Append($"<ul><li>{string.Join("</li><li>", places.Select(Safe))}</li></ul>");
+        body.Append(placesHtml);
         body.Append($"<p><a href=\"{link}\">Hold my places</a></p>");
         body.Append($"<p>Once they are held, {org} answers you, and nobody else can take them in the "
                   + "meantime. Nothing is paid through this site.</p>");
@@ -414,14 +418,45 @@ public sealed class EventGuestMailer
         body.Append("<p>If this wasn't you, do nothing: the places go back by themselves and no account "
                   + "is made.</p>");
 
+        // What a written template of this kind may use (MailKinds.HoldYourPlaces). Without it a
+        // template could be saved — the editor requires the hold link — and then render with the
+        // link empty, because nothing handed it over.
+        var payload = new MailPayload(
+            Tables: new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
+            {
+                // The person, not an account: nobody has one until they press the button.
+                ["AppUsers"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Email"] = pick.Email,
+                    ["DisplayName"] = pick.FirstName,
+                    ["FirstName"] = pick.FirstName,
+                },
+                ["HostedEvents"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Name"] = ev.Name,
+                },
+                ["Organizations"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Name"] = ev.Organization?.Name,
+                    ["PublicEmail"] = ev.Organization?.PublicEmail,
+                },
+            },
+            Supplied: new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HoldUrl"] = new(link),
+                ["HoldButton"] = new(BenEmailLayout.ActionButton("Hold my places", link), IsHtml: true),
+                ["HoldUntil"] = new(AtTheVenue(pick.ExpiresUtc, ev)),
+                ["Places"] = new(placesHtml, IsHtml: true),
+            });
+
         await _email.SendAsync(new EmailMessage(
             pick.Email,
             $"Hold your places at {ev.Name} within 15 minutes",
             body.ToString(),
             // This one prints a deadline through AtTheVenue, which labels nothing — so the footer
             // says which clock that deadline is on. Missing it by hours is the whole risk here.
-            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.ChooseYourEmails.Key,
-            TimesShownInZone: ZoneLabel(ev)), ct);
+            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.HoldYourPlaces.Key,
+            TimesShownInZone: ZoneLabel(ev), Payload: payload), ct);
 
         return true;
     }

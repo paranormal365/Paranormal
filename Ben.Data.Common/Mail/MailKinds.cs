@@ -275,10 +275,33 @@ public static class MailKinds
         ["AppUsers", "HostedEvents", "Organizations"],
         CanDecline: true);
 
-    public static readonly MailKindInfo ChooseYourEmails = new(
-        "choose-your-emails", "Choose what we send you",
-        "The link that lets a guest change what they hear about.",
-        ["AppUsers", "HostedEvents"]);
+    /// <summary>
+    /// The fifteen-minute link that holds the seats or rooms a guest picked without signing in.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This letter was filed as "choose-your-emails" — "Choose what we send you, the link
+    /// that lets a guest change what they hear about" — from 2026-09-20 until this replaced it.</b>
+    /// No such letter exists. The name reads like the method that sends this one,
+    /// <c>SendEmailPickLinkAsync</c>, taken for "pick your emails" rather than "picked by email". So
+    /// /admin/mail and the template editor both showed a seat hold as a preferences letter, and the
+    /// kind declared no link: a template written for it would have been accepted with no way to hold
+    /// anything, and a guest would have had fifteen minutes and nothing to press. Nothing was ever
+    /// stored under the old key — no queued letter, no template, on either database (checked
+    /// 2026-09-23) — so it was retired rather than aliased.</para>
+    ///
+    /// <para><b>AppUsers is the person, not an account.</b> Nobody has an account until they press
+    /// the button; the row a template reads is built from the address and first name they gave.</para>
+    /// </remarks>
+    public static readonly MailKindInfo HoldYourPlaces = new(
+        "hold-your-places", "Hold the places you picked",
+        "The fifteen-minute link a guest follows to hold the seats or rooms they picked without signing in.",
+        ["AppUsers", "HostedEvents", "Organizations"],
+        [new("HoldUrl", "The link that holds the places they picked.", Required: true,
+             Provides: "a way to hold the places"),
+         new("HoldButton", "A ready-made button pointing at that link.", IsHtml: true,
+             Provides: "a way to hold the places"),
+         new("HoldUntil", "When the places go back if nobody presses it, on the venue's own clock."),
+         new("Places", "What they picked, as a list.", IsHtml: true)]);
 
     // ── A hosted event, for the venue ─────────────────────────────────────────
     public static readonly MailKindInfo BookingsArrived = new(
@@ -333,7 +356,7 @@ public static class MailKinds
         BookingAsked, BookingDecided, HoldPlaced, HoldLapsed,
         EventGoingAhead, EventCalledOff, EventAnnouncement,
         SessionMoved, SessionCancelled, SessionPromoted,
-        EventThankYou, StaffInvite, GuestRemoved, AppealAnswered, ChooseYourEmails,
+        EventThankYou, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
         BookingsArrived, BookingsDigest,
         PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
         VenueClaimCode,
