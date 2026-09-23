@@ -11,9 +11,11 @@ namespace Ben.Web.Playwright.Tests;
 /// <remarks>
 /// <para>Every account here is created DURING the test — nothing leans on the seeded roster, so
 /// the journey proves the product works for someone arriving cold, which no other fixture does.
-/// Email confirmation uses the dev fallback: SMTP is unconfigured, so the confirmation link lands
-/// in the API's log, and the test reads it from the file named by <c>BEN_API_LOG</c>. Without
-/// that variable the fixture skips rather than pretending.</para>
+/// Email confirmation uses the dev fallback: SMTP is unconfigured, so the confirmation letter waits
+/// in the outbox and the test reads its link there as the SuperAdmin
+/// (<see cref="BenTestBase.LinkFromTheOutboxAsync"/>). It used to read the API's log from a
+/// <c>BEN_API_LOG</c> variable that run-e2e.sh never set, so this whole journey skipped in every
+/// standard run — and a skip reads as a pass.</para>
 ///
 /// <para>Writing it found two write-only features before it ever ran: no screen let anybody APPLY
 /// to join a group (the API and the review panel existed; the door didn't), and the manual
@@ -24,7 +26,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Journey")]
 public class NewGroupJourneyTests : BenTestBase
 {
-    private static string? ApiLogPath => Environment.GetEnvironmentVariable("BEN_API_LOG");
     private static string Unique => Guid.NewGuid().ToString("N")[..8];
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -48,23 +49,12 @@ public class NewGroupJourneyTests : BenTestBase
     }
 
     /// <summary>
-    /// Completes the confirmation the way a dev deployment really does it: the send falls back to
-    /// the log, and the newest confirm link is the one this signup just minted.
+    /// Completes the confirmation the way a dev deployment really does it: with no mail server the
+    /// letter waits in the outbox, and its link is the one this sign-up just minted.
     /// </summary>
-    private async Task ConfirmFromLogAsync()
+    private async Task ConfirmFromTheOutboxAsync(string email)
     {
-        var log = ApiLogPath!;
-        string? link = null;
-        for (var attempt = 0; attempt < 20 && link is null; attempt++)
-        {
-            var text = await File.ReadAllTextAsync(log);
-            link = text.Split('\n')
-                .Where(l => l.Contains("/confirm-email?userId="))
-                .Select(l => l[l.IndexOf("/confirm-email?userId=", StringComparison.Ordinal)..].Trim())
-                .LastOrDefault();
-            if (link is null) await Task.Delay(500);
-        }
-        Assert.That(link, Is.Not.Null, "No confirmation link reached the API log.");
+        var link = await LinkFromTheOutboxAsync(email, "/confirm-email?");
 
         await Page.GotoAsync($"{BaseUrl}{link}");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Confirm my email" })
@@ -78,7 +68,7 @@ public class NewGroupJourneyTests : BenTestBase
         var email = $"journey{tag}@example.com";
         var password = NewTestPassword();
         await SignUpAsync(tag, email, password);
-        await ConfirmFromLogAsync();
+        await ConfirmFromTheOutboxAsync(email);
         return (email, password);
     }
 
@@ -115,9 +105,6 @@ public class NewGroupJourneyTests : BenTestBase
     [Test]
     public async Task A_new_person_founds_a_group_gets_a_tier_members_a_case_and_an_investigation()
     {
-        if (ApiLogPath is null || !File.Exists(ApiLogPath))
-            Assert.Ignore("BEN_API_LOG not set — the journey needs the API's log for confirmation links.");
-
         var run = Unique;
         var groupName = $"Journey Group {run}";
         var groupSlug = $"journey-{run}";
@@ -132,15 +119,22 @@ public class NewGroupJourneyTests : BenTestBase
         await FillAndConfirmAsync("#newgroup-name", groupName);
         await FillAndConfirmAsync("#newgroup-url", groupSlug);
 
-        // The door is a WIZARD since item 166 W1: identity, then two skippable steps, then the
-        // review's Create. Steps 2 and 3 are walked with ClickUntil because each Next is only
-        // real once the circuit is live.
+        // The door is a WIZARD since item 166 W1: identity, two more steps, then the review's
+        // Create. Each Next is walked with ClickUntil because it is only real once the circuit is
+        // live.
         await ClickUntilAsync(
             Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
             Main.Locator("#newgroup-city"));
         await ClickUntilAsync(
             Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
             Main.Locator("#newgroup-applications"));
+
+        // "Take cases from clients" is ON by default (550ad7c6, so a new group can be found), and
+        // then the step refuses Next until it is told where the group works. This journey's case is
+        // the group's own, not a client's, so the founder says no for now — the answer the page
+        // itself offers. It went unnoticed because this journey never ran: it read its confirmation
+        // links from a log variable run-e2e.sh never set, and skipped.
+        await Main.Locator("#newgroup-clients").UncheckAsync();
         await ClickUntilAsync(
             Main.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true }),
             Main.Locator("#newgroup-review"));
@@ -169,16 +163,8 @@ public class NewGroupJourneyTests : BenTestBase
         await Expect(Main.GetByText(groupName, new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-        // The founder can open their own hub — and turns on applications, which is what makes
-        // the group joinable at all.
+        // The founder can open their own hub.
         Assert.That(await OpenOrganizationAsync(groupName), Is.True, "The new group is not in the founder's list.");
-        await ClickUntilAsync(
-            Main.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }),
-            Page.Locator("#edit-accepting-apps"));
-        await Page.Locator("#edit-accepting-apps").CheckAsync();
-        await ClickUntilAsync(
-            Main.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }),
-            Main.GetByText("Yes", new() { Exact = false }));
 
         // ── 3. The platform bills the group (the manual provider, with a coupon) ──
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
@@ -199,6 +185,21 @@ public class NewGroupJourneyTests : BenTestBase
         // The grid reloads with the group now Active — and the coupon redeemed, which the
         // campaign's redemption report will show.
         await Expect(row.GetByText("Active")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // ── 3b. …and only now can it take applications ───────────────────────
+        // A brand-new group is on the free lane, where "working with other people is part of a
+        // paid plan — a free group is just you", so turning applications on before it is billed is
+        // refused. This journey used to do it the other way round, from before the free lane
+        // existed; it never noticed, because it never ran (see ConfirmFromTheOutboxAsync).
+        await LoginAsync(founder.Email, founder.Password);
+        Assert.That(await OpenOrganizationAsync(groupName), Is.True, "The billed group is not in the founder's list.");
+        await ClickUntilAsync(
+            Main.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }),
+            Page.Locator("#edit-accepting-apps"));
+        await Page.Locator("#edit-accepting-apps").CheckAsync();
+        await ClickUntilAsync(
+            Main.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }),
+            Main.GetByText("Yes", new() { Exact = false }));
 
         // ── 4. Two more people arrive, apply, and are approved ───────────────
         var members = new List<(string Email, string Password)>();
@@ -248,6 +249,12 @@ public class NewGroupJourneyTests : BenTestBase
         await FillAndConfirmAsync("#casecreatepage-city-4662", "Nashville");
         await FillAndConfirmAsync("#casecreatepage-state-7b45", "TN");
         await FillAndConfirmAsync("#casecreatepage-zip-code-ba79", "37201");
+
+        // The form now asks what kind of place this is, and holds Open Case until it is answered
+        // (the public/private split of items 184-186). A place the group picked for itself is a
+        // public location — the free lane; a private residence is private-engagement work that
+        // needs a plan covering it. Another step this journey never learned, because it never ran.
+        await Main.GetByRole(AriaRole.Radio, new() { Name = "Public location", Exact = false }).CheckAsync();
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Button, new() { Name = "Open Case", Exact = true }),
             Main.GetByText(caseTitle, new() { Exact = false }));

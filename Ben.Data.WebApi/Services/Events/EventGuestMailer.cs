@@ -379,8 +379,10 @@ public sealed class EventGuestMailer
     /// going to somebody who never visited the site. Nothing is held for them beyond the fifteen
     /// minutes and no account exists until the button is pressed.</para>
     ///
-    /// <para>When mail is not set up the link is logged instead, as the public sign-up link is, so a
-    /// developer's machine and the browser tests can still follow it.</para>
+    /// <para>When mail is not set up the letter is queued all the same, and waits in the outbox —
+    /// where a developer, or the browser tests, read its link at /admin/mail. It used to be written
+    /// to the log instead; the link holds somebody's places, so it is a credential, and a log is not
+    /// where one belongs (NoCredentialsInLogsTests).</para>
     /// </remarks>
     /// <returns>True when a letter was written.</returns>
     public async Task<bool> SendEmailPickLinkAsync(
@@ -389,13 +391,12 @@ public sealed class EventGuestMailer
     {
         var link = _site.AbsoluteUrl($"/event-picks/{token}");
 
+        // Queued either way (see the remarks). Said, without the link, so a developer knows where
+        // to look rather than wondering why no mail arrived.
         if (!_email.IsConfigured)
-        {
             _log.LogInformation(
-                "Email is not configured; the pick link for {Email} was not sent. Pick token: {Token}",
-                pick.Email, token);
-            return false;
-        }
+                "Email is not configured; the pick letter for {Email} is waiting in the outbox at /admin/mail.",
+                pick.Email);
 
         var name = Safe(ev.Name);
         var org = Safe(ev.Organization?.Name ?? "the organizer");
