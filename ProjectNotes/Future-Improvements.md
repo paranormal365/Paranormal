@@ -12569,9 +12569,15 @@ the added-address confirmation and the venue claim code.
   `/webapi`). New `SiteIdentity:ApiBaseUrl` (deploy writes `$ApiUrl`); pass links for hosted events
   and tours use `ApiAbsoluteUrl`, which stays relative rather than falling back to the site.
 
-- **Twelve browser tests fail on the e2e database with or without these changes** (audio/video
-  uploads, file deletion, case messages, a seeded group's subscription "has ended", a tier that does
-  not resolve) — checked by rerunning them with the changes stashed.
+- **Twelve browser tests that failed with or without these changes — FIXED 2026-09-23, two causes:**
+  - *Ten:* the seeded paranormal365 plan (BillingDemoSeeder, ten days from renewal on purpose, seeded
+    once) ran out on 09-21; the lapse job made the group read-only and paused its open cases on
+    09-22. `run-e2e.sh` now renews the two seeded plans through the admin endpoint (which also
+    un-pauses the cases) when lapsed or within two days of ending, back to the seeder's shape.
+  - *Two (video editor imports):* moving the clip browser's styles to a global stylesheet on 09-22
+    kept three `::deep` rules, which a browser drops outside CSS isolation — the media bin's tab
+    strip lost its height and the grid covered the cards. Plain selectors now; a guard refuses
+    `::deep` in any global stylesheet.
 
 
 ## 240. Two branches parked with real work on them (CLOSED 2026-09-19 — both merged)
