@@ -21,11 +21,20 @@ Two of these are not just marketing and should not be reworded casually:
 
 Fixed - this is the reserved name, and the package manifest's DisplayName has to match it.
 
-## Short description  [1,000]
+## Short description  [270, NOT 1,000]
 
-    Render video on your own computer instead of in a browser tab. SideCar is the render engine for
-    the IsHaunted.com video editor: it does the cutting, joining and encoding locally, at the speed
-    of your own processor, and your footage never leaves the machine to be rendered.
+    The field takes 270 characters, not the 1,000 guessed here first - Ben read the limit off the
+    form, 2026-09-23. Paste as one paragraph. This is 256.
+
+    Exports that used to crawl now fly. SideCar hands the work of the IsHaunted.com video editor - cutting, joining, encoding - to your own processor instead of a browser tab. Long clips finish fast, and your footage never leaves the computer it is already on.
+
+    The privacy line is last on purpose: it is the point a buyer does not expect, and it lands
+    better as the thing they are left holding than as an item in the middle of a list.
+
+    An alternate at the same length, leading with an image rather than a claim, if the opening
+    ever reads as too strong:
+
+    A browser tab is a small room to edit video in. SideCar moves the heavy work - cutting, joining, encoding - onto your own processor, where there is room to swing. Exports finish in a fraction of the time, and your footage never leaves the machine it is on.
 
 ## Description  [10,000]
 
