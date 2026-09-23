@@ -12,6 +12,11 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// A host pointed at a scratch database keeps that database's files beside it, as run-e2e.sh does,
+// rather than in the shared .uploads (crawl W14). Development only; see DevUploadsPairing.
+if (builder.Environment.IsDevelopment())
+    Ben.Data.WebApi.Services.DevUploadsPairing.Apply(builder.Configuration, Console.Out);
+
 /* LOGGING */
 
 // Everything about levels and sinks now comes from configuration — nothing is pinned here.
