@@ -168,6 +168,34 @@ public sealed class VenuePlaceClaimTests
         Assert.Empty(start.ProvingContacts);
     }
 
+    /// <summary>
+    /// The code letter hands a template the code — which is the whole letter.
+    /// </summary>
+    /// <remarks>
+    /// Until 2026-09-23 the kind declared no code and the letter handed a template nothing, so a
+    /// template written for it would have gone out proving nothing. The code is now REQUIRED of a
+    /// template, and supplied here.
+    /// </remarks>
+    [Fact]
+    public async Task The_code_letter_hands_a_template_the_code_it_carries()
+    {
+        await using var sqlite = await SeedAsync();
+        var frontDesk = await ContactAsync(sqlite, SocietyOrgId, SocietyChair, LongAgo);
+        var mail = Mailbox();
+
+        Ok(await Claims(sqlite, mail, Manager).Claim(HotelOrgId,
+            new(PlaceId, VenueClaimantRole.Manager, null, frontDesk), default));
+
+        var letter = Assert.Single(mail.Sent);
+        Assert.Equal(Ben.Data.Common.Mail.MailKinds.VenueClaimCode.Key, letter.Kind);
+        Assert.Equal(CodeIn(mail), letter.Payload!.Supplied!["ClaimCode"].Value);
+        Assert.Contains("frontdesk@thomashousehotel.com", letter.Payload.Tables!["AppUsers"]["Email"]!.ToString());
+
+        // And a template without the code is refused when it is saved.
+        Assert.Equal(["the code"], Ben.Data.Common.Mail.MailTokens.MissingRequired(
+            "A code", "<p>Somebody wants to confirm {Places.Name}.</p>", Ben.Data.Common.Mail.MailKinds.VenueClaimCode));
+    }
+
     [Fact]
     public async Task A_code_to_the_venues_own_address_proves_the_claim_and_opens_a_week_for_objections()
     {

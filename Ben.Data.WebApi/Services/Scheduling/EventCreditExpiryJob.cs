@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
@@ -146,7 +147,13 @@ public sealed class EventCreditExpiryJob : IScheduledJob
             {
                 await _email.SendAsync(new EmailMessage(person.Email!, subject,
                     MailBody(credit, holderName, person),
-                    Kind: MailKinds.EventCreditExpiring.Key), ct);
+                    Kind: MailKinds.EventCreditExpiring.Key,
+                    // The person, and for a group's credit the group, as a template reads them.
+                    Payload: MailRows.For(MailKinds.EventCreditExpiring,
+                        MailRows.Person(person.Email, person.DisplayName),
+                        credit.OwnerOrganizationId is null ? null
+                            : new MailRows.Manual("Organizations",
+                                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["Name"] = holderName }))), ct);
                 continue;
             }
 

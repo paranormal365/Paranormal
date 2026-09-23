@@ -308,6 +308,21 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected async Task<string?> TryLinkFromTheOutboxAsync(string to, string linkPath)
     {
+        // From the path to the end of the attribute. Decoded first: a link in HTML writes its & as
+        // &amp;, and following that literally is a different link.
+        var shape = new Regex(Regex.Escape(linkPath) + "[^\"'<>\\s]*");
+
+        var html = await TryLetterFromTheOutboxAsync(to, body => shape.IsMatch(System.Net.WebUtility.HtmlDecode(body)));
+        return html is null ? null : shape.Match(System.Net.WebUtility.HtmlDecode(html)).Value;
+    }
+
+    /// <summary>
+    /// The body of the newest letter to <paramref name="to"/> that <paramref name="matches"/>, read
+    /// from the outbox as the SuperAdmin — or null after ten seconds of looking.
+    /// </summary>
+    /// <remarks>What <see cref="LinkFromTheOutboxAsync"/> reads, for a test that wants the whole letter.</remarks>
+    protected async Task<string?> TryLetterFromTheOutboxAsync(string to, Func<string, bool> matches)
+    {
         await using var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
 
         var login = await api.PostAsync("/login", new()
@@ -315,13 +330,9 @@ public abstract class BenTestBase : PageTest
             DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
         });
         Assert.That(login.Ok, Is.True,
-            "the admin seat reads the outbox for emailed links, and could not sign in: " + await login.TextAsync());
+            "the admin seat reads the outbox for emailed letters, and could not sign in: " + await login.TextAsync());
         var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
         var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
-
-        // From the path to the end of the attribute. Decoded first: a link in HTML writes its & as
-        // &amp;, and following that literally is a different link.
-        var shape = new Regex(Regex.Escape(linkPath) + "[^\"'<>\\s]*");
 
         for (var attempt = 0; attempt < 20; attempt++)
         {
@@ -338,10 +349,7 @@ public abstract class BenTestBase : PageTest
                 if (!body.Ok) continue;
 
                 var html = (await body.JsonAsync())!.Value.GetProperty("html").GetString();
-                if (html is null) continue;
-
-                var found = shape.Match(System.Net.WebUtility.HtmlDecode(html));
-                if (found.Success) return found.Value;
+                if (html is not null && matches(html)) return html;
             }
 
             await Task.Delay(500);
