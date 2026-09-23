@@ -12406,7 +12406,7 @@ refused here, so it needs running against `IsHauntedDb_player` and then producti
 No Playwright fixture yet.
 
 
-## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b transactions SHIPPED 2026-09-23, its guard open — see Plan-2026-09-22 §3)
 
 Ben, 2026-09-12:
 

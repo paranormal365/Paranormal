@@ -386,6 +386,24 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         invite.Token                = null;   // single use
         invite.DateUpdated          = DateTime.UtcNow;
 
+        // One transaction over the attendance AND the letter about it (item 239b). Two saves
+        // inside it: SendAskedAsync reads the booking back by id, so the row has to exist before
+        // it runs, and the letter it queues is only written by the second save. Either both land
+        // or neither — a guest told "nothing is held yet" for a request that rolled back is as
+        // wrong as a request with no letter.
+        //
+        // Only when there IS such a letter. Without a hosted request this path is exactly what it
+        // was: one save, then the tour's welcome below — which goes through IEmailService and so
+        // writes on a connection of its own. Inside a transaction that would be a second writer
+        // waiting on the first, for no gain, since there is nothing here for it to be atomic with.
+        // The two never meet today (a hosted event always asks rather than comes, so the welcome
+        // is skipped whenever `asked` is set); this keeps it that way if either rule moves.
+        //
+        // IsRelational, like MyProfileController: InMemory has no transactions and throws.
+        await using var tx = asked is not null && db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
         await db.SaveChangesAsync(ct);
 
         // Item 233: now that they are actually coming, the tour's own welcome — with the walk as
@@ -407,7 +425,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // same thing, but a link clicked on a phone in a car park is a page nobody reads twice,
         // and "nothing is held yet" is the part that must survive being half-read.
         if (asked is not null)
+        {
             await hostedMail.SendAskedAsync(db, asked.Id, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        if (tx is not null) await tx.CommitAsync(ct);
 
         return Ok(new EventAttendanceConfirmation(
             ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName,

@@ -657,11 +657,25 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         WriteGuests(db, booking, request.Guests ?? []);
         await BookingContact.FillEmptyNamesAsync(db, userId, contact, ct);
 
+        // One transaction over the request AND the letter about it (item 239b). Two saves inside
+        // it, because SendAskedAsync reads the booking back by id — it cannot see a row that has
+        // not been written yet — and the letter it queues must not be able to commit without the
+        // request, or survive a request that fails.
+        //
+        // IsRelational, like MyProfileController: the InMemory provider has no transactions and
+        // throws rather than ignoring the call.
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
         await db.SaveChangesAsync(ct);
 
         // Silence reads as a booking: somebody who filled in a form and heard nothing assumes it
         // worked, and turns up with a suitcase. The letter says the opposite in as many words.
         await mail.SendAskedAsync(db, booking.Id, ct);
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null) await tx.CommitAsync(ct);
 
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }

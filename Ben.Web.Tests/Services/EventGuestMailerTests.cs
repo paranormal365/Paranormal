@@ -400,8 +400,22 @@ public sealed class EventGuestMailerTests
              .Callback<EmailMessage, CancellationToken>((m, _) => messages.Add(m))
              .Returns(Task.CompletedTask);
 
+        // SendAskedAsync no longer goes through IEmailService: it queues into the caller's
+        // context so the letter commits with the request it describes (item 239b). Recording both
+        // into the same list keeps every assertion below about WHAT the letter says, while the
+        // route it took is what changed.
+        var queue = new Mock<Ben.Data.WebApi.Services.IOutboxEmailQueue>();
+        queue.Setup(q => q.EnqueueAsync(
+                 It.IsAny<Ben.Data.Source.Context.BenDataContext>(),
+                 It.IsAny<EmailMessage>(),
+                 It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Source.Context.BenDataContext, EmailMessage, CancellationToken>(
+                 (_, m, _) => messages.Add(m))
+             .Returns(Task.CompletedTask);
+
         return new Sent(messages,
-            new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance));
+            new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                 queue.Object));
     }
 
     /// <summary>The calendar file a confirmed booking's letter carries, as text.</summary>

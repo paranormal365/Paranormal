@@ -1,5 +1,6 @@
 using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Mail;
@@ -100,6 +101,86 @@ public sealed class ALetterCommitsWithWhatItIsAboutTests
         Assert.Equal(0, await read.OutboxEmails.CountAsync());
 
         Assert.Single(db.ChangeTracker.Entries<Ben.Data.Source.Entities.OutboxEmail>());
+    }
+
+    /// <summary>
+    /// Queueing inside the caller's transaction opens no connection of its own — and somebody who
+    /// switched the letter off still does not get it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a count and not a lock.</b> The hazard is a SECOND connection inside the
+    /// caller's transaction: the opt-out query joins AppUsers, which a booking writes, so where
+    /// readers wait on writers it stalls to the command timeout, and the preference lookup's catch
+    /// — correct for SendAsync — then sends the letter anyway. This harness cannot show that
+    /// stall: every context here shares one SQLite connection, so a "second" context is really the
+    /// same one, reads straight through, and gets the right answer. An earlier version of this test
+    /// asserted only the opt-out and passed against the broken code for exactly that reason.</para>
+    ///
+    /// <para>So it pins the property the fix actually rests on: the outbox asks its factory for
+    /// nothing while queueing. The template lookup is given a separate factory, because the
+    /// composer's read is of EmailTemplates, which no caller writes, and is not what this is
+    /// about.</para>
+    ///
+    /// <para>Tour reminders, because the preference check only runs for a letter a person may
+    /// decline. The booking acknowledgement 239b queues is not one — which is why nothing was
+    /// broken yet, and why the next caller to queue a declinable letter this way would be.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Queueing_inside_a_transaction_opens_no_connection_of_its_own()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var outboxFactory = new CountingFactory(sqlite.Factory);
+        var site = Options.Create(new SiteIdentity { Name = "IsHaunted.com" });
+        var queue = new OutboxEmailService(
+            outboxFactory, sender: null!, site,
+            new MailComposer(sqlite.Factory, new MemoryCache(new MemoryCacheOptions()), site,
+                             NullLogger<MailComposer>.Instance),
+            NullLogger<OutboxEmailService>.Instance);
+
+        var userId = Guid.NewGuid();
+        var email  = $"{userId:N}@example.com";
+        await using (var seed = await sqlite.NewContextAsync())
+        {
+            seed.Users.Add(new Ben.Data.Source.Entities.AppUser
+            {
+                Id = userId, Email = email, UserName = email,
+                DisplayName = "Declined", DateCreated = DateTime.UtcNow,
+            });
+            seed.UserEmailOptOuts.Add(new Ben.Data.Source.Entities.UserEmailOptOut
+            {
+                Id = Guid.NewGuid(), AppUserId = userId, Kind = MailKinds.TourReminder.Key,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = await sqlite.NewContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        await queue.EnqueueAsync(db, new EmailMessage(
+            email, "Your tour is soon", "<p>See you there.</p>", Kind: MailKinds.TourReminder.Key));
+
+        Assert.Equal(0, outboxFactory.Created);
+        Assert.Empty(db.ChangeTracker.Entries<Ben.Data.Source.Entities.OutboxEmail>());
+    }
+
+    /// <summary>A factory that counts what it hands out.</summary>
+    private sealed class CountingFactory(IDbContextFactory<BenDataContext> inner)
+        : IDbContextFactory<BenDataContext>
+    {
+        public int Created { get; private set; }
+
+        public BenDataContext CreateDbContext()
+        {
+            Created++;
+            return inner.CreateDbContext();
+        }
+
+        public Task<BenDataContext> CreateDbContextAsync(CancellationToken ct = default)
+        {
+            Created++;
+            return inner.CreateDbContextAsync(ct);
+        }
     }
 
     /// <summary>A context is required: passing none is a programming error, not a silent no-op.</summary>
