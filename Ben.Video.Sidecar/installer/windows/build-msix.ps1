@@ -13,9 +13,9 @@
         package actually has. VideoEncoders picks an encoder from what ffmpeg reports, so the app
         needs no build-time switch to go with this.
 
-      * Identity. A Store package is stamped with an identity Partner Center assigns. Until the app
-        name is reserved there, this stamps a placeholder and warns; the resulting .msix is
-        perfectly good for testing and CANNOT be uploaded.
+      * Identity. A Store package is stamped with an identity Partner Center assigns. Ours was
+        assigned on 2026-09-23 and is the default of the three parameters below, so an ordinary
+        rebuild needs no arguments. They stay parameters only so a second product could reuse this.
 
     WHAT THIS DOES NOT DO: sign anything. Store packages are re-signed by Microsoft, which is the
     whole reason this route exists - no certificate, and no SmartScreen warning for the people who
@@ -28,21 +28,19 @@
 
 .EXAMPLE
     .\build-msix.ps1
-    Build with a placeholder identity, for testing.
-
-.EXAMPLE
-    .\build-msix.ps1 -IdentityName 54321Ben.BenVideoSidecar -Publisher "CN=ABCD1234-..." -PublisherDisplayName "Ben Clark"
-    Build the real thing, with the identity copied from Partner Center.
+    Build the uploadable package. No arguments needed - the Store identity is the default.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    # All three come from Partner Center > your app > Product management > Product identity.
-    [string] $IdentityName,
-    [string] $Publisher,
-    [string] $PublisherDisplayName,
-
-    [string] $DisplayName = 'BenVideo Sidecar',
+    # All four are what Partner Center shows under Apps and games > IsHaunted.com SideCar >
+    # Product management > Product identity, copied on 2026-09-23. DO NOT edit them to something
+    # that looks tidier: a package whose identity differs by one character is rejected at upload,
+    # and the display name has to match the reserved name.
+    [string] $IdentityName         = 'IsHaunted.com.IsHaunted.comSideCar',
+    [string] $Publisher            = 'CN=434B6CE3-32C1-47BC-8ABB-5659C2E46F63',
+    [string] $PublisherDisplayName = 'IsHaunted.com',
+    [string] $DisplayName          = 'IsHaunted.com SideCar',
     [string] $AppVersion,
 
     # Reuse whatever is already staged instead of publishing again. Faster when iterating on the
@@ -67,12 +65,16 @@ function Write-Detail ([string]$m) { Write-Host "   $m" }
 function Get-Sha256 ([string]$p) { (Get-FileHash -Algorithm SHA256 $p).Hash.ToLowerInvariant() }
 
 # ---- identity --------------------------------------------------------------
-# A package that cannot be uploaded is still worth building - it is how everything else here gets
-# tested - but nobody should discover at upload time that it was stamped with a placeholder.
-$placeholder = $false
-if (-not $IdentityName)        { $IdentityName        = 'PLACEHOLDER.BenVideoSidecar'; $placeholder = $true }
-if (-not $Publisher)           { $Publisher           = 'CN=PLACEHOLDER-NOT-A-REAL-STORE-IDENTITY'; $placeholder = $true }
-if (-not $PublisherDisplayName){ $PublisherDisplayName= 'PLACEHOLDER'; $placeholder = $true }
+# Blanking one of these on the command line would otherwise pack a manifest with an empty Name or
+# Publisher, which upload rejects with a message that does not say which field was empty.
+foreach ($f in @(@('IdentityName', $IdentityName), @('Publisher', $Publisher),
+                 @('PublisherDisplayName', $PublisherDisplayName), @('DisplayName', $DisplayName))) {
+    if (-not $f[1]) { throw "-$($f[0]) is empty. Leave it alone to use the Store identity, or pass the real value." }
+}
+# Cheap sanity check on the one field whose shape is fixed. A Store Publisher is always a CN= of the
+# GUID Microsoft assigned; pasting the PublisherDisplayName in here by mistake is an easy slip and
+# costs an upload round-trip to find out about.
+if ($Publisher -notmatch '^CN=') { throw "-Publisher must start with CN= - Partner Center shows it in full. Got: $Publisher" }
 
 # ---- version ---------------------------------------------------------------
 # The package version is the app version with a fourth part. The Store REQUIRES that fourth part to
@@ -248,13 +250,10 @@ Write-Host ''
 Write-Host "   $outMsix  ($sizeMb MB)" -ForegroundColor Green
 Write-Host "   sha256 $(Get-Sha256 $outMsix)"
 
-if ($placeholder) {
-    Write-Host ''
-    Write-Host '   THIS PACKAGE CANNOT BE UPLOADED.' -ForegroundColor Yellow
-    Write-Host '   It carries a placeholder identity. Reserve the app name in Partner Center, then'
-    Write-Host '   copy Product identity into:'
-    Write-Host '      .\build-msix.ps1 -IdentityName <Name> -Publisher "<Publisher>" -PublisherDisplayName "<Name>"'
-}
+Write-Host ''
+Write-Host '   Ready to upload: Partner Center > IsHaunted.com SideCar > Start submission > Packages.' -ForegroundColor Cyan
+Write-Host '   Do not sign it. Microsoft re-signs Store packages, and a signature of ours only gets'
+Write-Host '   in the way. -SelfSign prints what it takes to install this one locally for testing.'
 
 if ($SelfSign) {
     Write-Host ''
