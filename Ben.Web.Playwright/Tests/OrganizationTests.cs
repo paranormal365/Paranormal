@@ -32,7 +32,9 @@ public class OrganizationTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         // .First: the grid shows the name ("BenCo") and the URL name ("benco") in adjacent cells,
         // and a case-insensitive loose match hits both, which is a strict-mode violation.
-        await Expect(Page.GetByText("BenCo", new() { Exact = false }).First)
+        // In the page body: the signed-in seat's sidebar names BenCo too, ahead of the grid, and
+        // it is collapsed — so the page-wide first match was a hidden nav label (2026-09-23).
+        await Expect(Main.GetByText("BenCo", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 

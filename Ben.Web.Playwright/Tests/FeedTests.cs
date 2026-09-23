@@ -468,9 +468,13 @@ public class FeedTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         await GoToFeedAsync();
-        await ComposeAsync($"Something worth liking #t{Guid.NewGuid():N}"[..44]);
+        var text = $"Something worth liking #t{Guid.NewGuid():N}"[..44];
+        await ComposeAsync(text);
 
-        var card = Page.Locator(".bv-feed-post").First;
+        // By its text, not by position. The feed opens on For You, which is ranked rather than
+        // newest-first, so on a database that has seen a few runs the first card can be somebody
+        // else's post this seat already likes — and the click then takes a like away (2026-09-23).
+        var card = Page.Locator(".bv-feed-post").Filter(new() { HasText = text }).First;
         var like = card.Locator(".bv-feed-like");
         await Expect(like).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
@@ -481,7 +485,7 @@ public class FeedTests : BenTestBase
         // The reload is the point: an optimistic count that never reached the server would
         // look identical until the page came back.
         await GoToFeedAsync();
-        var reloaded = Page.Locator(".bv-feed-post").First;
+        var reloaded = Page.Locator(".bv-feed-post").Filter(new() { HasText = text }).First;
         await Expect(reloaded.Locator(".bv-feed-like[aria-pressed='true']"))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
