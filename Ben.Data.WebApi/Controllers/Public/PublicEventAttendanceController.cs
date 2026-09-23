@@ -44,6 +44,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _email;
+
+    /// <summary>
+    /// Where the "confirm you're coming" letter goes: into the same save as the token it carries
+    /// (item 239b).
+    /// </summary>
+    private readonly Ben.Data.WebApi.Services.IOutboxEmailQueue _outbox;
     private readonly UserManager<AppUser> _users;
     private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly Ben.Data.Common.SiteIdentity _site;
@@ -78,8 +84,10 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         IDbContextFactory<BenDataContext> db, IEmailService email, UserManager<AppUser> users,
         IOptions<Ben.Data.Common.SiteIdentity> site, ILogger<PublicEventAttendanceController> logger,
         Ben.Data.WebApi.Services.UserHandleService handles,
-        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail)
+        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail,
+        Ben.Data.WebApi.Services.IOutboxEmailQueue outbox)
     {
+        _outbox = outbox;
         _tourMail = tourMail;
         _handles = handles;
         _db     = db;
@@ -217,8 +225,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 invite.Seats = TourSeats.Clamp(request.Seats);
         }
 
+        // The letter joins THIS save (item 239b). Asking again rotates the token, which kills the
+        // link in any letter already sent; saving the new token and writing its letter afterwards
+        // meant a letter that failed to write left somebody with a dead link and nothing to replace
+        // it. Now the token and the letter carrying it are one write, or neither is.
+        await TryQueueAsync(db, email, ev, token, ct);
         await db.SaveChangesAsync(ct);
-        await TrySendAsync(email, ev, token, ct);
 
         // Always 200, whether or not that address already has an account and whether or not the mail
         // actually went. Anything else turns this into an account-existence oracle.
@@ -460,14 +472,18 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
 
     /// <summary>
-    /// Sends the confirmation link, and treats a failure as non-fatal.
+    /// Queues the confirmation link into the caller's context, and treats a failure as non-fatal.
     /// </summary>
     /// <remarks>
-    /// No SMTP host is configured in any environment yet, so this does nothing today — and the
-    /// caller must not fail because of it, or asking to attend would break entirely the moment mail
-    /// was misconfigured. The invitation is already saved; a resend re-uses it.
+    /// <para>Not saved here: the caller's save writes the letter with the token it carries (item
+    /// 239b).</para>
+    ///
+    /// <para>The caller must not fail because of the letter, or asking to attend would break
+    /// entirely the moment mail was misconfigured — and nothing here may tell it whether the letter
+    /// went, for the reason given where it is caught.</para>
     /// </remarks>
-    private async Task TrySendAsync(string email, OrgCalendarEvent ev, string token, CancellationToken ct)
+    private async Task TryQueueAsync(
+        BenDataContext db, string email, OrgCalendarEvent ev, string token, CancellationToken ct)
     {
         if (!_email.IsConfigured)
         {
@@ -481,19 +497,20 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         try
         {
-            await _email.SendAsync(email,
+            await _outbox.EnqueueAsync(db, new EmailMessage(email,
                 $"Confirm you're coming to {ev.Title}",
                 $"<p>You said you'd like to come to <strong>{safeTitle}</strong> on "
                 + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
                 + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
                 + "<p>That link is good for two weeks, and only works once. If this wasn't you, "
-                + "nothing happens unless you click it.</p>", ct);
+                + "nothing happens unless you click it.</p>"), ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Logged rather than surfaced: telling the caller the send failed would also tell them
-            // the address exists, and there is nothing they could do about it either way.
-            _logger.LogWarning(ex, "Could not send an event attendance link to {Email}.", email);
+            // the address exists, and there is nothing they could do about it either way. Error
+            // rather than Warning, because the database log keeps Error and above.
+            _logger.LogError(ex, "Could not queue an event attendance link to {Email}.", email);
         }
     }
 }

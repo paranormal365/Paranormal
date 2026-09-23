@@ -51,7 +51,7 @@ public class ViewerReadOnlyTests
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
             new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
-            Support.SilentTourMail.Instance)
+            Support.SilentTourMail.Instance, new ForwardingOutboxQueue(new Mock<Ben.Data.Common.Interfaces.IEmailService>().Object))
         {
             ControllerContext = new ControllerContext
             {

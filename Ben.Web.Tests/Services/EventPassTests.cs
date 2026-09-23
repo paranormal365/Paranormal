@@ -423,7 +423,7 @@ public sealed class EventPassTests
             new HostedEventCalendarSync(),
             new Ben.Data.WebApi.Services.Access.HostedEventAccess(security.Object),
             mailer, email, site,
-            NullLogger<HostedEventBookingController>.Instance)
+            NullLogger<HostedEventBookingController>.Instance, new ForwardingOutboxQueue(email))
         {
             ControllerContext = new ControllerContext
             {

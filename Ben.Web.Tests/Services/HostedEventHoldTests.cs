@@ -158,7 +158,7 @@ public sealed class HostedEventHoldTests
             email.Object,
             site,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<
-                Ben.Data.WebApi.Controllers.Entities.HostedEventBookingController>.Instance)
+                Ben.Data.WebApi.Controllers.Entities.HostedEventBookingController>.Instance, new ForwardingOutboxQueue(email.Object))
         {
             ControllerContext = new ControllerContext
             {

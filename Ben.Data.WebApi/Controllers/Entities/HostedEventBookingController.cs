@@ -44,6 +44,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<HostedEventBookingController> _logger;
 
+    /// <summary>
+    /// Where the venue's invitation goes: into the same save as the token it carries (item 239b).
+    /// </summary>
+    private readonly IOutboxEmailQueue _outbox;
+
     /// <summary>An invitation is good for a fortnight, the same as every other link here.</summary>
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(14);
 
@@ -55,9 +60,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         EventGuestMailer guestMail,
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        ILogger<HostedEventBookingController> logger)
+        ILogger<HostedEventBookingController> logger,
+        IOutboxEmailQueue outbox)
         : base(dbFactory, mapper, security)
     {
+        _outbox = outbox;
         _sync = sync; _access = access; _guestMail = guestMail;
         _email = email; _site = site.Value; _logger = logger;
     }
@@ -548,9 +555,13 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             invite.UpdatedByAppUserId = userId.Value;
         }
 
+        // Queued BEFORE the save, so the token and the letter carrying it are one write (item
+        // 239b). Inviting again rotates the token; saving it first and sending afterwards could
+        // leave the guest's earlier link dead and no new one written — and because the outbox
+        // swallowed its own failure, "sent" still came back true to the host at the door.
+        var sent = await TryQueueInviteAsync(db, email, ev, token, ct);
         await db.SaveChangesAsync(ct);
 
-        var sent = await TrySendInviteAsync(email, ev, token, ct);
         return Ok(new HostedEventGuestInviteRecord(email, sent, expires));
     }
 
@@ -900,7 +911,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             pass.ReissuedFromHostedEventPassId is not null);
 
     /// <summary>
-    /// Sends the invitation, and reports honestly whether it went.
+    /// Queues the invitation into the caller's context, and reports honestly whether it did.
     /// </summary>
     /// <remarks>
     /// <para>Unlike the public flow, the truth is told to the caller here. A host is not a
@@ -908,11 +919,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// wondering why nobody came, and "we could not send it" is exactly what they need to know.
     /// The invitation is saved either way, and the link is in the log.</para>
     ///
+    /// <para>Not saved here: the caller's save writes the letter with the token it carries, so
+    /// true means the letter is in that same write (item 239b).</para>
+    ///
     /// <para>It deliberately says nothing about the room, the price or the programme. Those are
     /// the confirmation's to say, and this letter goes to an address nobody has proved yet.</para>
     /// </remarks>
-    private async Task<bool> TrySendInviteAsync(
-        string email, HostedEvent ev, string token, CancellationToken ct)
+    private async Task<bool> TryQueueInviteAsync(
+        BenDataContext db, string email, HostedEvent ev, string token, CancellationToken ct)
     {
         var link = _site.AbsoluteUrl($"/attending/{token}");
 
@@ -927,20 +941,22 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var safeName = NotificationText.Safe(ev.Name);
         try
         {
-            await _email.SendAsync(email,
+            await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
                 $"You're invited to {ev.Name}",
                 $"<p>The venue has invited you to <strong>{safeName}</strong>, starting "
               + $"{ev.StartsOn:dddd, MMMM d}.</p>"
               + $"<p><a href=\"{link}\">Accept the invitation</a></p>"
               + "<p>Accepting puts your name in front of the venue, who will confirm your place "
               + "and tell you what happens next. That link is good for two weeks and only works "
-              + "once.</p>", ct);
+              + "once.</p>"), ct);
             return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex,
-                "Could not send an invitation to hosted event {EventId}.", ev.Id);
+            // Error, which the database log keeps: a Warning is how a letter that never went
+            // stayed invisible before (item 239).
+            _logger.LogError(ex,
+                "Could not queue an invitation to hosted event {EventId}.", ev.Id);
             return false;
         }
     }
