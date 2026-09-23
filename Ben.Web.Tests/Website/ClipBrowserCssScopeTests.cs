@@ -92,4 +92,35 @@ public sealed class ClipBrowserCssScopeTests
     {
         Assert.DoesNotContain("CssScope", Read("Ben.Video.Editor", "Components", "ClipBrowser.razor"));
     }
+
+    /// <summary>
+    /// No global stylesheet uses <c>::deep</c>, which only means something under CSS isolation.
+    /// </summary>
+    /// <remarks>
+    /// When this component's styles moved to a global file (2026-09-22), three rules came with
+    /// their <c>::deep</c> — and a browser drops a rule whose selector it cannot parse, so the media
+    /// bin's tab strip lost its height again and the video editor's import tests timed out clicking
+    /// cards the grid now covered. Nothing warns: the rule is simply not there. Comments are
+    /// stripped first, since the fix is explained in one.
+    /// </remarks>
+    [Fact]
+    public void No_global_stylesheet_uses_deep()
+    {
+        var root = RepoRoot().FullName;
+        var offenders = Directory.EnumerateFiles(root, "*.css", SearchOption.AllDirectories)
+            .Where(p => p.Contains($"{Path.DirectorySeparatorChar}wwwroot{Path.DirectorySeparatorChar}")
+                     && !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                     && !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !p.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}")
+                     && !p.Contains($"{Path.DirectorySeparatorChar}.claude{Path.DirectorySeparatorChar}"))
+            .Where(p => System.Text.RegularExpressions.Regex
+                .Replace(File.ReadAllText(p), @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline)
+                .Contains("::deep"))
+            .Select(p => Path.GetRelativePath(root, p))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "These global stylesheets use ::deep, which a browser drops outside CSS isolation — the "
+          + "rule silently does nothing. Use a plain descendant selector:\n  " + string.Join("\n  ", offenders));
+    }
 }

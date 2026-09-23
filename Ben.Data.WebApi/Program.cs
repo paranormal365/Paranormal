@@ -12,6 +12,11 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// A host pointed at a scratch database keeps that database's files beside it, as run-e2e.sh does,
+// rather than in the shared .uploads (crawl W14). Development only; see DevUploadsPairing.
+if (builder.Environment.IsDevelopment())
+    Ben.Data.WebApi.Services.DevUploadsPairing.Apply(builder.Configuration, Console.Out);
+
 /* LOGGING */
 
 // Everything about levels and sinks now comes from configuration — nothing is pinned here.
@@ -249,6 +254,10 @@ Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorE
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
+// The origin every emailed link is built on. Unset, it falls back to AppBaseUrl — the setting both
+// deploy paths actually wrote — rather than leaving every link in every letter relative.
+builder.Services.PostConfigure<Ben.Data.Common.SiteIdentity>(site =>
+    Ben.Data.Common.SiteIdentity.UseAppBaseUrlWhenUnset(site, builder.Configuration["AppBaseUrl"]));
 // Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
 // exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
 // screen, which must send immediately and show the raw failure — a diagnostic that queues is not a
@@ -361,6 +370,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // visitor's account of somebody else's home stayed indefinitely (2026-09-17 audit).
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.PendingClientRequestExpiryJob>();
+// A guest code lives a day and nothing removed one, so each kept its guide's account row alive for
+// good (crawl C3). Swept a month after it ran out, with the passes it minted.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.GuestCodeExpiryJob>();
 // Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
 // letters that went a month ago. Nothing else sends mail any more.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

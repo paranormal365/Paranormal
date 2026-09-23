@@ -310,7 +310,7 @@ public sealed class MyEquipmentController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             // What a viewer downloads is the sanitized copy, so its type and size are what belong
             // on the row — the original's are recorded in the metadata table beside its EXIF.

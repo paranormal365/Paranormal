@@ -112,8 +112,8 @@ public sealed class VenueClaimController : BenControllerBase
                 .FirstOrDefault(c => c.Id == contactId);
             if (proving is null)
                 return BadRequest("That address can't prove this claim. Choose one from the list, or ask for a review.");
-            if (!_email.IsConfigured)
-                return Conflict("This site can't send email just now, so no code can be sent. Ask for a review instead.");
+            // No refusal when mail is not set up: the code is queued all the same and waits in the
+            // outbox until it is, readable by a site administrator at /admin/mail meanwhile.
         }
         else if (evidence is null)
         {

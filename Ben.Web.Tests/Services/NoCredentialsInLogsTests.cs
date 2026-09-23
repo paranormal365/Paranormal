@@ -171,7 +171,7 @@ public sealed class NoCredentialsInLogsTests
     /// otherwise <paramref name="i"/>. Handles "", @"", $"", $@"" / @$"", raw """ and '' literals,
     /// and the code inside an interpolation hole, which may hold literals of its own.
     /// </summary>
-    private static int EndOfLiteral(string s, int i)
+    internal static int EndOfLiteral(string s, int i)
     {
         var p = i;
         var interpolated = false;

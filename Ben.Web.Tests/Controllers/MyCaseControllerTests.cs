@@ -632,6 +632,30 @@ public class MyCaseControllerTests
         email.Verify(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "newperson@t.com"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// With no mail set up the letter is still queued, and the reply still says it was not sent.
+    /// </summary>
+    /// <remarks>
+    /// It used to be skipped, so it could not be read at /admin/mail or followed by a browser test
+    /// (2026-09-23). EmailSent must stay false: it is what makes the screen offer the link to copy.
+    /// </remarks>
+    [Fact]
+    public async Task InviteCoClient_NoMail_QueuesTheLetterButReportsNotSent()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var email = new Mock<IEmailService>();
+        email.Setup(e => e.IsConfigured).Returns(false);
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Returns(Task.CompletedTask);
+        var ctrl = Build(factory, clientId, emailService: email.Object);
+
+        var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);
+
+        var dto = Assert.IsType<InviteCoClientResult>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.False(dto.EmailSent);
+        email.Verify(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "newperson@t.com"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task InviteCoClient_SendFailure_StillSucceedsButReportsNotSent()
     {

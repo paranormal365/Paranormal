@@ -47,6 +47,23 @@ public sealed class VisualAuditWalk : BenTestBase
         ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals"]),
     ];
 
+    /// <summary>
+    /// The widths each seat's pages are read at: the desktop the walk began with, and a phone.
+    /// </summary>
+    /// <remarks>
+    /// W5 (crawl 2026-09-21): nothing checked layout at phone width. The walk read contrast,
+    /// clipping and card edges at desktop only, and the sweep's 375 pass watches the console and
+    /// the network, not the page — so a screen that scrolled sideways on every phone passed both.
+    /// Item 210 and the request wizard had fits-at-375 tests of their own; nothing else did. The
+    /// same auditor runs at both widths, and at 375 its "page scrolls sideways" finding, which a
+    /// desktop almost never trips, names the outermost elements that stick out.
+    /// </remarks>
+    private static readonly (string Name, int Width, int Height)[] Passes =
+    [
+        ("desktop", 0, 0),        // whatever the browser was given; not changed
+        ("phone", 375, 812),
+    ];
+
     private string _script = "";
 
     [OneTimeSetUp]
@@ -73,61 +90,78 @@ public sealed class VisualAuditWalk : BenTestBase
         var hard = new List<string>();
         var seen = 0;
 
-        foreach (var (seat, routes) in Walks)
+        var desktop = Page.ViewportSize;
+        foreach (var (pass, width, height) in Passes)
         {
-            if (seat != "visitor")
+            if (width > 0) await Page.SetViewportSizeAsync(width, height);
+            body.Append($"\n## At {(width > 0 ? $"{width}px ({pass})" : pass)} width\n");
+
+            foreach (var (seat, routes) in Walks)
             {
-                var (email, password) = seat == "superadmin"
-                    ? (SuperAdminEmail, SuperAdminPassword)
-                    : (UserEmail, UserPassword);
+                // Rows are keyed by pass as well as seat, so a phone-only fault reads as one.
+                var who = width > 0 ? $"{seat}@{width}" : seat;
 
-                if (string.IsNullOrWhiteSpace(password))
+                if (seat == "visitor")
                 {
-                    body.Append($"\n### {seat}\n\nSkipped: no password in the environment.\n");
-                    continue;
+                    // The desktop pass ends signed in as the last seat; a visitor is nobody.
+                    if (width > 0) await LogoutAsync();
+                }
+                else
+                {
+                    var (email, password) = seat == "superadmin"
+                        ? (SuperAdminEmail, SuperAdminPassword)
+                        : (UserEmail, UserPassword);
+
+                    if (string.IsNullOrWhiteSpace(password))
+                    {
+                        body.Append($"\n### {who}\n\nSkipped: no password in the environment.\n");
+                        continue;
+                    }
+
+                    await LoginAsync(email, password);
                 }
 
-                await LoginAsync(email, password);
-            }
+                body.Append($"\n### {who}\n\n");
 
-            body.Append($"\n### {seat}\n\n");
-
-            foreach (var route in routes)
-            {
-                await Page.GotoAsync($"{BaseUrl}{route}", new() { Timeout = 30_000 });
-                await WaitUntilLoadedAsync();
-                await Page.WaitForTimeoutAsync(1_500);
-
-                List<Finding> found;
-                try
+                foreach (var route in routes)
                 {
-                    var json = await Page.EvaluateAsync<string>(
-                        _script + "\n JSON.stringify(window.__benVisualAudit())");
-                    found = JsonSerializer.Deserialize<List<Finding>>(json,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-                }
-                catch (Exception ex)
-                {
-                    body.Append($"- `{route}` — could not be read: {ex.Message[..Math.Min(80, ex.Message.Length)]}\n");
-                    continue;
-                }
+                    await Page.GotoAsync($"{BaseUrl}{route}", new() { Timeout = 30_000 });
+                    await WaitUntilLoadedAsync();
+                    await Page.WaitForTimeoutAsync(1_500);
 
-                seen++;
-                foreach (var f in found) all.Add(new(seat + route, f.Kind, f.El, f.Detail));
-                if (found.Count == 0) { body.Append($"- `{route}` — nothing\n"); continue; }
+                    List<Finding> found;
+                    try
+                    {
+                        var json = await Page.EvaluateAsync<string>(
+                            _script + "\n JSON.stringify(window.__benVisualAudit())");
+                        found = JsonSerializer.Deserialize<List<Finding>>(json,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+                    }
+                    catch (Exception ex)
+                    {
+                        body.Append($"- `{route}` — could not be read: {ex.Message[..Math.Min(80, ex.Message.Length)]}\n");
+                        continue;
+                    }
 
-                body.Append($"- `{route}`\n");
-                foreach (var group in found.GroupBy(f => f.Kind).OrderBy(g => g.Key))
-                {
-                    body.Append($"    - **{group.Key}** ({group.Count()})\n");
-                    foreach (var f in group.Take(4)) body.Append($"        - `{f.El}` — {f.Detail}\n");
+                    seen++;
+                    foreach (var f in found) all.Add(new(who + route, f.Kind, f.El, f.Detail));
+                    if (found.Count == 0) { body.Append($"- `{route}` — nothing\n"); continue; }
+
+                    body.Append($"- `{route}`\n");
+                    foreach (var group in found.GroupBy(f => f.Kind).OrderBy(g => g.Key))
+                    {
+                        body.Append($"    - **{group.Key}** ({group.Count()})\n");
+                        foreach (var f in group.Take(4)) body.Append($"        - `{f.El}` — {f.Detail}\n");
+                    }
+
+                    // The two that are never a design choice.
+                    foreach (var f in found.Where(f => f.Kind is "text on the card edge" or "content clipped"))
+                        hard.Add($"{who} {route}: {f.Kind} — {f.El} — {f.Detail}");
                 }
-
-                // The two that are never a design choice.
-                foreach (var f in found.Where(f => f.Kind is "text on the card edge" or "content clipped"))
-                    hard.Add($"{seat} {route}: {f.Kind} — {f.El} — {f.Detail}");
             }
         }
+
+        if (desktop is not null) await Page.SetViewportSizeAsync(desktop.Width, desktop.Height);
 
         report.Append(VisualRollUp.Render(all)).Append(body);
 

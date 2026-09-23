@@ -29,9 +29,23 @@ namespace Ben.Web.Tests;
 internal static class TestOutbox
 {
     public static OutboxEmailService Real(IDbContextFactory<BenDataContext> factory)
+        => Build(factory, "smtp.test.invalid");
+
+    /// <summary>
+    /// The outbox on a machine with no mail server — every developer's, and the browser tests'
+    /// hosts (appsettings.Development.json sets Smtp:Host to null).
+    /// </summary>
+    /// <remarks>
+    /// Letters still queue here; nothing reports them sent. The tests using it hold both halves of
+    /// that at once (2026-09-23).
+    /// </remarks>
+    public static OutboxEmailService WithoutMail(IDbContextFactory<BenDataContext> factory)
+        => Build(factory, host: null);
+
+    private static OutboxEmailService Build(IDbContextFactory<BenDataContext> factory, string? host)
     {
         var site = Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://test.local" });
-        var smtp = new SmtpEmailService(Options.Create(new SmtpOptions { Host = "smtp.test.invalid" }), site);
+        var smtp = new SmtpEmailService(Options.Create(new SmtpOptions { Host = host }), site);
         return new OutboxEmailService(
             factory, smtp, site,
             new MailComposer(factory, new MemoryCache(new MemoryCacheOptions()), site,

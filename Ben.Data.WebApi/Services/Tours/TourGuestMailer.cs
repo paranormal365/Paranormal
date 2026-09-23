@@ -37,7 +37,7 @@ public sealed class TourGuestMailer
     /// <summary>
     /// Sends the sign-up mail for a tour date, or does nothing when the date is not a tour's.
     /// </summary>
-    /// <returns>True when a mail was sent.</returns>
+    /// <returns>True when a mail was queued.</returns>
     public Task<bool> SendSignUpAsync(
         BenDataContext db, Guid eventId, string toAddress, string? guestName, CancellationToken ct)
         => SendAsync(db, eventId, toAddress, guestName, reminder: false, ct);
@@ -59,7 +59,10 @@ public sealed class TourGuestMailer
         BenDataContext db, Guid eventId, string toAddress, string? guestName,
         bool reminder, CancellationToken ct, bool swallowFailures = true)
     {
-        if (!_email.IsConfigured || string.IsNullOrWhiteSpace(toAddress)) return false;
+        // Not skipped when mail is not set up: the letter — and the pass in it — waits in the
+        // outbox until it is, readable at /admin/mail meanwhile. The reminder job stops before
+        // it gets here in that case, so its "no tour" fallback is never reached by mistake.
+        if (string.IsNullOrWhiteSpace(toAddress)) return false;
 
         try
         {
@@ -81,7 +84,8 @@ public sealed class TourGuestMailer
 
             if (await PassTokenAsync(db, eventId, toAddress, ct) is { Length: > 0 } pass)
             {
-                var url = _site.AbsoluteUrl($"/api/public/tour-passes/{pass}.png");
+                // The API's origin, not the site's: the website does not serve /api (SiteIdentity.ApiBaseUrl).
+                var url = _site.ApiAbsoluteUrl($"/api/public/tour-passes/{pass}.png");
 
                 // Drawn into the letter FIRST, linked second. A linked picture a mail client
                 // blocked is a guest at a meeting point with nothing to show — the same reason
