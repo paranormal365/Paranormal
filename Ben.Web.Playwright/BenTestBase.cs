@@ -272,6 +272,84 @@ public abstract class BenTestBase : PageTest
         return (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString()!;
     }
 
+    /// <summary>
+    /// The link a letter to <paramref name="to"/> carried, read from the outbox — failing loudly
+    /// when there is none.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the outbox and not the log.</b> The harness has no mail server, so an emailed
+    /// link — confirming a sign-up, holding picked seats — has to be read from somewhere. It used to
+    /// be the API's log, which meant the API wrote working credentials into a text file for the
+    /// tests' benefit (NoCredentialsInLogsTests). The outbox takes every letter whether or not SMTP
+    /// is set up, and a SuperAdmin can read one's body, audited, which is the same thing a person
+    /// answering "did we send it?" does.</para>
+    ///
+    /// <para><b>It also needs nothing but the admin seat.</b> Two of the four readers asked for a
+    /// BEN_API_LOG variable that run-e2e.sh never set — one of them spelled BEN_API_LOGE — so the
+    /// sign-up and onboarding journeys skipped in every standard run, and a skip reads as a pass.</para>
+    ///
+    /// <para>Newest letter first, and every test's address is its own, so the letter found is the
+    /// one this test caused.</para>
+    /// </remarks>
+    /// <param name="linkPath">Where the link's path starts: "/confirm-email?" or "/event-picks/".</param>
+    /// <returns>The link from that path onward — ready to follow after BaseUrl.</returns>
+    protected async Task<string> LinkFromTheOutboxAsync(string to, string linkPath)
+    {
+        var link = await TryLinkFromTheOutboxAsync(to, linkPath);
+        Assert.That(link, Is.Not.Null,
+            $"No letter to {to} carrying a {linkPath} link reached the outbox. With no mail server "
+          + "the letter should still be queued — look at /admin/mail as the SuperAdmin.");
+        return link!;
+    }
+
+    /// <summary>
+    /// <see cref="LinkFromTheOutboxAsync"/>, answering null instead of failing — for a capture that
+    /// takes a picture only when it can.
+    /// </summary>
+    protected async Task<string?> TryLinkFromTheOutboxAsync(string to, string linkPath)
+    {
+        await using var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var login = await api.PostAsync("/login", new()
+        {
+            DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+        });
+        Assert.That(login.Ok, Is.True,
+            "the admin seat reads the outbox for emailed links, and could not sign in: " + await login.TextAsync());
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+        // From the path to the end of the attribute. Decoded first: a link in HTML writes its & as
+        // &amp;, and following that literally is a different link.
+        var shape = new Regex(Regex.Escape(linkPath) + "[^\"'<>\\s]*");
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var list = await api.GetAsync("/api/admin/mail/outbox?take=100", new() { Headers = auth });
+            Assert.That(list.Ok, Is.True, "the outbox could not be read: " + await list.TextAsync());
+
+            foreach (var row in (await list.JsonAsync())!.Value.EnumerateArray())
+            {
+                if (!string.Equals(row.GetProperty("to").GetString(), to, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!row.GetProperty("hasBody").GetBoolean()) continue;
+
+                var body = await api.GetAsync(
+                    $"/api/admin/mail/outbox/{row.GetProperty("id").GetString()}/body", new() { Headers = auth });
+                if (!body.Ok) continue;
+
+                var html = (await body.JsonAsync())!.Value.GetProperty("html").GetString();
+                if (html is null) continue;
+
+                var found = shape.Match(System.Net.WebUtility.HtmlDecode(html));
+                if (found.Success) return found.Value;
+            }
+
+            await Task.Delay(500);
+        }
+
+        return null;
+    }
+
     protected async Task<string> OrgIdBySlugAsync(string slug)
     {
         await _orgIdLock.WaitAsync();

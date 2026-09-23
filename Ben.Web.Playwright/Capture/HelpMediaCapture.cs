@@ -2453,9 +2453,9 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await Page.Locator("#picker-hold").ClickAsync();
         await Expect(Page.Locator("#picker-emailed")).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        if (PickTokenFromTheApiLog(stranger) is { } pickToken)
+        if (await TryLinkFromTheOutboxAsync(stranger, "/event-picks/") is { } pickLink)
         {
-            await GoAsync($"/event-picks/{pickToken}");
+            await GoAsync(pickLink);
             await Expect(Page.Locator("#pick-confirm")).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await ShootAsync("going-to-an-event", "hold-your-places-link.png",
                 gated: false, selector: "#pick-card", proves: "Hold my places");
@@ -2652,26 +2652,6 @@ public sealed class HelpMediaCapture : BenTestBase
                     new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
             await api.DisposeAsync();
         }
-    }
-
-    /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
-    private static string? PickTokenFromTheApiLog(string email)
-    {
-        var log = Environment.GetEnvironmentVariable("BEN_E2E_API_LOG");
-        if (string.IsNullOrWhiteSpace(log) || !File.Exists(log)) return null;
-
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            var match = System.Text.RegularExpressions.Regex.Matches(reader.ReadToEnd(),
-                    $@"pick link for ""?{System.Text.RegularExpressions.Regex.Escape(email)}""? was not sent\. Pick token: ""?([A-Za-z0-9_\-]+)")
-                .LastOrDefault();
-            if (match is not null) return match.Groups[1].Value;
-            Thread.Sleep(500);
-        }
-
-        return null;
     }
 
     /// <summary>

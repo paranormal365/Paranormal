@@ -23,25 +23,21 @@ namespace Ben.Web.Tests.Services;
 /// alone: the usual regex strips everything after <c>//</c>, which in a template reading
 /// "https://..." removes the very placeholder this is looking for.</para>
 ///
-/// <para><b>The allowances are by message, not by file</b>, so a new token log in either of those
-/// files still fails. Each has its reason, and an allowance that no longer matches anything fails
-/// too — otherwise a removed line would leave a permanent hole behind it.</para>
+/// <para><b>Allowances, if one is ever needed, are by message, not by file</b>, so a new token log
+/// elsewhere in the same file still fails; and an allowance that no longer matches anything fails too
+/// — otherwise a removed line would leave a permanent hole behind it. There are none.</para>
 /// </remarks>
 public sealed class NoCredentialsInLogsTests
 {
     /// <summary>File, a distinctive part of the message, and why it may carry a link.</summary>
-    private static readonly (string File, string Message, string Why)[] Allowed =
-    [
-        ("IdentityEmailSender.cs", "Use this instead: {Link}",
-            "the browser suite (NewGroupJourneyTests, via run-e2e.sh's BEN_E2E_API_LOG) and a "
-          + "developer with no mail server finish sign-up confirmation and password reset from this "
-          + "line. Warning, which the database log does not keep, and written only when the letter "
-          + "could not be handed on. To go when that fallback moves to the outbox."),
-        ("EventGuestMailer.cs", "Pick token: {Token}",
-            "HostedEventEmailPickTests and HelpMediaCapture follow the pick link from this line. "
-          + "Information, and written only where mail is not configured. To go when that fallback "
-          + "moves to the outbox."),
-    ];
+    /// <remarks>
+    /// <para><b>Empty, and meant to stay so.</b> Two lines were allowed when this guard was written,
+    /// because the browser suite followed the confirmation and seat-pick links out of the API's log.
+    /// Those letters now queue whether or not mail is set up, and the tests read them from the
+    /// outbox instead (BenTestBase.LinkFromTheOutboxAsync), so nothing here needs a link in a log.
+    /// An entry added later needs its reason written out, and still fails once it stops matching.</para>
+    /// </remarks>
+    private static readonly (string File, string Message, string Why)[] Allowed = [];
 
     private static readonly Regex Credential = new(@"\{(Token|Link)\}", RegexOptions.IgnoreCase);
 

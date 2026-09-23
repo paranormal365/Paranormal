@@ -111,19 +111,19 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
     {
         if (!_email.IsConfigured)
         {
-            // Said plainly and at Error, because on a deployed site this is a broken sign-up: the
-            // account exists and nobody will ever be told how to finish it. Locally it is expected
-            // and harmless — the environment names itself in the log either way.
+            // QUEUED ANYWAY, and still reported as not sent. The outbox takes a letter whether or
+            // not SMTP is set up, so the day it is, this one goes; until then a site administrator
+            // can read it — link and all — at /admin/mail, which is how a local sign-up is finished
+            // and how the browser tests follow it. It used to be written to the log instead, and a
+            // confirmation link is a credential: whoever holds it finishes somebody else's account
+            // (NoCredentialsInLogsTests). The log line says what happened and never the link.
+            //
+            // False, because nothing left this machine: DateConfirmationSent stays empty and the
+            // sign-up screen does not claim a letter is on its way.
+            await SendConfirmationLinkAsync(user, email, confirmationLink);
             _logger.LogError(
-                "No confirmation message was sent to {Recipient}: SMTP is not configured, so the "
-              + "account cannot be completed by its owner.", email);
-            // The same fallback SendAsync applies when a configured server refuses: the link goes
-            // to the console at Warning, below the database sink, so a local sign-up can still be
-            // finished. The configuration comment promised this and the early return above had
-            // been skipping it — the 2026-09-04 walkthrough's gap #1, still open on 2026-09-06.
-            _logger.LogWarning(
-                "Could not send the confirmation message to {Recipient}. Use this instead: {Link}",
-                email, confirmationLink);
+                "No confirmation message was sent to {Recipient}: SMTP is not configured. It is "
+              + "waiting in the outbox at /admin/mail, and goes when mail is set up.", email);
             return false;
         }
 
@@ -141,7 +141,7 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "can sign in.</p>"
               + "<p>If you did not create this account, ignore this message and nothing happens.</p>",
                 buttonText: "Confirm my email", buttonUrl: confirmationLink),
-            linkKind: "confirmation", link: confirmationLink,
+            linkKind: "confirmation",
             kind: MailKinds.ConfirmYourAddress.Key,
             supplied: Links("ConfirmUrl", "ConfirmButton", "Confirm my email", confirmationLink));
 
@@ -152,7 +152,7 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "<p>If you did not request this, ignore this message — your password will not "
               + "change.</p>",
                 buttonText: "Reset password", buttonUrl: resetLink),
-            linkKind: "password reset", link: resetLink,
+            linkKind: "password reset",
             kind: MailKinds.ResetYourPassword.Key,
             supplied: Links("ResetUrl", "ResetButton", "Reset password", resetLink));
 
@@ -192,7 +192,7 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
               + "to do — it takes the account out of anybody else's hands. Reply to this message "
               + "if you would rather it was removed.</p>",
                 buttonText: "Choose my password", buttonUrl: setPasswordUrl),
-            linkKind: "account handover", link: setPasswordUrl,
+            linkKind: "account handover",
             kind: MailKinds.AccountMadeForYou.Key,
             supplied: Links("SetPasswordUrl", "SetPasswordButton", "Choose my password", setPasswordUrl,
                             ("MadeBy", string.IsNullOrWhiteSpace(madeBy) ? "Somebody" : madeBy.Trim())),
@@ -225,13 +225,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
                  <p>If you did not request this, ignore this message — your password will not change.</p>
                  """,
                 buttonText: "Reset password", buttonUrl: resetUrl),
-            linkKind: "password reset", link: resetUrl,
+            linkKind: "password reset",
             kind: MailKinds.ResetYourPassword.Key,
             supplied: Links("ResetUrl", "ResetButton", "Reset password", resetUrl,
                             ("ResetCode", resetCode)));
     }
 
-    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind, string link,
+    private async Task SendAsync(string to, string subject, string htmlBody, string linkKind,
                                  string? kind = null,
                                  IReadOnlyDictionary<string, (string Value, bool IsHtml)>? supplied = null,
                                  string? displayName = null)
@@ -268,10 +268,7 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
         }
         catch (Exception ex)
         {
-            // TWO log lines, deliberately, because they want different audiences and different
-            // durability.
-            //
-            // The first is an ERROR and carries NO link. Error is the level the database sink
+            // One log line, and it carries NO link. Error is the level the database sink
             // keeps, so this is the line that still exists tomorrow when somebody asks "did that
             // message ever go out". It deliberately omits the link: a confirmation link is a
             // credential, and the whole point of this line is that it gets STORED.
@@ -281,18 +278,13 @@ public sealed class IdentityEmailSender : IEmailSender<AppUser>, IConfirmationMa
 
             // Identity treats a throwing sender as a failed request, which would report the
             // registration as failed after the account had already been created. So the send is
-            // attempted unconditionally and a failure is logged rather than raised — including
-            // while SMTP is unconfigured, which throws from SmtpEmailService by design.
+            // attempted unconditionally and a failure is logged rather than raised.
             //
-            // The link goes into the log so the flow stays completable without a mail provider.
-            // That makes it exactly as private as the log, which is the reason this is a warning
-            // and not something to leave switched on once mail is actually configured.
-            // The second is a WARNING and carries the link, for completing the flow locally where
-            // no mail server exists. Warning is below the database sink's threshold, so the token
-            // stays in console output and never lands in a table.
-            _logger.LogWarning(
-                "Could not send the {LinkKind} message to {Recipient}. Use this instead: {Link}",
-                linkKind, to, link);
+            // There used to be a second line here, at Warning, carrying the link "so the flow
+            // stays completable without a mail provider". It is gone: the link is a credential,
+            // and the fallback it provided now lives in the outbox, which takes every letter with
+            // or without SMTP and shows it at /admin/mail (NoCredentialsInLogsTests). Reaching
+            // this catch means the outbox itself refused, and then there is no letter to point to.
         }
     }
 }

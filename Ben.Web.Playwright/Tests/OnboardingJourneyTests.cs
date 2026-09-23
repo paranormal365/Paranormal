@@ -14,14 +14,12 @@ namespace Ben.Web.Playwright.Tests;
 [Category("OnboardingJourney")]
 public class OnboardingJourneyTests : BenTestBase
 {
-    private static string? ApiLogPath => Environment.GetEnvironmentVariable("BEN_API_LOGE") ?? Environment.GetEnvironmentVariable("BEN_API_LOG");
-
     [Test]
     public async Task A_cold_signup_meets_onboarding_once_and_an_old_account_never_does()
     {
-        if (ApiLogPath is null || !File.Exists(ApiLogPath))
-            Assert.Ignore("BEN_API_LOG not set — signup needs the API log for the confirmation link.");
-
+        // The confirmation link comes from the outbox, not the API's log. The log reader looked for
+        // BEN_API_LOGE (sic) or BEN_API_LOG, and run-e2e.sh sets neither — so this test skipped in
+        // every standard run, and a skip reads as a pass.
         var tag = Guid.NewGuid().ToString("N")[..8];
         var email = $"onboard{tag}@example.com";
         var password = NewTestPassword();
@@ -39,17 +37,7 @@ public class OnboardingJourneyTests : BenTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "Create account" }).ClickAsync();
         await Expect(Page.GetByText("Check your email").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        string? link = null;
-        for (var attempt = 0; attempt < 20 && link is null; attempt++)
-        {
-            var text = await File.ReadAllTextAsync(ApiLogPath!);
-            link = text.Split('\n')
-                .Where(l => l.Contains("/confirm-email?userId="))
-                .Select(l => l[l.IndexOf("/confirm-email?userId=", StringComparison.Ordinal)..].Trim())
-                .LastOrDefault();
-            if (link is null) await Task.Delay(500);
-        }
-        Assert.That(link, Is.Not.Null, "No confirmation link reached the API log.");
+        var link = await LinkFromTheOutboxAsync(email, "/confirm-email?");
         await Page.GotoAsync($"{BaseUrl}{link}");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Confirm my email" }).ClickAsync(new() { Timeout = 15_000 });
         await Expect(Page.GetByText("confirmed", new() { Exact = false }).First).ToBeVisibleAsync(new() { Timeout = 15_000 });
