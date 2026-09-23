@@ -452,7 +452,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             // Asked rather than assumed: an email-link account has no password, but this link may
             // equally have been clicked by somebody who has had one for years, and offering to set
             // a password to them reads as a warning that something is wrong with their account.
-            AccountHasNoPassword: !await _users.HasPasswordAsync(user)));
+            AccountHasNoPassword: !await _users.HasPasswordAsync(user),
+            // A tour date's seat waits for the business (item 234); a hosted event says so its own way.
+            AwaitsApproval: isTour));
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────

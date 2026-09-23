@@ -219,10 +219,14 @@ public class CalendarLettersAreFollowedTests : BenTestBase
 
         var link = await LinkFromLetterAsync(email, "/attending/", html => html.Contains(dateTitle));
 
-        // Deliberately no assertion on the heading. On a tour date the click only ASKS (item
-        // 234), but the confirmation page draws the ordinary "You're coming" card for anything
-        // that is not a hosted event — so asserting it would pin a sentence that may be wrong.
         await ConfirmFromTheLinkAsync(link, dateTitle, email);
+
+        // On a tour date the click only ASKS (item 234): the page must not say "You're coming"
+        // for a seat nobody has approved. It did until 2026-09-23.
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "You've asked for a place", Exact = true }))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.GetByText("Nothing is held until they do", new() { Exact = false })).ToBeVisibleAsync();
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "You're coming", Exact = true })).ToHaveCountAsync(0);
 
         // ── the business decides ─────────────────────────────────────────────
         await LoginAsync(UserEmail, UserPassword);
