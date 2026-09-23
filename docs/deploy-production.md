@@ -667,9 +667,16 @@ To genuinely disable mail locally, set the values to **null**, not absent:
 "Smtp": { "Host": null, "User": null, "Password": null }
 ```
 
-`IEmailService.IsConfigured` is then false, every caller skips it, and `IdentityEmailSender` logs
-the confirmation link so a local sign-up can still be completed. Measured effect: the sign-up
+`IEmailService.IsConfigured` is then false and nothing leaves the machine, but every letter is
+still queued in the outbox. A local sign-up or seat pick is completed from its link at `/admin/mail`,
+signed in as the SuperAdmin — which is also where the browser tests read it
+(`BenTestBase.LinkFromTheOutboxAsync`). Measured effect of nulling the values: the sign-up
 end-to-end test went from failing at 21 s to passing at 1 s.
+
+The link is **never** written to the log. It used to be, "so a local sign-up can still be
+completed"; but a confirmation link finishes somebody's account and a pick link holds their seats,
+and a log is not a place for a credential. `NoCredentialsInLogsTests` refuses any log line in the API
+that names a `{Token}` or `{Link}`.
 
 **Production is not affected and was never wrong** — `appsettings.json` pairs 465 with
 `SslOnConnect`, which is correct. If you ever want real mail locally, 587 goes with `StartTls`.
@@ -766,9 +773,9 @@ Two columns on `AppUsers` record what happened, and both are visible in Administ
 - `DateEmailConfirmed` — Identity keeps confirmation as a bare true/false with no time on it.
 
 A failure is logged at **Error** with no link in it, so it survives in the `Logs` table where the
-sink keeps only Error; and separately at **Warning** *with* the link, which stays in console output
-for completing a flow locally. The split is deliberate — a confirmation link is a credential, and
-the durable line is the one that gets stored.
+sink keeps only Error. There is no second line carrying the link any more: the letter itself waits in
+the outbox, and `/admin/mail` shows it — audited, SuperAdmin only — to anybody who needs to finish a
+flow by hand.
 
 Members can ask for a new link themselves: the "Confirm your email address first" message on the
 sign-in page carries a **Send the email again** button, throttled to one a minute.

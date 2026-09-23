@@ -129,8 +129,9 @@ public sealed class AccountCreationService : IConfirmationSender
     /// tokens are not URL-safe. This is the same encoding <c>MapIdentityApi</c> uses, so the same
     /// confirmation endpoint accepts both.</para>
     ///
-    /// <para>Returns whether the message left this machine. When it did not, the sender has
-    /// already logged the link at Warning so a local sign-up can still be finished.</para>
+    /// <para>Returns whether the message left this machine. When it did not because mail is not
+    /// set up, the letter is still waiting in the outbox, and a local sign-up is finished from its
+    /// link at /admin/mail — never from the log, since the link finishes somebody's account.</para>
     /// </remarks>
     public async Task<bool> SendConfirmationAsync(AppUser user, string? returnUrl, CancellationToken ct)
     {
