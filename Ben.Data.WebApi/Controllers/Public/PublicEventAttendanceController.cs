@@ -487,8 +487,11 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     {
         if (!_email.IsConfigured)
         {
+            // No token or link here: the link, used by anybody, confirms attendance in this
+            // person's name and burns their own copy (NoCredentialsInLogsTests).
             _logger.LogInformation(
-                "Email is not configured; attendance link for {Email} was not sent. Token: {Token}", email, token);
+                "Email is not configured; the attendance link for {Email} to event {EventId} was not sent.",
+                email, ev.Id);
             return;
         }
 

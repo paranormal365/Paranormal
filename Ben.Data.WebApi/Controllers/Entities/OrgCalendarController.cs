@@ -879,9 +879,11 @@ public sealed class OrgCalendarEventController : BenControllerBase
         }
         else
         {
+            // No token or link here: the link, used by anybody, confirms attendance in the
+            // guest's name and burns their own copy (NoCredentialsInLogsTests).
             _logger.LogInformation(
-                "Email is not configured; guest sign-up link for event {EventId} was not sent. Token: {Token}",
-                eventId, token);
+                "Email is not configured; the guest sign-up link for event {EventId} was not sent.",
+                eventId);
         }
 
         await db.SaveChangesAsync(ct);
