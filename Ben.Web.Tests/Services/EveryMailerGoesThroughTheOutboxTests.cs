@@ -32,6 +32,9 @@ public sealed class EveryMailerGoesThroughTheOutboxTests
             "must send immediately and show the raw failure — a diagnostic that queues is not a diagnostic.",
         ["Program.cs"] =
             "registers them.",
+        ["TestOutbox.cs"] =
+            "builds the outbox for tests exactly as Program.cs does, which means building the "
+          + "sender it wraps. It never posts: the outbox only queues, and no sender job runs in a test.",
     };
 
     [Fact]

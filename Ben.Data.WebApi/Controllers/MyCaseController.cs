@@ -38,6 +38,11 @@ public sealed class MyCaseController : BenControllerBase
     /// <summary>Makes the cards for links in a client's message once it is saved (2026-09-14).</summary>
     private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
 
+    /// <summary>
+    /// Where an invitation's letter goes: into the same save as the invite it carries (item 239b).
+    /// </summary>
+    private readonly Services.IOutboxEmailQueue _outbox;
+
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
@@ -48,10 +53,12 @@ public sealed class MyCaseController : BenControllerBase
         Services.PlatformMessageService messages,
         Services.IMediaIngestService mediaIngest,
         Services.ICmsMarkupSanitizer sanitizer,
-        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews,
+        Services.IOutboxEmailQueue outbox)
     {
         _sanitizer = sanitizer;
         _previews = previews;
+        _outbox = outbox;
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
@@ -1066,9 +1073,16 @@ public sealed class MyCaseController : BenControllerBase
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.CaseClientInvites.Add(invite);
-        await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi));
 
+        // The letter is queued into THIS context before the save, so the invite, the revocation of
+        // any earlier one and the letter carrying the new link are one write (item 239b). Before,
+        // the invite was saved first and the letter sent after — so a letter that never got
+        // written left a live invite nobody was told about, and because the outbox swallowed its
+        // own failure, EmailSent still came back true and the screen never offered the link to
+        // copy. EmailSent now means the letter is in the same row set as the invite.
+        //
+        // Still best effort: the invite succeeds without it and the screen falls back to the
+        // copy-link, which is the right rule while there is that fallback.
         var emailSent = false;
         if (_emailService.IsConfigured)
         {
@@ -1084,11 +1098,19 @@ public sealed class MyCaseController : BenControllerBase
                            $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
                            $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
                            $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
-                await _emailService.SendAsync(email, subject, body, ct);
+                await _outbox.EnqueueAsync(db, new EmailMessage(email, subject, body), ct);
                 emailSent = true;
             }
-            catch { /* best-effort — the invite still succeeds; the UI falls back to copy-link */ }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Was a bare catch with nothing logged. Error, because the database log keeps
+                // Error and above and a letter that never went must be findable.
+                _logger.LogError(ex, "Could not queue the invitation to case {CaseId}; the link is shown to copy instead.", caseId);
+            }
         }
+
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi));
 
         return Ok(new InviteCoClientResult(
             LinkedExistingAccount: false, CoClient: null, Invite: ToInviteRecord(invite), EmailSent: emailSent));

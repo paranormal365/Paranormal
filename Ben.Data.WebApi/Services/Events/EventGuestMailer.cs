@@ -713,12 +713,26 @@ public sealed class EventGuestMailer
     /// <para>Here rather than in a mailer of its own because this class already knows how to write
     /// a letter about an event: the venue's name, the reply-to, the safe encoding. A second class
     /// would be a second set of those to keep true.</para>
+    ///
+    /// <para><b>Queued into the caller's context, and not saved here (item 239b).</b> Every
+    /// invitation carries a fresh token, and reissuing one kills the link in the letter before
+    /// it. So a token saved without its letter leaves somebody with a dead link and nothing to
+    /// replace it, and a letter queued for a token that rolled back is a link that never worked.
+    /// The caller saves the row, queues this, saves again and commits once.</para>
     /// </remarks>
-    /// <returns>True when a letter was sent.</returns>
+    /// <returns>
+    /// True when a letter was queued; false when there is nothing to send — no mail set up, no
+    /// token, no address. Anything that goes wrong beyond that throws.
+    /// </returns>
     public async Task<bool> SendStaffInviteAsync(
         BenDataContext db, Guid staffId, CancellationToken ct)
     {
         if (!_email.IsConfigured) return false;
+
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendStaffInviteAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or an invitation's token and "
+          + "the letter carrying it stop being atomic (item 239b).");
 
         var staff = await db.HostedEventStaff.AsNoTracking()
             .Include(s => s.AppUser)
@@ -751,7 +765,7 @@ public sealed class EventGuestMailer
         body.Append("<p>The link works once and lasts a fortnight. If you were not expecting this, "
                   + "ignore it — nothing happens until you click.</p>");
 
-        await _email.SendAsync(new EmailMessage(
+        await queue.EnqueueAsync(db, new EmailMessage(
             to,
             $"Can you help at {ev?.Name ?? "an event"}?",
             body.ToString(),

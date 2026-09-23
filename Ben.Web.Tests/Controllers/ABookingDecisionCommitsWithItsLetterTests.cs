@@ -165,7 +165,7 @@ public sealed class ABookingDecisionCommitsWithItsLetterTests
         return new HostedEventBookingController(
             sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, security.Object,
             new HostedEventCalendarSync(), new HostedEventAccess(security.Object), mailer, email.Object,
-            site, NullLogger<HostedEventBookingController>.Instance)
+            site, NullLogger<HostedEventBookingController>.Instance, new ForwardingOutboxQueue(email.Object))
         {
             ControllerContext = new ControllerContext
             {
