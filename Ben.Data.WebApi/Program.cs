@@ -365,6 +365,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // visitor's account of somebody else's home stayed indefinitely (2026-09-17 audit).
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.PendingClientRequestExpiryJob>();
+// A guest code lives a day and nothing removed one, so each kept its guide's account row alive for
+// good (crawl C3). Swept a month after it ran out, with the passes it minted.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.GuestCodeExpiryJob>();
 // Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
 // letters that went a month ago. Nothing else sends mail any more.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
