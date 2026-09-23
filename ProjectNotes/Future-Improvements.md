@@ -13219,7 +13219,7 @@ A SuperAdmin or group screen that generates the code for a session, shows it lar
 off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
 
 
-## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — 11 letters still unnamed)
+## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — every declared letter now sent; templates fill in, 2026-09-23)
 
 Ben's ask is recorded in full at [[245]]; this is what was built for it.
 
