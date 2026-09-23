@@ -1,5 +1,6 @@
 using Ben.Data.Common;
 using Ben.Data.Common.Mail;
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -70,7 +71,7 @@ public sealed class ClientStatusMailer
         var body = $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) "
                  + $"that was set for {When(visit.ScheduledDateTime)} has been cancelled. The group will be in touch about what happens next.</p>";
         await SendToClientsAsync(db, c, "visit cancelled", $"A visit to your case {Reference(c)} was cancelled", "A visit was cancelled", body, ct,
-            MailKinds.VisitCancelled.Key);
+            MailKinds.VisitCancelled.Key, visit);
     }
 
     private async Task VisitAsync(BenDataContext db, Case c, Investigation visit, string kind, string title, string lead, CancellationToken ct,
@@ -81,11 +82,11 @@ public sealed class ClientStatusMailer
                  + (visit.EndDateTime is { } end ? $" until {When(end)}" : "")
                  + (string.IsNullOrWhiteSpace(visit.Location) ? "" : $"<br/>{WebUtility.HtmlEncode(visit.Location)}")
                  + "</p><p>Open your case to see it in your own time zone and to message the group.</p>";
-        await SendToClientsAsync(db, c, $"visit {kind}", $"{title}: {Reference(c)}", title, body, ct, mailKind);
+        await SendToClientsAsync(db, c, $"visit {kind}", $"{title}: {Reference(c)}", title, body, ct, mailKind, visit);
     }
 
     private async Task SendToClientsAsync(BenDataContext db, Case c, string what, string subject, string title, string bodyHtml, CancellationToken ct,
-                                          string? kind = null)
+                                          string? kind = null, Investigation? visit = null)
     {
         if (!_email.IsConfigured)
         {
@@ -123,8 +124,15 @@ public sealed class ClientStatusMailer
 
         var clients = await db.AppUsers.AsNoTracking()
             .Where(u => clientIds.Contains(u.Id))
-            .Select(u => new { AppUserId = u.Id, u.Email, u.EmailConfirmed })
             .ToListAsync(ct);
+
+        // What a template of this kind reads (MailRows): the client, the case, the group, and for a
+        // visit the visit. Until 2026-09-23 it was handed nothing — and four of these letters had
+        // PUBLISHED templates on production using {AppUsers.DisplayName}, {Organizations.Name} and
+        // {Investigations.ScheduledDateTime}, all of which would have printed blank.
+        var info = kind is null ? null : MailKinds.Find(kind);
+        var organization = c.Organization
+            ?? await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == c.OrganizationId, ct);
 
         if (clients.Count == 0)
         {
@@ -137,12 +145,13 @@ public sealed class ClientStatusMailer
         {
             if (string.IsNullOrWhiteSpace(client.Email) || !client.EmailConfirmed)
             {
-                _log.LogInformation("Client status mail: case {CaseId} ({What}) — client {AppUserId} has no confirmed address; not mailed.", c.Id, what, client.AppUserId);
+                _log.LogInformation("Client status mail: case {CaseId} ({What}) — client {AppUserId} has no confirmed address; not mailed.", c.Id, what, client.Id);
                 continue;
             }
             try
             {
-                await _email.SendAsync(new EmailMessage(client.Email, subject, html, Kind: kind), ct);
+                await _email.SendAsync(new EmailMessage(client.Email, subject, html, Kind: kind,
+                    Payload: info is null ? null : MailRows.For(info, client, c, organization, visit)), ct);
                 _log.LogInformation("Client status mail sent to {Recipient} for case {CaseId}: {What}.", client.Email, c.Id, what);
             }
             catch (Exception ex)

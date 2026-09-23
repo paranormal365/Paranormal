@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Helpers;
@@ -200,7 +201,8 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "nobody has been given access to it.</p>",
                 buttonText: "Sign in", buttonUrl: $"{BaseUrl}/login"),
             "their address was used in a sign-up attempt", ct,
-            MailKinds.SomebodyUsedYourAddress.Key);
+            MailKinds.SomebodyUsedYourAddress,
+            Link("SignInUrl", "SignInButton", "Sign in", $"{BaseUrl}/login"));
     }
 
     /// <summary>
@@ -229,15 +231,34 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "the request will be discarded on its own.</p>",
                 buttonText: "Sign in to finish it", buttonUrl: adoptLink),
             "an investigation request was made under their address", ct,
-            MailKinds.SomebodyUsedYourAddress.Key);
+            // Its own kind since 2026-09-23: it shared the sign-up warning's, so one template
+            // replaced both — and the published one had no link, which would have taken away the
+            // only way to claim the request.
+            MailKinds.RequestMadeUnderYourAddress,
+            new Dictionary<string, MailSuppliedValue>(
+                Link("FinishUrl", "FinishButton", "Sign in to finish it", adoptLink), StringComparer.OrdinalIgnoreCase)
+            {
+                ["StreetAddress"] = new(streetAddress),
+            });
     }
 
+    /// <summary>A link and its ready-made button, as a template of these kinds is promised them.</summary>
+    private static Dictionary<string, MailSuppliedValue> Link(string urlToken, string buttonToken, string buttonText, string url)
+        => new(StringComparer.OrdinalIgnoreCase)
+        {
+            [urlToken] = new(url),
+            [buttonToken] = new(BenEmailLayout.ActionButton(buttonText, url), IsHtml: true),
+        };
+
     private async Task TrySendAsync(AppUser to, string subject, string body, string what, CancellationToken ct,
-                                    string? kind = null)
+                                    MailKindInfo? kind = null,
+                                    IReadOnlyDictionary<string, MailSuppliedValue>? supplied = null)
     {
         try
         {
-            await _email.SendAsync(new EmailMessage(to.Email!, subject, body, Kind: kind), ct);
+            await _email.SendAsync(new EmailMessage(to.Email!, subject, body, Kind: kind?.Key,
+                // The account holder, and the link the letter exists to carry (MailRows).
+                Payload: kind is null ? null : MailRows.For(kind, supplied, to)), ct);
         }
         catch (Exception ex)
         {

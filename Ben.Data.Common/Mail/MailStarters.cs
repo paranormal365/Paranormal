@@ -116,6 +116,58 @@ public static class MailStarters
                                + "hands. Reply to this message if you would rather it was removed.")),
         [MailKinds.AccountMadeForYou.Key]);
 
+    /// <summary>
+    /// Holding the places somebody picked. Its own starter because the generic one has no hold link
+    /// in it, and <see cref="For"/> rightly will not offer a letter that would be refused on save.
+    /// </summary>
+    public static readonly MailStarter HoldPlaces = new(
+        "hold-places", "Hold the places you picked",
+        "What they picked, when it goes back, and the button that holds it.",
+        "Hold your places at {HostedEvents.Name} within 15 minutes",
+        Branded(
+            MailBlocks.Heading("Hold your places"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}, you picked places at "
+                               + "{HostedEvents.Name}. They are waiting for you until "
+                               + "<strong>{HoldUntil}</strong> — press the button to hold them."),
+            "{Places}",
+            "{HoldButton}",
+            MailBlocks.Paragraph("Once they are held, {Organizations.Name} answers you, and nobody "
+                               + "else can take them in the meantime."),
+            MailBlocks.Paragraph("If this wasn't you, do nothing: the places go back by themselves "
+                               + "and no account is made.")),
+        [MailKinds.HoldYourPlaces.Key]);
+
+    /// <summary>A request waiting under somebody's address, and the link that claims it.</summary>
+    public static readonly MailStarter RequestUnderYourAddress = new(
+        "request-under-your-address", "A request made with your address",
+        "Where it was asked for, and the button that claims it.",
+        "An investigation request was made using your {SiteName} email",
+        Branded(
+            MailBlocks.Heading("Was this you?"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. Somebody asked for an investigation at "
+                               + "<strong>{StreetAddress}</strong> using this email address, which "
+                               + "already has an account."),
+            MailBlocks.Paragraph("If that was you, sign in to finish it — the button below opens the "
+                               + "request so you can add it to your account."),
+            "{FinishButton}",
+            MailBlocks.Paragraph("If it was not you, there is nothing to do. The request will be "
+                               + "discarded on its own.")),
+        [MailKinds.RequestMadeUnderYourAddress.Key]);
+
+    /// <summary>The code that proves who runs a place.</summary>
+    public static readonly MailStarter VenueCode = new(
+        "venue-code", "A code to confirm a venue",
+        "Who is asking, the code, and what to do if it is nobody you know.",
+        "A code to confirm who runs {Places.Name}",
+        Branded(
+            MailBlocks.Heading("A code to confirm who runs {Places.Name}"),
+            MailBlocks.Paragraph("Somebody from <strong>{Organizations.Name}</strong> says they run "
+                               + "{Places.Name} and wants to be confirmed as its venue."),
+            MailBlocks.Paragraph("If that is you, give them this code: <strong>{ClaimCode}</strong>"),
+            MailBlocks.Paragraph("It works for 24 hours. If you don't know who this is, don't share it "
+                               + "— nothing happens without the code.")),
+        [MailKinds.VenueClaimCode.Key]);
+
     public static readonly MailStarter BookingConfirmed = new(
         "booking-confirmed", "A booking, with the pass",
         "The confirmation and the code they are admitted on.",
@@ -140,8 +192,8 @@ public static class MailStarters
 
     public static readonly IReadOnlyList<MailStarter> All =
     [
-        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, BookingConfirmed,
-        Plain,
+        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
+        RequestUnderYourAddress, VenueCode, BookingConfirmed, Plain,
     ];
 
     /// <summary>

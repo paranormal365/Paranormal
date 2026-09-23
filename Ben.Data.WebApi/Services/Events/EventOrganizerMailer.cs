@@ -1,4 +1,5 @@
 using Ben.Data.Common.Mail;
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
@@ -85,7 +86,11 @@ public sealed class EventOrganizerMailer
         body.Append($"<p><a href=\"{Board(ev)}\">Open the booking board</a></p>");
         body.Append(Footer(ev));
 
-        await _email.SendAsync(new EmailMessage(to.Email, subject, body.ToString(), Kind: MailKinds.BookingsArrived.Key), ct);
+        // The rows a template of this kind reads. A published template for this letter uses
+        // {AppUsers.DisplayName}, {Organizations.Name} and {HostedEvents.StartsOn}; with nothing
+        // handed over, all three rendered blank (found 2026-09-23, before any was sent).
+        await _email.SendAsync(new EmailMessage(to.Email, subject, body.ToString(), Kind: MailKinds.BookingsArrived.Key,
+            Payload: MailRows.For(MailKinds.BookingsArrived, MailRows.Person(to.Email, to.Name), ev, ev.Organization)), ct);
         return true;
     }
 
@@ -143,7 +148,8 @@ public sealed class EventOrganizerMailer
         body.Append(Footer(ev));
 
         await _email.SendAsync(new EmailMessage(
-            to.Email, $"Where {ev.Name} stands", body.ToString(), Kind: MailKinds.BookingsDigest.Key), ct);
+            to.Email, $"Where {ev.Name} stands", body.ToString(), Kind: MailKinds.BookingsDigest.Key,
+            Payload: MailRows.For(MailKinds.BookingsDigest, MailRows.Person(to.Email, to.Name), ev, ev.Organization)), ct);
         return true;
     }
 
