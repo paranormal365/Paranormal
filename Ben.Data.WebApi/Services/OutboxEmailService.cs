@@ -148,7 +148,14 @@ public sealed class OutboxEmailService : IEmailService, IOutboxEmailQueue
     {
         ArgumentNullException.ThrowIfNull(callersDb);
 
-        if (await WasDeclinedAsync(message, ct)) return;
+        // The preference is read through the CALLER'S context, not a fresh one (item 239b). This
+        // method exists to be called inside the caller's transaction, and a second connection
+        // opened in the middle of one is a reader the transaction can lock out: the opt-out query
+        // joins AppUsers, which a booking writes. Where readers wait on writers that is a stall to
+        // the command timeout, which the catch below would then turn into the letter going out
+        // anyway - the opt-out silently ignored. Both databases have read-committed snapshot on
+        // today, so they do not wait; nothing in the repository turns it on, so a rebuilt one would.
+        if (await WasDeclinedAsync(message, ct, callersDb)) return;
 
         message = await WithAnyTemplateAsync(message, ct);
         callersDb.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
@@ -187,7 +194,13 @@ public sealed class OutboxEmailService : IEmailService, IOutboxEmailQueue
     /// a nuisance; a database hiccup silently swallowing everybody's mail is the failure the whole
     /// outbox exists to prevent.</para>
     /// </remarks>
-    private async Task<bool> WasDeclinedAsync(EmailMessage message, CancellationToken ct)
+    /// <param name="callersDb">
+    /// The context to read through when the letter is being queued inside somebody else's
+    /// transaction (<see cref="EnqueueAsync"/>); null to open one of our own.
+    /// </param>
+    private async Task<bool> WasDeclinedAsync(
+        EmailMessage message, CancellationToken ct,
+        Ben.Data.Source.Context.BenDataContext? callersDb = null)
     {
         if (message.Kind is not { Length: > 0 } kind) return false;
         if (MailKinds.Find(kind) is not { CanDecline: true }) return false;
@@ -195,7 +208,8 @@ public sealed class OutboxEmailService : IEmailService, IOutboxEmailQueue
 
         try
         {
-            await using var db = await _db.CreateDbContextAsync(ct);
+            await using var own = callersDb is null ? await _db.CreateDbContextAsync(ct) : null;
+            var db = callersDb ?? own!;
 
             var declined = await db.UserEmailOptOuts.AsNoTracking()
                 .AnyAsync(o => o.Kind == kind
