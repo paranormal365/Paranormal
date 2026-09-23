@@ -135,6 +135,48 @@ public abstract class BenControllerBase : ControllerBase
             await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
     }
 
+    /// <summary>
+    /// <see cref="SaveAndAuditAsync{TEntity}"/>, with more writes that must commit alongside the
+    /// change or not at all (item 239b).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two saves, one transaction.</b> The change is saved first because what follows
+    /// may read it back by id — a mailer that loads the booking, for one — and cannot see a row
+    /// that has not been written. <paramref name="alongside"/> then adds its own rows to the SAME
+    /// context, and the second save writes them. The commit is the only point at which any of it
+    /// becomes true, so a failure anywhere leaves nothing behind.</para>
+    ///
+    /// <para><b>The audit waits for the commit.</b> It is written through its own service on its
+    /// own connection, so inside the transaction it would commit on its own — and a rollback would
+    /// leave a record of a change that never happened.</para>
+    ///
+    /// <para><b>Nothing in <paramref name="alongside"/> may write on another connection.</b> That
+    /// connection would not be in the transaction, and where readers wait on writers it can be
+    /// held up by the rows the first save wrote.</para>
+    /// </remarks>
+    protected async Task SaveInOneTransactionAndAuditAsync<TEntity>(
+        DbContext db, TEntity entity, Guid entityId, Guid userId,
+        Func<Task> alongside, CancellationToken ct)
+        where TEntity : class
+    {
+        var before = db.Entry(entity).OriginalValues.ToObject();
+
+        // IsRelational: the InMemory provider has no transactions and throws rather than ignoring
+        // the call, and a controller built by a unit test on it must still save.
+        await using (var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null)
+        {
+            await db.SaveChangesAsync(ct);
+            await alongside();
+            await db.SaveChangesAsync(ct);
+            if (tx is not null) await tx.CommitAsync(ct);
+        }
+
+        if (HttpContext?.RequestServices?.GetService<IAuditLogService>() is { } audit)
+            await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
+    }
+
     protected async Task TryAuditAsync(Task auditTask)
     {
         try

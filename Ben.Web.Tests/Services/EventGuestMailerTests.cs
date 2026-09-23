@@ -141,7 +141,16 @@ public sealed class EventGuestMailerTests
 
         var (_, mailer) = Mailer();
         await using (var db = await sqlite.NewContextAsync())
+        {
             await mailer.SendDecisionAsync(db, bookingId, default);
+
+            // Not written yet: the stamp rides in the caller's save with the letter itself (item
+            // 239b), so it can no longer be set for a letter that was never queued.
+            await using (var peek = await sqlite.NewContextAsync())
+                Assert.Null((await peek.HostedEventPasses.SingleAsync()).EmailedUtc);
+
+            await db.SaveChangesAsync();
+        }
 
         await using (var db = await sqlite.NewContextAsync())
         {
@@ -336,10 +345,23 @@ public sealed class EventGuestMailerTests
                         StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── what must never break a decision ─────────────────────────────────────
+    // ── a decision and its letter ────────────────────────────────────────────
 
+    /// <summary>
+    /// A decision letter that cannot be queued is the caller's to know about, not swallowed here.
+    /// </summary>
+    /// <remarks>
+    /// <para>This was <c>A_send_that_throws_never_undoes_the_decision</c>: answer false rather than
+    /// throw, because a guest who is confirmed but whose letter bounced is a confirmed guest. Right
+    /// while the letter was a call to a mail system. It is now a row in the caller's transaction
+    /// (item 239b), and a swallowed failure there would let the decision commit without it — the
+    /// confirmed guest with no pass, in silence, which is what the change exists to stop.</para>
+    ///
+    /// <para>What the caller then does is <c>ABookingDecisionCommitsWithItsLetterTests</c>: the
+    /// decision is not saved and the host is told to try again.</para>
+    /// </remarks>
     [Fact]
-    public async Task A_send_that_throws_never_undoes_the_decision()
+    public async Task A_decision_letter_that_cannot_be_queued_reaches_the_caller()
     {
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var seeded = await SeedAsync(sqlite);
@@ -347,15 +369,19 @@ public sealed class EventGuestMailerTests
 
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(true);
-        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
-             .ThrowsAsync(new InvalidOperationException("no smtp host"));
 
-        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance);
+        var queue = new Mock<Ben.Data.WebApi.Services.IOutboxEmailQueue>();
+        queue.Setup(q => q.EnqueueAsync(
+                 It.IsAny<Ben.Data.Source.Context.BenDataContext>(),
+                 It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .ThrowsAsync(new InvalidOperationException("the outbox is unreachable"));
+
+        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                          queue.Object);
 
         await using var db = await sqlite.NewContextAsync();
-        // Answers false rather than throwing. A guest who is confirmed but whose letter bounced is
-        // a confirmed guest.
-        Assert.False(await mailer.SendDecisionAsync(db, bookingId, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => mailer.SendDecisionAsync(db, bookingId, default));
     }
 
     [Fact]

@@ -414,7 +414,9 @@ public sealed class EventPassTests
                 .ReturnsAsync(decider);
 
         var site = Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local" });
-        var mailer = new EventGuestMailer(email, site, NullLogger<EventGuestMailer>.Instance);
+        // Letters queued by the mailer reach the same recording fake the assertions read (item 239b).
+        var mailer = new EventGuestMailer(email, site, NullLogger<EventGuestMailer>.Instance,
+                                          new ForwardingOutboxQueue(email));
 
         return new HostedEventBookingController(
             sqlite.Factory, new Mock<IMapper>().Object, security.Object,
