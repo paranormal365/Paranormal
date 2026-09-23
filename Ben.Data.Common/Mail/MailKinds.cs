@@ -286,10 +286,28 @@ public static class MailKinds
         "Invites somebody to work an event.",
         ["AppUsers", "HostedEvents", "Organizations"]);
 
+    /// <summary>
+    /// Tells an event's organizers that IsHaunted took their event down, and how to appeal.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Not a letter to a guest, whatever the key says.</b> Until 2026-09-23 this was titled
+    /// "About your place" and described as telling somebody they were removed from an event, and the
+    /// template written from that description greeted an organizer as a cancelled guest, with a blank
+    /// reason and a Chicago time labelled UTC. The key stays <c>guest-removed</c> because stored
+    /// templates are keyed to it; the words an author reads are what changed.</para>
+    ///
+    /// <para><b>There is no reason to print.</b> A removal clears <c>CancelledReason</c> on purpose —
+    /// the moderator's note stays on the removal record, where naming a complainant cannot reach the
+    /// organizer — so <c>{HostedEvents.CancelledReason}</c> is always empty here, and
+    /// <c>CancelledAtUtc</c> is when it was removed.</para>
+    /// </remarks>
     public static readonly MailKindInfo GuestRemoved = new(
-        "guest-removed", "About your place",
-        "Tells somebody they were removed from an event.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        "guest-removed", "Your event was removed",
+        "Tells an event's organizers that IsHaunted removed their event, and how to appeal.",
+        ["AppUsers", "HostedEvents", "Organizations"],
+        [new("AppealUrl", "The event's page, at the card where they appeal the removal."),
+         new("AppealButton", "A ready-made button pointing at that link.", IsHtml: true),
+         new("CreditNote", "\"The event credit spent on it has been returned…\" when it was, and nothing when it was not.")]);
 
     public static readonly MailKindInfo AppealAnswered = new(
         "appeal-answered", "Your appeal has been answered",

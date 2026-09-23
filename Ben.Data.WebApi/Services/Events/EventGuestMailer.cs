@@ -1120,14 +1120,15 @@ public sealed class EventGuestMailer
         foreach (var (id, email, name) in recipients)
         {
             if (email is not { Length: > 0 } to) continue;
+            var creditNote = creditReturned
+                ? "The event credit spent on it has been returned, and can be used for another event."
+                : "";
             var body = (name is { Length: > 0 } n ? $"<p>Hello {Safe(n)},</p>" : "<p>Hello,</p>")
                      + $"<p><strong>{Safe(ev.Name)}</strong>, hosted by {Safe(organizationName)}, has been removed from "
                      + $"{Safe(_site.Name)} because it doesn't meet our guidelines for hosted events.</p>"
                      + "<p>It is no longer on the site and can't take bookings. Anybody who had a place or had asked for one "
                      + "has been told it is not going ahead.</p>"
-                     + (creditReturned
-                         ? "<p>The event credit spent on it has been returned, and can be used for another event.</p>"
-                         : "")
+                     + (creditReturned ? $"<p>{creditNote}</p>" : "")
                      + "<p><strong>If you think this was a mistake</strong>, you can appeal. Tell us what the event is and "
                      + "anything you've changed, and a person will review it. If the appeal is upheld the event comes back "
                      + "as a draft, ready for you to publish again.</p>"
@@ -1135,11 +1136,17 @@ public sealed class EventGuestMailer
             try
             {
                 await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body, Kind: MailKinds.GuestRemoved.Key,
-                    // The rows a template of this kind reads (MailRows). Note for a template's
-                    // author: a removal CLEARS CancelledReason on purpose — the moderator's note is on
-                    // the removal record, which this kind does not carry — so {HostedEvents.CancelledReason}
-                    // is always empty here. CancelledAtUtc is the removal's time.
-                    Payload: MailRows.For(MailKinds.GuestRemoved, MailRows.Person(to, name), ev, ev.Organization)), ct);
+                    // The rows a template of this kind reads (MailRows), and the three things only this
+                    // sender knows: where to appeal, and whether the credit came back. A removal CLEARS
+                    // CancelledReason on purpose (see MailKinds.GuestRemoved), so there is no reason to give.
+                    Payload: MailRows.For(MailKinds.GuestRemoved,
+                        new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["AppealUrl"] = new(appeal),
+                            ["AppealButton"] = new(BenEmailLayout.ActionButton("Appeal this decision", appeal), IsHtml: true),
+                            ["CreditNote"] = new(creditNote),
+                        },
+                        MailRows.Person(to, name), ev, ev.Organization)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)

@@ -71,6 +71,9 @@ public static class MailSampleRows
                               + """alt="Your entry pass" style="display:block;border:0;" />""", true),
 
                 "ResetCode" => ("A1B2-C3D4", false),
+
+                "AppealButton" => (MailBlocks.Button("Appeal this decision", url), true),
+                "CreditNote" => ("The event credit spent on it has been returned, and can be used for another event.", false),
                 _ => (url, false),
             };
         }
