@@ -71,10 +71,10 @@ public sealed class APublishedTemplateFillsInTests
         Assert.Contains("starting October 30, 2026.", body);
     }
 
-    // ── the guest's "your event was removed" ─────────────────────────────────
+    // ── the organizer's "your event was removed" (key guest-removed, but it goes to the organizers) ──
 
     [Fact]
-    public async Task Guest_removed_names_the_guest_the_event_the_group_and_when()
+    public async Task Guest_removed_names_the_organizer_the_event_the_group_and_when()
     {
         await using var sqlite = await SeedAsync();
         await PublishAsync(sqlite, MailKinds.GuestRemoved,
@@ -88,12 +88,45 @@ public sealed class APublishedTemplateFillsInTests
             var mailer = new EventGuestMailer(TestOutbox.Real(sqlite.Factory), Site,
                 NullLogger<EventGuestMailer>.Instance, TestOutbox.Real(sqlite.Factory));
             Assert.Equal(1, await mailer.SendRemovedAsync(ev, ev.Organization.Name, creditReturned: false,
-                [(GuestId, "grace@example.test", "Grace Guest")], default));
+                [(GuestId, "grace@example.test", "Grace Organizer")], default));
         }
 
         var body = await OnlyLetterAsync(sqlite, MailKinds.GuestRemoved);
-        Assert.Contains("Hello Grace Guest.", body);
+        Assert.Contains("Hello Grace Organizer.", body);
         Assert.Contains("Halloween Lock-In, from The Thomas House, was removed on October 1, 2026 10:30 AM.", body);
+    }
+
+    /// <summary>
+    /// The appeal and the returned credit are what only the sender knows, and the built-in letter
+    /// carries both — a template that could not would be a worse letter than the one it replaces.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Guest_removed_hands_over_the_appeal_and_whether_the_credit_came_back(bool creditReturned)
+    {
+        await using var sqlite = await SeedAsync();
+        await PublishAsync(sqlite, MailKinds.GuestRemoved,
+            "<p>Removed.</p><p>[{CreditNote}]</p>{AppealButton}<p>{AppealUrl}</p>");
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var ev = await db.HostedEvents.Include(e => e.Organization).SingleAsync(e => e.Id == EventId);
+            var mailer = new EventGuestMailer(TestOutbox.Real(sqlite.Factory), Site,
+                NullLogger<EventGuestMailer>.Instance, TestOutbox.Real(sqlite.Factory));
+            Assert.Equal(1, await mailer.SendRemovedAsync(ev, ev.Organization.Name, creditReturned,
+                [(GuestId, "grace@example.test", "Grace Organizer")], default));
+        }
+
+        var body = await OnlyLetterAsync(sqlite, MailKinds.GuestRemoved);
+        var appeal = $"/organizations/{OrgId}/events/{EventId}#event-removed";
+        Assert.Contains(appeal + "\"", body);                 // the button's href
+        Assert.Contains(appeal + "</p>", body);               // the bare link
+        Assert.Contains(">Appeal this decision<", body);
+        if (creditReturned)
+            Assert.Contains("[The event credit spent on it has been returned, and can be used for another event.]", body);
+        else
+            Assert.Contains("[]", body);
     }
 
     // ── a client's case letters ──────────────────────────────────────────────
