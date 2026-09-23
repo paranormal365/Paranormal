@@ -131,10 +131,13 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
 
-# Built documents. Every one of these is produced from something else in the repo — the help
-# content, the ad copy, the investor HTML — by the scripts in docs/, so the PDF is an output and
-# not a source. Tracking them put a 33 MB binary in the history on every content edit.
+# The built documents under docs/ ARE tracked. They are outputs, and large ones, but they are
+# what a reader is handed — the product documentation, the six seat handovers, the two app guides
+# — and an output nobody can fetch from the repository is one nobody reads. `docs/*.pdf` was
+# ignored on 2026-09-21 on the belief that a private business licence had been swept in with them;
+# it had not. Nothing named or shaped like one has ever been added to this repository, under
+# docs/ or anywhere else, so there was no private document to keep out and the rule only hid the
+# documents. (Checked 2026-09-23 across every commit on every branch.)
 #
-# It also stopped a private document being committed by accident: the business licence was swept
-# in by a broad `git add` on 2026-09-21, on a repository that is public.
-docs/*.pdf
+# If a private paper ever does land here, give it its own line rather than a pattern that catches
+# the built documents with it — and remember that ignoring it only stops FUTURE commits.
