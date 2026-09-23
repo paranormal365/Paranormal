@@ -456,7 +456,7 @@ public sealed class FeedController : BenControllerBase
                 Id = uploadFileId,
                 UploadFileTypeId = UploadFileTypeSeeder.FeedMediaFileTypeId,
                 AppUserId = userId,
-                FileName = media.FileName,
+                FileName = ingested.ServedFileName(media.FileName),
                 StoredFileName = storedName,
                 ContentType = ingested.ServedContentType,
                 FileSize = ingested.ServedFileSize,

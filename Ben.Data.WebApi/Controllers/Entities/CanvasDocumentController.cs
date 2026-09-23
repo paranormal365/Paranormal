@@ -469,7 +469,7 @@ public sealed class CanvasDocumentController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId,
             AppUserId          = userId,
-            FileName           = SnapshotFileName(board.Name),
+            FileName           = ingested.ServedFileName(SnapshotFileName(board.Name)),
             StoredFileName     = storedName,
             StoragePath        = storagePath,
             ContentType        = ingested.ServedContentType,

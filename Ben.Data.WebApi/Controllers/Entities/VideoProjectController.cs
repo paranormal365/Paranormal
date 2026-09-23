@@ -237,7 +237,7 @@ public sealed class VideoProjectController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.PublishedVideoFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             StoragePath        = storagePath,
             ContentType        = ingested.ServedContentType,

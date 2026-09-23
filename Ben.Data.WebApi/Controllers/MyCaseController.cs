@@ -616,7 +616,7 @@ public sealed class MyCaseController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = EvidenceFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             ContentType        = ingested.ServedContentType,
             FileSize           = ingested.ServedFileSize,

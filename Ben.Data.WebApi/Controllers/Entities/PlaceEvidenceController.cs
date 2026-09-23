@@ -129,7 +129,7 @@ public sealed class PlaceEvidenceController : BenControllerBase
             Id = uploadFileId,
             UploadFileTypeId = UploadFileTypeSeeder.FeedMediaFileTypeId,
             AppUserId = userId,
-            FileName = file.FileName,
+            FileName = ingested.ServedFileName(file.FileName),
             StoredFileName = storedName,
             ContentType = ingested.ServedContentType,
             FileSize = ingested.ServedFileSize,

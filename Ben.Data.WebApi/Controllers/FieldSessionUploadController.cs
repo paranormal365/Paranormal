@@ -821,7 +821,7 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
-            FileName = Path.GetFileName(relativePath), StoredFileName = storedName,
+            FileName = ingested.ServedFileName(Path.GetFileName(relativePath)), StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = now, CreatedByAppUserId = userId,
