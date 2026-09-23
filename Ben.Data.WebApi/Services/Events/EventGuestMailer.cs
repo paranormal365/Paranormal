@@ -840,8 +840,17 @@ public sealed class EventGuestMailer
             $"Can you help at {ev?.Name ?? "an event"}?",
             body.ToString(),
             ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.StaffInvite.Key,
-            // An invited helper usually has no account yet: the row is the person as invited.
+            // An invited helper usually has no account yet: the row is the person as invited. The
+            // link, venue, role and permissions are no column of anything a template can read.
             Payload: MailRows.For(MailKinds.StaffInvite,
+                new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["AcceptUrl"] = new(url),
+                    ["AcceptButton"] = new(BenEmailLayout.ActionButton("Say yes and see what you need", url), IsHtml: true),
+                    ["Venue"] = new(ev?.Place?.Name ?? ""),
+                    ["Role"] = new(staff.RoleLabel ?? ""),
+                    ["CanDo"] = new("<ul><li>" + string.Join("</li><li>", WhatTheyCanDo(staff).Select(Safe)) + "</li></ul>", IsHtml: true),
+                },
                 (object?)staff.AppUser ?? MailRows.Person(to, staff.DisplayName), ev, ev?.Organization)), ct);
 
         return true;
