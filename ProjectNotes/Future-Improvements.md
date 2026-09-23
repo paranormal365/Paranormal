@@ -13247,9 +13247,10 @@ guest-removed, case-status-changed, somebody-used-your-address, visit-cancelled,
 visit-scheduled. The editor's preview fills every token with invented rows, so all seven looked
 right.
 
-- **Stopgap (Ben runs it; the session's production write was refused, correctly):** unpublish all
-  seven — `UPDATE dbo.EmailTemplates SET PublishedUtc = NULL … WHERE Kind IN (…seven…)`. Republish
-  each once this branch is live.
+- **Stopgap — DONE 2026-09-23 by Ben (7 rows affected; the session's production write was
+  refused, correctly):** all seven unpublished with
+  `UPDATE dbo.EmailTemplates SET PublishedUtc = NULL … WHERE Kind IN (…seven…)`. Drafts kept.
+  Republish each once this branch is live.
 - **`MailRows.For(kind, …entities)`** builds the rows from the entities a letter is about, through
   the same readable/secret column rules the editor offers, dropping any table the kind does not
   declare. All nineteen sends now use it; `EveryDeclaredLetterHandsOverItsRowsTests` fails on a
