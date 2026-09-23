@@ -55,8 +55,12 @@ public sealed class EventGuestMailerTests
         var letter = Assert.Single(sent);
         Assert.Contains("confirmed", letter.Subject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("data:image/png;base64,", letter.HtmlBody);
-        // And the link as well, for the client that strips data URIs instead.
-        Assert.Contains("/api/public/event-passes/", letter.HtmlBody);
+        // And the link as well, for the client that strips data URIs instead — on the API's origin,
+        // since the site does not serve /api. It was built on the site's until 2026-09-23, and
+        // could not have opened. A template is handed the same link.
+        Assert.Contains("https://test.local/webapi/api/public/event-passes/", letter.HtmlBody);
+        Assert.DoesNotContain("https://test.local/api/", letter.HtmlBody);
+        Assert.StartsWith("https://test.local/webapi/api/public/event-passes/", letter.Payload!.Supplied!["PassUrl"].Value);
         Assert.Contains("One code admits your whole party", letter.HtmlBody);
     }
 
@@ -430,7 +434,7 @@ public sealed class EventGuestMailerTests
     // ── plumbing ─────────────────────────────────────────────────────────────
 
     private static IOptions<SiteIdentity> Site()
-        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local" });
+        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local", ApiBaseUrl = "https://test.local/webapi" });
 
     private static Sent Mailer()
     {

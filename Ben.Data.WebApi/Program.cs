@@ -249,6 +249,10 @@ Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorE
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
+// The origin every emailed link is built on. Unset, it falls back to AppBaseUrl — the setting both
+// deploy paths actually wrote — rather than leaving every link in every letter relative.
+builder.Services.PostConfigure<Ben.Data.Common.SiteIdentity>(site =>
+    Ben.Data.Common.SiteIdentity.UseAppBaseUrlWhenUnset(site, builder.Configuration["AppBaseUrl"]));
 // Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
 // exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
 // screen, which must send immediately and show the raw failure — a diagnostic that queues is not a

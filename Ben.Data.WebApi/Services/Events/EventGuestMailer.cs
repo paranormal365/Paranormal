@@ -140,7 +140,7 @@ public sealed class EventGuestMailer
         var passSupplied = pass is null ? null : new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
         {
             ["PassImage"] = new($"<img src=\"{EventPasses.DataUri(pass.Token)}\" alt=\"Your entry pass\" width=\"180\" height=\"180\" />", IsHtml: true),
-            ["PassUrl"] = new(_site.AbsoluteUrl(Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token))),
+            ["PassUrl"] = new(_site.ApiAbsoluteUrl(Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token))),
         };
 
         await queue.EnqueueAsync(db, new EmailMessage(
@@ -197,7 +197,8 @@ public sealed class EventGuestMailer
 
         if (pass is not null)
         {
-            var url = _site.AbsoluteUrl(
+            // The API's origin, not the site's: the website does not serve /api (SiteIdentity.ApiBaseUrl).
+            var url = _site.ApiAbsoluteUrl(
                 Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token));
 
             body.Append("<p><strong>Show this at the door.</strong> One code admits your whole "

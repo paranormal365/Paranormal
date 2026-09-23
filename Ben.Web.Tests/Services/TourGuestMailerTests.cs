@@ -54,6 +54,7 @@ public sealed class TourGuestMailerTests
                Options.Create(new Ben.Data.Common.SiteIdentity
                {
                    Name = "IsHaunted.com", BaseUrl = "https://ishaunted.com",
+                   ApiBaseUrl = "https://ishaunted.com/webapi",
                }),
                NullLogger<TourGuestMailer>.Instance);
 
@@ -231,6 +232,39 @@ public sealed class TourGuestMailerTests
 
         Assert.False(await Mailer(email).SendSignUpAsync(db, w.PlainEventId, "ada@example.com", "Ada", default));
         Assert.Empty(email.Sent);
+    }
+
+    /// <summary>
+    /// A guest's pass is drawn into the letter and linked on the API's origin.
+    /// </summary>
+    /// <remarks>
+    /// The link was built on the SITE's origin until 2026-09-23, which does not serve /api — so the
+    /// fallback for a mail client that strips the drawn image could never have opened.
+    /// </remarks>
+    [Fact]
+    public async Task A_guest_with_a_pass_gets_it_drawn_in_and_linked_where_it_opens()
+    {
+        var w = await SeedAsync();
+        var email = new FakeEmail();
+        await using (var seed = await w.Factory.CreateDbContextAsync())
+        {
+            var guest = new AppUser { Id = Guid.NewGuid(), Email = "ada@example.com", UserName = "ada@example.com", DisplayName = "Ada" };
+            seed.Users.Add(guest);
+            seed.OrgCalendarEventAttendees.Add(new OrgCalendarEventAttendee
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = w.TourEventId, AppUserId = guest.Id,
+                RsvpStatus = RsvpStatus.Accepted, PassToken = "0a1b2c3d", DateCreated = DateTime.UtcNow,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        Assert.True(await Mailer(email).SendSignUpAsync(db, w.TourEventId, "ada@example.com", "Ada", default));
+
+        var letter = Assert.Single(email.Sent);
+        Assert.Contains("data:image/png;base64,", letter.HtmlBody);
+        Assert.Contains("https://ishaunted.com/webapi/api/public/tour-passes/0a1b2c3d.png", letter.HtmlBody);
+        Assert.Equal("https://ishaunted.com/webapi/api/public/tour-passes/0a1b2c3d.png", letter.Payload!.Supplied!["PassUrl"].Value);
     }
 
     /// <summary>

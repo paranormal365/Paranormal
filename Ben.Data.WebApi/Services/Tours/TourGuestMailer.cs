@@ -84,7 +84,8 @@ public sealed class TourGuestMailer
 
             if (await PassTokenAsync(db, eventId, toAddress, ct) is { Length: > 0 } pass)
             {
-                var url = _site.AbsoluteUrl($"/api/public/tour-passes/{pass}.png");
+                // The API's origin, not the site's: the website does not serve /api (SiteIdentity.ApiBaseUrl).
+                var url = _site.ApiAbsoluteUrl($"/api/public/tour-passes/{pass}.png");
 
                 // Drawn into the letter FIRST, linked second. A linked picture a mail client
                 // blocked is a guest at a meeting point with nothing to show — the same reason

@@ -12554,16 +12554,21 @@ the added-address confirmation and the venue claim code.
   Account & Accept" was `type="button"` with no handler, so nobody without an account could ever
   accept (and both password boxes were `type="text"`); SuperAdmin File Types → Save the same.
 
-**Open, found 2026-09-23, not fixed:**
-- **Tour dates say "You're coming" for a seat still awaiting approval.** `EventAttendanceConfirm`
-  says "You've asked for a place" only for hosted events; item 234 holds the tour welcome back for
-  exactly this reason, and the page contradicts it.
-- **The API's `SiteIdentity:BaseUrl` is never set by `deploy-ishaunted.ps1`** (only the website's,
-  and the API's `AppBaseUrl`). Every link built with `_site.AbsoluteUrl` — seat pick, `/attending/`,
-  `/helping/`, reset and handover, the pass link, the mail header logo — is then relative.
-  Unconfirmed on the server. Separately, the pass link is `/api/public/…-passes/{token}.png` on the
-  SITE origin, which does not forward `/api` (the API is under `/webapi`), so that fallback link
-  cannot open even with the setting fixed. The inline pass image is unaffected.
+**Found 2026-09-23, FIXED the same day:**
+- **Tour dates said "You're coming" for a seat still awaiting approval.** `EventAttendanceConfirm`
+  said "You've asked for a place" only for hosted events; item 234 holds the tour welcome back for
+  exactly this reason. `EventAttendanceConfirmation.AwaitsApproval` now carries the tour case and
+  the page says what happened. `CalendarLettersAreFollowedTests` asserts it (failed on the old page).
+- **The API's `SiteIdentity:BaseUrl` was never set by either deploy path** (`deploy-ishaunted.ps1`,
+  `uat-webapi-config.py`) — only `AppBaseUrl`. So every link built with `_site.AbsoluteUrl` was
+  relative in production: seat pick, `/attending/`, `/helping/`, reset and handover, the pass link,
+  the mail header logo. Only the confirmation letter worked, by falling back to AppBaseUrl by hand.
+  Now: an unset BaseUrl falls back to AppBaseUrl at startup (`SiteIdentity.UseAppBaseUrlWhenUnset`),
+  and both deploy paths write it. **Takes effect on the next API deploy** — no config edit needed.
+- **The pass link pointed at the site origin**, which does not forward `/api` (the API is under
+  `/webapi`). New `SiteIdentity:ApiBaseUrl` (deploy writes `$ApiUrl`); pass links for hosted events
+  and tours use `ApiAbsoluteUrl`, which stays relative rather than falling back to the site.
+
 - **Twelve browser tests fail on the e2e database with or without these changes** (audio/video
   uploads, file deletion, case messages, a seeded group's subscription "has ended", a tier that does
   not resolve) — checked by rerunning them with the changes stashed.
