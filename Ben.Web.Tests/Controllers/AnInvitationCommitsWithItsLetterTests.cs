@@ -106,6 +106,55 @@ public sealed class AnInvitationCommitsWithItsLetterTests
         await AssertTheOldLinkStillWorksAsync(sqlite);
     }
 
+    // ── with no mail server ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// With no mail server all three invitations still leave their letter in the outbox.
+    /// </summary>
+    /// <remarks>
+    /// They used to be skipped, so none of the three /attending links could be read at /admin/mail
+    /// or followed by a browser test (2026-09-23). The venue's host is still told the letter did not
+    /// go: a host who is told "sent" waits at the door for somebody who was never written to.
+    /// </remarks>
+    [Fact]
+    public async Task With_no_mail_every_invitation_still_waits_in_the_outbox()
+    {
+        // Two databases: the calendar and hosted-event seeds each bring the same people.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedPublicEventAsync(sqlite);
+        var outbox = TestOutbox.WithoutMail(sqlite.Factory);
+        Assert.False(outbox.IsConfigured);
+
+        await using var hosted = await SqliteTestDb.CreateAsync();
+        await SeedHostedEventAsync(hosted);
+        var hostedOutbox = TestOutbox.WithoutMail(hosted.Factory);
+
+        var site = Options.Create(new SiteIdentity { BaseUrl = "https://test.local" });
+
+        await new PublicEventAttendanceController(
+            sqlite.Factory, outbox, users: null!, site,
+            NullLogger<PublicEventAttendanceController>.Instance,
+            new UserHandleService(sqlite.Factory), Support.SilentTourMail.Instance, outbox)
+            .RequestAttendance(EventId, new RequestEventAttendanceRequest("asked@example.test", "Asked"), default);
+
+        await new OrgCalendarEventController(
+            sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, TheHostMayDoAnything().Object, outbox, site,
+            NullLogger<OrgCalendarEventController>.Instance,
+            new CmsMarkupSanitizer(), Support.SilentTourMail.Instance, outbox)
+            { ControllerContext = SignedInAs(HostId) }
+            .InviteGuest(OrgId, EventId, new InviteGuestRequest("signed-up@example.test", "Signed Up"), default);
+
+        var invited = await Board(hosted, hostedOutbox).InviteByEmail(
+            OrgId, HostedId, new InviteHostedEventGuestRequest("invited@example.test"), default);
+        Assert.False(Assert.IsType<HostedEventGuestInviteRecord>(Assert.IsType<OkObjectResult>(invited.Result).Value).Sent);
+
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Equal(["asked@example.test", "signed-up@example.test"],
+                         (await db.OutboxEmails.Select(o => o.To).ToListAsync()).Order());
+        await using (var db = await hosted.NewContextAsync())
+            Assert.Equal("invited@example.test", (await db.OutboxEmails.SingleAsync()).To);
+    }
+
     // ── a venue invites a guest ─────────────────────────────────────────────
 
     /// <summary>

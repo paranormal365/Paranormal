@@ -116,7 +116,7 @@ public sealed class CaseFileController : BenControllerBase
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = FileTypeFor(origin), AppUserId = userId,
-            FileName = file.FileName, StoredFileName = storedName,
+            FileName = ingested.ServedFileName(file.FileName), StoredFileName = storedName,
             // The served copy's type and size belong on the row; the original's are recorded in
             // the metadata table beside its EXIF.
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,

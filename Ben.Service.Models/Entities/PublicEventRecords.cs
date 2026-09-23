@@ -213,7 +213,16 @@ public sealed record EventAttendanceConfirmation(
     /// picking needs signing in. Rather than leave them to discover that, the page offers to set
     /// one, through the ordinary forgotten-password route.
     /// </remarks>
-    bool AccountHasNoPassword = false);
+    bool AccountHasNoPassword = false,
+
+    /// <summary>
+    /// A tour date, where the click asked for places the business has still to approve (item 234).
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-09-23: the page told these guests "You're coming" while the welcome letter was
+    /// held back precisely because nothing had been reserved. Like a hosted event, it is a request.
+    /// </remarks>
+    bool AwaitsApproval = false);
 
 
 // ── Published investigations (backlog item #89) ──────────────────────────────

@@ -104,7 +104,10 @@ public class RequestStatusProgressionTests : BenTestBase
         }
         // "Under Review" button should appear for Submitted/Viewed cards
         var underReviewBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Under Review" });
-        if (await underReviewBtn.IsVisibleAsync())
+        // .First: the seeded group can hold more than one submitted request — the adopt journey in
+        // EmailedLinksAreFollowedTests files a real one — and a bare IsVisible on two matches is a
+        // strict-mode violation, not an answer.
+        if (await underReviewBtn.First.IsVisibleAsync())
         {
             await Expect(underReviewBtn.First).ToBeVisibleAsync();
         }

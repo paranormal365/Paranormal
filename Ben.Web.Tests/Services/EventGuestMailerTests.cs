@@ -55,8 +55,12 @@ public sealed class EventGuestMailerTests
         var letter = Assert.Single(sent);
         Assert.Contains("confirmed", letter.Subject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("data:image/png;base64,", letter.HtmlBody);
-        // And the link as well, for the client that strips data URIs instead.
-        Assert.Contains("/api/public/event-passes/", letter.HtmlBody);
+        // And the link as well, for the client that strips data URIs instead — on the API's origin,
+        // since the site does not serve /api. It was built on the site's until 2026-09-23, and
+        // could not have opened. A template is handed the same link.
+        Assert.Contains("https://test.local/webapi/api/public/event-passes/", letter.HtmlBody);
+        Assert.DoesNotContain("https://test.local/api/", letter.HtmlBody);
+        Assert.StartsWith("https://test.local/webapi/api/public/event-passes/", letter.Payload!.Supplied!["PassUrl"].Value);
         Assert.Contains("One code admits your whole party", letter.HtmlBody);
     }
 
@@ -384,21 +388,36 @@ public sealed class EventGuestMailerTests
             () => mailer.SendDecisionAsync(db, bookingId, default));
     }
 
+    /// <summary>
+    /// With no mail set up the letter still waits in the outbox, and the pass is not marked sent.
+    /// </summary>
+    /// <remarks>
+    /// It used to be skipped outright, which left the one letter carrying the pass unreadable at
+    /// /admin/mail and unfollowable by any browser test (2026-09-23). Queued is not sent, though:
+    /// the host's "not sent yet" mark must stay until something can actually leave.
+    /// </remarks>
     [Fact]
-    public async Task Nothing_is_sent_when_the_deployment_has_no_mail()
+    public async Task Without_mail_the_letter_waits_and_the_pass_is_not_marked_sent()
     {
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var seeded = await SeedAsync(sqlite);
         var bookingId = await BookAsync(sqlite, HostedEventBookingStatus.Confirmed, seeded);
+        await IssuePassAsync(sqlite, bookingId);
 
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(false);
-        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance);
+        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                          new ForwardingOutboxQueue(email.Object));
 
-        await using var db = await sqlite.NewContextAsync();
-        Assert.False(await mailer.SendDecisionAsync(db, bookingId, default));
-        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()),
-                     Times.Never);
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            Assert.True(await mailer.SendDecisionAsync(db, bookingId, default));
+            await db.SaveChangesAsync();
+        }
+
+        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Once);
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Null((await db.HostedEventPasses.SingleAsync()).EmailedUtc);
     }
 
     [Fact]
@@ -415,7 +434,7 @@ public sealed class EventGuestMailerTests
     // ── plumbing ─────────────────────────────────────────────────────────────
 
     private static IOptions<SiteIdentity> Site()
-        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local" });
+        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local", ApiBaseUrl = "https://test.local/webapi" });
 
     private static Sent Mailer()
     {

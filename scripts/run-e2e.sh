@@ -275,6 +275,57 @@ else
   done
   # The website caches the feature snapshot, so give it a moment to notice.
   sleep 3
+
+  # ── The seeded groups' paid plans are kept current ────────────────────────
+  # BillingDemoSeeder puts paranormal365 ten days from renewal ON PURPOSE (so the renewal notice
+  # can be seen), and seeds only a group with no subscription row — so on a database that lives
+  # for weeks, the period simply runs out. The lapse job then does exactly its job: read-only
+  # group, every open case paused. On 2026-09-22 that took twelve unrelated tests down at once
+  # (case messages, uploads, file deletion, the tier journey), none of them about billing.
+  #
+  # Renewed through the admin endpoint rather than SQL, because that is the path that also
+  # un-pauses what the lapse paused. Only the two seeded groups, only when lapsed or within two
+  # days of ending, and back to the seeder's own shape: paranormal365 ten days out, nps 200.
+  echo "── Keeping the seeded groups' paid plans current ──────────────────────"
+  API_URL="$API_URL" SA_TOKEN="$SA_TOKEN" python3 - <<'PYEOF' || echo "   could not check the seeded subscriptions — see above"
+import json, os, urllib.request
+from datetime import datetime, timedelta, timezone
+
+api, token = os.environ["API_URL"], os.environ["SA_TOKEN"]
+def call(method, path, body=None):
+    req = urllib.request.Request(api + path, method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status, (json.loads(r.read() or b"null"))
+
+ACTIVE, LAPSED = 1, 2
+DAYS_LEFT = {"paranormal365": 10, "nps": 200}      # BillingDemoSeeder's plans
+now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+_, orgs = call("GET", "/api/organizations")
+slug_of = {o["id"]: o.get("urlName") for o in orgs}
+_, subs = call("GET", "/api/admin/organization-subscriptions")
+
+for s in subs:
+    slug = slug_of.get(s["organizationId"])
+    if slug not in DAYS_LEFT or s.get("subscriptionTierId") is None:
+        continue
+    end = s.get("currentPeriodEnd")
+    end = datetime.fromisoformat(end.rstrip("Z")[:26]) if end else None
+    if s["status"] == ACTIVE and end and end > now + timedelta(days=2):
+        print(f"   {slug:14} current to {end:%Y-%m-%d}")
+        continue
+    new_end = now + timedelta(days=DAYS_LEFT[slug])
+    months = s["interval"]                         # BillingInterval is a count of months
+    start = new_end - timedelta(days=round(months * 30.44))
+    code, _ = call("PUT", f"/api/admin/organization-subscriptions/{s['organizationId']}", {
+        "status": ACTIVE, "subscriptionTierId": s["subscriptionTierId"], "interval": s["interval"],
+        "currentPeriodStart": start.isoformat() + "Z", "currentPeriodEnd": new_end.isoformat() + "Z",
+        "cancelAtPeriodEnd": False, "note": "run-e2e.sh: the seeded plan ran out; renewed for the run",
+    })
+    print(f"   {slug:14} {'lapsed' if s['status'] == LAPSED else 'ending'} -> renewed to {new_end:%Y-%m-%d} ({code})")
+PYEOF
 fi
 
 echo ""

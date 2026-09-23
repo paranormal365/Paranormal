@@ -232,7 +232,8 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
 
         // Asked BEFORE reissuing. A fresh token kills the link in the letter they already have, so
         // rotating it when there is no way to send the new one leaves them with nothing that works
-        // — which is what happened when this was asked afterwards.
+        // — which is what happened when this was asked afterwards. (Adding a helper queues its
+        // first letter regardless; this button exists only to send one now.)
         if (!_mail.IsConfigured)
             return Conflict("This site has no outgoing mail set up, so nothing was sent.");
 

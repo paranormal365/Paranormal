@@ -691,6 +691,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (pass is null)
             return BadRequest("This booking has no live pass to send. Issue one first.");
 
+        // Refused, where the confirmation itself queues regardless: this button's only purpose is
+        // to send the letter now, and with no mail set up it cannot. The confirmation's letter
+        // already waits in the outbox; a second copy there would tell the host nothing.
         if (!_guestMail.IsConfigured)
             return Conflict("This site has no outgoing mail set up, so the letter cannot be sent. "
                           + "Show them the pass from this screen instead.");
@@ -917,9 +920,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// <para>Unlike the public flow, the truth is told to the caller here. A host is not a
     /// stranger who might be probing for accounts; they are the person who will stand at a door
     /// wondering why nobody came, and "we could not send it" is exactly what they need to know.
-    /// The invitation is saved either way. When mail is not set up nothing is sent and the link is
-    /// shown nowhere — not on the board, and not in the log, because whoever held it could ask for
-    /// a place as the guest. Inviting them again once mail works sends a fresh one.</para>
+    /// The invitation is saved either way. When mail is not set up the letter is queued all the
+    /// same and waits in the outbox — readable by a site administrator at /admin/mail, which is how
+    /// the browser tests follow it — but the host is told it was NOT sent, because nothing left.
+    /// The link is shown nowhere else: not on the board, and not in the log, because whoever held
+    /// it could ask for a place as the guest.</para>
     ///
     /// <para>Not saved here: the caller's save writes the letter with the token it carries, so
     /// true means the letter is in that same write (item 239b).</para>
@@ -932,15 +937,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     {
         var link = _site.AbsoluteUrl($"/attending/{token}");
 
+        // Queued either way (see the remarks). Said, without the link — used by anybody it asks
+        // for a place in the guest's name and burns their own copy (NoCredentialsInLogsTests).
         if (!_email.IsConfigured)
-        {
-            // No link here: used by anybody it asks for a place in the guest's name and burns
-            // their own copy (NoCredentialsInLogsTests).
             _logger.LogInformation(
-                "Email is not configured; the invitation to hosted event {EventId} was not sent.",
+                "Email is not configured; the invitation to hosted event {EventId} is waiting in the outbox.",
                 ev.Id);
-            return false;
-        }
 
         var safeName = NotificationText.Safe(ev.Name);
         try
@@ -953,7 +955,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
               + "<p>Accepting puts your name in front of the venue, who will confirm your place "
               + "and tell you what happens next. That link is good for two weeks and only works "
               + "once.</p>"), ct);
-            return true;
+
+            // Sent means it will leave. Queued with nowhere to go is the truth the host needs.
+            return _email.IsConfigured;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

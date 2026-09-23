@@ -590,6 +590,11 @@ if ($Apps -contains 'webapi') {
     Set-JsonValue $cfg 'ConnectionStrings:BenDbConnectionString' $sqlConn
     Set-JsonValue $cfg 'FileStorage:RootPath' $UploadsRoot     # blank here is a hard startup failure
     Set-JsonValue $cfg 'AppBaseUrl' $SiteUrl                   # the links in outgoing email
+    # The origin every emailed link is built on, and the API's own for the links it answers itself
+    # (an entry pass drawn as a PNG). Neither was written before 2026-09-23: letter links were
+    # relative, and the pass link pointed at the site, which does not serve /api.
+    Set-JsonValue $cfg 'SiteIdentity:BaseUrl' $SiteUrl
+    Set-JsonValue $cfg 'SiteIdentity:ApiBaseUrl' $ApiUrl
     Set-SerilogConnectionString $cfg $sqlConn
 
     # Carried from the secrets file. Each of these turns a feature off SILENTLY when absent, which

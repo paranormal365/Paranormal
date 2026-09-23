@@ -142,7 +142,7 @@ public sealed class HostedEventUncoveredEndpointTests
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(false);
         return new EventGuestMailer(email.Object, Options.Create(new Ben.Data.Common.SiteIdentity { Name = "IsHaunted", BaseUrl = "https://test.local" }),
-            NullLogger<EventGuestMailer>.Instance);
+            NullLogger<EventGuestMailer>.Instance, new ForwardingOutboxQueue(email.Object));
     }
 
     private static HostedEventBookingController Board(SqliteTestDb sqlite, Guid who)

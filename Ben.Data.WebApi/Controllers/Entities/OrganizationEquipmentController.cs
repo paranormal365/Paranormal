@@ -451,7 +451,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             ContentType        = ingested.ServedContentType,
             FileSize           = ingested.ServedFileSize,

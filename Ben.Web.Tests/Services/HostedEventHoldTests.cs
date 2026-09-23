@@ -41,7 +41,8 @@ public sealed class HostedEventHoldTests
         return new EventGuestMailer(
             email.Object,
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance,
+            new ForwardingOutboxQueue(email.Object));
     }
 
     private static readonly Guid OrgId = Guid.NewGuid();
@@ -154,7 +155,8 @@ public sealed class HostedEventHoldTests
             new HostedEventCalendarSync(),
             new Ben.Data.WebApi.Services.Access.HostedEventAccess(security.Object),
             new EventGuestMailer(email.Object, site,
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance,
+                new ForwardingOutboxQueue(email.Object)),
             email.Object,
             site,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<

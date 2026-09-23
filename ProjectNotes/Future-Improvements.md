@@ -12532,6 +12532,53 @@ fails at once, a claimed row is not claimed twice, running twice sends once),
 `EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
 diagnostics controller may take `SmtpEmailService` directly).
 
+### Letters that carry a link now queue without a mail server (2026-09-23)
+
+An audit found thirteen letters carrying something a person must use, and two followed anywhere in
+the browser suite. Nine could never be: their senders asked `IsConfigured` first and skipped the
+letter, and the test hosts (like every dev machine) have no SMTP. They now queue regardless — the
+pass letter, tour sign-up, staff invite, the three `/attending/` invitations, the co-client invite,
+the added-address confirmation and the venue claim code.
+
+- **The rule: queued is not sent.** Every "sent" a person is shown still means a mail server will
+  deliver it — the hosted invite's `Sent`, the co-client and address `EmailSent` (so the copy-link
+  fallback still appears), and the pass's `EmailedUtc` (so the board's "not sent yet" stays).
+- **"Send it again" buttons still refuse without mail** — the guest's and host's pass resend and the
+  staff-invite resend. Their only purpose is to send now; queueing would tell a guest their pass
+  was on its way when it was not.
+- **Browser tests:** `EmailedLinksAreFollowedTests` (reset, handover, request claim),
+  `HostedEventLettersAreFollowedTests`, `CalendarLettersAreFollowedTests`,
+  `AccountLettersAreFollowedTests` — each reads its letter from the outbox and uses it. The venue
+  claim test skips until its proving address has been on record 7 days (`ContactMinimumAge`).
+- **Two bugs they found, both from the 2026-08-18 ports:** the co-client invite page's "Create
+  Account & Accept" was `type="button"` with no handler, so nobody without an account could ever
+  accept (and both password boxes were `type="text"`); SuperAdmin File Types → Save the same.
+
+**Found 2026-09-23, FIXED the same day:**
+- **Tour dates said "You're coming" for a seat still awaiting approval.** `EventAttendanceConfirm`
+  said "You've asked for a place" only for hosted events; item 234 holds the tour welcome back for
+  exactly this reason. `EventAttendanceConfirmation.AwaitsApproval` now carries the tour case and
+  the page says what happened. `CalendarLettersAreFollowedTests` asserts it (failed on the old page).
+- **The API's `SiteIdentity:BaseUrl` was never set by either deploy path** (`deploy-ishaunted.ps1`,
+  `uat-webapi-config.py`) — only `AppBaseUrl`. So every link built with `_site.AbsoluteUrl` was
+  relative in production: seat pick, `/attending/`, `/helping/`, reset and handover, the pass link,
+  the mail header logo. Only the confirmation letter worked, by falling back to AppBaseUrl by hand.
+  Now: an unset BaseUrl falls back to AppBaseUrl at startup (`SiteIdentity.UseAppBaseUrlWhenUnset`),
+  and both deploy paths write it. **Takes effect on the next API deploy** — no config edit needed.
+- **The pass link pointed at the site origin**, which does not forward `/api` (the API is under
+  `/webapi`). New `SiteIdentity:ApiBaseUrl` (deploy writes `$ApiUrl`); pass links for hosted events
+  and tours use `ApiAbsoluteUrl`, which stays relative rather than falling back to the site.
+
+- **Twelve browser tests that failed with or without these changes — FIXED 2026-09-23, two causes:**
+  - *Ten:* the seeded paranormal365 plan (BillingDemoSeeder, ten days from renewal on purpose, seeded
+    once) ran out on 09-21; the lapse job made the group read-only and paused its open cases on
+    09-22. `run-e2e.sh` now renews the two seeded plans through the admin endpoint (which also
+    un-pauses the cases) when lapsed or within two days of ending, back to the seeder's shape.
+  - *Two (video editor imports):* moving the clip browser's styles to a global stylesheet on 09-22
+    kept three `::deep` rules, which a browser drops outside CSS isolation — the media bin's tab
+    strip lost its height and the grid covered the cards. Plain selectors now; a guard refuses
+    `::deep` in any global stylesheet.
+
 
 ## 240. Two branches parked with real work on them (CLOSED 2026-09-19 — both merged)
 
@@ -13172,7 +13219,7 @@ A SuperAdmin or group screen that generates the code for a session, shows it lar
 off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
 
 
-## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — 11 letters still unnamed)
+## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — every declared letter now sent; templates fill in, 2026-09-23)
 
 Ben's ask is recorded in full at [[245]]; this is what was built for it.
 

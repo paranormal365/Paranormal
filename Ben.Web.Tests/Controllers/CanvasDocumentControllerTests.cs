@@ -875,7 +875,10 @@ public sealed class CanvasDocumentControllerTests
         Assert.Equal(upload.Id, link.UploadFileId);
         Assert.Equal("Board snapshot: \"Henderson board\"", link.Description);
         Assert.Equal(Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId, upload.UploadFileTypeId);
-        Assert.Equal("Henderson board.png", upload.FileName);
+        // .jpg: the snapshot arrives as a PNG and is served as the JPEG ingest re-encodes it to. This
+        // asserted ".png" until 2026-09-23, which was crawl C5 written into a test (a download with
+        // JPEG bytes under a PNG name).
+        Assert.Equal("Henderson board.jpg", upload.FileName);
         Assert.False(upload.IsPublic);
         Assert.StartsWith($"cases/{w.CaseId}/files/", upload.StoragePath);
         Assert.Equal(upload.Id, stored.PublishedUploadFileId);

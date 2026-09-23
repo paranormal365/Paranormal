@@ -238,8 +238,31 @@ window.__benVisualAudit = function () {
     });
 
   const de = document.documentElement;
-  if (de.scrollWidth > de.clientWidth + 2)
+  if (de.scrollWidth > de.clientWidth + 2) {
     out.push({ kind: 'page scrolls sideways', el: 'html', detail: `${de.scrollWidth - de.clientWidth}px` });
+
+    // WHICH element, because "html, 212px" is a symptom with no address. The outermost ones only:
+    // an element that sticks out drags every descendant with it, and naming all of those buries
+    // the one to fix. Anything inside a box that scrolls sideways on purpose (a wide table in its
+    // .table-responsive) is not the page's problem and is skipped (W5, 2026-09-23).
+    const limit = de.clientWidth + 2;
+    const scrollsSideways = e => /auto|scroll/.test(getComputedStyle(e).overflowX);
+    const culprits = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (el.getBoundingClientRect().right <= limit) continue;
+      let parent = el.parentElement, contained = false, parentAlsoOut = false;
+      for (; parent && parent !== document.body; parent = parent.parentElement) {
+        if (scrollsSideways(parent)) { contained = true; break; }
+        if (parent.getBoundingClientRect().right > limit) { parentAlsoOut = true; break; }
+      }
+      if (contained || parentAlsoOut) continue;
+      culprits.push(el);
+      if (culprits.length === 3) break;
+    }
+    for (const el of culprits)
+      out.push({ kind: 'sticks out past the screen', el: path(el),
+                 detail: `right edge at ${Math.round(el.getBoundingClientRect().right)}px on a ${de.clientWidth}px screen` });
+  }
 
   return out;
 };
