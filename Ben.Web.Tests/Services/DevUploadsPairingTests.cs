@@ -16,11 +16,17 @@ public sealed class DevUploadsPairingTests
 {
     private const string Shared = "/Users/dev/Source/Ben/.uploads";
 
+    /// <summary>
+    /// The folder beside <see cref="Shared"/>, spelled the way this platform's <c>Path</c> spells it —
+    /// "/Users/dev/Source/Ben/.uploads-x" on the Mac, "\Users\dev\...\.uploads-x" on Windows.
+    /// </summary>
+    private static string Beside(string folder) => Path.Combine(Path.GetDirectoryName(Shared)!, folder);
+
     [Theory]
-    [InlineData("Server=db;Database=IsHauntedDb_e2e_block1;Integrated Security=true", "/Users/dev/Source/Ben/.uploads-IsHauntedDb_e2e_block1")]
-    [InlineData("Server=db;Initial Catalog=IsHauntedDb_player;Integrated Security=true", "/Users/dev/Source/Ben/.uploads-IsHauntedDb_player")]
-    public void A_scratch_database_gets_the_folder_named_after_it(string connection, string expected)
-        => Assert.Equal(expected, DevUploadsPairing.PairedRoot(connection, Shared + "/"));
+    [InlineData("Server=db;Database=IsHauntedDb_e2e_block1;Integrated Security=true", ".uploads-IsHauntedDb_e2e_block1")]
+    [InlineData("Server=db;Initial Catalog=IsHauntedDb_player;Integrated Security=true", ".uploads-IsHauntedDb_player")]
+    public void A_scratch_database_gets_the_folder_named_after_it(string connection, string expectedFolder)
+        => Assert.Equal(Beside(expectedFolder), DevUploadsPairing.PairedRoot(connection, Shared + "/"));
 
     [Fact]
     public void The_default_database_keeps_the_shared_folder()
@@ -45,7 +51,7 @@ public sealed class DevUploadsPairingTests
 
         DevUploadsPairing.Apply(config, log);
 
-        Assert.Equal("/Users/dev/Source/Ben/.uploads-IsHauntedDb_e2e_x", config["FileStorage:RootPath"]);
+        Assert.Equal(Beside(".uploads-IsHauntedDb_e2e_x"), config["FileStorage:RootPath"]);
         Assert.Contains(".uploads-IsHauntedDb_e2e_x", log.ToString());
     }
 }
