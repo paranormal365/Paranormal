@@ -129,6 +129,55 @@ public sealed class APublishedTemplateFillsInTests
             Assert.Contains("[]", body);
     }
 
+    // ── asking somebody to help at an event ──────────────────────────────────
+
+    /// <summary>
+    /// The accept link is a single-use token, so a template can only include it if the sender hands
+    /// it over — and an invitation nobody can accept is worse than the built-in one.
+    /// </summary>
+    [Fact]
+    public async Task Staff_invite_hands_over_the_accept_link_the_venue_the_role_and_what_they_can_do()
+    {
+        await using var sqlite = await SeedAsync();
+        await PublishAsync(sqlite, MailKinds.StaffInvite,
+            "<p>Hello {AppUsers.DisplayName}. [{Venue}] [{Role}] {HostedEvents.StartsOn}</p>{CanDo}{AcceptButton}<p>{AcceptUrl}</p>");
+
+        var staffId = Guid.NewGuid();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.HostedEventStaff.Add(new HostedEventStaff
+            {
+                Id = staffId, HostedEventId = EventId, Email = "sam@example.test", DisplayName = "Sam Helper",
+                RoleLabel = "Door", RunsTheDoor = true, SeesBookings = true,
+                Token = "helper-token-123", DateExpires = DateTime.UtcNow.AddDays(14),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+            });
+            await db.SaveChangesAsync();
+
+            var outbox = TestOutbox.Real(sqlite.Factory);
+            var mailer = new EventGuestMailer(outbox, Site, NullLogger<EventGuestMailer>.Instance, outbox);
+            Assert.True(await mailer.SendStaffInviteAsync(db, staffId, default));
+            await db.SaveChangesAsync();
+        }
+
+        var body = await OnlyLetterAsync(sqlite, MailKinds.StaffInvite);
+        Assert.Contains("Hello Sam Helper. [The Thomas House Hotel] [Door] October 30, 2026", body);
+        Assert.Contains("<li>scan passes at the door and mark people in</li>", body);
+        Assert.Contains("<li>see who is coming, including their names and anything they cannot eat</li>", body);
+        Assert.Contains("https://test.local/helping/helper-token-123\"", body);   // the button's href
+        Assert.Contains("https://test.local/helping/helper-token-123</p>", body); // the bare link
+        Assert.Contains(">Say yes and see what you need<", body);
+    }
+
+    [Fact]
+    public void A_staff_invite_template_without_a_way_to_accept_is_refused()
+    {
+        Assert.Equal(["a way to accept"],
+            MailTokens.MissingRequired("Can you help?", "<p>Hello {AppUsers.DisplayName}.</p>", MailKinds.StaffInvite));
+        Assert.Empty(MailTokens.MissingRequired("Can you help?", "<p>{AcceptButton}</p>", MailKinds.StaffInvite));
+        Assert.Empty(MailTokens.MissingRequired("Can you help?", "<a href=\"{AcceptUrl}\">Yes</a>", MailKinds.StaffInvite));
+    }
+
     // ── a client's case letters ──────────────────────────────────────────────
 
     [Fact]

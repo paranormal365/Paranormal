@@ -281,10 +281,31 @@ public static class MailKinds
         ["AppUsers", "HostedEvents", "Organizations"],
         CanDecline: true);
 
+    /// <summary>
+    /// Asks somebody to help at an event, with the one link that says yes.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Until 2026-09-23 this declared nothing a template could use to accept.</b> The link
+    /// carries a fresh single-use token, which is no column of anything, so a template for this
+    /// letter could not include it — publishing one would have sent every helper an invitation they
+    /// had no way to answer. <c>AcceptUrl</c> is therefore required, and the editor refuses a
+    /// template without it.</para>
+    ///
+    /// <para><b>The rest is what the built-in letter says and a table cannot:</b> the venue (a
+    /// <c>Places</c> row this letter does not carry), the role, and what accepting lets them do —
+    /// the same list the acceptance page shows, from the same method.</para>
+    /// </remarks>
     public static readonly MailKindInfo StaffInvite = new(
         "staff-invite", "You have been asked to help",
-        "Invites somebody to work an event.",
-        ["AppUsers", "HostedEvents", "Organizations"]);
+        "Invites somebody to work an event, with the link that accepts.",
+        ["AppUsers", "HostedEvents", "Organizations"],
+        [new("AcceptUrl", "The link that accepts. It works once and lasts a fortnight.",
+             Required: true, Provides: "a way to accept"),
+         new("AcceptButton", "A ready-made button pointing at that link.",
+             IsHtml: true, Provides: "a way to accept"),
+         new("Venue", "Where the event is, when it has a place; empty when it does not."),
+         new("Role", "What the group has them down as, e.g. \"Door\"; empty when not given."),
+         new("CanDo", "What accepting lets them do, as a list.", IsHtml: true)]);
 
     /// <summary>
     /// Tells an event's organizers that IsHaunted took their event down, and how to appeal.

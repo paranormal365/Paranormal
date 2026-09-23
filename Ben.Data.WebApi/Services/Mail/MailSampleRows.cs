@@ -74,6 +74,12 @@ public static class MailSampleRows
 
                 "AppealButton" => (MailBlocks.Button("Appeal this decision", url), true),
                 "CreditNote" => ("The event credit spent on it has been returned, and can be used for another event.", false),
+
+                "AcceptButton" => (MailBlocks.Button("Say yes and see what you need", url), true),
+                "Venue" => ("The Thomas House Hotel", false),
+                "Role" => ("Door", false),
+                "CanDo" => ("<ul><li>scan passes at the door and mark people in</li>"
+                          + "<li>see who is coming, including their names and anything they cannot eat</li></ul>", true),
                 _ => (url, false),
             };
         }
