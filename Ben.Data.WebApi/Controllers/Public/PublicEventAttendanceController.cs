@@ -485,15 +485,13 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     private async Task TryQueueAsync(
         BenDataContext db, string email, OrgCalendarEvent ev, string token, CancellationToken ct)
     {
+        // Queued whether or not mail is set up: it waits in the outbox until it is, readable at
+        // /admin/mail meanwhile. Said, without the token or link — used by anybody, it confirms
+        // attendance in this person's name and burns their own copy (NoCredentialsInLogsTests).
         if (!_email.IsConfigured)
-        {
-            // No token or link here: the link, used by anybody, confirms attendance in this
-            // person's name and burns their own copy (NoCredentialsInLogsTests).
             _logger.LogInformation(
-                "Email is not configured; the attendance link for {Email} to event {EventId} was not sent.",
+                "Email is not configured; the attendance link for {Email} to event {EventId} is waiting in the outbox.",
                 email, ev.Id);
-            return;
-        }
 
         var link = _site.AbsoluteUrl($"/attending/{token}");
         var safeTitle = NotificationText.Safe(ev.Title);

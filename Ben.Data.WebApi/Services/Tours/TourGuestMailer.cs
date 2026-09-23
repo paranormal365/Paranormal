@@ -37,7 +37,7 @@ public sealed class TourGuestMailer
     /// <summary>
     /// Sends the sign-up mail for a tour date, or does nothing when the date is not a tour's.
     /// </summary>
-    /// <returns>True when a mail was sent.</returns>
+    /// <returns>True when a mail was queued.</returns>
     public Task<bool> SendSignUpAsync(
         BenDataContext db, Guid eventId, string toAddress, string? guestName, CancellationToken ct)
         => SendAsync(db, eventId, toAddress, guestName, reminder: false, ct);
@@ -59,7 +59,10 @@ public sealed class TourGuestMailer
         BenDataContext db, Guid eventId, string toAddress, string? guestName,
         bool reminder, CancellationToken ct, bool swallowFailures = true)
     {
-        if (!_email.IsConfigured || string.IsNullOrWhiteSpace(toAddress)) return false;
+        // Not skipped when mail is not set up: the letter — and the pass in it — waits in the
+        // outbox until it is, readable at /admin/mail meanwhile. The reminder job stops before
+        // it gets here in that case, so its "no tour" fallback is never reached by mistake.
+        if (string.IsNullOrWhiteSpace(toAddress)) return false;
 
         try
         {

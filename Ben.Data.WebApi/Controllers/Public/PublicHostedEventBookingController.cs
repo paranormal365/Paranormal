@@ -338,6 +338,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             return Conflict("There is no pass on this booking at the moment. The venue can issue "
                           + "you one.");
 
+        // Refused, where the venue's confirmation queues regardless: asking to be sent it again is
+        // asking for it now, and with no mail set up the honest answer is the screen.
         if (!mail.IsConfigured)
             return Conflict("This site has no outgoing mail set up, so nothing can be posted. The "
                           + "pass on this screen is the same one.");

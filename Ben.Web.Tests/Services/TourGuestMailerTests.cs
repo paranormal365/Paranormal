@@ -233,15 +233,23 @@ public sealed class TourGuestMailerTests
         Assert.Empty(email.Sent);
     }
 
+    /// <summary>
+    /// With no mail set up the tour letter, pass and all, still waits in the outbox.
+    /// </summary>
+    /// <remarks>
+    /// It used to be skipped, so the letter carrying a tour guest's pass could not be read at
+    /// /admin/mail or followed by a browser test (2026-09-23). The reminder job stops earlier when
+    /// there is no mail, so this never reaches its "no tour" fallback by mistake.
+    /// </remarks>
     [Fact]
-    public async Task Nothing_is_sent_when_email_is_not_configured()
+    public async Task Without_mail_the_tour_letter_still_waits_in_the_outbox()
     {
         var w = await SeedAsync();
         var email = new FakeEmail { Configured = false };
         await using var db = await w.Factory.CreateDbContextAsync();
 
-        Assert.False(await Mailer(email).SendSignUpAsync(db, w.TourEventId, "ada@example.com", "Ada", default));
-        Assert.Empty(email.Sent);
+        Assert.True(await Mailer(email).SendSignUpAsync(db, w.TourEventId, "ada@example.com", "Ada", default));
+        Assert.Equal("ada@example.com", Assert.Single(email.Sent).To);
     }
 
     [Fact]

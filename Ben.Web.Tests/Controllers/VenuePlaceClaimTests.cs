@@ -42,11 +42,11 @@ public sealed class VenuePlaceClaimTests
 
     private sealed record Mail(List<EmailMessage> Sent, IEmailService Service);
 
-    private static Mail Mailbox()
+    private static Mail Mailbox(bool configured = true)
     {
         var sent = new List<EmailMessage>();
         var email = new Mock<IEmailService>();
-        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.SetupGet(e => e.IsConfigured).Returns(configured);
         email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
             .Callback<EmailMessage, CancellationToken>((m, _) => sent.Add(m)).Returns(Task.CompletedTask);
         return new Mail(sent, email.Object);
@@ -176,6 +176,28 @@ public sealed class VenuePlaceClaimTests
     /// template written for it would have gone out proving nothing. The code is now REQUIRED of a
     /// template, and supplied here.
     /// </remarks>
+    /// <summary>
+    /// With no mail set up a claim is no longer refused: the code waits in the outbox.
+    /// </summary>
+    /// <remarks>
+    /// It used to be refused outright, so the code path could be tested nowhere but here — no
+    /// browser test could reach it (2026-09-23). The letter is the same letter either way.
+    /// </remarks>
+    [Fact]
+    public async Task With_no_mail_set_up_the_code_still_waits_in_the_outbox()
+    {
+        await using var sqlite = await SeedAsync();
+        var frontDesk = await ContactAsync(sqlite, SocietyOrgId, SocietyChair, LongAgo);
+        var mail = Mailbox(configured: false);
+
+        Ok(await Claims(sqlite, mail, Manager).Claim(HotelOrgId,
+            new(PlaceId, VenueClaimantRole.Manager, null, frontDesk), default));
+
+        var letter = Assert.Single(mail.Sent);
+        Assert.Equal(Ben.Data.Common.Mail.MailKinds.VenueClaimCode.Key, letter.Kind);
+        Assert.Equal(CodeIn(mail), letter.Payload!.Supplied!["ClaimCode"].Value);
+    }
+
     [Fact]
     public async Task The_code_letter_hands_a_template_the_code_it_carries()
     {

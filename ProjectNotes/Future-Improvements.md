@@ -12532,6 +12532,42 @@ fails at once, a claimed row is not claimed twice, running twice sends once),
 `EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
 diagnostics controller may take `SmtpEmailService` directly).
 
+### Letters that carry a link now queue without a mail server (2026-09-23)
+
+An audit found thirteen letters carrying something a person must use, and two followed anywhere in
+the browser suite. Nine could never be: their senders asked `IsConfigured` first and skipped the
+letter, and the test hosts (like every dev machine) have no SMTP. They now queue regardless — the
+pass letter, tour sign-up, staff invite, the three `/attending/` invitations, the co-client invite,
+the added-address confirmation and the venue claim code.
+
+- **The rule: queued is not sent.** Every "sent" a person is shown still means a mail server will
+  deliver it — the hosted invite's `Sent`, the co-client and address `EmailSent` (so the copy-link
+  fallback still appears), and the pass's `EmailedUtc` (so the board's "not sent yet" stays).
+- **"Send it again" buttons still refuse without mail** — the guest's and host's pass resend and the
+  staff-invite resend. Their only purpose is to send now; queueing would tell a guest their pass
+  was on its way when it was not.
+- **Browser tests:** `EmailedLinksAreFollowedTests` (reset, handover, request claim),
+  `HostedEventLettersAreFollowedTests`, `CalendarLettersAreFollowedTests`,
+  `AccountLettersAreFollowedTests` — each reads its letter from the outbox and uses it. The venue
+  claim test skips until its proving address has been on record 7 days (`ContactMinimumAge`).
+- **Two bugs they found, both from the 2026-08-18 ports:** the co-client invite page's "Create
+  Account & Accept" was `type="button"` with no handler, so nobody without an account could ever
+  accept (and both password boxes were `type="text"`); SuperAdmin File Types → Save the same.
+
+**Open, found 2026-09-23, not fixed:**
+- **Tour dates say "You're coming" for a seat still awaiting approval.** `EventAttendanceConfirm`
+  says "You've asked for a place" only for hosted events; item 234 holds the tour welcome back for
+  exactly this reason, and the page contradicts it.
+- **The API's `SiteIdentity:BaseUrl` is never set by `deploy-ishaunted.ps1`** (only the website's,
+  and the API's `AppBaseUrl`). Every link built with `_site.AbsoluteUrl` — seat pick, `/attending/`,
+  `/helping/`, reset and handover, the pass link, the mail header logo — is then relative.
+  Unconfirmed on the server. Separately, the pass link is `/api/public/…-passes/{token}.png` on the
+  SITE origin, which does not forward `/api` (the API is under `/webapi`), so that fallback link
+  cannot open even with the setting fixed. The inline pass image is unaffected.
+- **Twelve browser tests fail on the e2e database with or without these changes** (audio/video
+  uploads, file deletion, case messages, a seeded group's subscription "has ended", a tier that does
+  not resolve) — checked by rerunning them with the changes stashed.
+
 
 ## 240. Two branches parked with real work on them (CLOSED 2026-09-19 — both merged)
 

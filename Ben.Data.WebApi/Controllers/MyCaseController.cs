@@ -1083,30 +1083,31 @@ public sealed class MyCaseController : BenControllerBase
         //
         // Still best effort: the invite succeeds without it and the screen falls back to the
         // copy-link, which is the right rule while there is that fallback.
+        //
+        // Queued whether or not mail is set up, so it waits in the outbox until it is (readable at
+        // /admin/mail meanwhile); but EmailSent says true only when it will actually leave, so a
+        // site with no mail still shows the link to copy.
         var emailSent = false;
-        if (_emailService.IsConfigured)
+        try
         {
-            try
-            {
-                var inviter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
-                var appBaseUrl = _configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
-                var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
-                var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
-                var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
-                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
-                var body = $"<p>{inviterName} has invited you to collaborate on the case " +
-                           $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
-                           $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
-                           $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
-                await _outbox.EnqueueAsync(db, new EmailMessage(email, subject, body), ct);
-                emailSent = true;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Was a bare catch with nothing logged. Error, because the database log keeps
-                // Error and above and a letter that never went must be findable.
-                _logger.LogError(ex, "Could not queue the invitation to case {CaseId}; the link is shown to copy instead.", caseId);
-            }
+            var inviter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+            var appBaseUrl = _configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
+            var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
+            var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
+            var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
+            var body = $"<p>{inviterName} has invited you to collaborate on the case " +
+                       $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
+                       $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
+                       $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
+            await _outbox.EnqueueAsync(db, new EmailMessage(email, subject, body), ct);
+            emailSent = _emailService.IsConfigured;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Was a bare catch with nothing logged. Error, because the database log keeps
+            // Error and above and a letter that never went must be findable.
+            _logger.LogError(ex, "Could not queue the invitation to case {CaseId}; the link is shown to copy instead.", caseId);
         }
 
         await db.SaveChangesAsync(ct);

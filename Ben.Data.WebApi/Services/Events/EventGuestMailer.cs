@@ -90,16 +90,19 @@ public sealed class EventGuestMailer
     /// that row fails to write is the database failing, and then the honest outcome is that the
     /// decision did not happen either and the host is told to try again — not a confirmation the
     /// guest never hears about. So failures now reach the caller.</para>
+    ///
+    /// <para><b>Queued whether or not mail is set up</b>, like every letter since the outbox: it
+    /// waits there until it is, and a site administrator — or the browser tests — can read it at
+    /// /admin/mail meanwhile. It used to be skipped outright, so the one letter carrying the pass
+    /// could never be followed by a test.</para>
     /// </remarks>
     /// <returns>
-    /// True when a letter was queued; false when there is nothing to send — no mail set up, no
-    /// booking, no address. Anything that goes wrong beyond that throws.
+    /// True when a letter was queued; false when there is nothing to send — no booking, no
+    /// address. Anything that goes wrong beyond that throws.
     /// </returns>
     public async Task<bool> SendDecisionAsync(
         BenDataContext db, Guid bookingId, CancellationToken ct)
     {
-        if (!_email.IsConfigured) return false;
-
         var queue = _queue ?? throw new InvalidOperationException(
             "SendDecisionAsync queues its letter into the caller's transaction and needs an "
           + "IOutboxEmailQueue. Construct EventGuestMailer with one, or a venue's decision and the "
@@ -151,8 +154,9 @@ public sealed class EventGuestMailer
         // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
         // can see at a glance whose replacement has not gone out yet. Written by the caller's
         // save with the letter itself, so the mark can no longer clear for a letter that was
-        // never queued — which it did while the send swallowed its own failures.
-        if (pass is not null)
+        // never queued — which it did while the send swallowed its own failures. Not stamped when
+        // mail is not set up: queued with nowhere to go is not sent, and the mark stays honest.
+        if (pass is not null && _email.IsConfigured)
         {
             var tracked = await db.HostedEventPasses.FirstOrDefaultAsync(p => p.Id == pass.Id, ct);
             if (tracked is not null) tracked.EmailedUtc = DateTime.UtcNow;
@@ -783,16 +787,17 @@ public sealed class EventGuestMailer
     /// it. So a token saved without its letter leaves somebody with a dead link and nothing to
     /// replace it, and a letter queued for a token that rolled back is a link that never worked.
     /// The caller saves the row, queues this, saves again and commits once.</para>
+    ///
+    /// <para><b>Queued whether or not mail is set up</b>; it waits in the outbox until it is (see
+    /// <see cref="SendDecisionAsync"/>).</para>
     /// </remarks>
     /// <returns>
-    /// True when a letter was queued; false when there is nothing to send — no mail set up, no
-    /// token, no address. Anything that goes wrong beyond that throws.
+    /// True when a letter was queued; false when there is nothing to send — no token, no address.
+    /// Anything that goes wrong beyond that throws.
     /// </returns>
     public async Task<bool> SendStaffInviteAsync(
         BenDataContext db, Guid staffId, CancellationToken ct)
     {
-        if (!_email.IsConfigured) return false;
-
         var queue = _queue ?? throw new InvalidOperationException(
             "SendStaffInviteAsync queues its letter into the caller's transaction and needs an "
           + "IOutboxEmailQueue. Construct EventGuestMailer with one, or an invitation's token and "

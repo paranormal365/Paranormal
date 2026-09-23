@@ -856,34 +856,32 @@ public sealed class OrgCalendarEventController : BenControllerBase
         // The letter is queued into THIS context and written by the save below with the token it
         // carries (item 239b). Signing somebody up again rotates the token, so saving it first and
         // writing the letter afterwards could leave them with a dead link and no new one.
-        if (_email.IsConfigured)
-        {
-            var link = _site.AbsoluteUrl($"/attending/{token}");
-            var safeTitle = Ben.Data.WebApi.Services.NotificationText.Safe(ev.Title);
-            try
-            {
-                await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
-                    $"You're signed up for {ev.Title}",
-                    $"<p>Someone from the group signed you up for <strong>{safeTitle}</strong> on "
-                    + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
-                    + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
-                    + "<p>Confirming lets you share photos, recordings and anything else from the "
-                    + "night with the group. That link is good for two weeks and only works once.</p>"), ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Logged, never surfaced: the same reasoning as the public flow, and a guide can
-                // do nothing about a bounced address anyway. Error, which the database log keeps.
-                _logger.LogError(ex, "Could not queue a guest sign-up link for event {EventId}.", eventId);
-            }
-        }
-        else
-        {
-            // No token or link here: the link, used by anybody, confirms attendance in the
-            // guest's name and burns their own copy (NoCredentialsInLogsTests).
+        //
+        // Queued whether or not mail is set up: it waits in the outbox until it is, readable at
+        // /admin/mail meanwhile. Said, without the link — used by anybody, it confirms attendance
+        // in the guest's name and burns their own copy (NoCredentialsInLogsTests).
+        if (!_email.IsConfigured)
             _logger.LogInformation(
-                "Email is not configured; the guest sign-up link for event {EventId} was not sent.",
+                "Email is not configured; the guest sign-up link for event {EventId} is waiting in the outbox.",
                 eventId);
+
+        var link = _site.AbsoluteUrl($"/attending/{token}");
+        var safeTitle = Ben.Data.WebApi.Services.NotificationText.Safe(ev.Title);
+        try
+        {
+            await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
+                $"You're signed up for {ev.Title}",
+                $"<p>Someone from the group signed you up for <strong>{safeTitle}</strong> on "
+                + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
+                + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
+                + "<p>Confirming lets you share photos, recordings and anything else from the "
+                + "night with the group. That link is good for two weeks and only works once.</p>"), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Logged, never surfaced: the same reasoning as the public flow, and a guide can
+            // do nothing about a bounced address anyway. Error, which the database log keeps.
+            _logger.LogError(ex, "Could not queue a guest sign-up link for event {EventId}.", eventId);
         }
 
         await db.SaveChangesAsync(ct);
