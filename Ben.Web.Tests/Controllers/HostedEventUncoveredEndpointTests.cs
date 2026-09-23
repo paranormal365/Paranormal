@@ -152,7 +152,7 @@ public sealed class HostedEventUncoveredEndpointTests
         email.SetupGet(e => e.IsConfigured).Returns(false);
         return new HostedEventBookingController(sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, security.Object,
             new HostedEventCalendarSync(), new HostedEventAccess(security.Object), Mailer(), email.Object,
-            Options.Create(new Ben.Data.Common.SiteIdentity { Name = "IsHaunted" }), NullLogger<HostedEventBookingController>.Instance)
+            Options.Create(new Ben.Data.Common.SiteIdentity { Name = "IsHaunted" }), NullLogger<HostedEventBookingController>.Instance, new ForwardingOutboxQueue(email.Object))
         { ControllerContext = As(who) };
     }
 

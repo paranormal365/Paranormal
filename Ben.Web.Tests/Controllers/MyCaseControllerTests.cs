@@ -60,7 +60,7 @@ public class MyCaseControllerTests
             emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
             new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None, new ForwardingOutboxQueue(emailService ?? CreateUnconfiguredEmailService()));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -79,7 +79,7 @@ public class MyCaseControllerTests
             CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
             new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None, new ForwardingOutboxQueue(CreateUnconfiguredEmailService()));
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -618,7 +618,9 @@ public class MyCaseControllerTests
         var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
         var email = new Mock<IEmailService>();
         email.Setup(e => e.IsConfigured).Returns(true);
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        // The letter is queued now rather than sent (item 239b); the test's queue hands it to this
+        // fake as the EmailMessage it is, so the overload to watch is that one.
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
              .Returns(Task.CompletedTask);
         var ctrl = Build(factory, clientId, emailService: email.Object);
 
@@ -627,7 +629,7 @@ public class MyCaseControllerTests
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<InviteCoClientResult>(ok.Value);
         Assert.True(dto.EmailSent);
-        email.Verify(e => e.SendAsync("newperson@t.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        email.Verify(e => e.SendAsync(It.Is<EmailMessage>(m => m.To == "newperson@t.com"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -636,8 +638,9 @@ public class MyCaseControllerTests
         var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
         var email = new Mock<IEmailService>();
         email.Setup(e => e.IsConfigured).Returns(true);
-        email.Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .ThrowsAsync(new InvalidOperationException("SMTP unreachable"));
+        // The failure injected where the letter now goes: queueing it (item 239b).
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .ThrowsAsync(new InvalidOperationException("the outbox is unreachable"));
         var ctrl = Build(factory, clientId, emailService: email.Object);
 
         var result = await ctrl.InviteCoClient(caseId, new InviteCoClientRequest("newperson@t.com"), default);

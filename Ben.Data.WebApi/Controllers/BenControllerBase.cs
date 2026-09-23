@@ -161,20 +161,36 @@ public abstract class BenControllerBase : ControllerBase
     {
         var before = db.Entry(entity).OriginalValues.ToObject();
 
-        // IsRelational: the InMemory provider has no transactions and throws rather than ignoring
-        // the call, and a controller built by a unit test on it must still save.
-        await using (var tx = db.Database.IsRelational()
-            ? await db.Database.BeginTransactionAsync(ct)
-            : null)
-        {
-            await db.SaveChangesAsync(ct);
-            await alongside();
-            await db.SaveChangesAsync(ct);
-            if (tx is not null) await tx.CommitAsync(ct);
-        }
+        await SaveInOneTransactionAsync(db, alongside, ct);
 
         if (HttpContext?.RequestServices?.GetService<IAuditLogService>() is { } audit)
             await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
+    }
+
+    /// <summary>
+    /// Saves what is pending and <paramref name="alongside"/>'s writes as one: both commit, or
+    /// neither does (item 239b).
+    /// </summary>
+    /// <remarks>
+    /// For a caller whose follow-up reads back by id what the first save wrote — a mailer loading
+    /// the row its letter is about — and so cannot simply add to the same single save. Where the
+    /// follow-up needs nothing read back, one ordinary save is simpler and just as atomic. See
+    /// <see cref="SaveInOneTransactionAndAuditAsync{TEntity}"/> for why nothing in
+    /// <paramref name="alongside"/> may write on another connection.
+    /// </remarks>
+    protected static async Task SaveInOneTransactionAsync(
+        DbContext db, Func<Task> alongside, CancellationToken ct)
+    {
+        // IsRelational: the InMemory provider has no transactions and throws rather than ignoring
+        // the call, and a controller built by a unit test on it must still save.
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        await db.SaveChangesAsync(ct);
+        await alongside();
+        await db.SaveChangesAsync(ct);
+        if (tx is not null) await tx.CommitAsync(ct);
     }
 
     protected async Task TryAuditAsync(Task auditTask)
