@@ -92,15 +92,33 @@ Fixed - this is the reserved name, and the package manifest's DisplayName has to
     Does not run at startup unless you turn it on yourself in Windows Settings
     Free, with a free IsHaunted.com account
 
-## Search terms  [up to 7, 30 chars each]
+## Search terms  [up to 7 terms, 30 chars each, 21 words total]
 
-    video render
-    ishaunted
-    local video export
-    ffmpeg helper
-    video editor companion
-    paranormal video
-    evidence video
+    ghost hunting
+    paranormal investigation
+    ghost hunter
+    offline rendering
+    transcode
+    companion app
+    local encoder
+
+Seven terms, 13 words, longest 24 characters - inside all three limits.
+
+NOT a list of what the app does. Microsoft's guidance is that search terms are for words which are
+NOT already in the app's name or description, because those are searchable already; the first set
+here spent four of the seven on "video", which the description says a dozen times, and one on
+"ishaunted", which is in the product NAME - where a title match already outranks any keyword.
+
+So the first three are AUDIENCE, not function. Ben's buyers are ghost hunters, and the word
+"paranormal" appears nowhere in this listing, which means that search cannot currently reach the
+app at all. A search for "ghost hunting" in the Store returns almost nothing, so the app lands in
+a near-empty result set rather than competing with every video tool published.
+
+The last four are function words this listing genuinely does not use: it says "encoding" but never
+"encoder" or "transcode", and never "offline" or "companion".
+
+Re-check this list whenever the description changes. Its whole value is being the words that are
+missing from everything else.
 
 ## Additional license terms  [10,000]
 
