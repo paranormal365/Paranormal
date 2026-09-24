@@ -156,4 +156,22 @@ public sealed partial class BenAdminClientAdapter
         var result = await _api.GetBytesAsync("/api/admin/store/stock/export.csv", "store-stock.csv", token);
         return result is { } r ? (r.Data, r.FileName) : null;
     }
+
+    // ── discount codes ───────────────────────────────────────────────────────
+
+    public Task<LoadResult<StoreCouponAdminRecord>> GetStoreCouponsAsync(CancellationToken token = default)
+        => _api.GetListAsync<StoreCouponAdminRecord>("/api/admin/store/coupons", token);
+
+    public Task<(StoreCouponAdminRecord? Result, string? Error)> CreateStoreCouponAsync(
+        SaveStoreCouponRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreCouponRequest, StoreCouponAdminRecord>(
+               HttpMethod.Post, "/api/admin/store/coupons", request, token);
+
+    public Task<(StoreCouponAdminRecord? Result, string? Error)> SaveStoreCouponAsync(
+        Guid couponId, SaveStoreCouponRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreCouponRequest, StoreCouponAdminRecord>(
+               HttpMethod.Put, $"/api/admin/store/coupons/{couponId}", request, token);
+
+    public Task<(bool Deleted, string? Error)> DeleteStoreCouponAsync(Guid couponId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/admin/store/coupons/{couponId}", token);
 }

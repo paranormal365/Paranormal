@@ -106,4 +106,17 @@ public interface IBenStoreAdminClient
 
     /// <summary>Every active variant's stock as a CSV file, fetched with the admin's token.</summary>
     Task<(byte[] Data, string FileName)?> DownloadStoreStockCsvAsync(CancellationToken token = default);
+
+    // ── discount codes ───────────────────────────────────────────────────────
+
+    Task<LoadResult<StoreCouponAdminRecord>> GetStoreCouponsAsync(CancellationToken token = default);
+
+    Task<(StoreCouponAdminRecord? Result, string? Error)> CreateStoreCouponAsync(
+        SaveStoreCouponRequest request, CancellationToken token = default);
+
+    Task<(StoreCouponAdminRecord? Result, string? Error)> SaveStoreCouponAsync(
+        Guid couponId, SaveStoreCouponRequest request, CancellationToken token = default);
+
+    /// <summary>Refused once the code has been used — retire it instead.</summary>
+    Task<(bool Deleted, string? Error)> DeleteStoreCouponAsync(Guid couponId, CancellationToken token = default);
 }
