@@ -136,4 +136,15 @@ public interface IBenStoreAdminClient
         Guid reviewId, ReplyToStoreReviewRequest request, CancellationToken token = default);
 
     Task<(bool Deleted, string? Error)> DeleteStoreReviewAsync(Guid reviewId, CancellationToken token = default);
+
+    // ── settings and dashboard ───────────────────────────────────────────────
+
+    /// <summary>The settings and the ready-to-sell checklist (which asks Stripe, so allow a moment).</summary>
+    Task<ItemResult<StoreSettingsAdminRecord>> GetStoreSettingsAsync(CancellationToken token = default);
+
+    /// <summary>Saves the whole form or none of it; the refusal names the one value that is wrong.</summary>
+    Task<(StoreSettingsAdminRecord? Result, string? Error)> SaveStoreSettingsAsync(
+        SaveStoreSettingsRequest request, CancellationToken token = default);
+
+    Task<ItemResult<StoreDashboardRecord>> GetStoreDashboardAsync(int days = 30, CancellationToken token = default);
 }

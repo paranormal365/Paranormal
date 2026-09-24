@@ -205,4 +205,17 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(bool Deleted, string? Error)> DeleteStoreReviewAsync(Guid reviewId, CancellationToken token = default)
         => _api.DeleteExpectingReasonAsync($"/api/admin/store/reviews/{reviewId}", token);
+
+    // ── settings and dashboard ───────────────────────────────────────────────
+
+    public Task<ItemResult<StoreSettingsAdminRecord>> GetStoreSettingsAsync(CancellationToken token = default)
+        => _api.GetItemAsync<StoreSettingsAdminRecord>("/api/admin/store/settings", token);
+
+    public Task<(StoreSettingsAdminRecord? Result, string? Error)> SaveStoreSettingsAsync(
+        SaveStoreSettingsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreSettingsRequest, StoreSettingsAdminRecord>(
+               HttpMethod.Put, "/api/admin/store/settings", request, token);
+
+    public Task<ItemResult<StoreDashboardRecord>> GetStoreDashboardAsync(int days = 30, CancellationToken token = default)
+        => _api.GetItemAsync<StoreDashboardRecord>($"/api/admin/store/dashboard?days={days}", token);
 }
