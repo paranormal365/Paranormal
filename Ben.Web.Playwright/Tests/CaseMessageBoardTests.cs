@@ -79,6 +79,11 @@ public class CaseMessageBoardTests : BenTestBase
         var orgId = System.Text.RegularExpressions.Regex.Match(Page.Url, @"/organizations/([0-9a-f\-]+)").Groups[1].Value;
         if (string.IsNullOrEmpty(orgId)) { Assert.Ignore("Could not read the group from the URL."); return; }
 
+        // Every run opens a case, and the group's plan allows ten open at once: the ones earlier
+        // runs left had filled it by 09/24, and the page — rightly — refused an eleventh ("you are
+        // using all of it"). So the cases this test made go first, and this run's goes at the end.
+        await DeleteUnwrittenThreadCasesAsync(orgId);
+
         await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/new");
         await WaitForTheCircuitAsync();
         await WaitUntilLoadedAsync();
@@ -131,6 +136,24 @@ public class CaseMessageBoardTests : BenTestBase
 
         // And still answering, which a terminated circuit cannot do.
         await Expect(Compose).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await DeleteUnwrittenThreadCasesAsync(orgId);
+    }
+
+    /// <summary>
+    /// Deletes the cases this test opens (titled "Unwritten thread …"), as a SuperAdmin through the
+    /// case delete's own confirmation — the title typed back.
+    /// </summary>
+    private static async Task DeleteUnwrittenThreadCasesAsync(string orgId)
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var cases = await api.SendAsync(HttpMethod.Get, $"/api/organizations/{orgId}/cases");
+        foreach (var item in cases.EnumerateArray())
+        {
+            var title = item.GetProperty("title").GetString() ?? "";
+            if (!title.StartsWith("Unwritten thread ", StringComparison.Ordinal)) continue;
+            await api.SendAsync(HttpMethod.Delete, $"/api/admin/cases/{item.GetProperty("id").GetString()}/purge", new { confirmTitle = title });
+        }
     }
 
     // ── Client-side: panel rendering ─────────────────────────────────────────

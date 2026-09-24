@@ -195,7 +195,10 @@ public class LookAndTruthsTests : BenTestBase
         var numbers = await Page.EvaluateAsync<int[]>(
             """
             (() => {
-                const digits = t => { const m = (t || '').match(/(\d+)\s*$/); return m ? +m[1] : 0; };
+                // "99+" is what the bell and the sidebar show from a hundred up: read it as 100, and
+                // the page's rows (which are not capped) as at least that. A member with 105 waiting
+                // read as 0 against 105 here on 09/24, and the badges were right.
+                const digits = t => { const m = (t || '').match(/(\d+)(\+?)\s*$/); return m ? (m[2] ? 100 : +m[1]) : 0; };
 
                 const sidebarItem = [...document.querySelectorAll('li')]
                     .find(li => li.innerText && li.innerText.trim().startsWith('Notifications'));
@@ -215,8 +218,12 @@ public class LookAndTruthsTests : BenTestBase
 
         Assert.That(numbers[1], Is.EqualTo(numbers[0]),
             $"The sidebar says {numbers[0]} and the bell says {numbers[1]}.");
-        Assert.That(numbers[2], Is.EqualTo(numbers[1]),
-            $"The bell says {numbers[1]} and the page lists rows adding to {numbers[2]}.");
+        if (numbers[1] == 100)
+            Assert.That(numbers[2], Is.GreaterThanOrEqualTo(100),
+                $"The bell says 99+ and the page lists rows adding to {numbers[2]}.");
+        else
+            Assert.That(numbers[2], Is.EqualTo(numbers[1]),
+                $"The bell says {numbers[1]} and the page lists rows adding to {numbers[2]}.");
     }
 
     /// <summary>
