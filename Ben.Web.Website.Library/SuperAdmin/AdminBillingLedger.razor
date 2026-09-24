@@ -24,6 +24,8 @@
         <div class="col">
             <h3 class="mb-0">Billing Ledger<HelpLink Slug="site-administration" Anchor="the-money-trail" /></h3>
             <p class="text-secondary small mb-0">Every charge, payment, adjustment and payout. Rows are never edited — corrections are new rows.</p>
+            @* The store's money is not group money (storefront S5.5): it lives on its own desk. *@
+            <p class="text-secondary small mb-0">This ledger is group money only — store orders and their refunds are on <a href="/admin/store/orders">Store orders</a>.</p>
         </div>
         <div class="col-auto">
             <button type="button" class="btn btn-primary" id="ledger-record" @onclick="OpenRecord">

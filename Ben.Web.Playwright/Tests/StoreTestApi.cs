@@ -145,5 +145,48 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
         return product;
     }
 
+    /// <summary>
+    /// A paid guest order for one unit of <paramref name="product"/>, placed straight through the
+    /// store's API in test checkout — cart, checkout, the dev pay route — as a buyer's browser would.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous calls from the test process share the checkout's ten-a-minute limit with the browser
+    /// tests, so a 429 waits a minute and asks again.
+    /// </remarks>
+    public static async Task<Guid> PaidGuestOrderAsync(JsonElement product, string email)
+    {
+        using var guest = new HttpClient { BaseAddress = new Uri(BenTestBase.ApiUrlForHelpers), Timeout = TimeSpan.FromSeconds(60) };
+        guest.DefaultRequestHeaders.Add("X-Ben-Cart",
+            Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_'));
+
+        async Task<HttpResponseMessage> PostAsync(string path, object body)
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                var response = await guest.PostAsync(path, JsonContent.Create(body));
+                if (response.StatusCode != System.Net.HttpStatusCode.TooManyRequests || attempt == 2) return response;
+                await Task.Delay(TimeSpan.FromSeconds(61));
+            }
+        }
+
+        var variant = product.GetProperty("variants")[0].GetProperty("id").GetGuid();
+        var added = await PostAsync("/api/store/cart/items", new { variantId = variant, quantity = 1 });
+        Assert.That(added.IsSuccessStatusCode, Is.True, $"adding to the cart answered {(int)added.StatusCode}: {await added.Content.ReadAsStringAsync()}");
+
+        var prepared = await PostAsync("/api/store/checkout/payment-intent", new
+        {
+            email,
+            shipping = new { fullName = "Desk Buyer", phone = "615-555-0177", street1 = "3 Birch Rd", street2 = (string?)null, city = "Nashville", state = "TN", zip = "37203" },
+            billing = (object?)null, billCompany = (string?)null, agreedToTerms = true, buyerNotes = (string?)null,
+        });
+        var text = await prepared.Content.ReadAsStringAsync();
+        Assert.That(prepared.IsSuccessStatusCode, Is.True, $"the checkout answered {(int)prepared.StatusCode}: {text}");
+        var orderId = JsonDocument.Parse(text).RootElement.GetProperty("orderId").GetGuid();
+
+        var paid = await PostAsync($"/api/store/checkout/dev/simulate-payment/{orderId}", new { });
+        Assert.That(paid.IsSuccessStatusCode, Is.True, $"the test payment answered {(int)paid.StatusCode}");
+        return orderId;
+    }
+
     public void Dispose() => http.Dispose();
 }

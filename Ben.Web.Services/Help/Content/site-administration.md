@@ -499,6 +499,15 @@ survive those clients.
 If a template ever fails to render, the site sends its own letter instead and records why. Nothing
 you can write here can stop a letter going out.
 
+### The store's letters
+
+The store sends six letters, each one editable here like any other: the buyer's **receipt** ("Thank
+you for your order"), **Your order is on its way** (carrier and tracking — or that it went without
+tracking), **A refund on your order**, **A link to your order** (for "Find my order"), and to
+SuperAdmins **A new store order** and **Store stock is running low**. Each has a starter to begin from
+and sample values in the preview. A template you publish is used from then on; deleting it brings the
+site's own letter back.
+
 ## Knowing whether a member was ever emailed
 
 **Administration → Users** has a **Verified** column, and it distinguishes three things that used
@@ -1159,12 +1168,63 @@ deleted, because the order keeps the code it was bought with.
 
 ## Orders and fulfilment
 
-Orders, packing, shipping and tracking arrive in a later part of the store's build; this section
-will describe them.
+**Orders** (under Store) lists every paid order and every checkout still waiting for payment,
+newest first. Search by order number, buyer, email, SKU, product or tracking number; filter by
+status, discount code, dates, **Waiting to go out or needing attention**, **Needing attention**, and
+**Refunds that failed or are stuck**. Checkouts that were never paid and have finished are left out
+unless you ask for them. The dashboard's **To pack**, **To ship** and **Needs attention** tiles, and
+a discount code's "N orders", open this list already filtered. **Export CSV** downloads what the
+filters show, one row per item — number, date, buyer's state, SKU, quantity, prices, discount, tax,
+shipping and refunds.
+
+Open an order for everything about it: the buyer, where it is going, the items, the money, its
+refunds and its history. The buttons along the top are only the ones that make sense now:
+
+- **Mark packed** — for a paid order.
+- **Ship…** — choose the **carrier** (USPS, UPS, FedEx, DHL or Other) and type the **tracking
+  number**; the tracking link is made from the two, and the dialog shows it before you confirm. For
+  "Other" you may paste the carrier's own https link. If the parcel is not tracked, tick **No
+  tracking provided** — it ships with the carrier and no number, and the buyer is told it went
+  without tracking. Shipping emails the buyer straight away.
+- **Correct tracking…** (or **Add tracking…** for a parcel sent untracked) — fixes the carrier or
+  number on a shipped order. It does not email the buyer; use **Resend email…** if they need it.
+- **Mark delivered** — for a shipped order.
+- **Edit address…** — until it ships. Changing the buyer's email replaces the order's private link
+  (the old one stops working) and sends the receipt to the new address. Sales tax is not worked out
+  again for a new state; the history notes it.
+- **Resend email…** — the receipt, or "Your order is on its way" once it has shipped.
+- **Release checkout** — lets go of a checkout still waiting for payment, giving back its stock and
+  discount code. It is refused while the payment is still going through at Stripe.
+- **Invoice** prints the order's invoice; **Open in Stripe** opens the payment in Stripe's dashboard.
+
+**Needs attention.** An order is flagged when something about its payment needs a person to look —
+paid after its checkout was cancelled, or an amount that did not match. It cannot be packed or shipped
+until you read the reason and press **I've looked — clear it**.
+
+**Notes** you add go into the order's history with your name. Everything done to an order is there,
+newest first.
 
 ## Refunds and cancellations
 
-Refunds and cancellations arrive with orders; this section will describe them.
+**Refund…** on an order gives money back to the buyer's card through Stripe. Refund **by item** —
+choosing how many of each, and whether they go back on the shelf — or **by amount** (shipping, a
+goodwill amount), which never restocks. Every refund needs a reason. You can refund up to what is
+still refundable; a refund still going through at Stripe counts against that.
+
+A refund moves nothing until Stripe says the money has gone: then the stock goes back (if you chose),
+the order's refunded total rises, it becomes **Refunded** when nothing is left, the buyer is emailed,
+and the sales tax filing is reversed. **A pending refund finishes when Stripe says so** — the refund
+shows **Awaiting Stripe** meanwhile, and the order updates by itself. If Stripe refuses, the refund
+shows **Failed** with Stripe's reason and nothing else changed; **Try again** looks for it at Stripe
+first and never refunds twice. A refund made in Stripe's own dashboard is recorded on the order too
+("Refunded from the Stripe dashboard"), without restocking.
+
+**Cancel…** is for a paid order that has not shipped: it refunds everything still refundable,
+shipping included, puts the items back on the shelf if you tick it, and marks the order Cancelled
+once the refund goes through. A shipped order is refunded instead.
+
+**Refunds that failed or are stuck** on the Orders list finds the ones to look at. **Export refunds**
+on the same page downloads every refund in the chosen dates with its status and Stripe's ids.
 
 ## Store reviews
 
@@ -1186,5 +1246,7 @@ dashboard, and a buyer in any other state is charged no sales tax.
 
 ## Stock alerts
 
-A daily stock digest arrives with orders; this section will describe it. Until then, the
-dashboard's low-stock table and the Stock page's low-stock filter show what is running out.
+Every morning while the store is on, each SuperAdmin gets a bell and an email — "Store stock: N
+running low" — listing the variants on sale that are at or under the store's low-stock number, with
+a button to the Stock page. It comes once a day, and not at all when nothing is low. The dashboard's
+low-stock table and the Stock page's **Running low only** filter show the same thing at any time.

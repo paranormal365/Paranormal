@@ -177,7 +177,7 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
     public async Task QueueLowStockAsync(BenDataContext db, IReadOnlyList<(string Product, string? Variant, string Sku, int Left)> low,
         IReadOnlyList<(string Email, string? Name)> admins, CancellationToken ct)
     {
-        var url = _site.AbsoluteUrl("/admin/store/stock?low=1");
+        var url = _site.AbsoluteUrl("/admin/store/stock?low=true");
         var rows = new StringBuilder();
         foreach (var (product, variant, sku, left) in low)
             rows.Append($"<tr><td style=\"{Cell}\">{Safe(product)}{(string.IsNullOrWhiteSpace(variant) ? "" : $" — {Safe(variant)}")}"

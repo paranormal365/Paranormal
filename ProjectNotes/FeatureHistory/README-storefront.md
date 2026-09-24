@@ -337,6 +337,25 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   when it fits — too big and it loads again when live. Test products share one shelf
   (StoreTestApi.SharedShelf), and the 137 old per-product shelves on IsHauntedDb_e2e were hidden
   through the admin API.
+- (S5) The order desk. StoreOrderTransitions (pack/ship/correct tracking/deliver/cancel, notes, address,
+  attention, resend, release — each one conditional update), StoreRefundService (plan §5.7: row before
+  Stripe, nothing moves until succeeded, one completion however the news arrives, list-then-fresh-key
+  retries, full reversal only for a first whole-order refund, reversals owed after a late tax filing
+  filed by StoreTaxRetryJob, dashboard refunds recorded by payment), StoreOrderDesk (list/filters/detail/
+  abilities/CSV), AdminStoreOrderController, the three admin pages, StoreLowStockJob (daily, deduped on
+  its own bell, only while the store is on), letters shipped/refunded/low-stock on the same outbox +
+  template path as every other letter.
+  - Shipping follows Ben's 09/24 rule: carrier + number build the link; "No tracking provided" ships
+    without one (replacing the plan's "A shipment needs a tracking number.").
+  - The dashboard's "Needs attention" tile counts flagged orders only, so the list gained an
+    attention-only filter to match it (the plan pointed the tile at needsAction, which also holds every
+    paid and packed order).
+  - Export is a button (the site's pattern — the file needs the admin's token), not the plan's anchor.
+  - Cancel refunds everything still refundable, shipping included, and completing that refund cancels
+    (the refund is marked by a "Cancellation pending: {id}" event note, so a webhook-completed pending
+    refund still cancels).
+  - The fake gateway now names a refund the same way when creating and listing it (re_fake_{key}).
+  - The site's BenDateFieldGuard refused the list's browser date boxes; they are BenDateFields.
 - (S4.11) Not in the browser suite: "Without Stripe the checkout says so" needs a host with no keys
   and no fake — the refusal (PaymentsNotSetUp, 503 prose) is covered by StoreCheckoutServiceTests.
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one

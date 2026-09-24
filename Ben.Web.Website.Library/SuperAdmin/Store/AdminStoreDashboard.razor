@@ -45,10 +45,10 @@
             }
 
             <div class="row g-3 mb-3">
-                @* Orders links land in S5.5, with the orders page. *@
-                <div class="col-6 col-lg-3"><StatCard Label="To pack" Value="@d.OrdersToPack.ToString()" Icon="package" Href="@null" /></div>
-                <div class="col-6 col-lg-3"><StatCard Label="To ship" Value="@d.OrdersToShip.ToString()" Icon="truck" Href="@null" /></div>
-                <div class="col-6 col-lg-3"><StatCard Label="Needs attention" Value="@d.OrdersNeedingAttention.ToString()" Icon="alert-triangle" HigherIsBetter="false" Href="@null" /></div>
+                @* Each tile opens the order list filtered to exactly what it counts (S5.5). *@
+                <div class="col-6 col-lg-3"><StatCard Label="To pack" Value="@d.OrdersToPack.ToString()" Icon="package" Href="/admin/store/orders?status=Paid" LinkLabel="Open the orders to pack" /></div>
+                <div class="col-6 col-lg-3"><StatCard Label="To ship" Value="@d.OrdersToShip.ToString()" Icon="truck" Href="/admin/store/orders?status=Packed" LinkLabel="Open the orders to ship" /></div>
+                <div class="col-6 col-lg-3"><StatCard Label="Needs attention" Value="@d.OrdersNeedingAttention.ToString()" Icon="alert-triangle" HigherIsBetter="false" Href="/admin/store/orders?attention=true" LinkLabel="Open the orders needing attention" /></div>
                 <div class="col-6 col-lg-3"><StatCard Label="Reviews waiting" Value="@d.ReviewsPending.ToString()" Icon="message-square" HigherIsBetter="false" Href="/admin/store/reviews" LinkLabel="Open the review queue" /></div>
             </div>
 

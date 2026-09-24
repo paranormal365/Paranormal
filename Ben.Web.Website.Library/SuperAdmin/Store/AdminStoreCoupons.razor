@@ -42,8 +42,7 @@
                             <td class="small text-nowrap">@Window(c)</td>
                             <td class="text-nowrap">
                                 @c.RedemptionCount@(c.MaxRedemptions is { } max ? $" of {max}" : "")
-                                @* The orders link lands in S5.5, with the orders page. *@
-                                <div class="text-secondary small" data-testid="coupon-orders">@c.OrderCount @(c.OrderCount == 1 ? "order" : "orders")</div>
+                                <a class="small d-block" data-testid="coupon-orders" href="@($"/admin/store/orders?coupon={Uri.EscapeDataString(c.Code)}")">@c.OrderCount @(c.OrderCount == 1 ? "order" : "orders")</a>
                             </td>
                             <td>
                                 @if (!c.IsActive) { <span class="badge bg-secondary">Retired</span> }

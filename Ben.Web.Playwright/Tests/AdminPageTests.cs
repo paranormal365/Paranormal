@@ -63,6 +63,7 @@ public class AdminPageTests : BenTestBase
         ("/admin/store/coupons",       "Discount Codes"),
         ("/admin/store/reviews",       "Only approved ones count"),
         ("/admin/store/settings",      "Store Settings"),
+        ("/admin/store/orders",        "Pack, ship and refund"),
     };
 
     [Test]

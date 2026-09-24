@@ -150,4 +150,45 @@ public interface IBenStoreAdminClient
         SaveStoreSettingsRequest request, CancellationToken token = default);
 
     Task<ItemResult<StoreDashboardRecord>> GetStoreDashboardAsync(int days = 30, CancellationToken token = default);
+
+    // ── The order desk (storefront S5.5) ──────────────────────────────────────
+    // Every action answers with the order as it now stands, or the refusal in words.
+
+    Task<LoadResult<StoreOrderListRecord>> GetStoreOrdersAsync(StoreOrderListQuery query, CancellationToken token = default);
+
+    Task<ItemResult<StoreOrderDetailAdminRecord>> GetStoreOrderAdminAsync(Guid orderId, CancellationToken token = default);
+
+    Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAdminAsync(Guid orderId, CancellationToken token = default);
+
+    Task<LoadResult<StoreRefundRecord>> GetStoreOrderRefundsAsync(Guid orderId, CancellationToken token = default);
+
+    Task<(byte[] Data, string FileName)?> DownloadStoreOrdersCsvAsync(StoreOrderListQuery query, CancellationToken token = default);
+
+    Task<(byte[] Data, string FileName)?> DownloadStoreRefundsCsvAsync(DateTime? from = null, DateTime? to = null, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> PackStoreOrderAsync(Guid orderId, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ShipStoreOrderAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CorrectStoreOrderTrackingAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreOrderAsync(Guid orderId, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreOrderAsync(Guid orderId, CancelStoreOrderRequest request, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> AddStoreOrderNoteAsync(Guid orderId, string note, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ChangeStoreOrderAddressAsync(Guid orderId, ChangeStoreOrderAddressRequest request, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ClearStoreOrderAttentionAsync(Guid orderId, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ResendStoreOrderLetterAsync(Guid orderId, string kind, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ReleaseStoreOrderAsync(Guid orderId, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RefundStoreOrderAsync(Guid orderId, StoreRefundRequest request, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RetryStoreRefundAsync(Guid orderId, Guid refundId, CancellationToken token = default);
+
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RetryStoreRefundTaxAsync(Guid orderId, Guid refundId, CancellationToken token = default);
 }

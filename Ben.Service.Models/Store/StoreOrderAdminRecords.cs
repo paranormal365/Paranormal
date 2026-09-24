@@ -73,6 +73,31 @@ public sealed record StoreOrderDetailAdminRecord(
     IReadOnlyList<StoreRefundRecord> Refunds, IReadOnlyList<StoreOrderEventRecord> Events,
     StoreOrderAbilities Can, DateTime? ReservationExpiresUtc);
 
+/// <summary>The order list's filters as the page asks them (and the address it keeps them in).</summary>
+public sealed record StoreOrderListQuery(
+    StoreOrderStatus? Status = null, string? Q = null, string? Coupon = null, DateTime? From = null, DateTime? To = null,
+    bool NeedsAction = false, bool RefundAttention = false, bool IncludeUnpaid = false, bool Attention = false)
+{
+    /// <summary>The query string both the list and the CSV take.</summary>
+    public string ToQueryString() => Parameters() is { Length: > 0 } p ? "?" + p : "";
+
+    /// <summary>The same, without its "?" — for an address that always writes one.</summary>
+    public string Parameters()
+    {
+        var parts = new List<string>();
+        if (Status is { } s) parts.Add($"status={s}");
+        if (!string.IsNullOrWhiteSpace(Q)) parts.Add($"q={Uri.EscapeDataString(Q.Trim())}");
+        if (!string.IsNullOrWhiteSpace(Coupon)) parts.Add($"coupon={Uri.EscapeDataString(Coupon.Trim())}");
+        if (From is { } f) parts.Add($"from={f:yyyy-MM-dd}");
+        if (To is { } t) parts.Add($"to={t:yyyy-MM-dd}");
+        if (NeedsAction) parts.Add("needsAction=true");
+        if (RefundAttention) parts.Add("refunds=attention");
+        if (IncludeUnpaid) parts.Add("unpaid=true");
+        if (Attention) parts.Add("attention=true");
+        return string.Join("&", parts);
+    }
+}
+
 /// <summary>What asking for a refund came to.</summary>
 /// <param name="Message">For a refund Stripe accepted but is still processing — said to the admin.</param>
 public sealed record StoreRefundResult(StoreRefundRecord Refund, string? Message);

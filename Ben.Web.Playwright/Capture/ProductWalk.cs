@@ -600,7 +600,7 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/sidecar-telemetry", "/admin/file-types", "/admin/lookup-types", "/admin/equipment-taxonomy",
                      "/admin/experience-taxonomy", "/admin/delete-case", "/admin/delete-group", "/admin/delete-user",
                      "/admin/store", "/admin/store/categories", "/admin/store/products", "/admin/store/stock",
-                     "/admin/store/coupons", "/admin/store/reviews", "/admin/store/settings",
+                     "/admin/store/coupons", "/admin/store/reviews", "/admin/store/settings", "/admin/store/orders",
                  })
             await StepAsync(route.Replace("/admin/", "admin "), () => GoAsync(route));
         await StepAsync("one user", async () =>
@@ -615,6 +615,13 @@ public sealed class ProductWalk : BenTestBase
         {
             await GoAsync("/admin/store/products");
             await FollowAsync("/admin/store/products/");
+        });
+
+        // The order desk (S5.5): one order is reached only from the list. The demo seed's seven orders provide it.
+        await StepAsync("one order, from the list", async () =>
+        {
+            await GoAsync("/admin/store/orders");
+            await FollowAsync("/admin/store/orders/");
         });
 
         // The route alone proves nothing here: the page renders its list before anything is

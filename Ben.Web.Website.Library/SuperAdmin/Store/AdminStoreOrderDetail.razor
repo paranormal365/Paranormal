@@ -1,0 +1,600 @@
+@page "/admin/store/orders/{Id:guid}"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@inject IMediaUrlBuilder MediaUrls
+
+<PageTitle>SuperAdmin — @(_order is { } t ? $"Order #{t.OrderNumber}" : "Store Order")</PageTitle>
+
+@*
+    One order at the desk (storefront S5.5): what happened, what to do next, and the buttons for
+    exactly that (the server says which, in StoreOrderAbilities). Every press answers with the order
+    as it now stands; a refusal lands in #order-desk-refusal (or in its dialog), never only a toast.
+
+    Shipping (Ben, 09/24): pick the carrier, type the tracking number, and the link is built from the
+    two — the dialog shows it before you confirm. "No tracking provided" ships without a number.
+*@
+
+<div class="container-fluid px-3" style="max-width:72rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/admin/store/orders">Orders</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@(_order is { } b ? $"#{b.OrderNumber}" : "Order")</li>
+        </ol>
+    </nav>
+
+    @if (_loading)
+    {
+        <div class="text-secondary py-5 text-center"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading the order…</div>
+    }
+    else if (_order is not { } o)
+    {
+        @if (_loadError is not null)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="order-load-refusal">@_loadError</div>
+                <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Retry</button>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-secondary">There's no such order.</div>
+        }
+    }
+    else
+    {
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div>
+                <h3 class="mb-0">Order #@o.OrderNumber<HelpLink Slug="site-administration" Anchor="orders-and-fulfilment" /></h3>
+                <div class="small text-secondary">
+                    Placed @o.PlacedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") ·
+                    <span class="fw-medium text-@StoreOrderStatusText.Tone(o.Status)-emphasis" data-testid="order-status">@StoreOrderStatusText.Label(o.Status)</span> ·
+                    @o.PaymentStatus
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                @if (o.PaidUtc is not null)
+                {
+                    <a class="btn btn-sm btn-outline-secondary" href="@($"/admin/store/orders/{o.Id}/invoice")" id="order-print-invoice"><BenIcon Name="printer" /> Invoice</a>
+                }
+                @if (o.StripeDashboardUrl is { } stripe)
+                {
+                    <a class="btn btn-sm btn-outline-secondary" href="@stripe" target="_blank" rel="noopener" id="order-open-stripe">Open in Stripe</a>
+                }
+            </div>
+        </div>
+
+        @if (o.NeedsAttention)
+        {
+            <div class="alert alert-danger d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert" data-testid="order-attention">
+                <span><strong>Needs attention.</strong> @o.AttentionReason</span>
+                @if (o.Can.CanClearAttention)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="order-clear-attention" disabled="@_busy" @onclick="ClearAttentionAsync">I've looked — clear it</button>
+                }
+            </div>
+        }
+
+        <div class="d-flex flex-wrap gap-2 mb-3" data-testid="order-actions">
+            @if (o.Can.CanPack) { <button type="button" class="btn btn-primary" id="order-pack" disabled="@_busy" @onclick="PackAsync">Mark packed</button> }
+            @if (o.Can.CanShip) { <button type="button" class="btn btn-primary" id="order-ship" disabled="@_busy" @onclick="@(() => OpenShip(correcting: false))">Ship…</button> }
+            @if (o.Can.CanCorrectTracking) { <button type="button" class="btn btn-outline-secondary" id="order-correct-tracking" disabled="@_busy" @onclick="@(() => OpenShip(correcting: true))">@(o.TrackingNumber is null ? "Add tracking…" : "Correct tracking…")</button> }
+            @if (o.Can.CanDeliver) { <button type="button" class="btn btn-outline-success" id="order-deliver" disabled="@_busy" @onclick="DeliverAsync">Mark delivered</button> }
+            @if (o.Can.CanRefund) { <button type="button" class="btn btn-outline-secondary" id="order-refund" disabled="@_busy" @onclick="OpenRefund">Refund…</button> }
+            @if (o.Can.CanCancel) { <button type="button" class="btn btn-outline-danger" id="order-cancel" disabled="@_busy" @onclick="@(() => { _cancelReason = ""; _cancelRestock = true; _dialogError = null; _cancelOpen = true; })">Cancel…</button> }
+            @if (o.Can.CanEditAddress) { <button type="button" class="btn btn-outline-secondary" id="order-edit-address" disabled="@_busy" @onclick="OpenAddress">Edit address…</button> }
+            @if (o.Can.CanResendConfirmation || o.Can.CanResendShipped) { <button type="button" class="btn btn-outline-secondary" id="order-resend" disabled="@_busy" @onclick="OpenResend">Resend email…</button> }
+            @if (o.Can.CanRelease) { <button type="button" class="btn btn-outline-danger" id="order-release" disabled="@_busy" @onclick="ReleaseAsync">Release checkout</button> }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger" role="alert" id="order-desk-refusal">@_error</div>
+        }
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100"><div class="card-body small">
+                    <h4 class="h6 fw-bold">Buyer</h4>
+                    <div>@o.BuyerName</div>
+                    <div class="text-break"><a href="@($"mailto:{o.BuyerEmail}")">@o.BuyerEmail</a></div>
+                    <div class="text-secondary">@(o.BuyerAppUserId is null ? "Guest" : "Member")</div>
+                    @if (o.BuyerNotes is { } notes) { <div class="mt-2"><span class="text-secondary">Note:</span> @notes</div> }
+                </div></div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100"><div class="card-body small" data-testid="order-ship-to">
+                    <h4 class="h6 fw-bold">Ship to</h4>
+                    <div>@o.Shipping.Name</div>
+                    <div>@o.Shipping.Street1</div>
+                    @if (o.Shipping.Street2 is { } s2) { <div>@s2</div> }
+                    <div>@o.Shipping.City, @o.Shipping.State @o.Shipping.Zip</div>
+                    @if (o.Shipping.Phone is { } phone) { <div>@phone</div> }
+                </div></div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100"><div class="card-body small">
+                    <h4 class="h6 fw-bold">Bill to</h4>
+                    @if (o.Billing is { } bill)
+                    {
+                        <div>@bill.Name</div>
+                        @if (bill.Company is { } company) { <div>@company</div> }
+                        <div>@bill.Street1, @bill.City, @bill.State @bill.Zip</div>
+                    }
+                    else { <div class="text-secondary">Same as shipping</div> }
+                </div></div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100"><div class="card-body small" data-testid="order-shipment">
+                    <h4 class="h6 fw-bold">Shipment</h4>
+                    @if (o.Carrier is { } carrier)
+                    {
+                        <div>@carrier</div>
+                        @if (o.TrackingNumber is { } tracking)
+                        {
+                            @if (o.TrackingUrl is { } link) { <a href="@link" target="_blank" rel="noopener" data-testid="order-tracking">@tracking</a> }
+                            else { <div>@tracking</div> }
+                        }
+                        else { <div class="text-secondary">@StoreOrderDeskSentences.NoTrackingLabel</div> }
+                        @if (o.DeliveredUtc is { } delivered) { <div class="text-success">Delivered @delivered.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</div> }
+                    }
+                    else { <div class="text-secondary">Not shipped yet</div> }
+                </div></div>
+            </div>
+        </div>
+
+        <div class="table-responsive mb-3">
+            <table class="table align-middle mb-0" style="min-width:36rem;">
+                <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Line</th><th class="text-end">Refunded</th></tr></thead>
+                <tbody>
+                    @foreach (var i in o.Items)
+                    {
+                        <tr data-testid="order-item">
+                            <td>
+                                <div class="fw-medium">@i.ProductName@(i.VariantName is { } v ? $" — {v}" : null)</div>
+                                <div class="small text-secondary font-monospace">@i.Sku</div>
+                            </td>
+                            <td class="text-end">@i.Quantity</td>
+                            <td class="text-end text-nowrap">@StoreMoney.Format(i.UnitPrice)</td>
+                            <td class="text-end text-nowrap">@StoreMoney.Format(i.LineTotal)@(i.LineDiscount > 0 ? $" (−{StoreMoney.Format(i.LineDiscount)})" : null)</td>
+                            <td class="text-end small">@(i.QuantityRefunded > 0 ? $"{i.QuantityRefunded} ({i.QuantityRestocked} back on the shelf)" : "–")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-lg-7">
+                <h4 class="h6 fw-bold">Refunds</h4>
+                @if (o.Refunds.Count == 0)
+                {
+                    <p class="small text-secondary">None.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled small" data-testid="order-refunds">
+                        @foreach (var r in o.Refunds)
+                        {
+                            <li class="border-bottom py-2">
+                                <span class="fw-medium">@StoreMoney.Format(r.Amount)</span> — @r.Reason
+                                <span class="badge ms-1 @RefundBadge(r)">@RefundWords(r)</span>
+                                <div class="text-secondary">
+                                    @r.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")@(r.RequestedByName is { } who ? $" · {who}" : null)@(r.Restock ? " · restocked" : null)
+                                    @if (r.FailureReason is { } why) { <text> · @why</text> }
+                                </div>
+                                @if (r.IsRetryable)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-1" disabled="@_busy" @onclick="@(() => RetryRefundAsync(r))">Try again</button>
+                                }
+                                @if (r.TaxReversalMissing)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-1" disabled="@_busy" @onclick="@(() => RetryTaxAsync(r))">File the tax reversal</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+            <div class="col-lg-5">
+                <div class="ben-summary">
+                    <div class="ben-summary__row"><span>Products</span><span>@StoreMoney.Format(o.Totals.Subtotal)</span></div>
+                    @if (o.Totals.Discount > 0) { <div class="ben-summary__row text-success"><span>Discount@(o.CouponCode is { } c ? $" ({c})" : null)</span><span>−@StoreMoney.Format(o.Totals.Discount)</span></div> }
+                    <div class="ben-summary__row"><span>Shipping</span><span>@(o.Totals.Shipping == 0 ? "Free" : StoreMoney.Format(o.Totals.Shipping))</span></div>
+                    <div class="ben-summary__row"><span>Sales tax@(o.Totals.ShippingTax > 0 ? $" (includes {StoreMoney.Format(o.Totals.ShippingTax)} on shipping)" : null)</span><span>@StoreMoney.Format(o.Totals.Tax)</span></div>
+                    <div class="ben-summary__row ben-summary__total"><span>Total</span><span>@StoreMoney.Format(o.Totals.Total)</span></div>
+                    @if (o.RefundedAmount > 0) { <div class="ben-summary__row text-warning-emphasis"><span>Refunded</span><span>−@StoreMoney.Format(o.RefundedAmount)</span></div> }
+                    <div class="ben-summary__row small text-secondary"><span>Still refundable</span><span data-testid="order-refundable">@StoreMoney.Format(o.Refundable)</span></div>
+                </div>
+            </div>
+        </div>
+
+        <h4 class="h6 fw-bold">History</h4>
+        <div class="mb-2">
+            <label class="form-label small" for="order-note">Add a note</label>
+            <div class="input-group">
+                <input id="order-note" class="form-control" maxlength="2000" @bind="_note" @bind:event="oninput" />
+                <button type="button" class="btn btn-outline-secondary" id="order-note-add" disabled="@_busy" @onclick="AddNoteAsync">Add</button>
+            </div>
+        </div>
+        <ul class="list-unstyled small" data-testid="order-history">
+            @foreach (var e in o.Events)
+            {
+                <li class="border-bottom py-2">
+                    <span class="text-secondary">@e.OccurredUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</span>
+                    · <span class="fw-medium">@EventWords(e)</span>
+                    @if (e.Note is { } n && e.Kind != StoreOrderEventKind.LetterQueued) { <text> — @n</text> }
+                    @if (e.Amount is { } a) { <text> (@StoreMoney.Format(a))</text> }
+                    @if (e.ActorName is { } actor) { <span class="text-secondary"> · @actor</span> }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@* ── Ship / correct tracking ── *@
+<BenModal @bind-Visible="_shipOpen" Title="@(_correcting ? "Tracking" : "Ship this order")">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label" for="ship-carrier">Carrier</label>
+            <select id="ship-carrier" class="form-select" value="@_carrier" @onchange="@(e => _carrier = e.Value?.ToString() ?? "")">
+                <option value="">Choose…</option>
+                @foreach (var c in StoreCarriers.All) { <option value="@c">@c</option> }
+            </select>
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="ship-no-tracking" checked="@_noTracking" @onchange="@(e => _noTracking = (bool)(e.Value ?? false))" />
+            <label class="form-check-label" for="ship-no-tracking">@StoreOrderDeskSentences.NoTrackingLabel</label>
+        </div>
+        @if (!_noTracking)
+        {
+            <div class="mb-3">
+                <label class="form-label" for="ship-tracking">Tracking number</label>
+                <input id="ship-tracking" class="form-control" maxlength="64" autocomplete="off" @bind="_tracking" @bind:event="oninput" />
+            </div>
+            @if (_carrier == StoreCarriers.Other)
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="ship-link">Tracking link (optional, https://)</label>
+                    <input id="ship-link" type="url" class="form-control" @bind="_trackingLink" @bind:event="oninput" />
+                </div>
+            }
+            else if (StoreCarriers.TrackingUrl(_carrier, _tracking) is { } preview)
+            {
+                <p class="small text-secondary mb-3" data-testid="ship-link-preview">The buyer's link: <a href="@preview" target="_blank" rel="noopener">@preview</a></p>
+            }
+        }
+        else
+        {
+            <p class="small text-secondary">The buyer is told it was sent without tracking.</p>
+        }
+        @if (!_correcting)
+        {
+            <div class="mb-2">
+                <label class="form-label" for="ship-note">Note for the history (optional)</label>
+                <input id="ship-note" class="form-control" maxlength="500" @bind="_shipNote" @bind:event="oninput" />
+            </div>
+            <p class="small text-secondary mb-0">Shipping emails the buyer now.</p>
+        }
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="ship-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _shipOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="ship-confirm" disabled="@_busy" @onclick="ShipAsync">@(_correcting ? "Save tracking" : "Ship it")</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Refund ── *@
+<BenModal @bind-Visible="_refundOpen" Title="Refund" Size="lg">
+    <ChildContent>
+        @if (_order is { } ro)
+        {
+            <p class="small">Still refundable: <strong>@StoreMoney.Format(ro.Refundable)</strong>.</p>
+            <div class="mb-3">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="refund-mode" id="refund-by-items" checked="@_byItems" @onchange="@(() => _byItems = true)" />
+                    <label class="form-check-label" for="refund-by-items">By item</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="refund-mode" id="refund-by-amount" checked="@(!_byItems)" @onchange="@(() => _byItems = false)" />
+                    <label class="form-check-label" for="refund-by-amount">By amount</label>
+                </div>
+            </div>
+            @if (_byItems)
+            {
+                @foreach (var i in ro.Items.Where(i => i.Refundable > 0))
+                {
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <input type="number" class="form-control" style="width:6rem;" min="0" max="@i.Refundable" id="@($"refund-qty-{i.Sku}")"
+                               value="@_quantities.GetValueOrDefault(i.Id)" @onchange="@(e => _quantities[i.Id] = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
+                        <label for="@($"refund-qty-{i.Sku}")" class="small">of @i.Refundable × @i.ProductName@(i.VariantName is { } v ? $" — {v}" : null)</label>
+                    </div>
+                }
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="refund-restock" checked="@_restock" @onchange="@(e => _restock = (bool)(e.Value ?? false))" />
+                    <label class="form-check-label" for="refund-restock">Put them back on the shelf</label>
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="refund-amount">Amount</label>
+                    <div class="input-group" style="max-width:12rem;">
+                        <span class="input-group-text">$</span>
+                        <input id="refund-amount" type="number" step="0.01" min="0.01" class="form-control" @bind="_amount" />
+                    </div>
+                </div>
+            }
+            <div class="mb-2">
+                <label class="form-label" for="refund-reason">Reason</label>
+                <input id="refund-reason" class="form-control" maxlength="500" placeholder="Arrived damaged" @bind="_refundReason" @bind:event="oninput" />
+            </div>
+            <p class="small text-secondary mb-0">The money goes back to the buyer's card through Stripe, and they're emailed when it has gone.</p>
+        }
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="refund-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _refundOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-danger" id="refund-confirm" disabled="@_busy" @onclick="RefundAsync">Refund</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Cancel ── *@
+<BenModal @bind-Visible="_cancelOpen" Title="Cancel this order">
+    <ChildContent>
+        <p class="small">Cancelling refunds everything still refundable and emails the buyer.</p>
+        <div class="mb-2">
+            <label class="form-label" for="cancel-reason">Reason</label>
+            <input id="cancel-reason" class="form-control" maxlength="500" @bind="_cancelReason" @bind:event="oninput" />
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="cancel-restock" checked="@_cancelRestock" @onchange="@(e => _cancelRestock = (bool)(e.Value ?? false))" />
+            <label class="form-check-label" for="cancel-restock">Put the items back on the shelf</label>
+        </div>
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="cancel-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _cancelOpen = false)">Keep it</button>
+        <button type="button" class="btn btn-danger" id="cancel-confirm" disabled="@_busy" @onclick="CancelAsync">Cancel and refund</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Address ── *@
+<BenModal @bind-Visible="_addressOpen" Title="Edit the address" Size="lg">
+    <ChildContent>
+        <StoreAddressFields Address="_address.Shipping" Prefix="edit" />
+        <div class="form-floating mt-3">
+            <input type="email" class="form-control" id="edit-email" placeholder="Email address" @bind="_address.Email" @bind:event="oninput" />
+            <label for="edit-email">Buyer's email</label>
+        </div>
+        <p class="small text-secondary mt-2 mb-0">A new email replaces the order's private link and sends the receipt again. Sales tax is not recalculated for a new state.</p>
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="address-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _addressOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="address-confirm" disabled="@_busy" @onclick="SaveAddressAsync">Save</button>
+    </FooterContent>
+</BenModal>
+
+@* ── Resend ── *@
+<BenModal @bind-Visible="_resendOpen" Title="Resend an email">
+    <ChildContent>
+        <label class="form-label" for="resend-kind">Which email</label>
+        <select id="resend-kind" class="form-select" value="@_resendKind" @onchange="@(e => _resendKind = e.Value?.ToString() ?? "confirmation")">
+            @if (_order?.Can.CanResendConfirmation == true) { <option value="confirmation">The receipt</option> }
+            @if (_order?.Can.CanResendShipped == true) { <option value="shipped">"Your order is on its way"</option> }
+        </select>
+        <p class="small text-secondary mt-2 mb-0">It goes to @_order?.BuyerEmail.</p>
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="resend-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _resendOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="resend-confirm" disabled="@_busy" @onclick="ResendAsync">Send</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private StoreOrderDetailAdminRecord? _order;
+    private bool _loading = true, _busy;
+    private string? _loadError, _error, _dialogError, _note;
+
+    private bool _shipOpen, _correcting, _noTracking;
+    private string _carrier = "", _tracking = "";
+    private string? _trackingLink, _shipNote;
+
+    private bool _refundOpen, _byItems = true, _restock = true;
+    private readonly Dictionary<Guid, int> _quantities = [];
+    private decimal? _amount;
+    private string _refundReason = "";
+
+    private bool _cancelOpen, _cancelRestock = true;
+    private string _cancelReason = "";
+
+    private bool _addressOpen;
+    private CheckoutForm _address = new();
+
+    private bool _resendOpen;
+    private string _resendKind = "confirmation";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var read = await AdminClient.GetStoreOrderAdminAsync(Id);
+        var error = read.Failed ? read.Reason ?? "The order couldn't be loaded." : null;
+        _loadError = error;
+        _order = read.Item;
+        _loading = false;
+    }
+
+    /// <summary>Runs a desk action: the fresh order on success, the refusal on the page (or in the open dialog) otherwise.</summary>
+    private async Task<bool> DoAsync(Func<Task<(StoreOrderDetailAdminRecord? Result, string? Error)>> action, string done, bool inDialog = false)
+    {
+        _busy = true; _error = null; _dialogError = null;
+        try
+        {
+            var (result, error) = await action();
+            if (result is null)
+            {
+                error ??= "That didn't work.";
+                if (inDialog) _dialogError = error; else _error = error;
+                return false;
+            }
+            _order = result;
+            Toasts.Success(done);
+            return true;
+        }
+        finally { _busy = false; }
+    }
+
+    private Task PackAsync() => DoAsync(() => AdminClient.PackStoreOrderAsync(Id), "Marked packed.");
+    private Task DeliverAsync() => DoAsync(() => AdminClient.DeliverStoreOrderAsync(Id), "Marked delivered.");
+    private Task ClearAttentionAsync() => DoAsync(() => AdminClient.ClearStoreOrderAttentionAsync(Id), "Attention cleared.");
+    private Task ReleaseAsync() => DoAsync(() => AdminClient.ReleaseStoreOrderAsync(Id), "Checkout released — its stock and code are free again.");
+
+    private async Task AddNoteAsync()
+    {
+        if (await DoAsync(() => AdminClient.AddStoreOrderNoteAsync(Id, _note ?? ""), "Note added.")) _note = "";
+    }
+
+    private void OpenShip(bool correcting)
+    {
+        _correcting = correcting;
+        _carrier = _order?.Carrier ?? "";
+        _tracking = _order?.TrackingNumber ?? "";
+        _noTracking = correcting && _order?.Carrier is not null && _order.TrackingNumber is null;
+        _trackingLink = _carrier == StoreCarriers.Other ? _order?.TrackingUrl : null;
+        _shipNote = null;
+        _dialogError = null;
+        _shipOpen = true;
+    }
+
+    private async Task ShipAsync()
+    {
+        var shipment = new StoreShipmentInfo(_carrier, _noTracking ? null : _tracking, _noTracking ? null : _trackingLink, _shipNote, _noTracking);
+        var ok = _correcting
+            ? await DoAsync(() => AdminClient.CorrectStoreOrderTrackingAsync(Id, shipment), "Tracking saved.", inDialog: true)
+            : await DoAsync(() => AdminClient.ShipStoreOrderAsync(Id, shipment), "Shipped — the buyer has been emailed.", inDialog: true);
+        if (ok) _shipOpen = false;
+    }
+
+    private void OpenRefund()
+    {
+        _quantities.Clear();
+        _byItems = _order?.Items.Any(i => i.Refundable > 0) == true;
+        _restock = true;
+        _amount = null;
+        _refundReason = "";
+        _dialogError = null;
+        _refundOpen = true;
+    }
+
+    private async Task RefundAsync()
+    {
+        var request = _byItems
+            ? new StoreRefundRequest(null, _quantities.Where(q => q.Value > 0).Select(q => new StoreRefundLine(q.Key, q.Value)).ToList(), _refundReason, _restock)
+            : new StoreRefundRequest(_amount, null, _refundReason, false);
+        var ok = await DoAsync(() => AdminClient.RefundStoreOrderAsync(Id, request), "Refund made.", inDialog: true);
+        if (!ok) return;
+        _refundOpen = false;
+        if (_order?.Refunds.FirstOrDefault()?.IsAwaitingStripe == true) Toasts.Info(StoreOrderDeskSentences.RefundPending);
+    }
+
+    private async Task CancelAsync()
+    {
+        if (await DoAsync(() => AdminClient.CancelStoreOrderAsync(Id, new CancelStoreOrderRequest(_cancelReason, _cancelRestock)), "Cancelled and refunded.", inDialog: true))
+            _cancelOpen = false;
+    }
+
+    private void OpenAddress()
+    {
+        if (_order is not { } o) return;
+        _address = new CheckoutForm { Email = o.BuyerEmail };
+        _address.Shipping.FullName = o.Shipping.Name;
+        _address.Shipping.Phone = o.Shipping.Phone ?? "";
+        _address.Shipping.Street1 = o.Shipping.Street1;
+        _address.Shipping.Street2 = o.Shipping.Street2;
+        _address.Shipping.City = o.Shipping.City;
+        _address.Shipping.State = o.Shipping.State;
+        _address.Shipping.Zip = o.Shipping.Zip;
+        _dialogError = null;
+        _addressOpen = true;
+    }
+
+    private async Task SaveAddressAsync()
+    {
+        var request = new ChangeStoreOrderAddressRequest(_address.Shipping.ToInput(),
+            string.Equals(_address.Email.Trim(), _order?.BuyerEmail, StringComparison.OrdinalIgnoreCase) ? null : _address.Email);
+        if (await DoAsync(() => AdminClient.ChangeStoreOrderAddressAsync(Id, request), "Address saved.", inDialog: true))
+            _addressOpen = false;
+    }
+
+    private void OpenResend()
+    {
+        _resendKind = _order?.Can.CanResendShipped == true ? "shipped" : "confirmation";
+        _dialogError = null;
+        _resendOpen = true;
+    }
+
+    private async Task ResendAsync()
+    {
+        if (await DoAsync(() => AdminClient.ResendStoreOrderLetterAsync(Id, _resendKind), "Sent again.", inDialog: true))
+            _resendOpen = false;
+    }
+
+    private Task RetryRefundAsync(StoreRefundRecord r) => DoAsync(() => AdminClient.RetryStoreRefundAsync(Id, r.Id), "Refund tried again.");
+    private Task RetryTaxAsync(StoreRefundRecord r) => DoAsync(() => AdminClient.RetryStoreRefundTaxAsync(Id, r.Id), "Tax reversal filed.");
+
+    private static string RefundWords(StoreRefundRecord r) => r switch
+    {
+        { Status: StoreRefundStatus.Succeeded } => "Refunded",
+        { IsAwaitingStripe: true } => "Awaiting Stripe",
+        { Status: StoreRefundStatus.Pending } => "Not sent yet",
+        _ => "Failed",
+    };
+
+    private static string RefundBadge(StoreRefundRecord r) => r.Status switch
+    {
+        StoreRefundStatus.Succeeded => "bg-success-subtle text-success-emphasis",
+        StoreRefundStatus.Pending => "bg-info-subtle text-info-emphasis",
+        _ => "bg-danger-subtle text-danger-emphasis",
+    };
+
+    private static string EventWords(StoreOrderEventRecord e) => e.Kind switch
+    {
+        StoreOrderEventKind.Placed => "Placed",
+        StoreOrderEventKind.PaymentSucceeded => "Paid",
+        StoreOrderEventKind.PaymentFailed => "Payment failed",
+        StoreOrderEventKind.PaymentProcessing => "Payment processing",
+        StoreOrderEventKind.ReservationExpired => "Checkout expired",
+        StoreOrderEventKind.Packed => "Packed",
+        StoreOrderEventKind.Shipped => "Shipped",
+        StoreOrderEventKind.TrackingChanged => "Tracking changed",
+        StoreOrderEventKind.Delivered => "Delivered",
+        StoreOrderEventKind.Cancelled => "Cancelled",
+        StoreOrderEventKind.RefundRequested => "Refund asked for",
+        StoreOrderEventKind.RefundPending => "Refund processing at Stripe",
+        StoreOrderEventKind.RefundSucceeded => "Refunded",
+        StoreOrderEventKind.RefundFailed => "Refund failed",
+        StoreOrderEventKind.RefundFromStripe => "Refunded in Stripe's dashboard",
+        StoreOrderEventKind.Restocked => "Restocked",
+        StoreOrderEventKind.LetterQueued => $"Email queued ({e.Note})",
+        StoreOrderEventKind.NoteAdded => "Note",
+        StoreOrderEventKind.Anonymised => "Buyer's details removed",
+        StoreOrderEventKind.TaxTransactionFailed => "Sales tax filing problem",
+        StoreOrderEventKind.AddressChanged => "Address changed",
+        StoreOrderEventKind.AttentionRaised => "Needs attention",
+        StoreOrderEventKind.AttentionCleared => "Attention cleared",
+        _ => e.Kind.ToString(),
+    };
+}

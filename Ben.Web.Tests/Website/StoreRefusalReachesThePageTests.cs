@@ -30,6 +30,9 @@ public sealed class StoreRefusalReachesThePageTests
         { "Ben.Web.Website.Library/Store/Orders/StoreOrderDetail.razor", "order-refusal" },
         { "Ben.Web.Website.Library/Store/Orders/StoreInvoice.razor", "invoice-refusal" },
         { "Ben.Web.Website.Library/Store/Orders/StoreOrderLookup.razor", "lookup-refusal" },
+        // The order desk (S5.5): a refused ship, refund or release is said on the page.
+        { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreOrders.razor", "orders-refusal" },
+        { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreOrderDetail.razor", "order-desk-refusal" },
     };
 
     private static string Read(string relative)

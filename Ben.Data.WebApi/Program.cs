@@ -441,6 +441,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.StoreTaxRetryJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.StoreCartSweepJob>();
+// S5.6: the morning's low stock, once a day while the store is on.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreLowStockJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();

@@ -221,4 +221,73 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<ItemResult<StoreDashboardRecord>> GetStoreDashboardAsync(int days = 30, CancellationToken token = default)
         => _api.GetItemAsync<StoreDashboardRecord>($"/api/admin/store/dashboard?days={days}", token);
+
+    // ── the order desk (S5.5) ────────────────────────────────────────────────
+
+    public Task<LoadResult<StoreOrderListRecord>> GetStoreOrdersAsync(StoreOrderListQuery query, CancellationToken token = default)
+        => _api.GetListAsync<StoreOrderListRecord>($"/api/admin/store/orders?{query.Parameters()}", token);
+
+    public Task<ItemResult<StoreOrderDetailAdminRecord>> GetStoreOrderAdminAsync(Guid orderId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreOrderDetailAdminRecord>($"/api/admin/store/orders/{orderId}", token);
+
+    public Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAdminAsync(Guid orderId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreInvoiceRecord>($"/api/admin/store/orders/{orderId}/invoice", token);
+
+    public Task<LoadResult<StoreRefundRecord>> GetStoreOrderRefundsAsync(Guid orderId, CancellationToken token = default)
+        => _api.GetListAsync<StoreRefundRecord>($"/api/admin/store/orders/{orderId}/refunds", token);
+
+    public async Task<(byte[] Data, string FileName)?> DownloadStoreOrdersCsvAsync(StoreOrderListQuery query, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/admin/store/orders/export.csv?{query.Parameters()}", "store-orders.csv", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
+
+    public async Task<(byte[] Data, string FileName)?> DownloadStoreRefundsCsvAsync(DateTime? from = null, DateTime? to = null, CancellationToken token = default)
+    {
+        var query = new StoreOrderListQuery(From: from, To: to).Parameters();
+        var result = await _api.GetBytesAsync($"/api/admin/store/orders/refunds/export.csv?{query}", "store-refunds.csv", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
+
+    private Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeskAsync(HttpMethod method, string path, object? body, CancellationToken token)
+        => _api.SendExpectingReasonAsync<object, StoreOrderDetailAdminRecord>(method, path, body ?? new { }, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> PackStoreOrderAsync(Guid orderId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/pack", null, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ShipStoreOrderAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/ship", shipment, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CorrectStoreOrderTrackingAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Put, $"/api/admin/store/orders/{orderId}/tracking", shipment, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreOrderAsync(Guid orderId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/deliver", null, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreOrderAsync(Guid orderId, CancelStoreOrderRequest request, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/cancel", request, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> AddStoreOrderNoteAsync(Guid orderId, string note, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/notes", new AddStoreOrderNoteRequest(note), token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ChangeStoreOrderAddressAsync(Guid orderId, ChangeStoreOrderAddressRequest request, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Put, $"/api/admin/store/orders/{orderId}/address", request, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ClearStoreOrderAttentionAsync(Guid orderId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/attention/clear", null, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ResendStoreOrderLetterAsync(Guid orderId, string kind, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/resend", new ResendStoreOrderLetterRequest(kind), token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ReleaseStoreOrderAsync(Guid orderId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/release", null, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RefundStoreOrderAsync(Guid orderId, StoreRefundRequest request, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/refunds", request, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RetryStoreRefundAsync(Guid orderId, Guid refundId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/refunds/{refundId}/retry", null, token);
+
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RetryStoreRefundTaxAsync(Guid orderId, Guid refundId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/refunds/{refundId}/retry-tax", null, token);
 }
