@@ -344,6 +344,37 @@ away: "Create an account" → /register?returnUrl=/store/checkout), the 250×292
 illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" review sort IS built
 (popular = most helpful first, the default).
 
+## Ben's rules added 09/24/2026 (mid-S4)
+- "When categories and subcategories are created, they are not displayed to an end user as an
+  option unless there is something for sale under the category or subcategory. They are just
+  available for sellers to use when adding their products. Only superadmins manage the categories
+  and subcategories."
+  - Already true:
+    - Shelf tiles, the listing's category tree and the hero slides come from
+      PublicStoreController.CategoryCardsAsync, which keeps only shelves with a live product.
+    - Category CRUD is SuperAdmin-only.
+  - Gap 1: `/store/c/{slug}` for an active shelf with nothing on sale opens an empty listing. It
+    should answer "Page not found" like a hidden one.
+  - Gap 2: SUBCATEGORIES do not exist (v1 left "category parents" out). Needs:
+    - a nullable parent on StoreCategory (migration)
+    - admin tree editing
+    - listing tree nesting
+    - a parent that shows only if it or a child has something for sale
+    - the product editor's category picker grouped by parent
+  - Scheduled as its own sitting straight after S4, before S5.
+- "The initial state of the store is going to be turned off, but the superadmin has access to the
+  records and pages we have already created for the store in order to populate it." Already the
+  design:
+  - features.store defaults OFF.
+  - Every /admin/store page and API works with it off (AdminStoreCatalogTests run dark).
+  - The editor's live Preview works dark.
+- Documentation, when everything is debugged, gap-free and green:
+  - help for the general audience, sellers and administration, like the rest of the help, with
+    screenshots (S7);
+  - the product PDF regenerated with it once merged to master.
+  - Sellers' help covers what the Seller role means today; the seller workspace itself is
+    backlog item 251.
+
 ## Sellers (built 09/24/2026, between S3.3 and S3.4 at Ben's request)
 - The additive **Seller** site role (RoleNames.Seller, seeded by SuperAdminSeeder, given on the
   person's Site Roles tab). Ben: "A seller only has control over their individual items in the
