@@ -171,4 +171,51 @@ public sealed class ComponentClassesAreStyledTests
     {
         Assert.Contains(".help-link-badge", AllStyleRules(), StringComparison.Ordinal);
     }
+
+    // ── Storefront S2.4: Smarty's own utilities never reach markup ─────────────
+    //
+    // The store follows Smarty 5's shop pages for STRUCTURE only. Its utility classes are defined
+    // in Smarty's CSS, which is not loaded — a copied `link-normal` or `bg-cover` would draw
+    // nothing, silently, the way an unstyled ben-* class does. The equivalents are ben-* classes in
+    // ben-store.css (ben-link-normal, ben-card__rail and so on).
+
+    internal static readonly string[] SmartyOnly =
+    [
+        "text-danger-hover", "link-normal", "link-muted", "article-format", "bg-cover", "text-dashed",
+        "show-hover-item", "show-hover-container", "shadow-3d-hover", "transition-hover-top", "bg-suprime",
+        "overlay-dark", "overlay-opacity-", "d-middle", "gap-auto-",
+    ];
+
+    /// <summary>Smarty utility classes named in one file's class attributes.</summary>
+    internal static IReadOnlyList<string> SmartyClassesIn(string markup)
+        => Regex.Matches(markup, "class=\"([^\"]*)\"")
+            .SelectMany(m => m.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(token => SmartyOnly.Any(bad => bad.EndsWith('-') ? token.StartsWith(bad, StringComparison.Ordinal) : token == bad))
+            .Distinct().ToList();
+
+    [Fact]
+    public void No_markup_carries_a_smarty_utility_class()
+    {
+        var root = RepoRoot().FullName;
+        var found = Roots.Select(r => Path.Combine(root, r)).Where(Directory.Exists)
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.razor", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => SmartyClassesIn(File.ReadAllText(f)).Select(c => $"{c}  ({Path.GetRelativePath(root, f)})"))
+            .ToList();
+
+        Assert.True(found.Count == 0,
+            "These classes come from Smarty's CSS, which the site does not load, so they draw nothing:\n  "
+          + string.Join("\n  ", found) + "\nUse the ben-* equivalent in ben-store.css, or write one.");
+    }
+
+    [Theory]
+    [InlineData("<a class=\"small d-block link-normal\">", "link-normal")]
+    [InlineData("<div class=\"ratio bg-cover lazy\">", "bg-cover")]
+    [InlineData("<div class=\"d-flex gap-auto-2\">", "gap-auto-2")]
+    public void The_smarty_check_catches_a_copied_class(string markup, string expected)
+        => Assert.Equal([expected], SmartyClassesIn(markup));
+
+    [Fact]
+    public void The_smarty_check_leaves_our_own_names_alone()
+        => Assert.Empty(SmartyClassesIn("<a class=\"ben-link-normal ben-card__rail text-danger\">"));
 }

@@ -11,12 +11,14 @@ namespace Ben.Web.Website.Library.Kit;
 /// <param name="Credit">Whose picture it is — shown in smaller type beneath the caption.</param>
 /// <param name="LinkUrl">Where clicking the slide goes, or null for a slide that is just a picture.</param>
 /// <param name="AltText">Overrides the caption as the alt text where the two should differ.</param>
+/// <param name="Title">A heading for an <c>Overlay</c> to draw — a shop's "EMF Meters" over its picture.</param>
 public sealed record BenSlide(
     string Url,
     string? Caption = null,
     string? Credit = null,
     string? LinkUrl = null,
-    string? AltText = null)
+    string? AltText = null,
+    string? Title = null)
 {
     /// <summary>What a screen reader is told. Falls back through caption, credit, then a plain word.</summary>
     public string Describe() =>
