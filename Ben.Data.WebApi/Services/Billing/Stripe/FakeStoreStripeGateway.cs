@@ -65,7 +65,7 @@ public sealed class FakeStoreStripeGateway : IStoreStripeGateway
     {
         if (RefundRefusal is { } why) throw new StoreStripeRefusedException("charge_already_refunded", "invalid_request_error", why);
         Refunds.Add(spec);
-        return Task.FromResult(new StoreRefundOutcome($"re_fake_{Refunds.Count}_{spec.IdempotencyKey}", RefundStatus, spec.Metadata));
+        return Task.FromResult(new StoreRefundOutcome($"re_fake_{spec.IdempotencyKey}", RefundStatus, spec.Metadata));
     }
 
     public Task<IReadOnlyList<StoreRefundOutcome>> ListRefundsAsync(string paymentIntentId, CancellationToken ct)

@@ -417,6 +417,19 @@ away: "Create an account" → /register?returnUrl=/store/checkout), the 250×292
 illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" review sort IS built
 (popular = most helpful first, the default).
 
+## Ben's rules added 09/24/2026 (S5, shipping)
+
+> "If there is tracking, an order being fulfilled will need to be able to select the carrier and
+> provide the tracking number to generate a link to track a package. … it is possible not all
+> packages are tracked so there will need to be No tracking provided selection as well."
+
+- Shipping an order: pick the carrier from the list (USPS, UPS, FedEx, DHL, Other) and type the
+  tracking number; the tracking link is BUILT from carrier + number (StoreCarriers.TrackingUrl), never
+  typed — only "Other" may take a pasted https link.
+- "No tracking provided" is a choice: the order ships with its carrier and no number, the letter and
+  the order page say it went without tracking, and no link is shown. This replaces the plan's
+  "A shipment needs a tracking number." refusal (S5.3).
+
 ## Ben's rules added 09/24/2026 (mid-S4)
 - "When categories and subcategories are created, they are not displayed to an end user as an
   option unless there is something for sale under the category or subcategory. They are just

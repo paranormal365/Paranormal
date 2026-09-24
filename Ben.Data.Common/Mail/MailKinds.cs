@@ -419,6 +419,32 @@ public static class MailKinds
         [new("OrderUrl", "The order's page — a private link for a guest, the sign-in page for a member.", Required: true,
              Provides: "a way to see the order")]);
 
+    public static readonly MailKindInfo StoreOrderShipped = new(
+        "store-order-shipped", "Your order is on its way",
+        "Tells a buyer their store order has shipped, with the carrier and tracking number.",
+        ["AppUsers", "StoreOrders"],
+        [new("OrderUrl", "The order's own page — with its private link for a guest.", Required: true, Provides: "a way to see the order"),
+         new("Carrier", "Who is carrying it — USPS, UPS, FedEx, DHL or Other."),
+         new("TrackingNumber", "The carrier's tracking number."),
+         new("TrackingUrl", "The carrier's own tracking page for that number; empty for Other."),
+         new("ItemsTable", "What was shipped: each item, how many, and its price.", IsHtml: true)]);
+
+    public static readonly MailKindInfo StoreOrderRefunded = new(
+        "store-order-refunded", "A refund on your order",
+        "Tells a buyer money from their store order is on its way back to their card.",
+        ["AppUsers", "StoreOrders"],
+        [new("OrderUrl", "The order's own page — with its private link for a guest.", Required: true, Provides: "a way to see the order"),
+         new("RefundAmount", "How much was refunded this time, in dollars."),
+         new("RefundReason", "Why, in the words the admin gave."),
+         new("RefundLines", "The items refunded and how many, when the refund was by item.", IsHtml: true)]);
+
+    public static readonly MailKindInfo StoreLowStock = new(
+        "store-low-stock", "Store stock is running low",
+        "The daily note to every SuperAdmin of store variants at or under the low-stock number.",
+        ["AppUsers"],
+        [new("AdminStockUrl", "The store's stock page in administration.", Required: true, Provides: "a way to restock"),
+         new("StockTable", "Each low variant: product, variant, SKU and how many are left.", IsHtml: true)]);
+
     /// <summary>Every kind, in the order a person should see them.</summary>
     public static readonly IReadOnlyList<MailKindInfo> All =
     [
@@ -434,7 +460,7 @@ public static class MailKinds
         BookingsArrived, BookingsDigest,
         PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
         VenueClaimCode,
-        StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink,
+        StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink, StoreOrderShipped, StoreOrderRefunded, StoreLowStock,
     ];
 
     /// <summary>The kind with this key, or null when nothing declares it.</summary>

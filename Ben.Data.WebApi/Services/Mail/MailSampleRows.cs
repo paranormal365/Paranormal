@@ -79,6 +79,13 @@ public static class MailSampleRows
                 "ItemsTable" => (MailBlocks.LineItems(), true),
                 "SummaryTable" => (MailBlocks.LineItems(), true),
                 "ShipTo" => ("Marguerite Ashdown<br>1201 Del Rio Pike<br>Franklin, TN 37064", true),
+                "Carrier" => ("USPS", false),
+                "TrackingNumber" => ("9400 1000 0000 0000 0000 42", false),
+                "TrackingUrl" => ("https://tools.usps.com/go/TrackConfirmAction?tLabels=9400100000000000000042", false),
+                "RefundAmount" => ("$42.50", false),
+                "RefundReason" => ("Arrived damaged", false),
+                "RefundLines" => (MailBlocks.LineItems(), true),
+                "StockTable" => (MailBlocks.LineItems(), true),
                 _ => (url, false),
             };
         }

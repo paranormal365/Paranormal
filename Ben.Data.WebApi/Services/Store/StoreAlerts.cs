@@ -74,6 +74,41 @@ public sealed class StoreAlerts(
             $"{reason} Open the order: /admin/store/orders/{orderId}", ct);
 
     /// <summary>A refund Stripe refused after accepting it.</summary>
+    /// <summary>The buyer's bell when their order ships (a member; a guest has the letter).</summary>
+    public Task OrderShippedAsync(Guid orderId, CancellationToken ct = default)
+        => BuyerAsync(orderId, o => ($"Your order {o.OrderNumber} is on its way",
+            string.IsNullOrWhiteSpace(o.TrackingNumber)
+                ? $"Order {o.OrderNumber} has shipped with {o.Carrier}, without tracking. {StoreOrderMailer.ViewPath(o)}"
+                : $"Order {o.OrderNumber} has shipped with {o.Carrier}, tracking {o.TrackingNumber}. {StoreOrderMailer.ViewPath(o)}"), ct);
+
+    /// <summary>The buyer's bell when a refund goes through.</summary>
+    public async Task OrderRefundedAsync(Guid refundId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var refund = await db.StoreRefunds.AsNoTracking().Where(r => r.Id == refundId).Select(r => new { r.OrderId, r.Amount }).FirstOrDefaultAsync(ct);
+        if (refund is null) return;
+        await BuyerAsync(refund.OrderId, o => ($"A refund on order {o.OrderNumber}",
+            $"{StoreOrderMailer.Usd(refund.Amount)} is on its way back to your card. {StoreOrderMailer.ViewPath(o)}"), ct);
+    }
+
+    private async Task BuyerAsync(Guid orderId, Func<Ben.Data.Source.Entities.StoreOrder, (string Subject, string Body)> say, CancellationToken ct)
+    {
+        try
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var order = await db.StoreOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId, ct);
+            if (order?.BuyerAppUserId is not { } buyer) return;
+            var admins = await SuperAdminIdsAsync(db, ct);
+            if (admins.Count == 0) return;
+            var (subject, body) = say(order);
+            await messages.SendAsync(subject, body, [buyer], admins[0], ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "The buyer's bell for store order {OrderId} could not be sent.", orderId);
+        }
+    }
+
     public Task RefundFailedAsync(int orderNumber, Guid orderId, string reason, CancellationToken ct = default)
         => ToAdminsAsync($"A refund on order {orderNumber} failed",
             $"A refund on order {orderNumber} failed at Stripe: {reason}. Nothing was restocked. /admin/store/orders/{orderId}", ct);

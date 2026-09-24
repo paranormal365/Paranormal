@@ -121,7 +121,11 @@
             @if (order.Carrier is { } carrier)
             {
                 <span>Delivery: @carrier</span>
-                @if (order.TrackingNumber is { } tracking)
+                @if (order.TrackingNumber is not { Length: > 0 })
+                {
+                    <span> · sent without tracking</span>
+                }
+                @if (order.TrackingNumber is { Length: > 0 } tracking)
                 {
                     <span> · Tracking </span>
                     @if (order.TrackingUrl is { } trackingUrl)

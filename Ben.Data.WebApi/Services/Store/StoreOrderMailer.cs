@@ -116,6 +116,103 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
         return true;
     }
 
+    /// <summary>"Your order is on its way" (S5.2): carrier, tracking and what is in the parcel. Outbox only.</summary>
+    public async Task QueueShippedAsync(BenDataContext db, StoreOrder order, IReadOnlyList<StoreOrderItem> items, DateTime now, CancellationToken ct)
+    {
+        var url = _site.AbsoluteUrl(ViewPath(order));
+        var tracking = order.TrackingUrl;
+        var body = new StringBuilder();
+        body.Append($"<p>Hello {Safe(order.BuyerName)},</p>");
+        body.Append(string.IsNullOrWhiteSpace(order.TrackingNumber)
+            // "No tracking provided" (Ben, 09/24): not every parcel is tracked, and the letter says so plainly.
+            ? $"<p>Order <strong>{order.OrderNumber}</strong> has shipped with {Safe(order.Carrier)}. It was sent without "
+              + "tracking, so there is no number to follow — it should reach you in the usual few days.</p>"
+            : $"<p>Order <strong>{order.OrderNumber}</strong> has shipped with {Safe(order.Carrier)}. "
+              + $"The tracking number is <strong>{Safe(order.TrackingNumber)}</strong>.</p>");
+        body.Append(ItemsTable(items));
+        body.Append($"<p>It is going to:<br>{AddressBlock(order)}</p>");
+
+        var supplied = new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["OrderUrl"] = new(url),
+            ["Carrier"] = new(order.Carrier ?? ""),
+            ["TrackingNumber"] = new(order.TrackingNumber ?? ""),
+            ["TrackingUrl"] = new(tracking ?? url),
+            ["ItemsTable"] = new(ItemsTable(items), IsHtml: true),
+        };
+        await QueueAsync(db, order, MailKinds.StoreOrderShipped, order.BuyerEmail,
+            $"Your order {order.OrderNumber} is on its way",
+            BenEmailLayout.Wrap(_site, "Your order is on its way", body.ToString(),
+                tracking is null ? "See your order" : "Track it", tracking ?? url),
+            supplied, now, ct);
+    }
+
+    /// <summary>"A refund on your order" (S5.2) — sent only once Stripe says the money has gone back.</summary>
+    /// <param name="lines">What was refunded by item, if the refund was by item; empty for a refund by amount.</param>
+    public async Task QueueRefundedAsync(BenDataContext db, StoreOrder order, decimal amount, string reason,
+        IReadOnlyList<(string Product, int Quantity)> lines, DateTime now, CancellationToken ct)
+    {
+        var url = _site.AbsoluteUrl(ViewPath(order));
+        var refundLines = lines.Count == 0 ? "" : ItemsRefunded(lines);
+        var body = new StringBuilder();
+        body.Append($"<p>Hello {Safe(order.BuyerName)},</p>");
+        body.Append($"<p>We have refunded <strong>{Usd(amount)}</strong> on order <strong>{order.OrderNumber}</strong>: {Safe(reason)}.</p>");
+        body.Append(refundLines);
+        body.Append("<p>It goes back to the card you paid with. Banks usually show it within 5–10 business days.</p>");
+
+        var supplied = new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["OrderUrl"] = new(url),
+            ["RefundAmount"] = new(Usd(amount)),
+            ["RefundReason"] = new(reason),
+            ["RefundLines"] = new(refundLines, IsHtml: true),
+        };
+        await QueueAsync(db, order, MailKinds.StoreOrderRefunded, order.BuyerEmail,
+            $"A refund on your order {order.OrderNumber}",
+            BenEmailLayout.Wrap(_site, "A refund on your order", body.ToString(), "See your order", url),
+            supplied, now, ct);
+    }
+
+    /// <summary>The morning's low stock (S5.6), one letter per SuperAdmin.</summary>
+    public async Task QueueLowStockAsync(BenDataContext db, IReadOnlyList<(string Product, string? Variant, string Sku, int Left)> low,
+        IReadOnlyList<(string Email, string? Name)> admins, CancellationToken ct)
+    {
+        var url = _site.AbsoluteUrl("/admin/store/stock?low=1");
+        var rows = new StringBuilder();
+        foreach (var (product, variant, sku, left) in low)
+            rows.Append($"<tr><td style=\"{Cell}\">{Safe(product)}{(string.IsNullOrWhiteSpace(variant) ? "" : $" — {Safe(variant)}")}"
+                      + $" <span style=\"color:#6b7280;\">{Safe(sku)}</span></td>"
+                      + $"<td align=\"right\" style=\"{Cell}\">{left} left</td></tr>");
+        var table = Table(rows.ToString());
+        foreach (var (email, name) in admins)
+        {
+            await queue.EnqueueAsync(db, new EmailMessage(
+                email, $"Store stock: {low.Count} running low",
+                BenEmailLayout.Wrap(_site, "Store stock is running low",
+                    "<p>These are at or under the store's low-stock number:</p>" + table, "Open the stock page", url),
+                Kind: MailKinds.StoreLowStock.Key,
+                Payload: MailRows.For(MailKinds.StoreLowStock,
+                    new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["AdminStockUrl"] = new(url),
+                        ["StockTable"] = new(table, IsHtml: true),
+                    },
+                    MailRows.Person(email, name))), ct);
+        }
+    }
+
+    private static string ItemsRefunded(IReadOnlyList<(string Product, int Quantity)> lines)
+    {
+        var rows = new StringBuilder();
+        foreach (var (product, quantity) in lines)
+            rows.Append($"<tr><td style=\"{Cell}\">{quantity} × {Safe(product)}</td></tr>");
+        return Table(rows.ToString());
+    }
+
+    private static string Table(string rows)
+        => "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+         + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;\">" + rows + "</table>";
+
     private async Task QueueAsync(BenDataContext db, StoreOrder order, MailKindInfo kind, string to, string subject, string html,
         IReadOnlyDictionary<string, MailSuppliedValue> supplied, DateTime now, CancellationToken ct)
     {

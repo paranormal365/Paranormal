@@ -117,6 +117,46 @@ public static class MailStarters
                                + "the order to whoever has this email.")),
         [MailKinds.StoreOrderLink.Key]);
 
+    /// <summary>The order is on its way (S5.2).</summary>
+    public static readonly MailStarter OrderShipped = new(
+        "order-shipped", "An order on its way",
+        "The good news, the carrier and tracking number, what is in the parcel, and the order's page.",
+        "Your order {StoreOrders.OrderNumber} is on its way",
+        Branded(
+            MailBlocks.Heading("Your order is on its way"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. Order {StoreOrders.OrderNumber} has shipped with "
+                               + "{Carrier}. The tracking number is {TrackingNumber}."),
+            "{ItemsTable}",
+            MailBlocks.Button("Track it", "{TrackingUrl}"),
+            MailBlocks.Paragraph("You can always see the order, and its tracking, on <a href=\"{OrderUrl}\">its page</a>.")),
+        [MailKinds.StoreOrderShipped.Key]);
+
+    /// <summary>Money on its way back (S5.2).</summary>
+    public static readonly MailStarter OrderRefunded = new(
+        "order-refunded", "A refund",
+        "How much is coming back and why, what was refunded, and the order's page.",
+        "A refund on your order {StoreOrders.OrderNumber}",
+        Branded(
+            MailBlocks.Heading("A refund on your order"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. We have refunded {RefundAmount} on order "
+                               + "{StoreOrders.OrderNumber}: {RefundReason}."),
+            "{RefundLines}",
+            MailBlocks.Paragraph("It goes back to the card you paid with. Banks usually show it within 5–10 business days."),
+            MailBlocks.Button("See your order", "{OrderUrl}")),
+        [MailKinds.StoreOrderRefunded.Key]);
+
+    /// <summary>The morning's low stock, for SuperAdmins (S5.6).</summary>
+    public static readonly MailStarter LowStock = new(
+        "low-stock", "Low stock",
+        "The variants running low, and the button to the stock page.",
+        "Store stock is running low",
+        Branded(
+            MailBlocks.Heading("Store stock is running low"),
+            MailBlocks.Paragraph("These are at or under the store's low-stock number:"),
+            "{StockTable}",
+            MailBlocks.Button("Open the stock page", "{AdminStockUrl}")),
+        [MailKinds.StoreLowStock.Key]);
+
     public static readonly MailStarter Invoice = new(
         "invoice", "An invoice",
         "The same table, worded as something still to pay, with a button.",
@@ -235,7 +275,8 @@ public static class MailStarters
     public static readonly IReadOnlyList<MailStarter> All =
     [
         Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
-        RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink, Plain,
+        RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink,
+        OrderShipped, OrderRefunded, LowStock, Plain,
     ];
 
     /// <summary>
