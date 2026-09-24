@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Service.Models.Store;
 
 namespace Ben.Web.Services.WebApi;
@@ -174,4 +175,34 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(bool Deleted, string? Error)> DeleteStoreCouponAsync(Guid couponId, CancellationToken token = default)
         => _api.DeleteExpectingReasonAsync($"/api/admin/store/coupons/{couponId}", token);
+
+    // ── reviews ──────────────────────────────────────────────────────────────
+
+    public Task<LoadResult<StoreReviewAdminRecord>> GetStoreReviewsAsync(
+        StoreReviewStatus? status = null, string? search = null, Guid? productId = null, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        if (status is { } s) query.Add($"status={s}");
+        if (!string.IsNullOrWhiteSpace(search)) query.Add($"q={Uri.EscapeDataString(search.Trim())}");
+        if (productId is { } p) query.Add($"productId={p}");
+        return _api.GetListAsync<StoreReviewAdminRecord>(
+            "/api/admin/store/reviews" + (query.Count == 0 ? "" : "?" + string.Join('&', query)), token);
+    }
+
+    public Task<(StoreReviewAdminRecord? Result, string? Error)> ApproveStoreReviewAsync(Guid reviewId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreReviewAdminRecord>(
+               HttpMethod.Post, $"/api/admin/store/reviews/{reviewId}/approve", new { }, token);
+
+    public Task<(StoreReviewAdminRecord? Result, string? Error)> RejectStoreReviewAsync(
+        Guid reviewId, RejectStoreReviewRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RejectStoreReviewRequest, StoreReviewAdminRecord>(
+               HttpMethod.Post, $"/api/admin/store/reviews/{reviewId}/reject", request, token);
+
+    public Task<(StoreReviewAdminRecord? Result, string? Error)> ReplyToStoreReviewAsync(
+        Guid reviewId, ReplyToStoreReviewRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<ReplyToStoreReviewRequest, StoreReviewAdminRecord>(
+               HttpMethod.Put, $"/api/admin/store/reviews/{reviewId}/reply", request, token);
+
+    public Task<(bool Deleted, string? Error)> DeleteStoreReviewAsync(Guid reviewId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/admin/store/reviews/{reviewId}", token);
 }

@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Service.Models.Store;
 using Ben.Web.Services.WebApi;
 
@@ -119,4 +120,20 @@ public interface IBenStoreAdminClient
 
     /// <summary>Refused once the code has been used — retire it instead.</summary>
     Task<(bool Deleted, string? Error)> DeleteStoreCouponAsync(Guid couponId, CancellationToken token = default);
+
+    // ── reviews ──────────────────────────────────────────────────────────────
+
+    Task<LoadResult<StoreReviewAdminRecord>> GetStoreReviewsAsync(
+        StoreReviewStatus? status = null, string? search = null, Guid? productId = null, CancellationToken token = default);
+
+    Task<(StoreReviewAdminRecord? Result, string? Error)> ApproveStoreReviewAsync(Guid reviewId, CancellationToken token = default);
+
+    /// <summary>Refuses a review; the reason is shown to the reviewer.</summary>
+    Task<(StoreReviewAdminRecord? Result, string? Error)> RejectStoreReviewAsync(
+        Guid reviewId, RejectStoreReviewRequest request, CancellationToken token = default);
+
+    Task<(StoreReviewAdminRecord? Result, string? Error)> ReplyToStoreReviewAsync(
+        Guid reviewId, ReplyToStoreReviewRequest request, CancellationToken token = default);
+
+    Task<(bool Deleted, string? Error)> DeleteStoreReviewAsync(Guid reviewId, CancellationToken token = default);
 }
