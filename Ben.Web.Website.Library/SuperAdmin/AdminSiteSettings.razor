@@ -73,6 +73,12 @@
                         : section.First().GroupBlurb)
                 </p>
             </div>
+        @if (IsEditedElsewhere(section.Key))
+        {
+            @* Storefront S1.1: shown, not edited — see StoreSettingsReadOnly. *@
+            <StoreSettingsReadOnly Settings="@section.ToList()" />
+            continue;
+        }
         @foreach (var setting in section)
         {
             var s = setting;
@@ -240,6 +246,12 @@
             return Sections.Select(g => g.Key).FirstOrDefault();
         }
     }
+
+    /// <summary>
+    /// Sections this page lists without editing, because another page owns their rules
+    /// (storefront S1.1: the store's settings are edited on /admin/store/settings).
+    /// </summary>
+    internal static bool IsEditedElsewhere(string section) => section == StoreSettingsReadOnly.GroupName;
 
     /// <summary>A section's name as an element id.</summary>
     private static string Slug(string name)

@@ -208,6 +208,56 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string FeatureStore = "features.store";
 
+    // ── Store ─────────────────────────────────────────────────────────────────
+    //
+    // Edited ONLY on /admin/store/settings, where every value passes StoreSettingsValidation.
+    // The generic site-settings page shows them read-only and its PUT refuses the prefix, so a
+    // "Tennessee" ship-from state cannot arrive by the door that does not check it.
+
+    /// <summary>Every store key starts with this; the generic settings door refuses it.</summary>
+    public const string StorePrefix = "store.";
+
+    /// <summary>Take orders. Off pauses checkout while the catalogue stays visible.</summary>
+    public const string StoreCheckoutEnabled = "store.checkout-enabled";
+
+    /// <summary>Flat shipping charged once per order, in dollars. Empty = $0.</summary>
+    public const string StoreShippingFlatRateUsd = "store.shipping-flat-rate-usd";
+
+    /// <summary>Product total (after discount) at which shipping is free. Empty = never free.</summary>
+    public const string StoreFreeShippingThresholdUsd = "store.free-shipping-threshold-usd";
+
+    /// <summary>"Only N left" at or below this; the stock digest uses it too.</summary>
+    public const string StoreLowStockThreshold = "store.low-stock-threshold";
+
+    public const string StoreShipFromStreet = "store.ship-from-street";
+    public const string StoreShipFromCity   = "store.ship-from-city";
+    public const string StoreShipFromState  = "store.ship-from-state";
+    public const string StoreShipFromZip    = "store.ship-from-zip";
+
+    /// <summary>"Need help?" address and the reply-to on order letters. Empty = the public contact email.</summary>
+    public const string StoreSupportEmail = "store.support-email";
+
+    /// <summary>Returns window in days, shown on the product page, order page and invoice.</summary>
+    public const string StoreReturnsWindowDays = "store.returns-window-days";
+
+    /// <summary>How long a checkout holds its stock and coupon before they go back.</summary>
+    public const string StoreReservationMinutes = "store.reservation-minutes";
+
+    /// <summary>Offer Stripe Link in the payment form. Off at launch (Ben, 09/24/2026).</summary>
+    public const string StoreLinkEnabled = "store.link-enabled";
+
+    /// <summary>The store's keys in the order its settings page and the read-only group show them.</summary>
+    public static readonly string[] StoreKeys =
+    [
+        StoreCheckoutEnabled, StoreShippingFlatRateUsd, StoreFreeShippingThresholdUsd,
+        StoreLowStockThreshold, StoreShipFromStreet, StoreShipFromCity, StoreShipFromState,
+        StoreShipFromZip, StoreSupportEmail, StoreReturnsWindowDays, StoreReservationMinutes,
+        StoreLinkEnabled,
+    ];
+
+    /// <summary>The section the store keys are filed under, on both settings pages.</summary>
+    public const string StoreGroupName = "Store";
+
     /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
@@ -277,6 +327,31 @@ public static class SiteSettingKeys
         (UploadChunkMaxBytes, "Upload limit — one chunk (bytes)",
             "How large each piece of a chunked upload may be, in bytes. Keep this under 100 MB (104857600): the site is served through Cloudflare, which rejects any single request bigger than that. Leave empty for the built-in default of 64 MiB (67108864)."),
 
+        (StoreCheckoutEnabled, "Take orders",
+            "Off pauses checkout while the catalogue stays visible — every cart and the checkout page say the store isn't taking orders at the moment. Orders already paid carry on. Hiding the shop altogether is 'Feature — Store' under Features."),
+        (StoreShippingFlatRateUsd, "Flat shipping rate ($)",
+            "Charged once per order. Leave empty for $0."),
+        (StoreFreeShippingThresholdUsd, "Free shipping over ($)",
+            "Orders whose product total after discount reaches this ship free. Leave empty to never ship free."),
+        (StoreLowStockThreshold, "Low-stock note at",
+            "Cards and the product page say 'Only N left' at or below this; the daily stock digest uses it too. Leave empty for 3."),
+        (StoreShipFromStreet, "Ship-from street",
+            "Where parcels leave from — Stripe Tax needs it to work out sales tax. All four ship-from lines must be set before the store can take an order."),
+        (StoreShipFromCity, "Ship-from city",
+            "Where parcels leave from. All four ship-from lines must be set before the store can take an order."),
+        (StoreShipFromState, "Ship-from state",
+            "Two letters, like TN. All four ship-from lines must be set before the store can take an order."),
+        (StoreShipFromZip, "Ship-from ZIP",
+            "Five digits, or ZIP+4. All four ship-from lines must be set before the store can take an order."),
+        (StoreSupportEmail, "Store support email",
+            "Shown as 'Need help?' on the cart and order pages and used as the reply-to on order letters. Leave empty to use the public contact email."),
+        (StoreReturnsWindowDays, "Returns window (days)",
+            "Shown on the product page, the order page and the invoice. Leave empty for 30."),
+        (StoreReservationMinutes, "Checkout reservation (minutes)",
+            "How long stock and a discount code are held for a buyer who has reached the payment step. Leave empty for 15."),
+        (StoreLinkEnabled, "Offer Stripe Link",
+            "When on, the payment form also offers Link, Stripe's saved-card checkout. Link has to be activated in the Stripe dashboard first. Off by default — cards, Apple Pay and Google Pay work either way."),
+
         (FeatureVideoEditor, "Feature — Video editor",
             "The video editor: My Videos, the editor on a case, and the links to the standalone editor. Turning this off hides those pages and makes their addresses stop working. Anything already exported or saved is untouched."),
         (FeatureEquipment, "Feature — Equipment",
@@ -343,6 +418,12 @@ public static class SiteSettingKeys
          [FreeAccountStorageMegabytes, EventStorageMegabytes, EventRetentionDays, UploadMaxFileBytes, UploadChunkMaxBytes,
           RateLimitGlobalPerMinute, RateLimitAuthPerMinute, RateLimitGeocodingPerMinute,
           RateLimitEventAttendancePerMinute, RateLimitAudioProcessingPerMinute]),
+
+        (StoreGroupName,
+         "What the shop charges for delivery, where it ships from, and how a buyer reaches you. "
+         + "Edited on the store settings page, which checks every value. The store itself is "
+         + "switched on under Features.",
+         StoreKeys),
 
         ("Features",
          "Whole sections of the site, on or off. Turning one off stops its addresses working, not "
@@ -443,7 +524,9 @@ public static class SiteSettingKeys
                 .Append(AllowOrganizationSelfRegistration)
                 .Append(AllowTourBusinessSignUps)
                 .Append(EventCreditsEnabled)
-                .Append(PlanPurchasesEnabled),
+                .Append(PlanPurchasesEnabled)
+                .Append(StoreCheckoutEnabled)
+                .Append(StoreLinkEnabled),
             StringComparer.Ordinal);
 
 }
