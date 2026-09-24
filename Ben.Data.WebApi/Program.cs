@@ -404,14 +404,27 @@ builder.Services.Configure<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway,
                               Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
+// The store's side of Stripe (storefront S4.2): the SAME StripeGateway singleton, never a second
+// client — or pretend Stripe in a Development test checkout (StoreStripeMode, three conditions).
+if (Ben.Data.WebApi.Services.Store.StoreStripeMode.UseFakes(builder.Environment, builder.Configuration))
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStoreStripeGateway,
+                                  Ben.Data.WebApi.Services.Billing.StripeIntegration.FakeStoreStripeGateway>();
+else
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStoreStripeGateway>(sp =>
+        (Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway)
+            sp.GetRequiredService<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway>());
 // Storefront: whether Stripe Tax is ready. Pretend Stripe only in Development with no key and
 // Stripe:AllowFakeCheckout on (StoreStripeMode); anywhere else the real probe, which says
 // "Online payment isn't set up." rather than pretending.
 builder.Services.AddSingleton(Ben.Data.WebApi.Services.Store.StorePaymentSetup.From(builder.Environment, builder.Configuration));
+// S4.3: the tax service IS the probe, one instance under both names, so the settings page and the
+// checkout ask the same Stripe the same way.
 if (Ben.Data.WebApi.Services.Store.StoreStripeMode.UseFakes(builder.Environment, builder.Configuration))
-    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe, Ben.Data.WebApi.Services.Store.FakeStoreTaxProbe>();
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxService, Ben.Data.WebApi.Services.Store.FakeStoreTaxService>();
 else
-    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe, Ben.Data.WebApi.Services.Store.StripeTaxProbe>();
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxService, Ben.Data.WebApi.Services.Store.StripeTaxService>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe>(sp =>
+    sp.GetRequiredService<Ben.Data.WebApi.Services.Store.IStoreTaxService>());
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();

@@ -89,7 +89,7 @@ public interface IStripeGateway
 
 /// <summary>The real thing. Small on purpose: amounts and decisions arrive computed, so this is
 /// translation, not logic.</summary>
-public sealed class StripeGateway : IStripeGateway
+public sealed partial class StripeGateway : IStripeGateway, IStoreStripeGateway
 {
     private readonly StripeOptions _options;
     private readonly StripeClient? _client;
