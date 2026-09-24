@@ -1053,7 +1053,7 @@ administration menu: the dashboard, categories, products, stock, discount codes,
 store's own settings. Every one of those screens works while the shop is switched off, which is
 how the catalogue gets entered, priced and photographed before any visitor can see it.
 
-### Turning the store on
+## Turning the store on
 
 Two switches, for two different jobs:
 
@@ -1070,7 +1070,7 @@ lists every reason the store could not take an order right now — no ship-from 
 live with stock, Stripe keys missing, Stripe Tax not active in the Stripe dashboard, the shop
 switched off — and says **Ready to sell** only when the list is empty.
 
-### Categories and products
+## Categories and products
 
 A **category** is a shelf: EMF meters, spirit boxes, field accessories. Each has an address
 (/store/c/emf-meters), an optional picture, a place in the order, and its own on/off switch.
@@ -1089,7 +1089,7 @@ A product that has been sold can be switched off but never deleted, because its 
 and refunds point at it. **Duplicate** makes a hidden copy — options, variants with new SKUs and no
 stock, specifications and copies of every picture — for a product that differs only slightly.
 
-### Options, variants and stock
+## Options, variants and stock
 
 **Options** are what a buyer chooses — Colour, Size — up to three per product, each with its
 values (a Colour can show round swatches from a hex colour; everything else shows as buttons).
@@ -1112,14 +1112,14 @@ variants as it covers and save once — all of it is applied or none of it is, a
 the SKU that stopped it. A supplier's sheet can be uploaded as a CSV of `Sku,Delta` rows, with the
 same all-or-nothing rule; **Export CSV** downloads the whole stock list for a stocktake.
 
-### Product pictures
+## Product pictures
 
 Up to twelve pictures per product, in the order you drag them. A picture can be tied to a
 variant, so choosing that colour shows that photograph. Every picture is stored as a clean copy —
 the camera details and location are removed — sized for a sharp product page, with a small copy
 for cards and the cart. A live product keeps at least one picture.
 
-### Discount codes
+## Discount codes
 
 Store discount codes (GHOST10) are separate from the plan coupons under Billing. A code takes a
 percentage or a dollar amount off the products — never shipping or tax — and can have a minimum
@@ -1128,23 +1128,23 @@ what stops a code working today: **Takes nothing off**, **Expires before it star
 or **Expired**. Once an order has used a code it can be retired (switched off) but not renamed or
 deleted, because the order keeps the code it was bought with.
 
-### Orders and fulfilment
+## Orders and fulfilment
 
 Orders, packing, shipping and tracking arrive in a later part of the store's build; this section
 will describe them.
 
-### Refunds and cancellations
+## Refunds and cancellations
 
 Refunds and cancellations arrive with orders; this section will describe them.
 
-### Reviews
+## Store reviews
 
 Buyers can review what they bought, and every review waits in **Reviews** until somebody approves
 or refuses it. Only approved reviews count toward a product's stars. Refusing needs a reason,
 because the reviewer is told why. The shop can reply under an approved review; refusing a review
 later takes the reply down with it. The queue shows the oldest waiting review first.
 
-### Store settings
+## Store settings
 
 The store settings page holds the flat shipping rate and the free-shipping threshold, the low-stock
 number, the ship-from address Stripe Tax works sales tax out from, the support email shown as
@@ -1155,7 +1155,7 @@ says which value it was. Site Settings shows these values too, read-only, with a
 The page also lists the states Stripe Tax is registered in — registrations are made in the Stripe
 dashboard, and a buyer in any other state is charged no sales tax.
 
-### Stock alerts
+## Stock alerts
 
 A daily stock digest arrives with orders; this section will describe it. Until then, the
 dashboard's low-stock table and the Stock page's low-stock filter show what is running out.

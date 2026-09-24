@@ -445,6 +445,19 @@
             // Phase 17b: every hosted event, removal and appeals.
             new NavItem("Events",        "calendar",    "/admin/events"),
         }),
+        // Storefront: the gear store's back office. Shown whether or not the shop is switched on —
+        // the catalogue is entered while it is dark (precedent: Reported Posts stays with the feed
+        // off). Orders joins this group when its page lands (S5.5).
+        new NavItem("Store", "shopping-cart", children: new[]
+        {
+            new NavItem("Store Dashboard",  "bar-chart-2",    "/admin/store"),
+            new NavItem("Categories",       "layers",         "/admin/store/categories"),
+            new NavItem("Products",         "package",        "/admin/store/products"),
+            new NavItem("Stock",            "box",            "/admin/store/stock"),
+            new NavItem("Discount Codes",   "tag",            "/admin/store/coupons"),
+            new NavItem("Reviews",          "message-square", "/admin/store/reviews"),
+            new NavItem("Store Settings",   "sliders",        "/admin/store/settings"),
+        }),
         new NavItem("System", "settings", children: new[]
         {
             new NavItem("Site Settings",    "settings", "/admin/site-settings"),

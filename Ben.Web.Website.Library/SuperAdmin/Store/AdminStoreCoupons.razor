@@ -1,0 +1,241 @@
+@page "/admin/store/coupons"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Store Discount Codes</PageTitle>
+
+@*
+    The store's discount codes (storefront S1.11) — separate from the plan coupons under Billing.
+    The list says what stops a code working, so a broken one is found by whoever made it rather
+    than by a buyer at checkout.
+*@
+
+<div class="container-fluid px-3" style="max-width:72rem;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h3 class="mb-0">Discount Codes<HelpLink Slug="site-administration" Anchor="discount-codes" /></h3>
+            <p class="text-secondary small mb-0">Codes buyers type at the cart. They take money off the products, never shipping or tax.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="coupon-new" @onclick="New">New code</button>
+    </div>
+
+    <BenListState TItem="StoreCouponAdminRecord" Result="_result" Loading="_loading" EmptyText="No discount codes yet" OnRetry="LoadAsync">
+        <div class="table-responsive">
+            <table class="table align-middle" id="coupons" style="min-width:48rem;">
+                <thead>
+                    <tr><th>Code</th><th>Takes off</th><th>When</th><th>Used</th><th>Status</th><th style="width:7rem;">Actions</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _result.Items)
+                    {
+                        <tr data-testid="coupon-row">
+                            <td>
+                                <div class="fw-semibold font-monospace">@c.Code</div>
+                                @if (c.Name != c.Code) { <div class="text-secondary small">@c.Name</div> }
+                            </td>
+                            <td class="text-nowrap">
+                                @(c.Kind == StoreCouponKind.Percent ? $"{c.PercentOff}%" : StoreMoney.Format(c.AmountOff ?? 0m))
+                                @if (c.MinimumOrderAmount is { } min) { <div class="text-secondary small">over @StoreMoney.Format(min)</div> }
+                            </td>
+                            <td class="small text-nowrap">@Window(c)</td>
+                            <td class="text-nowrap">
+                                @c.RedemptionCount@(c.MaxRedemptions is { } max ? $" of {max}" : "")
+                                @* The orders link lands in S5.5, with the orders page. *@
+                                <div class="text-secondary small" data-testid="coupon-orders">@c.OrderCount @(c.OrderCount == 1 ? "order" : "orders")</div>
+                            </td>
+                            <td>
+                                @if (!c.IsActive) { <span class="badge bg-secondary">Retired</span> }
+                                else if (c.Problem is { } problem) { <span class="badge bg-danger-subtle text-danger-emphasis">@problem</span> }
+                                else { <span class="badge bg-success" data-testid="coupon-live">Live</span> }
+                            </td>
+                            <td>
+                                <span class="text-nowrap">
+                                    <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => Edit(c))" />
+                                    <BenGridAction Icon="trash-2" Label="@(c.OrderCount > 0 ? "Used — retire it instead" : "Delete")" Tone="GridActionTone.Danger"
+                                                   Disabled="@(c.OrderCount > 0)" OnClick="@(() => DeleteAsync(c))" />
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="_editing" Title="@(_editId is null ? "New discount code" : $"Edit {_form.Code}")">
+    <ChildContent>
+        <div class="row g-2">
+            <div class="col-6">
+                <label class="form-label" for="coupon-code">Code</label>
+                <input id="coupon-code" class="form-control font-monospace text-uppercase" maxlength="64" placeholder="GHOST10" @bind="_form.Code" @bind:event="oninput" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="coupon-name">Name (for you)</label>
+                <input id="coupon-name" class="form-control" maxlength="150" placeholder="Halloween" @bind="_form.Name" />
+            </div>
+            <div class="col-12">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="coupon-kind" id="coupon-kind-percent" checked="@(_form.Kind == StoreCouponKind.Percent)"
+                           @onchange="@(() => _form.Kind = StoreCouponKind.Percent)" />
+                    <label class="form-check-label" for="coupon-kind-percent">Percent off</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="coupon-kind" id="coupon-kind-fixed" checked="@(_form.Kind == StoreCouponKind.Fixed)"
+                           @onchange="@(() => _form.Kind = StoreCouponKind.Fixed)" />
+                    <label class="form-check-label" for="coupon-kind-fixed">Dollars off</label>
+                </div>
+            </div>
+            @if (_form.Kind == StoreCouponKind.Percent)
+            {
+                <div class="col-6">
+                    <label class="form-label" for="coupon-percent">Percent</label>
+                    <input id="coupon-percent" type="number" min="1" max="100" class="form-control" @bind="_form.PercentOff" />
+                </div>
+            }
+            else
+            {
+                <div class="col-6">
+                    <label class="form-label" for="coupon-amount">Amount ($)</label>
+                    <input id="coupon-amount" type="number" step="0.01" min="0" class="form-control" @bind="_form.AmountOff" />
+                </div>
+            }
+            <div class="col-6">
+                <label class="form-label" for="coupon-minimum">Minimum order ($)</label>
+                <input id="coupon-minimum" type="number" step="0.01" min="0" class="form-control" placeholder="none" @bind="_form.MinimumOrderAmount" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="coupon-starts">Starts</label>
+                <BenDateField Id="coupon-starts" Mode="DateEntryMode.Date" @bind-Value="_form.Starts" Width="100%" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="coupon-ends">Ends</label>
+                <BenDateField Id="coupon-ends" Mode="DateEntryMode.Date" @bind-Value="_form.Ends" Width="100%" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="coupon-max">Total uses</label>
+                <input id="coupon-max" type="number" min="1" class="form-control" placeholder="unlimited" @bind="_form.MaxRedemptions" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="coupon-per-buyer">Uses per buyer</label>
+                <input id="coupon-per-buyer" type="number" min="1" class="form-control" placeholder="unlimited" @bind="_form.MaxRedemptionsPerBuyer" />
+            </div>
+            <div class="col-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="coupon-active" @bind="_form.IsActive" />
+                    <label class="form-check-label" for="coupon-active">Live — buyers can use it</label>
+                </div>
+            </div>
+        </div>
+        @if (_formError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="coupon-refusal">@_formError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _editing = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="coupon-save" disabled="@_busy" @onclick="SaveAsync">Save</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    private LoadResult<StoreCouponAdminRecord> _result;
+    private bool _loading = true, _busy, _editing;
+    private Guid? _editId;
+    private CouponForm _form = new();
+    private string? _formError;
+
+    private sealed class CouponForm
+    {
+        public string Code { get; set; } = "";
+        public string? Name { get; set; }
+        public StoreCouponKind Kind { get; set; } = StoreCouponKind.Percent;
+        public int? PercentOff { get; set; } = 10;
+        public decimal? AmountOff { get; set; }
+        public decimal? MinimumOrderAmount { get; set; }
+        public DateTime? Starts { get; set; }
+        public DateTime? Ends { get; set; }
+        public int? MaxRedemptions { get; set; }
+        public int? MaxRedemptionsPerBuyer { get; set; } = 1;
+        public bool IsActive { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreCouponsAsync();
+        _loading = false;
+    }
+
+    private static string Window(StoreCouponAdminRecord c) => (c.StartsUtc, c.EndsUtc) switch
+    {
+        (null, null) => "Any time",
+        ({ } s, null) => $"From {s.ToDisplayDate()}",
+        (null, { } e) => $"Until {e.AddDays(-1).ToDisplayDate()}",
+        ({ } s, { } e) => $"{s.ToDisplayDate()} – {e.AddDays(-1).ToDisplayDate()}",
+    };
+
+    private void New()
+    {
+        _editId = null; _form = new CouponForm(); _formError = null; _editing = true;
+    }
+
+    private void Edit(StoreCouponAdminRecord c)
+    {
+        _editId = c.Id;
+        _form = new CouponForm
+        {
+            Code = c.Code, Name = c.Name == c.Code ? null : c.Name, Kind = c.Kind, PercentOff = c.PercentOff, AmountOff = c.AmountOff,
+            MinimumOrderAmount = c.MinimumOrderAmount,
+            Starts = c.StartsUtc?.Date,
+            // Stored as the moment it stops working, shown as the last day it works.
+            Ends = c.EndsUtc?.Date.AddDays(-1),
+            MaxRedemptions = c.MaxRedemptions, MaxRedemptionsPerBuyer = c.MaxRedemptionsPerBuyer, IsActive = c.IsActive,
+        };
+        _formError = null;
+        _editing = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _formError = null;
+        try
+        {
+            // A day in the form is a whole day: it starts at the start of that date and works
+            // through the end of the last one.
+            var request = new SaveStoreCouponRequest(
+                _form.Code, _form.Name ?? "", _form.Kind,
+                _form.Kind == StoreCouponKind.Percent ? _form.PercentOff : null,
+                _form.Kind == StoreCouponKind.Fixed ? _form.AmountOff : null,
+                _form.MinimumOrderAmount,
+                _form.Starts is { } s ? DateTime.SpecifyKind(s.Date, DateTimeKind.Utc) : null,
+                _form.Ends is { } e ? DateTime.SpecifyKind(e.Date.AddDays(1), DateTimeKind.Utc) : null,
+                _form.MaxRedemptions, _form.MaxRedemptionsPerBuyer, _form.IsActive);
+            var (saved, error) = _editId is { } id
+                ? await AdminClient.SaveStoreCouponAsync(id, request)
+                : await AdminClient.CreateStoreCouponAsync(request);
+            if (saved is null) { _formError = error ?? "Saving failed."; return; }
+            Toasts.Success($"{saved.Code} saved.");
+            _editing = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(StoreCouponAdminRecord c)
+    {
+        var (deleted, error) = await AdminClient.DeleteStoreCouponAsync(c.Id);
+        if (!deleted) { Toasts.Error(error ?? "The code could not be deleted."); return; }
+        Toasts.Success($"{c.Code} deleted.");
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,212 @@
+@page "/admin/store/reviews"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Store Reviews</PageTitle>
+
+@*
+    The review queue (storefront S1.11). Oldest waiting first. A refusal needs a reason because the
+    reviewer is told it; a reply goes only under an approved review.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="mb-3">
+        <h3 class="mb-0">Reviews<HelpLink Slug="site-administration" Anchor="store-reviews" /></h3>
+        <p class="text-secondary small mb-0">Buyers' reviews wait here until somebody approves or refuses them. Only approved ones count toward a product's stars.</p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+        <div class="btn-group flex-wrap" role="group" aria-label="Which reviews">
+            @foreach (var (label, status) in Filters)
+            {
+                <button type="button" class="btn btn-sm @(_status == status ? "btn-primary" : "btn-outline-primary")"
+                        data-testid="review-filter" @onclick="@(() => FilterAsync(status))">@label</button>
+            }
+        </div>
+        <div class="flex-grow-1" style="min-width:12rem;">
+            <label class="form-label small" for="reviews-search">Search</label>
+            <input id="reviews-search" type="search" class="form-control form-control-sm" placeholder="Title, words or product"
+                   @bind="_search" @bind:event="oninput" @bind:after="LoadAsync" />
+        </div>
+    </div>
+
+    <BenListState TItem="StoreReviewAdminRecord" Result="_result" Loading="_loading"
+                  EmptyText="@(_status == StoreReviewStatus.Pending ? "Nothing waiting — every review has been looked at" : "No reviews here")" OnRetry="LoadAsync">
+        @foreach (var r in _result.Items)
+        {
+            <div class="card mb-3" data-testid="review-card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <div>
+                            <div class="text-warning" aria-label="@($"{r.Rating} out of 5 stars")">@(new string('★', r.Rating))<span class="text-secondary">@(new string('☆', 5 - r.Rating))</span></div>
+                            <div class="fw-semibold">@r.Title</div>
+                        </div>
+                        <div class="text-end small">
+                            <span class="badge @StatusBadge(r.Status)">@StatusText(r.Status)</span>
+                            <div class="text-secondary mt-1">@r.CreatedUtc.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                        </div>
+                    </div>
+                    <p class="mb-2 mt-2" style="white-space:pre-line;">@r.Body</p>
+                    <div class="text-secondary small mb-2">
+                        <a href="@($"/admin/store/products/{r.ProductId}/edit")">@r.ProductName</a> ·
+                        @r.AuthorDisplayName · order @r.OrderNumber
+                        @if (r.HelpfulCount > 0) { <span> · @r.HelpfulCount found it helpful</span> }
+                    </div>
+                    @if (r.Status == StoreReviewStatus.Rejected && r.RejectionReason is { } why)
+                    {
+                        <div class="alert alert-secondary py-2 small mb-2">Refused: @why</div>
+                    }
+                    @if (r.AdminReply is { } reply)
+                    {
+                        <div class="border-start border-3 ps-2 small mb-2"><span class="fw-semibold">The shop replied:</span> @reply</div>
+                    }
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (r.Status != StoreReviewStatus.Approved)
+                        {
+                            <button type="button" class="btn btn-sm btn-success" data-testid="review-approve" disabled="@_busy" @onclick="@(() => ApproveAsync(r))">Approve</button>
+                        }
+                        @if (r.Status != StoreReviewStatus.Rejected)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-warning" data-testid="review-reject" disabled="@_busy" @onclick="@(() => OpenReject(r))">Refuse…</button>
+                        }
+                        @if (r.Status == StoreReviewStatus.Approved)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="review-reply" disabled="@_busy" @onclick="@(() => OpenReply(r))">@(r.AdminReply is null ? "Reply…" : "Change reply…")</button>
+                        }
+                        <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_busy" @onclick="@(() => DeleteAsync(r))">Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="_rejecting" Title="Refuse this review">
+    <ChildContent>
+        <label class="form-label" for="reject-reason">Why — the reviewer is told</label>
+        <textarea id="reject-reason" class="form-control" rows="3" maxlength="500" @bind="_reason" @bind:event="oninput"></textarea>
+        @if (_modalError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="reject-refusal">@_modalError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _rejecting = false)">Cancel</button>
+        <button type="button" class="btn btn-warning" id="reject-save" disabled="@_busy" @onclick="RejectAsync">Refuse</button>
+    </FooterContent>
+</BenModal>
+
+<BenModal @bind-Visible="_replying" Title="Reply under this review">
+    <ChildContent>
+        <label class="form-label" for="reply-body">Reply — shown under the review. Leave empty to remove it.</label>
+        <textarea id="reply-body" class="form-control" rows="4" maxlength="1000" @bind="_reply" @bind:event="oninput"></textarea>
+        <div class="form-text">@((_reply ?? "").Length) of 1,000</div>
+        @if (_modalError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="reply-refusal">@_modalError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _replying = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="reply-save" disabled="@_busy" @onclick="ReplyAsync">Save reply</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    private static readonly (string Label, StoreReviewStatus? Status)[] Filters =
+    [
+        ("Waiting", StoreReviewStatus.Pending), ("Approved", StoreReviewStatus.Approved),
+        ("Refused", StoreReviewStatus.Rejected), ("All", null),
+    ];
+
+    private LoadResult<StoreReviewAdminRecord> _result;
+    private bool _loading = true, _busy, _rejecting, _replying;
+    private StoreReviewStatus? _status = StoreReviewStatus.Pending;
+    private string? _search, _reason, _reply, _modalError;
+    private Guid _reviewId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreReviewsAsync(_status, _search);
+        _loading = false;
+    }
+
+    private async Task FilterAsync(StoreReviewStatus? status) { _status = status; await LoadAsync(); }
+
+    private static string StatusText(StoreReviewStatus s) => s switch
+    {
+        StoreReviewStatus.Pending => "Waiting",
+        StoreReviewStatus.Approved => "Approved",
+        _ => "Refused",
+    };
+
+    private static string StatusBadge(StoreReviewStatus s) => s switch
+    {
+        StoreReviewStatus.Pending => "bg-warning-subtle text-warning-emphasis",
+        StoreReviewStatus.Approved => "bg-success",
+        _ => "bg-secondary",
+    };
+
+    private async Task ApproveAsync(StoreReviewAdminRecord r)
+    {
+        _busy = true;
+        try
+        {
+            var (saved, error) = await AdminClient.ApproveStoreReviewAsync(r.Id);
+            if (saved is null) { Toasts.Error(error ?? "The review could not be approved."); return; }
+            Toasts.Success($"Approved — it now shows on {r.ProductName}.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void OpenReject(StoreReviewAdminRecord r) { _reviewId = r.Id; _reason = null; _modalError = null; _rejecting = true; }
+
+    private void OpenReply(StoreReviewAdminRecord r) { _reviewId = r.Id; _reply = r.AdminReply; _modalError = null; _replying = true; }
+
+    private async Task RejectAsync()
+    {
+        _busy = true; _modalError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.RejectStoreReviewAsync(_reviewId, new RejectStoreReviewRequest(_reason ?? ""));
+            if (saved is null) { _modalError = error ?? "The review could not be refused."; return; }
+            _rejecting = false;
+            Toasts.Success("Refused. The reviewer will see why.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReplyAsync()
+    {
+        _busy = true; _modalError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.ReplyToStoreReviewAsync(_reviewId, new ReplyToStoreReviewRequest(_reply));
+            if (saved is null) { _modalError = error ?? "The reply could not be saved."; return; }
+            _replying = false;
+            Toasts.Success(saved.AdminReply is null ? "Reply removed." : "Reply saved.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(StoreReviewAdminRecord r)
+    {
+        var (deleted, error) = await AdminClient.DeleteStoreReviewAsync(r.Id);
+        if (!deleted) { Toasts.Error(error ?? "The review could not be deleted."); return; }
+        Toasts.Success("Deleted.");
+        await LoadAsync();
+    }
+}

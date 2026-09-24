@@ -1,0 +1,197 @@
+@page "/admin/store/products"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
+@inject SiteFeaturesProvider Features
+
+<PageTitle>SuperAdmin — Store Products</PageTitle>
+
+@*
+    Every product, live or not (storefront S1.11). A product that is switched on but whose
+    category is hidden reads "Hidden (category)", not "Live" — a badge that says Live about
+    something nobody can buy is the kind of screen that lies. "Preview" opens the product page as
+    a SuperAdmin sees it, which works before it goes on sale and while the shop is dark.
+*@
+
+<div class="container-fluid px-3" style="max-width:80rem;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h3 class="mb-0">Products<HelpLink Slug="site-administration" Anchor="categories-and-products" /></h3>
+            <p class="text-secondary small mb-0">Everything the store sells or will sell. New products start hidden.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="product-new" @onclick="OpenNew">New product</button>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-12 col-md-5">
+            <label class="form-label small" for="products-search">Search</label>
+            <input id="products-search" type="search" class="form-control" placeholder="Name, address or SKU"
+                   @bind="_search" @bind:event="oninput" @bind:after="LoadAsync" />
+        </div>
+        <div class="col-6 col-md-4">
+            <label class="form-label small" for="products-category">Category</label>
+            <select id="products-category" class="form-select" value="@_categoryId" @onchange="OnCategoryChangedAsync">
+                <option value="">All categories</option>
+                @foreach (var c in _categories.Items)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="products-active">Showing</label>
+            <select id="products-active" class="form-select" value="@_active" @onchange="OnActiveChangedAsync">
+                <option value="">Live and hidden</option>
+                <option value="true">On sale</option>
+                <option value="false">Hidden</option>
+            </select>
+        </div>
+    </div>
+
+    <BenListState TItem="StoreProductListAdminRecord" Result="_result" Loading="_loading"
+                  EmptyText="No products match" OnRetry="LoadAsync">
+        <div class="table-responsive">
+            <table class="table align-middle" id="products">
+                <thead>
+                    <tr>
+                        <th style="width:64px;"></th>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th class="text-end">Stock</th>
+                        <th>Status</th>
+                        <th style="width:10rem;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _result.Items)
+                    {
+                        <tr data-testid="product-row">
+                            <td>
+                                @if (p.PrimaryImageUploadFileId is { } picture)
+                                {
+                                    <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" class="rounded border"
+                                         style="width:48px;height:48px;object-fit:cover;" />
+                                }
+                            </td>
+                            <td>
+                                <a class="fw-semibold" href="@($"/admin/store/products/{p.Id}/edit")">@p.Name</a>
+                                @if (p.IsFeatured) { <span class="badge bg-warning-subtle text-warning-emphasis ms-1">Featured</span> }
+                                <div class="text-secondary small">@p.CategoryName · @p.VariantCount @(p.VariantCount == 1 ? "variant" : "variants")</div>
+                            </td>
+                            <td class="text-nowrap">@PriceRange(p)</td>
+                            <td class="text-end text-nowrap">
+                                @p.TotalStock
+                                @if (p.LowStockVariants > 0) { <span class="badge bg-danger-subtle text-danger-emphasis ms-1">@p.LowStockVariants low</span> }
+                            </td>
+                            <td>
+                                @if (p.HiddenByCategory) { <span class="badge bg-warning-subtle text-warning-emphasis">Hidden (category)</span> }
+                                else if (p.IsActive) { <span class="badge bg-success">Live</span> }
+                                else { <span class="badge bg-secondary">Hidden</span> }
+                            </td>
+                            <td>
+                                <span class="text-nowrap">
+                                    <BenGridAction Icon="edit-2" Label="Edit" Href="@($"/admin/store/products/{p.Id}/edit")" />
+                                    <BenGridAction Icon="external-link" Label="Preview" Href="@($"/store/p/{p.Slug}?preview=1")"
+                                                   data-testid="product-preview" target="_blank" rel="noopener" />
+                                    @if (Features.IsOn(SiteFeatures.Store) && p.IsActive && !p.HiddenByCategory)
+                                    {
+                                        <BenGridAction Icon="eye" Label="Open on the store" Href="@($"/store/p/{p.Slug}")"
+                                                       target="_blank" rel="noopener" />
+                                    }
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="_creating" Title="New product">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label" for="new-product-name">Name</label>
+            <input id="new-product-name" class="form-control" maxlength="200" @bind="_newName" @bind:event="oninput" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label" for="new-product-category">Category</label>
+            <select id="new-product-category" class="form-select" @bind="_newCategoryId">
+                @foreach (var c in _categories.Items)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </select>
+        </div>
+        <p class="text-secondary small mb-0">It starts hidden, with one variant to price. You'll add pictures, options and stock next.</p>
+        @if (_createError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="new-product-refusal">@_createError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _creating = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="new-product-save" disabled="@_busy" @onclick="CreateAsync">Create</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    private LoadResult<StoreProductListAdminRecord> _result;
+    private LoadResult<StoreCategoryAdminRecord> _categories;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _search;
+    private string _categoryId = "";
+    private string _active = "";
+
+    private bool _creating;
+    private string _newName = "";
+    private Guid _newCategoryId;
+    private string? _createError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        _categories = await AdminClient.GetStoreCategoriesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreProductsAsync(_search,
+            Guid.TryParse(_categoryId, out var c) ? c : null,
+            bool.TryParse(_active, out var a) ? a : null);
+        _loading = false;
+    }
+
+    private async Task OnCategoryChangedAsync(ChangeEventArgs e) { _categoryId = e.Value?.ToString() ?? ""; await LoadAsync(); }
+
+    private async Task OnActiveChangedAsync(ChangeEventArgs e) { _active = e.Value?.ToString() ?? ""; await LoadAsync(); }
+
+    private static string PriceRange(StoreProductListAdminRecord p)
+        => p.MinPrice == p.MaxPrice ? StoreMoney.Format(p.MinPrice) : $"{StoreMoney.Format(p.MinPrice)} – {StoreMoney.Format(p.MaxPrice)}";
+
+    private void OpenNew()
+    {
+        _newName = "";
+        _newCategoryId = Guid.TryParse(_categoryId, out var c) ? c : _categories.Items.FirstOrDefault()?.Id ?? Guid.Empty;
+        _createError = _categories.Items.Count == 0 ? "Add a category first — every product is filed under one." : null;
+        _creating = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true; _createError = null;
+        try
+        {
+            var (product, error) = await AdminClient.CreateStoreProductAsync(
+                new CreateStoreProductRequest(_newName, _newCategoryId == Guid.Empty ? null : _newCategoryId));
+            if (product is null) { _createError = error ?? "The product could not be created."; return; }
+            NavManager.NavigateTo($"/admin/store/products/{product.Id}/edit");
+        }
+        finally { _busy = false; }
+    }
+}

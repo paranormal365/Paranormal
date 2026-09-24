@@ -1,0 +1,300 @@
+@page "/admin/store/categories"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Store Categories</PageTitle>
+
+@*
+    The store's shelves (storefront S1.11). Hiding one takes its live products off the store; the
+    dialog says how many BEFORE anything is saved, from the list's own count, and the toast after
+    the save says what the server actually hid.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h3 class="mb-0">Categories<HelpLink Slug="site-administration" Anchor="categories-and-products" /></h3>
+            <p class="text-secondary small mb-0">The shelves of the store, in the order visitors see them.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="category-new" @onclick="NewCategory">New category</button>
+    </div>
+
+    <BenListState TItem="StoreCategoryAdminRecord" Result="_result" Loading="_loading"
+                  EmptyText="No categories yet — add the first shelf" OnRetry="LoadAsync">
+        <div class="table-responsive">
+            <table class="table align-middle" id="categories">
+                <thead>
+                    <tr>
+                        <th style="width:64px;"></th>
+                        <th>Category</th>
+                        <th class="text-end">Products</th>
+                        <th>Shown</th>
+                        <th style="width:12rem;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (c, i) in _result.Items.Select((c, i) => (c, i)))
+                    {
+                        <tr data-testid="category-row">
+                            <td>
+                                @if (c.ImageUploadFileId is { } picture)
+                                {
+                                    <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" class="rounded border"
+                                         style="width:48px;height:36px;object-fit:cover;" />
+                                }
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@c.Name
+                                    @if (c.IsNew) { <span class="badge bg-info-subtle text-info-emphasis ms-1">New</span> }
+                                </div>
+                                <div class="text-secondary small font-monospace">/store/c/@c.Slug</div>
+                            </td>
+                            <td class="text-end text-nowrap">@c.LiveProductCount live · @c.ProductCount in all</td>
+                            <td>
+                                <span class="badge @(c.IsActive ? "bg-success" : "bg-secondary")">@(c.IsActive ? "Shown" : "Hidden")</span>
+                            </td>
+                            <td>
+                                <span class="text-nowrap">
+                                    <BenGridAction Icon="arrow-up" Label="Move up" Disabled="@(i == 0 || _busy)" OnClick="@(() => MoveAsync(i, -1))" />
+                                    <BenGridAction Icon="arrow-down" Label="Move down" Disabled="@(i == _result.Items.Count - 1 || _busy)" OnClick="@(() => MoveAsync(i, +1))" />
+                                    <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => Edit(c))" />
+                                    <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => AskRemove(c))" />
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="_editing" Title="@(_editId is null ? "New category" : $"Edit {_editName}")">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label" for="category-name">Name</label>
+            <input id="category-name" class="form-control" maxlength="100" @bind="_form.Name" @bind:event="oninput" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="category-slug">Web address</label>
+            <div class="input-group">
+                <span class="input-group-text">/store/c/</span>
+                <input id="category-slug" class="form-control" maxlength="120" placeholder="made from the name"
+                       @bind="_form.Slug" @bind:event="oninput" />
+            </div>
+            <div class="form-text">Kept when the name changes. Change it only if you mean to — shared links use it.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="category-description">Description</label>
+            <textarea id="category-description" class="form-control" rows="3" maxlength="1000" @bind="_form.Description"></textarea>
+        </div>
+        <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="category-active" @bind="_form.IsActive" />
+            <label class="form-check-label" for="category-active">Shown on the store</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="category-isnew" @bind="_form.IsNew" />
+            <label class="form-check-label" for="category-isnew">Mark as new</label>
+        </div>
+        @if (_editId is { } id)
+        {
+            <div class="mb-2">
+                <label class="form-label" for="category-image-input">Picture</label>
+                <InputFile id="category-image-input" class="form-control" accept="image/*" OnChange="@(e => UploadAsync(id, e))" />
+                @if (_editPicture is { } picture)
+                {
+                    <div class="d-flex align-items-center gap-2 mt-2">
+                        <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="Category picture" class="rounded border"
+                             style="width:96px;height:72px;object-fit:cover;" />
+                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => RemovePictureAsync(id))">Remove picture</button>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="text-secondary small mb-0">Add a picture once the category is saved.</p>
+        }
+        @if (_formError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="category-refusal">@_formError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _editing = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="category-save" disabled="@_busy" @onclick="SaveAsync">Save</button>
+    </FooterContent>
+</BenModal>
+
+<BenConfirmDialog @bind-Visible="_confirmHide" Title="Hide this category?" ConfirmText="Hide it"
+                  Busy="_busy" OnConfirm="ConfirmedSaveAsync">
+    <p class="mb-0" id="category-hide-warning">
+        Hiding @_editName takes @Products(_hideCount) off the store. Each keeps its own switch, and showing the
+        category again puts them back.
+    </p>
+</BenConfirmDialog>
+
+<BenConfirmDialog @bind-Visible="_confirmRemove" Title="Remove this category?" ConfirmText="Remove"
+                  Busy="_busy" OnConfirm="RemoveAsync" Message="@($"{_removeName} will be removed. This can't be undone.")" />
+
+@code {
+    private LoadResult<StoreCategoryAdminRecord> _result;
+    private bool _loading = true;
+    private bool _busy;
+
+    private bool _editing;
+    private Guid? _editId;
+    private string _editName = "";
+    private Guid? _editPicture;
+    private bool _wasActive;
+    private int _liveCount;
+    private CategoryForm _form = new();
+    private string? _formError;
+
+    private bool _confirmHide;
+    private int _hideCount;
+    private bool _confirmRemove;
+    private Guid _removeId;
+    private string _removeName = "";
+
+    private sealed class CategoryForm
+    {
+        public string Name { get; set; } = "";
+        public string? Slug { get; set; }
+        public string? Description { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool IsNew { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreCategoriesAsync();
+        _loading = false;
+    }
+
+    private static string Products(int n) => n == 1 ? "1 live product" : $"{n} live products";
+
+    private void NewCategory()
+    {
+        _editId = null; _editName = ""; _editPicture = null; _wasActive = false; _liveCount = 0;
+        _form = new CategoryForm();
+        _formError = null;
+        _editing = true;
+    }
+
+    private void Edit(StoreCategoryAdminRecord c)
+    {
+        _editId = c.Id; _editName = c.Name; _editPicture = c.ImageUploadFileId;
+        _wasActive = c.IsActive; _liveCount = c.LiveProductCount;
+        _form = new CategoryForm { Name = c.Name, Slug = c.Slug, Description = c.Description, IsActive = c.IsActive, IsNew = c.IsNew };
+        _formError = null;
+        _editing = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        // Hiding a shelf with live products on it says so first, from the count the list carried.
+        if (_editId is not null && _wasActive && !_form.IsActive && _liveCount > 0)
+        {
+            _hideCount = _liveCount;
+            _confirmHide = true;
+            return;
+        }
+        await ConfirmedSaveAsync();
+    }
+
+    private async Task ConfirmedSaveAsync()
+    {
+        _busy = true; _formError = null;
+        try
+        {
+            var request = new SaveStoreCategoryRequest(_form.Name, _form.Slug, _form.Description, _form.IsActive, _form.IsNew);
+            if (_editId is { } id)
+            {
+                var (saved, error) = await AdminClient.SaveStoreCategoryAsync(id, request);
+                if (saved is null) { _formError = error ?? "Saving failed."; _confirmHide = false; return; }
+                Toasts.Success(saved.HiddenProducts > 0
+                    ? $"{saved.Category.Name} is hidden, and {Products(saved.HiddenProducts)} with it."
+                    : $"{saved.Category.Name} saved.");
+            }
+            else
+            {
+                var (created, error) = await AdminClient.CreateStoreCategoryAsync(request);
+                if (created is null) { _formError = error ?? "Saving failed."; return; }
+                Toasts.Success($"{created.Name} added.");
+            }
+            _confirmHide = false;
+            _editing = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task UploadAsync(Guid id, InputFileChangeEventArgs e)
+    {
+        _busy = true; _formError = null;
+        try
+        {
+            using var content = await StoreAdminUploads.ContentAsync(e.File);
+            var (saved, error) = await AdminClient.SetStoreCategoryImageAsync(id, content);
+            if (saved is null) { _formError = error ?? "That picture could not be uploaded."; return; }
+            _editPicture = saved.ImageUploadFileId;
+            await LoadAsync();
+        }
+        catch (IOException) { _formError = StoreAdminUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task RemovePictureAsync(Guid id)
+    {
+        var (saved, error) = await AdminClient.RemoveStoreCategoryImageAsync(id);
+        if (saved is null) { _formError = error ?? "The picture could not be removed."; return; }
+        _editPicture = null;
+        await LoadAsync();
+    }
+
+    private async Task MoveAsync(int index, int by)
+    {
+        var ids = _result.Items.Select(c => c.Id).ToList();
+        (ids[index], ids[index + by]) = (ids[index + by], ids[index]);
+        _busy = true;
+        try
+        {
+            var (_, error) = await AdminClient.ReorderStoreCategoriesAsync(new ReorderRequest(ids));
+            if (error is not null) Toasts.Error(error);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void AskRemove(StoreCategoryAdminRecord c)
+    {
+        _removeId = c.Id; _removeName = c.Name;
+        _confirmRemove = true;
+    }
+
+    private async Task RemoveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var (deleted, error) = await AdminClient.DeleteStoreCategoryAsync(_removeId);
+            _confirmRemove = false;
+            if (!deleted) { Toasts.Error(error ?? "The category could not be removed."); return; }
+            Toasts.Success($"{_removeName} removed.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}

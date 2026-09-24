@@ -1,5 +1,13 @@
 @implements IDisposable
 
+@* The pane, drawn here rather than by the strip — see BenTabs for why. *@
+@if (Parent?.IsActive(this) == true)
+{
+    <div class="tab-pane fade show active" role="tabpanel">
+        @ChildContent
+    </div>
+}
+
 @code {
     [CascadingParameter] private BenTabs? Parent { get; set; }
 
@@ -23,6 +31,24 @@
         if (Parent is null)
             throw new InvalidOperationException($"<BenTab Title=\"{Title}\"> must be inside a <BenTabs>.");
         Parent.Register(this);
+        _header = Header;
+    }
+
+    /// <summary>What the strip last drew for this tab's button.</summary>
+    private (string, string?, int?, bool) _header;
+
+    private (string, string?, int?, bool) Header => (Title, Icon, Badge, Disabled);
+
+    /// <summary>
+    /// The strip draws this tab's button before this tab receives its new parameters, so a new
+    /// badge count (a picture added) would show one render late. Values, not delegates, so a
+    /// redraw that changes nothing asks for nothing.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (Header == _header) return;
+        _header = Header;
+        Parent?.HeaderChanged();
     }
 
     public void Dispose() => Parent?.Unregister(this);

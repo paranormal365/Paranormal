@@ -1,0 +1,184 @@
+@page "/admin/store/stock"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>SuperAdmin — Store Stock</PageTitle>
+
+@*
+    Stock across the whole store (storefront S1.11): receive a delivery across many variants in one
+    save, import a supplier's sheet, download the lot. All or nothing — the refusal names the SKU
+    that stopped it and lands here (#stock-refusal), never only in a toast that fades.
+
+    Export is a button, not an anchor: the file comes from the API with the admin's token, which a
+    plain link to the API could not carry.
+*@
+
+<div class="container-fluid px-3" style="max-width:72rem;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h3 class="mb-0">Stock<HelpLink Slug="site-administration" Anchor="options-variants-and-stock" /></h3>
+            <p class="text-secondary small mb-0">On the shelf, held by checkouts in progress, and free to sell.</p>
+        </div>
+        <button type="button" class="btn btn-outline-secondary" id="stock-export" disabled="@_exporting" @onclick="ExportAsync">Export CSV</button>
+    </div>
+
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-12 col-md-6">
+            <label class="form-label small" for="stock-search">Search</label>
+            <input id="stock-search" type="search" class="form-control" placeholder="Product, variant or SKU"
+                   @bind="_search" @bind:event="oninput" @bind:after="LoadAsync" />
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="stock-low" @bind="LowOnly" @bind:after="LoadAsync" />
+                <label class="form-check-label" for="stock-low">Running low only</label>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="stock-csv">Import a CSV (Sku,Delta)</label>
+            <InputFile id="stock-csv" class="form-control form-control-sm" accept=".csv,text/csv" disabled="@_busy" OnChange="ImportAsync" />
+        </div>
+    </div>
+
+    <BenListState TItem="StoreStockRow" Result="_result" Loading="_loading" EmptyText="No live variants match" OnRetry="LoadAsync">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle" id="stock" style="min-width:44rem;">
+                <thead>
+                    <tr>
+                        <th>Product</th><th>Variant</th><th>SKU</th>
+                        <th class="text-end">On hand</th><th class="text-end">Held</th><th class="text-end">Free</th>
+                        <th style="width:8rem;">Receive</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _result.Items)
+                    {
+                        var row = r;
+                        <tr data-testid="stock-row">
+                            <td><a href="@($"/admin/store/products/{row.ProductId}/edit")">@row.ProductName</a></td>
+                            <td>@row.VariantName</td>
+                            <td class="font-monospace small">@row.Sku</td>
+                            <td class="text-end">@row.OnHand</td>
+                            <td class="text-end">@row.Reserved</td>
+                            <td class="text-end @(row.IsLow ? "text-danger fw-semibold" : null)">@row.Available</td>
+                            <td>
+                                <label class="visually-hidden" for="@($"receive-{row.VariantId}")">Receive for @row.Sku</label>
+                                <input id="@($"receive-{row.VariantId}")" type="number" class="form-control form-control-sm" data-testid="stock-receive"
+                                       value="@_receive.GetValueOrDefault(row.VariantId)" @onchange="@(e => SetReceive(row.VariantId, e))" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+
+    <div class="card mt-2">
+        <div class="card-body row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+                <label class="form-label small" for="stock-reason-all">Why</label>
+                <select id="stock-reason-all" class="form-select" @bind="_reason">
+                    <option value="@StoreStockReason.Received">Received</option>
+                    <option value="@StoreStockReason.Correction">Correction</option>
+                    <option value="@StoreStockReason.Damaged">Damaged</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-6">
+                <label class="form-label small" for="stock-note-all">Note</label>
+                <input id="stock-note-all" class="form-control" maxlength="200" placeholder="Delivery 4471" @bind="_note" />
+            </div>
+            <div class="col-12 col-md-3">
+                <button type="button" class="btn btn-primary w-100" id="stock-save" disabled="@(_busy || _receive.Count == 0)" @onclick="SaveAsync">
+                    Save @(_receive.Count == 0 ? "" : $"{_receive.Count} {(_receive.Count == 1 ? "change" : "changes")}")
+                </button>
+            </div>
+            @if (_error is not null)
+            {
+                <div class="col-12"><div class="alert alert-danger py-2 mb-0" id="stock-refusal">@_error</div></div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "low")] public bool? LowQuery { get; set; }
+
+    private LoadResult<StoreStockRow> _result;
+    private bool _loading = true, _busy, _exporting;
+    private string? _search, _note, _error;
+    private bool? _lowOnly;
+    private StoreStockReason _reason = StoreStockReason.Received;
+    private readonly Dictionary<Guid, int> _receive = [];
+
+    private bool LowOnly
+    {
+        get => _lowOnly ?? LowQuery == true;
+        set => _lowOnly = value;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreStockAsync(_search, LowOnly);
+        _loading = false;
+    }
+
+    private void SetReceive(Guid variantId, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var n) && n != 0) _receive[variantId] = n;
+        else _receive.Remove(variantId);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (done, error) = await AdminClient.AdjustStoreStockAsync(new BulkAdjustStockRequest(
+                _receive.Select(r => new BulkStockLine(r.Key, r.Value, null)).ToList(), _reason, _note));
+            if (done is null) { _error = error ?? "Nothing was changed."; return; }
+            Toasts.Success($"{done.VariantsChanged} {(done.VariantsChanged == 1 ? "variant" : "variants")} updated.");
+            _receive.Clear();
+            _note = null;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            using var content = await StoreAdminUploads.ContentAsync(e.File);
+            var (done, error) = await AdminClient.ImportStoreStockAsync(content);
+            if (done is null) { _error = error ?? "Nothing was changed."; return; }
+            Toasts.Success($"{e.File.Name}: {done.VariantsChanged} {(done.VariantsChanged == 1 ? "variant" : "variants")} received.");
+            await LoadAsync();
+        }
+        catch (IOException) { _error = StoreAdminUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task ExportAsync()
+    {
+        _exporting = true; _error = null;
+        try
+        {
+            var file = await AdminClient.DownloadStoreStockCsvAsync();
+            if (file is null) { _error = "The stock list could not be downloaded."; return; }
+            await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Value.Data), "text/csv", file.Value.FileName);
+        }
+        finally { _exporting = false; }
+    }
+}

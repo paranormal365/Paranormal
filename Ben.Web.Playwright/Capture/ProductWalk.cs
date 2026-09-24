@@ -593,12 +593,22 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/orphaned-sessions", "/admin/video-assets",
                      "/admin/sidecar-telemetry", "/admin/file-types", "/admin/lookup-types", "/admin/equipment-taxonomy",
                      "/admin/experience-taxonomy", "/admin/delete-case", "/admin/delete-group", "/admin/delete-user",
+                     "/admin/store", "/admin/store/categories", "/admin/store/products", "/admin/store/stock",
+                     "/admin/store/coupons", "/admin/store/reviews", "/admin/store/settings",
                  })
             await StepAsync(route.Replace("/admin/", "admin "), () => GoAsync(route));
         await StepAsync("one user", async () =>
         {
             await GoAsync("/admin/users");
             await FollowAsync("/admin/users/");
+        });
+
+        // Storefront: the product editor is reached only from the list, so the route alone would
+        // walk past it. Needs one product — the demo seed provides seven.
+        await StepAsync("one product, from the list", async () =>
+        {
+            await GoAsync("/admin/store/products");
+            await FollowAsync("/admin/store/products/");
         });
 
         // The route alone proves nothing here: the page renders its list before anything is

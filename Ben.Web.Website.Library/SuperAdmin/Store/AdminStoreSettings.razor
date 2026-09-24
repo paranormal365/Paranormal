@@ -1,0 +1,217 @@
+@page "/admin/store/settings"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Store Settings</PageTitle>
+
+@*
+    The one place store settings are edited (storefront S1.11). The whole form is checked before
+    anything is saved, and the refusal names the one value that is wrong. Beside it, the
+    ready-to-sell checklist — every reason the store could not take an order right now.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="mb-3">
+        <h3 class="mb-0">Store Settings<HelpLink Slug="site-administration" Anchor="store-settings" /></h3>
+        <p class="text-secondary small mb-0">Shipping, where parcels leave from, and how a buyer reaches you.</p>
+    </div>
+
+    <BenItemState TItem="StoreSettingsAdminRecord" Result="_result" Loading="_loading"
+                  LoadingText="Loading the settings and asking Stripe…" OnRetry="LoadAsync">
+        <ChildContent Context="s">
+            <div class="row g-3">
+                <div class="col-lg-7 order-2 order-lg-1">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" role="switch" id="store-take-orders" @bind="_form.CheckoutEnabled" />
+                                <label class="form-check-label" for="store-take-orders">Take orders</label>
+                                <div class="form-text">Off pauses checkout while the catalogue stays visible.</div>
+                            </div>
+
+                            <h6 class="mt-3">Shipping</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label small" for="store-shipping">Flat rate ($)</label>
+                                    <input id="store-shipping" type="number" step="0.01" min="0" class="form-control" placeholder="0.00" @bind="_form.ShippingFlatRate" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small" for="store-free-over">Free over ($)</label>
+                                    <input id="store-free-over" type="number" step="0.01" min="0" class="form-control" placeholder="never" @bind="_form.FreeShippingThreshold" />
+                                </div>
+                            </div>
+
+                            <h6>Ship from</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-12">
+                                    <label class="form-label small" for="store-ship-street">Street</label>
+                                    <input id="store-ship-street" class="form-control" maxlength="200" @bind="_form.ShipFromStreet" />
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label class="form-label small" for="store-ship-city">City</label>
+                                    <input id="store-ship-city" class="form-control" maxlength="200" @bind="_form.ShipFromCity" />
+                                </div>
+                                <div class="col-4 col-sm-2">
+                                    <label class="form-label small" for="store-ship-state">State</label>
+                                    <input id="store-ship-state" class="form-control text-uppercase" maxlength="2" placeholder="TN" @bind="_form.ShipFromState" />
+                                </div>
+                                <div class="col-8 col-sm-4">
+                                    <label class="form-label small" for="store-ship-zip">ZIP</label>
+                                    <input id="store-ship-zip" class="form-control" maxlength="10" @bind="_form.ShipFromZip" />
+                                </div>
+                            </div>
+
+                            <h6>For buyers</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-12">
+                                    <label class="form-label small" for="store-support-email">Support email</label>
+                                    <input id="store-support-email" type="email" class="form-control" placeholder="the public contact email" @bind="_form.SupportEmail" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small" for="store-returns">Returns window (days)</label>
+                                    <input id="store-returns" type="number" min="0" max="365" class="form-control" placeholder="30" @bind="_form.ReturnsWindowDays" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small" for="store-low-stock">"Only N left" at</label>
+                                    <input id="store-low-stock" type="number" min="0" max="100" class="form-control" placeholder="3" @bind="_form.LowStockThreshold" />
+                                </div>
+                            </div>
+
+                            <h6>Checkout</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label small" for="store-reservation">Hold stock for (minutes)</label>
+                                    <input id="store-reservation" type="number" min="5" max="240" class="form-control" placeholder="15" @bind="_form.ReservationMinutes" />
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch mt-4">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="store-link" @bind="_form.LinkEnabled" />
+                                        <label class="form-check-label" for="store-link">Offer Stripe Link</label>
+                                    </div>
+                                    <div class="form-text">Link must be activated in the Stripe dashboard first.</div>
+                                </div>
+                            </div>
+
+                            @if (_error is not null)
+                            {
+                                <div class="alert alert-danger py-2" id="store-settings-refusal">@_error</div>
+                            }
+                            <button type="button" class="btn btn-primary" id="store-settings-save" disabled="@_busy" @onclick="SaveAsync">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5 order-1 order-lg-2">
+                    <div class="card @(s.ReadyToSell ? "border-success" : "border-warning")" id="ready-to-sell">
+                        <div class="card-body">
+                            @if (s.ReadyToSell)
+                            {
+                                <h5 class="card-title text-success mb-1">Ready to sell</h5>
+                                <p class="small mb-0">Nothing stands between a buyer and an order.</p>
+                            }
+                            else
+                            {
+                                <h5 class="card-title mb-2">Not ready to sell yet</h5>
+                                <ul class="small mb-0 ps-3" id="not-ready">
+                                    @foreach (var reason in s.NotReadyBecause)
+                                    {
+                                        <li>@reason</li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-body small">
+                            <div class="fw-semibold mb-1">The shop is @(s.StoreIsOn ? "on" : "off")</div>
+                            <p class="mb-2">It's switched with the other sections of the site.</p>
+                            <a href="/admin/site-settings?setting=features.store" id="store-switch-link">Go to the switch</a>
+                        </div>
+                    </div>
+
+                    <div class="card mt-3" id="tax-states">
+                        <div class="card-body small">
+                            <div class="fw-semibold mb-1">Sales tax is collected in</div>
+                            @if (s.TaxRegisteredStates.Count == 0)
+                            {
+                                <p class="mb-1">No state yet.</p>
+                            }
+                            else
+                            {
+                                <p class="mb-1">@string.Join(", ", s.TaxRegisteredStates.Select(code => UsStates.NameOf(code) ?? code))</p>
+                            }
+                            <p class="text-secondary mb-0">Registrations are made in the Stripe dashboard. A buyer anywhere else is charged no sales tax.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    private ItemResult<StoreSettingsAdminRecord> _result;
+    private bool _loading = true, _busy;
+    private string? _error;
+    private SettingsForm _form = new();
+
+    private sealed class SettingsForm
+    {
+        public bool CheckoutEnabled { get; set; } = true;
+        public decimal? ShippingFlatRate { get; set; }
+        public decimal? FreeShippingThreshold { get; set; }
+        public int? LowStockThreshold { get; set; }
+        public string? ShipFromStreet { get; set; }
+        public string? ShipFromCity { get; set; }
+        public string? ShipFromState { get; set; }
+        public string? ShipFromZip { get; set; }
+        public string? SupportEmail { get; set; }
+        public int? ReturnsWindowDays { get; set; }
+        public int? ReservationMinutes { get; set; }
+        public bool LinkEnabled { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreSettingsAsync();
+        if (_result.Item is { } s) Adopt(s);
+        _loading = false;
+    }
+
+    private void Adopt(StoreSettingsAdminRecord s)
+        => _form = new SettingsForm
+        {
+            CheckoutEnabled = s.CheckoutEnabled, ShippingFlatRate = s.ShippingFlatRate, FreeShippingThreshold = s.FreeShippingThreshold,
+            LowStockThreshold = s.LowStockThreshold, ShipFromStreet = s.ShipFromStreet, ShipFromCity = s.ShipFromCity,
+            ShipFromState = s.ShipFromState, ShipFromZip = s.ShipFromZip, SupportEmail = s.SupportEmail,
+            ReturnsWindowDays = s.ReturnsWindowDays, ReservationMinutes = s.ReservationMinutes, LinkEnabled = s.LinkEnabled,
+        };
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreSettingsAsync(new SaveStoreSettingsRequest(
+                _form.CheckoutEnabled, _form.ShippingFlatRate, _form.FreeShippingThreshold, _form.LowStockThreshold,
+                _form.ShipFromStreet, _form.ShipFromCity, _form.ShipFromState, _form.ShipFromZip, _form.SupportEmail,
+                _form.ReturnsWindowDays, _form.ReservationMinutes, _form.LinkEnabled));
+            if (saved is null) { _error = error ?? "Saving failed — nothing was changed."; return; }
+            _result = ItemResult<StoreSettingsAdminRecord>.Ok(saved);
+            Adopt(saved);
+            Toasts.Success(saved.ReadyToSell ? "Saved. The store is ready to sell." : "Saved.");
+        }
+        finally { _busy = false; }
+    }
+}
