@@ -536,4 +536,37 @@ public sealed class AppUserPurgeBehaviourTests
         Assert.Equal(0, (await check.StoreReviews.AsNoTracking().SingleAsync(r => r.Id == reviewId)).HelpfulCount);
         Assert.Null((await check.StoreCouponRedemptions.AsNoTracking().SingleAsync()).BuyerAppUserId);
     }
+
+    /// <summary>
+    /// A seller (the Seller role, Ben 09/24/2026): the items they sold stay in the store as the
+    /// site's own, the preview does not count them as keeping the person, and the row goes.
+    /// </summary>
+    [Fact]
+    public async Task A_sellers_items_stay_as_the_sites_own_and_the_row_still_goes()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+        Guid productId;
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            var admin = await db.AppUsers.SingleAsync(u => u.Id == h.AdminId);
+            var variant = StoreTestData.Variant(db, admin);
+            await db.SaveChangesAsync();
+            productId = variant.ProductId;
+            await db.StoreProducts.Where(p => p.Id == productId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SellerAppUserId, h.TargetId));
+        }
+
+        var (purge, _) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.False(preview!.RowWillSurvive, "the preview counted the item's seller as keeping the person");
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.True(result!.RowRemoved);
+
+        await using var check = await h.Sqlite.NewContextAsync();
+        var product = await check.StoreProducts.AsNoTracking().SingleAsync(p => p.Id == productId);
+        Assert.Null(product.SellerAppUserId);
+    }
 }

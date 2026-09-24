@@ -57,6 +57,7 @@
                     <tr>
                         <th style="width:64px;"></th>
                         <th>Product</th>
+                        <th>Seller</th>
                         <th>Price</th>
                         <th class="text-end">Stock</th>
                         <th>Status</th>
@@ -79,6 +80,7 @@
                                 @if (p.IsFeatured) { <span class="badge bg-warning-subtle text-warning-emphasis ms-1">Featured</span> }
                                 <div class="text-secondary small">@p.CategoryName · @p.VariantCount @(p.VariantCount == 1 ? "variant" : "variants")</div>
                             </td>
+                            <td class="small" data-testid="product-seller">@(p.SellerName ?? "Site")</td>
                             <td class="text-nowrap">@PriceRange(p)</td>
                             <td class="text-end text-nowrap">
                                 @p.TotalStock

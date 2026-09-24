@@ -254,6 +254,13 @@ public sealed class AccountClosureService
         // above: closure and the SuperAdmin purge must not disagree about what an order keeps.
         await Store.StoreOrderScrub.DetachAndScrubAsync(db, userId, DateTime.UtcNow, ct);
 
+        // Items they sold stay in the store as the site's own: the item is not theirs to take
+        // with them, and a seller who has gone cannot be paid or asked a question.
+        // Tracked rather than ExecuteUpdate: closure's own tests run on the InMemory provider.
+        foreach (var sold in await db.StoreProducts.Where(p => p.SellerAppUserId == userId).ToListAsync(ct))
+            sold.SellerAppUserId = null;
+        await db.SaveChangesAsync(ct);
+
         // Bytes after the rows, and never fatal: a closure that has already anonymised the
         // account must not fail because one blob would not delete. It is logged instead.
         if (media is not null)

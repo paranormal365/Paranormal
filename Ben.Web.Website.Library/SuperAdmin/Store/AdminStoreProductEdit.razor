@@ -85,6 +85,29 @@
                             </select>
                             <div class="form-text">Links the product page to the model's page in the equipment catalogue.</div>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="product-seller">Seller</label>
+                            <select id="product-seller" class="form-select" @bind="_details.SellerAppUserId" @bind:after="MarkDirty">
+                                <option value="">The site's own stock</option>
+                                @foreach (var s in _sellers.Items)
+                                {
+                                    <option value="@s.Id">@s.Name@(s.Email is { } e && e != s.Name ? $" ({e})" : "")</option>
+                                }
+                                @if (_details.SellerAppUserId is { } current && _sellers.Items.All(s => s.Id != current))
+                                {
+                                    @* Somebody who has since lost the Seller role stays on the item they had. *@
+                                    <option value="@current">@(_product?.SellerName ?? "A former seller")</option>
+                                }
+                            </select>
+                            <div class="form-text">
+                                The member who makes and sells this item. Only people with the Seller role are listed —
+                                give it on their Site Roles tab. Shoppers never see this.
+                            </div>
+                            @if (_sellers.Failed)
+                            {
+                                <div class="small text-danger">The list of sellers couldn't be loaded.</div>
+                            }
+                        </div>
                         <div class="col-12">
                             <label class="form-label" for="product-short">Short description</label>
                             <textarea id="product-short" class="form-control" rows="2" maxlength="500" @bind="_details.ShortDescription" @bind:after="MarkDirty"></textarea>
@@ -378,6 +401,7 @@
     private StoreProductAdminRecord? _product;
     private LoadResult<StoreCategoryAdminRecord> _categories;
     private LoadResult<EquipmentModelRecord> _models;
+    private LoadResult<StoreSellerRecord> _sellers;
     private bool _loading = true;
     private bool _busy;
     private bool _dirty;
@@ -404,6 +428,7 @@
         public string? Slug { get; set; }
         public Guid CategoryId { get; set; }
         public Guid? EquipmentModelId { get; set; }
+        public Guid? SellerAppUserId { get; set; }
         public string? ShortDescription { get; set; }
         public string? LongDescriptionHtml { get; set; }
         public bool IsFeatured { get; set; }
@@ -457,6 +482,7 @@
         if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
         _categories = await AdminClient.GetStoreCategoriesAsync();
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
+        _sellers = await AdminClient.GetStoreSellersAsync();
         await LoadAsync();
     }
 
@@ -487,6 +513,7 @@
             _details = new DetailsForm
             {
                 Name = p.Name, Slug = p.Slug, CategoryId = p.CategoryId, EquipmentModelId = p.EquipmentModelId,
+                SellerAppUserId = p.SellerAppUserId,
                 ShortDescription = p.ShortDescription, LongDescriptionHtml = p.LongDescriptionHtml,
                 IsFeatured = p.IsFeatured, NewUntil = p.NewUntilUtc?.Date, StripeTaxCode = p.StripeTaxCode,
                 SortOrder = p.SortOrder,
@@ -529,7 +556,7 @@
                 _details.CategoryId, _details.EquipmentModelId, _details.Name, _details.Slug, _details.ShortDescription,
                 _details.LongDescriptionHtml, _details.IsFeatured, // A day, not an instant: "new until 10/31" is stored as that date.
                 _details.NewUntil is { } until ? DateTime.SpecifyKind(until.Date, DateTimeKind.Utc) : null, _details.StripeTaxCode,
-                _details.SortOrder, specs));
+                _details.SortOrder, specs, _details.SellerAppUserId));
             if (saved is null) { _detailsError = error ?? "Saving failed."; return; }
             Adopt(saved, Drafts.Details);
             Toasts.Success("Saved.");

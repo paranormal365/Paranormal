@@ -30,7 +30,7 @@ public sealed record ReorderRequest(IReadOnlyList<Guid> OrderedIds);
 public sealed record StoreProductListAdminRecord(
     Guid Id, string Name, string Slug, Guid CategoryId, string CategoryName, bool IsActive, bool HiddenByCategory,
     bool IsFeatured, decimal MinPrice, decimal MaxPrice, int TotalStock, int LowStockVariants, int VariantCount,
-    int UnitsSold, Guid? PrimaryImageUploadFileId, DateTime? DateUpdated);
+    int UnitsSold, Guid? PrimaryImageUploadFileId, DateTime? DateUpdated, string? SellerName = null);
 
 /// <summary>Just a name: a new product starts hidden, with one $0.00 variant to price.</summary>
 public sealed record CreateStoreProductRequest(string Name, Guid? CategoryId = null);
@@ -40,7 +40,7 @@ public sealed record CreateStoreProductRequest(string Name, Guid? CategoryId = n
 public sealed record SaveStoreProductRequest(
     Guid CategoryId, Guid? EquipmentModelId, string Name, string? Slug, string? ShortDescription,
     string? LongDescriptionHtml, bool IsFeatured, DateTime? NewUntilUtc, string? StripeTaxCode, int SortOrder,
-    IReadOnlyList<StoreSpecGroup> Specs);
+    IReadOnlyList<StoreSpecGroup> Specs, Guid? SellerAppUserId);
 
 public sealed record StoreProductAdminRecord(
     Guid Id, Guid CategoryId, string CategoryName, bool CategoryIsActive, Guid? EquipmentModelId, string Name,
@@ -49,7 +49,11 @@ public sealed record StoreProductAdminRecord(
     decimal AverageRating, int ReviewCount, int PendingReviewCount, bool HasBeenSold,
     IReadOnlyList<StoreImageRecord> Images, IReadOnlyList<StoreOptionRecord> Options,
     IReadOnlyList<StoreVariantAdminRecord> Variants, IReadOnlyList<StoreSpecGroup> Specs,
-    string PublicUrl, DateTime DateCreated, DateTime? DateUpdated);
+    string PublicUrl, DateTime DateCreated, DateTime? DateUpdated,
+    Guid? SellerAppUserId = null, string? SellerName = null);
+
+/// <summary>Somebody who can be named as an item's seller: a holder of the Seller role.</summary>
+public sealed record StoreSellerRecord(Guid Id, string Name, string? Email);
 
 /// <param name="Label">The variant as a person reads it — "Black / Large", or "Default".</param>
 /// <param name="HasBeenOrdered">True once any order line names it; it can then only be deactivated.</param>

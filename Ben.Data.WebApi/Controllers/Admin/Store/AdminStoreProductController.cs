@@ -75,11 +75,32 @@ public sealed partial class AdminStoreProductController(
                 p.Variants.Count(), p.UnitsSold,
                 p.Images.Where(i => i.VariantId == null).OrderBy(i => i.SortOrder).Select(i => (Guid?)i.UploadFileId).FirstOrDefault()
                     ?? p.Images.OrderBy(i => i.SortOrder).Select(i => (Guid?)i.UploadFileId).FirstOrDefault(),
-                p.DateUpdated ?? p.DateCreated))
+                p.DateUpdated ?? p.DateCreated,
+                p.SellerAppUser == null ? null : p.SellerAppUser.DisplayName ?? p.SellerAppUser.Email))
             .ToListAsync(ct);
 
         return Ok(ListPaging.Apply(rows, page, pageSize, Response));
     }
+
+    /// <summary>Everybody who can be named as an item's seller: the holders of the Seller role.</summary>
+    [HttpGet("sellers")]
+    public async Task<ActionResult<IEnumerable<StoreSellerRecord>>> Sellers(CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var ids = SellerIds(db);
+        var sellers = await db.AppUsers.AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new StoreSellerRecord(u.Id, u.DisplayName ?? u.Email ?? u.UserName ?? "Unnamed", u.Email))
+            .ToListAsync(ct);
+        // Sorted here: a member of a record built in the projection has no SQL to order by.
+        return Ok(sellers.OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase).ToList());
+    }
+
+    public const string NotASeller = "That person isn't a seller. Give them the Seller role on their Site Roles tab first.";
+
+    /// <summary>The Seller role's holders, as a query.</summary>
+    private static IQueryable<Guid> SellerIds(BenDataContext db)
+        => db.UserRoles.Where(ur => db.Roles.Any(r => r.Id == ur.RoleId && r.Name == RoleNames.Seller)).Select(ur => ur.UserId);
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<StoreProductAdminRecord>> GetById(Guid id, CancellationToken ct)
@@ -151,6 +172,11 @@ public sealed partial class AdminStoreProductController(
         if (taxCode is not null && !TaxCode().IsMatch(taxCode))
             return BadRequest("A Stripe tax code looks like txcd_99999999.");
         if (SpecProblem(request.Specs) is { } badSpec) return BadRequest(badSpec);
+        // A seller is named only from the Seller role; one who has since lost it can stay on the
+        // item they already had, so an unrelated save does not fail over it.
+        if (request.SellerAppUserId is { } sellerId && sellerId != product.SellerAppUserId
+            && !await SellerIds(db).AnyAsync(u => u == sellerId, ct))
+            return BadRequest(NotASeller);
 
         if (!string.IsNullOrWhiteSpace(request.Slug))
         {
@@ -174,6 +200,7 @@ public sealed partial class AdminStoreProductController(
         product.NewUntilUtc = request.NewUntilUtc;
         product.StripeTaxCode = taxCode;
         product.SortOrder = request.SortOrder;
+        product.SellerAppUserId = request.SellerAppUserId;
         product.DateUpdated = DateTime.UtcNow;
         product.UpdatedByAppUserId = userId;
 
@@ -895,6 +922,9 @@ public sealed partial class AdminStoreProductController(
         var ordered = await db.StoreOrderItems.AsNoTracking().Where(i => i.ProductId == id)
             .Select(i => i.VariantId).Distinct().ToListAsync(ct);
         var pendingReviews = await db.StoreReviews.CountAsync(r => r.ProductId == id && r.Status == StoreReviewStatus.Pending, ct);
+        var sellerName = p.SellerAppUserId is { } seller
+            ? await db.AppUsers.AsNoTracking().Where(u => u.Id == seller).Select(u => u.DisplayName ?? u.Email).FirstOrDefaultAsync(ct)
+            : null;
 
         return new StoreProductAdminRecord(
             p.Id, p.CategoryId, p.Category.Name, p.Category.IsActive, p.EquipmentModelId, p.Name, p.Slug,
@@ -910,7 +940,7 @@ public sealed partial class AdminStoreProductController(
                 ordered.Contains(v.Id))).ToList(),
             p.Specs.OrderBy(s => s.SortOrder).GroupBy(s => s.GroupName)
                 .Select(g => new StoreSpecGroup(g.Key, g.Select(s => new StoreSpecRecord(s.Name, s.Value)).ToList())).ToList(),
-            $"/store/p/{p.Slug}", p.DateCreated, p.DateUpdated);
+            $"/store/p/{p.Slug}", p.DateCreated, p.DateUpdated, p.SellerAppUserId, sellerName);
     }
 
     private static int IndexOf(IReadOnlyList<Guid> ids, Guid id)
@@ -931,5 +961,6 @@ public sealed partial class AdminStoreProductController(
         Id = p.Id, CategoryId = p.CategoryId, EquipmentModelId = p.EquipmentModelId, Name = p.Name, Slug = p.Slug,
         ShortDescription = p.ShortDescription, LongDescriptionHtml = p.LongDescriptionHtml, IsActive = p.IsActive,
         IsFeatured = p.IsFeatured, SortOrder = p.SortOrder, NewUntilUtc = p.NewUntilUtc, StripeTaxCode = p.StripeTaxCode,
+        SellerAppUserId = p.SellerAppUserId,
     };
 }

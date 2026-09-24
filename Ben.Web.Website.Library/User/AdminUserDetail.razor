@@ -827,6 +827,7 @@ else
         "superadmin" => "everything: every administration page, impersonation, billing, and this screen.",
         "admin"      => "sees the administration help documents. Grants nothing else yet.",
         "moderator"  => "reviews what people post: the feed's report queue and media awaiting review. Nothing else.",
+        "seller"     => "sells their own items in the store: they can be named as an item's seller. No store administration and no pricing.",
         _            => "a custom role. It grants nothing unless the site's code checks for it by name.",
     };
 
@@ -835,7 +836,8 @@ else
         "superadmin" => 0,
         "admin"      => 1,
         "moderator"  => 2,
-        _            => 3,
+        "seller"     => 3,
+        _            => 4,
     };
 
     private async Task ImpersonateUser()

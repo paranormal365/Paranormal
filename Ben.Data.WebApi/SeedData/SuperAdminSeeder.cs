@@ -57,6 +57,15 @@ internal static class SuperAdminSeeder
                 throw new InvalidOperationException($"Failed to create role '{RoleNames.Moderator}': {string.Join(", ", moderatorRoleResult.Errors.Select(e => e.Description))}");
         }
 
+        // Ensure the Seller role exists (storefront). Nobody is seeded into it: a SuperAdmin gives it
+        // on the person's Site Roles tab, and the product editor's Seller field lists its holders.
+        if (!await roleManager.RoleExistsAsync(RoleNames.Seller))
+        {
+            var sellerRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Seller));
+            if (!sellerRoleResult.Succeeded)
+                throw new InvalidOperationException($"Failed to create role '{RoleNames.Seller}': {string.Join(", ", sellerRoleResult.Errors.Select(e => e.Description))}");
+        }
+
         // Ensure SuperAdmin user exists
         var user = await userManager.FindByEmailAsync(email);
         if (user is null)

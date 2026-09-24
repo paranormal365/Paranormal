@@ -13494,6 +13494,26 @@ or built on the `storefront` branch, planned with a smaller scope, or new.
   discontinue it.
 - Ben's point 8 in the source list stops mid-sentence ("This will show the"). Ask Ben.
 
+### Ben's seller rules (09/24/2026)
+
+- "A seller only has control over their individual items in the store, not the admin part or
+  pricing." A seller works on their own items only. They never see the store's admin pages and
+  never set a price.
+- **A seller can add items.** Each one starts as a hidden draft. An admin can still assign any item to any
+  seller.
+- **An admin approves going on sale:** the admin sets the price and puts the item on sale. A
+  seller may take their own item off sale at any time.
+- **Edits to an item already on sale show immediately.** The item's history records who changed
+  what.
+- **Built on the storefront branch:**
+  - the additive **Seller** site role, assigned on the Site Roles tab
+  - a Seller field on each item, listing only people who hold the role
+  - a Seller column in the product list
+  - a live preview of the product page while it is being edited
+- **Still to build, after the store ships:** the seller's own workspace — their items, create a
+  draft, edit words, pictures and specs, and ask for an item to go on sale — plus the rest of this
+  item.
+
 ### Decide before building
 
 - **Is the store a marketplace?** The v1 plan has the site selling its own stock. Sellers who are

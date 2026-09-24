@@ -100,7 +100,8 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 - Migrations: `dotnet ef migrations add <Name> --project Ben.Data.Source --startup-project
   Ben.Data.WebApi`; apply with `--connection "<player|e2e|live>"` only (`dotnet ef` ignores the env
   var; IsHauntedDb is production). M1 StoreCatalog, M2 StoreCartsAndOrders,
-  M3 StoreFavouritesAndReviews.
+  M3 StoreFavouritesAndReviews, M4 StoreProductSeller (09/24, Ben's Seller role: one nullable
+  column + index + FK on StoreProducts, nothing else).
 - The confirmation, shipped and refund letters are queued through IOutboxEmailQueue INSIDE the
   transaction that changes the order — a refused letter refuses the change.
 - NO Stripe call inside a SQL transaction: MarkPaid commits first, the tax transaction is a second
@@ -302,6 +303,18 @@ with the same intent), the checkout's "New client (creates account)" radio (sign
 away: "Create an account" → /register?returnUrl=/store/checkout), the 250×292 empty-cart
 illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" review sort IS built
 (popular = most helpful first, the default).
+
+## Sellers (built 09/24/2026, between S3.3 and S3.4 at Ben's request)
+- The additive **Seller** site role (RoleNames.Seller, seeded by SuperAdminSeeder, given on the
+  person's Site Roles tab). Ben: "A seller only has control over their individual items in the
+  store, not the admin part or pricing."
+- `StoreProduct.SellerAppUserId`: the product editor's Seller field lists only role holders
+  (`GET api/admin/store/products/sellers`); a person who later loses the role stays on what they
+  had; the product list has a Seller column. Closure/purge clears it (shared AnonymiseAsync), and
+  the purge census skips that one column (`clearedColumns`), so a seller stays deletable.
+- The seller's own workspace follows the store (backlog item 251), with Ben's rules: sellers add
+  hidden drafts, an admin sets the price and puts an item on sale, a seller can take their own
+  item off sale, and edits to a live item show immediately.
 
 ## Queued after S8: Ben's store enhancements (09/24/2026)
 Ben's `Store Enhancements.md` list is backlog item 251 in `ProjectNotes/Future-Improvements.md`.

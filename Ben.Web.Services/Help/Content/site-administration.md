@@ -234,8 +234,8 @@ you take while impersonating are real actions on their account.
 
 ## Site roles
 
-There are three roles that apply across the whole site, separate from anyone's role inside a
-group:
+There are four roles that apply across the whole site, separate from anyone's role inside a
+group. They add up: somebody can hold any mix of them.
 
 - **SuperAdmin** — everything: every page under Administration, impersonation, billing, and the
   power to hand out these roles.
@@ -244,6 +244,9 @@ group:
 - **Moderator** — reviews what people post: the feed's report queue and the media awaiting
   review, with the power to approve, hold or hide. No billing, no user administration, no
   impersonation. A SuperAdmin can moderate without holding this role.
+- **Seller** — a member who makes and sells their own items in the store. Only people with this
+  role are offered in a product's **Seller** field. It opens no part of Administration, and a
+  seller never sets a price or puts an item on sale — a SuperAdmin does both.
 
 Everyone else is an ordinary member. Creating an account and confirming an email address makes
 someone a verified member; it never puts them in a site role.
@@ -1084,6 +1087,12 @@ price. It goes on sale with **Activate**, which refuses — saying what to do �
 has a price, at least one picture, a live variant and a visible category. A product's address
 (/store/p/k-ii-emf-meter) is made from its name once and then kept: renaming a product does not
 break links people have shared. Type a new address only if you mean to.
+
+**Seller** names the member who makes and sells the product; leave it on "The site's own stock"
+for anything the site sells itself. Only people with the Seller role are listed — give it on their
+**Site Roles** tab first. Shoppers never see who the seller is, and the products list shows it in
+its **Seller** column. A seller who leaves the site leaves their products behind as the site's
+own.
 
 A product that has been sold can be switched off but never deleted, because its orders, invoices
 and refunds point at it. **Duplicate** makes a hidden copy — options, variants with new SKUs and no

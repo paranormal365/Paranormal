@@ -56,6 +56,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<StoreProductAdminRecord>> GetStoreProductAsync(Guid productId, CancellationToken token = default)
         => _api.GetItemAsync<StoreProductAdminRecord>($"/api/admin/store/products/{productId}", token);
 
+    public Task<LoadResult<StoreSellerRecord>> GetStoreSellersAsync(CancellationToken token = default)
+        => _api.GetListAsync<StoreSellerRecord>("/api/admin/store/products/sellers", token);
+
     public Task<(StoreProductAdminRecord? Result, string? Error)> CreateStoreProductAsync(
         CreateStoreProductRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<CreateStoreProductRequest, StoreProductAdminRecord>(

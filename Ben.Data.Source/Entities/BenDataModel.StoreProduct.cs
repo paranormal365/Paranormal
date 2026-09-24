@@ -57,7 +57,14 @@ namespace Ben.Data.Source.Entities
         /// <summary>Cache: the number of approved reviews.</summary>
         public int ReviewCount { get; set; }
 
+        /// <summary>
+        /// The member who makes and sells this item — a holder of the Seller role. Null for the
+        /// site's own stock. Never shown to shoppers.
+        /// </summary>
+        public Guid? SellerAppUserId { get; set; }
+
         public virtual StoreCategory Category { get; set; } = null!;
+        public virtual AppUser? SellerAppUser { get; set; }
         public virtual EquipmentModel? EquipmentModel { get; set; }
         public virtual ICollection<StoreProductOption> Options { get; set; } = [];
         public virtual ICollection<StoreProductVariant> Variants { get; set; } = [];

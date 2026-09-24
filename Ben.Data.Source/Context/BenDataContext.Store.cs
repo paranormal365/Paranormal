@@ -74,6 +74,11 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.CategoryId).OnDelete(DeleteBehavior.NoAction);
             product.HasOne(e => e.EquipmentModel).WithMany()
                 .HasForeignKey(e => e.EquipmentModelId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The seller. NoAction like every FK to AppUsers; deleting the person clears it
+            // (AppUserPurge), so the item stays, as the site's own stock.
+            product.HasIndex(e => e.SellerAppUserId);
+            product.HasOne(e => e.SellerAppUser).WithMany()
+                .HasForeignKey(e => e.SellerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             StoreAudit<StoreProduct>(modelBuilder);
 
             var option = modelBuilder.Entity<StoreProductOption>();

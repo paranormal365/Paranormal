@@ -380,7 +380,7 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
 
         var saved = Ok(await Controller().Update(p.Id, new SaveStoreProductRequest(
             _categoryId, null, p.Name, null, "Short", "<p>Reads EMF</p><script>alert(1)</script>", false, null, null, 0,
-            [new StoreSpecGroup("Detection", [new StoreSpecRecord("Range", "0–20 mG")])]), default));
+            [new StoreSpecGroup("Detection", [new StoreSpecRecord("Range", "0–20 mG")])], null), default));
 
         Assert.Contains("Reads EMF", saved.LongDescriptionHtml);
         Assert.DoesNotContain("script", saved.LongDescriptionHtml);

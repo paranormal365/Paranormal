@@ -45,6 +45,9 @@ public interface IBenStoreAdminClient
 
     Task<ItemResult<StoreProductAdminRecord>> GetStoreProductAsync(Guid productId, CancellationToken token = default);
 
+    /// <summary>Everybody who can be named as an item's seller: the holders of the Seller role.</summary>
+    Task<LoadResult<StoreSellerRecord>> GetStoreSellersAsync(CancellationToken token = default);
+
     Task<(StoreProductAdminRecord? Result, string? Error)> CreateStoreProductAsync(
         CreateStoreProductRequest request, CancellationToken token = default);
 

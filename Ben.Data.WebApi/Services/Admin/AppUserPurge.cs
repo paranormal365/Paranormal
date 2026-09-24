@@ -461,6 +461,13 @@ public sealed class AppUserPurge
             nameof(StoreOrder), nameof(StoreCouponRedemption),
         };
 
+        // Single columns the shared anonymise step sets to null, on tables it otherwise leaves
+        // alone — so the table's other references to people are still counted.
+        var clearedColumns = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{nameof(StoreProduct)}.{nameof(StoreProduct.SellerAppUserId)}",
+        };
+
         var total = 0;
         var itemised = new List<string>();
 
@@ -477,6 +484,7 @@ public sealed class AppUserPurge
                 // Composite references are not counted, and there are none. A guard test fails on
                 // the day somebody adds one, rather than this quietly under-counting.
                 if (fk.Properties.Count != 1) continue;
+                if (clearedColumns.Contains($"{entity.ClrType.Name}.{fk.Properties[0].Name}")) continue;
 
                 var count = await CountReferencesAsync(
                     db, entity.ClrType, fk.Properties[0].Name, userId,
