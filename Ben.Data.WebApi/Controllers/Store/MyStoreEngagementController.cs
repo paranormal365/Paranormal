@@ -51,6 +51,7 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
         return Ok(entries.OrderBy(e => order.IndexOf(e.Product.Id)).Select(e => StoreCatalogue.Card(e, settings.LowStockThreshold, now)).ToList());
     }
 
+    /// <summary>The header heart's number: the same favourites the list shows, no more.</summary>
     [HttpGet("favourites/count")]
     public async Task<ActionResult<StoreFavouriteCount>> FavouriteCount(CancellationToken ct)
     {
@@ -59,6 +60,7 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
         return Ok(new StoreFavouriteCount(await CountAsync(db, me, ct)));
     }
 
+    /// <summary>Keeps a product. Only one on sale; keeping it twice keeps it once. Answers the new count.</summary>
     [HttpPut("favourites/{productId:guid}")]
     [EnableRateLimiting(RateLimiting.StoreCartPolicy)]
     public async Task<ActionResult<StoreFavouriteCount>> AddFavourite(Guid productId, CancellationToken ct)
@@ -75,6 +77,7 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
         return Ok(new StoreFavouriteCount(await CountAsync(db, me, ct)));
     }
 
+    /// <summary>Lets a product go — on sale or not, so a hidden one can still be cleared. Answers the new count.</summary>
     [HttpDelete("favourites/{productId:guid}")]
     [EnableRateLimiting(RateLimiting.StoreCartPolicy)]
     public async Task<ActionResult<StoreFavouriteCount>> RemoveFavourite(Guid productId, CancellationToken ct)
@@ -91,6 +94,11 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
 
     // ── The product page's "you" panel ───────────────────────────────────────
 
+    /// <summary>
+    /// Whether the reader keeps this product, may review it (and if not, the sentence saying why), and
+    /// their own review in whatever state it is in. Joins guest orders first, so a guest who has just
+    /// signed up sees Write a review straight away.
+    /// </summary>
     [HttpGet("products/{productId:guid}/state")]
     public async Task<ActionResult<StoreProductViewerState>> State(Guid productId, CancellationToken ct)
     {
@@ -161,6 +169,7 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
         return Ok(new MyStoreReviewRecord(review.Id, review.Rating, review.Title, review.Body, review.Status, null, review.DateCreated));
     }
 
+    /// <summary>Deletes the reader's review, its helpful votes with it, and works the stars out again.</summary>
     [HttpDelete("products/{productId:guid}/review")]
     [EnableRateLimiting(RateLimiting.StoreCartPolicy)]
     public async Task<IActionResult> DeleteReview(Guid productId, CancellationToken ct)
@@ -176,6 +185,10 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
         return NoContent();
     }
 
+    /// <summary>
+    /// "Helpful", set (POST) or taken back (DELETE) — a setting, not a toggle, so a repeated tap cannot
+    /// flip it. Only on a published review of a product on sale, and never on your own.
+    /// </summary>
     [HttpPost("reviews/{reviewId:guid}/helpful")]
     [EnableRateLimiting(RateLimiting.StoreCartPolicy)]
     public Task<ActionResult<StoreHelpfulVoteResult>> Helpful(Guid reviewId, CancellationToken ct) => VoteAsync(reviewId, true, ct);

@@ -684,16 +684,17 @@
     private bool ContainsActive(NavItem group)
         => group.Children.Any(c => IsActive(c) || ContainsActive(c));
 
+    /// <summary>The address lit in the menu this render; set by <see cref="MostSpecificMatch"/>.</summary>
+    private string? _activeUrl;
+
+    private string CurrentPath => "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
+
     /// <summary>
     /// The one address lit in the menu: the longest entry that covers this page. "Browse the Store"
     /// (/store) covers /store/favourites too, and lit beside "Favourites" it said the page was in
     /// two places at once (seen by eye, 09/24). A page no entry names exactly — a case under
     /// /cases — still lights the entry above it.
     /// </summary>
-    private string? _activeUrl;
-
-    private string CurrentPath => "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
-
     private string? MostSpecificMatch()
     {
         var path = CurrentPath;
@@ -705,6 +706,7 @@
             .FirstOrDefault();
     }
 
+    /// <summary>The entry's address is this page, or a folder this page sits in.</summary>
     private static bool Covers(string? url, string path)
     {
         if (string.IsNullOrEmpty(url)) return false;
