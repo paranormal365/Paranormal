@@ -567,10 +567,27 @@
         }
     }
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws this page, then the live connection builds it again as a new component with
+    // none of the first one's data — so it showed its content, its spinner, and its content again.
+    // What the server fetched rides into the page ([PersistentState]) and is used once, for the
+    // address it was fetched for; every later load (Retry, a new address) asks the API.
+    [PersistentState] public List<PublicSubscriptionTier>? RenderedTiers { get; set; }
+
     private async Task LoadAsync()
     {
         _loading = true;
-        _tiersResult = await Client.GetPublicPricingAsync();
+        if (RenderedTiers is { } carried)
+        {
+            RenderedTiers = null;
+            _tiersResult = LoadResult<PublicSubscriptionTier>.Ok(carried);
+        }
+        else
+        {
+            _tiersResult = await Client.GetPublicPricingAsync();
+            if (!RendererInfo.IsInteractive && !_tiersResult.Failed && PrerenderCarry.Fits(_tiersResult.Items))
+                RenderedTiers = [.. _tiersResult.Items];
+        }
 
         _intervals = [.. _tiersResult.Items
             .SelectMany(t => t.Prices.Select(p => p.Interval))

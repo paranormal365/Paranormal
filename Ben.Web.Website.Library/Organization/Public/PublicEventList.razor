@@ -224,12 +224,34 @@
         await ReloadAsync();
     }
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws this page, then the live connection builds it again as a new component with
+    // none of the first one's data — so it showed its content, its spinner, and its content again.
+    // What the server fetched rides into the page ([PersistentState]) and is used once, for the
+    // address it was fetched for; every later load (Retry, a new address) asks the API.
+    [PersistentState] public List<PublicEventListItem>? RenderedEvents { get; set; }
+    [PersistentState] public string? RenderedFor { get; set; }
+
     private async Task ReloadAsync()
     {
+        var key = UrlName ?? "*";
+        if (RenderedEvents is { } carried && RenderedFor == key)
+        {
+            RenderedEvents = null;
+            _events = LoadResult<PublicEventListItem>.Ok(carried);
+            _loading = false;
+            return;
+        }
+
         _loading = true;
         StateHasChanged();
         _events  = await AdminClient.GetPublicEventsAsync(UrlName);
         _loading = false;
+        if (!RendererInfo.IsInteractive && !_events.Failed && PrerenderCarry.Fits(_events.Items))
+        {
+            RenderedEvents = [.. _events.Items];
+            RenderedFor = key;
+        }
         StateHasChanged();
     }
 }
