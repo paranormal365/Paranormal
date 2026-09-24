@@ -176,9 +176,11 @@ On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for
 
 ### 3. Database, then deploy
 
-1. Apply the store's migrations to the LIVE database **before** deploying the code (M1–M4:
-   21 store tables and the product seller column; nothing existing changes). Always with an explicit
-   `--connection`; `dotnet ef` ignores the connection-string environment variable.
+1. Apply the store's five migrations to the LIVE database **before** deploying the code:
+   `StoreCatalog`, `StoreCartsAndOrders`, `StoreFavouritesAndReviews`, `StoreProductSeller`,
+   `StoreSubcategories` — 21 store tables, the product's seller column and the category's parent;
+   nothing existing changes. Always with an explicit `--connection`; `dotnet ef` ignores the
+   connection-string environment variable.
 2. Deploy both sites. The store is still dark.
 3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count
    buyers separately. The API trusts that header from loopback only. If the website's peer at the API is

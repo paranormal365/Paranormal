@@ -2253,6 +2253,158 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("site-administration", "equipment-taxonomy.png", gated: true);
     }
 
+    // ── The store ─────────────────────────────────────────────────────────────
+
+    /// <summary>A demo product's fixed id (StoreDemoSeeder): 21 is the K-II.</summary>
+    private static string StoreSeeded(int n) => $"a1000000-0000-0000-0000-{n:D12}";
+
+    /// <summary>
+    /// shopping-at-the-store: the front, a list, a product and its reviews, the three cart surfaces,
+    /// checkout, and a buyer's orders and favourites.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Run it on a fresh side database</b> (<c>BEN_E2E_DB=IsHauntedDb_capture</c>): the e2e
+    /// database collects a shelf for every test that ever ran, and the store's front would show
+    /// "Sold Out Shelf 2a3ce6" beside the EMF meters. A fresh one holds only StoreDemoSeeder's
+    /// seven products, its orders and its reviews.</para>
+    ///
+    /// <para><b>The cart and checkout are a guest's</b>, at phone width — the document says a guest
+    /// can buy, and most will be holding a phone. The Payment step is not captured in the harness's
+    /// test checkout: it shows a "Test checkout" note where the card form goes, which would teach a
+    /// reader the opposite of what the text says. It is taken when Stripe test keys are present.</para>
+    /// </remarks>
+    [Test]
+    [Description("shopping-at-the-store: the store, a product, the cart, checkout, orders and favourites.")]
+    public async Task Capture_Shopping()
+    {
+        const string slug = "shopping-at-the-store";
+        await LogoutAsync();
+
+        // The harness has only just switched the store on, and the site holds a switch's answer
+        // for up to 30 seconds: on a fresh database the first look is "page not found".
+        await GoAsync("/store");
+        for (var tries = 0; tries < 8 && !await Page.GetByText("Shop by category").IsVisibleAsync(); tries++)
+        {
+            await Page.WaitForTimeoutAsync(5_000);
+            await GoAsync("/store");
+        }
+        await ShootAsync(slug, "store-home.png", proves: "Shop by category");
+
+        await GoAsync("/store/products");
+        await ShootAsync(slug, "listing.png", proves: "K-II EMF Meter");
+
+        await GoAsync("/store/p/k-ii-emf-meter");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "product.png", proves: "Add to cart");
+        await ShootAsync(slug, "reviews.png", selector: "#reviews", proves: "The store replied");
+
+        // Two things in the cart, the second added last so the drawer is open on the phone shot.
+        await ClickUntilAsync(Page.Locator("[data-testid=add-to-cart]"), Page.Locator("[data-testid=cart-drawer]"));
+        await Page.Keyboard.PressAsync("Escape");
+        await GoAsync("/store/p/investigators-field-bag");
+        await WaitForTheCircuitAsync();
+        await Page.SetViewportSizeAsync(390, PhoneHeight);
+        await ClickUntilAsync(Page.Locator("[data-testid=add-to-cart]"), Page.Locator("[data-testid=cart-drawer]"));
+        await ShootAsync(slug, "cart-drawer.png", width: 390, proves: "To checkout");
+        await Page.Keyboard.PressAsync("Escape");
+
+        await GoAsync("/store");
+        await WaitForTheCircuitAsync();
+        await ClickUntilAsync(Page.Locator("#nav-cart"), Page.Locator(".ben-cart-dd.show"));
+        await ShootAsync(slug, "cart-menu.png", selector: ".ben-cart-dd.show", proves: "Go to Cart");
+
+        await GoAsync("/store/cart");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "cart.png", proves: "Do you have a discount code?");
+
+        await ClickUntilAsync(Page.Locator("#cart-to-checkout"), Page.Locator("#checkout-email"));
+        await FillAndConfirmAsync("#checkout-email", "ada.buyer@example.com");
+        await FillAndConfirmAsync("#shipping-full-name", "Ada Buyer");
+        await FillAndConfirmAsync("#shipping-phone", "615-555-0100");
+        await FillAndConfirmAsync("#shipping-street1", "1 Elm St");
+        await FillAndConfirmAsync("#shipping-city", "Nashville");
+        await Page.SelectOptionAsync("#shipping-state", "TN");
+        await FillAndConfirmAsync("#shipping-zip", "37203");
+        await ShootAsync(slug, "checkout.png", width: 390, proves: "Shipping address");
+
+        await Page.Locator("#checkout-terms").CheckAsync();
+        await Page.Locator("#store-continue-payment").ClickAsync();
+        await Expect(Page.Locator("[data-testid=checkout-payment]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        if (await Page.Locator("[data-testid=checkout-fake]").CountAsync() > 0)
+            TestContext.Out.WriteLine("NOT captured: checkout-payment.png — the harness's test checkout has no card form (needs Stripe test keys).");
+        else
+            await ShootAsync(slug, "checkout-payment.png", width: 390, proves: "Place order");
+
+        // A buyer with history: Sarah has five seeded orders and two favourites.
+        await LoginAsync(UserEmail, UserPassword);
+        await GoAsync("/store/orders");
+        await WaitForTheCircuitAsync();
+        await DismissActionNeededBannersAsync();   // Sarah's groups' "work waiting" is not the subject
+        await ShootAsync(slug, "my-orders.png", proves: "Order no.");
+
+        await GoAsync($"/store/orders/{StoreSeeded(102)}");
+        await ShootAsync(slug, "order.png", proves: "H1n Handy Recorder");
+
+        await GoAsync("/store/favourites");
+        await ShootAsync(slug, "favourites.png", proves: "REM Pod");
+    }
+
+    /// <summary>
+    /// Closes the "has work waiting" banners the way a person would. They are about the signed-in
+    /// person's groups, not the page being photographed, and stay closed for the rest of the tab's
+    /// session (ActionNeededBanners), so once is enough for every shot that follows.
+    /// </summary>
+    private async Task DismissActionNeededBannersAsync()
+    {
+        var close = Page.Locator(".action-needed-banner .btn-close");
+        await Page.WaitForTimeoutAsync(1_000);   // they arrive a moment after the page does
+        for (var i = 0; i < 10 && await close.CountAsync() > 0; i++)
+        {
+            await close.First.ClickAsync();
+            await Page.WaitForTimeoutAsync(300);
+        }
+    }
+
+    /// <summary>
+    /// site-administration's store sections: the dashboard, products and one being edited, stock,
+    /// the order desk and one order, the review queue and the settings.
+    /// </summary>
+    /// <remarks>Run on a fresh side database, like <see cref="Capture_Shopping"/>, or the grids are
+    /// hundreds of rows of test products.</remarks>
+    [Test]
+    [Description("site-administration: the store's back office.")]
+    public async Task Capture_StoreAdministration()
+    {
+        const string slug = "site-administration";
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        await GoAsync("/admin/store");
+        await WaitForTheCircuitAsync();
+        await DismissActionNeededBannersAsync();
+        await ShootAsync(slug, "store-dashboard.png", gated: true, proves: "To pack");
+
+        await GoAsync("/admin/store/products");
+        await ShootAsync(slug, "store-products.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync($"/admin/store/products/{StoreSeeded(21)}/edit");
+        await ShootAsync(slug, "store-product-edit.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync("/admin/store/stock");
+        await ShootAsync(slug, "store-stock.png", gated: true, proves: "KII-EMF");
+
+        await GoAsync("/admin/store/orders");
+        await ShootAsync(slug, "store-orders.png", gated: true, proves: "Sarah");
+
+        await GoAsync($"/admin/store/orders/{StoreSeeded(101)}");
+        await ShootAsync(slug, "store-order.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync("/admin/store/reviews");
+        await ShootAsync(slug, "store-reviews.png", gated: true, proves: "Our go-to first sweep");
+
+        await GoAsync("/admin/store/settings");
+        await ShootAsync(slug, "store-settings.png", gated: true, proves: "Flat rate");
+    }
+
     // ── Publications ──────────────────────────────────────────────────────────
 
     /// <summary>

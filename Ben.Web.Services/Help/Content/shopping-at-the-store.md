@@ -1,6 +1,6 @@
 ---
 title: Shopping at the Store
-summary: Finding gear, choosing options, your cart, placing an order, delivery, returns and reviews.
+summary: Finding gear, choosing options, your cart, placing an order, delivery, returns, favourites and reviews.
 section: Getting Started
 audience: Everyone
 feature: features.store
@@ -15,6 +15,8 @@ things that go with them. Anyone can buy, with or without an account.
 **Store** in the menu opens the front of the store: its shelves — EMF meters, spirit boxes,
 recorders and so on — and rows of featured, new and popular gear. Pick a shelf to see everything on
 it, or **Browse everything** to see the whole store.
+
+![The front of the store: its featured shelf, the search box and the promise strip](/help/media/shopping-at-the-store/store-home.png)
 
 The search box finds gear by name, and by the code on its label (the SKU). Suggestions appear as
 you type two letters or more; press Enter to see every match.
@@ -33,6 +35,8 @@ Each filter you choose shows as a chip above the list; its **✕** takes that on
 price. The address in your browser carries every choice, so a filtered list can be bookmarked or
 sent to a friend and opens the same way.
 
+![All products, with the shelves and filters down the side](/help/media/shopping-at-the-store/listing.png)
+
 A card marked **Sold out** is still listed — you can see what the store carries — but it cannot
 be bought until it is back. **Only 3 left** means just that.
 
@@ -50,6 +54,8 @@ A price with another struck through beside it is on sale; the struck-through one
 to cost. Prices are in US dollars and do not include sales tax or delivery, which are added at
 checkout.
 
+![A product page: the picture, the price with its old price struck through, the heart, and Add to cart](/help/media/shopping-at-the-store/product.png)
+
 ## Your cart
 
 You don't need an account to shop. Your cart belongs to your browser until you sign in, and then
@@ -61,15 +67,21 @@ saved on your account follows you to any device you sign in on.
 well. The cart slides out from the side to show what you added. If fewer are left than you asked
 for, you get the ones that are left and a note saying how many that was.
 
+![The cart sliding out on a phone, with two items and the totals](/help/media/shopping-at-the-store/cart-drawer.png)
+
 **Seeing your cart.** The cart icon at the top of every page shows how many things are in it.
 Tap it for a quick look — the items, the products total, shipping and the total before tax — or
 press **Go to Cart** for the full cart page.
+
+![The quick look under the cart icon](/help/media/shopping-at-the-store/cart-menu.png)
 
 **Changing quantities.** On the cart page or in the slide-out cart, use − and + to change how
 many. The totals update as you press — there is no "update cart" button to remember. The bin
 icon removes an item. Each item says how many are in stock. An item that has sold out, or has
 been taken out of the store since you added it, is marked in red. Fix or remove it before
 checking out.
+
+![The cart page: the steps, each item with − and +, and the order summary](/help/media/shopping-at-the-store/cart.png)
 
 **Discount codes.** On the cart page, press **Do you have a discount code?**, type the code and
 press **Apply**. In the slide-out cart, open **Discount code**. A code comes off the products,
@@ -104,6 +116,8 @@ order**, **Payment**, **Complete**.
    so your card details go straight to them and never reach IsHaunted.com. Press **Place order**.
 6. **Complete.** You'll see "Thank you for your order!" with your order number, and a receipt
    arrives by email.
+
+![Checkout on a phone: the steps, the delivery details, and the total with Continue to payment](/help/media/shopping-at-the-store/checkout.png)
 
 **Changing something after you continue.** Once you press Continue, your details are shown as a
 summary so the payment is for exactly what you see. To change the address, the email or the
@@ -144,6 +158,10 @@ it has got to: *Paid — being prepared*, *Packed*, *Shipped*, *Delivered*, *Can
 Open an order to see where it's going, what's in it, what it came to, and its tracking number once
 it ships. Checkouts you started but never paid for aren't orders, so they aren't listed.
 
+![My Orders, each order with its date, total and where it has got to](/help/media/shopping-at-the-store/my-orders.png)
+
+![One order: where it's going, how it's being paid, and its tracking number](/help/media/shopping-at-the-store/order.png)
+
 **As a guest.** Your receipt email has a private link to your order — keep that email, because it
 is the way back. If you've lost it, go to **Find my order** (at the bottom of the store's front
 page), enter the order number and the email address you used, and the link is sent again. The page
@@ -180,12 +198,16 @@ comes back if it returns.
 Favourites belong to your account, so you need to be signed in: a guest who taps a heart is asked to
 sign in first.
 
+![Favourites: the products you're keeping, as they are today](/help/media/shopping-at-the-store/favourites.png)
+
 ## Reviews
 
 **Reading reviews.** A product's reviews are at the bottom of its page, with its average stars
 at the top. Sort them by *Most popular*, *Newest*, *Highest rated*, *Lowest rated* or *Most helpful*.
 Every review is from somebody who bought that product here, and some have a reply from the store.
 Signed in, you can mark a review **Helpful**; the count under it says how many people did.
+
+![A product's reviews: the average, each review with its stars, the store's reply and Helpful](/help/media/shopping-at-the-store/reviews.png)
 
 **Writing one.** Only somebody who has bought a product can review it. Sign in, open the product,
 and press **Write a review**: pick one to five stars, give it a title and say a few words about how
@@ -197,3 +219,10 @@ moderator and is taken down until it's approved again. One review per product; a
 can't be reviewed.
 
 **Bought as a guest? Sign up with the email you ordered with — the order attaches to your account and you can review.**
+
+## Selling your own gear
+
+Some things in the store are made by members of the site. If you build equipment and would like to
+sell it here, get in touch through **Contact**. A site administrator lists it for you and sets its
+price; orders, payments and refunds go through the store, so buying it works exactly like buying
+anything else here. Shoppers don't see who made an item.

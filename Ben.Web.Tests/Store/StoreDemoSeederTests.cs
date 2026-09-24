@@ -19,12 +19,20 @@ public sealed class StoreDemoSeederTests
             var admin = StoreTestData.Person(db);
             StoreTestData.StoreImageType(db, admin);
             if (withPeople)
-                foreach (var (email, first) in new[] { (StoreDemoSeeder.SarahEmail, "Sarah"), (StoreDemoSeeder.JamesEmail, "James"), (StoreDemoSeeder.EmmaEmail, "Emma") })
+            {
+                foreach (var (email, first) in new[] { (StoreDemoSeeder.SarahEmail, "Sarah"), (StoreDemoSeeder.JamesEmail, "James") })
                     db.AppUsers.Add(new Ben.Data.Source.Entities.AppUser
                     {
                         Id = Guid.NewGuid(), UserName = email, Email = email, NormalizedEmail = email.ToUpperInvariant(),
                         FirstName = first, LastName = "Demo", DateCreated = DateTime.UtcNow,
                     });
+                // As the development seeders make people: a display name, no first or last name.
+                db.AppUsers.Add(new Ben.Data.Source.Entities.AppUser
+                {
+                    Id = Guid.NewGuid(), UserName = StoreDemoSeeder.EmmaEmail, Email = StoreDemoSeeder.EmmaEmail,
+                    NormalizedEmail = StoreDemoSeeder.EmmaEmail.ToUpperInvariant(), DisplayName = "Emma Rodriguez", DateCreated = DateTime.UtcNow,
+                });
+            }
             await db.SaveChangesAsync();
             owner = admin.Id;
         }
@@ -268,5 +276,18 @@ public sealed class StoreDemoSeederTests
 
         Assert.Empty(await db.StoreReviews.ToListAsync());
         Assert.Equal((0m, 0), await db.StoreProducts.Where(p => p.Slug == "k-ii-emf-meter").Select(p => new ValueTuple<decimal, int>(p.AverageRating, p.ReviewCount)).SingleAsync());
+    }
+
+    [Fact]
+    public async Task An_order_is_addressed_to_the_person_by_the_name_the_site_shows()
+    {
+        var (sqlite, _) = await SeededAsync(withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        var emmas = await db.StoreOrders.SingleAsync(o => o.Id == StoreDemoSeeder.SeededOrders.EmmaKii);
+        Assert.Equal(("Emma Rodriguez", "Emma Rodriguez"), (emmas.BuyerName, emmas.ShipName));
+        var sarahs = await db.StoreOrders.FirstAsync(o => o.Id == StoreDemoSeeder.SeededOrders.SarahPaid);
+        Assert.Equal("Sarah Demo", sarahs.ShipName);   // no display name: first and last
     }
 }

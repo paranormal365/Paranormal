@@ -20,6 +20,17 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
         return new StoreTestApi(http);
     }
 
+    /// <summary>
+    /// Sends without asserting, for cleanup whose refusals are expected — NUnit records a failed
+    /// assertion even when it is caught, so SendAsync inside a try still fails the test.
+    /// </summary>
+    public async Task<System.Net.HttpStatusCode> TrySendAsync(HttpMethod method, string path)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        using var response = await http.SendAsync(request);
+        return response.StatusCode;
+    }
+
     public async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body = null)
     {
         using var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body) };

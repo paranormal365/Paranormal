@@ -1065,6 +1065,8 @@ administration menu: the dashboard, categories, products, stock, discount codes,
 store's own settings. Every one of those screens works while the shop is switched off, which is
 how the catalogue gets entered, priced and photographed before any visitor can see it.
 
+![The store dashboard: orders to pack and ship, reviews waiting, sales, and what is running low](help-media:site-administration/store-dashboard.png)
+
 ## Turning the store on
 
 Two switches, for two different jobs:
@@ -1082,6 +1084,8 @@ lists every reason the store could not take an order right now — no ship-from 
 live with stock, Stripe keys missing, Stripe Tax not active in the Stripe dashboard, the shop
 switched off — and says **Ready to sell** only when the list is empty.
 
+![Store Settings, with the Ready to sell checklist beside the form](help-media:site-administration/store-settings.png)
+
 ## Categories and products
 
 A **category** is a shelf: EMF meters, spirit boxes, field accessories. Each has an address
@@ -1097,6 +1101,8 @@ subcategories stays at the top. On the Categories page subcategories are listed 
 category, and the arrows move a row among its own level. In a product's **Category** list they read
 "Category › Subcategory". Hiding a category hides its subcategories' products too, and a category
 with subcategories cannot be removed until they are moved or removed.
+
+![The products list: each product's price, stock, seller and whether it is live](help-media:site-administration/store-products.png)
 
 **What shoppers see.** A category or subcategory appears on the store only when something is on
 sale under it — a category counts its subcategories' products, so it appears as soon as any of them
@@ -1127,6 +1133,8 @@ A product that has been sold can be switched off but never deleted, because its 
 and refunds point at it. **Duplicate** makes a hidden copy — options, variants with new SKUs and no
 stock, specifications and copies of every picture — for a product that differs only slightly.
 
+![Editing a product: its details, with tabs for options and variants, pictures and a live preview](help-media:site-administration/store-product-edit.png)
+
 ## Options, variants and stock
 
 **Options** are what a buyer chooses — Colour, Size — up to three per product, each with its
@@ -1149,6 +1157,8 @@ free to sell, with a low-stock filter. Type a delivery into the **Receive** colu
 variants as it covers and save once — all of it is applied or none of it is, and a refusal names
 the SKU that stopped it. A supplier's sheet can be uploaded as a CSV of `Sku,Delta` rows, with the
 same all-or-nothing rule; **Export CSV** downloads the whole stock list for a stocktake.
+
+![The stock page: on hand, held by checkouts, free to sell, and a box to receive more](help-media:site-administration/store-stock.png)
 
 ## Product pictures
 
@@ -1177,6 +1187,8 @@ a discount code's "N orders", open this list already filtered. **Export CSV** do
 filters show, one row per item — number, date, buyer's state, SKU, quantity, prices, discount, tax,
 shipping and refunds.
 
+![The order desk: every order with its buyer, total and status](help-media:site-administration/store-orders.png)
+
 Open an order for everything about it: the buyer, where it is going, the items, the money, its
 refunds and its history. The buttons along the top are only the ones that make sense now:
 
@@ -1196,6 +1208,8 @@ refunds and its history. The buttons along the top are only the ones that make s
 - **Release checkout** — lets go of a checkout still waiting for payment, giving back its stock and
   discount code. It is refused while the payment is still going through at Stripe.
 - **Invoice** prints the order's invoice; **Open in Stripe** opens the payment in Stripe's dashboard.
+
+![One order on the desk: its actions, the buyer, where it's going, the items and the money](help-media:site-administration/store-order.png)
 
 **Needs attention.** An order is flagged when something about its payment needs a person to look —
 paid after its checkout was cancelled, or an amount that did not match. It cannot be packed or shipped
@@ -1236,6 +1250,8 @@ later takes the reply down with it. The queue shows the oldest waiting review fi
 The reviewer sees their own review on the product page the whole time — "Waiting for approval", then
 published, or the reason it wasn't. A reviewer who edits a published review sends it back to the
 queue, and it comes down until it's approved again.
+
+![The review queue: a waiting review with Approve, Refuse and Delete](help-media:site-administration/store-reviews.png)
 
 ## Store settings
 

@@ -156,6 +156,11 @@
     display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
 }
 .ben-gallery__main::-webkit-scrollbar { display: none; }
+/* Below lg the gallery spans the page, so on a tablet held upright 70vh of 4:3 still pushed Add to
+   cart past the bottom of a 1024-high screen (StoreDeviceTests, 09/24). Stacked, it gives way first. */
+@media (max-width: 991.98px) {
+    .ben-gallery__main { max-height: min(45vh, 40rem); }
+}
 .ben-gallery__slide { flex: 0 0 100%; scroll-snap-align: center; border: 0; padding: 0; background: none; cursor: zoom-in; }
 .ben-gallery__slide img { width: 100%; height: 100%; object-fit: cover; }
 .ben-gallery__thumbs { display: flex; gap: .5rem; overflow-x: auto; scroll-snap-type: x proximity; padding: .5rem 0; }

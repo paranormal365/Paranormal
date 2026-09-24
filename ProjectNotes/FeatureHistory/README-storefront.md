@@ -403,7 +403,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S4b | subcategories (Ben, 09/24): nullable parent, one level deep; shelves shown only when something is on sale under them; empty shelf 404 | Built 09/24/2026 — migration M5 StoreSubcategories (one nullable column, index, NoAction FK); StoreSubcategoryTests 11 + the sellable-rule guard, 10 breaks all caught; Playwright StoreSubcategoryTests 2; Store category 52/52; unit suite green |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | Built 09/24/2026 — StoreRefundTests 18, StoreOrderTransitionsTests 19, AdminStoreOrderControllerTests 10, StoreLowStockJobTests 3, every fact seen failing on a deliberate break; Playwright StoreAdminOrderTests 6; Store category + admin walk 61/61; unit suite green (7,362). Tracking per Ben: a carrier + number makes the link, or "No tracking provided". Line thumbnails on the order desk (Ben, 09/24) |
 | S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | Built 09/24/2026 — StoreReviewRulesTests 14 (10 breaks), StoreFavouriteStateTests 5 (5 breaks), seed facts 4 (5 breaks), preview facts (2 breaks); guard rows: commit button, 3 refusals; Playwright StoreReviewTests 5, StoreFavouritesTests 4; Store category 68/68 on IsHauntedDb_e2e; every unit project green (Ben.Web.Tests 7,388). Found by eye: the kept heart went white on hover (now via --bs-btn-* variables) and the nav lit two entries. Visual audit now walks /store/orders, /store/favourites, the K-II and /admin/store/orders + reviews |
-| S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | |
+| S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | Built 09/24/2026 — 19 help screenshots (11 shopper, 8 admin) captured by HelpMediaCapture.Capture_Shopping / Capture_StoreAdministration on a fresh side database (`BEN_E2E_DB=IsHauntedDb_help`) so no test shelves show, every one read by eye; help text placed around them + "Selling your own gear"; StorePagesHaveTitlesAndHelpTests (50 rows, 3 breaks caught); StoreDeviceTests 16 (4 sizes × shop, drawer, checkout both steps, admin order); Store category 84/84; every unit project green (Ben.Web.Tests 7,439) — found the upright-tablet fold (gallery now 45vh below lg). Deploy doc + go-live doc name all five migrations. **Deferred on purpose:** the product PDF (Ben: regenerate after the merge — a PDF now would publish store help while the shop is dark), the public changelog entry (drafted under Rollout state; `/changes` is public) and `checkout-payment.png` (the harness's test checkout has no card form; capture it with Stripe test keys) |
 | S8 | rollout | |
 
 ## Rejected (and why)
@@ -547,3 +547,25 @@ Fixture capture: (command, date, webhook endpoint api_version — filled in at S
 
 ## Rollout state
 Flag OFF in production until Ben turns it on; §8 of the plan is the checklist.
+
+**On launch day**, add to `Ben.Web.Services/Changelog/Content/website.md` (public — it goes live with
+the flag, not before):
+
+```
+## yyyy-MM-dd
+
+- The store is open: EMF meters, spirit boxes, recorders and the gear that goes with them, for
+  anyone, with or without an account. Pay by card at checkout; sales tax is worked out from your
+  delivery address, and orders ship anywhere in the fifty states and Washington, DC.
+- Keep products in Favourites with the heart, and review what you have bought. Reviews are read by
+  a moderator before they appear.
+- Orders placed while signed in are under My Orders, with the invoice and tracking; a guest's order
+  is reached from the link in the receipt, or from Find my order.
+```
+
+After the merge to master: rebuild the product PDF and the per-audience PDFs (`docs/README.md`), and
+capture `checkout-payment.png` with Stripe test keys in place (`Capture_Shopping` takes it when the
+checkout is not the harness's test one) and add it under "Placing an order".
+
+Side databases made for the captures (safe to drop): `IsHauntedDb_capture` (its orders were seeded
+with emails for names, since fixed), `IsHauntedDb_help` (the one the committed screenshots came from).

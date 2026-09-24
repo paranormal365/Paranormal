@@ -375,7 +375,11 @@ internal static class StoreDemoSeeder
     {
         var id = seed.Id;
         var n = (int)(id.ToByteArray()[^1]);
-        var name = buyer is null ? "Morgan Guest" : $"{buyer.FirstName} {buyer.LastName}".Trim();
+        // The name the site shows for them — the demo people have a display name and no first or
+        // last name, so reading only those put an email address where the name goes on every order.
+        var name = buyer is null ? "Morgan Guest"
+            : !string.IsNullOrWhiteSpace(buyer.DisplayName) ? buyer.DisplayName!
+            : $"{buyer.FirstName} {buyer.LastName}".Trim();
         if (string.IsNullOrWhiteSpace(name)) name = seed.Email;
 
         var items = seed.Lines.Select(l =>

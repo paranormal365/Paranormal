@@ -344,6 +344,20 @@ demand when the editor looks for it and stops fifteen minutes after the editor c
 Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
 nothing: a server that skipped a release needs the older entries too.
 
+### Storefront — not released yet (date this entry the day it ships)
+
+The store ships dark: the code can be deployed and the catalogue entered on the live site long
+before anybody can buy. The whole sequence — the Stripe dashboard, the keys, the migrations, the
+dark period and opening — is in [stripe-go-live.md](stripe-go-live.md), under "The store". What the
+database needs, in order, **before** the code is deployed:
+
+1. `StoreCatalog`, `StoreCartsAndOrders`, `StoreFavouritesAndReviews`, `StoreProductSeller`,
+   `StoreSubcategories` — `dotnet ef database update` with an explicit `--connection` (it ignores
+   the environment variable). Additive: 21 new tables, two new nullable columns; nothing existing is
+   changed or dropped.
+2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
+   `/admin/store/settings` reads **Ready to sell**.
+
 ### 2026-09-17 — research cards, address lookup, the client's words, and a Research file type
 
 1. **Deploy the canvas application, or none of this appears**:
