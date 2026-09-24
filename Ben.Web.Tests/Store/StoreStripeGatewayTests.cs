@@ -85,7 +85,7 @@ public sealed class StoreStripeGatewayTests
         var fake = new FakeStoreStripeGateway();
         var order = Guid.NewGuid();
         var spec = new StorePaymentIntentSpec(order, 5999, "usd", OrderMeta, new StoreShippingDetails("Sarah", null, "1 Main", null, "Nashville", "TN", "37203"),
-            "IsHaunted store order 100001", "100001", $"store-order-{order:N}", AllowLink: true);
+            "IsHaunted store order 100001", "ORD 100001", $"store-order-{order:N}", AllowLink: true);
 
         var a = await fake.CreatePaymentIntentAsync(spec, default);
         var b = await fake.CreatePaymentIntentAsync(spec, default);

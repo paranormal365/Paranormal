@@ -34,7 +34,7 @@ function isDark() {
 
 // Mounts the Payment Element in `slot` for this order's PaymentIntent. Answers null when mounted,
 // or a sentence when it could not be (Stripe.js blocked, a network failure).
-export async function mount(slot, publishableKey, clientSecret, billing) {
+export async function mount(slot, publishableKey, clientSecret, billing, allowLink) {
     dispose()
     if (!slot) return 'The payment form has nowhere to go — reload the page.'
     try {
@@ -53,6 +53,10 @@ export async function mount(slot, publishableKey, clientSecret, billing) {
     _payment = _elements.create('payment', {
         layout: 'tabs',
         defaultValues: { billingDetails: billing ?? undefined },
+        // Link offers itself inside the card form ("Save my information for faster checkout", ticked)
+        // whenever it is on for the Stripe account, even on a card-only payment. The store's own
+        // setting decides, here as on the payment (Ben, 09/24: Link off at launch).
+        wallets: { link: allowLink ? 'auto' : 'never' },
     })
     return await new Promise(resolve => {
         _payment.on('ready', () => resolve(null))

@@ -89,6 +89,12 @@ public sealed partial class StripeGateway
             await new PaymentIntentService(StoreClient).CancelAsync(paymentIntentId, cancellationToken: ct);
             return StripeCancelOutcome.Cancelled;
         }
+        catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing")
+        {
+            // Stripe has no such payment — nothing can ever be charged on it, so the checkout is over.
+            // Before this, one such id made every expiry pass throw on it, for good (09/24).
+            return StripeCancelOutcome.Cancelled;
+        }
         catch (StripeException ex) when (ex.StripeError?.Code == "payment_intent_unexpected_state")
         {
             // Already canceled reads as done; confirming or succeeded means the money may be moving.

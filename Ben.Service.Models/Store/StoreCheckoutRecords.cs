@@ -24,9 +24,11 @@ public sealed record StoreCheckoutTotals(
 /// <param name="PublishableKey">The Stripe key the page loads Stripe.js with; a fake one in test checkout.</param>
 /// <param name="FakeCheckout">No real Stripe: the page offers "Test checkout — no card needed".</param>
 /// <param name="ReservationExpiresUtc">When the held stock goes back — the page counts down to it.</param>
+/// <param name="AllowLink">The store offers Stripe Link. Off, the card form hides Link's "save my information" as
+/// well — Stripe shows it inside a card-only form whenever Link is on for the account (the first real run, 09/24).</param>
 public sealed record StoreCheckoutPrepared(
     Guid OrderId, int OrderNumber, string? ClientSecret, string? PublishableKey, StoreCheckoutTotals Totals,
-    bool PaidWithoutCharge, string ReturnUrl, DateTime ReservationExpiresUtc, bool FakeCheckout = false);
+    bool PaidWithoutCharge, string ReturnUrl, DateTime ReservationExpiresUtc, bool FakeCheckout = false, bool AllowLink = false);
 
 /// <summary>Where an order stands, for the page Stripe sends the buyer back to (it polls this).</summary>
 /// <param name="IsFinal">Paid, cancelled or refunded — nothing more will change on its own.</param>

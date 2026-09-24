@@ -162,25 +162,12 @@ public class StoreDeviceTests : BenTestBase
         await Expect(payment.Or(limited).Or(tooManyOpen)).ToBeVisibleAsync(new() { Timeout = 60_000 });
         if (await payment.IsVisibleAsync()) return;
 
-        if (await tooManyOpen.IsVisibleAsync()) await ReleaseOpenCheckoutsAsync();
+        if (await tooManyOpen.IsVisibleAsync()) await StoreTestApi.ReleaseOpenCheckoutsAsync();
         else await Task.Delay(TimeSpan.FromSeconds(61));
         await button.ClickAsync();
         await Expect(payment).ToBeVisibleAsync(new() { Timeout = 60_000 });
     }
 
-    /// <summary>
-    /// Lets go of every checkout still waiting for payment. An address may hold three, and every
-    /// browser in the suite is the same address, so checkouts other tests left open (they expire
-    /// after fifteen minutes) would otherwise refuse this one.
-    /// </summary>
-    private static async Task ReleaseOpenCheckoutsAsync()
-    {
-        using var api = await StoreTestApi.OpenAsync();
-        var open = await api.SendAsync(HttpMethod.Get, "/api/admin/store/orders?status=PendingPayment");
-        // A 409 is a checkout already let go (the seeded abandoned one) or still going through at Stripe.
-        foreach (var order in open.EnumerateArray())
-            await api.TrySendAsync(HttpMethod.Post, $"/api/admin/store/orders/{order.GetProperty("id").GetString()}/release");
-    }
 
     [TestCase(375, 812)]
     [TestCase(768, 1024)]

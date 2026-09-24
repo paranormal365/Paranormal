@@ -249,9 +249,9 @@ public sealed class StoreCheckoutService(
         if (cents == 0)
         {
             await payments.MarkPaidAsync(order.Id, order.StripePaymentIntentId, null, $"free-{order.Id:N}", 0, order.StripeTaxCalculationId, ct);
-            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, null, p, paid: true), null);
+            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, null, p, paid: true, settings.LinkEnabled), null);
         }
-        return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, await ClientSecretAsync(order, ct), p, paid: false), null);
+        return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, await ClientSecretAsync(order, ct), p, paid: false, settings.LinkEnabled), null);
     }
 
     private async Task<StoreCheckoutResult> PlaceAsync(StoreCartCaller caller, string? ip, StoreCheckoutRequest r, StoreCart cart,
@@ -336,14 +336,14 @@ public sealed class StoreCheckoutService(
         if (StoreMoney.Cents(p.Total) == 0)
         {
             await payments.MarkPaidAsync(order.Id, null, null, $"free-{order.Id:N}", 0, order.StripeTaxCalculationId, ct);
-            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, null, p, paid: true), null);
+            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, null, p, paid: true, settings.LinkEnabled), null);
         }
 
         // 9. The intent, outside any transaction.
         try
         {
             var secret = await CreateIntentAsync(db, order, p, settings, ct);
-            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, secret, p, paid: false), null);
+            return new StoreCheckoutResult(StoreCheckoutOutcome.Ok, Prepared(order, secret, p, paid: false, settings.LinkEnabled), null);
         }
         catch (Exception ex) when (ex is HttpRequestException or Stripe.StripeException or TaskCanceledException)
         {
@@ -357,7 +357,7 @@ public sealed class StoreCheckoutService(
         var handle = await gateway.CreatePaymentIntentAsync(new StorePaymentIntentSpec(
             order.Id, StoreMoney.Cents(p.Total), "usd", Metadata(order, p.Tax.CalculationId),
             new StoreShippingDetails(order.ShipName, order.ShipPhone, order.ShipStreet1, order.ShipStreet2, order.ShipCity, order.ShipState, order.ShipZip),
-            $"IsHaunted store order {order.OrderNumber}", order.OrderNumber.ToString(), $"store-order-{order.Id:N}",
+            $"IsHaunted store order {order.OrderNumber}", StatementSuffix(order.OrderNumber), $"store-order-{order.Id:N}",
             AllowLink: settings.LinkEnabled), ct);
         if (handle.LinkRefused) await alerts.LinkNotActivatedAsync(ct);
 
@@ -379,13 +379,13 @@ public sealed class StoreCheckoutService(
         [StoreStripeKeys.OrderNumber] = order.OrderNumber.ToString(),
     };
 
-    private StoreCheckoutPrepared Prepared(StoreOrder order, string? secret, Priced p, bool paid)
+    private StoreCheckoutPrepared Prepared(StoreOrder order, string? secret, Priced p, bool paid, bool allowLink)
     {
         var fake = gateway is FakeStoreStripeGateway;
         return new StoreCheckoutPrepared(order.Id, order.OrderNumber, paid ? null : secret,
             paid ? null : fake ? FakeStoreStripeGateway.PublishableKey : stripe.Value.PublishableKey,
             new StoreCheckoutTotals(p.Subtotal, p.Discount, p.Shipping, p.Tax.TaxCents / 100m, p.Total, p.Tax.ShippingTaxCents / 100m),
-            paid, $"/store/checkout/complete?order={order.Id}", order.ReservationExpiresUtc ?? Now, fake);
+            paid, $"/store/checkout/complete?order={order.Id}", order.ReservationExpiresUtc ?? Now, fake, allowLink);
     }
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -393,4 +393,11 @@ public sealed class StoreCheckoutService(
     private static bool IsDeadlock(Exception ex)
         => ex is Microsoft.Data.SqlClient.SqlException { Number: 1205 }
         || ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 1205 };
+
+    /// <summary>
+    /// What the buyer's card statement shows after the business's short name: "ORD 100187". Stripe
+    /// requires a letter in it (the bare number was refused by the first real payment, 09/24) and
+    /// allows 22 characters for the name and this together, so it stays short.
+    /// </summary>
+    internal static string StatementSuffix(int orderNumber) => $"ORD {orderNumber}";
 }

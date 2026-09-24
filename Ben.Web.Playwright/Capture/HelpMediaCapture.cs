@@ -2333,7 +2333,14 @@ public sealed class HelpMediaCapture : BenTestBase
         if (await Page.Locator("[data-testid=checkout-fake]").CountAsync() > 0)
             TestContext.Out.WriteLine("NOT captured: checkout-payment.png — the harness's test checkout has no card form (needs Stripe test keys).");
         else
-            await ShootAsync(slug, "checkout-payment.png", width: 390, proves: "Place order");
+        {
+            // Stripe's own card form, in its frame: shot once it has drawn its fields, not its spinner.
+            await Expect(Page.FrameLocator("#ben-payment-element iframe").First.Locator("[name=number]"))
+                .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            // The payment card itself: at phone width the page would otherwise be photographed wherever
+            // it happened to be scrolled, which on 09/24 was the middle of the form.
+            await ShootAsync(slug, "checkout-payment.png", width: 390, selector: "[data-testid=checkout-payment]", proves: "Step 3 of 4");
+        }
 
         // A buyer with history: Sarah has five seeded orders and two favourites.
         await LoginAsync(UserEmail, UserPassword);

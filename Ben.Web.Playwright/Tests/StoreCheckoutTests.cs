@@ -76,10 +76,12 @@ public class StoreCheckoutTests : BenTestBase
         await Page.Locator(button).ClickAsync();
         var limited = Refusal.Filter(new() { HasText = "wait a minute" });
         var testPaymentFailed = Refusal.Filter(new() { HasText = "test payment didn't go through" });
-        await Expect(expected.Or(limited).Or(testPaymentFailed)).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        var tooManyOpen = Refusal.Filter(new() { HasText = "Too many checkouts are open" });
+        await Expect(expected.Or(limited).Or(testPaymentFailed).Or(tooManyOpen)).ToBeVisibleAsync(new() { Timeout = 60_000 });
         if (await expected.IsVisibleAsync()) return;
 
-        await Task.Delay(TimeSpan.FromSeconds(61));
+        if (await tooManyOpen.IsVisibleAsync()) await StoreTestApi.ReleaseOpenCheckoutsAsync();
+        else await Task.Delay(TimeSpan.FromSeconds(61));
         await Page.Locator(button).ClickAsync();
         await Expect(expected).ToBeVisibleAsync(new() { Timeout = 60_000 });
     }
@@ -93,6 +95,9 @@ public class StoreCheckoutTests : BenTestBase
             await card.Locator("[name=number]").FillAsync("4242 4242 4242 4242");
             await card.Locator("[name=expiry]").FillAsync("12 / 34");
             await card.Locator("[name=cvc]").FillAsync("123");
+            // Stripe's form asks for the card's ZIP as well; without it: "Your ZIP code is invalid."
+            var postal = card.Locator("[name=postalCode]");
+            if (await postal.CountAsync() > 0) await postal.FillAsync("37203");
         }
         await PressPastTheLimitAsync(button, Page.GetByText("Thank you for your order!"));
     }
@@ -219,6 +224,8 @@ public class StoreCheckoutTests : BenTestBase
     [Description("When the hold runs out the page checks stock again by itself, and says so, instead of showing a Stripe error.")]
     public async Task Expired_reservation_re_prepares_instead_of_showing_a_Stripe_error()
     {
+        // Expires the hold through a Development-only route the real-Stripe run does not have.
+        if (StoreTestApi.RealStripe) Assert.Ignore("Uses the test checkout's expire route; not available against real Stripe.");
         using var api = await StoreTestApi.OpenAsync();
         await AddToCartAsync(await api.BuyableAsync(Unique("Laser grid"), 22m));
         await OpenCheckoutAsync();

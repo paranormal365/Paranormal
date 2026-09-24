@@ -119,6 +119,8 @@ order**, **Payment**, **Complete**.
 
 ![Checkout on a phone: the steps, the delivery details, and the total with Continue to payment](/help/media/shopping-at-the-store/checkout.png)
 
+![The Payment step: Stripe's card form, and how long your items are held](/help/media/shopping-at-the-store/checkout-payment.png)
+
 **Changing something after you continue.** Once you press Continue, your details are shown as a
 summary so the payment is for exactly what you see. To change the address, the email or the
 discount code, press **Edit**. Continue again afterwards and the total is worked out again.

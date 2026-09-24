@@ -164,8 +164,28 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
     /// Anonymous calls from the test process share the checkout's ten-a-minute limit with the browser
     /// tests, so a 429 waits a minute and asks again.
     /// </remarks>
+    /// <summary>
+    /// Lets go of every checkout still waiting for payment. An address may hold three open, and every
+    /// browser in the suite is one address, so checkouts an earlier test or run left (they expire after
+    /// fifteen minutes) would refuse the next. A 409 is one already let go, or still paying at Stripe.
+    /// </summary>
+    public static async Task ReleaseOpenCheckoutsAsync()
+    {
+        using var api = await OpenAsync();
+        var open = await api.SendAsync(HttpMethod.Get, "/api/admin/store/orders?status=PendingPayment");
+        foreach (var order in open.EnumerateArray())
+            await api.TrySendAsync(HttpMethod.Post, $"/api/admin/store/orders/{order.GetProperty("id").GetString()}/release");
+    }
+
+    /// <summary>Whether this run pays at real Stripe (BEN_STRIPE_E2E=1) rather than through the test checkout.</summary>
+    public static bool RealStripe => Environment.GetEnvironmentVariable("BEN_STRIPE_E2E") == "1";
+
     public static async Task<Guid> PaidGuestOrderAsync(JsonElement product, string email)
     {
+        // Paid through the test checkout's own door, which real Stripe does not have: the order desk's
+        // tests are about the desk, and real payments are proven by StoreRealStripeTests.
+        if (RealStripe) Assert.Ignore("Pays through the test checkout; real payments are StoreRealStripeTests' to prove.");
+
         using var guest = new HttpClient { BaseAddress = new Uri(BenTestBase.ApiUrlForHelpers), Timeout = TimeSpan.FromSeconds(60) };
         guest.DefaultRequestHeaders.Add("X-Ben-Cart",
             Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_'));
@@ -191,6 +211,17 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
             billing = (object?)null, billCompany = (string?)null, agreedToTerms = true, buyerNotes = (string?)null,
         });
         var text = await prepared.Content.ReadAsStringAsync();
+        if ((int)prepared.StatusCode == 409 && text.Contains("Too many checkouts are open"))
+        {
+            await ReleaseOpenCheckoutsAsync();
+            prepared = await PostAsync("/api/store/checkout/payment-intent", new
+            {
+                email,
+                shipping = new { fullName = "Desk Buyer", phone = "615-555-0177", street1 = "3 Birch Rd", street2 = (string?)null, city = "Nashville", state = "TN", zip = "37203" },
+                billing = (object?)null, billCompany = (string?)null, agreedToTerms = true, buyerNotes = (string?)null,
+            });
+            text = await prepared.Content.ReadAsStringAsync();
+        }
         Assert.That(prepared.IsSuccessStatusCode, Is.True, $"the checkout answered {(int)prepared.StatusCode}: {text}");
         var orderId = JsonDocument.Parse(text).RootElement.GetProperty("orderId").GetGuid();
 

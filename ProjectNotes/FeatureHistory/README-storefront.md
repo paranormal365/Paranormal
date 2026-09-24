@@ -399,7 +399,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | Built 09/24/2026 — unit facts each seen failing on a deliberate break (64 breaks across S1.1–S1.12, all caught but one that exposed a redundant check, removed); AdminStoreCatalogTests 8/8 and AdminPageTests on IsHauntedDb_e2e with the shop off; new guards StoreClientRoutesTests, StoreRefusalReachesThePageTests, StoreReviewQueueHasAnEntranceTests each broken once |
 | S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | Built 09/24/2026 — PublicStoreController 12 facts (9 breaks caught), shared components 16 render facts (10 breaks), query string 8 facts; StoreBrowseTests/StoreProductTests/StoreFeatureFlagTests + crawls + admin 25/25 on IsHauntedDb_e2e with the store on; visual audit light+dark at four widths; guards StoreControllersAreGated, StoreLinksResolve, StoreProductProseClassIsGlobal, the Smarty deny-list, each broken once |
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | Built 09/24/2026 — server: StoreCartService/Controller 30 facts, 20 breaks caught; website: cookie, client headers, cart state, card button 20 facts, 14 breaks caught; guards StorePublicWritesAreRateLimited, StoreCartSurfacesAgree (incl. the badge outside the signed-in branch), cart-refusal and the two Apply rows, each broken once; StoreCartTests 7/7 + store/crawl/header suite 33/33 on IsHauntedDb_e2e. Between S3.3 and S3.4, at Ben's request: the Seller role and the editor's live preview (below) |
-| S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | Built 09/24/2026 in fake mode — every new fact seen failing on a deliberate break (mutation runs per sitting, recorded in the commits); Playwright StoreCheckoutTests 8, StoreOrderTests 8, Store category 51/51 on IsHauntedDb_e2e; unit suite green (Ben.Web.Tests 7,296). By eye: checkout desktop/phone, light/dark; order page, invoice, lookup, returns. **Still open for S4 exit:** the real test-mode run (`BEN_STRIPE_E2E=1`: 4242 card, self-signed webhook 200 / forged 400, tax adds up) and the webhook signature fixtures captured with the Stripe CLI — both need Ben's Stripe TEST key in the gitignored dev settings. |
+| S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | Built 09/24/2026 in fake mode — every new fact seen failing on a deliberate break (mutation runs per sitting, recorded in the commits); Playwright StoreCheckoutTests 8, StoreOrderTests 8, Store category 51/51 on IsHauntedDb_e2e; unit suite green (Ben.Web.Tests 7,296). By eye: checkout desktop/phone, light/dark; order page, invoice, lookup, returns. **S4 exit done 09/24/2026** against the Stripe sandbox — see "Stripe test-mode run" below: real card, signed webhook 200 / forged 400, tax filed and reversed, real event samples, and three production bugs only real Stripe could show. |
 | S4b | subcategories (Ben, 09/24): nullable parent, one level deep; shelves shown only when something is on sale under them; empty shelf 404 | Built 09/24/2026 — migration M5 StoreSubcategories (one nullable column, index, NoAction FK); StoreSubcategoryTests 11 + the sellable-rule guard, 10 breaks all caught; Playwright StoreSubcategoryTests 2; Store category 52/52; unit suite green |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | Built 09/24/2026 — StoreRefundTests 18, StoreOrderTransitionsTests 19, AdminStoreOrderControllerTests 10, StoreLowStockJobTests 3, every fact seen failing on a deliberate break; Playwright StoreAdminOrderTests 6; Store category + admin walk 61/61; unit suite green (7,362). Tracking per Ben: a carrier + number makes the link, or "No tracking provided". Line thumbnails on the order desk (Ben, 09/24) |
 | S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | Built 09/24/2026 — StoreReviewRulesTests 14 (10 breaks), StoreFavouriteStateTests 5 (5 breaks), seed facts 4 (5 breaks), preview facts (2 breaks); guard rows: commit button, 3 refusals; Playwright StoreReviewTests 5, StoreFavouritesTests 4; Store category 68/68 on IsHauntedDb_e2e; every unit project green (Ben.Web.Tests 7,388). Found by eye: the kept heart went white on hover (now via --bs-btn-* variables) and the nav lit two entries. Visual audit now walks /store/orders, /store/favourites, the K-II and /admin/store/orders + reviews |
@@ -542,8 +542,31 @@ The rest is new:
 Whether sellers make the store a marketplace (payouts, merchant of record) is the first thing to decide.
 
 ## Stripe test-mode run
-(date, payment intent id, tax transaction id, refund id — filled in at S4 exit)
-Fixture capture: (command, date, webhook endpoint api_version — filled in at S4.2)
+**09/24/2026, Stripe sandbox "IsHaunted.com sandbox" (acct …UACuLL5), Tennessee registered.** Order #100201:
+$39.00 + $3.80 Tennessee tax = $42.80, paid with the 4242 card (`pi_3UJLNIL5hGFM4xkH168RHmK9`), marked paid
+by the forwarded `payment_intent.succeeded`, tax filed as a Stripe Tax transaction, then refunded in full at
+Stripe with the tax reversed and the unit restocked (StoreRealStripeTests). Store suite in real mode:
+78 passed, 0 failed, 8 skipped (the desk and dev-route tests, which pay through the test checkout).
+
+Run it again: `BEN_STRIPE_E2E=1 scripts/run-e2e.sh --filter "TestCategory=Store" -e BEN_STRIPE_E2E=1` —
+sandbox test keys + `whsec_` in the gitignored API settings, `stripe login` done (stripe-go-live.md §0).
+
+**Samples:** `Ben.Web.Tests/Fixtures/Stripe/*.json` — payment_intent.succeeded, refund.created,
+refund.updated, payment_intent.canceled, fetched with `stripe events retrieve <evt>` on 09/24/2026, API version
+`2026-08-26.dahlia` (newer than the SDK's; the webhook reads with the version check off).
+`client_secret` blanked (public repo). StoreStripeEventSampleTests (5 facts, 2 breaks caught).
+
+**What only real Stripe found** (each fixed with a test that fails without it):
+1. The card-statement suffix was the bare order number; Stripe requires a letter ("The statement descriptor
+   must contain at least one Latin character") — no payment could start. Now `ORD 100187`, and the fake
+   gateway applies Stripe's rule, so the ordinary run catches it (11 tests fail on the old code).
+2. The expiry job stopped the whole pass at the first checkout Stripe could not cancel (a `pi_fake_` id it had
+   never seen), retrying it forever: nothing was released, holds piled up, and the three-open-checkouts limit
+   refused everybody. `resource_missing` now counts as cancelled, and one failure no longer stops the rest.
+3. Link showed "Save my information for faster checkout" (ticked) inside a card-only form, though the store
+   has Link off (Ben's launch decision): the card form now takes `wallets.link` from the store's setting.
+4. (tests) Stripe's form also asks the card's ZIP; the mount is retried once and its failure logged (it failed
+   once after Edit → Continue and could not be reproduced by hand).
 
 ## Rollout state
 Flag OFF in production until Ben turns it on; §8 of the plan is the checklist.

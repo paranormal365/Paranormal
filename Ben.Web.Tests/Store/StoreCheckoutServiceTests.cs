@@ -139,6 +139,20 @@ public sealed class StoreCheckoutServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_card_form_offers_Link_only_when_the_store_does()
+    {
+        // Stripe shows Link's "save my information" inside a card-only form when Link is on for the
+        // account; the page hides it unless the store's own setting says otherwise (first real run, 09/24).
+        var v = await VariantAsync();
+        var off = await Checkout().PrepareAsync(await CartWithAsync(v), null, Request());
+        await SetAsync(SiteSettingKeys.StoreLinkEnabled, "true");
+        var on = await Checkout().PrepareAsync(await CartWithAsync(await VariantAsync()), null, Request());
+
+        Assert.False(off.Prepared!.AllowLink);
+        Assert.True(on.Prepared!.AllowLink);
+    }
+
+    [Fact]
     public async Task A_paused_store_or_no_payment_keys_refuses_before_reserving()
     {
         var v = await VariantAsync();
@@ -444,5 +458,20 @@ public sealed class StoreCheckoutServiceTests : IAsyncLifetime
         var result = await Checkout().PrepareAsync(await CartWithAsync(v), null, Request());
 
         Assert.Equal((StoreCheckoutOutcome.Unavailable, StoreCheckoutSentences.TaxUnavailable), (result.Outcome, result.Sentence));
+    }
+
+    [Theory]
+    [InlineData(100001)]
+    [InlineData(999999)]
+    [InlineData(1234567)]
+    public void The_card_statement_suffix_is_one_Stripe_takes(int orderNumber)
+    {
+        // A bare order number passed every fake run and Stripe refused the first real payment with
+        // it: "The statement descriptor must contain at least one Latin character" (09/24).
+        var suffix = Ben.Data.WebApi.Services.Store.StoreCheckoutService.StatementSuffix(orderNumber);
+        Assert.Null(FakeStoreStripeGateway.StatementSuffixProblem(suffix));
+        Assert.Contains(orderNumber.ToString(), suffix);
+        Assert.True(suffix.Length <= 12, "short enough to fit beside the business's name in 22");
+        Assert.NotNull(FakeStoreStripeGateway.StatementSuffixProblem(orderNumber.ToString()));
     }
 }

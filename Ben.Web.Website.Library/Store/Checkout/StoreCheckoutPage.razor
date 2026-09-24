@@ -6,6 +6,8 @@
 @inject IBenUserState User
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@using Microsoft.Extensions.Logging
+@inject ILogger<StoreCheckoutPage> Log
 
 <PageTitle>Checkout — Store</PageTitle>
 
@@ -339,19 +341,31 @@
         if (_mountPending && _form.Prepared is { FakeCheckout: false, ClientSecret: { } secret, PublishableKey: { } key })
         {
             _mountPending = false;
-            try
+            // Twice before the buyer is told: the real-Stripe run (09/24) saw a mount fail once after
+            // Edit → Continue and succeed on its own when repeated by hand. What failed is logged now —
+            // it used to be thrown away, leaving a sentence and nothing to find it by.
+            for (var attempt = 1; attempt <= 2; attempt++)
             {
-                _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/Store/Checkout/StoreCheckoutPage.razor.js");
-                var billing = new { name = _form.Shipping.FullName, email = _form.Email, phone = _form.Shipping.Phone };
-                var error = await _module.InvokeAsync<string?>("mount", _paymentSlot, key, secret, billing);
-                _refusal = error;
-                _mounted = error is null;
-            }
-            catch (JSDisconnectedException) { return; }
-            catch (Exception ex) when (ex is JSException or TaskCanceledException or InvalidOperationException)
-            {
-                var error = "The payment form couldn't be loaded. Reload the page and try again.";
-                _refusal = error;
+                try
+                {
+                    _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/Store/Checkout/StoreCheckoutPage.razor.js");
+                    var billing = new { name = _form.Shipping.FullName, email = _form.Email, phone = _form.Shipping.Phone };
+                    var error = await _module.InvokeAsync<string?>("mount", _paymentSlot, key, secret, billing, _form.Prepared?.AllowLink ?? false);
+                    _refusal = error;
+                    _mounted = error is null;
+                    break;
+                }
+                catch (JSDisconnectedException) { return; }
+                catch (Exception ex) when (ex is JSException or TaskCanceledException or InvalidOperationException)
+                {
+                    Log.LogWarning(ex, "Store checkout {OrderId}: the payment form did not mount (attempt {Attempt}).", _form.Prepared?.OrderId, attempt);
+                    if (attempt == 2)
+                    {
+                        var error = "The payment form couldn't be loaded. Reload the page and try again.";
+                        _refusal = error;
+                    }
+                    else await Task.Delay(750);
+                }
             }
             StateHasChanged();
         }

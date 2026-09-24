@@ -30,15 +30,32 @@ public sealed class FakeStoreStripeGateway : IStoreStripeGateway
     public bool RefuseLink { get; set; }
     public bool UpdateIsUnexpectedState { get; set; }
     public StripeCancelOutcome CancelAnswer { get; set; } = StripeCancelOutcome.Cancelled;
+
+    /// <summary>A payment Stripe cannot be reached about — its cancel throws, as a network or Stripe fault would.</summary>
+    public string? CancelThrowsFor { get; set; }
     public bool CreateFails { get; set; }
     public string RefundStatus { get; set; } = "succeeded";
     public string? RefundRefusal { get; set; }
 
     public static string IntentIdFor(Guid orderId) => $"pi_fake_{orderId:N}";
 
+    /// <summary>What Stripe says about a statement descriptor suffix, or null when it takes it.</summary>
+    public static string? StatementSuffixProblem(string? suffix)
+    {
+        if (string.IsNullOrEmpty(suffix)) return null;
+        if (!suffix.Any(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z')) return "The statement descriptor must contain at least one Latin character.";
+        if (suffix.Length > 22) return "The statement descriptor suffix is at most 22 characters.";
+        if (suffix.IndexOfAny(['<', '>', '\\', '\'', '"', '*']) >= 0) return "The statement descriptor cannot contain < > \\ ' \" *.";
+        return null;
+    }
+
     public Task<StorePaymentIntentHandle> CreatePaymentIntentAsync(StorePaymentIntentSpec spec, CancellationToken ct)
     {
         if (CreateFails) throw new HttpRequestException("Stripe did not answer (fake).");
+        // Stripe's own rule, so the test checkout refuses what Stripe would: a bare order number
+        // passed every fake run and was refused by the first real one (09/24).
+        if (StatementSuffixProblem(spec.StatementDescriptorSuffix) is { } problem)
+            throw new InvalidOperationException($"Stripe would refuse this payment: {problem}");
         CreateKeys.Add(spec.IdempotencyKey);
         var id = IntentIdFor(spec.OrderId);
         Intents[id] = (spec.AmountCents, spec.Metadata);
@@ -57,6 +74,7 @@ public sealed class FakeStoreStripeGateway : IStoreStripeGateway
 
     public Task<StripeCancelOutcome> CancelPaymentIntentAsync(string paymentIntentId, CancellationToken ct)
     {
+        if (paymentIntentId == CancelThrowsFor) throw new HttpRequestException("Stripe could not be reached (fake).");
         Cancelled.Add(paymentIntentId);
         return Task.FromResult(CancelAnswer);
     }

@@ -1,0 +1,55 @@
+{
+  "id": "evt_3UJLNIL5hGFM4xkH1v3fNUy7",
+  "object": "event",
+  "api_version": "2026-08-26.dahlia",
+  "context": "acct_1UACuLL5hGFM4xkH",
+  "created": 1790289868,
+  "data": {
+    "object": {
+      "id": "re_3UJLNIL5hGFM4xkH1mKybPUI",
+      "object": "refund",
+      "amount": 4280,
+      "balance_transaction": "txn_3UJLNIL5hGFM4xkH1me4sh10",
+      "charge": "ch_3UJLNIL5hGFM4xkH1QAcLdqm",
+      "created": 1790289867,
+      "currency": "usd",
+      "customer": null,
+      "customer_account": null,
+      "destination_details": {
+        "card": {
+          "reference": "9019904369565245",
+          "reference_status": "available",
+          "reference_type": "acquirer_reference_number",
+          "type": "refund"
+        },
+        "type": "card"
+      },
+      "metadata": {
+        "ih_store_order": "36b1d6cc-b36c-4895-9757-65712178ab7e",
+        "ih_store_refund": "5bf4676b-37b7-42c2-8fdc-6f0f4eae611e"
+      },
+      "payment_intent": "pi_3UJLNIL5hGFM4xkH168RHmK9",
+      "payment_method": "pm_1UJLNLL5hGFM4xkHGPU4hfHD",
+      "reason": "requested_by_customer",
+      "receipt_number": null,
+      "source_transfer_reversal": null,
+      "status": "succeeded",
+      "transfer_reversal": null
+    },
+    "previous_attributes": {
+      "destination_details": {
+        "card": {
+          "reference": null,
+          "reference_status": "pending"
+        }
+      }
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 0,
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  },
+  "type": "refund.updated"
+}

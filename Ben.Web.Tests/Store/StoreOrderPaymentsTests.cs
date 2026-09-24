@@ -315,6 +315,26 @@ public sealed class StoreOrderPaymentsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Expiry_goes_on_past_a_checkout_Stripe_cannot_be_asked_about()
+    {
+        var stuck = await PlaceAsync();
+        var fine = await PlaceAsync();
+        await using (var db = await _sqlite.NewContextAsync())
+            await db.StoreOrders.ExecuteUpdateAsync(s => s.SetProperty(o => o.ReservationExpiresUtc, DateTime.UtcNow.AddMinutes(-1)));
+        _stripe.CancelThrowsFor = stuck.Pi;
+
+        var released = await Payments().ExpireReservationsAsync();
+
+        Assert.Equal(1, released);
+        Assert.Equal(StoreOrderStatus.Cancelled, (await ReadAsync(fine)).Order.Status);
+        Assert.Equal(StoreOrderStatus.PendingPayment, (await ReadAsync(stuck)).Order.Status);   // kept for the next pass
+
+        _stripe.CancelThrowsFor = null;
+        Assert.Equal(1, await Payments().ExpireReservationsAsync());
+        Assert.Equal(StoreOrderStatus.Cancelled, (await ReadAsync(stuck)).Order.Status);
+    }
+
+    [Fact]
     public async Task Expiry_cancels_at_Stripe_before_releasing_and_leaves_a_payment_that_is_going_through()
     {
         var gone = await PlaceAsync();

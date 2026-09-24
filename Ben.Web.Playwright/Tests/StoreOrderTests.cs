@@ -100,6 +100,8 @@ public class StoreOrderTests : BenTestBase
     [Description("A guest buys in test checkout, and the letter's link opens the order with no account.")]
     public async Task Guest_FindsTheirOrder_ByTheEmailedLink()
     {
+        // Pays through the test checkout's panel; the order link is the subject, not the payment.
+        if (StoreTestApi.RealStripe) Assert.Ignore("Pays through the test checkout; real payments are StoreRealStripeTests' to prove.");
         using var api = await StoreTestApi.OpenAsync();
         var name = $"Guest letter bag {Guid.NewGuid().ToString("N")[..6]}";
         var product = await api.BuyableAsync(name, 21m);

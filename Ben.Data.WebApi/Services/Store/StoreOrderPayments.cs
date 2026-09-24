@@ -393,10 +393,22 @@ public sealed class StoreOrderPayments(
                          && o.ReservationExpiresUtc != null && o.ReservationExpiresUtc < now && !o.NeedsAttention)
                 .Select(o => o.Id).ToListAsync(ct);
 
+        // One at a time, and one that fails is left for the next pass — never the rest with it. A single
+        // payment Stripe would not answer about used to stop every release, so holds piled up until the
+        // three-open-checkouts limit refused every buyer on the address (the real-Stripe run, 09/24).
         var done = 0;
         foreach (var id in expired)
-            if (await CancelPendingOrderAsync(id, "Checkout expired", ct, StoreOrderEventKind.ReservationExpired) != CancelOutcome.StillProcessing)
-                done++;
+        {
+            try
+            {
+                if (await CancelPendingOrderAsync(id, "Checkout expired", ct, StoreOrderEventKind.ReservationExpired) != CancelOutcome.StillProcessing)
+                    done++;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                log.LogWarning(ex, "Store order {OrderId}: its expired checkout could not be released this pass; trying again next minute.", id);
+            }
+        }
         return done;
     }
 
