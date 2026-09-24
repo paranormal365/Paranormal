@@ -1044,3 +1044,118 @@ on the campaign itself — deals differ per referrer, so the percent does too. A
 percent is not counted, and the owed figure wears a **partial** badge when that happens, so a low
 number never reads as a settled one. Recording a payout pre-fills the outstanding balance and
 lands on the ledger like everything else.
+
+## The store
+
+The store sells scientific gear for investigations — EMF meters, spirit boxes, recorders — to
+anyone, with or without an account. Everything about it is managed under **Store** in the
+administration menu: the dashboard, categories, products, stock, discount codes, reviews and the
+store's own settings. Every one of those screens works while the shop is switched off, which is
+how the catalogue gets entered, priced and photographed before any visitor can see it.
+
+### Turning the store on
+
+Two switches, for two different jobs:
+
+- **Feature — Store**, under Site Settings → Features, shows or hides the whole shop. Off, the
+  store's pages, cart and checkout answer "page not found". Orders already placed are untouched:
+  a buyer's order page, the thank-you page and the links in their letters keep working, and so do
+  these admin screens.
+- **Take orders**, on the store settings page, pauses buying without hiding anything. The
+  catalogue stays browsable and every cart says the store isn't taking orders at the moment. This
+  is the switch to reach for if something goes wrong with payments.
+
+Before switching the shop on, open **Store Settings** and read the **Ready to sell** checklist. It
+lists every reason the store could not take an order right now — no ship-from address, nothing
+live with stock, Stripe keys missing, Stripe Tax not active in the Stripe dashboard, the shop
+switched off — and says **Ready to sell** only when the list is empty.
+
+### Categories and products
+
+A **category** is a shelf: EMF meters, spirit boxes, field accessories. Each has an address
+(/store/c/emf-meters), an optional picture, a place in the order, and its own on/off switch.
+Hiding a category takes its products off the store without touching them — the page tells you
+how many live products it will hide before you confirm, and showing the category again puts back
+exactly what was live. A category holding products cannot be removed; move them first. The last
+category cannot be removed either.
+
+A **product** starts with just a name. It arrives hidden, with one variant at $0.00 waiting for a
+price. It goes on sale with **Activate**, which refuses — saying what to do — until the product
+has a price, at least one picture, a live variant and a visible category. A product's address
+(/store/p/k-ii-emf-meter) is made from its name once and then kept: renaming a product does not
+break links people have shared. Type a new address only if you mean to.
+
+A product that has been sold can be switched off but never deleted, because its orders, invoices
+and refunds point at it. **Duplicate** makes a hidden copy — options, variants with new SKUs and no
+stock, specifications and copies of every picture — for a product that differs only slightly.
+
+### Options, variants and stock
+
+**Options** are what a buyer chooses — Colour, Size — up to three per product, each with its
+values (a Colour can show round swatches from a hex colour; everything else shows as buttons).
+**Generate variants** makes one variant for every combination the product does not have yet, so
+two colours by three sizes makes six; running it again adds nothing. A value some variant is made
+of cannot be removed from its option until that variant stops using it.
+
+Each **variant** has its own SKU, price, optional old price (shown struck through — it must be
+higher than the price), and stock. A variant that has been ordered can be switched off but not
+deleted, and a live product always keeps at least one live variant.
+
+Stock only ever changes with a reason — **Received**, **Correction** or **Damaged** — and every
+change leaves a line in the variant's stock log saying who, when, by how much and what it left.
+**Sold**, **Refunded** and **Cancelled** lines are written by the store itself. A change is
+refused rather than applied if it would leave fewer on the shelf than open checkouts are holding.
+
+The **Stock** page shows every live variant at once: on hand, held by checkouts in progress, and
+free to sell, with a low-stock filter. Type a delivery into the **Receive** column across as many
+variants as it covers and save once — all of it is applied or none of it is, and a refusal names
+the SKU that stopped it. A supplier's sheet can be uploaded as a CSV of `Sku,Delta` rows, with the
+same all-or-nothing rule; **Export CSV** downloads the whole stock list for a stocktake.
+
+### Product pictures
+
+Up to twelve pictures per product, in the order you drag them. A picture can be tied to a
+variant, so choosing that colour shows that photograph. Every picture is stored as a clean copy —
+the camera details and location are removed — sized for a sharp product page, with a small copy
+for cards and the cart. A live product keeps at least one picture.
+
+### Discount codes
+
+Store discount codes (GHOST10) are separate from the plan coupons under Billing. A code takes a
+percentage or a dollar amount off the products — never shipping or tax — and can have a minimum
+order, a start and end date, a total number of uses and a number of uses per buyer. The list says
+what stops a code working today: **Takes nothing off**, **Expires before it starts**, **Used up**
+or **Expired**. Once an order has used a code it can be retired (switched off) but not renamed or
+deleted, because the order keeps the code it was bought with.
+
+### Orders and fulfilment
+
+Orders, packing, shipping and tracking arrive in a later part of the store's build; this section
+will describe them.
+
+### Refunds and cancellations
+
+Refunds and cancellations arrive with orders; this section will describe them.
+
+### Reviews
+
+Buyers can review what they bought, and every review waits in **Reviews** until somebody approves
+or refuses it. Only approved reviews count toward a product's stars. Refusing needs a reason,
+because the reviewer is told why. The shop can reply under an approved review; refusing a review
+later takes the reply down with it. The queue shows the oldest waiting review first.
+
+### Store settings
+
+The store settings page holds the flat shipping rate and the free-shipping threshold, the low-stock
+number, the ship-from address Stripe Tax works sales tax out from, the support email shown as
+"Need help?", the returns window, how long a checkout holds its stock, and whether to offer Stripe
+Link. The whole form is checked before anything is saved, so one mistyped value saves nothing and
+says which value it was. Site Settings shows these values too, read-only, with a link here.
+
+The page also lists the states Stripe Tax is registered in — registrations are made in the Stripe
+dashboard, and a buyer in any other state is charged no sales tax.
+
+### Stock alerts
+
+A daily stock digest arrives with orders; this section will describe it. Until then, the
+dashboard's low-stock table and the Stock page's low-stock filter show what is running out.
