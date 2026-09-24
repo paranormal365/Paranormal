@@ -90,6 +90,62 @@ public sealed class StoreImageStorage(
     }
 
     /// <summary>
+    /// A new file with the same bytes, for a duplicated product — never a shared row, so deleting
+    /// either product's picture cannot take the other's.
+    /// </summary>
+    public async Task<UploadFile> CopyAsync(BenDataContext db, Guid uploadFileId, string folder, Guid adminId, CancellationToken ct)
+    {
+        var source = await db.UploadFiles.AsNoTracking().SingleAsync(f => f.Id == uploadFileId, ct);
+        var metadata = await db.UploadFileMetadata.AsNoTracking().FirstOrDefaultAsync(m => m.UploadFileId == uploadFileId, ct);
+        var now = DateTime.UtcNow;
+        var storedName = $"{Guid.NewGuid()}.jpg";
+        string? path = null;
+
+        // Seeded pictures live in the row itself (FileData); uploaded ones on storage.
+        if (!string.IsNullOrWhiteSpace(source.StoragePath))
+        {
+            path = $"store/{folder}/{storedName}";
+            await CopyFileAsync(source.StoragePath, path, ct);
+            var thumb = images.ThumbnailPathFor(source.StoragePath);
+            if (storage.Exists(thumb)) await CopyFileAsync(thumb, images.ThumbnailPathFor(path), ct);
+        }
+
+        var copy = new UploadFile
+        {
+            Id = Guid.NewGuid(),
+            UploadFileTypeId = UploadFileTypeSeeder.StoreImageFileTypeId,
+            AppUserId = null,
+            OwnerOrganizationId = null,
+            FileName = source.FileName,
+            StoredFileName = storedName,
+            ContentType = source.ContentType,
+            FileSize = source.FileSize,
+            StoragePath = path,
+            FileData = path is null ? source.FileData : null,
+            IsPublic = true,
+            ExpiresAtUtc = null,
+            DateCreated = now,
+            CreatedByAppUserId = adminId,
+        };
+        db.UploadFiles.Add(copy);
+        db.UploadFileMetadata.Add(new UploadFileMetadata
+        {
+            Id = Guid.NewGuid(), UploadFileId = copy.Id, MediaKind = "Image",
+            WidthPixels = metadata?.WidthPixels, HeightPixels = metadata?.HeightPixels, ExtractedAtUtc = now,
+        });
+        return copy;
+    }
+
+    private async Task CopyFileAsync(string from, string to, CancellationToken ct)
+    {
+        await using var read = await storage.OpenReadAsync(from, ct);
+        using var buffer = new MemoryStream();
+        await read.CopyToAsync(buffer, ct);
+        buffer.Position = 0;
+        await storage.WriteAsync(to, buffer, ct);
+    }
+
+    /// <summary>
     /// Removes a picture nothing points at any more — the row, then its bytes. A row something
     /// else still holds — an order line keeps the picture it was bought with — is left.
     /// </summary>
