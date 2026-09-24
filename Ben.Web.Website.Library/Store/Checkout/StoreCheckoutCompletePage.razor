@@ -1,0 +1,210 @@
+@page "/store/checkout/complete"
+@using Ben.Web.Website.Library.Store.Shared
+@implements IDisposable
+@inject IBenAdminClient Store
+@inject StoreCartState CartState
+@inject NavigationManager Nav
+@inject IMediaUrlBuilder MediaUrls
+
+<PageTitle>Order complete — Store</PageTitle>
+
+@*
+    Where a buyer lands after paying (storefront S4.11), after Smarty's order-complete page
+    (shop-page-checkout-success-1.html): "Thank you for your order!", the number, what was bought
+    and what it came to, and the way back to the shop.
+
+    NOT behind the store switch: somebody who has just been charged must reach this page whatever
+    the switch says. Stripe's answer reaches our server by webhook, a moment after the buyer
+    arrives here, so the page asks how the order stands — quickly at first, then easing off — and
+    shows what it hears: paid, still going through, or cancelled with the reason. After about a
+    minute it stops asking and says the letter will follow; it never claims an order it has not
+    seen paid.
+
+    Who may ask: the buyer signed in, or the browser whose cart placed the order, for an hour.
+    The status carries the order's own address; its token opens the items and totals here.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <StoreCheckoutSteps Current="@(_status is { Status: not StoreOrderStatus.PendingPayment and not StoreOrderStatus.Cancelled } ? StoreCheckoutStep.Complete : StoreCheckoutStep.Payment)" />
+
+    @if (_query.OrderId is null)
+    {
+        <StoreEmptyState Icon="shopping-bag" Title="No order to show"
+                         Lead="This page shows an order just placed. Start from the store."
+                         LinkText="Go to the store" LinkHref="/store" />
+    }
+    else if (_notFound)
+    {
+        <div class="alert alert-warning" role="alert" data-testid="complete-not-found">
+            We couldn't find that order from this browser. If you paid, your confirmation email has a link to it.
+        </div>
+        <a class="btn btn-outline-secondary" href="/store">Continue shopping</a>
+    }
+    else if (_status is null && !_gaveUp)
+    {
+        <div class="text-center text-secondary py-5" data-testid="complete-waiting">
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Checking your payment…
+        </div>
+    }
+    else if (_status is { Status: StoreOrderStatus.Cancelled } cancelled)
+    {
+        <div class="card mb-3">
+            <div class="card-body p-4 p-lg-5 text-center">
+                <h2 class="h4 mb-3">Your order didn't go through</h2>
+                <p class="lead mb-4" data-testid="complete-problem">@(cancelled.Problem ?? "The payment was not completed, and nothing was charged.")</p>
+                <a class="btn btn-primary" href="/store/cart">Back to your cart</a>
+            </div>
+        </div>
+    }
+    else if (_status is { IsFinal: true } paid)
+    {
+        <div class="card mb-4">
+            <div class="card-body p-4 p-lg-5 text-center">
+                <div class="ben-store-empty__icon ben-complete-mark mb-3"><BenIcon Name="check" /></div>
+                <h2 class="h3 mb-3">Thank you for your order!</h2>
+                <p class="lead mb-1">Order no. <strong data-testid="complete-order-number">@paid.OrderNumber</strong></p>
+                <p class="text-secondary mb-0">We've emailed your receipt. We'll email again when it ships.</p>
+            </div>
+        </div>
+
+        @if (_order is { } order)
+        {
+            <div class="row g-4 mb-4">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header fs-6 fw-bold py-3">Your items</div>
+                        <ul class="list-unstyled card-body p-md-4 mb-0">
+                            @foreach (var item in order.Items)
+                            {
+                                <li class="row align-items-center g-2 mb-2 pb-2" data-testid="complete-item">
+                                    <div class="col-3 col-md-2">
+                                        @if (item.ImageUploadFileId is { } picture)
+                                        {
+                                            <img class="img-fluid rounded" src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" loading="lazy" />
+                                        }
+                                    </div>
+                                    <div class="col-9 col-md-10">
+                                        <p class="mb-0 fw-medium">@item.Quantity &times; @item.ProductName</p>
+                                        @if (item.VariantName is { } variant) { <small class="d-block text-secondary">@variant</small> }
+                                        <span class="small">@StoreMoney.Format(item.LineTotal)</span>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="ben-summary" data-testid="complete-totals">
+                        <h2 class="h5 mb-3">Order summary</h2>
+                        <div class="ben-summary__row"><span>Products</span><span>@StoreMoney.Format(order.Totals.Subtotal)</span></div>
+                        @if (order.Totals.Discount > 0)
+                        {
+                            <div class="ben-summary__row text-success"><span>Discount@(order.CouponCode is { } c ? $" ({c})" : null)</span><span>−@StoreMoney.Format(order.Totals.Discount)</span></div>
+                        }
+                        <div class="ben-summary__row"><span>Shipping</span><span>@(order.Totals.Shipping == 0 ? "Free" : StoreMoney.Format(order.Totals.Shipping))</span></div>
+                        <div class="ben-summary__row"><span>Sales tax</span><span>@StoreMoney.Format(order.Totals.Tax)</span></div>
+                        <div class="ben-summary__row ben-summary__total"><span>Total</span><span>@StoreMoney.Format(order.Totals.Total)</span></div>
+                        <div class="small text-secondary mt-3">
+                            Shipping to @order.Shipping.Name, @order.Shipping.City, @order.Shipping.State
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* "See your order" arrives with the order page (S4.13). *@
+        <a href="/store" class="btn btn-primary">Continue shopping</a>
+    }
+    else
+    {
+        <div class="card mb-3">
+            <div class="card-body p-4 p-lg-5 text-center" data-testid="complete-pending">
+                <h2 class="h4 mb-3">Your payment is still being confirmed</h2>
+                <p class="mb-2">
+                    @if (_gaveUp)
+                    {
+                        <text>This is taking longer than usual. You don't need to pay again — we'll email you as soon as it's confirmed.</text>
+                    }
+                    else
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span><text>Waiting to hear from the bank…</text>
+                    }
+                </p>
+                @if (_status is { } pending)
+                {
+                    <p class="text-secondary small mb-0">Order no. @pending.OrderNumber</p>
+                }
+            </div>
+        </div>
+        <a href="/store" class="btn btn-outline-secondary">Continue shopping</a>
+    }
+
+    <p class="small text-secondary mt-4 mb-0">
+        Questions about an order? <HelpLink Slug="shopping-at-the-store" Anchor="placing-an-order" />
+    </p>
+</div>
+
+@code {
+    private StoreCheckoutCompleteQuery _query = new(null, false);
+    private StoreOrderStatusView? _status;
+    private StoreOrderView? _order;
+    private bool _gaveUp, _notFound, _cartReset;
+    private readonly CancellationTokenSource _stop = new();
+
+    protected override void OnInitialized() => _query = StoreCheckoutCompleteQuery.Parse(Nav.Uri);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Only once the circuit is up: the cart header that proves this browser placed the order
+        // rides the interactive calls.
+        if (!firstRender || !RendererInfo.IsInteractive || _query.OrderId is not { } id) return;
+        await PollAsync(id);
+    }
+
+    private async Task PollAsync(Guid id)
+    {
+        var attempts = _query.StripeSaysFailed ? 3 : StoreCheckoutCompleteQuery.Backoff.Count;
+        for (var i = 0; i <= attempts && !_stop.IsCancellationRequested; i++)
+        {
+            var read = await Store.GetStoreOrderStatusAsync(id, null, _stop.Token);
+            if (read.Item is { } status)
+            {
+                _status = status;
+                if (status.IsFinal)
+                {
+                    await ResetAsync(status);
+                    StateHasChanged();
+                    return;
+                }
+            }
+            else if (read.IsEmpty)   // 404: not this browser's order, or none at all
+            {
+                _notFound = true;
+                StateHasChanged();
+                return;
+            }
+            StateHasChanged();
+            if (i == attempts) break;
+            try { await Task.Delay(StoreCheckoutCompleteQuery.Backoff[Math.Min(i, StoreCheckoutCompleteQuery.Backoff.Count - 1)], _stop.Token); }
+            catch (TaskCanceledException) { return; }
+        }
+        _gaveUp = true;
+        StateHasChanged();
+    }
+
+    /// <summary>Paid: the webhook emptied the ordered lines from the cart, so the badge and drawer read it again.</summary>
+    private async Task ResetAsync(StoreOrderStatusView status)
+    {
+        if (_cartReset) return;
+        _cartReset = true;
+        if (status.Status != StoreOrderStatus.Cancelled)
+            _order = (await Store.GetStoreOrderAsync(status.OrderId, StoreCheckoutCompleteQuery.TokenIn(status.OrderUrl), _stop.Token)).Item;
+        await CartState.RefreshAsync();
+    }
+
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _stop.Dispose();
+    }
+}

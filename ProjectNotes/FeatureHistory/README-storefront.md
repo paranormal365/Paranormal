@@ -265,8 +265,40 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 - (S3) The four surfaces share StoreCartLine (four modes) and StoreCartView.ShippingText; the page
   uses StoreOrderSummary, the drawer and the header menu their compact rows with the same
   data-testids — StoreCartSurfacesAgreeTests (source) and The_four_surfaces_agree (screen).
-- (S3) Until S4.11 there is no "To checkout": the summary ends at its total (or the sentence why
-  it can't check out), and the drawer's button is "Go to Cart".
+- (S3) Until S4.11 there was no "To checkout". S4.11 adds it to the cart page's summary and to the
+  drawer (Smarty's red button, only when the cart can check out), and makes the steps' "Place order"
+  a link from the cart (and "Cart" a link back from the checkout); later steps are never links.
+- (S4.10) The checkout's validation lives once, in StoreCheckoutRules (Ben.Service.Models): the
+  server refuses with it and the page checks with it, so a sentence shown before sending is the one
+  the server would say. CheckoutForm refuses every change while its order is being paid for; "Edit"
+  unlocks and forgets the placed order.
+- (S4.11) The checkout is one page in two steps: "Continue to payment" places the order and mounts
+  Stripe's Payment Element (Stripe.js loaded only then); the steps move to Payment once it is up. A
+  countdown shows the hold; the status is re-read every 30 s and a lapsed hold re-prepares by itself
+  with "Your reservation expired — we've checked stock again." An expired hold not yet released is
+  REUSED by the server with a fresh expiry, so the same PaymentIntent (and client secret) carries on;
+  the plan's "a new ClientSecret" was not what the service does, and the test checks the notice and a
+  fresh countdown instead.
+- (S4.11) The thank-you page is not behind the switch. It reads the status with the cart header
+  (the browser that placed the order, for an hour), and the status's own OrderUrl token opens the
+  items and totals. Polls back off over about a minute, then says the email will follow.
+- (S4.11, found by the browser suite) The checkout's rate limit (10 a minute per address) answered
+  429 with a JSON body, which the client's prose test drops — and the page said "The checkout
+  couldn't be started just now", which was false. SendExpectingReasonAsync and
+  SendExpectingConflictAsync now answer a 429 with WebApiClient.TooManyTries ("wait a minute and try
+  again") — RateLimitedSendsSayWaitTests, both seen failing without the fix. Every e2e browser is a
+  guest from 127.0.0.1, so the checkout fixture meets the limit; its presses wait a minute and press
+  again when told to, as a buyer would.
+- (S4.11, by eye 09/24, isolated hosts, phone and desktop, light and dark)
+  - Floating labels drew their placeholder underneath: app.css makes every placeholder visible
+    with !important, which beat Bootstrap's floating-label rule. app.css now exempts
+    `.form-floating > .form-control` (the store is the only user of floating labels).
+  - The phone's checkout bar was sticky and never stuck (the layout scrolls in a container): it sat
+    at the end of the page. Now fixed-position like Smarty's, with a spacer; Checkout_fits_a_phone
+    asserts it is at the bottom of the screen, which the first version of the test did not.
+  - The lock beside "All transactions are secured" and the thank-you tick's colour.
+- (S4.11) Not in the browser suite: "Without Stripe the checkout says so" needs a host with no keys
+  and no fake — the refusal (PaymentsNotSetUp, 503 prose) is covered by StoreCheckoutServiceTests.
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one
   adapter under that name only, and the narrower interface stopped the site from STARTING. No unit
   test builds the website's real container — the e2e harness (host refused to start) found it.

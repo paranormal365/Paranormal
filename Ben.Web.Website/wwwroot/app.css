@@ -694,6 +694,13 @@ textarea.form-control::placeholder {
     opacity: 1;
 }
 
+/* …except under a floating label (the store's checkout, storefront S4.11). There the placeholder
+   exists only so Bootstrap can tell an empty box by :placeholder-shown; the label IS the prompt.
+   The rule above, being !important, drew both on top of each other — seen by eye 09/24. */
+.form-floating > .form-control::placeholder {
+    color: transparent !important;
+}
+
 /* ── The @name prefix reports the availability check ─────────────────────────
    Grey with nothing to say, blue while the answer is in flight, green or red once it lands.
 

@@ -196,6 +196,8 @@ public sealed class WebApiClient : IWebApiClient
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null);
         }
 
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return (default, TooManyTries);
+
         var body = await response.Content.ReadAsStringAsync(token);
 
         // A refusal we wrote is a plain sentence; a framework error is a ProblemDetails blob or an
@@ -281,6 +283,8 @@ public sealed class WebApiClient : IWebApiClient
             return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null, default);
         }
 
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return (default, TooManyTries, default);
+
         // Read once, as text. Trying the JSON reader first and the string reader second would read
         // the same stream twice, and the second read of an unbuffered response is empty.
         var body = await response.Content.ReadAsStringAsync(token);
@@ -307,6 +311,14 @@ public sealed class WebApiClient : IWebApiClient
 
         return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null, default);
     }
+
+    /// <summary>
+    /// What a person is told when the API's rate limiter turns them away. The limiter's own body is
+    /// JSON, which the prose test rightly drops — and the page then said "couldn't be started just
+    /// now", which was not true (storefront S4.11: the checkout's ten-a-minute limit, met in the
+    /// browser suite). Being asked to wait is something a person can act on.
+    /// </summary>
+    public const string TooManyTries = "That's a lot of tries in a short time — wait a minute and try again.";
 
     /// <summary>What <c>ReadFromJsonAsync</c> uses when nothing is passed: the web defaults.</summary>
     private static readonly System.Text.Json.JsonSerializerOptions WebJson

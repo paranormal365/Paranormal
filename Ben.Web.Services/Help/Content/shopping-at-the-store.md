@@ -88,15 +88,53 @@ keep things in your cart, and the cart says "The store isn't taking orders at th
 
 ## Placing an order
 
-The checkout, step by step. (Written with the checkout.)
+The steps across the top of the cart and checkout pages show where you are: **Cart**, **Place
+order**, **Payment**, **Complete**.
+
+1. **From your cart**, press **To checkout** (on the cart page, or in the slide-out cart).
+2. **Delivery.** Enter your email address and where the order should go: your name, phone,
+   street, city, state and ZIP code. If your card's billing address is somewhere else, tick
+   **Billing address is different** and fill that in too. You can add a note for the person
+   packing your order.
+3. **A discount code**, if you have one, goes in the box under the order summary. The summary
+   shows it coming off straight away.
+4. **Agree to the terms** and press **Continue to payment**. Your items are now held for you,
+   sales tax is worked out from your address, and the summary shows the total you'll pay.
+5. **Payment.** Enter your card in the payment form. It belongs to Stripe, our payment company,
+   so your card details go straight to them and never reach IsHaunted.com. Press **Place order**.
+6. **Complete.** You'll see "Thank you for your order!" with your order number, and a receipt
+   arrives by email.
+
+**Changing something after you continue.** Once you press Continue, your details are shown as a
+summary so the payment is for exactly what you see. To change the address, the email or the
+discount code, press **Edit**. Continue again afterwards and the total is worked out again.
+
+**Your items are held for a short while** — the payment step shows how long. If the time runs
+out before you pay, the page checks stock again by itself and says "Your reservation expired —
+we've checked stock again." Nothing is charged until you press Place order.
+
+**If something can't be bought**, the checkout says so in a red box at the top: an item that sold
+out while you were typing, an address that doesn't look right, or a card the bank declined. Fix
+it and continue again. Nothing is charged when the checkout refuses.
+
+**With or without an account.** As a guest, we email you a link to your order. If you have an
+account, **Sign in** on the checkout page first and the order is kept with your account.
 
 ## Delivery
 
-Where the store ships and what shipping costs. (Written with the checkout.)
+The store ships to addresses in the fifty United States and Washington, DC. It doesn't ship to US
+territories, military addresses or other countries yet.
+
+Shipping is one flat price for the whole order, however many things are in it, and it's free once
+your products come to a set amount — the cart tells you how much more would make it free. The
+shipping line in the cart and at checkout always shows what you'll pay.
 
 ## Sales tax
 
-How sales tax is worked out. (Written with the checkout.)
+Sales tax depends on where the order is going, so the cart shows a **total before tax** and the
+tax is worked out at checkout, when you press **Continue to payment**. It appears on its own line
+in the order summary, never hidden inside a price. Some states tax shipping as well; where they
+do, that is included in the sales tax line.
 
 ## Your orders
 

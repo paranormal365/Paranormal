@@ -17,8 +17,7 @@
     Quantities change as they are pressed — Smarty's "Update cart" button is dropped because
     nothing waits for it. Every number is the server's: each change answers with the whole cart.
 
-    "To checkout" arrives with the checkout page (S4.11); until then the summary ends at its total,
-    or says why the cart cannot check out.
+    "To checkout" shows only when the cart can check out; otherwise the summary says why not.
 *@
 
 <FeatureGate Flag="@SiteFeatures.Store">
@@ -97,7 +96,11 @@
                 </div>
 
                 <div class="col-xl-4">
-                    <StoreOrderSummary Cart="cart" Sticky="true" />
+                    <StoreOrderSummary Cart="cart" Sticky="true">
+                        <Cta>
+                            <a href="/store/checkout" class="btn btn-primary w-100" id="cart-to-checkout">To checkout</a>
+                        </Cta>
+                    </StoreOrderSummary>
                 </div>
             </div>
         }

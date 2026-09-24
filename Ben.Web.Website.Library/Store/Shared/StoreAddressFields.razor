@@ -1,0 +1,81 @@
+@*
+    One US address on the checkout (storefront S4.11), after Smarty's shipping block
+    (shop-page-checkout.html): floating labels, full name and phone side by side, the street, then
+    state, city and ZIP. Country is fixed — the store ships to the fifty states and DC only — so it
+    is shown, not asked. Every label is tied to its input by id, so a screen reader and a tap on
+    the label both land in the box.
+*@
+
+<div class="row g-3" data-testid="@($"{Prefix}-address")">
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <input type="text" class="form-control" id="@($"{Prefix}-full-name")" placeholder="Full name" autocomplete="@Auto("name")"
+                   @bind="Address.FullName" @bind:event="oninput" />
+            <label for="@($"{Prefix}-full-name")">Full name</label>
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <input type="tel" class="form-control" id="@($"{Prefix}-phone")" placeholder="Phone" autocomplete="@Auto("tel")"
+                   @bind="Address.Phone" @bind:event="oninput" />
+            <label for="@($"{Prefix}-phone")">Phone</label>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="form-floating">
+            <input type="text" class="form-control" id="@($"{Prefix}-street1")" placeholder="Street address" autocomplete="@Auto("address-line1")"
+                   @bind="Address.Street1" @bind:event="oninput" />
+            <label for="@($"{Prefix}-street1")">Street address</label>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="form-floating">
+            <input type="text" class="form-control" id="@($"{Prefix}-street2")" placeholder="Apartment, suite, unit (optional)" autocomplete="@Auto("address-line2")"
+                   @bind="Address.Street2" @bind:event="oninput" />
+            <label for="@($"{Prefix}-street2")">Apartment, suite, unit (optional)</label>
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <input type="text" class="form-control" id="@($"{Prefix}-city")" placeholder="City" autocomplete="@Auto("address-level2")"
+                   @bind="Address.City" @bind:event="oninput" />
+            <label for="@($"{Prefix}-city")">City</label>
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <BenSelect TItem="StateOption" TValue="string" Id="@($"{Prefix}-state")"
+                       Data="States" TextField="Name" ValueField="Code" DefaultText="Choose a state…"
+                       @bind-Value="State" AriaLabel="State" />
+            <label for="@($"{Prefix}-state")">State</label>
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <input type="text" inputmode="numeric" class="form-control" id="@($"{Prefix}-zip")" placeholder="ZIP code" autocomplete="@Auto("postal-code")"
+                   maxlength="10" @bind="Address.Zip" @bind:event="oninput" />
+            <label for="@($"{Prefix}-zip")">ZIP code</label>
+        </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <input type="text" class="form-control" id="@($"{Prefix}-country")" value="United States" readonly aria-readonly="true" tabindex="-1" />
+            <label for="@($"{Prefix}-country")">Country</label>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CheckoutAddress Address { get; set; } = default!;
+
+    /// <summary>"shipping" or "billing": the ids' prefix and the browser's autofill section.</summary>
+    [Parameter, EditorRequired] public string Prefix { get; set; } = "";
+
+    private string? State { get => string.IsNullOrEmpty(Address.State) ? null : Address.State; set => Address.State = value ?? ""; }
+
+    // BenSelect reads its text and value by property name; a tuple's names are only fields.
+    private sealed record StateOption(string Code, string Name);
+    private static readonly StateOption[] States = UsStates.All.Select(s => new StateOption(s.Code, s.Name)).ToArray();
+
+    private string Auto(string field) => $"section-{Prefix} {Prefix} {field}";
+}

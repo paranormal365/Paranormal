@@ -5,29 +5,37 @@
     Two substitutions, stated once in the plan: Smarty's "Fees" line is our Sales tax — its own
     line, never folded into a total — and on the cart the total is "Total before tax", because
     Stripe Tax only works the tax out at checkout from the address. Every figure comes from the
-    cart record the server priced; this component adds nothing up but the tax at checkout.
+    server: the cart record on the cart, and at checkout — once the order is placed — the order's
+    own totals (Totals), which is what the card will be charged. This component adds nothing up.
 *@
 
 <div class="ben-summary @(Sticky ? "ben-summary--sticky" : null)" data-testid="order-summary">
     <h2 class="h5 mb-3">Order summary</h2>
 
     <div class="ben-summary__row" data-testid="summary-products">
-        <span>Products</span><span>@StoreMoney.Format(Cart.Subtotal)</span>
+        <span>Products</span><span>@StoreMoney.Format(Totals?.Subtotal ?? Cart.Subtotal)</span>
     </div>
-    @if (Cart.Discount > 0)
+    @if ((Totals?.Discount ?? Cart.Discount) is > 0 and var discount)
     {
         <div class="ben-summary__row text-success" data-testid="summary-discount">
-            <span>Discount@(Cart.CouponCode is { } code ? $" ({code})" : null)</span><span>−@StoreMoney.Format(Cart.Discount)</span>
+            <span>Discount@(Cart.CouponCode is { } code ? $" ({code})" : null)</span><span>−@StoreMoney.Format(discount)</span>
         </div>
     }
     <div class="ben-summary__row" data-testid="summary-shipping">
         <span>Shipping</span>
-        <span class="@(Cart.Shipping is null ? "text-secondary" : Cart.ShippingIsFree ? "text-success fw-medium" : null)">@Cart.ShippingText</span>
+        @if (Totals is { } placed)
+        {
+            <span class="@(placed.Shipping == 0 ? "text-success fw-medium" : null)">@(placed.Shipping == 0 ? "Free" : StoreMoney.Format(placed.Shipping))</span>
+        }
+        else
+        {
+            <span class="@(Cart.Shipping is null ? "text-secondary" : Cart.ShippingIsFree ? "text-success fw-medium" : null)">@Cart.ShippingText</span>
+        }
     </div>
     @* fees slot — Smarty's "Fees" line; the store charges none beyond sales tax *@
     <div class="ben-summary__row" data-testid="summary-tax">
         <span>Sales tax</span>
-        @if (Tax is { } tax)
+        @if ((Totals?.Tax ?? Tax) is { } tax)
         {
             <span>@StoreMoney.Format(tax)</span>
         }
@@ -36,18 +44,18 @@
             <span class="text-secondary">–</span>
         }
     </div>
-    @if (Tax is null)
+    @if (Totals is null && Tax is null)
     {
-        <div class="small text-secondary">Sales tax is worked out at checkout.</div>
+        <div class="small text-secondary">@(AtCheckout ? "Sales tax is worked out from your address when you continue." : "Sales tax is worked out at checkout.")</div>
     }
-    @if (FreeShippingNote is { } note)
+    @if (Totals is null && FreeShippingNote is { } note)
     {
         <div class="small text-secondary mt-1" data-testid="summary-free-note">@note</div>
     }
 
     <div class="ben-summary__row ben-summary__total" data-testid="summary-total">
-        <span>@(Tax is null ? "Total before tax" : "Total")</span>
-        <span>@StoreMoney.Format(Tax is { } t ? Cart.TotalBeforeTax + t : Cart.TotalBeforeTax)</span>
+        <span>@(Totals is null && Tax is null ? "Total before tax" : "Total")</span>
+        <span>@StoreMoney.Format(Totals?.Total ?? (Tax is { } t ? Cart.TotalBeforeTax + t : Cart.TotalBeforeTax))</span>
     </div>
 
     @* reward-points slot — Smarty's points line; not in v1 *@
@@ -87,6 +95,12 @@
 
     /// <summary>The worked-out sales tax at checkout; null on the cart, where it is not known yet.</summary>
     [Parameter] public decimal? Tax { get; set; }
+
+    /// <summary>The placed order's figures at checkout — what the card will be charged. Wins over the cart's.</summary>
+    [Parameter] public StoreCheckoutTotals? Totals { get; set; }
+
+    /// <summary>On the checkout page, before the order is placed: the tax note says when it will be known.</summary>
+    [Parameter] public bool AtCheckout { get; set; }
 
     /// <summary>The way on — "To checkout" — shown only when the cart can check out.</summary>
     [Parameter] public RenderFragment? Cta { get; set; }

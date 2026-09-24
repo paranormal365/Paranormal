@@ -15,8 +15,8 @@
     locked through BenModal's module, which counts opens, so a dialog over the drawer does not
     unlock the page when it closes.
 
-    min(420px, 100vw) wide: full width on a phone, never on a tablet. "To checkout" arrives with the
-    checkout page (S4.11); until then the way on is the cart page.
+    min(420px, 100vw) wide: full width on a phone, never on a tablet. "To checkout" (Smarty's red
+    button) when the cart can check out, and the cart page beside it.
 *@
 
 @if (CartState.DrawerOpen)
@@ -97,7 +97,11 @@
                 {
                     <p class="small text-warning-emphasis mt-2 mb-0" data-testid="summary-why-not">@why</p>
                 }
-                <a href="/store/cart" class="btn btn-danger w-100 mt-3" @onclick="CartState.CloseDrawer">Go to Cart</a>
+                @if (money.CanCheckout)
+                {
+                    <a href="/store/checkout" class="btn btn-danger w-100 mt-3" id="drawer-to-checkout" @onclick="CartState.CloseDrawer">To checkout</a>
+                }
+                <a href="/store/cart" class="btn @(money.CanCheckout ? "btn-outline-secondary" : "btn-danger") w-100 mt-2" @onclick="CartState.CloseDrawer">Go to Cart</a>
             </div>
         }
     </aside>

@@ -23,6 +23,8 @@ public sealed class StoreRefusalReachesThePageTests
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreStock.razor", "stock-refusal" },
         // A cart that failed to load must not look like an empty one (S3.5).
         { "Ben.Web.Website.Library/Store/Cart/StoreCartPage.razor", "cart-refusal" },
+        // "Only 1 of … left", "Enter a 5-digit ZIP code", a declined card (S4.11).
+        { "Ben.Web.Website.Library/Store/Checkout/StoreCheckoutPage.razor", "checkout-refusal" },
     };
 
     private static string Read(string relative)

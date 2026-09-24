@@ -3,8 +3,8 @@
     labels always, so a buyer can see how far there is to go; a phone shows the numbered dots and
     one line saying which step this is.
 
-    No links yet: "Place order" gains /store/checkout when that page exists (S4.11) — a link that
-    runs ahead of its page is a dead end, and StoreLinksResolveTests refuses it.
+    From the cart, "Place order" is a link to the checkout; from the checkout, "Cart" goes back.
+    Later steps are never links — Payment and Complete cannot be reached by skipping ahead.
 *@
 
 <div class="mb-3">
@@ -12,7 +12,14 @@
         @foreach (var (step, label) in Labels)
         {
             <li class="ben-steps__item @Css(step)" aria-current="@(step == Current ? "step" : null)">
-                <span class="ben-steps__label">@label</span>
+                @if (LinkFor(step) is { } href)
+                {
+                    <a class="ben-steps__label ben-link-normal" href="@href">@label</a>
+                }
+                else
+                {
+                    <span class="ben-steps__label">@label</span>
+                }
             </li>
         }
     </ol>
@@ -36,6 +43,13 @@
 
     /// <summary>Shows "Secured checkout" with a lock under the steps.</summary>
     [Parameter] public bool Secure { get; set; }
+
+    private string? LinkFor(StoreCheckoutStep step) => (Current, step) switch
+    {
+        (StoreCheckoutStep.Cart, StoreCheckoutStep.PlaceOrder) => "/store/checkout",
+        (StoreCheckoutStep.PlaceOrder, StoreCheckoutStep.Cart) => "/store/cart",
+        _ => null,
+    };
 
     private string? Css(StoreCheckoutStep step)
         => step < Current ? "ben-steps__item--done" : step == Current ? "ben-steps__item--current" : null;

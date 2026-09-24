@@ -43,7 +43,21 @@ public sealed class StoreComponentRenderTests
         Assert.Contains(caption, html);
         Assert.Equal(done, Regex.Matches(html, "ben-steps__item--done").Count);
         Assert.Single(Regex.Matches(html, "aria-current=\"step\""));
-        Assert.DoesNotContain("href=", html);
+    }
+
+    /// <summary>From the cart the next step is a link, and from the checkout the cart is; nothing skips ahead to paying (S4.11).</summary>
+    [Theory]
+    [InlineData(StoreCheckoutStep.Cart, "href=\"/store/checkout\"")]
+    [InlineData(StoreCheckoutStep.PlaceOrder, "href=\"/store/cart\"")]
+    [InlineData(StoreCheckoutStep.Payment, null)]
+    [InlineData(StoreCheckoutStep.Complete, null)]
+    public async Task The_steps_link_only_one_step_either_way(StoreCheckoutStep current, string? link)
+    {
+        var html = await RenderAsync<StoreCheckoutSteps>(new() { [nameof(StoreCheckoutSteps.Current)] = current });
+
+        if (link is null) Assert.DoesNotContain("href=", html);
+        else Assert.Single(Regex.Matches(html, "href="));
+        if (link is not null) Assert.Contains(link, html);
     }
 
     [Fact]

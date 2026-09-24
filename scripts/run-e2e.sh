@@ -211,8 +211,11 @@ start_host() {
 }
 
 # Bound on the IPv4 address, probed on the localhost name — see the note by the URLs.
+# The store's test checkout (storefront S4.9): the pretend Stripe gateway and tax service, which
+# only exist in Development with NO secret key and the flag on — so the key is blanked here even
+# if the developer's own settings carry a test one. Nothing in a normal run ever talks to Stripe.
 start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
-  "FileStorage__RootPath=$UPLOADS_DIR"
+  "FileStorage__RootPath=$UPLOADS_DIR Stripe__AllowFakeCheckout=true Stripe__SecretKey= Stripe__PublishableKey="
 start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
@@ -278,6 +281,32 @@ else
   done
   # The website caches the feature snapshot, so give it a moment to notice.
   sleep 3
+
+  # ── The store can take a (test) order ────────────────────────────────────
+  # Sales tax needs a ship-from address, the pretend tax service exactly as the real one, so the
+  # checkout tests would all stop at "Sales tax couldn't be calculated". Filled in only where the
+  # settings are blank, through the admin page's own endpoint; everything already set is kept.
+  echo "── Letting the store take test orders ─────────────────────────────────"
+  API_URL="$API_URL" SA_TOKEN="$SA_TOKEN" python3 - <<'PYEOF' || echo "   could not set the store's ship-from address — checkout tests will fail on tax"
+import json, os, urllib.request
+api, token = os.environ["API_URL"], os.environ["SA_TOKEN"]
+def call(method, body=None):
+    req = urllib.request.Request(api + "/api/admin/store/settings", method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+s = call("GET")
+save = {k: s.get(k) for k in ("checkoutEnabled", "shippingFlatRate", "freeShippingThreshold", "lowStockThreshold",
+        "shipFromStreet", "shipFromCity", "shipFromState", "shipFromZip", "supportEmail",
+        "returnsWindowDays", "reservationMinutes", "linkEnabled")}
+save["checkoutEnabled"] = True
+for key, value in (("shipFromStreet", "401 Church St"), ("shipFromCity", "Nashville"),
+                   ("shipFromState", "TN"), ("shipFromZip", "37219")):
+    save[key] = save.get(key) or value
+after = call("PUT", save)
+print("   ship-from", after.get("shipFromCity"), after.get("shipFromState"), "| ready to sell:", after.get("readyToSell"))
+PYEOF
 
   # ── The seeded groups' paid plans are kept current ────────────────────────
   # BillingDemoSeeder puts paranormal365 ten days from renewal ON PURPOSE (so the renewal notice
