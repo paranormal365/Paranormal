@@ -75,4 +75,10 @@ public interface IMediaUrlBuilder
 
     /// <summary>A picture from a tour's gallery. Anonymous, for the same reason.</summary>
     string TourPhoto(Guid uploadFileId);
+
+    /// <summary>
+    /// A store picture — a category's, a product's, or the one an order line was bought with
+    /// (storefront). Anonymous, and served whether or not the shop is switched on.
+    /// </summary>
+    string StoreImage(Guid uploadFileId, bool thumbnail = false);
 }

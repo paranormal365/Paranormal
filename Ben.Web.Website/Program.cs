@@ -796,6 +796,29 @@ app.MapGet("/media/tour-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// Store pictures (storefront S1.8). Anonymous and NOT behind the store switch: the catalogue is
+// entered while the shop is dark, and a buyer's order page shows what they bought either way. A
+// picture never changes under its id, so it is cached for a year — by anybody.
+app.MapGet("/media/store-image/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/store-image/{fileId}",
+        accessToken: null, httpFactory, ctx, ct, cacheControl: "public, max-age=31536000, immutable");
+}).AllowAnonymous();
+
+app.MapGet("/media/store-image/{fileId:guid}/thumb", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/store-image/{fileId}/thumb",
+        accessToken: null, httpFactory, ctx, ct, cacheControl: "public, max-age=31536000, immutable");
+}).AllowAnonymous();
+
 // A session on a hosted event's programme, as a calendar file (item 235 phase 10). Anonymous: the
 // programme is public once published, and a calendar app following the link carries no session.
 app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics", async (

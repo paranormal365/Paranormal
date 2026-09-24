@@ -101,6 +101,9 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
 
     public string TourPhoto(Guid uploadFileId) => $"/media/tour-photo/{uploadFileId}";
 
+    public string StoreImage(Guid uploadFileId, bool thumbnail = false)
+        => thumbnail ? $"/media/store-image/{uploadFileId}/thumb" : $"/media/store-image/{uploadFileId}";
+
     public string EventPhoto(Guid uploadFileId) => $"/media/event-photo/{uploadFileId}";
 
     private string Build(Guid fileId, string kind)
