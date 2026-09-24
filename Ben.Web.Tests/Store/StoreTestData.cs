@@ -49,6 +49,74 @@ internal static class StoreTestData
         return variant;
     }
 
+    /// <summary>A category of its own, active unless told otherwise.</summary>
+    public static StoreCategory Category(BenDataContext db, AppUser admin, string? name = null, bool active = true, int sortOrder = 0)
+    {
+        var slug = Guid.NewGuid().ToString("N")[..10];
+        var category = new StoreCategory
+        {
+            Id = Guid.NewGuid(), Name = name ?? $"Category {slug}", Slug = $"c-{slug}", IsActive = active,
+            SortOrder = sortOrder, DateCreated = Now, CreatedByAppUserId = admin.Id,
+        };
+        db.StoreCategories.Add(category);
+        return category;
+    }
+
+    /// <summary>A product filed under <paramref name="category"/>, with one default variant.</summary>
+    public static StoreProduct Product(BenDataContext db, AppUser admin, StoreCategory category, bool active = true, decimal price = 59.99m)
+    {
+        var slug = Guid.NewGuid().ToString("N")[..10];
+        var product = new StoreProduct
+        {
+            Id = Guid.NewGuid(), CategoryId = category.Id, Name = $"Meter {slug}", Slug = $"p-{slug}",
+            IsActive = active, MinPrice = price, MaxPrice = price, DateCreated = Now, CreatedByAppUserId = admin.Id,
+        };
+        db.StoreProducts.Add(product);
+        db.StoreProductVariants.Add(new StoreProductVariant
+        {
+            Id = Guid.NewGuid(), ProductId = product.Id, Sku = $"SKU-{slug}".ToUpperInvariant(), Price = price,
+            StockOnHand = 5, IsActive = true, IsDefault = true, DateCreated = Now, CreatedByAppUserId = admin.Id,
+        });
+        return product;
+    }
+
+    /// <summary>The Store Image upload type, which every store picture's row points at.</summary>
+    public static void StoreImageType(BenDataContext db, AppUser admin)
+        => db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.StoreImageFileTypeId,
+            Name = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.StoreImageFileTypeName,
+            IsActive = true, DateCreated = Now, CreatedByAppUserId = admin.Id,
+        });
+
+    /// <summary>A real JPEG, so the sanitizer has something to decode.</summary>
+    public static byte[] Jpeg(int width = 1200, int height = 900)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(width, height);
+        using (var canvas = new SkiaSharp.SKCanvas(bitmap)) canvas.Clear(new SkiaSharp.SKColor(40, 60, 90));
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 80);
+        return data.ToArray();
+    }
+
+    /// <summary>An upload as the controller receives it.</summary>
+    public static Microsoft.AspNetCore.Http.IFormFile Upload(byte[] bytes, string contentType = "image/jpeg", string name = "photo.jpg")
+        => new Microsoft.AspNetCore.Http.FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", name)
+        {
+            Headers = new Microsoft.AspNetCore.Http.HeaderDictionary(),
+            ContentType = contentType,
+        };
+
+    /// <summary>A request signed in as <paramref name="who"/>.</summary>
+    public static Microsoft.AspNetCore.Mvc.ControllerContext SignedInAs(Guid who) => new()
+    {
+        HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+            User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, who.ToString())], "Bearer")),
+        },
+    };
+
     public static StoreCoupon Coupon(
         BenDataContext db, AppUser admin, StoreCouponKind kind = StoreCouponKind.Percent, int? percentOff = 10,
         decimal? amountOff = null, int? maxRedemptions = null, int? perBuyer = 1)

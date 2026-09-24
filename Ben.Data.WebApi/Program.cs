@@ -223,6 +223,8 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorServ
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // The one place an uploaded media file is taken in — see IMediaIngestService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+// Storefront: files category and product pictures as site-owned uploads (StoreImageStorage).
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.StoreImageStorage>();
 
 // Reads .ben session bundles and serves what is inside them as byte ranges. Singleton because
 // the index it caches describes files that never change once written.

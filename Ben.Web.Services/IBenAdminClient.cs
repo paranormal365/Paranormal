@@ -39,7 +39,8 @@ public interface IBenAdminClient :
     IBenProgrammeClient,
     IBenEventFileClient,
     IBenEventRoomClient,
-    IBenEventOversightClient
+    IBenEventOversightClient,
+    IBenStoreAdminClient
 {
     // Every member now lives in one of the slices above. This interface remains the single name
     // components inject and the single thing BenAdminClientAdapter implements, so nothing that
