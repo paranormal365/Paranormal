@@ -74,6 +74,11 @@ public static class MailSampleRows
 
                 "AppealButton" => (MailBlocks.Button("Appeal this decision", url), true),
                 "CreditNote" => ("The event credit spent on it has been returned, and can be used for another event.", false),
+
+                // The store's letters (S4.4): the shapes an author lays out around.
+                "ItemsTable" => (MailBlocks.LineItems(), true),
+                "SummaryTable" => (MailBlocks.LineItems(), true),
+                "ShipTo" => ("Marguerite Ashdown<br>1201 Del Rio Pike<br>Franklin, TN 37064", true),
                 _ => (url, false),
             };
         }

@@ -392,6 +392,33 @@ public static class MailKinds
         [new("ClaimCode", "The code to hand to whoever is making the claim.", Required: true,
              Provides: "the code")]);
 
+    // ── The store (storefront S4.4) ────────────────────────────────────────────
+    // AppUsers is the buyer as an account OR as the name and email a guest typed (MailRows.Person);
+    // StoreOrders is the order row (its access token is never offered — MailTemplateSchema).
+
+    public static readonly MailKindInfo StoreOrderConfirmation = new(
+        "store-order-confirmation", "Thank you for your order",
+        "The receipt a buyer gets when their store order is paid.",
+        ["AppUsers", "StoreOrders"],
+        [new("OrderUrl", "The order's own page — with its private link for a guest.", Required: true, Provides: "a way to see the order"),
+         new("ItemsTable", "What was bought: each item, how many, and its price.", IsHtml: true),
+         new("SummaryTable", "Products, discount, shipping, sales tax and the total.", IsHtml: true),
+         new("ShipTo", "Where the parcel is going, on separate lines.", IsHtml: true)]);
+
+    public static readonly MailKindInfo StoreOrderPlaced = new(
+        "store-order-placed", "A new store order",
+        "Tells every SuperAdmin a store order has been paid and is waiting to be packed.",
+        ["AppUsers", "StoreOrders"],
+        [new("AdminOrderUrl", "The order in the store's administration.", Required: true, Provides: "a way to open the order"),
+         new("ItemsTable", "What was bought: each item, how many, and its price.", IsHtml: true)]);
+
+    public static readonly MailKindInfo StoreOrderLink = new(
+        "store-order-link", "A link to your order",
+        "Sends a buyer the way back to an order they asked to find again.",
+        ["AppUsers", "StoreOrders"],
+        [new("OrderUrl", "The order's page — a private link for a guest, the sign-in page for a member.", Required: true,
+             Provides: "a way to see the order")]);
+
     /// <summary>Every kind, in the order a person should see them.</summary>
     public static readonly IReadOnlyList<MailKindInfo> All =
     [
@@ -407,6 +434,7 @@ public static class MailKinds
         BookingsArrived, BookingsDigest,
         PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
         VenueClaimCode,
+        StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink,
     ];
 
     /// <summary>The kind with this key, or null when nothing declares it.</summary>

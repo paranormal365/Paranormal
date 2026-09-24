@@ -75,6 +75,48 @@ public static class MailStarters
             MailBlocks.Paragraph("This receipt is for your records. Nothing further is needed.")),
         [MailKinds.PaymentReceipt.Key]);
 
+    /// <summary>The store's receipt (S4.4).</summary>
+    public static readonly MailStarter OrderConfirmation = new(
+        "order-confirmation", "An order receipt",
+        "Thanks, the order number, what was bought and what it cost, where it is going, and the order's page.",
+        "Your order {StoreOrders.OrderNumber} from {SiteName}",
+        Branded(
+            MailBlocks.Heading("Thank you for your order"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. We have your order {StoreOrders.OrderNumber} "
+                               + "and your payment. We will write again when it is on its way."),
+            "{ItemsTable}",
+            "{SummaryTable}",
+            MailBlocks.Paragraph("It is going to:<br>{ShipTo}"),
+            MailBlocks.Button("See your order", "{OrderUrl}"),
+            MailBlocks.Paragraph("Keep this email: its button is how you get back to your order.")),
+        [MailKinds.StoreOrderConfirmation.Key]);
+
+    /// <summary>What every SuperAdmin hears when an order is paid (S4.4).</summary>
+    public static readonly MailStarter NewOrderAlert = new(
+        "new-order-alert", "A new order to pack",
+        "The order number, what to pack, and the button to the order in administration.",
+        "New store order {StoreOrders.OrderNumber}",
+        Branded(
+            MailBlocks.Heading("A new store order"),
+            MailBlocks.Paragraph("Order {StoreOrders.OrderNumber} has been paid and is waiting to be packed."),
+            "{ItemsTable}",
+            MailBlocks.Button("Open the order", "{AdminOrderUrl}")),
+        [MailKinds.StoreOrderPlaced.Key]);
+
+    /// <summary>The way back to an order, for somebody who asked (S4.4).</summary>
+    public static readonly MailStarter OrderLink = new(
+        "order-link", "A link to an order",
+        "One line of explanation and the button back to the order.",
+        "Your order {StoreOrders.OrderNumber}",
+        Branded(
+            MailBlocks.Heading("Your order"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. You asked for a way back to order "
+                               + "{StoreOrders.OrderNumber}. Here it is."),
+            MailBlocks.Button("See your order", "{OrderUrl}"),
+            MailBlocks.Paragraph("If you did not ask for this, you can ignore it — the link only shows "
+                               + "the order to whoever has this email.")),
+        [MailKinds.StoreOrderLink.Key]);
+
     public static readonly MailStarter Invoice = new(
         "invoice", "An invoice",
         "The same table, worded as something still to pay, with a button.",
@@ -193,7 +235,7 @@ public static class MailStarters
     public static readonly IReadOnlyList<MailStarter> All =
     [
         Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
-        RequestUnderYourAddress, VenueCode, BookingConfirmed, Plain,
+        RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink, Plain,
     ];
 
     /// <summary>
