@@ -224,6 +224,7 @@ public sealed class StoreOrderPayments(
         var calculationId = chargedCalculationId ?? order.StripeTaxCalculationId;
         if (calculationId is null) return;
         var now = Now;
+        string? refusedForGood = null;
 
         try
         {
@@ -246,9 +247,20 @@ public sealed class StoreOrderPayments(
         {
             order.TaxCommitAttempts++;
             db.StoreOrderEvents.Add(Event(order, StoreOrderEventKind.TaxTransactionFailed, now, ex.Message));
+            // A refusal Stripe will give every time: raise it and stop — the retry job skips an order
+            // needing attention — rather than knocking twenty times.
+            if (ex.Failure == StoreTaxFailure.Configuration)
+            {
+                var why = $"Stripe refused to file this order's sales tax: {ex.Message}";
+                Raise(db, order, why, now);
+                attention?.Add(why);
+                refusedForGood = why;
+            }
             log.LogError(ex, "The sales tax for store order {Number} could not be filed; the retry job will try again.", order.OrderNumber);
         }
         await db.SaveChangesAsync(ct);
+        if (refusedForGood is not null && attention is null)
+            await alerts.OrderNeedsAttentionAsync(order.OrderNumber, order.Id, refusedForGood, ct);
     }
 
     public static string TaxReference(StoreOrder order) => $"{order.OrderNumber}-{order.Id.ToString("N")[..8]}";

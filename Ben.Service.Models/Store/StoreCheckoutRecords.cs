@@ -36,6 +36,9 @@ public sealed record StoreOrderStatusView(
     Guid OrderId, int OrderNumber, StoreOrderStatus Status, bool IsFinal, string? Problem, string? OrderUrl,
     DateTime? ReservationExpiresUtc);
 
+/// <summary>What a 409 from the checkout carries: the sentence, and an order still being paid for when there is one.</summary>
+public sealed record StoreCheckoutRefusal(string Sentence, Guid? OrderId);
+
 /// <summary>The checkout's sentences, shared by the service that says them and the tests and pages that look for them.</summary>
 public static class StoreCheckoutSentences
 {

@@ -430,6 +430,14 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreAlerts>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderPayments>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreCheckoutService>();
+// S4.8: unfinished checkouts give their stock back every MINUTE (its own timer — the shared one
+// runs every five, which would let a 15-minute hold run to 20); failed tax filings retry; idle
+// carts are swept.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Store.StoreReservationExpiryService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreTaxRetryJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreCartSweepJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();

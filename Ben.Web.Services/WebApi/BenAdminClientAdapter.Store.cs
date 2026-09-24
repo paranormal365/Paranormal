@@ -69,4 +69,39 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Delete, "/api/store/cart/coupon", null, token);
         return StoreCartChange.From((cart, error, null));
     }
+
+    // ── Checkout and orders (S4.10) ──────────────────────────────────────────
+
+    public async Task<StoreCheckoutAttempt> PrepareCheckoutAsync(StoreCheckoutRequest request, CancellationToken token = default)
+    {
+        var (prepared, error, refusal) = await _api.SendExpectingConflictAsync<StoreCheckoutRequest, StoreCheckoutPrepared, StoreCheckoutRefusal>(
+            HttpMethod.Post, "/api/store/checkout/payment-intent", request, token);
+        return prepared is not null ? new StoreCheckoutAttempt(prepared, null)
+             : refusal is not null ? new StoreCheckoutAttempt(null, refusal.Sentence, refusal.OrderId)
+             : new StoreCheckoutAttempt(null, error ?? StoreCheckoutAttempt.CouldNotStart);
+    }
+
+    private static string WithToken(string path, string? accessToken)
+        => string.IsNullOrEmpty(accessToken) ? path : $"{path}?t={Uri.EscapeDataString(accessToken)}";
+
+    public Task<ItemResult<StoreOrderStatusView>> GetStoreOrderStatusAsync(Guid orderId, string? accessToken, CancellationToken token = default)
+        => _api.GetItemAsync<StoreOrderStatusView>(WithToken($"/api/store/orders/{orderId}/status", accessToken), token);
+
+    public Task<ItemResult<StoreOrderView>> GetStoreOrderAsync(Guid orderId, string? accessToken, CancellationToken token = default)
+        => _api.GetItemAsync<StoreOrderView>(WithToken($"/api/store/orders/{orderId}", accessToken), token);
+
+    public Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default)
+        => _api.GetItemAsync<StoreInvoiceRecord>(WithToken($"/api/store/orders/{orderId}/invoice", accessToken), token);
+
+    public Task<LoadResult<StoreOrderSummaryView>> GetMyStoreOrdersAsync(int? months = null, CancellationToken token = default)
+        => _api.GetListAsync<StoreOrderSummaryView>("/api/me/store/orders" + (months is > 0 ? $"?months={months}" : ""), token);
+
+    public Task<bool> LookupStoreOrderAsync(GuestOrderLookupRequest request, CancellationToken token = default)
+        => _api.PostAnonymousVoidAsync("/api/store/orders/lookup", request, token);
+
+    public async Task<bool> SimulateFakePaymentAsync(Guid orderId, CancellationToken token = default)
+        => (await _api.SendWithStatusAsync<object, object>(HttpMethod.Post, $"/api/store/checkout/dev/simulate-payment/{orderId}", new { }, token)).Status is >= 200 and < 300;
+
+    public async Task<bool> ExpireReservationForTestAsync(Guid orderId, CancellationToken token = default)
+        => (await _api.SendWithStatusAsync<object, object>(HttpMethod.Post, $"/api/store/checkout/dev/expire-reservation/{orderId}", new { }, token)).Status is >= 200 and < 300;
 }

@@ -23,6 +23,9 @@ public sealed class StoreControllersAreGatedTests
 {
     private static readonly Dictionary<string, string> NotGated = new()
     {
+        ["StoreOrderController"] =
+            "The order doors: a buyer who has been charged must reach the thank-you page, the emailed link and the "
+          + "invoice whatever the switch says, and the webhook still fulfils with the shop hidden.",
         [nameof(PublicStoreImageController)] =
             "Pictures serve while the shop is dark: the catalogue is entered and previewed before anybody can see it, "
           + "and an order page shows what was bought whether the shop is open or not.",
@@ -39,6 +42,8 @@ public sealed class StoreControllersAreGatedTests
     {
         Assert.Contains(StoreControllers(), t => t == typeof(PublicStoreController));
         Assert.Contains(StoreControllers(), t => t == typeof(Ben.Data.WebApi.Controllers.Store.StoreCartController));
+        Assert.Contains(StoreControllers(), t => t == typeof(Ben.Data.WebApi.Controllers.Store.StoreCheckoutController));
+        Assert.Contains(StoreControllers(), t => t == typeof(Ben.Data.WebApi.Controllers.Store.StoreOrderController));
     }
 
     [Fact]

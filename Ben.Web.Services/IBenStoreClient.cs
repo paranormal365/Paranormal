@@ -50,6 +50,37 @@ public interface IBenStoreClient
     Task<StoreCartChange> ApplyCartCouponAsync(string code, CancellationToken token = default);
 
     Task<StoreCartChange> RemoveCartCouponAsync(CancellationToken token = default);
+
+    // ── Checkout and orders (storefront S4.10) ───────────────────────────────
+
+    /// <summary>Places the order and starts its payment. Exactly one of the answer's parts is set.</summary>
+    Task<StoreCheckoutAttempt> PrepareCheckoutAsync(StoreCheckoutRequest request, CancellationToken token = default);
+
+    /// <param name="accessToken">The order's private link token, for a guest; null for the buyer signed in or the browser that placed it.</param>
+    Task<ItemResult<StoreOrderStatusView>> GetStoreOrderStatusAsync(Guid orderId, string? accessToken, CancellationToken token = default);
+
+    Task<ItemResult<StoreOrderView>> GetStoreOrderAsync(Guid orderId, string? accessToken, CancellationToken token = default);
+
+    Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default);
+
+    /// <summary>My Orders: the signed-in person's paid orders, newest first.</summary>
+    Task<LoadResult<StoreOrderSummaryView>> GetMyStoreOrdersAsync(int? months = null, CancellationToken token = default);
+
+    /// <summary>"Find my order". The answer is the same whether or not anything matched.</summary>
+    Task<bool> LookupStoreOrderAsync(GuestOrderLookupRequest request, CancellationToken token = default);
+
+    /// <summary>Test checkout only: pays the order as Stripe would.</summary>
+    Task<bool> SimulateFakePaymentAsync(Guid orderId, CancellationToken token = default);
+
+    /// <summary>Test checkout only: runs the order's reservation out.</summary>
+    Task<bool> ExpireReservationForTestAsync(Guid orderId, CancellationToken token = default);
+}
+
+/// <summary>What pressing Continue came to.</summary>
+/// <param name="StillProcessingOrderId">An earlier payment on this cart is still going through — the page polls it.</param>
+public sealed record StoreCheckoutAttempt(StoreCheckoutPrepared? Prepared, string? Error, Guid? StillProcessingOrderId = null)
+{
+    public const string CouldNotStart = "The checkout couldn't be started just now. Try again in a moment.";
 }
 
 /// <summary>What a change to the cart came back with.</summary>

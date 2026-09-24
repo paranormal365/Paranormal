@@ -30,6 +30,7 @@ public sealed class AnonymousTokenDoorsAreRateLimitedTests
         ["PublicInvestigationCodeController"] = "a guest code off a printed sheet",
         ["PublicAccountHandoverController"]   = "a reset code from an account-handover letter",
         ["PublicEventPassController"]         = "an event pass token, rendered as a picture",
+        ["StoreOrderController"]              = "a store order's private link token (?t=), and find-my-order",
     };
 
     [Fact]
