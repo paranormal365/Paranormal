@@ -67,6 +67,29 @@ public sealed class StoreClientRoutesTests
           + "screen can reach them:\n  " + string.Join("\n  ", uncalled));
     }
 
+    /// <summary>The public store's actions, read from its controller.</summary>
+    internal static IEnumerable<(string Verb, string Route)> PublicStoreRoutes()
+    {
+        var source = File.ReadAllText(Path.Combine(Root(), "Ben.Data.WebApi", "Controllers", "Public", "PublicStoreController.cs"));
+        var prefix = Regex.Match(source, @"\[Route\(""([^""]+)""\)\]").Groups[1].Value.Trim('/');
+        foreach (Match m in Regex.Matches(source, @"\[Http(Get|Post|Put|Delete)(?:\(""([^""]*)""\))?\]"))
+            yield return (m.Groups[1].Value.ToUpperInvariant(), m.Groups[2].Value.Length == 0 ? prefix : $"{prefix}/{m.Groups[2].Value}");
+    }
+
+    [Fact]
+    public void Every_public_store_action_is_called_by_the_client()
+    {
+        var client = File.ReadAllText(Path.Combine(Root(), "Ben.Web.Services", "WebApi", "BenAdminClientAdapter.Store.cs"));
+        var routes = PublicStoreRoutes().ToList();
+        Assert.True(routes.Count >= 8, "Far fewer actions than the public store has — the pattern is reading the wrong thing.");
+
+        var uncalled = routes
+            .Where(r => !Regex.IsMatch(client, "\"/" + Pattern(r.Route) + @"(\?[^""]*)?"""))
+            .Select(r => $"{r.Verb} {r.Route}").ToList();
+        Assert.True(uncalled.Count == 0,
+            "These public store endpoints have no call in BenAdminClientAdapter.Store.cs:\n  " + string.Join("\n  ", uncalled));
+    }
+
     /// <summary>A route template as a regex over a C# string literal or interpolation.</summary>
     private static string Pattern(string route)
         => string.Join("/", route.Split('/').Select(segment =>
