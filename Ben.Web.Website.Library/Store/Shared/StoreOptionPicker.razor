@@ -1,0 +1,108 @@
+@*
+    The product page's choices (storefront S2.6): colour swatches and size pills, as real radio
+    buttons with labels, so a keyboard, a screen reader and a finger all work.
+
+    Two states that must not look alike:
+      - UNAVAILABLE — no live variant has this value together with what is already chosen. The
+        radio is disabled; it cannot be picked.
+      - SOLD OUT — the combination exists but none is left. It can still be picked (the buyer should
+        see why the button says Sold out) and wears a muted dashed ring with "Sold out" in its
+        title. Never a line through the word: struck-through text reads as "gone for good".
+*@
+
+@foreach (var option in Options)
+{
+    var o = option;
+    <fieldset class="mb-3">
+        <legend class="fs-6 fw-semibold mb-2">
+            @o.Name@if (SelectedValueFor(o) is { } chosen) {<span class="fw-normal text-secondary">: @chosen.Value</span>}
+        </legend>
+        <div class="ben-selector @(o.Kind == StoreOptionKind.Swatch ? "ben-selector--swatch" : null)">
+            @foreach (var value in o.Values)
+            {
+                var v = value;
+                var id = $"opt-{o.Id:N}-{v.Id:N}";
+                var state = StateOf(Options, Variants, Selected, o.Id, v.Id);
+                <input type="radio" id="@id" name="@($"opt-{o.Id:N}")" value="@v.Id"
+                       checked="@(Selected.GetValueOrDefault(o.Id) == v.Id)" disabled="@(state == ChoiceState.Unavailable)"
+                       @onchange="@(() => ChooseAsync(o.Id, v.Id))" />
+                <label for="@id" class="@(state == ChoiceState.SoldOut ? "ben-selector--soldout" : null)"
+                       title="@(state == ChoiceState.SoldOut ? $"{v.Value} — Sold out" : v.Value)" data-testid="option-value">
+                    @if (o.Kind == StoreOptionKind.Swatch)
+                    {
+                        <span class="ben-selector__dot" style="@($"background:{SafeHex(v.SwatchHex)};")"></span>
+                        <span class="visually-hidden">@v.Value@(state == ChoiceState.SoldOut ? " (sold out)" : "")</span>
+                    }
+                    else
+                    {
+                        @v.Value
+                    }
+                </label>
+            }
+        </div>
+    </fieldset>
+}
+
+@code {
+    public enum ChoiceState { Available, SoldOut, Unavailable }
+
+    [Parameter] public IReadOnlyList<StoreOptionRecord> Options { get; set; } = [];
+    [Parameter] public IReadOnlyList<StoreVariantPublicRecord> Variants { get; set; } = [];
+
+    /// <summary>Chosen value per option id.</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, Guid> Selected { get; set; } = new Dictionary<Guid, Guid>();
+    [Parameter] public EventCallback<IReadOnlyDictionary<Guid, Guid>> SelectedChanged { get; set; }
+
+    private StoreOptionValueRecord? SelectedValueFor(StoreOptionRecord o)
+        => Selected.TryGetValue(o.Id, out var id) ? o.Values.FirstOrDefault(v => v.Id == id) : null;
+
+    private async Task ChooseAsync(Guid optionId, Guid valueId)
+    {
+        var next = Selected.ToDictionary(p => p.Key, p => p.Value);
+        next[optionId] = valueId;
+        // A choice elsewhere that no longer fits this one is let go rather than left contradicting it.
+        foreach (var other in Options.Where(o => o.Id != optionId && next.ContainsKey(o.Id)))
+            if (StateOf(Options, Variants, next, other.Id, next[other.Id]) == ChoiceState.Unavailable)
+                next.Remove(other.Id);
+        await SelectedChanged.InvokeAsync(next);
+    }
+
+    /// <summary>What picking <paramref name="valueId"/> would lead to, given the other choices.</summary>
+    internal static ChoiceState StateOf(
+        IReadOnlyList<StoreOptionRecord> options, IReadOnlyList<StoreVariantPublicRecord> variants,
+        IReadOnlyDictionary<Guid, Guid> selected, Guid optionId, Guid valueId)
+    {
+        var wanted = selected.Where(p => p.Key != optionId).Select(p => p.Value).Append(valueId).ToList();
+        var matching = variants.Where(v => wanted.All(v.OptionValueIds.Contains)).ToList();
+        if (matching.Count == 0) return ChoiceState.Unavailable;
+        return matching.Any(v => v.Available > 0) ? ChoiceState.Available : ChoiceState.SoldOut;
+    }
+
+    /// <summary>The variant the choices name — only once every option has a value.</summary>
+    internal static StoreVariantPublicRecord? VariantFor(
+        IReadOnlyList<StoreOptionRecord> options, IReadOnlyList<StoreVariantPublicRecord> variants,
+        IReadOnlyDictionary<Guid, Guid> selected)
+    {
+        if (options.Count == 0) return variants.FirstOrDefault(v => v.IsDefault) ?? variants.FirstOrDefault();
+        if (options.Any(o => !selected.ContainsKey(o.Id))) return null;
+        var chosen = options.Select(o => selected[o.Id]).ToHashSet();
+        return variants.FirstOrDefault(v => v.OptionValueIds.Count == chosen.Count && v.OptionValueIds.All(chosen.Contains));
+    }
+
+    /// <summary>The choices a page opens on: the default variant's, or the first one in stock.</summary>
+    internal static Dictionary<Guid, Guid> StartingChoices(
+        IReadOnlyList<StoreOptionRecord> options, IReadOnlyList<StoreVariantPublicRecord> variants)
+    {
+        var start = variants.Where(v => v.IsDefault && v.Available > 0).Concat(variants.Where(v => v.Available > 0))
+                            .Concat(variants).FirstOrDefault();
+        var result = new Dictionary<Guid, Guid>();
+        if (start is null) return result;
+        foreach (var o in options)
+            if (o.Values.FirstOrDefault(v => start.OptionValueIds.Contains(v.Id)) is { } value) result[o.Id] = value.Id;
+        return result;
+    }
+
+    /// <summary>Only a colour the admin page accepts reaches a style attribute.</summary>
+    private static string SafeHex(string? hex)
+        => hex is { Length: 7 } && hex[0] == '#' && hex.Skip(1).All(Uri.IsHexDigit) ? hex : "transparent";
+}

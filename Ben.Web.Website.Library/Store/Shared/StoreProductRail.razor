@@ -1,0 +1,31 @@
+@*
+    A row of product cards that scrolls sideways (storefront S2.6): four across on a computer, two
+    on a tablet, one and a bit on a phone so the next card says there are more.
+*@
+
+@if (Cards.Count > 0)
+{
+    <section class="mb-5" aria-label="@Title">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <h2 class="h4 mb-0">@Title</h2>
+            @if (!string.IsNullOrWhiteSpace(MoreHref))
+            {
+                <a class="ben-link-muted small" href="@MoreHref">@(MoreText ?? "View all")</a>
+            }
+        </div>
+        <div class="ben-store-rail" data-testid="@TestId">
+            @foreach (var card in Cards)
+            {
+                <StoreCard Card="card" />
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public IReadOnlyList<StoreProductCard> Cards { get; set; } = [];
+    [Parameter] public string? MoreHref { get; set; }
+    [Parameter] public string? MoreText { get; set; }
+    [Parameter] public string? TestId { get; set; }
+}

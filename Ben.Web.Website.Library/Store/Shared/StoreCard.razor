@@ -1,0 +1,37 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A product on a shelf (storefront S2.6), after Smarty's listing card. Named StoreCard, not
+    StoreProductCard: that is the record it draws, and a component of the same name hides it. The card: the whole card is one link;
+    the badges sit in the top-left corner; the button rail (add to cart, the heart) sits in the
+    top-right, OUTSIDE the link so a tap on a button is not also a tap on the card. The rail is
+    empty in S2 — the cart button arrives in S3.5 and the heart in S6.3 — and on a touchscreen it is
+    always shown, never waiting for a hover a finger cannot make.
+*@
+
+<div class="ben-card @(Card.InStock ? null : "ben-card--soldout")" data-testid="store-card" data-slug="@Card.Slug">
+    <StoreBadges Floating="true" SoldOut="@(!Card.InStock)" Discount="@Card.DiscountPercent" IsNew="@Card.IsNew" />
+    <div class="ben-card__rail">@Rail</div>
+    <a class="ben-card__link" href="@($"/store/p/{Card.Slug}")">
+        <figure class="ben-card__figure">
+            @if (Card.PrimaryImageUploadFileId is { } picture)
+            {
+                <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="@(Card.PrimaryImageAlt ?? Card.Name)" loading="lazy" />
+            }
+        </figure>
+        <StoreStars Rating="@Card.AverageRating" Count="@Card.ReviewCount" />
+        <span class="ben-card__title">@Card.Name</span>
+        <StorePrice Price="@Card.MinPrice" Max="@(Card.MaxPrice > Card.MinPrice ? Card.MaxPrice : null)" Was="@Card.CompareAtPrice" />
+        @if (Card.StockLeft is { } left)
+        {
+            <span class="ben-store-note ben-store-note--low">Only @left left</span>
+        }
+    </a>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoreProductCard Card { get; set; } = default!;
+
+    /// <summary>The buttons beside the card — add to cart, favourite. Outside the card's link.</summary>
+    [Parameter] public RenderFragment? Rail { get; set; }
+}

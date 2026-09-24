@@ -1,0 +1,74 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A product's pictures (storefront S2.6): one large picture, the others as thumbnails beneath in a
+    strip that scrolls sideways, and a full-size view in a dialog. No script — the choice is state.
+    Previous/next buttons on the picture give a phone the swipe it expects, at a size a thumb can
+    hit, and the dialog's close button sits at the bottom where a thumb is.
+
+    When the buyer picks a variant that has its own picture (the Camo box), that picture is shown.
+*@
+
+@if (Images.Count > 0)
+{
+    var current = Images[Math.Clamp(_index, 0, Images.Count - 1)];
+    <div class="ben-gallery" data-testid="store-gallery">
+        <div class="position-relative">
+            <button type="button" class="ben-gallery__slide d-block w-100 ben-gallery__main" aria-label="See this picture full size" @onclick="@(() => _zoom = true)">
+                <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" data-testid="gallery-main" />
+            </button>
+            @if (Images.Count > 1)
+            {
+                <button type="button" class="btn btn-light position-absolute top-50 start-0 translate-middle-y ms-2 rounded-circle ben-gallery__nav" aria-label="Previous picture" @onclick="@(() => Step(-1))"><BenIcon Name="chevron-left" /></button>
+                <button type="button" class="btn btn-light position-absolute top-50 end-0 translate-middle-y me-2 rounded-circle ben-gallery__nav" aria-label="Next picture" @onclick="@(() => Step(+1))"><BenIcon Name="chevron-right" /></button>
+            }
+        </div>
+        @if (Images.Count > 1)
+        {
+            <div class="ben-gallery__thumbs" role="list">
+                @for (var i = 0; i < Images.Count; i++)
+                {
+                    var index = i;
+                    <button type="button" role="listitem" class="ben-gallery__thumb @(index == _index ? "active" : null)"
+                            aria-label="@($"Picture {index + 1} of {Images.Count}")" aria-current="@(index == _index ? "true" : null)"
+                            @onclick="@(() => _index = index)">
+                        <img src="@MediaUrls.StoreImage(Images[index].UploadFileId, thumbnail: true)" alt="" loading="lazy" />
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <BenModal @bind-Visible="_zoom" Title="@ProductName" Size="xl">
+        <ChildContent>
+            <div class="ben-gallery__zoom text-center">
+                <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" />
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-secondary w-100" @onclick="@(() => _zoom = false)">Close</button>
+        </FooterContent>
+    </BenModal>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<StoreImageRecord> Images { get; set; } = [];
+    [Parameter] public string ProductName { get; set; } = "";
+
+    /// <summary>The chosen variant; its own picture, when it has one, is shown.</summary>
+    [Parameter] public Guid? VariantId { get; set; }
+
+    private int _index;
+    private bool _zoom;
+    private Guid? _shownFor;
+
+    protected override void OnParametersSet()
+    {
+        if (VariantId == _shownFor) return;
+        _shownFor = VariantId;
+        var own = Images.Select((image, i) => (image, i)).FirstOrDefault(x => x.image.VariantId is { } v && v == VariantId);
+        if (own.image is not null) _index = own.i;
+    }
+
+    private void Step(int by) => _index = (_index + by + Images.Count) % Images.Count;
+}

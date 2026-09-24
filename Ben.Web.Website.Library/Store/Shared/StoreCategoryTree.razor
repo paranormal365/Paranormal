@@ -1,0 +1,23 @@
+@*
+    The shelves, down the side of a listing (storefront S2.6), with how many products each holds.
+*@
+
+<nav aria-label="Categories">
+    <ul class="ben-nav-deep">
+        <li><a class="@(ActiveSlug is null ? "active" : null)" href="/store/products">All products</a></li>
+        @foreach (var c in Categories)
+        {
+            <li>
+                <a class="@(c.Slug == ActiveSlug ? "active" : null)" href="@($"/store/c/{c.Slug}")"
+                   aria-current="@(c.Slug == ActiveSlug ? "page" : null)">
+                    @c.Name <span class="ben-nav-deep__count">@c.ProductCount</span>
+                </a>
+            </li>
+        }
+    </ul>
+</nav>
+
+@code {
+    [Parameter] public IReadOnlyList<StoreCategoryCard> Categories { get; set; } = [];
+    [Parameter] public string? ActiveSlug { get; set; }
+}
