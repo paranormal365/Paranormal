@@ -1,0 +1,253 @@
+@page "/store/p/{ProductSlug}"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+<PageTitle>@(_product.Item?.Name ?? "Product") — Store</PageTitle>
+
+@*
+    One product (storefront S2.9), after Smarty's product page: the gallery beside the buy box,
+    then the description, the specifications and the reviews, and more from the same shelf. Below
+    the lg break the gallery sits above the buy box.
+
+    The buy box says what the chosen variant costs and how many are left. Add to cart and the
+    quantity arrive with the cart (S3.5) and the heart with favourites (S6.3); a sold-out choice
+    already shows its disabled "Sold out" button.
+
+    ?preview=1 is for a SuperAdmin: a product not yet on sale, or on a hidden shelf, opens with a
+    warning over it. It needs the admin's token, so it waits for the circuit and the sign-in; to
+    anybody else it is the same "Page not found" as a product that does not exist.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Store">
+    @if (!_loading && StoreNotFound.Answers(_product))
+    {
+        <StoreNotFound />
+    }
+    else
+    {
+    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+        <BenItemState TItem="StoreProductDetail" Result="_product" Loading="_loading" LoadingText="Loading the product…" OnRetry="LoadAsync">
+            <ChildContent Context="p">
+                <SocialCard Title="@p.Name" Description="@p.ShortDescription" RelativeUrl="@($"/store/p/{p.Slug}")"
+                            ImageUrl="@(p.Images.FirstOrDefault() is { } first ? MediaUrls.StoreImage(first.UploadFileId) : null)" Type="product" />
+
+                <nav aria-label="breadcrumb" class="mb-3">
+                    <ol class="breadcrumb small mb-0">
+                        <li class="breadcrumb-item"><a href="/store">Store</a></li>
+                        <li class="breadcrumb-item"><a href="@($"/store/c/{p.CategorySlug}")">@p.CategoryName</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">@p.Name</li>
+                    </ol>
+                </nav>
+
+                @if (p.IsPreview)
+                {
+                    <div class="alert alert-warning" data-testid="store-preview">
+                        <strong>Preview — shoppers can't see this.</strong> It isn't on sale, or its category is hidden.
+                        <a href="/admin/store/products" class="alert-link">Back to products</a>
+                    </div>
+                }
+
+                <div class="row g-4 mb-5">
+                    <div class="col-lg-7">
+                        <StoreProductGallery Images="p.Images" ProductName="@p.Name" VariantId="@Chosen?.Id" />
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="ben-buybox">
+                            <StoreBadges IsNew="@p.IsNew" IsFeatured="@p.IsFeatured" Discount="@Discount" />
+                            <h1 class="h3 mt-2 mb-1">@p.Name<HelpLink Slug="shopping-at-the-store" Anchor="options-and-prices" /></h1>
+                            @if (p.Reviews.Count > 0)
+                            {
+                                <a class="ben-link-muted small" href="@($"/store/p/{p.Slug}#reviews")"><StoreStars Rating="@p.Reviews.Average" Count="@p.Reviews.Count" /></a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(p.ShortDescription))
+                            {
+                                <p class="text-secondary mt-2">@p.ShortDescription</p>
+                            }
+
+                            <div class="my-3" data-testid="product-price">
+                                @if (Chosen is { } v)
+                                {
+                                    <StorePrice Price="@v.Price" Was="@v.CompareAtPrice" Large="true" />
+                                }
+                                else
+                                {
+                                    <StorePrice Price="@p.Variants.Min(x => x.Price)" Max="@p.Variants.Max(x => x.Price)" Large="true" />
+                                }
+                            </div>
+
+                            <StoreOptionPicker Options="p.Options" Variants="p.Variants" Selected="_selected" SelectedChanged="OnChoiceChanged" />
+
+                            <div class="small mb-3">
+                                @if (Chosen is { } variant)
+                                {
+                                    <div class="text-secondary">SKU <span class="font-monospace" data-testid="product-sku">@variant.Sku</span></div>
+                                    <div data-testid="product-stock">
+                                        @if (variant.Available <= 0) { <span class="text-danger fw-semibold">Sold out</span> }
+                                        else if (variant.Available <= p.LowStockThreshold) { <span class="ben-store-note--low fw-semibold">Only @variant.Available left</span> }
+                                        else { <span class="text-success">In stock</span> }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-secondary" data-testid="product-stock">Choose @string.Join(" and ", p.Options.Where(o => !_selected.ContainsKey(o.Id)).Select(o => o.Name.ToLowerInvariant())).</div>
+                                }
+                            </div>
+
+                            @* Add to cart and the quantity land here in S3.5; the heart in S6.3. *@
+                            @if (p.IsPreview || Chosen is { Available: <= 0 })
+                            {
+                                <button type="button" class="btn btn-secondary btn-lg w-100" disabled data-testid="sold-out-button">
+                                    @(p.IsPreview ? "Not on sale" : "Sold out")
+                                </button>
+                            }
+                            @if (_info.Item is { CheckoutEnabled: false })
+                            {
+                                <p class="small text-secondary mt-2 mb-0" data-testid="store-paused">The store isn't taking orders at the moment.</p>
+                            }
+
+                            <div class="mt-4">
+                                @if (_info.Item is { } info)
+                                {
+                                    <details class="ben-accordion">
+                                        <summary>Delivery</summary>
+                                        <div>
+                                            @if (info.FreeShippingOver is { } over)
+                                            {
+                                                <p class="mb-0">Free on orders over @StoreMoney.Format(over)@(info.ShippingFlatRate > 0 ? $"; otherwise {StoreMoney.Format(info.ShippingFlatRate)} an order" : "").</p>
+                                            }
+                                            else
+                                            {
+                                                <p class="mb-0">@(info.ShippingFlatRate > 0 ? $"{StoreMoney.Format(info.ShippingFlatRate)} an order" : "Free"), anywhere in the United States.</p>
+                                            }
+                                        </div>
+                                    </details>
+                                    <details class="ben-accordion">
+                                        <summary>Returns</summary>
+                                        <div><p class="mb-0">@(p.ReturnsWindowDays > 0 ? $"Send it back within {p.ReturnsWindowDays} days of delivery." : "Ask us about a return.")</p></div>
+                                    </details>
+                                    <details class="ben-accordion">
+                                        <summary>Need help?</summary>
+                                        <div>
+                                            <p class="mb-0">
+                                                @if (!string.IsNullOrWhiteSpace(info.SupportEmail))
+                                                {
+                                                    <span>Write to <a href="@($"mailto:{info.SupportEmail}")">@info.SupportEmail</a>.</span>
+                                                }
+                                                else
+                                                {
+                                                    <a href="/contact">Get in touch</a>
+                                                }
+                                            </p>
+                                        </div>
+                                    </details>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(p.LongDescriptionHtml))
+                {
+                    <section class="mb-5" aria-labelledby="about-heading">
+                        <h2 class="h4" id="about-heading">About the @p.Name</h2>
+                        @* Sanitised when the admin saved it (AdminStoreProductController.Update). Global
+                           prose class: a scoped one would never reach inside HTML a person wrote. *@
+                        <div class="ben-store-description" data-testid="product-description">@((MarkupString)p.LongDescriptionHtml)</div>
+                        <p class="small text-secondary mt-3 mb-0">Last updated on @p.LastUpdatedUtc.ToViewerLocalTime(UserState).ToDisplayDate()</p>
+                    </section>
+                }
+
+                @if (p.Specs.Count > 0)
+                {
+                    <section class="mb-5" aria-labelledby="specs-heading">
+                        <h2 class="h4" id="specs-heading">Specifications</h2>
+                        @foreach (var group in p.Specs)
+                        {
+                            <h3 class="h6 mt-3">@group.GroupName</h3>
+                            <table class="table table-sm ben-specs mb-0">
+                                <tbody>
+                                    @foreach (var spec in group.Items)
+                                    {
+                                        <tr><th scope="row">@spec.Name</th><td>@spec.Value</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
+                }
+
+                @if (p.Equipment is { } model)
+                {
+                    <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalogue</a></p>
+                }
+
+                <section class="mb-5" id="reviews" aria-labelledby="reviews-heading">
+                    <h2 class="h4" id="reviews-heading">Reviews</h2>
+                    @if (p.Reviews.Count == 0)
+                    {
+                        <p class="text-secondary">No reviews yet.</p>
+                    }
+                    else
+                    {
+                        <p><StoreStars Rating="@p.Reviews.Average" Count="@p.Reviews.Count" /> <span class="ms-1">@p.Reviews.Average.ToString("0.0") out of 5</span></p>
+                    }
+                    @* The reviews themselves, sorting and writing one arrive with S6. *@
+                </section>
+
+                <StoreProductRail Title="More from this shelf" Cards="p.Related" MoreHref="@($"/store/c/{p.CategorySlug}")" TestId="rail-related" />
+            </ChildContent>
+        </BenItemState>
+    </div>
+    }
+</FeatureGate>
+
+@code {
+    [Parameter] public string ProductSlug { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "preview")] public int? Preview { get; set; }
+
+    private ItemResult<StoreProductDetail> _product;
+    private ItemResult<StorePublicInfo> _info;
+    private bool _loading = true;
+    private IReadOnlyDictionary<Guid, Guid> _selected = new Dictionary<Guid, Guid>();
+    private string? _loadedSlug;
+    private bool _counted;
+
+    private StoreVariantPublicRecord? Chosen => _product.Item is { } p ? StoreOptionPicker.VariantFor(p.Options, p.Variants, _selected) : null;
+
+    private int? Discount => Chosen is { CompareAtPrice: { } was } v && was > v.Price ? (int)Math.Floor((was - v.Price) / was * 100m) : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{ProductSlug}|{Preview}";
+        if (key == _loadedSlug) return;
+
+        // A preview needs the admin's token, which only the live circuit has.
+        if (Preview == 1 && !await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _loadedSlug = key;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var product = Store.GetStoreProductPageAsync(ProductSlug, Preview == 1);
+        var info = Store.GetStoreInfoAsync();
+        _product = await product;
+        _info = await info;
+        _selected = _product.Item is { } p ? StoreOptionPicker.StartingChoices(p.Options, p.Variants) : new Dictionary<Guid, Guid>();
+        _loading = false;
+
+        // Counted once, from the live circuit — not the server render as well.
+        if (!_counted && RendererInfo.IsInteractive && _product.Item is { IsPreview: false } seen)
+        {
+            _counted = true;
+            _ = Store.RecordStoreProductViewAsync(seen.Id);
+        }
+    }
+
+    private void OnChoiceChanged(IReadOnlyDictionary<Guid, Guid> selected) => _selected = selected;
+}

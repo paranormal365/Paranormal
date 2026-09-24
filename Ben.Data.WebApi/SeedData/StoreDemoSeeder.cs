@@ -72,8 +72,26 @@ internal static class StoreDemoSeeder
 
         foreach (var shelf in Shelves)
         {
-            if (await db.StoreCategories.AnyAsync(c => c.Id == Id(shelf.N), ct)) continue;
-            var picture = Picture(db, Id(10 + shelf.N), $"{shelf.Slug}.jpg", shelf.Name, shelf.Colour, ownerId, now);
+            if (await db.StoreCategories.AnyAsync(c => c.Id == Id(shelf.N), ct))
+            {
+                // A shelf's picture sits under the store hero's own title, so it carries no words;
+                // the first seeds drew the name in, and the hero read "EMF Meters" twice over. The
+                // file name is the version: an older one is redrawn into the row (and its disk copy,
+                // if a migration moved it there, let go). Changing bytes under an id breaks the
+                // one-year cache promise, which is fine for a development seed and nothing else:
+                // real pictures are replaced with new ids.
+                var existing = await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == Id(10 + shelf.N), ct);
+                if (existing is not null && existing.FileName != ShelfPictureName(shelf))
+                {
+                    var drawn = Draw(shelf.Name, shelf.Colour, withName: false);
+                    existing.FileData = drawn;
+                    existing.FileSize = drawn.LongLength;
+                    existing.FileName = existing.StoredFileName = ShelfPictureName(shelf);
+                    existing.StoragePath = null;
+                }
+                continue;
+            }
+            var picture = Picture(db, Id(10 + shelf.N), ShelfPictureName(shelf), shelf.Name, shelf.Colour, ownerId, now, withName: false);
             db.StoreCategories.Add(new StoreCategory
             {
                 Id = Id(shelf.N), Name = shelf.Name, Slug = shelf.Slug, Description = shelf.Description,
@@ -263,25 +281,47 @@ internal static class StoreDemoSeeder
 
     private static SKColor Darker(SKColor c) => new((byte)(c.Red * 0.6), (byte)(c.Green * 0.6), (byte)(c.Blue * 0.6));
 
-    /// <summary>Draws a 1200×900 card with the name on it and files it as a store image, bytes in the row.</summary>
-    private static Guid Picture(BenDataContext db, Guid id, string fileName, string caption, SKColor colour, Guid ownerId, DateTime now)
+    private const int PictureWidth = 1200, PictureHeight = 900;
+
+    /// <summary>A shelf picture's file name, which is also its version — see the repaint above.</summary>
+    private static string ShelfPictureName(Shelf shelf) => $"{shelf.Slug}-shelf-v2.jpg";
+
+    /// <summary>
+    /// A 1200×900 picture: the shelf's colour and a few rings (a dial, a speaker's cone — enough to
+    /// read as a picture rather than a flat box), with the product's name when <paramref name="withName"/>.
+    /// Deterministic, so a re-run can tell whether a stored picture is today's drawing.
+    /// </summary>
+    private static byte[] Draw(string name, SKColor colour, bool withName)
     {
-        const int width = 1200, height = 900;
-        using var bitmap = new SKBitmap(width, height);
+        using var bitmap = new SKBitmap(PictureWidth, PictureHeight);
         using (var canvas = new SKCanvas(bitmap))
         {
-            using var shade = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(width, height),
+            using var shade = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(PictureWidth, PictureHeight),
                 [colour, Darker(colour)], SKShaderTileMode.Clamp);
             using var fill = new SKPaint { Shader = shade };
-            canvas.DrawRect(0, 0, width, height, fill);
+            canvas.DrawRect(0, 0, PictureWidth, PictureHeight, fill);
 
-            using var font = new SKFont(SKTypeface.Default, 72);
-            using var ink = new SKPaint { Color = SKColors.White, IsAntialias = true };
-            canvas.DrawText(caption, width / 2f, height / 2f + 24, SKTextAlign.Center, font, ink);
+            using var ring = new SKPaint { Color = new SKColor(255, 255, 255, 28), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 18 };
+            for (var r = 140; r <= 620; r += 120) canvas.DrawCircle(PictureWidth * 0.72f, PictureHeight * 0.62f, r, ring);
+
+            if (withName)
+            {
+                using var font = new SKFont(SKTypeface.Default, 72);
+                using var ink = new SKPaint { Color = SKColors.White, IsAntialias = true };
+                canvas.DrawText(name, PictureWidth / 2f, PictureHeight / 2f + 24, SKTextAlign.Center, font, ink);
+            }
         }
         using var image = SKImage.FromBitmap(bitmap);
         using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 82);
-        var bytes = jpeg.ToArray();
+        return jpeg.ToArray();
+    }
+
+    /// <summary>Draws a picture and files it as a store image, bytes in the row.</summary>
+    private static Guid Picture(BenDataContext db, Guid id, string fileName, string caption, SKColor colour, Guid ownerId, DateTime now,
+        bool withName = true)
+    {
+        const int width = PictureWidth, height = PictureHeight;
+        var bytes = Draw(caption, colour, withName);
 
         db.UploadFiles.Add(new UploadFile
         {

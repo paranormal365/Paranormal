@@ -1,0 +1,117 @@
+@page "/store"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IMediaUrlBuilder MediaUrls
+
+<PageTitle>Store</PageTitle>
+
+@*
+    The store's front page (storefront S2.7), after Smarty's shop home: a hero of the shelves, the
+    promises, the shelves as tiles, and three rows of products. Works signed out — it is written
+    for people with no account — and loads during the server render, so a link shared anywhere
+    shows the shop, not a spinner.
+
+    Behind the store switch: with the shop off this is the ordinary "Page not found".
+*@
+
+<FeatureGate Flag="@SiteFeatures.Store">
+    @if (!_loading && StoreNotFound.Answers(_home))
+    {
+        @* The API has the store off before this website's switch snapshot catches up. *@
+        <StoreNotFound />
+    }
+    else
+    {
+    <SocialCard Title="Store" Description="Scientific gear for investigations — EMF meters, spirit boxes, recorders and more." RelativeUrl="/store" />
+
+    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+        <BenItemState TItem="StoreHomeResponse" Result="_home" Loading="_loading" LoadingText="Opening the store…" OnRetry="LoadAsync">
+            <ChildContent Context="home">
+                <div class="ben-store-hero mb-3" data-testid="store-hero">
+                    @if (home.Slides.Count > 0)
+                    {
+                        <BenSlideshow Slides="@Slides(home)" Height="clamp(16rem, 45vw, 30rem)" AutoAdvance="true">
+                            <Overlay Context="slide">
+                                <div class="ben-store-hero__overlay">
+                                    <h2 class="ben-store-hero__title">@slide.Title</h2>
+                                    @if (!string.IsNullOrWhiteSpace(slide.Caption))
+                                    {
+                                        <p class="ben-store-hero__lead d-none d-sm-block">@slide.Caption</p>
+                                    }
+                                    <a class="btn btn-lg btn-outline-light" href="@slide.LinkUrl">Shop now</a>
+                                </div>
+                            </Overlay>
+                        </BenSlideshow>
+                    }
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <h1 class="h3 mb-0">Store<HelpLink Slug="shopping-at-the-store" Anchor="finding-something" /></h1>
+                    <div class="flex-grow-1" style="max-width:32rem;"><StoreSearchBox /></div>
+                </div>
+
+                @if (_info.Item is { } info)
+                {
+                    <StorePromiseStrip Info="info" />
+                    @if (!info.CheckoutEnabled)
+                    {
+                        <div class="alert alert-info" data-testid="store-paused">The store isn't taking orders at the moment.</div>
+                    }
+                }
+
+                @if (home.Categories.Count > 0)
+                {
+                    <section class="mb-5" aria-label="Shop by category">
+                        <h2 class="h4 mb-3">Shop by category</h2>
+                        <div class="row g-3">
+                            @foreach (var c in home.Categories)
+                            {
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <a class="ben-cat-tile" href="@($"/store/c/{c.Slug}")" data-testid="category-tile">
+                                        @if (c.ImageUploadFileId is { } picture)
+                                        {
+                                            <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" loading="lazy" />
+                                        }
+                                        <span class="ben-cat-tile__label">@c.Name<span class="ben-cat-tile__count">@c.ProductCount @(c.ProductCount == 1 ? "product" : "products")</span></span>
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <StoreProductRail Title="Featured" Cards="home.Featured" TestId="rail-featured" />
+                <StoreProductRail Title="New arrivals" Cards="home.NewArrivals" MoreHref="/store/products?sort=newest" TestId="rail-new" />
+                <StoreProductRail Title="Most popular" Cards="home.Popular" MoreHref="/store/products" MoreText="Browse everything" TestId="rail-popular" />
+
+                @if (home.Categories.Count == 0)
+                {
+                    <StoreEmptyState Title="Nothing on the shelves yet" Lead="The store is being stocked — come back soon." LinkText="Back to the home page" LinkHref="/" />
+                }
+            </ChildContent>
+        </BenItemState>
+    </div>
+    }
+</FeatureGate>
+
+@code {
+    private ItemResult<StoreHomeResponse> _home;
+    private ItemResult<StorePublicInfo> _info;
+    private bool _loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var home = Store.GetStoreHomeAsync();
+        var info = Store.GetStoreInfoAsync();
+        _home = await home;
+        _info = await info;
+        _loading = false;
+    }
+
+    private IReadOnlyList<BenSlide> Slides(StoreHomeResponse home)
+        => home.Slides.Select(s => new BenSlide(MediaUrls.StoreImage(s.ImageUploadFileId), Caption: s.Caption,
+            LinkUrl: s.Href, AltText: "", Title: s.Title)).ToList();
+}

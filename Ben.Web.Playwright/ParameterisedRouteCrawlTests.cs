@@ -126,6 +126,18 @@ public class ParameterisedRouteCrawlTests : BenTestBase
         if (FirstValue(await ApiAsync("/api/equipment-catalog/models", token), "id", "modelId") is { } modelId)
             _ids["ModelId"] = modelId;
 
+        // Storefront: a shelf and a product from the public store, and a product for the admin
+        // editor. The store is switched on by run-e2e.sh; with it off the public routes are
+        // skipped as "feature switched off" and the admin one still resolves.
+        if (FirstValue(await ApiAsync("/api/public/store/categories", token), "slug") is { } categorySlug)
+            _ids["CategorySlug"] = categorySlug;
+        var listing = await Page.APIRequest.GetAsync($"{ApiUrl}/api/public/store/products");
+        if (listing.Ok && (await listing.JsonAsync())?.GetProperty("products") is { ValueKind: System.Text.Json.JsonValueKind.Array } products
+            && products.GetArrayLength() > 0)
+            _ids["ProductSlug"] = products[0].GetProperty("slug").GetString()!;
+        if (FirstValue(await ApiAsync("/api/admin/store/products", token), "id") is { } productId)
+            _ids["ProductId"] = productId;
+
         // A field session the crawler can actually open. Uploaded rather than assumed: nothing
         // seeds one, and without it the player's route is skipped — which would mean the one
         // guard against dead-end links never visits the newest page on the site.

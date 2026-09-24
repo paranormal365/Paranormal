@@ -287,6 +287,14 @@
                     media.Add(new NavItem("My Videos",     "film",  "/my-videos"));
                 main.Add(Group("Media", "layers", media.ToArray()));
 
+                // ── Store ─────────────────────────────────────────────────────
+                // Storefront. Browse now; Favourites join with S6.3, and My Orders with S4.13 —
+                // that one OUTSIDE this switch, because a buyer's orders must stay reachable when
+                // the shop is dark (the Reported Posts precedent in the admin menu).
+                if (Features.IsOn(SiteFeatures.Store))
+                    main.Add(Group("Store", "shopping-cart",
+                        new NavItem("Browse the Store", "shopping-bag", "/store")));
+
                 // ── Community ─────────────────────────────────────────────────
                 var community = new List<NavItem>();
 

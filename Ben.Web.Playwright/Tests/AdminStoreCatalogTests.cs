@@ -29,80 +29,13 @@ public class AdminStoreCatalogTests : BenTestBase
 
     private static string Unique(string name) => $"{name} {Guid.NewGuid().ToString("N")[..6]}";
 
-    private static string FixturePhoto => Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg");
+    private static string FixturePhoto => StoreTestApi.FixturePhoto;
 
     /// <summary>Types into a field, retrying until it holds, then leaves it so its change binding fires.</summary>
     private async Task SetAsync(string selector, string value)
     {
         await FillAndConfirmAsync(selector, value);
         await Page.Locator(selector).PressAsync("Tab");
-    }
-
-    // ── the admin API, for arranging what a test needs ───────────────────────
-
-    private sealed class StoreApi(HttpClient http) : IDisposable
-    {
-        public static async Task<StoreApi> OpenAsync()
-        {
-            var token = await SuperAdminTokenAsync();
-            Assert.That(token, Is.Not.Null, "Could not sign in to the API as the SuperAdmin.");
-            var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(60) };
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            return new StoreApi(http);
-        }
-
-        public async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body = null)
-        {
-            using var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body) };
-            using var response = await http.SendAsync(request);
-            var text = await response.Content.ReadAsStringAsync();
-            Assert.That(response.IsSuccessStatusCode, Is.True, $"{method} {path} answered {(int)response.StatusCode}: {text}");
-            return text.Length == 0 ? default : JsonDocument.Parse(text).RootElement.Clone();
-        }
-
-        public async Task<Guid> CategoryAsync(string name)
-            => (await SendAsync(HttpMethod.Post, "/api/admin/store/categories",
-                   new { name, slug = (string?)null, description = (string?)null, isActive = true, isNew = false }))
-               .GetProperty("id").GetGuid();
-
-        /// <summary>A product priced at <paramref name="price"/>, with a picture — optionally two sizes, optionally live.</summary>
-        public async Task<JsonElement> ProductAsync(Guid categoryId, string name, bool twoSizes = false, bool live = false, decimal price = 39m)
-        {
-            var product = await SendAsync(HttpMethod.Post, "/api/admin/store/products", new { name, categoryId });
-            var id = product.GetProperty("id").GetGuid();
-            var variant = product.GetProperty("variants")[0];
-            await SendAsync(HttpMethod.Put, $"/api/admin/store/products/{id}/variants/{variant.GetProperty("id").GetGuid()}",
-                new { sku = variant.GetProperty("sku").GetString(), price, compareAtPrice = (decimal?)null, isActive = true, isDefault = true, sortOrder = 0, optionValueIds = Array.Empty<Guid>() });
-
-            using (var form = new MultipartFormDataContent())
-            {
-                var bytes = new ByteArrayContent(await File.ReadAllBytesAsync(FixturePhoto));
-                bytes.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-                form.Add(bytes, "file", "photo.jpg");
-                using var upload = await http.PostAsync($"/api/admin/store/products/{id}/images", form);
-                Assert.That(upload.IsSuccessStatusCode, Is.True, await upload.Content.ReadAsStringAsync());
-            }
-
-            if (twoSizes)
-            {
-                await SendAsync(HttpMethod.Put, $"/api/admin/store/products/{id}/options", new
-                {
-                    options = new[]
-                    {
-                        new { id = (Guid?)null, name = "Size", kind = 0, values = new[]
-                        {
-                            new { id = (Guid?)null, value = "Small", swatchHex = (string?)null, isActive = true },
-                            new { id = (Guid?)null, value = "Large", swatchHex = (string?)null, isActive = true },
-                        } },
-                    },
-                });
-                await SendAsync(HttpMethod.Post, $"/api/admin/store/products/{id}/variants/generate");
-            }
-            if (live) await SendAsync(HttpMethod.Post, $"/api/admin/store/products/{id}/activate");
-            return await SendAsync(HttpMethod.Get, $"/api/admin/store/products/{id}");
-        }
-
-        public void Dispose() => http.Dispose();
     }
 
     // ── the tests ────────────────────────────────────────────────────────────
@@ -129,7 +62,7 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("A product goes from a name to on sale: picture, options, four variants, a price, stock, activate.")]
     public async Task A_product_goes_from_nothing_to_on_sale()
     {
-        using var api = await StoreApi.OpenAsync();
+        using var api = await StoreTestApi.OpenAsync();
         var categoryName = Unique("Spirit Boxes");
         await api.CategoryAsync(categoryName);
         var productName = Unique("Spirit Box");
@@ -200,7 +133,7 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("The stock page receives a delivery across two variants in one save, and logs both.")]
     public async Task Stock_page_receives_across_two_variants_in_one_save()
     {
-        using var api = await StoreApi.OpenAsync();
+        using var api = await StoreTestApi.OpenAsync();
         var name = Unique("Field Bag");
         var product = await api.ProductAsync(await api.CategoryAsync(Unique("Bags")), name, twoSizes: true);
 
@@ -247,7 +180,7 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("Store settings save, read back, and a bad state is refused on the page with nothing saved.")]
     public async Task Settings_save_and_read_back()
     {
-        using var api = await StoreApi.OpenAsync();
+        using var api = await StoreTestApi.OpenAsync();
         var before = await api.SendAsync(HttpMethod.Get, "/api/admin/store/settings");
         try
         {
@@ -294,9 +227,8 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("With the shop switched off the dashboard says so and links to the switch.")]
     public async Task Dashboard_says_the_store_is_off_and_links_to_the_switch()
     {
-        using var api = await StoreApi.OpenAsync();
-        var wasOn = !await FeatureIsOffAsync("features.store");
-        if (wasOn) await api.SendAsync(HttpMethod.Put, "/api/admin/site-settings/features.store", new { value = "false" });
+        var wasOn = await SetTheStoreAsync(on: false);
+        Assert.That(wasOn, Is.Not.Null, "Could not switch the store off.");
         try
         {
             await Page.GotoAsync($"{BaseUrl}/admin/store");
@@ -308,7 +240,7 @@ public class AdminStoreCatalogTests : BenTestBase
         }
         finally
         {
-            if (wasOn) await api.SendAsync(HttpMethod.Put, "/api/admin/site-settings/features.store", new { value = "true" });
+            await PutTheStoreBackAsync(wasOn);
         }
     }
 
@@ -337,7 +269,7 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("Hiding a category says how many live products go with it BEFORE saving, then hides them.")]
     public async Task Category_deactivate_warns_about_live_products()
     {
-        using var api = await StoreApi.OpenAsync();
+        using var api = await StoreTestApi.OpenAsync();
         var categoryName = Unique("Trigger Objects");
         var categoryId = await api.CategoryAsync(categoryName);
         await api.ProductAsync(categoryId, Unique("REM Pod"), live: true);

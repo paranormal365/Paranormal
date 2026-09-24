@@ -147,8 +147,10 @@
 .ben-qty input::-webkit-outer-spin-button, .ben-qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* ── Product page: gallery and buy box ─────────────────────────────────── */
+/* 4:3 — the shape product photographs come in — and never taller than most of the screen, so a
+   tablet held upright still shows the price and the choices without scrolling. */
 .ben-gallery__main {
-    aspect-ratio: 1 / 1; border-radius: var(--bs-border-radius-lg); overflow: hidden; background: var(--bs-secondary-bg);
+    aspect-ratio: 4 / 3; max-height: min(70vh, 40rem); border-radius: var(--bs-border-radius-lg); overflow: hidden; background: var(--bs-secondary-bg);
     display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
 }
 .ben-gallery__main::-webkit-scrollbar { display: none; }
@@ -163,12 +165,22 @@
 @media (hover: none) { .ben-gallery__nav { width: 44px; height: 44px; } }
 .ben-buybox { position: relative; }
 @media (min-width: 992px) { .ben-buybox { position: sticky; top: 5rem; } }
-.ben-accordion .accordion-button { font-weight: 600; }
+/* Delivery / Returns / Need help: <details>, so they open with no script on every device. */
+.ben-accordion { border-top: 1px solid var(--bs-border-color); }
+.ben-accordion:last-of-type { border-bottom: 1px solid var(--bs-border-color); }
+.ben-accordion > summary { list-style: none; cursor: pointer; font-weight: 600; padding: .8rem 0; display: flex; justify-content: space-between; min-height: 44px; }
+.ben-accordion > summary::-webkit-details-marker { display: none; }
+.ben-accordion > summary::after { content: "+"; color: var(--bs-secondary-color); font-weight: 400; }
+.ben-accordion[open] > summary::after { content: "−"; }
+.ben-accordion > div { padding: 0 0 .9rem; color: var(--bs-secondary-color); }
 
 /* The product description. Global, not scoped: it is HTML the admin wrote, so no component's
    scoped rules reach inside it (the publications reader's prose class is scoped to its own
    component and would style nothing here — StoreProductProseClassIsGlobalTests). */
 .ben-store-description { line-height: 1.65; }
+/* On the paragraphs and list items themselves, not only inherited: the theme sets a line height
+   on <p>, which beats one inherited from here (StoreProductTests.Product_description_is_styled). */
+.ben-store-description p, .ben-store-description li { line-height: 1.65; }
 .ben-store-description p { margin: 0 0 1rem; }
 .ben-store-description h2, .ben-store-description h3, .ben-store-description h4 { margin: 1.5rem 0 .6rem; font-weight: 600; }
 .ben-store-description h2 { font-size: 1.35rem; }

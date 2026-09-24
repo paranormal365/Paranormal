@@ -266,7 +266,10 @@ else
   # /feed walks "There is nothing at this address" instead. That is four phantom failures in a
   # crawl, and worse in the walks, which report the refusal page as a clean screen. Turning it on
   # HERE, once, makes every one of those restores a no-op.
-  for feature in features.publications features.public-feed; do
+  # features.store (storefront S2.10): the shop ships dark, so every store browser test and the
+  # crawls need it on; StoreFeatureFlagTests and the admin dashboard test turn it off and put it
+  # back themselves.
+  for feature in features.publications features.public-feed features.store; do
     code=$(curl -fsS -o /dev/null -w "%{http_code}" -X PUT \
       "$API_URL/api/admin/site-settings/$feature" \
       -H "Authorization: Bearer $SA_TOKEN" -H "Content-Type: application/json" \

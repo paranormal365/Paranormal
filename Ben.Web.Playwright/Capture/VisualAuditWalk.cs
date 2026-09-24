@@ -42,9 +42,11 @@ public sealed class VisualAuditWalk : BenTestBase
     [
         // /tonight and /places/new added 2026-09-21 with items 248 and 250; a place's own page and
         // the guest-code sheet need an id and are photographed by VisualShots instead.
-        ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new"]),
+        ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new",
+                     "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box"]),
         ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new"]),
-        ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals"]),
+        ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals",
+                        "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings"]),
     ];
 
     /// <summary>
@@ -62,6 +64,10 @@ public sealed class VisualAuditWalk : BenTestBase
     [
         ("desktop", 0, 0),        // whatever the browser was given; not changed
         ("phone", 375, 812),
+        // Storefront responsive addendum (09/23): tablets are first-class, upright and on their side.
+        // 768 is below the lg break (sidebars stack); 1024 landscape is above it (side by side).
+        ("tablet", 768, 1024),
+        ("tablet-landscape", 1024, 768),
     ];
 
     private string _script = "";

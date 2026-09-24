@@ -98,6 +98,12 @@ public abstract class BenTestBase : PageTest
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
 
+    /// <summary><see cref="ApiUrl"/>, for helper classes that are not fixtures.</summary>
+    internal static string ApiUrlForHelpers => ApiUrl;
+
+    /// <summary><see cref="SuperAdminTokenAsync"/>, for helper classes that are not fixtures.</summary>
+    internal static Task<string?> SuperAdminTokenForHelpersAsync() => SuperAdminTokenAsync();
+
     // ── Site feature switches ────────────────────────────────────────────────
     //
     // Several features ship dark and are turned on per deployment. A suite that fails when one is
@@ -689,6 +695,53 @@ public abstract class BenTestBase : PageTest
 
     /// <summary>The site setting that switches the public feed on.</summary>
     protected const string FeedSwitchKey = "features.public-feed";
+
+    /// <summary>The site setting that shows the store (storefront).</summary>
+    protected const string StoreSwitchKey = "features.store";
+
+    /// <summary>
+    /// Sets the store switch and waits until the WEBSITE agrees — its feature snapshot refreshes
+    /// every 30 seconds, so the API agreeing proves nothing about the page a browser is about to
+    /// open (see <see cref="TurnTheFeedOnAsync"/>). Returns what the switch was before, or null
+    /// when it could not be changed.
+    /// </summary>
+    protected static async Task<bool?> SetTheStoreAsync(bool on)
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+        var wasOn = !await FeatureIsOffAsync(StoreSwitchKey);
+
+        using (var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) })
+        {
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            using var response = await http.PutAsJsonAsync($"/api/admin/site-settings/{StoreSwitchKey}", new { value = on ? "true" : "false" });
+            if (!response.IsSuccessStatusCode) return null;
+        }
+
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                // Asks for the page each state draws, not merely the absence of the other: an API
+                // that already says off behind a website that still says on draws neither.
+                var html = await probe.GetStringAsync("/store");
+                var settled = on
+                    ? html.Contains("data-testid=\"store-hero\"", StringComparison.Ordinal)
+                    : html.Contains("There is nothing at this address.", StringComparison.Ordinal);
+                if (settled) return wasOn;
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(1000);
+        }
+        return null;
+    }
+
+    /// <summary>Puts the store switch back where <see cref="SetTheStoreAsync"/> found it.</summary>
+    protected static async Task PutTheStoreBackAsync(bool? wasOn)
+    {
+        if (wasOn is { } previous) await SetTheStoreAsync(previous);
+    }
 
     private static async Task<bool> SetFeedSwitchAsync(string token, bool on)
     {

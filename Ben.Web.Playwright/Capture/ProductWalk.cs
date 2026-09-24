@@ -289,6 +289,10 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("an item somebody owns", () => FollowIfAnyAsync("/equipment/"));
         await StepAsync("a tour's public page", () => GoAsync("/o/pw-tour-1789070429/tours/church-street-walk"));
         await StepAsync("publications", () => GoAsync("/publications"));
+        // Storefront: the shop as a stranger finds it — the front, a shelf, one product.
+        await StepAsync("the store", () => GoAsync("/store"), Main.Locator("[data-testid=store-hero]"));
+        await StepAsync("a shelf", () => GoAsync("/store/c/spirit-boxes"), Main.Locator("[data-testid=listing-grid]"));
+        await StepAsync("a product", () => FollowAsync("/store/p/"), Main.Locator("[data-testid=product-price]"));
         await StepAsync("pricing, a card and a button for every plan", () => GoAsync("/pricing"),
             Main.Locator("[data-testid=pricing-band] [data-testid=pricing-cta] a, [data-testid=pricing-band] [data-testid=pricing-cta] button, #pricing-not-on-sale"), expect: "Pricing");
         await StepAsync("ask for an investigation", () => GoAsync("/my-requests/new"));
