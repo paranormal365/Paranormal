@@ -247,6 +247,33 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   version, and an older one is repainted into the row on startup.
 - (S1) StoreDemoSeeder.SeedCoreAsync(db, ownerId, ct) — the owner, not a storage service: the
   pictures live in the row (FileData), so nothing is written to disk.
+- (S3) A cart write answers 409 with the whole cart plus StoreCartView.Notice ("Only 3 left.",
+  "You can buy up to 100 at a time.", the 50-line cap) — the plan's record had nowhere to say
+  what happened to a capped add. The client uses ONE call, SendExpectingConflictAsync (200 / 409
+  with the cart / prose refusal), rather than the plan's pair; StoreCartChange.Cart is null only
+  when nothing changed, which is how the product page knows not to open the drawer.
+- (S3) Merge on sign-in: the guest cart's DELETE referees (its lines are read first). Two requests
+  merging at once add the guest lines once — tested by running the competitor just before the
+  first one's transaction (SqliteTestDb shares one connection, so they cannot overlap inside it).
+- (S3) X-Ben-Cart goes only to /api/store/* and /api/me/store/*. X-Forwarded-For (the visitor's
+  address) goes on EVERY API call, as the plan says — which changes more than the store: every
+  API rate limit keyed by address now counts each website visitor separately instead of the
+  whole website as one (loopback) caller. The API trusts the header only from loopback.
+- (S3) The ben.cart cookie is made only for page requests (GET, text/html, no file extension, not
+  /_blazor or /media) and only while features.store is on: nobody gets a cookie from a dark shop.
+  A malformed value is replaced.
+- (S3) The four surfaces share StoreCartLine (four modes) and StoreCartView.ShippingText; the page
+  uses StoreOrderSummary, the drawer and the header menu their compact rows with the same
+  data-testids — StoreCartSurfacesAgreeTests (source) and The_four_surfaces_agree (screen).
+- (S3) Until S4.11 there is no "To checkout": the summary ends at its total (or the sentence why
+  it can't check out), and the drawer's button is "Go to Cart".
+- (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one
+  adapter under that name only, and the narrower interface stopped the site from STARTING. No unit
+  test builds the website's real container — the e2e harness (host refused to start) found it.
+- (S3) Not written: the plan's Cart_page_shows_a_retry_when_the_api_refuses browser test — there
+  is no clean way to make the e2e API refuse the cart on demand. The refusal is covered by
+  StoreRefusalReachesThePageTests (cart-refusal row) and StoreCartStateTests (a failed read keeps
+  LoadError, never an empty cart).
 
 ## Slices (status)
 | Slice | What | Status |
@@ -254,7 +281,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S0 | flag, 21 entities, 3 migrations, purge, static helpers, rate-limit partition | Built 09/24/2026 — every new fact seen failing first (mutations recorded in the commit) |
 | S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | Built 09/24/2026 — unit facts each seen failing on a deliberate break (64 breaks across S1.1–S1.12, all caught but one that exposed a redundant check, removed); AdminStoreCatalogTests 8/8 and AdminPageTests on IsHauntedDb_e2e with the shop off; new guards StoreClientRoutesTests, StoreRefusalReachesThePageTests, StoreReviewQueueHasAnEntranceTests each broken once |
 | S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | Built 09/24/2026 — PublicStoreController 12 facts (9 breaks caught), shared components 16 render facts (10 breaks), query string 8 facts; StoreBrowseTests/StoreProductTests/StoreFeatureFlagTests + crawls + admin 25/25 on IsHauntedDb_e2e with the store on; visual audit light+dark at four widths; guards StoreControllersAreGated, StoreLinksResolve, StoreProductProseClassIsGlobal, the Smarty deny-list, each broken once |
-| S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | |
+| S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | Built 09/24/2026 — server: StoreCartService/Controller 30 facts, 20 breaks caught; website: cookie, client headers, cart state, card button 20 facts, 14 breaks caught; guards StorePublicWritesAreRateLimited, StoreCartSurfacesAgree (incl. the badge outside the signed-in branch), cart-refusal and the two Apply rows, each broken once; StoreCartTests 7/7 + store/crawl/header suite 33/33 on IsHauntedDb_e2e. Between S3.3 and S3.4, at Ben's request: the Seller role and the editor's live preview (below) |
 | S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
 | S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | |

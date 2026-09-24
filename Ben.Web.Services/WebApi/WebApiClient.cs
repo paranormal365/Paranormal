@@ -10,26 +10,64 @@ public sealed class WebApiClient : IWebApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly IWebApiTokenStore _tokenStore;
+    private readonly StoreCartTokenHolder? _cart;
+    private readonly VisitorAddressHolder? _visitor;
 
     // NOTE: WebApiClient is resolved as a typed transient from the Blazor circuit scope,
     // so IWebApiTokenStore here is the correct circuit-scoped instance.
     // WebApiBearerTokenHandler was removed from the pipeline because IHttpClientFactory
     // resolves handlers from the ROOT scope, not the circuit scope — injecting IWebApiTokenStore
     // there always gave an empty, unrelated instance.
-    public WebApiClient(HttpClient httpClient, IWebApiTokenStore tokenStore)
+    /// <param name="cart">The circuit's cart token (storefront S3.4). Optional so the many tests that build a client by hand keep compiling.</param>
+    /// <param name="visitor">The circuit's visitor address (S3.4). Optional for the same reason.</param>
+    public WebApiClient(HttpClient httpClient, IWebApiTokenStore tokenStore,
+        StoreCartTokenHolder? cart = null, VisitorAddressHolder? visitor = null)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
+        _cart = cart;
+        _visitor = visitor;
     }
 
     /// <summary>Creates an HttpRequestMessage with the current bearer token attached.</summary>
     private HttpRequestMessage Auth(HttpMethod method, string url)
     {
-        var req = new HttpRequestMessage(method, url);
+        var req = Anonymous(method, url);
         if (!string.IsNullOrWhiteSpace(_tokenStore.AccessToken))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _tokenStore.AccessToken);
         return req;
     }
+
+    /// <summary>
+    /// A request with no bearer — but with the visitor's address, and on a store call the cart
+    /// token (storefront S3.4).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Read per request, never set once in the constructor.</b> The circuit's client is
+    /// built before MainLayout restores the token into its holder, so a header fixed at
+    /// construction would be missing for the client's whole life — the reason the bearer is read
+    /// here too, rather than set on the HttpClient.</para>
+    ///
+    /// <para><b>X-Forwarded-For</b> lets the API's rate limits count each visitor instead of the
+    /// website as one caller; the API believes it only from the local machine. <b>X-Ben-Cart</b>
+    /// goes only to the store's own addresses: no other endpoint has any use for it.</para>
+    /// </remarks>
+    private HttpRequestMessage Anonymous(HttpMethod method, string url)
+    {
+        var req = new HttpRequestMessage(method, url);
+        if (_visitor?.Address is { Length: > 0 } address)
+            req.Headers.TryAddWithoutValidation("X-Forwarded-For", address);
+        if (_cart?.Token is { Length: > 0 } token && IsStoreCall(url))
+            req.Headers.TryAddWithoutValidation(CartHeader, token);
+        return req;
+    }
+
+    /// <summary>The header the API's cart reads (StoreCartController.CartHeader).</summary>
+    public const string CartHeader = "X-Ben-Cart";
+
+    internal static bool IsStoreCall(string url)
+        => url.StartsWith("/api/store/", StringComparison.OrdinalIgnoreCase)
+        || url.StartsWith("/api/me/store/", StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public async Task<TResponse?> GetAsync<TResponse>(string relativeUrl, CancellationToken token = default)
@@ -41,7 +79,7 @@ public sealed class WebApiClient : IWebApiClient
 
     /// <inheritdoc />
     public Task<ItemResult<TResponse>> GetAnonymousItemAsync<TResponse>(string relativeUrl, CancellationToken token = default)
-        => SendItemAsync<TResponse>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+        => SendItemAsync<TResponse>(Anonymous(HttpMethod.Get, relativeUrl), token);
 
     /// <summary>
     /// The body every single-object GET shares — the counterpart to <see cref="SendListAsync{T}"/>.
@@ -63,7 +101,7 @@ public sealed class WebApiClient : IWebApiClient
 
     /// <inheritdoc />
     public Task<LoadResult<T>> GetAnonymousListAsync<T>(string relativeUrl, CancellationToken token = default)
-        => SendListAsync<T>(new HttpRequestMessage(HttpMethod.Get, relativeUrl), token);
+        => SendListAsync<T>(Anonymous(HttpMethod.Get, relativeUrl), token);
 
     /// <summary>
     /// The body both list fetches share. One implementation on purpose: the authenticated and
@@ -87,7 +125,8 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<TResponse?> PostAnonymousReadingBodyAsync<TRequest, TResponse>(
         string relativeUrl, TRequest payload, CancellationToken token = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var req = Anonymous(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
 
         try
@@ -275,7 +314,8 @@ public sealed class WebApiClient : IWebApiClient
 
     public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var req = Anonymous(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await BodyOrDefaultAsync<TResponse>(response, token);
@@ -283,7 +323,8 @@ public sealed class WebApiClient : IWebApiClient
 
     public async Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var req = Anonymous(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         return response.IsSuccessStatusCode;
     }
@@ -292,7 +333,8 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
         string relativeUrl, TRequest payload, CancellationToken token = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var req = Anonymous(HttpMethod.Post, relativeUrl);
+        req.Content = JsonContent.Create(payload);
         using var response = await _httpClient.SendAsync(req, token);
         if (response.IsSuccessStatusCode) return (true, null);
 

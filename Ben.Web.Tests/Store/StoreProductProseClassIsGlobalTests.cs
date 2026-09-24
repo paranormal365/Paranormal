@@ -25,9 +25,9 @@ public sealed class StoreProductProseClassIsGlobalTests
     [Fact]
     public void The_description_class_has_a_rule_outside_any_scoped_stylesheet()
     {
-        var page = File.ReadAllText(Path.Combine(Root(), "Ben.Web.Website.Library", "Store", "StoreProduct.razor"));
+        var page = File.ReadAllText(Path.Combine(Root(), "Ben.Web.Website.Library", "Store", "Shared", "StoreProductView.razor"));
         var element = Regex.Match(page, "<div class=\"([^\"]+)\" data-testid=\"product-description\">");
-        Assert.True(element.Success, "StoreProduct.razor no longer marks its description with data-testid=\"product-description\".");
+        Assert.True(element.Success, "StoreProductView.razor no longer marks its description with data-testid=\"product-description\".");
         var classes = element.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         var global = new[] { "Ben.Web.Website.Library", "Ben.Web.Website" }

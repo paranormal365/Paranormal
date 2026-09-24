@@ -21,6 +21,8 @@ public sealed class StoreRefusalReachesThePageTests
     {
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreProductEdit.razor", "variant-refusal" },
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreStock.razor", "stock-refusal" },
+        // A cart that failed to load must not look like an empty one (S3.5).
+        { "Ben.Web.Website.Library/Store/Cart/StoreCartPage.razor", "cart-refusal" },
     };
 
     private static string Read(string relative)

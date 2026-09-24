@@ -293,6 +293,8 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("the store", () => GoAsync("/store"), Main.Locator("[data-testid=store-hero]"));
         await StepAsync("a shelf", () => GoAsync("/store/c/spirit-boxes"), Main.Locator("[data-testid=listing-grid]"));
         await StepAsync("a product", () => FollowAsync("/store/p/"), Main.Locator("[data-testid=product-price]"));
+        await StepAsync("the cart", () => GoAsync("/store/cart"),
+            Main.Locator("[data-testid=order-summary]").Or(Main.GetByText("Your cart is empty")));
         await StepAsync("pricing, a card and a button for every plan", () => GoAsync("/pricing"),
             Main.Locator("[data-testid=pricing-band] [data-testid=pricing-cta] a, [data-testid=pricing-band] [data-testid=pricing-cta] button, #pricing-not-on-sale"), expect: "Pricing");
         await StepAsync("ask for an investigation", () => GoAsync("/my-requests/new"));

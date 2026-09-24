@@ -11,6 +11,8 @@
 @inject EntraTokenHolder EntraTokenHolder
 @inject PersistentComponentState AppState
 @inject Ben.Web.Services.SiteFeaturesProvider Features
+@inject StoreCartTokenHolder CartToken
+@inject VisitorAddressHolder Visitor
 
 @*
     The template's app-wrap skeleton. Everything below the markup is carried over from the
@@ -64,6 +66,12 @@
         @* One toast host for the whole app; BenToastService is what pages talk to. *@
         <BenToastHost />
 
+        @* The slide-out cart (storefront S3.5): one for the whole app, opened by Add to cart. *@
+        @if (Features.IsOn(SiteFeatures.Store))
+        {
+            <Ben.Web.Website.Library.Store.Cart.StoreCartDrawer />
+        }
+
         @* One tooltip for every icon-only row action in every grid (BenGridAction, and command
            buttons given Class="ben-grid-action"). Telerik reads each target's title, so the words
            a person sees on hover or focus are the same words a screen reader hears from its
@@ -105,6 +113,13 @@
             EntraTokenHolder.Email               = token.Email;
             EntraTokenHolder.EntraOid            = token.EntraOid;
             EntraTokenHolder.IsEntraAuthenticated = token.IsEntraAuthenticated;
+        }
+
+        // The cart token and the visitor's address, the same way (StoreCartTokenPersister).
+        if (AppState.TryTakeFromJson<SerializedStoreVisitor>(StoreCartTokenPersister.Key, out var visitor) && visitor is not null)
+        {
+            CartToken.Token = visitor.CartToken;
+            Visitor.Address = visitor.Address;
         }
 
         base.OnInitialized();

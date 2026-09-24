@@ -41,6 +41,9 @@ public sealed record StoreCartView(
     string? Notice = null)
 {
     public bool IsEmpty => Lines.Count == 0;
+
+    /// <summary>Shipping as every surface writes it: "–" with nothing in the cart, "Free", or the rate.</summary>
+    public string ShippingText => Shipping is null ? "–" : ShippingIsFree ? "Free" : StoreMoney.Format(Shipping.Value);
 }
 
 /// <summary>What the header badge shows: units in the cart.</summary>

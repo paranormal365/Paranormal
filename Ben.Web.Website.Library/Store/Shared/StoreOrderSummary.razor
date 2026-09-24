@@ -1,0 +1,102 @@
+@*
+    The order summary (storefront S3.5), after Smarty's cart summary (shop-page-cart-1.html):
+    Products, Discount, Shipping, Sales tax, the total, the way on, and the small print.
+
+    Two substitutions, stated once in the plan: Smarty's "Fees" line is our Sales tax — its own
+    line, never folded into a total — and on the cart the total is "Total before tax", because
+    Stripe Tax only works the tax out at checkout from the address. Every figure comes from the
+    cart record the server priced; this component adds nothing up but the tax at checkout.
+*@
+
+<div class="ben-summary @(Sticky ? "ben-summary--sticky" : null)" data-testid="order-summary">
+    <h2 class="h5 mb-3">Order summary</h2>
+
+    <div class="ben-summary__row" data-testid="summary-products">
+        <span>Products</span><span>@StoreMoney.Format(Cart.Subtotal)</span>
+    </div>
+    @if (Cart.Discount > 0)
+    {
+        <div class="ben-summary__row text-success" data-testid="summary-discount">
+            <span>Discount@(Cart.CouponCode is { } code ? $" ({code})" : null)</span><span>−@StoreMoney.Format(Cart.Discount)</span>
+        </div>
+    }
+    <div class="ben-summary__row" data-testid="summary-shipping">
+        <span>Shipping</span>
+        <span class="@(Cart.Shipping is null ? "text-secondary" : Cart.ShippingIsFree ? "text-success fw-medium" : null)">@Cart.ShippingText</span>
+    </div>
+    @* fees slot — Smarty's "Fees" line; the store charges none beyond sales tax *@
+    <div class="ben-summary__row" data-testid="summary-tax">
+        <span>Sales tax</span>
+        @if (Tax is { } tax)
+        {
+            <span>@StoreMoney.Format(tax)</span>
+        }
+        else
+        {
+            <span class="text-secondary">–</span>
+        }
+    </div>
+    @if (Tax is null)
+    {
+        <div class="small text-secondary">Sales tax is worked out at checkout.</div>
+    }
+    @if (FreeShippingNote is { } note)
+    {
+        <div class="small text-secondary mt-1" data-testid="summary-free-note">@note</div>
+    }
+
+    <div class="ben-summary__row ben-summary__total" data-testid="summary-total">
+        <span>@(Tax is null ? "Total before tax" : "Total")</span>
+        <span>@StoreMoney.Format(Tax is { } t ? Cart.TotalBeforeTax + t : Cart.TotalBeforeTax)</span>
+    </div>
+
+    @* reward-points slot — Smarty's points line; not in v1 *@
+
+    <div class="mt-3">
+        @if (!Cart.CanCheckout && Cart.WhyNotCheckout is { } why)
+        {
+            <p class="small text-warning-emphasis mb-0" data-testid="summary-why-not">@why</p>
+        }
+        else
+        {
+            @Cta
+        }
+    </div>
+
+    <hr />
+    <ul class="list-unstyled small mb-0 d-flex flex-wrap gap-3">
+        <li><a class="ben-link-muted" href="/help/shopping-at-the-store#returns-and-refunds">Returns</a></li>
+        <li><a class="ben-link-muted" href="/privacy">Privacy</a></li>
+        <li><a class="ben-link-muted" href="/terms">Terms</a></li>
+    </ul>
+    <div class="text-end small pt-2">
+        Need help?
+        @if (!string.IsNullOrWhiteSpace(Cart.SupportEmail))
+        {
+            <a href="@($"mailto:{Cart.SupportEmail}")">Contact us</a>
+        }
+        else
+        {
+            <a href="/contact">Contact us</a>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoreCartView Cart { get; set; } = default!;
+
+    /// <summary>The worked-out sales tax at checkout; null on the cart, where it is not known yet.</summary>
+    [Parameter] public decimal? Tax { get; set; }
+
+    /// <summary>The way on — "To checkout" — shown only when the cart can check out.</summary>
+    [Parameter] public RenderFragment? Cta { get; set; }
+
+    [Parameter] public bool Sticky { get; set; }
+
+    /// <summary>"Spend $12.50 more for free shipping", while that is true.</summary>
+    private string? FreeShippingNote
+        => Cart is { IsEmpty: false, ShippingIsFree: false, FreeShippingThreshold: > 0 }
+           && Cart.FreeShippingThreshold - (Cart.Subtotal - Cart.Discount) is var more && more > 0
+            ? $"Spend {StoreMoney.Format(more)} more for free shipping."
+            : null;
+}

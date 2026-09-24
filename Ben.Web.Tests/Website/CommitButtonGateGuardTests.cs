@@ -38,6 +38,9 @@ public sealed class CommitButtonGateGuardTests
         ("report-add-section", "ReportBuilder.razor"),
         ("req-verify-address", "ClientRequestWizard.razor"),
         ("area-look-up",       "AreaOfOperationDialog.razor"),
+        // The store's discount code (S3.5): an empty box answers "Enter a code.", never a dead button.
+        ("store-apply-coupon", "StoreDiscountModal.razor"),
+        ("drawer-discount-apply", "StoreCartDrawer.razor"),
     ];
 
     private static DirectoryInfo RepoRoot()

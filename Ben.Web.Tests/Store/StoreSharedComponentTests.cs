@@ -122,6 +122,28 @@ public sealed class StoreSharedComponentTests
         Assert.Contains("$79.99 – $84.99", inStock);
     }
 
+    /// <summary>
+    /// The card's cart button (S3.5): a one-variant product adds straight to the cart, a product
+    /// with choices links to its page, and a sold-out card has neither — even when it has one
+    /// variant, which is exactly the card a naive "SingleVariantId is set" check would give a button.
+    /// </summary>
+    [Fact]
+    public async Task Sold_out_card_has_no_cart_button()
+    {
+        var single = Card(inStock: true) with { SingleVariantId = Guid.NewGuid(), VariantCount = 1 };
+
+        var addable = await RenderAsync<StoreCard>(new() { [nameof(StoreCard.Card)] = single });
+        var choosy = await RenderAsync<StoreCard>(new() { [nameof(StoreCard.Card)] = Card(inStock: true) });
+        var soldOut = await RenderAsync<StoreCard>(new() { [nameof(StoreCard.Card)] = single with { InStock = false } });
+
+        Assert.Contains("data-testid=\"card-add-to-cart\"", addable);
+        Assert.DoesNotContain("card-choose-options", addable);
+        Assert.Contains("data-testid=\"card-choose-options\"", choosy);
+        Assert.DoesNotContain("card-add-to-cart", choosy);
+        Assert.DoesNotContain("card-add-to-cart", soldOut);
+        Assert.DoesNotContain("card-choose-options", soldOut);
+    }
+
     /// <summary>The rail is hidden only where there is a hover to reveal it.</summary>
     [Fact]
     public void Card_rail_is_reachable_without_hover()

@@ -1,0 +1,140 @@
+@using Ben.Service.Models.Store
+@using Ben.Web.Website.Library.Store.Shared
+@implements IDisposable
+
+@inject StoreCartState CartState
+@inject SiteFeaturesProvider Features
+@inject NavigationManager NavManager
+
+@*
+    The header's cart (storefront S3.5), after Smarty's header cart menu (shop-index-1.html): the
+    icon with its count, and a menu of "Cart Products" with the money and "Go to Cart".
+
+    Signed in or not — a guest has a cart too — so BenHeader draws it outside its signed-in block,
+    and it decides for itself whether the store is open (StoreCartBadgeTests holds both).
+
+    Smarty's single "Subtotal" line is three rows here, Products / Shipping / Total before tax: the
+    same three fields of the same cart the drawer and the cart page show, so the three surfaces
+    cannot disagree (The_four_surfaces_agree). Open state is a C# field, like the bell's —
+    Bootstrap's dropdown script and Blazor cannot both own this subtree.
+*@
+
+@if (Features.IsOn(SiteFeatures.Store))
+{
+    <div class="dropdown ben-cart-menu">
+        <button type="button" class="btn btn-system no-arrow @(_open ? "show ben-dropdown-open" : null)"
+                id="nav-cart" aria-label="Open Cart" aria-expanded="@_open.ToString().ToLowerInvariant()"
+                title="@Tooltip" @onclick="ToggleAsync">
+            @if (CartState.Count > 0)
+            {
+                <span class="badge badge-icon pos-top pos-end bg-warning text-dark" data-testid="cart-badge">@Badge</span>
+            }
+            <BenIcon Name="shopping-cart" Class="sa-icon-2x" />
+        </button>
+
+        <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated ben-cart-dd @(_open ? "show" : null)">
+            @* Contents only while open, like the bell: a closed menu's rows would linger in the DOM. *@
+            @if (_open)
+            {
+                <div class="px-3 py-2"><strong>Cart Products</strong></div>
+                <div class="dropdown-divider m-0"></div>
+
+                @if (CartState.LoadError is { } error && CartState.Cart is null)
+                {
+                    <div class="px-3 py-3 small">
+                        <div class="text-danger mb-2" data-testid="cart-menu-refusal">@error</div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CartState.RefreshAsync">Retry</button>
+                    </div>
+                }
+                else if (CartState.Cart is not { } cart)
+                {
+                    <div class="px-3 py-4 text-center text-secondary small">Opening your cart…</div>
+                }
+                else if (cart.IsEmpty)
+                {
+                    <div class="py-4 text-center bg-body-secondary small" data-testid="cart-menu-empty">Your cart is empty</div>
+                }
+                else
+                {
+                    <div class="ben-cart-dd__list">
+                        @foreach (var line in cart.Lines.Take(VisibleLines))
+                        {
+                            <StoreCartLine @key="line.VariantId" Line="line" Mode="StoreCartLineMode.Dropdown" Navigated="Close" />
+                        }
+                    </div>
+                    @if (cart.Lines.Count > VisibleLines)
+                    {
+                        <div class="px-3 small text-secondary">+@(cart.Lines.Count - VisibleLines) more</div>
+                    }
+                    <div class="dropdown-divider"></div>
+                    <div class="px-3 small ben-cart-dd__rows" data-testid="cart-menu-money">
+                        <div data-testid="summary-products"><span>Products</span><span>@StoreMoney.Format(cart.Subtotal)</span></div>
+                        <div data-testid="summary-shipping"><span>Shipping</span><span>@cart.ShippingText</span></div>
+                        <div class="fw-semibold" data-testid="summary-total"><span>Total before tax</span><span>@StoreMoney.Format(cart.TotalBeforeTax)</span></div>
+                    </div>
+                    @if (!cart.CanCheckout && cart.WhyNotCheckout is { } why)
+                    {
+                        <div class="px-3 pt-2 small text-warning-emphasis" data-testid="summary-why-not">@why</div>
+                    }
+                }
+                <div class="p-3">
+                    <a href="/store/cart" class="btn btn-primary w-100" @onclick="Close">Go to Cart</a>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_open)
+    {
+        <div class="ben-dropdown-backdrop" @onclick="Close"></div>
+    }
+}
+
+@code {
+    /// <summary>Smarty's menu shows a handful of lines; the cart page shows them all.</summary>
+    private const int VisibleLines = 5;
+
+    private bool _open;
+
+    private string Badge => CartState.Count > 99 ? "99+" : CartState.Count.ToString();
+
+    private string Tooltip => CartState.Count switch
+    {
+        0 => "Cart",
+        1 => "1 item in your cart",
+        var n => $"{n} items in your cart",
+    };
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += OnCartChanged;
+        NavManager.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !Features.IsOn(SiteFeatures.Store)) return;
+        // After the first render, like the bell: the read waits for the sign-in to be restored,
+        // which MainLayout only signals during its own first render.
+        await CartState.EnsureStartedAsync(RendererInfo.IsInteractive);
+    }
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (_open) await CartState.RefreshAsync();   // stock and prices may have moved
+    }
+
+    private void Close() => _open = false;
+
+    private void OnCartChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(() => { _open = false; StateHasChanged(); });
+
+    public void Dispose()
+    {
+        CartState.Changed -= OnCartChanged;
+        NavManager.LocationChanged -= OnLocationChanged;
+    }
+}

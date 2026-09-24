@@ -227,14 +227,25 @@
 }
 
 /* ── Cart surfaces and summary (S3/S4) ─────────────────────────────────── */
+.ben-cart-menu .dropdown-menu { padding-bottom: 0; }
 .ben-cart-dd { width: min(22rem, 92vw); }
+.ben-cart-dd__list { max-height: 50vh; overflow-y: auto; }
+.ben-cart-dd__thumb { width: 40px; height: 40px; flex: 0 0 auto; border-radius: var(--bs-border-radius-sm); object-fit: cover; background: var(--bs-secondary-bg); }
 .ben-cart-dd__rows > div { display: flex; justify-content: space-between; }
 .ben-cart-drawer { width: min(420px, 100vw); }
 .ben-cart-line { display: flex; gap: .75rem; padding: .75rem 0; border-bottom: 1px solid var(--bs-border-color); }
 .ben-cart-line__image { width: 4.5rem; height: 4.5rem; flex: 0 0 auto; border-radius: var(--bs-border-radius); object-fit: cover; background: var(--bs-secondary-bg); }
 .ben-cart-line__remove { color: var(--bs-secondary-color); }
+/* The cart page's card (Smarty's shop-page-cart-1.html item): the remove button sits over the
+   corner, above the card's own stacking. A line that can't be bought gets a red edge as well as its
+   sentence. */
+.ben-cart-card .ben-cart-line__remove { z-index: 1; }
+.ben-cart-card--problem { border-color: var(--bs-danger-border-subtle); }
+.ben-cart-card__image { width: 100%; height: 100%; object-fit: cover; border-radius: var(--bs-border-radius); background: var(--bs-secondary-bg); }
 .ben-cart-line__remove:hover, .ben-cart-line__remove:focus-visible { color: var(--bs-danger); }
 .ben-summary { background: var(--bs-tertiary-bg); border-radius: var(--bs-border-radius-lg); padding: 1.25rem; }
+/* Beside the list from lg up it stays in view as the list scrolls; stacked below lg it never sticks. */
+@media (min-width: 992px) { .ben-summary--sticky { position: sticky; top: 5rem; } }
 .ben-summary__row { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
 .ben-summary__total { border-top: 1px solid var(--bs-border-color); margin-top: .5rem; padding-top: .75rem; font-weight: 700; font-size: 1.15rem; }
 .ben-checkout-bar {

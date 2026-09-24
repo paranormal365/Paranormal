@@ -43,7 +43,7 @@ public sealed class VisualAuditWalk : BenTestBase
         // /tonight and /places/new added 2026-09-21 with items 248 and 250; a place's own page and
         // the guest-code sheet need an id and are photographed by VisualShots instead.
         ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new",
-                     "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box"]),
+                     "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box", "/store/cart"]),
         ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new"]),
         ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals",
                         "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings"]),

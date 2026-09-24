@@ -1,0 +1,164 @@
+@page "/store/cart"
+@using Ben.Web.Website.Library.Store.Shared
+@implements IDisposable
+@inject StoreCartState CartState
+@inject IBenAdminClient Store
+@inject BenToastService Toasts
+
+<PageTitle>My cart — Store</PageTitle>
+
+@*
+    The cart page (storefront S3.5), after Smarty's cart (shop-page-cart-1.html): the steps, the
+    lines as cards with their quantities, "Do you have a discount code?", the order summary beside
+    them (under them below the lg break), and the promises.
+
+    Quantities change as they are pressed — Smarty's "Update cart" button is dropped because
+    nothing waits for it. Every number is the server's: each change answers with the whole cart.
+
+    "To checkout" arrives with the checkout page (S4.11); until then the summary ends at its total,
+    or says why the cart cannot check out.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Store">
+    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a href="/store">Store</a></li>
+                <li class="breadcrumb-item active" aria-current="page">My cart</li>
+            </ol>
+        </nav>
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <h1 class="h3 mb-0">My cart<HelpLink Slug="shopping-at-the-store" Anchor="your-cart" /></h1>
+            <a class="ben-link-muted small" href="/store"><BenIcon Name="arrow-left" /> Continue shopping</a>
+        </div>
+
+        <StoreCheckoutSteps Current="StoreCheckoutStep.Cart" Secure="true" />
+
+        @if (_refusal is not null)
+        {
+            @* "Your cart couldn't be loaded" — never an empty cart: a cart that failed to load and
+               one with nothing in it must not look the same. Over the last cart that did load, if
+               there was one, so its numbers are not taken as current without a warning. *@
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="cart-refusal">@_refusal</div>
+                <button type="button" class="btn btn-outline-secondary" @onclick="RetryAsync">Retry</button>
+            </div>
+        }
+
+        @if (CartState.Cart is not { } cart)
+        {
+            @if (_refusal is null)
+            {
+                <div class="text-center text-secondary py-5" data-testid="cart-loading">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Opening your cart…
+                </div>
+            }
+        }
+        else if (cart.IsEmpty)
+        {
+            <StoreEmptyState Icon="shopping-cart" Title="Your cart is empty"
+                             Lead="Please go back and add some items to your cart."
+                             LinkText="Back to shopping" LinkHref="/store" />
+        }
+        else
+        {
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    @foreach (var line in cart.Lines)
+                    {
+                        <StoreCartLine @key="line.VariantId" Line="line" Mode="StoreCartLineMode.Page"
+                                       LowStockThreshold="cart.LowStockThreshold" Busy="@(_busy == line.VariantId)"
+                                       QuantityChanged="@(q => SetQuantityAsync(line, q))"
+                                       Removed="@(() => RemoveAsync(line))" />
+                    }
+
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+                        <button type="button" class="btn btn-link px-0" id="open-discount" @onclick="@(() => _discountOpen = true)">
+                            <BenIcon Name="tag" /> Do you have a discount code?
+                        </button>
+                        @if (cart.CouponCode is { } applied)
+                        {
+                            <span class="badge bg-success-subtle text-success-emphasis d-inline-flex align-items-center gap-2 py-2 px-3" data-testid="applied-code">
+                                @applied @(cart.Discount > 0 ? $"−{StoreMoney.Format(cart.Discount)}" : null)
+                                <button type="button" class="btn btn-sm btn-link p-0 text-success-emphasis" aria-label="@($"Remove the code {applied}")"
+                                        @onclick="RemoveCouponAsync">
+                                    <BenIcon Name="x" />
+                                </button>
+                            </span>
+                        }
+                    </div>
+                    @if (cart.CouponProblem is { } problem)
+                    {
+                        <p class="small text-warning-emphasis mt-1 mb-0" data-testid="coupon-problem">@problem</p>
+                    }
+                </div>
+
+                <div class="col-lg-4">
+                    <StoreOrderSummary Cart="cart" />
+                </div>
+            </div>
+        }
+
+        @if (_info.Item is { } info)
+        {
+            <div class="mt-5"><StorePromiseStrip Info="info" /></div>
+        }
+    </div>
+
+    <StoreDiscountModal @bind-Visible="_discountOpen" />
+</FeatureGate>
+
+@code {
+    private ItemResult<StorePublicInfo> _info;
+    private string? _refusal;
+    private Guid? _busy;
+    private bool _discountOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CartState.Changed += OnCartChanged;
+        _info = await Store.GetStoreInfoAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Stock and prices may have moved since the drawer last looked; the page always re-reads.
+        await CartState.EnsureFreshAsync(RendererInfo.IsInteractive);
+    }
+
+    private void OnCartChanged() => InvokeAsync(() =>
+    {
+        var error = CartState.LoadError;
+        _refusal = error;
+        StateHasChanged();
+    });
+
+    private Task RetryAsync() => CartState.RefreshAsync();
+
+    private async Task SetQuantityAsync(StoreCartLineView line, int quantity)
+    {
+        _busy = line.VariantId;
+        var said = (await CartState.SetQuantityAsync(line.VariantId, quantity)).Message;
+        _busy = null;
+        if (said is not null) Toasts.Warning(said);
+    }
+
+    private async Task RemoveAsync(StoreCartLineView line)
+    {
+        _busy = line.VariantId;
+        var said = (await CartState.RemoveAsync(line.VariantId)).Message;
+        _busy = null;
+        if (said is not null) Toasts.Warning(said);
+        else Toasts.Info($"{line.ProductName} removed from your cart.");
+    }
+
+    private async Task RemoveCouponAsync()
+    {
+        var said = (await CartState.RemoveCouponAsync()).Message;
+        if (said is not null) Toasts.Warning(said);
+    }
+
+    public void Dispose() => CartState.Changed -= OnCartChanged;
+}

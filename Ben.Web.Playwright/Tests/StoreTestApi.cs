@@ -82,5 +82,44 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
                 new { delta = (int?)null, setTo = onHand, reason = 1, note = "e2e" });
     }
 
+    /// <summary>
+    /// Changes some store settings for one test and returns a way to put them back. The settings
+    /// page saves them all at once, so this reads them, changes what was asked and saves the lot.
+    /// </summary>
+    public async Task<Func<Task>> WithSettingsAsync(
+        bool? checkoutEnabled = null, decimal? flatRate = null, decimal? freeOver = null)
+    {
+        var before = await SendAsync(HttpMethod.Get, "/api/admin/store/settings");
+        object Body(JsonElement s, bool? checkout, decimal? rate, decimal? over) => new
+        {
+            checkoutEnabled = checkout ?? s.GetProperty("checkoutEnabled").GetBoolean(),
+            shippingFlatRate = rate ?? Nullable(s, "shippingFlatRate"),
+            freeShippingThreshold = over ?? Nullable(s, "freeShippingThreshold"),
+            lowStockThreshold = s.GetProperty("lowStockThreshold").ValueKind == JsonValueKind.Null ? (int?)null : s.GetProperty("lowStockThreshold").GetInt32(),
+            shipFromStreet = Text(s, "shipFromStreet"), shipFromCity = Text(s, "shipFromCity"),
+            shipFromState = Text(s, "shipFromState"), shipFromZip = Text(s, "shipFromZip"),
+            supportEmail = Text(s, "supportEmail"),
+            returnsWindowDays = s.GetProperty("returnsWindowDays").ValueKind == JsonValueKind.Null ? (int?)null : s.GetProperty("returnsWindowDays").GetInt32(),
+            reservationMinutes = s.GetProperty("reservationMinutes").ValueKind == JsonValueKind.Null ? (int?)null : s.GetProperty("reservationMinutes").GetInt32(),
+            linkEnabled = s.GetProperty("linkEnabled").GetBoolean(),
+        };
+        await SendAsync(HttpMethod.Put, "/api/admin/store/settings", Body(before, checkoutEnabled, flatRate, freeOver));
+        return () => SendAsync(HttpMethod.Put, "/api/admin/store/settings", Body(before, null, null, null));
+    }
+
+    private static decimal? Nullable(JsonElement e, string name)
+        => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetDecimal();
+
+    private static string? Text(JsonElement e, string name)
+        => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetString();
+
+    /// <summary>A live, one-variant product with stock — the card adds it straight to the cart.</summary>
+    public async Task<JsonElement> BuyableAsync(string name, decimal price, int onHand = 10)
+    {
+        var product = await ProductAsync(await CategoryAsync(name + " shelf"), name, live: true, price: price);
+        await SetStockAsync(product, onHand);
+        return product;
+    }
+
     public void Dispose() => http.Dispose();
 }

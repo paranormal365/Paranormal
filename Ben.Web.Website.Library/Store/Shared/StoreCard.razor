@@ -1,17 +1,39 @@
 @inject IMediaUrlBuilder MediaUrls
+@inject StoreCartState CartState
+@inject BenToastService Toasts
 
 @*
     A product on a shelf (storefront S2.6), after Smarty's listing card. Named StoreCard, not
     StoreProductCard: that is the record it draws, and a component of the same name hides it. The card: the whole card is one link;
     the badges sit in the top-left corner; the button rail (add to cart, the heart) sits in the
-    top-right, OUTSIDE the link so a tap on a button is not also a tap on the card. The rail is
-    empty in S2 — the cart button arrives in S3.5 and the heart in S6.3 — and on a touchscreen it is
-    always shown, never waiting for a hover a finger cannot make.
+    top-right, OUTSIDE the link so a tap on a button is not also a tap on the card. On a
+    touchscreen the rail is always shown, never waiting for a hover a finger cannot make.
+
+    The cart button (S3.5) adds a product with one live variant straight to the cart; a product
+    with choices gets a link to its page instead, where the choice is made. A sold-out card has
+    neither — there is nothing to buy (Sold_out_card_has_no_cart_button). The heart joins in S6.3.
 *@
 
 <div class="ben-card @(Card.InStock ? null : "ben-card--soldout")" data-testid="store-card" data-slug="@Card.Slug">
     <StoreBadges Floating="true" SoldOut="@(!Card.InStock)" Discount="@Card.DiscountPercent" IsNew="@Card.IsNew" />
-    <div class="ben-card__rail">@Rail</div>
+    <div class="ben-card__rail">
+        @if (Card.InStock && Card.SingleVariantId is { } variantId)
+        {
+            <button type="button" class="btn btn-light btn-sm shadow-sm" data-testid="card-add-to-cart"
+                    aria-label="@($"Add {Card.Name} to the cart")" title="Add to cart"
+                    disabled="@_adding" @onclick="@(() => AddAsync(variantId))">
+                <BenIcon Name="shopping-cart" />
+            </button>
+        }
+        else if (Card.InStock)
+        {
+            <a class="btn btn-light btn-sm shadow-sm" href="@($"/store/p/{Card.Slug}")" data-testid="card-choose-options"
+               aria-label="@($"Choose options for {Card.Name}")" title="Choose options">
+                <BenIcon Name="sliders" />
+            </a>
+        }
+        @Rail
+    </div>
     <a class="ben-card__link" href="@($"/store/p/{Card.Slug}")">
         <figure class="ben-card__figure">
             @if (Card.PrimaryImageUploadFileId is { } picture)
@@ -32,6 +54,19 @@
 @code {
     [Parameter, EditorRequired] public StoreProductCard Card { get; set; } = default!;
 
-    /// <summary>The buttons beside the card — add to cart, favourite. Outside the card's link.</summary>
+    /// <summary>More buttons beside the cart one — the heart (S6.3). Outside the card's link.</summary>
     [Parameter] public RenderFragment? Rail { get; set; }
+
+    private bool _adding;
+
+    private async Task AddAsync(Guid variantId)
+    {
+        _adding = true;
+        var change = await CartState.AddAsync(variantId, 1);
+        _adding = false;
+        if (change.Cart is null) { Toasts.Error(change.Message ?? StoreCartChange.CouldNotUpdate); return; }
+        if (change.Message is { } notAll) Toasts.Warning(notAll);
+        else Toasts.Success($"{Card.Name} added to your cart.");
+        CartState.OpenDrawer();
+    }
 }

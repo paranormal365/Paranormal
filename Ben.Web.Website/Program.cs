@@ -186,6 +186,12 @@ builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredSer
 // One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
 // down with the circuit — the poll it owns must not outlive the session it polls for.
 builder.Services.AddScoped<NotificationState>();
+// The store's cart (storefront S3.4): the browser's token and the visitor's address, filled by
+// the middleware below on the server render and restored into the circuit by MainLayout; and one
+// copy of the cart per circuit, so the header, the drawer and the cart page agree.
+builder.Services.AddScoped<StoreCartTokenHolder>();
+builder.Services.AddScoped<VisitorAddressHolder>();
+builder.Services.AddScoped<StoreCartState>();
 // Scoped = per circuit. Avatar resolution depends on who is asking, so this must not be shared
 // across sessions — see AvatarCache.
 builder.Services.AddScoped<AvatarCache>();
@@ -408,6 +414,19 @@ app.Use(async (context, next) =>
                           ?? user.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
         holder.IsEntraAuthenticated = holder.AccessToken is not null;
     }
+    await next();
+});
+
+// ── The store's cart cookie (storefront S3.4) ─────────────────────────────
+// Reads ben.cart — or, on a page while the store is open, makes it — and hands the token and the
+// visitor's own address to the request's holders; StoreCartTokenPersister carries both into the
+// circuit. NEW, not the Entra capture above: that one sets no cookie.
+app.Use(async (context, next) =>
+{
+    Ben.Web.Website.Services.StoreCartCookie.Apply(context,
+        context.RequestServices.GetRequiredService<StoreCartTokenHolder>(),
+        context.RequestServices.GetRequiredService<VisitorAddressHolder>(),
+        context.RequestServices.GetRequiredService<SiteFeaturesProvider>().IsOn(SiteFeatures.Store));
     await next();
 });
 

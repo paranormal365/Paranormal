@@ -1,0 +1,185 @@
+@using Ben.Web.Website.Library.Store.Shared
+@implements IAsyncDisposable
+@inject StoreCartState CartState
+@inject BenToastService Toasts
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+@*
+    The slide-out cart (storefront S3.5), after Smarty's floating cart (sidebar-float-cart.html):
+    "My Cart" and a link to the cart page, the lines with their quantities, a collapsible discount
+    code, the money, and the way on. It opens when something is added to the cart.
+
+    Blazor owns it entirely — the `show` class, its own backdrop, Escape to close — for the reason
+    BenModal gives: Bootstrap's offcanvas script moves nodes Blazor is still diffing. Scroll is
+    locked through BenModal's module, which counts opens, so a dialog over the drawer does not
+    unlock the page when it closes.
+
+    min(420px, 100vw) wide: full width on a phone, never on a tablet. "To checkout" arrives with the
+    checkout page (S4.11); until then the way on is the cart page.
+*@
+
+@if (CartState.DrawerOpen)
+{
+    <aside class="offcanvas offcanvas-end show ben-cart-drawer" tabindex="-1" aria-label="My Cart" role="dialog" aria-modal="true"
+           data-testid="cart-drawer" @ref="_panel" @onkeydown="OnKeyDown">
+        <div class="offcanvas-header border-bottom">
+            <div>
+                <h2 class="h5 fw-bold mb-0">My Cart</h2>
+                <a href="/store/cart" class="small" @onclick="CartState.CloseDrawer">view cart page</a>
+            </div>
+            <button type="button" class="btn-close" aria-label="Close" @onclick="CartState.CloseDrawer"></button>
+        </div>
+
+        <div class="offcanvas-body">
+            @if (CartState.LoadError is { } error && CartState.Cart is null)
+            {
+                <div class="text-danger small mb-2" data-testid="cart-drawer-refusal">@error</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CartState.RefreshAsync">Retry</button>
+            }
+            else if (CartState.Cart is not { } cart)
+            {
+                <div class="text-center text-secondary py-5"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Opening your cart…</div>
+            }
+            else if (cart.IsEmpty)
+            {
+                <StoreEmptyState Icon="shopping-cart" Title="Your cart is empty" LinkText="Back to shopping" LinkHref="/store" />
+            }
+            else
+            {
+                @foreach (var line in cart.Lines)
+                {
+                    <StoreCartLine @key="line.VariantId" Line="line" Mode="StoreCartLineMode.Drawer"
+                                   LowStockThreshold="cart.LowStockThreshold" Busy="@(_busy == line.VariantId)"
+                                   QuantityChanged="@(q => SetQuantityAsync(line, q))"
+                                   Removed="@(() => RemoveAsync(line))" Navigated="CartState.CloseDrawer" />
+                    @* gift slot — Smarty's per-item gift line; the store has no gifts *@
+                }
+            }
+        </div>
+
+        @if (CartState.Cart is { IsEmpty: false } money)
+        {
+            <div class="border-top p-3">
+                <button type="button" class="btn btn-link btn-sm px-0 d-flex align-items-center gap-1" aria-expanded="@_codeOpen.ToString().ToLowerInvariant()"
+                        id="drawer-discount-toggle" @onclick="@(() => _codeOpen = !_codeOpen)">
+                    <BenIcon Name="tag" /> Discount code
+                </button>
+                @if (_codeOpen)
+                {
+                    <div class="input-group input-group-sm mt-1">
+                        <label class="visually-hidden" for="drawer-discount-code">Discount code</label>
+                        <input id="drawer-discount-code" class="form-control" autocomplete="off" spellcheck="false" maxlength="64"
+                               @bind="_code" @bind:event="oninput" />
+                        <button type="button" class="btn btn-warning" id="drawer-discount-apply" @onclick="ApplyAsync">Add</button>
+                    </div>
+                    @if (_codeError is not null)
+                    {
+                        <div class="alert alert-warning py-1 px-2 small mt-2 mb-0">@_codeError</div>
+                    }
+                }
+
+                <div class="small mt-3" data-testid="cart-drawer-money">
+                    <div class="ben-summary__row" data-testid="summary-products"><span>Products</span><span>@StoreMoney.Format(money.Subtotal)</span></div>
+                    @if (money.Discount > 0)
+                    {
+                        <div class="ben-summary__row text-success"><span>Discount (@money.CouponCode)</span><span>−@StoreMoney.Format(money.Discount)</span></div>
+                    }
+                    <div class="ben-summary__row" data-testid="summary-shipping">
+                        <span>Shipping</span>
+                        <span class="@(money.ShippingIsFree ? "text-success fw-medium" : null)">@money.ShippingText</span>
+                    </div>
+                    <div class="ben-summary__row fw-semibold" data-testid="summary-total"><span>Total before tax</span><span>@StoreMoney.Format(money.TotalBeforeTax)</span></div>
+                    <div class="text-secondary">Sales tax is worked out at checkout.</div>
+                </div>
+
+                @if (!money.CanCheckout && money.WhyNotCheckout is { } why)
+                {
+                    <p class="small text-warning-emphasis mt-2 mb-0" data-testid="summary-why-not">@why</p>
+                }
+                <a href="/store/cart" class="btn btn-danger w-100 mt-3" @onclick="CartState.CloseDrawer">Go to Cart</a>
+            </div>
+        }
+    </aside>
+    <div class="offcanvas-backdrop fade show" @onclick="CartState.CloseDrawer"></div>
+}
+
+@code {
+    private ElementReference _panel;
+    private IJSObjectReference? _modal;
+    private bool _locked;
+    private Guid? _busy;
+    private bool _codeOpen;
+    private string _code = "";
+    private string? _codeError;
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += OnChanged;
+        CartState.DrawerChanged += OnChanged;
+        NavManager.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (CartState.DrawerOpen == _locked) return;
+        try
+        {
+            _modal ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/Kit/BenModal.razor.js");
+            if (CartState.DrawerOpen) await _modal.InvokeVoidAsync("open", _panel);
+            else await _modal.InvokeVoidAsync("close");
+            _locked = CartState.DrawerOpen;
+        }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { /* prerender: no JS yet */ }
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(CartState.CloseDrawer);
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CartState.CloseDrawer();
+    }
+
+    private async Task SetQuantityAsync(StoreCartLineView line, int quantity)
+    {
+        _busy = line.VariantId;
+        var said = (await CartState.SetQuantityAsync(line.VariantId, quantity)).Message;
+        _busy = null;
+        if (said is not null) Toasts.Warning(said);
+    }
+
+    private async Task RemoveAsync(StoreCartLineView line)
+    {
+        _busy = line.VariantId;
+        var said = (await CartState.RemoveAsync(line.VariantId)).Message;
+        _busy = null;
+        if (said is not null) Toasts.Warning(said);
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_code)) { _codeError = StoreCartSentences.EnterACode; return; }
+        _codeError = (await CartState.ApplyCouponAsync(_code.Trim())).Message;
+        if (_codeError is null) { _code = ""; _codeOpen = false; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        CartState.Changed -= OnChanged;
+        CartState.DrawerChanged -= OnChanged;
+        NavManager.LocationChanged -= OnLocationChanged;
+        if (_modal is not null)
+        {
+            try
+            {
+                if (_locked) await _modal.InvokeVoidAsync("close");
+                await _modal.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

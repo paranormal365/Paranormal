@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.RegularExpressions;
 using Ben.Web.Website.Library.Store.Shared;
 using Microsoft.AspNetCore.Components;
@@ -16,6 +17,13 @@ public sealed class StoreComponentRenderTests
     {
         var collection = new ServiceCollection();
         services?.Invoke(collection);
+        // What the cart buttons on cards and the product page reach for (S3.5), unless the test
+        // brought its own.
+        collection.TryAddSingleton(new Moq.Mock<Ben.Web.Services.IBenUserState>().Object);
+        collection.TryAddScoped(sp => new Ben.Web.Services.StoreCartState(
+            sp.GetService<Ben.Web.Services.IBenAdminClient>() ?? new Moq.Mock<Ben.Web.Services.IBenAdminClient>().Object,
+            sp.GetRequiredService<Ben.Web.Services.IBenUserState>()));
+        collection.TryAddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
         await using var provider = collection.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, NullLoggerFactory.Instance);
         return await renderer.Dispatcher.InvokeAsync(async () =>

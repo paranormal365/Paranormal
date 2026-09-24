@@ -68,6 +68,10 @@
         <BenIcon Name="maximize" Class="sa-icon-2x sa-fullscreen-off" />
     </button>
 
+    @* The cart is for everybody, signed in or not: outside the signed-in block, and it decides for
+       itself whether the store is open (StoreCartBadgeTests). *@
+    <BenCartButton />
+
     @if (IsAuthenticated)
     {
         <BenNotificationBell />

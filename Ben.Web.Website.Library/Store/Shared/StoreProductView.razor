@@ -1,4 +1,6 @@
 @inject IBenUserState UserState
+@inject StoreCartState CartState
+@inject BenToastService Toasts
 
 @*
     One product as a shopper sees it (storefront S2.9), drawn by two callers: the store's product
@@ -212,7 +214,14 @@ else if (Product.IsPreview)
 
     private void OnChoiceChanged(IReadOnlyDictionary<Guid, Guid> selected) => _selected = selected;
 
-    /// <summary>Add to cart and the quantity land here in S3.5; the heart in S6.3.</summary>
+    private int _quantity = 1;
+    private bool _adding;
+
+    /// <summary>
+    /// The quantity and Add to cart (S3.5); the heart joins in S6.3. A preview or a sold-out
+    /// choice shows its disabled button instead. With the store paused the button stays — a cart
+    /// can still be kept — and the sentence under it says why nothing can be ordered yet.
+    /// </summary>
     private RenderFragment BuyControls(StoreVariantPublicRecord? chosen) => __builder =>
     {
         if (Product.IsPreview || chosen is { Available: <= 0 })
@@ -221,5 +230,32 @@ else if (Product.IsPreview)
                 @(Product.IsPreview ? "Not on sale" : "Sold out")
             </button>
         }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2 align-items-stretch">
+                <StoreQuantity @bind-Value="_quantity" Max="@Math.Min(chosen?.Available ?? StoreCartRules.MaxQuantityPerLine, StoreCartRules.MaxQuantityPerLine)"
+                               Disabled="@(chosen is null || _adding)" ItemName="@Product.Name" Id="product-quantity" />
+                <button type="button" class="btn btn-primary btn-lg flex-grow-1" data-testid="add-to-cart"
+                        disabled="@(chosen is null || _adding)" @onclick="@(() => AddAsync(chosen!))">
+                    <BenIcon Name="shopping-cart" /> @(chosen is null ? "Choose an option" : "Add to cart")
+                </button>
+            </div>
+        }
     };
+
+    private async Task AddAsync(StoreVariantPublicRecord chosen)
+    {
+        _adding = true;
+        var change = await CartState.AddAsync(chosen.Id, _quantity);
+        _adding = false;
+        if (change.Cart is null)
+        {
+            Toasts.Error(change.Message ?? StoreCartChange.CouldNotUpdate);   // refused: nothing added
+            return;
+        }
+        _quantity = 1;
+        if (change.Message is { } notAll) Toasts.Warning(notAll);           // "Only 3 left." — some added
+        else Toasts.Success("Added to your cart.");
+        CartState.OpenDrawer();
+    }
 }
