@@ -250,7 +250,9 @@ start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/b
   "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV"
 if [[ "${STRIPE_FORWARD:-}" == "1" ]]; then
   echo "── Forwarding Stripe's test events to the API ──────────────────────────"
-  nohup stripe listen --forward-to "$API_URL/api/stripe/webhook" >"$LOG_DIR/stripe-listen.log" 2>&1 &
+  # The events the webhook handles — the same list the live endpoint is given (stripe-go-live.md).
+  STRIPE_EVENTS="checkout.session.completed,payment_intent.succeeded,payment_intent.processing,payment_intent.payment_failed,payment_intent.canceled,refund.created,refund.updated,refund.failed"
+  nohup stripe listen --events "$STRIPE_EVENTS" --forward-to "$API_URL/api/stripe/webhook" >"$LOG_DIR/stripe-listen.log" 2>&1 &
   echo $! >"$LOG_DIR/stripe-listen.pid"
   STARTED_PIDS+=("$(cat "$LOG_DIR/stripe-listen.pid")")
   for _ in $(seq 1 30); do grep -q "Ready!" "$LOG_DIR/stripe-listen.log" 2>/dev/null && break; sleep 1; done
