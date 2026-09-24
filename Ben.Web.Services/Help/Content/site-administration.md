@@ -1088,6 +1088,13 @@ has a price, at least one picture, a live variant and a visible category. A prod
 (/store/p/k-ii-emf-meter) is made from its name once and then kept: renaming a product does not
 break links people have shared. Type a new address only if you mean to.
 
+**Preview** — the button at the top of the product, the tab beside Pictures, or the eye on
+the products list — shows the product page as a shopper will see it: the pictures, the price, the
+choices, the description and the specifications. It is drawn from what is on the form now, so a
+change shows before you save it (the note above it says when something is unsaved), and it works
+while the store is switched off. With the store on, **Open the saved page** shows the real page
+as it stands.
+
 **Seller** names the member who makes and sells the product; leave it on "The site's own stock"
 for anything the site sells itself. Only people with the Seller role are listed — give it on their
 **Site Roles** tab first. Shoppers never see who the seller is, and the products list shows it in

@@ -1,0 +1,225 @@
+@inject IBenUserState UserState
+
+@*
+    One product as a shopper sees it (storefront S2.9), drawn by two callers: the store's product
+    page, and the product editor's live preview, which hands it the unsaved work (Ben, 09/24/2026).
+    One component on purpose — a preview drawn by a copy of the page would drift from the page,
+    and a preview that is not what shoppers get is worse than none.
+
+    After Smarty's product page: the gallery beside the buy box, then the description, the
+    specifications and the reviews, and more from the same shelf. Below the lg break the gallery
+    sits above the buy box.
+*@
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a href="/store">Store</a></li>
+        <li class="breadcrumb-item"><a href="@($"/store/c/{Product.CategorySlug}")">@Product.CategoryName</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@Product.Name</li>
+    </ol>
+</nav>
+
+@if (Banner is not null)
+{
+    @Banner
+}
+else if (Product.IsPreview)
+{
+    <div class="alert alert-warning" data-testid="store-preview">
+        <strong>Preview — shoppers can't see this.</strong> It isn't on sale, or its category is hidden.
+        <a href="/admin/store/products" class="alert-link">Back to products</a>
+    </div>
+}
+
+<div class="row g-4 mb-5">
+    <div class="col-lg-7">
+        <StoreProductGallery Images="Product.Images" ProductName="@Product.Name" VariantId="@Chosen?.Id" />
+    </div>
+    <div class="col-lg-5">
+        <div class="ben-buybox">
+            <StoreBadges IsNew="@Product.IsNew" IsFeatured="@Product.IsFeatured" Discount="@Discount" />
+            <h1 class="h3 mt-2 mb-1">@Product.Name<HelpLink Slug="shopping-at-the-store" Anchor="options-and-prices" /></h1>
+            @if (Product.Reviews.Count > 0)
+            {
+                <a class="ben-link-muted small" href="@($"/store/p/{Product.Slug}#reviews")"><StoreStars Rating="@Product.Reviews.Average" Count="@Product.Reviews.Count" /></a>
+            }
+            @if (!string.IsNullOrWhiteSpace(Product.ShortDescription))
+            {
+                <p class="text-secondary mt-2">@Product.ShortDescription</p>
+            }
+
+            <div class="my-3" data-testid="product-price">
+                @if (Chosen is { } v)
+                {
+                    <StorePrice Price="@v.Price" Was="@v.CompareAtPrice" Large="true" />
+                }
+                else if (Product.Variants.Count > 0)
+                {
+                    <StorePrice Price="@Product.Variants.Min(x => x.Price)" Max="@Product.Variants.Max(x => x.Price)" Large="true" />
+                }
+            </div>
+
+            <StoreOptionPicker Options="Product.Options" Variants="Product.Variants" Selected="_selected" SelectedChanged="OnChoiceChanged" />
+
+            <div class="small mb-3">
+                @if (Chosen is { } variant)
+                {
+                    <div class="text-secondary">SKU <span class="font-monospace" data-testid="product-sku">@variant.Sku</span></div>
+                    <div data-testid="product-stock">
+                        @if (variant.Available <= 0) { <span class="text-danger fw-semibold">Sold out</span> }
+                        else if (variant.Available <= Product.LowStockThreshold) { <span class="ben-store-note--low fw-semibold">Only @variant.Available left</span> }
+                        else { <span class="text-success">In stock</span> }
+                    </div>
+                }
+                else if (Product.Variants.Count == 0)
+                {
+                    <div class="text-secondary" data-testid="product-stock">Nothing to choose yet — no variant is switched on.</div>
+                }
+                else
+                {
+                    <div class="text-secondary" data-testid="product-stock">Choose @string.Join(" and ", Product.Options.Where(o => !_selected.ContainsKey(o.Id)).Select(o => o.Name.ToLowerInvariant())).</div>
+                }
+            </div>
+
+            @BuyControls(Chosen)
+
+            @if (Info is { CheckoutEnabled: false })
+            {
+                <p class="small text-secondary mt-2 mb-0" data-testid="store-paused">The store isn't taking orders at the moment.</p>
+            }
+
+            <div class="mt-4">
+                @if (Info is { } info)
+                {
+                    <details class="ben-accordion">
+                        <summary>Delivery</summary>
+                        <div>
+                            @if (info.FreeShippingOver is { } over)
+                            {
+                                <p class="mb-0">Free on orders over @StoreMoney.Format(over)@(info.ShippingFlatRate > 0 ? $"; otherwise {StoreMoney.Format(info.ShippingFlatRate)} an order" : "").</p>
+                            }
+                            else
+                            {
+                                <p class="mb-0">@(info.ShippingFlatRate > 0 ? $"{StoreMoney.Format(info.ShippingFlatRate)} an order" : "Free"), anywhere in the United States.</p>
+                            }
+                        </div>
+                    </details>
+                    <details class="ben-accordion">
+                        <summary>Returns</summary>
+                        <div><p class="mb-0">@(Product.ReturnsWindowDays > 0 ? $"Send it back within {Product.ReturnsWindowDays} days of delivery." : "Ask us about a return.")</p></div>
+                    </details>
+                    <details class="ben-accordion">
+                        <summary>Need help?</summary>
+                        <div>
+                            <p class="mb-0">
+                                @if (!string.IsNullOrWhiteSpace(info.SupportEmail))
+                                {
+                                    <span>Write to <a href="@($"mailto:{info.SupportEmail}")">@info.SupportEmail</a>.</span>
+                                }
+                                else
+                                {
+                                    <a href="/contact">Get in touch</a>
+                                }
+                            </p>
+                        </div>
+                    </details>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Product.LongDescriptionHtml))
+{
+    <section class="mb-5" aria-labelledby="about-heading">
+        <h2 class="h4" id="about-heading">About the @Product.Name</h2>
+        @* The store page's copy was sanitised when it was saved (AdminStoreProductController.Update).
+           In the editor's preview it is the draft the editor itself is already showing, in the
+           same browser, to the person typing it. Global prose class: a scoped one would never
+           reach inside HTML a person wrote. *@
+        <div class="ben-store-description" data-testid="product-description">@((MarkupString)Product.LongDescriptionHtml)</div>
+        <p class="small text-secondary mt-3 mb-0">Last updated on @Product.LastUpdatedUtc.ToViewerLocalTime(UserState).ToDisplayDate()</p>
+    </section>
+}
+
+@if (Product.Specs.Count > 0)
+{
+    <section class="mb-5" aria-labelledby="specs-heading">
+        <h2 class="h4" id="specs-heading">Specifications</h2>
+        @foreach (var group in Product.Specs)
+        {
+            <h3 class="h6 mt-3">@group.GroupName</h3>
+            <table class="table table-sm ben-specs mb-0">
+                <tbody>
+                    @foreach (var spec in group.Items)
+                    {
+                        <tr><th scope="row">@spec.Name</th><td>@spec.Value</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+}
+
+@if (Product.Equipment is { } model)
+{
+    <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalogue</a></p>
+}
+
+<section class="mb-5" id="reviews" aria-labelledby="reviews-heading">
+    <h2 class="h4" id="reviews-heading">Reviews</h2>
+    @if (Product.Reviews.Count == 0)
+    {
+        <p class="text-secondary">No reviews yet.</p>
+    }
+    else
+    {
+        <p><StoreStars Rating="@Product.Reviews.Average" Count="@Product.Reviews.Count" /> <span class="ms-1">@Product.Reviews.Average.ToString("0.0") out of 5</span></p>
+    }
+    @* The reviews themselves, sorting and writing one arrive with S6. *@
+</section>
+
+<StoreProductRail Title="More from this shelf" Cards="Product.Related" MoreHref="@($"/store/c/{Product.CategorySlug}")" TestId="rail-related" />
+
+@code {
+    [Parameter, EditorRequired] public StoreProductDetail Product { get; set; } = default!;
+
+    /// <summary>The store's own facts — delivery, the pause switch, who to write to.</summary>
+    [Parameter] public StorePublicInfo? Info { get; set; }
+
+    /// <summary>Replaces the "Preview — shoppers can't see this" banner (the editor says what its preview is).</summary>
+    [Parameter] public RenderFragment? Banner { get; set; }
+
+    private IReadOnlyDictionary<Guid, Guid> _selected = new Dictionary<Guid, Guid>();
+    private Guid? _selectedFor;
+
+    private StoreVariantPublicRecord? Chosen => StoreOptionPicker.VariantFor(Product.Options, Product.Variants, _selected);
+
+    private int? Discount => Chosen is { CompareAtPrice: { } was } v && was > v.Price ? (int)Math.Floor((was - v.Price) / was * 100m) : null;
+
+    protected override void OnParametersSet()
+    {
+        // A new product starts from its default choices. The same one redrawn — the editor's
+        // preview rebuilds it on every keystroke — keeps what the person picked, less any value
+        // that has since been switched off.
+        var offered = Product.Options.SelectMany(o => o.Values.Select(v => (o.Id, v.Id))).ToHashSet();
+        if (_selectedFor != Product.Id || _selected.Any(kv => !offered.Contains((kv.Key, kv.Value))))
+        {
+            _selected = StoreOptionPicker.StartingChoices(Product.Options, Product.Variants);
+            _selectedFor = Product.Id;
+        }
+    }
+
+    private void OnChoiceChanged(IReadOnlyDictionary<Guid, Guid> selected) => _selected = selected;
+
+    /// <summary>Add to cart and the quantity land here in S3.5; the heart in S6.3.</summary>
+    private RenderFragment BuyControls(StoreVariantPublicRecord? chosen) => __builder =>
+    {
+        if (Product.IsPreview || chosen is { Available: <= 0 })
+        {
+            <button type="button" class="btn btn-secondary btn-lg w-100" disabled data-testid="sold-out-button">
+                @(Product.IsPreview ? "Not on sale" : "Sold out")
+            </button>
+        }
+    };
+}

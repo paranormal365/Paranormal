@@ -59,6 +59,47 @@ public class AdminStoreCatalogTests : BenTestBase
     }
 
     [Test]
+    [Description("The editor's Preview draws the product page from the unsaved form, with the store switched off (Ben, 09/24/2026).")]
+    public async Task The_preview_shows_unsaved_work_while_the_store_is_dark()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var categoryId = await api.CategoryAsync(Unique("Trigger Objects"));
+        var product = await api.ProductAsync(categoryId, Unique("Cat Ball"), price: 24.5m);
+        var id = product.GetProperty("id").GetGuid();
+
+        var wasOn = await SetTheStoreAsync(on: false);
+        try
+        {
+            // The products list's Preview opens the editor on its Preview tab — not the store's own
+            // address, which is behind the store switch and answers "Page not found" while it is off.
+            await Page.GotoAsync($"{BaseUrl}/admin/store/products");
+            await WaitForTheCircuitAsync();
+            var name = product.GetProperty("name").GetString()!;
+            await FillAndConfirmAsync("#products-search", name);
+            var row = Page.Locator("[data-testid=product-row]").Filter(new() { HasText = name });
+            await Expect(row).ToHaveCountAsync(1, new() { Timeout = 15_000 });
+            await ClickUntilUrlAsync(row.Locator("[data-testid=product-preview]"), "tab=preview");
+            await Expect(Page.Locator("[data-testid=editor-preview-page]")).ToContainTextAsync("$24.50", new() { Timeout = 30_000 });
+            await Expect(Page.Locator("[data-testid=editor-preview-page]")).ToContainTextAsync("Not on sale");
+
+            // Typed on the Details tab and NOT saved: the preview draws it anyway.
+            var typed = Unique("Cat Ball Mk II");
+            await OpenTabAsync("Details", Page.Locator("#product-name"));
+            await SetAsync("#product-name", typed);
+            await SetAsync("#product-short", "Lights up when something touches it.");
+            await ClickUntilAsync(Page.Locator("[data-testid=product-preview]").First, Page.Locator("[data-testid=editor-preview-page]"));
+            await Expect(Page.Locator("[data-testid=editor-preview-page] h1")).ToContainTextAsync(typed);
+            await Expect(Page.Locator("[data-testid=editor-preview-page]")).ToContainTextAsync("Lights up when something touches it.");
+            await Expect(Page.Locator("[data-testid=editor-preview]")).ToContainTextAsync("unsaved changes");
+
+            // Still unsaved: the product itself has its old name.
+            var stored = await api.SendAsync(HttpMethod.Get, $"/api/admin/store/products/{id}");
+            Assert.That(stored.GetProperty("name").GetString(), Is.EqualTo(product.GetProperty("name").GetString()));
+        }
+        finally { await PutTheStoreBackAsync(wasOn); }
+    }
+
+    [Test]
     [Description("A product goes from a name to on sale: picture, options, four variants, a price, stock, activate.")]
     public async Task A_product_goes_from_nothing_to_on_sale()
     {

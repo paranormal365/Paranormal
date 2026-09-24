@@ -316,6 +316,21 @@ illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" r
   hidden drafts, an admin sets the price and puts an item on sale, a seller can take their own
   item off sale, and edits to a live item show immediately.
 
+## Live preview in the product editor (built 09/24/2026, Ben's request)
+- Ben: "have a preview button so you can see a preview of the store page as it is being
+  configured and created." The editor's **Preview** tab (and its header button, and the products
+  list's Preview action, `/admin/store/products/{id}/edit?tab=preview`) draws the product page
+  from the form as it stands, saved or not.
+- ONE component: the product page's body moved into `Store/Shared/StoreProductView.razor`, which
+  both `/store/p/{slug}` and the editor draw. `StoreProductPreview.Build` (Ben.Service.Models)
+  applies the public page's rules to the admin record plus the unsaved drafts: live variants
+  only, option values a live variant uses, an old price only when higher, "New" to the end of the
+  day.
+- Found on the way: the old Preview (`/store/p/{slug}?preview=1`) is behind the store switch, so
+  with the shop dark — the catalogue-entry period it existed for — it answered "Page not found".
+  The editor's preview is built in the page and works dark; "Open the saved page" shows only
+  when the store is on.
+
 ## Queued after S8: Ben's store enhancements (09/24/2026)
 Ben's `Store Enhancements.md` list is backlog item 251 in `ProjectNotes/Future-Improvements.md`.
 It is to be started once the store ships. Nothing in it changes S3–S8.

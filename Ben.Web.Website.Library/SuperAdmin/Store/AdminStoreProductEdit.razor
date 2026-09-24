@@ -1,9 +1,11 @@
 @page "/admin/store/products/{ProductId:guid}/edit"
+@using Ben.Web.Website.Library.Store.Shared
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IMediaUrlBuilder MediaUrls
 @inject BenToastService Toasts
+@inject SiteFeaturesProvider Features
 
 <PageTitle>SuperAdmin — @(_product?.Name ?? "Product")</PageTitle>
 
@@ -12,6 +14,10 @@
     variant's price and stock, and its pictures. Every refusal lands on the page in the server's
     words — the variant grid's under the grid (#variant-refusal), because a per-row Save whose
     "no" vanished would look exactly like a Save that worked.
+
+    The Preview tab (Ben, 09/24/2026) is the product page as a shopper will see it, drawn from
+    what is on the form now — saved or not — by the same component the store uses. It works with
+    the store switched off, which the store's own address does not.
 *@
 
 <div class="container-fluid px-3" style="max-width:72rem;">
@@ -31,7 +37,9 @@
                     </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-outline-secondary" data-testid="product-preview" href="@($"{p.PublicUrl}?preview=1")" target="_blank" rel="noopener">Preview</a>
+                    <button type="button" class="btn btn-outline-secondary" data-testid="product-preview" @onclick="@(() => _tab = "preview")">
+                        <BenIcon Name="eye" /> Preview
+                    </button>
                     @if (p.IsActive)
                     {
                         <button type="button" class="btn btn-outline-warning" id="product-deactivate" disabled="@_busy" @onclick="DeactivateAsync">Take off sale</button>
@@ -323,6 +331,35 @@
                         </div>
                     </div>
                 </BenTab>
+
+                <BenTab Title="Preview" Id="preview">
+                    <div class="pt-3">
+                        <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="editor-preview">
+                            <div class="flex-grow-1">
+                                <strong>How shoppers will see this page.</strong>
+                                @if (_dirty)
+                                {
+                                    <span>It shows your unsaved changes — press <strong>Save</strong> on the Details tab to keep them.</span>
+                                }
+                                else
+                                {
+                                    <span>It follows the form as you edit.</span>
+                                }
+                                @if (!p.IsActive)
+                                {
+                                    <span>It isn't on sale yet, so the button reads "Not on sale".</span>
+                                }
+                            </div>
+                            @if (Features.IsOn(SiteFeatures.Store))
+                            {
+                                <a class="btn btn-sm btn-outline-secondary" href="@($"{p.PublicUrl}?preview=1")" target="_blank" rel="noopener">Open the saved page</a>
+                            }
+                        </div>
+                        <div class="border rounded-3 p-3 bg-body" data-testid="editor-preview-page">
+                            <StoreProductView Product="@PreviewDetail(p)" Info="@PreviewInfo" Banner="@NoBanner" />
+                        </div>
+                    </div>
+                </BenTab>
             </BenTabs>
         </ChildContent>
     </BenItemState>
@@ -397,6 +434,9 @@
 @code {
     [Parameter] public Guid ProductId { get; set; }
 
+    /// <summary>Which tab to open on — the products list's Preview action opens "preview".</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
     private ItemResult<StoreProductAdminRecord> _result;
     private StoreProductAdminRecord? _product;
     private LoadResult<StoreCategoryAdminRecord> _categories;
@@ -406,6 +446,40 @@
     private bool _busy;
     private bool _dirty;
     private string? _tab = "details";
+    private ItemResult<StoreSettingsAdminRecord> _settings;
+
+    /// <summary>The preview's own note replaces the page's "shoppers can't see this" banner.</summary>
+    private static readonly RenderFragment NoBanner = _ => { };
+
+    /// <summary>The product page, built from the form as it stands.</summary>
+    private StoreProductDetail PreviewDetail(StoreProductAdminRecord saved)
+    {
+        var category = _categories.Items.FirstOrDefault(c => c.Id == _details.CategoryId);
+        var model = _models.Items.FirstOrDefault(m => m.Id == _details.EquipmentModelId);
+        var settings = _settings.Item;
+        return StoreProductPreview.Build(saved,
+            new StoreProductPreviewDraft(
+                _details.Name, _details.ShortDescription, _details.LongDescriptionHtml, _details.IsFeatured,
+                _details.NewUntil, SpecGroups(),
+                _variants.ToDictionary(kv => kv.Key, kv => new StoreVariantPreviewDraft(kv.Value.Price, kv.Value.CompareAtPrice, kv.Value.IsActive))),
+            new StoreProductPreviewContext(
+                category?.Name ?? saved.CategoryName, category?.Slug ?? "",
+                model is { UrlName: { } modelSlug, BrandUrlName: { } brandSlug } ? new StoreEquipmentLink(model.BrandName, brandSlug, model.Name, modelSlug) : null,
+                settings?.LowStockThreshold ?? 3, settings?.ReturnsWindowDays ?? 30, DateTime.UtcNow));
+    }
+
+    /// <summary>Delivery, returns and "need help", from the store settings.</summary>
+    private StorePublicInfo? PreviewInfo => _settings.Item is { } s
+        ? new StorePublicInfo(s.CheckoutEnabled, s.ShippingFlatRate ?? 0m, s.FreeShippingThreshold is > 0m ? s.FreeShippingThreshold : null,
+            s.ReturnsWindowDays ?? 30, s.SupportEmail, PaymentsEnabled: false, FakeCheckout: false, PublishableKey: null)
+        : null;
+
+    /// <summary>The specification lines as the page groups them — the save and the preview share it.</summary>
+    private List<StoreSpecGroup> SpecGroups() => _details.Specs
+        .Where(s => !string.IsNullOrWhiteSpace(s.Name) || !string.IsNullOrWhiteSpace(s.Value))
+        .GroupBy(s => s.Group.Trim())
+        .Select(g => new StoreSpecGroup(g.Key, g.Select(s => new StoreSpecRecord(s.Name, s.Value)).ToList()))
+        .ToList();
     private string? _pageError, _detailsError, _optionsError, _variantError, _pictureError;
 
     private DetailsForm _details = new();
@@ -483,6 +557,8 @@
         _categories = await AdminClient.GetStoreCategoriesAsync();
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
+        _settings = await AdminClient.GetStoreSettingsAsync();
+        if (Tab is "details" or "variants" or "pictures" or "preview") _tab = Tab;
         await LoadAsync();
     }
 
@@ -547,11 +623,7 @@
         _busy = true; _detailsError = null;
         try
         {
-            var specs = _details.Specs
-                .Where(s => !string.IsNullOrWhiteSpace(s.Name) || !string.IsNullOrWhiteSpace(s.Value))
-                .GroupBy(s => s.Group.Trim())
-                .Select(g => new StoreSpecGroup(g.Key, g.Select(s => new StoreSpecRecord(s.Name, s.Value)).ToList()))
-                .ToList();
+            var specs = SpecGroups();
             var (saved, error) = await AdminClient.SaveStoreProductAsync(ProductId, new SaveStoreProductRequest(
                 _details.CategoryId, _details.EquipmentModelId, _details.Name, _details.Slug, _details.ShortDescription,
                 _details.LongDescriptionHtml, _details.IsFeatured, // A day, not an instant: "new until 10/31" is stored as that date.

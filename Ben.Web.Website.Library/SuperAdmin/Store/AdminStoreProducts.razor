@@ -10,8 +10,10 @@
 @*
     Every product, live or not (storefront S1.11). A product that is switched on but whose
     category is hidden reads "Hidden (category)", not "Live" — a badge that says Live about
-    something nobody can buy is the kind of screen that lies. "Preview" opens the product page as
-    a SuperAdmin sees it, which works before it goes on sale and while the shop is dark.
+    something nobody can buy is the kind of screen that lies. "Preview" opens the editor's Preview
+    tab — the product page drawn by the store's own component — which works before it goes on sale
+    and while the shop is dark. (It used to open /store/p/…?preview=1, which is behind the store
+    switch: with the shop dark it answered "Page not found".)
 *@
 
 <div class="container-fluid px-3" style="max-width:80rem;">
@@ -94,8 +96,8 @@
                             <td>
                                 <span class="text-nowrap">
                                     <BenGridAction Icon="edit-2" Label="Edit" Href="@($"/admin/store/products/{p.Id}/edit")" />
-                                    <BenGridAction Icon="external-link" Label="Preview" Href="@($"/store/p/{p.Slug}?preview=1")"
-                                                   data-testid="product-preview" target="_blank" rel="noopener" />
+                                    <BenGridAction Icon="external-link" Label="Preview" Href="@($"/admin/store/products/{p.Id}/edit?tab=preview")"
+                                                   data-testid="product-preview" />
                                     @if (Features.IsOn(SiteFeatures.Store) && p.IsActive && !p.HiddenByCategory)
                                     {
                                         <BenGridAction Icon="eye" Label="Open on the store" Href="@($"/store/p/{p.Slug}")"
