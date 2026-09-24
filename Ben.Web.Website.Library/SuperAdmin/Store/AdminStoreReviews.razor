@@ -69,7 +69,7 @@
                         }
                         @if (r.Status != StoreReviewStatus.Rejected)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-warning" data-testid="review-reject" disabled="@_busy" @onclick="@(() => OpenReject(r))">Refuse…</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="review-reject" disabled="@_busy" @onclick="@(() => OpenReject(r))">Refuse…</button>
                         }
                         @if (r.Status == StoreReviewStatus.Approved)
                         {

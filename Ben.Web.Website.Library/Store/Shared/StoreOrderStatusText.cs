@@ -21,13 +21,15 @@ public static class StoreOrderStatusText
     };
 
     /// <summary>The Bootstrap colour name: text-{tone}, bg-{tone}-subtle.</summary>
+    /// <remarks>Paid and Packed were "info", which this theme draws at 4.43:1 on a dark card — under
+    /// the 4.5 that small text needs (visual audit, 09/24). Amber reads as "on its way through"; a
+    /// checkout never paid for is not an order yet, so it is the quiet grey.</remarks>
     public static string Tone(StoreOrderStatus status) => status switch
     {
         StoreOrderStatus.Delivered => "success",
         StoreOrderStatus.Shipped => "primary",
-        StoreOrderStatus.Paid or StoreOrderStatus.Packed => "info",
+        StoreOrderStatus.Paid or StoreOrderStatus.Packed => "warning",
         StoreOrderStatus.Cancelled => "danger",
-        StoreOrderStatus.PendingPayment => "warning",
         _ => "secondary",
     };
 }
