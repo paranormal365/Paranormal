@@ -297,6 +297,13 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
     at the end of the page. Now fixed-position like Smarty's, with a spacer; Checkout_fits_a_phone
     asserts it is at the bottom of the screen, which the first version of the test did not.
   - The lock beside "All transactions are secured" and the thank-you tick's colour.
+- (S4.12) Seven demo orders (StoreDemoSeeder.SeededOrders): Sarah's paid, shipped (USPS), delivered with
+  GHOST10, refunded and abandoned; a guest's (morgan.guest@example.com); James's delivered. They take
+  the NEXT FREE numbers, not #100001–#100007 as planned — a database that has taken orders already
+  holds those, and the number is unique — so tests open them by fixed id. History, not sales: stock
+  untouched, a seed_ tax transaction id so StoreTaxRetryJob skips them, the abandoned one already
+  released. Development seeds only (SeedData:DevData:Enabled; the dev settings name
+  IsHauntedDb_player, production has it off). Six breaks, all caught.
 - (S4.11) Not in the browser suite: "Without Stripe the checkout says so" needs a host with no keys
   and no fake — the refusal (PaymentsNotSetUp, 503 prose) is covered by StoreCheckoutServiceTests.
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one

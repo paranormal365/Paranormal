@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Store;
+using Ben.Service.Models.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SkiaSharp;
@@ -184,6 +185,185 @@ internal static class StoreDemoSeeder
             });
             await db.SaveChangesAsync(ct);
         }
+
+        await SeedOrdersAsync(db, now, ct);
+    }
+
+    // ── Orders (storefront S4.12) ────────────────────────────────────────────
+
+    internal const string SarahEmail = "sarah.mitchell@benco.dev";
+    internal const string JamesEmail = "james.thornton@benco.dev";
+    internal const string GuestEmail = "morgan.guest@example.com";
+
+    /// <summary>The seeded orders' fixed ids, for the tests that open them.</summary>
+    internal static class SeededOrders
+    {
+        public static readonly Guid SarahPaid = Id(101), SarahShipped = Id(102), SarahDelivered = Id(103), SarahRefunded = Id(104),
+            Guest = Id(105), JamesDelivered = Id(106), SarahAbandoned = Id(107);
+    }
+
+    private sealed record LineSeed(string Sku, int Quantity);
+
+    private sealed record OrderSeed(
+        Guid Id, string Email, StoreOrderStatus Status, LineSeed[] Lines, decimal Shipping, decimal TaxRate, bool TaxShipping,
+        string State, string City, string Zip, int DaysAgo, bool Coupon = false, bool Refunded = false, bool Abandoned = false);
+
+    /// <summary>
+    /// Seven orders in the shapes the order pages have to draw (plan S4.12): Sarah's paid, shipped,
+    /// delivered-with-a-code, refunded and abandoned checkouts; a guest's; James's delivered one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>History, not sales.</b> Stock is not touched and no tax is filed: each paid order
+    /// carries a <c>seed_</c> tax transaction id so StoreTaxRetryJob leaves it alone, and the
+    /// abandoned one is already released so the expiry service does too.</para>
+    ///
+    /// <para><b>Numbers are the next free ones</b>, not #100001–#100007 as first planned: a database
+    /// that has taken real (or test) orders already holds those numbers, and the number is unique.
+    /// Tests find these orders by their fixed ids.</para>
+    ///
+    /// <para><b>The money adds up</b> the way the checkout's does: each line's tax is on its total
+    /// less its discount, shipping's tax is its own figure, and Subtotal − Discount + Shipping + Tax =
+    /// Total to the cent (StoreDemoSeederTests.Orders_balance_to_the_cent).</para>
+    /// </remarks>
+    private static async Task SeedOrdersAsync(BenDataContext db, DateTime now, CancellationToken ct)
+    {
+        OrderSeed[] orders =
+        [
+            new(SeededOrders.SarahPaid, SarahEmail, StoreOrderStatus.Paid, [new("KII-EMF", 1)], 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 1),
+            new(SeededOrders.SarahShipped, SarahEmail, StoreOrderStatus.Shipped, [new("H1N-BLACK", 1)], 0m, 0.0925m, false, "TN", "Nashville", "37203", 6),
+            new(SeededOrders.SarahDelivered, SarahEmail, StoreOrderStatus.Delivered, [new("BAG-OLV-STD", 2)], 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 20, Coupon: true),
+            new(SeededOrders.SarahRefunded, SarahEmail, StoreOrderStatus.Refunded, [new("PSB7-BLACK", 1)], 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 35, Refunded: true),
+            new(SeededOrders.Guest, GuestEmail, StoreOrderStatus.Paid, [new("KII-EMF", 1), new("BAG-BLK-STD", 1)], 0m, 0.06m, false, "KY", "Louisville", "40202", 2),
+            new(SeededOrders.JamesDelivered, JamesEmail, StoreOrderStatus.Delivered, [new("BAG-BLK-LRG", 1)], 7.95m, 0.07m, false, "IN", "Indianapolis", "46204", 14),
+            new(SeededOrders.SarahAbandoned, SarahEmail, StoreOrderStatus.PendingPayment, [new("KII-EMF", 1)], 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 3, Abandoned: true),
+        ];
+
+        var skus = orders.SelectMany(o => o.Lines).Select(l => l.Sku).Distinct().ToList();
+        var variants = await db.StoreProductVariants.AsNoTracking().Include(v => v.Product)
+            .Where(v => skus.Contains(v.Sku)).ToDictionaryAsync(v => v.Sku, ct);
+        var productIds = variants.Values.Select(v => v.ProductId).ToList();
+        var pictures = (await db.StoreProductImages.AsNoTracking().Where(i => productIds.Contains(i.ProductId))
+                .Select(i => new { i.ProductId, i.VariantId, i.UploadFileId, i.SortOrder }).ToListAsync(ct))
+            .Select(i => (i.ProductId, i.VariantId, i.UploadFileId, i.SortOrder)).ToList();
+        var emails = orders.Select(o => o.Email.ToUpperInvariant()).Distinct().ToList();
+        var people = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail != null && emails.Contains(u.NormalizedEmail))
+            .ToDictionaryAsync(u => u.NormalizedEmail!, ct);
+
+        foreach (var seed in orders)
+        {
+            if (await db.StoreOrders.AnyAsync(o => o.Id == seed.Id, ct)) continue;
+            if (seed.Lines.Any(l => !variants.ContainsKey(l.Sku))) continue;
+            var buyer = seed.Email == GuestEmail ? null : people.GetValueOrDefault(seed.Email.ToUpperInvariant());
+            if (seed.Email != GuestEmail && buyer is null) continue;   // that demo person is not on this database
+
+            var placed = now.AddDays(-seed.DaysAgo);
+            var order = BuildOrder(seed, buyer, variants, pictures, placed);
+            db.StoreOrders.Add(order);
+            await StoreOrderNumbers.SaveNumberedAsync(db, order, ct);
+
+            if (seed.Coupon)
+            {
+                db.StoreCouponRedemptions.Add(new StoreCouponRedemption
+                {
+                    Id = Guid.NewGuid(), CouponId = CouponId, OrderId = order.Id, BuyerEmailNormalized = order.BuyerEmailNormalized,
+                    BuyerAppUserId = buyer?.Id, DiscountAmount = order.DiscountAmount, RedeemedUtc = placed,
+                });
+                await db.StoreCoupons.Where(c => c.Id == CouponId)
+                    .ExecuteUpdateAsync(u => u.SetProperty(c => c.RedemptionCount, c => c.RedemptionCount + 1), ct);
+                await db.SaveChangesAsync(ct);
+            }
+        }
+    }
+
+    private static StoreOrder BuildOrder(OrderSeed seed, AppUser? buyer, IReadOnlyDictionary<string, StoreProductVariant> variants,
+        List<(Guid ProductId, Guid? VariantId, Guid UploadFileId, int SortOrder)> pictures, DateTime placed)
+    {
+        var id = seed.Id;
+        var n = (int)(id.ToByteArray()[^1]);
+        var name = buyer is null ? "Morgan Guest" : $"{buyer.FirstName} {buyer.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(name)) name = seed.Email;
+
+        var items = seed.Lines.Select(l =>
+        {
+            var v = variants[l.Sku];
+            var lineTotal = StoreMoney.Round(v.Price * l.Quantity);
+            var discount = seed.Coupon ? StoreMoney.Round(lineTotal * 0.10m) : 0m;
+            return new StoreOrderItem
+            {
+                Id = Guid.NewGuid(), OrderId = id, ProductId = v.ProductId, VariantId = v.Id, ProductName = v.Product.Name,
+                VariantName = string.IsNullOrWhiteSpace(v.Name) ? null : v.Name, Sku = v.Sku, UnitPrice = v.Price,
+                CompareAtPrice = v.CompareAtPrice is { } was && was > v.Price ? was : null, Quantity = l.Quantity, LineTotal = lineTotal, LineDiscount = discount,
+                TaxAmount = StoreMoney.Round((lineTotal - discount) * seed.TaxRate), StripeTaxCode = v.Product.StripeTaxCode,
+                QuantityRefunded = seed.Refunded ? l.Quantity : 0, QuantityRestocked = 0,
+                ImageUploadFileId = pictures.Where(x => x.VariantId == v.Id).OrderBy(x => x.SortOrder).Select(x => (Guid?)x.UploadFileId).FirstOrDefault()
+                                    ?? pictures.Where(x => x.ProductId == v.ProductId).OrderBy(x => x.SortOrder).Select(x => (Guid?)x.UploadFileId).FirstOrDefault(),
+                DateCreated = placed,
+            };
+        }).ToList();
+
+        var subtotal = items.Sum(i => i.LineTotal);
+        var discountTotal = items.Sum(i => i.LineDiscount);
+        var shippingTax = seed.TaxShipping ? StoreMoney.Round(seed.Shipping * seed.TaxRate) : 0m;
+        var tax = items.Sum(i => i.TaxAmount) + shippingTax;
+        var total = subtotal - discountTotal + seed.Shipping + tax;
+        var paid = seed.Abandoned ? (DateTime?)null : placed.AddMinutes(2);
+
+        var order = new StoreOrder
+        {
+            Id = id, Status = seed.Status, BuyerAppUserId = buyer?.Id, BuyerEmail = seed.Email,
+            BuyerEmailNormalized = StoreEmail.Normalize(seed.Email), BuyerName = name,
+            ShipName = name, ShipPhone = "615-555-01" + n.ToString("D2"), ShipStreet1 = $"{100 + n} Elm Street", ShipCity = seed.City,
+            ShipState = seed.State, ShipZip = seed.Zip, ShipCountry = "US", BillingSameAsShipping = true,
+            Subtotal = subtotal, DiscountAmount = discountTotal, ShippingAmount = seed.Shipping, TaxAmount = tax,
+            ShippingTaxAmount = shippingTax, Total = total, RefundedAmount = seed.Refunded ? total : 0m,
+            CouponId = seed.Coupon ? CouponId : null, CouponCode = seed.Coupon ? CouponCode : null,
+            CartFingerprint = $"seed-{n}", StripePaymentIntentId = seed.Abandoned ? null : $"seed_pi_{n}",
+            StripeChargeId = seed.Abandoned ? null : $"seed_ch_{n}", StripeTaxCalculationId = $"seed_taxcalc_{n}",
+            StripeTaxTransactionId = seed.Abandoned ? null : $"seed_taxtxn_{n}",
+            AccessToken = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)),
+            ReservationExpiresUtc = placed.AddMinutes(15), ReservationReleasedUtc = seed.Abandoned ? placed.AddMinutes(16) : null,
+            PlacedUtc = placed, PaidUtc = paid, DateCreated = placed, DateUpdated = placed,
+            Items = items,
+        };
+
+        void Event(StoreOrderEventKind kind, DateTime at, StoreOrderStatus? to = null, string? note = null, decimal? amount = null)
+            => order.Events.Add(new StoreOrderEvent { Id = Guid.NewGuid(), OrderId = id, Kind = kind, ToStatus = to, Note = note, Amount = amount, OccurredUtc = at });
+
+        Event(StoreOrderEventKind.Placed, placed, StoreOrderStatus.PendingPayment);
+        if (seed.Abandoned)
+        {
+            Event(StoreOrderEventKind.ReservationExpired, placed.AddMinutes(16), note: "The buyer left without paying.");
+            return order;
+        }
+        Event(StoreOrderEventKind.PaymentSucceeded, paid!.Value, StoreOrderStatus.Paid, amount: total);
+
+        if (seed.Status is StoreOrderStatus.Shipped or StoreOrderStatus.Delivered)
+        {
+            order.PackedUtc = paid.Value.AddHours(20);
+            order.ShippedUtc = paid.Value.AddDays(1);
+            order.Carrier = "USPS";
+            order.TrackingNumber = $"9400 1000 0000 0000 0000 {n:D2}";
+            order.TrackingUrl = $"https://tools.usps.com/go/TrackConfirmAction?tLabels=94001000000000000000{n:D2}";
+            Event(StoreOrderEventKind.Packed, order.PackedUtc.Value, StoreOrderStatus.Packed);
+            Event(StoreOrderEventKind.Shipped, order.ShippedUtc.Value, StoreOrderStatus.Shipped, note: "USPS");
+        }
+        if (seed.Status == StoreOrderStatus.Delivered)
+        {
+            order.DeliveredUtc = paid.Value.AddDays(4);
+            Event(StoreOrderEventKind.Delivered, order.DeliveredUtc.Value, StoreOrderStatus.Delivered);
+        }
+        if (seed.Refunded)
+        {
+            var at = paid.Value.AddDays(3);
+            order.Refunds.Add(new StoreRefund
+            {
+                Id = Guid.NewGuid(), OrderId = id, Amount = total, TaxReversed = tax, Reason = "Arrived damaged", Restock = false,
+                Status = StoreRefundStatus.Succeeded, StripeRefundId = $"seed_re_{n}", StripeTaxReversalId = $"seed_taxrev_{n}",
+                DateCreated = at, CompletedUtc = at,
+            });
+            Event(StoreOrderEventKind.RefundSucceeded, at, StoreOrderStatus.Refunded, note: "Arrived damaged", amount: total);
+        }
+        return order;
     }
 
     private sealed record OptionSeed(string Name, StoreOptionKind Kind, (string Value, string? Hex)[] Values);

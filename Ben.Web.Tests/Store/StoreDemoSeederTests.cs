@@ -10,7 +10,7 @@ namespace Ben.Web.Tests.Store;
 /// </summary>
 public sealed class StoreDemoSeederTests
 {
-    private static async Task<(SqliteTestDb Db, Guid Owner)> SeededAsync(int times = 1)
+    private static async Task<(SqliteTestDb Db, Guid Owner)> SeededAsync(int times = 1, bool withPeople = false)
     {
         var sqlite = await SqliteTestDb.CreateAsync();
         Guid owner;
@@ -18,6 +18,13 @@ public sealed class StoreDemoSeederTests
         {
             var admin = StoreTestData.Person(db);
             StoreTestData.StoreImageType(db, admin);
+            if (withPeople)
+                foreach (var (email, first) in new[] { (StoreDemoSeeder.SarahEmail, "Sarah"), (StoreDemoSeeder.JamesEmail, "James") })
+                    db.AppUsers.Add(new Ben.Data.Source.Entities.AppUser
+                    {
+                        Id = Guid.NewGuid(), UserName = email, Email = email, NormalizedEmail = email.ToUpperInvariant(),
+                        FirstName = first, LastName = "Demo", DateCreated = DateTime.UtcNow,
+                    });
             await db.SaveChangesAsync();
             owner = admin.Id;
         }
@@ -121,5 +128,88 @@ public sealed class StoreDemoSeederTests
         }
         await using var again = await sqlite.NewContextAsync();
         Assert.Equal("store/moved.jpg", (await again.UploadFiles.AsNoTracking().SingleAsync(f => f.Id == shelfPicture)).StoragePath);
+    }
+
+    // ── Orders (S4.12) ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Orders_balance_to_the_cent()
+    {
+        var (sqlite, _) = await SeededAsync(withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+        var orders = await db.StoreOrders.Include(o => o.Items).ToListAsync();
+
+        Assert.Equal(7, orders.Count);
+        Assert.All(orders, o =>
+        {
+            Assert.Equal(o.Total, o.Subtotal - o.DiscountAmount + o.ShippingAmount + o.TaxAmount);
+            Assert.Equal(o.Subtotal, o.Items.Sum(i => i.LineTotal));
+            Assert.Equal(o.DiscountAmount, o.Items.Sum(i => i.LineDiscount));
+            Assert.Equal(o.TaxAmount, o.Items.Sum(i => i.TaxAmount) + o.ShippingTaxAmount);
+            Assert.Equal(Ben.Service.Models.Store.StoreMoney.Cents(o.Total),
+                Ben.Service.Models.Store.StoreMoney.Cents(o.Subtotal) - Ben.Service.Models.Store.StoreMoney.Cents(o.DiscountAmount)
+                + Ben.Service.Models.Store.StoreMoney.Cents(o.ShippingAmount) + Ben.Service.Models.Store.StoreMoney.Cents(o.TaxAmount));
+            Assert.True(o.Total > 0);
+        });
+        // The shapes the order pages draw: tax on shipping, a code, a refund, tracking.
+        Assert.Contains(orders, o => o.ShippingTaxAmount > 0);
+        Assert.Contains(orders, o => o.CouponCode == StoreDemoSeeder.CouponCode && o.DiscountAmount > 0);
+        Assert.Contains(orders, o => o.Status == Ben.Data.Common.Enums.StoreOrderStatus.Refunded && o.RefundedAmount == o.Total);
+        Assert.Contains(orders, o => o.Status == Ben.Data.Common.Enums.StoreOrderStatus.Shipped && o.TrackingUrl != null);
+        Assert.Single(orders, o => o.BuyerAppUserId == null);
+    }
+
+    [Fact]
+    public async Task Sarah_has_one_abandoned_checkout()
+    {
+        var (sqlite, _) = await SeededAsync(withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+        var sarahs = await db.StoreOrders.Where(o => o.BuyerEmailNormalized == StoreDemoSeeder.SarahEmail.ToUpperInvariant()).ToListAsync();
+
+        Assert.Equal(5, sarahs.Count);
+        var abandoned = Assert.Single(sarahs, o => o.PaidUtc is null);
+        Assert.Equal((Ben.Data.Common.Enums.StoreOrderStatus.PendingPayment, StoreDemoSeeder.SeededOrders.SarahAbandoned), (abandoned.Status, abandoned.Id));
+        Assert.NotNull(abandoned.ReservationReleasedUtc);
+        Assert.Null(abandoned.StripePaymentIntentId);
+    }
+
+    /// <summary>History, not sales: nothing seeded is picked up by the tax retry job or the expiry service.</summary>
+    [Fact]
+    public async Task The_jobs_leave_the_seeded_orders_alone()
+    {
+        var (sqlite, _) = await SeededAsync(withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.False(await db.StoreOrders.AnyAsync(o => o.PaidUtc != null && o.StripeTaxTransactionId == null && o.StripeTaxCalculationId != null));
+        Assert.False(await db.StoreOrders.AnyAsync(o => o.Status == Ben.Data.Common.Enums.StoreOrderStatus.PendingPayment && o.ReservationReleasedUtc == null));
+        Assert.All(await db.StoreProductVariants.Where(v => v.Sku == "KII-EMF" || v.Sku == "BAG-OLV-STD").ToListAsync(),
+            v => Assert.Equal(0, v.StockReserved));
+    }
+
+    [Fact]
+    public async Task Seeding_orders_twice_adds_none_and_counts_the_code_once()
+    {
+        var (sqlite, _) = await SeededAsync(times: 2, withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.Equal(7, await db.StoreOrders.CountAsync());
+        Assert.Single(await db.StoreCouponRedemptions.ToListAsync());
+        Assert.Equal(1, (await db.StoreCoupons.SingleAsync(c => c.Code == StoreDemoSeeder.CouponCode)).RedemptionCount);
+        Assert.Equal(7, (await db.StoreOrders.Select(o => o.OrderNumber).Distinct().ToListAsync()).Count);
+    }
+
+    [Fact]
+    public async Task Without_the_demo_people_only_the_guest_order_is_seeded()
+    {
+        var (sqlite, _) = await SeededAsync();
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        var only = Assert.Single(await db.StoreOrders.ToListAsync());
+        Assert.Equal(StoreDemoSeeder.SeededOrders.Guest, only.Id);
     }
 }
