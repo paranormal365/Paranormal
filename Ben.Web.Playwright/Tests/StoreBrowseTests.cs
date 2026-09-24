@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using NUnit.Framework;
 
@@ -14,12 +15,68 @@ public class StoreBrowseTests : BenTestBase
 {
     private ILocator Card(string slug) => Page.Locator($"[data-testid=store-card][data-slug={slug}]");
 
+    /// <summary>
+    /// The server draws the page, then the live connection takes over. It must take over what is
+    /// already there: before 09/24 it built each store page again from nothing, so the shop turned
+    /// into "Opening the store…" and back in front of every visitor.
+    /// </summary>
+    [TestCase("/store", "Opening the store", "[data-testid=store-hero]")]
+    [TestCase("/store/products", "Finding products", "[data-testid=listing-grid]")]
+    [TestCase("/store/p/k-ii-emf-meter", "Loading the product", "[data-testid=product-price]")]
+    public async Task The_page_does_not_blink_when_it_comes_alive(string path, string loading, string content)
+    {
+        // Watches the whole load: any moment the loading words appear AFTER the content has.
+        await Page.AddInitScriptAsync($$"""
+            window.__blinked = false;
+            new MutationObserver(() => {
+                if (document.querySelector('{{content}}')) window.__seenContent = true;
+                if (window.__seenContent && document.body && document.body.innerText.includes('{{loading}}')) window.__blinked = true;
+            }).observe(document, { childList: true, subtree: true, characterData: true });
+            """);
+        // A page that never comes alive never blinks either — the first version of this test passed
+        // against pages whose connection the server had refused. So it also listens for that.
+        var dropped = new List<string>();
+        Page.Console += (_, m) => { if (m.Type == "error" && m.Text.Contains("Connection closed with an error")) dropped.Add(m.Text); };
+
+        await Page.GotoAsync($"{BaseUrl}{path}");
+        await Expect(Page.Locator(content).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await WaitForTheCircuitAsync();
+        await Page.WaitForTimeoutAsync(1500);   // the live page's first render, and anything it fetches
+
+        Assert.That(dropped, Is.Empty, $"{path}: the server closed the live connection — the page is drawn but dead.");
+        Assert.That(await Page.EvaluateAsync<bool>("window.__blinked === true"), Is.False,
+            $"{path} went back to \"{loading}…\" after it had drawn — the live page rebuilt it from nothing.");
+
+        // And it is live: the header's cart opens its menu, which only the circuit can do.
+        await ClickUntilAsync(Page.Locator("#nav-cart"), Page.Locator(".ben-cart-dd.show"));
+    }
+
+    /// <summary>
+    /// What a store page carries from its server render into the live page is sent back to the
+    /// server in the connection's first message, and a message over the circuit's limit (128 KB,
+    /// Ben.Web.Website/Program.cs) makes the server hang up. At 32 KB, the default, the listing and
+    /// the front page were already over it. Each page keeps under half the limit, so a catalogue
+    /// that grows is caught here before a shopper finds a dead page.
+    /// </summary>
+    [TestCase("/store")]
+    [TestCase("/store/products")]
+    [TestCase("/store/p/k-ii-emf-meter")]
+    public async Task The_carried_state_fits_the_connection(string path)
+    {
+        var html = await (await Page.APIRequest.GetAsync($"{BaseUrl}{path}")).TextAsync();
+        var state = Regex.Match(html, "<!--Blazor-Server-Component-State:(.*?)-->", RegexOptions.Singleline);
+        var bytes = state.Success ? state.Groups[1].Value.Length : 0;
+        Assert.That(bytes, Is.LessThan(64 * 1024), $"{path} carries {bytes:N0} bytes into its live page; the circuit takes 128 KB at most.");
+    }
+
     [Test]
     [Description("A visitor with no account sees the hero, the promises, the shelves and the rails.")]
     public async Task Home_RendersForAVisitor()
     {
         await Page.GotoAsync($"{BaseUrl}/store");
         await Expect(Page.Locator("[data-testid=store-hero]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await WaitForTheCircuitAsync();   // count what the live page shows, not the server render's copy
+        await Expect(Page.Locator("[data-testid=category-tile]").First).ToBeVisibleAsync();
         // At least the five demo shelves — other fixtures add shelves of their own to this database.
         Assert.That(await Page.Locator("[data-testid=category-tile]").CountAsync(), Is.GreaterThanOrEqualTo(5));
         await Expect(Page.Locator("[data-testid=category-tile]", new() { HasTextString = "EMF Meters" })).ToBeVisibleAsync();

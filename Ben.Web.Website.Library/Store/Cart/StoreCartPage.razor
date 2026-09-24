@@ -10,7 +10,9 @@
 @*
     The cart page (storefront S3.5), after Smarty's cart (shop-page-cart-1.html): the steps, the
     lines as cards with their quantities, "Do you have a discount code?", the order summary beside
-    them (under them below the lg break), and the promises.
+    them, and the promises. The summary sits beside the list only from the xl break: with the
+    sidebar open, an lg-wide content area left it too narrow for "Total before tax" and its amount
+    on one line (seen by eye 09/24 — no audit measures a wrapped label); below xl it goes under the list.
 
     Quantities change as they are pressed — Smarty's "Update cart" button is dropped because
     nothing waits for it. Every number is the server's: each change answers with the whole cart.
@@ -30,7 +32,7 @@
 
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
             <h1 class="h3 mb-0">My cart<HelpLink Slug="shopping-at-the-store" Anchor="your-cart" /></h1>
-            <a class="ben-link-muted small" href="/store"><BenIcon Name="arrow-left" /> Continue shopping</a>
+            <a class="ben-link-muted small text-nowrap d-inline-flex align-items-center gap-1" href="/store"><BenIcon Name="arrow-left" /> Continue shopping</a>
         </div>
 
         <StoreCheckoutSteps Current="StoreCheckoutStep.Cart" Secure="true" />
@@ -64,7 +66,7 @@
         else
         {
             <div class="row g-4">
-                <div class="col-lg-8">
+                <div class="col-xl-8">
                     @foreach (var line in cart.Lines)
                     {
                         <StoreCartLine @key="line.VariantId" Line="line" Mode="StoreCartLineMode.Page"
@@ -94,8 +96,8 @@
                     }
                 </div>
 
-                <div class="col-lg-4">
-                    <StoreOrderSummary Cart="cart" />
+                <div class="col-xl-4">
+                    <StoreOrderSummary Cart="cart" Sticky="true" />
                 </div>
             </div>
         }

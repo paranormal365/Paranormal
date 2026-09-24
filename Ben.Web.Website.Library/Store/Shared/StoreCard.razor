@@ -65,8 +65,7 @@
         var change = await CartState.AddAsync(variantId, 1);
         _adding = false;
         if (change.Cart is null) { Toasts.Error(change.Message ?? StoreCartChange.CouldNotUpdate); return; }
-        if (change.Message is { } notAll) Toasts.Warning(notAll);
-        else Toasts.Success($"{Card.Name} added to your cart.");
+        if (change.Message is { } notAll) Toasts.Warning(notAll);   // the drawer itself confirms the add
         CartState.OpenDrawer();
     }
 }

@@ -244,8 +244,9 @@
 .ben-cart-card__image { width: 100%; height: 100%; object-fit: cover; border-radius: var(--bs-border-radius); background: var(--bs-secondary-bg); }
 .ben-cart-line__remove:hover, .ben-cart-line__remove:focus-visible { color: var(--bs-danger); }
 .ben-summary { background: var(--bs-tertiary-bg); border-radius: var(--bs-border-radius-lg); padding: 1.25rem; }
-/* Beside the list from lg up it stays in view as the list scrolls; stacked below lg it never sticks. */
-@media (min-width: 992px) { .ben-summary--sticky { position: sticky; top: 5rem; } }
+/* Beside the list (xl up, where the cart page puts it) it stays in view as the list scrolls;
+   stacked under the list it never sticks. */
+@media (min-width: 1200px) { .ben-summary--sticky { position: sticky; top: 5rem; } }
 .ben-summary__row { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
 .ben-summary__total { border-top: 1px solid var(--bs-border-color); margin-top: .5rem; padding-top: .75rem; font-weight: 700; font-size: 1.15rem; }
 .ben-checkout-bar {

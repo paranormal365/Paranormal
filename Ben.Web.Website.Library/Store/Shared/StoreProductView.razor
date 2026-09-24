@@ -254,8 +254,9 @@ else if (Product.IsPreview)
             return;
         }
         _quantity = 1;
-        if (change.Message is { } notAll) Toasts.Warning(notAll);           // "Only 3 left." — some added
-        else Toasts.Success("Added to your cart.");
+        // No "Added" toast: the drawer sliding out is the confirmation, and a toast sat over the
+        // drawer's total and its button (seen by eye 09/24). Only "less than you asked" is said.
+        if (change.Message is { } notAll) Toasts.Warning(notAll);
         CartState.OpenDrawer();
     }
 }

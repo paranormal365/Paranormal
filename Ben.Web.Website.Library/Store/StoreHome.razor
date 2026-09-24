@@ -99,7 +99,25 @@
     private ItemResult<StorePublicInfo> _info;
     private bool _loading = true;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    /// <summary>
+    /// What the server render fetched, carried into the live page. Without it the circuit builds
+    /// the page again from nothing: the shop the visitor was already looking at turned into
+    /// "Opening the store…" and back (and a browser test counted the shelves in that gap).
+    /// </summary>
+    [PersistentState] public StoreHomeResponse? RenderedHome { get; set; }
+    [PersistentState] public StorePublicInfo? RenderedInfo { get; set; }
+
+    protected override Task OnInitializedAsync()
+    {
+        if (RenderedHome is { } home)
+        {
+            _home = ItemResult<StoreHomeResponse>.Ok(home);
+            _info = ItemResult<StorePublicInfo>.Ok(RenderedInfo);
+            _loading = false;
+            return Task.CompletedTask;
+        }
+        return LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -109,6 +127,8 @@
         _home = await home;
         _info = await info;
         _loading = false;
+        RenderedHome = _home.Item;
+        RenderedInfo = _info.Item;
     }
 
     private IReadOnlyList<BenSlide> Slides(StoreHomeResponse home)

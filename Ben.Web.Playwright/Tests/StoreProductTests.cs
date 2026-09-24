@@ -59,6 +59,9 @@ public class StoreProductTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/store/p/k-ii-emf-meter");
         var paragraph = Page.Locator("[data-testid=product-description] p").First;
         await Expect(paragraph).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // The live page replaces the server's copy of the page; a paragraph read in that moment is
+        // detached and has no style at all (NaN). Measure the live one.
+        await WaitForTheCircuitAsync();
 
         var ratio = await paragraph.EvaluateAsync<double>(
             "e => { const s = getComputedStyle(e); return parseFloat(s.lineHeight) / parseFloat(s.fontSize); }");

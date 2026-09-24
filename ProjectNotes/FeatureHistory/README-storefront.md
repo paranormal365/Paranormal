@@ -270,6 +270,19 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one
   adapter under that name only, and the narrower interface stopped the site from STARTING. No unit
   test builds the website's real container — the e2e harness (host refused to start) found it.
+- (S3, found by eye and a flake) Every store page BLINKED: the server drew it, then the live page
+  rebuilt it from nothing ("Opening the store…" and back). StoreHome, StoreListing and StoreProduct
+  now carry what the server fetched into the live page ([PersistentState]).
+  - That broke the listing and the front page outright. The carried state is sent back in the
+    circuit's first message: 35 KB and 36 KB, over SignalR's 32 KB default, so the server hung
+    up and the pages were drawn but dead. The limit is now 128 KB (Program.cs AddHubOptions).
+  - The first blink test PASSED against those dead pages: a page that never comes alive never
+    blinks. It now also fails on a refused connection and opens the cart menu.
+    The_carried_state_fits_the_connection keeps each page under 64 KB.
+  - Shown to discriminate: all 3 pages blink without the fix, and 2 fail at the old 32 KB limit.
+- (S3) The admin stock and product lists kept a stale answer: the first, unfiltered load (slow
+  with 124 variants) arrived after the search's and refilled the list. Only the newest load's
+  answer is kept now.
 - (S3) Not written: the plan's Cart_page_shows_a_retry_when_the_api_refuses browser test — there
   is no clean way to make the e2e API refuse the cart on demand. The refusal is covered by
   StoreRefusalReachesThePageTests (cart-refusal row) and StoreCartStateTests (a failed read keeps

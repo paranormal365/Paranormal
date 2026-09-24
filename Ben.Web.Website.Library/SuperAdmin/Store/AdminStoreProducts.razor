@@ -162,12 +162,18 @@
         await LoadAsync();
     }
 
+    private int _loads;
+
+    /// <summary>Only the newest answer is kept — see AdminStoreStock.LoadAsync for the race.</summary>
     private async Task LoadAsync()
     {
+        var mine = ++_loads;
         _loading = true;
-        _result = await AdminClient.GetStoreProductsAsync(_search,
+        var result = await AdminClient.GetStoreProductsAsync(_search,
             Guid.TryParse(_categoryId, out var c) ? c : null,
             bool.TryParse(_active, out var a) ? a : null);
+        if (mine != _loads) return;   // a newer search is on its way
+        _result = result;
         _loading = false;
     }
 

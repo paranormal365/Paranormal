@@ -59,13 +59,31 @@
         await LoadAsync();
     }
 
+    /// <summary>What the server render fetched — see StoreHome.RenderedHome. Never a preview (that waits for the circuit).</summary>
+    [PersistentState] public StoreProductDetail? RenderedProduct { get; set; }
+    [PersistentState] public StorePublicInfo? RenderedInfo { get; set; }
+
     private async Task LoadAsync()
     {
-        _loading = true;
-        var product = Store.GetStoreProductPageAsync(ProductSlug, Preview == 1);
-        var info = Store.GetStoreInfoAsync();
-        _product = await product;
-        _info = await info;
+        if (RenderedProduct is { IsPreview: false } rendered && rendered.Slug == ProductSlug && Preview != 1)
+        {
+            RenderedProduct = null;   // once
+            _product = ItemResult<StoreProductDetail>.Ok(rendered);
+            _info = ItemResult<StorePublicInfo>.Ok(RenderedInfo);
+        }
+        else
+        {
+            _loading = true;
+            var product = Store.GetStoreProductPageAsync(ProductSlug, Preview == 1);
+            var info = Store.GetStoreInfoAsync();
+            _product = await product;
+            _info = await info;
+            if (!RendererInfo.IsInteractive)
+            {
+                RenderedProduct = _product.Item;
+                RenderedInfo = _info.Item;
+            }
+        }
         _loading = false;
 
         // Counted once, from the live circuit — not the server render as well.

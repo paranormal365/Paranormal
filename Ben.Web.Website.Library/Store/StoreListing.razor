@@ -163,11 +163,27 @@
 
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 
+    /// <summary>What the server render fetched, and for which address — see StoreHome.RenderedHome.</summary>
+    [PersistentState] public StoreListingResponse? RenderedListing { get; set; }
+    [PersistentState] public string? RenderedFor { get; set; }
+
     private async Task LoadAsync()
     {
+        if (RenderedListing is { } rendered && RenderedFor == Nav.Uri)
+        {
+            RenderedListing = null;   // once: a later visit to this address is a fresh read
+            _listing = ItemResult<StoreListingResponse>.Ok(rendered);
+            _loading = false;
+            return;
+        }
         _loading = true;
         _listing = await Store.GetStoreListingAsync(CategorySlug, _query);
         _loading = false;
+        if (!RendererInfo.IsInteractive)
+        {
+            RenderedListing = _listing.Item;
+            RenderedFor = Nav.Uri;
+        }
     }
 
     private void OnSortChanged(ChangeEventArgs e)

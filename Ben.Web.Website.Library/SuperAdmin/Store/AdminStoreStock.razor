@@ -126,10 +126,20 @@
         await LoadAsync();
     }
 
+    private int _loads;
+
+    /// <summary>
+    /// Every keystroke in the search loads; only the NEWEST answer is kept. Without the count, the
+    /// page's first, unfiltered load — slow with a real catalogue — arrived after the search's and
+    /// put every row back under a filled-in search box (AdminStoreCatalogTests, 124 rows for 2).
+    /// </summary>
     private async Task LoadAsync()
     {
+        var mine = ++_loads;
         _loading = true;
-        _result = await AdminClient.GetStoreStockAsync(_search, LowOnly);
+        var result = await AdminClient.GetStoreStockAsync(_search, LowOnly);
+        if (mine != _loads) return;   // a newer search is on its way
+        _result = result;
         _loading = false;
     }
 

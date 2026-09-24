@@ -295,8 +295,15 @@ if (entraEnabled)
 
 // Add services to the container.
 builder.Services.AddAuthorization();
+// The largest message the browser may send the circuit: 128 KB, not SignalR's 32 KB default.
+// A page that carries what its server render fetched into the live page ([PersistentState] — the
+// store's front page and listings, storefront 09/24) sends it all back in the circuit's first
+// message. Past 32 KB the server hung up before the page ever came alive: 35 KB of listing and 36
+// KB of store front, and the page just sat there, drawn but dead. The Playwright test
+// The_carried_state_fits_the_connection keeps each store page well under this limit.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    .AddHubOptions(o => o.MaximumReceiveMessageSize = 128 * 1024);
 
 var app = builder.Build();
 
