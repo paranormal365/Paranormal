@@ -197,12 +197,44 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   plus the sentence, not an HtmlRenderer fact: the page loads its preview in OnAfterRenderAsync,
   which a static render never runs. StoreMoney's "on the seeded totals" identity runs on sample
   totals now; the seeded orders arrive in S4.
+- (S1) One stock sentence, not two: the product page's single adjust and the stock page's bulk
+  save both go through StoreStock.AdjustManyAsync and say S0's words ("Nothing was changed — {SKU}
+  can't go below the {n} held by open checkouts."), where the plan had a second wording per door.
+- (S1) Store settings validation adds a ZIP rule ("A ZIP code is five digits, or ZIP+4 like
+  37201-1234."), dollars-and-cents and a $10,000 ceiling on the two money settings; a state must
+  be a real US state, not just two letters. SaveStoreSettingsRequest carries nullable values
+  (null = unset, the default applies) and the page saves the whole form or none of it.
+- (S1) AdminStoreProductController adds "This product is on sale, so the variant needs a price above
+  $0.00." — a live product could otherwise be set to sell for nothing.
+- (S1) IStoreTaxProbe has no IsAvailable: the ship-from address is a setting the probe cannot see,
+  so ReadyToSell reads it from StoreSettingsReader. StorePaymentSetup (Fake, HasSecretKey,
+  HasPublishableKey) is computed once at startup by the same rule the fakes use (StoreStripeMode).
+  The Link-not-activated sentence waits for the hourly bell it reads (S4).
+- (S1) Stock export is a button that downloads through the admin's client
+  (DownloadStoreStockCsvAsync + downloadFileFromBase64), not an anchor: a plain link to the API
+  cannot carry the admin's token.
+- (S1) The Store section of Site Settings is a component (StoreSettingsReadOnly) proven by an
+  HtmlRenderer fact plus AdminSiteSettings.IsEditedElsewhere; the page itself loads only when
+  interactive, which HtmlRenderer never is.
+- (S1) Help: the store's sections are `##` headings, not `###` under "The store" —
+  HelpLinkTargetTests resolves anchors against the contents list, which lists `##` only. Reviews'
+  anchor is `store-reviews`.
+- (S1) BenTabs drew the active pane from the tab's content one render late (Blazor hands a child
+  its parameters after the parent draws). Found by AdminStoreCatalogTests — "Generate variants"
+  stayed disabled after saving options. Each BenTab now draws its own pane; the strip redraws when
+  a tab's title/icon/badge/disabled changes (compared by value — a delegate comparison loops,
+  because the content is a new delegate on every redraw). 36 browser tests over the other twelve
+  tabbed screens re-run green.
+- (S1) The product editor refreshes only the drafts of the part a save changed (Drafts flags): a
+  late answer to one save used to wipe what had been typed since in another part.
+- (S1) StoreDemoSeeder.SeedCoreAsync(db, ownerId, ct) — the owner, not a storage service: the
+  pictures live in the row (FileData), so nothing is written to disk.
 
 ## Slices (status)
 | Slice | What | Status |
 |---|---|---|
 | S0 | flag, 21 entities, 3 migrations, purge, static helpers, rate-limit partition | Built 09/24/2026 — every new fact seen failing first (mutations recorded in the commit) |
-| S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | |
+| S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | Built 09/24/2026 — unit facts each seen failing on a deliberate break (64 breaks across S1.1–S1.12, all caught but one that exposed a redundant check, removed); AdminStoreCatalogTests 8/8 and AdminPageTests on IsHauntedDb_e2e with the shop off; new guards StoreClientRoutesTests, StoreRefusalReachesThePageTests, StoreReviewQueueHasAnEntranceTests each broken once |
 | S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | |
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | |
 | S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | |
