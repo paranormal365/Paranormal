@@ -13514,6 +13514,44 @@ or built on the `storefront` branch, planned with a smaller scope, or new.
   draft, edit words, pictures and specs, and ask for an item to go on sale — plus the rest of this
   item.
 
+### Shipping questions (Ben asked 09/24/2026 how shipping normally works)
+
+v1 ships to the US only: one flat rate per order, free over a threshold, and the admin buys each
+label (e.g. on Pirate Ship) and types in the tracking number. Once there are sellers, and possibly
+international buyers, these need answers.
+
+**Sellers:**
+- Each seller packs and ships from home, so a cart with two sellers' items is **two parcels, two
+  labels and two tracking numbers**. An order needs shipments, each with its own seller, carrier,
+  tracking, status and date. The v1 order has exactly one tracking number.
+- **Who pays for shipping, and how is it split?** One flat rate split between the sellers, a flat
+  rate per seller in the cart, or each seller's own rate per item? And does free shipping over
+  the threshold still apply to the whole cart when two sellers must each pay for a label?
+- **Who buys the label?** The seller buys it and is repaid, or the site buys it on the seller's
+  behalf through a label API (Shippo, EasyPost). With the second, the label cost is a line in the
+  seller's payout ledger.
+- **Handling time per seller.** "Ships within N business days" can differ by seller, and the
+  store should show it. It also decides when an order counts as late.
+- **Ship-from address per seller.** Stripe Tax works sales tax out from the ship-from address;
+  v1 has one site-wide address.
+
+**International:**
+- **Which countries, if any?** Canada first is the usual easy step.
+- **Rates.** A flat rate per country or zone needs no product data. Live carrier rates need a
+  weight and box size on every product.
+- **Customs.**
+  - Every parcel needs a customs description, a value and a tariff (HS) code per product.
+  - Duties are either paid by the buyer on delivery (the default; parcels sometimes get refused) or
+    collected at checkout. Collecting means VAT registration in, for example, the EU (IOSS) and
+    the UK.
+- **Batteries.** Lithium batteries installed in a device can usually go abroad within size limits;
+  loose or spare ones often cannot go by airmail. This needs a per-product "can't ship abroad"
+  switch. Devices on AA or 9V alkaline batteries aren't affected.
+- **Returns.** International returns often cost more than the item. Offer none, or refund without
+  taking the item back.
+- **Insurance.** For items worth more than a label's included cover (USPS Ground Advantage
+  includes $100), should insurance be added automatically, and who pays for it?
+
 ### Decide before building
 
 - **Is the store a marketplace?** The v1 plan has the site selling its own stock. Sellers who are
