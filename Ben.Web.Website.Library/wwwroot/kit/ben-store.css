@@ -94,6 +94,11 @@
 .ben-price--lg { font-size: 1.6rem; }
 .ben-stars { color: var(--bs-warning); letter-spacing: .05em; white-space: nowrap; }
 .ben-stars__empty { color: var(--bs-border-color); }
+/* A half star is an ordinary star filled halfway — no glyph a font might not have. */
+.ben-stars__half {
+    background: linear-gradient(90deg, var(--bs-warning) 50%, var(--bs-border-color) 50%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 .ben-stars__count { color: var(--bs-secondary-color); font-size: .85em; margin-left: .25rem; letter-spacing: 0; }
 .ben-store-note { font-size: .9rem; }
 .ben-store-note--low { color: var(--bs-danger-text-emphasis); }

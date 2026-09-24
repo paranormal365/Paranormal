@@ -1,0 +1,23 @@
+@*
+    The small flags on a card or a product (storefront S2.5): the discount, New, Featured, Sold out.
+*@
+
+@if (SoldOut || Discount is > 0 || IsNew || IsFeatured)
+{
+    <span class="@(Floating ? "ben-card__badges" : "d-inline-flex flex-wrap gap-1")">
+        @if (SoldOut) { <span class="badge bg-secondary">Sold out</span> }
+        @if (Discount is > 0 and var off) { <span class="badge bg-danger">-@off%</span> }
+        @if (IsNew) { <span class="badge bg-success">New</span> }
+        @if (IsFeatured) { <span class="badge bg-warning-subtle text-warning-emphasis">Featured</span> }
+    </span>
+}
+
+@code {
+    [Parameter] public int? Discount { get; set; }
+    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public bool IsFeatured { get; set; }
+    [Parameter] public bool SoldOut { get; set; }
+
+    /// <summary>Pinned to the top corner of a card rather than in the flow.</summary>
+    [Parameter] public bool Floating { get; set; }
+}
