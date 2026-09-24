@@ -132,8 +132,8 @@
         _home = await home;
         _info = await info;
         _loading = false;
-        RenderedHome = _home.Item;
-        RenderedInfo = _info.Item;
+        RenderedHome = StoreCarry.IfItFits(_home.Item);
+        RenderedInfo = RenderedHome is null ? null : _info.Item;
     }
 
     private IReadOnlyList<BenSlide> Slides(StoreHomeResponse home)

@@ -216,7 +216,8 @@ public sealed class StoreCartService(BenDataContext db, TimeProvider? clock = nu
                 .Where(i => i.CartId == cart.Id)
                 .OrderBy(i => i.DateCreated).ThenBy(i => i.Id)
                 .Select(i => new LineRow(i, i.Variant, i.Variant.Product,
-                    i.Variant.IsActive && i.Variant.Product.IsActive && i.Variant.Product.Category.IsActive))
+                    i.Variant.IsActive && i.Variant.Product.IsActive && i.Variant.Product.Category.IsActive
+                    && (i.Variant.Product.Category.ParentCategoryId == null || i.Variant.Product.Category.ParentCategory!.IsActive)))
                 .ToListAsync(ct);
 
         var held = cart is null ? new Dictionary<Guid, int>() : await HeldByOwnCheckoutAsync(cart.Id, ct);
@@ -450,7 +451,8 @@ public sealed class StoreCartService(BenDataContext db, TimeProvider? clock = nu
 
     private Task<StoreProductVariant?> SellableVariantAsync(Guid variantId, CancellationToken ct)
         => db.StoreProductVariants.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.Id == variantId && v.IsActive && v.Product.IsActive && v.Product.Category.IsActive, ct);
+            .FirstOrDefaultAsync(v => v.Id == variantId && v.IsActive && v.Product.IsActive && v.Product.Category.IsActive
+                && (v.Product.Category.ParentCategoryId == null || v.Product.Category.ParentCategory!.IsActive), ct);
 
     /// <summary>Sets a line to exactly <paramref name="quantity"/>, adding it if it is not there.</summary>
     private async Task SetLineAsync(Guid cartId, Guid variantId, int quantity, CancellationToken ct)

@@ -16,6 +16,10 @@
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb small mb-0">
         <li class="breadcrumb-item"><a href="/store">Store</a></li>
+        @if (Product.ParentCategorySlug is { } parentSlug)
+        {
+            <li class="breadcrumb-item"><a href="@($"/store/c/{parentSlug}")">@Product.ParentCategoryName</a></li>
+        }
         <li class="breadcrumb-item"><a href="@($"/store/c/{Product.CategorySlug}")">@Product.CategoryName</a></li>
         <li class="breadcrumb-item active" aria-current="page">@Product.Name</li>
     </ol>

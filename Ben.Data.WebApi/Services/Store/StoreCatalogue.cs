@@ -12,8 +12,14 @@ namespace Ben.Data.WebApi.Services.Store;
 /// </summary>
 /// <remarks>
 /// <para><b>One root.</b> A product is on the store when it is active AND its category is active
-/// AND it has at least one active variant — <see cref="LiveProducts"/> says so once, and every
-/// public answer starts from it, so no endpoint can forget one of the three.</para>
+/// AND that category's parent (if it has one) is active AND it has at least one active variant —
+/// <see cref="LiveProducts"/> says so once, and every public answer starts from it, so no endpoint
+/// can forget one. The copies the cart, checkout and stock need in their own queries are held to the
+/// same rule by StoreSellableRuleNamesTheParentTests.</para>
+///
+/// <para><b>Shelves show only what sells</b> (Ben, 09/24): a category or subcategory reaches a shopper
+/// only when something is on sale under it; an empty one is there for sellers to file products in,
+/// and its address answers 404.</para>
 ///
 /// <para><b>Filtered in memory.</b> A store of tens or hundreds of products is loaded whole and
 /// filtered, counted, sorted and paged here. That keeps the answers identical on SQL Server and on
@@ -24,8 +30,11 @@ namespace Ben.Data.WebApi.Services.Store;
 public static class StoreCatalogue
 {
     /// <summary>The one definition of "on the store".</summary>
+    /// <remarks>A subcategory's product also needs the parent shown: hiding a parent hides everything under it.</remarks>
     public static IQueryable<StoreProduct> LiveProducts(BenDataContext db)
-        => db.StoreProducts.Where(p => p.IsActive && p.Category.IsActive && p.Variants.Any(v => v.IsActive));
+        => db.StoreProducts.Where(p => p.IsActive && p.Category.IsActive
+            && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive)
+            && p.Variants.Any(v => v.IsActive));
 
     /// <summary>A product as the listing needs it, loaded once per request.</summary>
     public sealed record Entry(
@@ -36,7 +45,7 @@ public static class StoreCatalogue
     public static async Task<List<Entry>> LoadAsync(BenDataContext db, IQueryable<StoreProduct> products, CancellationToken ct)
     {
         var rows = await products.AsNoTracking()
-            .Include(p => p.Category)
+            .Include(p => p.Category).ThenInclude(c => c!.ParentCategory)
             .Include(p => p.Variants.Where(v => v.IsActive))
             .AsSplitQuery()
             .ToListAsync(ct);

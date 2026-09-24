@@ -80,8 +80,8 @@
             _info = await info;
             if (!RendererInfo.IsInteractive)
             {
-                RenderedProduct = _product.Item;
-                RenderedInfo = _info.Item;
+                RenderedProduct = StoreCarry.IfItFits(_product.Item);
+                RenderedInfo = RenderedProduct is null ? null : _info.Item;
             }
         }
         _loading = false;

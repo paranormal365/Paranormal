@@ -74,9 +74,9 @@ public sealed class AdminStoreCategoryController(
         if (category is null) return NotFound();
         var before = Clone(category);
 
-        var hidden = category.IsActive && !request.IsActive
-            ? await db.StoreProducts.CountAsync(p => p.CategoryId == id && p.IsActive, ct)
-            : 0;
+        // What this save takes off the store: the live products under it (its subcategories' too) before,
+        // less those still live after — hiding it, or moving it under a hidden parent.
+        var liveBefore = await LiveUnderAsync(db, id, ct);
 
         if (await ApplyAsync(db, category, request, ct) is { } refused) return refused;
         category.DateUpdated = DateTime.UtcNow;
@@ -85,6 +85,7 @@ public sealed class AdminStoreCategoryController(
         if (await SaveOrConflictAsync(db, category, ct) is { } conflict) return conflict;
         await TryAuditAsync(auditLog.LogUpdateAsync(nameof(StoreCategory), id, before, category, userId, AppSources.WebApi));
 
+        var hidden = Math.Max(0, liveBefore - await LiveUnderAsync(db, id, ct));
         return Ok(new StoreCategorySaveResult((await ListAsync(db, ct)).Single(c => c.Id == id), hidden));
     }
 
@@ -176,6 +177,11 @@ public sealed class AdminStoreCategoryController(
         var category = await db.StoreCategories.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (category is null) return NotFound();
 
+        var subcategories = await db.StoreCategories.CountAsync(c => c.ParentCategoryId == id, ct);
+        if (subcategories > 0)
+            return BadRequest($"{category.Name} has {subcategories} subcategor{(subcategories == 1 ? "y" : "ies")}. "
+                            + "Move or delete them first.");
+
         var products = await db.StoreProducts.CountAsync(p => p.CategoryId == id, ct);
         if (products > 0)
             return BadRequest($"{category.Name} still holds {products} product{(products == 1 ? "" : "s")}. "
@@ -200,15 +206,39 @@ public sealed class AdminStoreCategoryController(
         return -1;
     }
 
-    internal static Task<List<StoreCategoryAdminRecord>> ListAsync(BenDataContext db, CancellationToken ct)
-        => db.StoreCategories.AsNoTracking()
-            .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
+    /// <summary>
+    /// Every category, as a tree read top to bottom: each top-level category followed by its
+    /// subcategories, each level in its own sort order.
+    /// </summary>
+    internal static async Task<List<StoreCategoryAdminRecord>> ListAsync(BenDataContext db, CancellationToken ct)
+    {
+        var live = StoreCatalogue.LiveProducts(db);
+        var rows = await db.StoreCategories.AsNoTracking()
             .Select(c => new StoreCategoryAdminRecord(
                 c.Id, c.Name, c.Slug, c.Description, c.ImageUploadFileId, c.SortOrder, c.IsActive, c.IsNew,
                 db.StoreProducts.Count(p => p.CategoryId == c.Id),
-                c.IsActive ? db.StoreProducts.Count(p => p.CategoryId == c.Id && p.IsActive) : 0,
-                c.DateCreated))
+                live.Count(p => p.CategoryId == c.Id || p.Category.ParentCategoryId == c.Id),
+                c.DateCreated, c.ParentCategoryId, c.ParentCategory == null ? null : c.ParentCategory.Name,
+                db.StoreCategories.Count(s => s.ParentCategoryId == c.Id)))
             .ToListAsync(ct);
+        return TreeOrder(rows);
+    }
+
+    /// <summary>Top-level categories in order, each followed by its own subcategories in order.</summary>
+    internal static List<StoreCategoryAdminRecord> TreeOrder(IReadOnlyList<StoreCategoryAdminRecord> rows)
+    {
+        var byParent = rows.Where(r => r.ParentCategoryId is not null).ToLookup(r => r.ParentCategoryId!.Value);
+        var ordered = new List<StoreCategoryAdminRecord>(rows.Count);
+        foreach (var top in rows.Where(r => r.ParentCategoryId is null).OrderBy(r => r.SortOrder).ThenBy(r => r.Name))
+        {
+            ordered.Add(top);
+            ordered.AddRange(byParent[top.Id].OrderBy(r => r.SortOrder).ThenBy(r => r.Name));
+        }
+        return ordered;
+    }
+
+    private static Task<int> LiveUnderAsync(BenDataContext db, Guid id, CancellationToken ct)
+        => StoreCatalogue.LiveProducts(db).CountAsync(p => p.CategoryId == id || p.Category.ParentCategoryId == id, ct);
 
     /// <summary>Copies the request onto the row, or answers why not.</summary>
     private async Task<ActionResult?> ApplyAsync(
@@ -238,6 +268,21 @@ public sealed class AdminStoreCategoryController(
             category.Slug = await StoreSlugs.ForCategoryAsync(db, category.Id, name, ct);
         }
 
+        // One level deep: a subcategory sits under a top-level category, and a category that has
+        // subcategories stays at the top (Ben, 09/24).
+        if (request.ParentCategoryId is { } parentId)
+        {
+            if (parentId == category.Id) return BadRequest("A category can't sit under itself.");
+            var parent = await db.StoreCategories.AsNoTracking().Where(c => c.Id == parentId)
+                .Select(c => new { c.Name, c.ParentCategoryId }).FirstOrDefaultAsync(ct);
+            if (parent is null) return BadRequest("That parent category no longer exists.");
+            if (parent.ParentCategoryId is not null)
+                return BadRequest($"{parent.Name} is itself a subcategory. Subcategories go one level deep — choose a top-level category.");
+            if (await db.StoreCategories.AnyAsync(c => c.ParentCategoryId == category.Id, ct))
+                return BadRequest($"{name} has subcategories of its own, so it can't become one. Move them first.");
+        }
+
+        category.ParentCategoryId = request.ParentCategoryId;
         category.Name = name;
         category.Description = description;
         category.IsActive = request.IsActive;
@@ -266,5 +311,6 @@ public sealed class AdminStoreCategoryController(
     {
         Id = c.Id, Name = c.Name, Slug = c.Slug, Description = c.Description,
         ImageUploadFileId = c.ImageUploadFileId, SortOrder = c.SortOrder, IsActive = c.IsActive, IsNew = c.IsNew,
+        ParentCategoryId = c.ParentCategoryId,
     };
 }

@@ -11,7 +11,7 @@ public sealed record StoreVariantPreviewDraft(decimal Price, decimal? CompareAtP
 /// <summary>What the product page needs that is not the product: its shelf, its model, the store's numbers.</summary>
 public sealed record StoreProductPreviewContext(
     string CategoryName, string CategorySlug, StoreEquipmentLink? Equipment, int LowStockThreshold, int ReturnsWindowDays,
-    DateTime Now);
+    DateTime Now, string? ParentCategoryName = null, string? ParentCategorySlug = null);
 
 /// <summary>
 /// The product page as a shopper would see it, built from the editor's unsaved work (Ben,
@@ -62,6 +62,6 @@ public static class StoreProductPreview
             draft.Specs.Where(g => g.Items.Count > 0).ToList(),
             new StoreReviewSummary(saved.AverageRating, saved.ReviewCount, [0, 0, 0, 0, 0]),
             context.Equipment, Related: [], context.LowStockThreshold, context.ReturnsWindowDays,
-            LastUpdatedUtc: context.Now, IsPreview: true);
+            LastUpdatedUtc: context.Now, IsPreview: true, context.ParentCategoryName, context.ParentCategorySlug);
     }
 }

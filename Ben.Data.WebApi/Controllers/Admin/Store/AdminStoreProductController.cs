@@ -68,7 +68,9 @@ public sealed partial class AdminStoreProductController(
         var rows = await query
             .OrderBy(p => p.Category.SortOrder).ThenBy(p => p.SortOrder).ThenBy(p => p.Name)
             .Select(p => new StoreProductListAdminRecord(
-                p.Id, p.Name, p.Slug, p.CategoryId, p.Category.Name, p.IsActive, p.IsActive && !p.Category.IsActive,
+                p.Id, p.Name, p.Slug, p.CategoryId,
+                p.Category.ParentCategory == null ? p.Category.Name : p.Category.ParentCategory.Name + " › " + p.Category.Name,
+                p.IsActive, p.IsActive && !(p.Category.IsActive && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive)),
                 p.IsFeatured, p.MinPrice, p.MaxPrice,
                 p.Variants.Where(v => v.IsActive).Sum(v => v.StockOnHand),
                 p.Variants.Count(v => v.IsActive && v.StockOnHand - v.StockReserved <= threshold),
@@ -227,7 +229,7 @@ public sealed partial class AdminStoreProductController(
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var product = await db.StoreProducts.Include(p => p.Category).Include(p => p.Variants)
+        var product = await db.StoreProducts.Include(p => p.Category).ThenInclude(c => c.ParentCategory).Include(p => p.Variants)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null) return NotFound();
 
@@ -240,6 +242,8 @@ public sealed partial class AdminStoreProductController(
             return BadRequest("Add at least one picture before showing it.");
         if (live.Count == 0) return BadRequest("At least one variant must be active.");
         if (!product.Category.IsActive) return BadRequest("Its category is hidden — show the category first.");
+        if (product.Category.ParentCategory is { IsActive: false } parent)
+            return BadRequest($"Its category sits under {parent.Name}, which is hidden — show {parent.Name} first.");
 
         return await SwitchAsync(db, product, on: true, userId, ct);
     }
@@ -905,7 +909,7 @@ public sealed partial class AdminStoreProductController(
     internal static async Task<StoreProductAdminRecord?> LoadAsync(BenDataContext db, Guid id, CancellationToken ct)
     {
         var p = await db.StoreProducts.AsNoTracking()
-            .Include(x => x.Category)
+            .Include(x => x.Category).ThenInclude(c => c.ParentCategory)
             .Include(x => x.Options).ThenInclude(o => o.Values)
             .Include(x => x.Variants).ThenInclude(v => v.OptionValues)
             .Include(x => x.Specs)
@@ -927,7 +931,9 @@ public sealed partial class AdminStoreProductController(
             : null;
 
         return new StoreProductAdminRecord(
-            p.Id, p.CategoryId, p.Category.Name, p.Category.IsActive, p.EquipmentModelId, p.Name, p.Slug,
+            p.Id, p.CategoryId,
+            p.Category.ParentCategory == null ? p.Category.Name : p.Category.ParentCategory.Name + " › " + p.Category.Name,
+            p.Category.IsActive && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive), p.EquipmentModelId, p.Name, p.Slug,
             p.ShortDescription, p.LongDescriptionHtml, p.IsActive, p.IsFeatured, p.NewUntilUtc, p.StripeTaxCode,
             p.SortOrder, p.ViewCount, p.UnitsSold, p.AverageRating, p.ReviewCount, pendingReviews, ordered.Count > 0,
             pictures,

@@ -131,7 +131,8 @@ public sealed class AdminStoreSettingsController(
 
         var sellable = await db.StoreProductVariants.AnyAsync(v =>
             v.IsActive && v.StockOnHand - v.StockReserved > 0 && v.Price > 0
-            && v.Product.IsActive && v.Product.Category.IsActive, ct);
+            && v.Product.IsActive && v.Product.Category.IsActive
+            && (v.Product.Category.ParentCategoryId == null || v.Product.Category.ParentCategory!.IsActive), ct);
         if (!sellable) reasons.Add(NothingToSell);
 
         if (!payments.Fake)

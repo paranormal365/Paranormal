@@ -11,13 +11,17 @@
     The store's shelves (storefront S1.11). Hiding one takes its live products off the store; the
     dialog says how many BEFORE anything is saved, from the list's own count, and the toast after
     the save says what the server actually hid.
+
+    Subcategories (09/24, Ben): one level deep, listed indented under their category; the arrows
+    move a row among its siblings only. Only a SuperAdmin reaches this page. Shoppers see a category
+    only when something is on sale under it — an empty one is here for sellers to file products in.
 *@
 
 <div class="container-fluid px-3" style="max-width:64rem;">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div>
             <h3 class="mb-0">Categories<HelpLink Slug="site-administration" Anchor="categories-and-products" /></h3>
-            <p class="text-secondary small mb-0">The shelves of the store, in the order visitors see them.</p>
+            <p class="text-secondary small mb-0">The shelves of the store, in the order visitors see them. A shelf with nothing on sale under it stays out of sight.</p>
         </div>
         <button type="button" class="btn btn-primary" id="category-new" @onclick="NewCategory">New category</button>
     </div>
@@ -36,9 +40,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var (c, i) in _result.Items.Select((c, i) => (c, i)))
+                    @foreach (var c in _result.Items)
                     {
-                        <tr data-testid="category-row">
+                        <tr data-testid="@(c.ParentCategoryId is null ? "category-row" : "subcategory-row")">
                             <td>
                                 @if (c.ImageUploadFileId is { } picture)
                                 {
@@ -46,11 +50,17 @@
                                          style="width:48px;height:36px;object-fit:cover;" />
                                 }
                             </td>
-                            <td>
-                                <div class="fw-semibold">@c.Name
+                            <td class="@(c.ParentCategoryId is null ? null : "ps-4")">
+                                <div class="fw-semibold">
+                                    @if (c.ParentCategoryId is not null) { <span class="text-secondary me-1" aria-hidden="true">↳</span> }
+                                    @c.Name
                                     @if (c.IsNew) { <span class="badge bg-info-subtle text-info-emphasis ms-1">New</span> }
                                 </div>
                                 <div class="text-secondary small font-monospace">/store/c/@c.Slug</div>
+                                @if (c.ParentName is { } parent)
+                                {
+                                    <div class="text-secondary small">In @parent</div>
+                                }
                             </td>
                             <td class="text-end text-nowrap">@c.LiveProductCount live · @c.ProductCount in all</td>
                             <td>
@@ -58,8 +68,8 @@
                             </td>
                             <td>
                                 <span class="text-nowrap">
-                                    <BenGridAction Icon="arrow-up" Label="Move up" Disabled="@(i == 0 || _busy)" OnClick="@(() => MoveAsync(i, -1))" />
-                                    <BenGridAction Icon="arrow-down" Label="Move down" Disabled="@(i == _result.Items.Count - 1 || _busy)" OnClick="@(() => MoveAsync(i, +1))" />
+                                    <BenGridAction Icon="arrow-up" Label="Move up" Disabled="@(!CanMove(c, -1) || _busy)" OnClick="@(() => MoveAsync(c, -1))" />
+                                    <BenGridAction Icon="arrow-down" Label="Move down" Disabled="@(!CanMove(c, +1) || _busy)" OnClick="@(() => MoveAsync(c, +1))" />
                                     <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => Edit(c))" />
                                     <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => AskRemove(c))" />
                                 </span>
@@ -86,6 +96,28 @@
                        @bind="_form.Slug" @bind:event="oninput" />
             </div>
             <div class="form-text">Kept when the name changes. Change it only if you mean to — shared links use it.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="category-parent">Sits under</label>
+            <select id="category-parent" class="form-select" disabled="@(_editSubcategories > 0)"
+                    value="@(_form.ParentCategoryId?.ToString() ?? "")"
+                    @onchange="@(e => _form.ParentCategoryId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                <option value="">Nothing — a top-level category</option>
+                @foreach (var top in _result.Items.Where(x => x.ParentCategoryId is null && x.Id != _editId))
+                {
+                    <option value="@top.Id">@top.Name</option>
+                }
+            </select>
+            <div class="form-text">
+                @if (_editSubcategories > 0)
+                {
+                    <text>@_editName has subcategories of its own, so it stays at the top level.</text>
+                }
+                else
+                {
+                    <text>A subcategory is one level down. Shoppers see it under its category once something in it is on sale.</text>
+                }
+            </div>
         </div>
         <div class="mb-3">
             <label class="form-label" for="category-description">Description</label>
@@ -151,6 +183,7 @@
     private Guid? _editPicture;
     private bool _wasActive;
     private int _liveCount;
+    private int _editSubcategories;
     private CategoryForm _form = new();
     private string? _formError;
 
@@ -167,6 +200,7 @@
         public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
         public bool IsNew { get; set; }
+        public Guid? ParentCategoryId { get; set; }
     }
 
     protected override async Task OnInitializedAsync()
@@ -187,7 +221,7 @@
 
     private void NewCategory()
     {
-        _editId = null; _editName = ""; _editPicture = null; _wasActive = false; _liveCount = 0;
+        _editId = null; _editName = ""; _editPicture = null; _wasActive = false; _liveCount = 0; _editSubcategories = 0;
         _form = new CategoryForm();
         _formError = null;
         _editing = true;
@@ -196,8 +230,12 @@
     private void Edit(StoreCategoryAdminRecord c)
     {
         _editId = c.Id; _editName = c.Name; _editPicture = c.ImageUploadFileId;
-        _wasActive = c.IsActive; _liveCount = c.LiveProductCount;
-        _form = new CategoryForm { Name = c.Name, Slug = c.Slug, Description = c.Description, IsActive = c.IsActive, IsNew = c.IsNew };
+        _wasActive = c.IsActive; _liveCount = c.LiveProductCount; _editSubcategories = c.SubcategoryCount;
+        _form = new CategoryForm
+        {
+            Name = c.Name, Slug = c.Slug, Description = c.Description, IsActive = c.IsActive, IsNew = c.IsNew,
+            ParentCategoryId = c.ParentCategoryId,
+        };
         _formError = null;
         _editing = true;
     }
@@ -219,7 +257,7 @@
         _busy = true; _formError = null;
         try
         {
-            var request = new SaveStoreCategoryRequest(_form.Name, _form.Slug, _form.Description, _form.IsActive, _form.IsNew);
+            var request = new SaveStoreCategoryRequest(_form.Name, _form.Slug, _form.Description, _form.IsActive, _form.IsNew, _form.ParentCategoryId);
             if (_editId is { } id)
             {
                 var (saved, error) = await AdminClient.SaveStoreCategoryAsync(id, request);
@@ -264,10 +302,36 @@
         await LoadAsync();
     }
 
-    private async Task MoveAsync(int index, int by)
+    /// <summary>The rows that share this one's level and parent, in order — what the arrows move among.</summary>
+    private List<StoreCategoryAdminRecord> SiblingsOf(StoreCategoryAdminRecord c)
+        => _result.Items.Where(x => x.ParentCategoryId == c.ParentCategoryId).ToList();
+
+    private bool CanMove(StoreCategoryAdminRecord c, int by)
     {
-        var ids = _result.Items.Select(c => c.Id).ToList();
-        (ids[index], ids[index + by]) = (ids[index + by], ids[index]);
+        var siblings = SiblingsOf(c);
+        var at = siblings.FindIndex(x => x.Id == c.Id) + by;
+        return at >= 0 && at < siblings.Count;
+    }
+
+    /// <summary>
+    /// Swaps a row with its neighbouring sibling, then sends the whole tree in order: the server
+    /// numbers every category by its place in that list, and sorts each level by it.
+    /// </summary>
+    private async Task MoveAsync(StoreCategoryAdminRecord c, int by)
+    {
+        if (!CanMove(c, by)) return;
+        var siblings = SiblingsOf(c);
+        var at = siblings.FindIndex(x => x.Id == c.Id);
+        (siblings[at], siblings[at + by]) = (siblings[at + by], siblings[at]);
+
+        var tops = c.ParentCategoryId is null ? siblings : _result.Items.Where(x => x.ParentCategoryId is null).ToList();
+        var ids = new List<Guid>();
+        foreach (var top in tops)
+        {
+            ids.Add(top.Id);
+            var children = top.Id == c.ParentCategoryId ? siblings : _result.Items.Where(x => x.ParentCategoryId == top.Id).ToList();
+            ids.AddRange(children.Select(x => x.Id));
+        }
         _busy = true;
         try
         {

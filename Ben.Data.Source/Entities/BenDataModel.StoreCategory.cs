@@ -6,10 +6,12 @@ namespace Ben.Data.Source.Entities
     /// A shelf in the gear store — "EMF meters", "Spirit boxes" (storefront).
     /// </summary>
     /// <remarks>
-    /// Flat on purpose: a parent is one nullable column later, and nothing in v1 needs one. The
-    /// store's own table rather than <see cref="EquipmentCategory"/>, which has no slug and no
-    /// picture and is proposed by members. Hiding a category takes its products off the store
-    /// (the "sellable" rule: variant AND product AND category active).
+    /// One level of subcategories (Ben, 09/24): <see cref="ParentCategoryId"/> names a top-level
+    /// category, and a category that has subcategories is never itself one. The store's own table
+    /// rather than <see cref="EquipmentCategory"/>, which has no slug and no picture and is proposed
+    /// by members. Hiding a category takes its products off the store — and hiding a parent takes its
+    /// subcategories' products with it (the "sellable" rule: variant AND product AND category AND the
+    /// category's parent, if any, active).
     /// </remarks>
     public class StoreCategory : IAuditableEntity
     {
@@ -30,7 +32,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>Shows the "New" badge beside the name in the category list.</summary>
         public bool IsNew { get; set; }
 
+        /// <summary>The top-level category this is a subcategory of; null for a top-level category.</summary>
+        public Guid? ParentCategoryId { get; set; }
+
         public virtual UploadFile? ImageUploadFile { get; set; }
+        public virtual StoreCategory? ParentCategory { get; set; }
+        public virtual ICollection<StoreCategory> Subcategories { get; set; } = [];
         public virtual ICollection<StoreProduct> Products { get; set; } = [];
 
         public DateTime DateCreated { get; set; }

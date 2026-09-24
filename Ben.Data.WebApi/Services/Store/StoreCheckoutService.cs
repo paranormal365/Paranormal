@@ -96,7 +96,8 @@ public sealed class StoreCheckoutService(
         var held = open?.Items.GroupBy(i => i.VariantId).ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity)) ?? [];
 
         var lines = (await db.StoreCartItems.AsNoTracking().Where(i => i.CartId == cart.Id)
-                .Select(i => new { i.Quantity, i.Variant, i.Variant.Product, Sellable = i.Variant.IsActive && i.Variant.Product.IsActive && i.Variant.Product.Category.IsActive })
+                .Select(i => new { i.Quantity, i.Variant, i.Variant.Product, Sellable = i.Variant.IsActive && i.Variant.Product.IsActive && i.Variant.Product.Category.IsActive
+                    && (i.Variant.Product.Category.ParentCategoryId == null || i.Variant.Product.Category.ParentCategory!.IsActive) })
                 .ToListAsync(ct))
             .Select(x => new Line(x.Variant, x.Product, x.Quantity,
                 Math.Max(0, x.Variant.StockOnHand - x.Variant.StockReserved) + held.GetValueOrDefault(x.Variant.Id), x.Sellable))

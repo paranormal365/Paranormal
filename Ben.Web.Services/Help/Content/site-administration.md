@@ -1082,6 +1082,19 @@ how many live products it will hide before you confirm, and showing the category
 exactly what was live. A category holding products cannot be removed; move them first. The last
 category cannot be removed either.
 
+**Subcategories.** A category can sit under another one — choose it in **Sits under** when editing
+it. They go one level deep: a subcategory sits under a top-level category, and a category that has
+subcategories stays at the top. On the Categories page subcategories are listed indented under their
+category, and the arrows move a row among its own level. In a product's **Category** list they read
+"Category › Subcategory". Hiding a category hides its subcategories' products too, and a category
+with subcategories cannot be removed until they are moved or removed.
+
+**What shoppers see.** A category or subcategory appears on the store only when something is on
+sale under it — a category counts its subcategories' products, so it appears as soon as any of them
+has something for sale. An empty one stays out of sight (its address says "Page not found") but is
+always there to file products in. The store's front page shows top-level categories; the side list
+on the product pages shows subcategories under them. Only SuperAdmins can change categories.
+
 A **product** starts with just a name. It arrives hidden, with one variant at $0.00 waiting for a
 price. It goes on sale with **Activate**, which refuses — saying what to do — until the product
 has a price, at least one picture, a live variant and a visible category. A product's address

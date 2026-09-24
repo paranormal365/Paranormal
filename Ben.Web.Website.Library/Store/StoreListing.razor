@@ -181,8 +181,8 @@
         _loading = false;
         if (!RendererInfo.IsInteractive)
         {
-            RenderedListing = _listing.Item;
-            RenderedFor = Nav.Uri;
+            RenderedListing = StoreCarry.IfItFits(_listing.Item);
+            RenderedFor = RenderedListing is null ? null : Nav.Uri;
         }
     }
 

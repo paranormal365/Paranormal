@@ -321,6 +321,22 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   a live/test mix; sets Stripe__PublishableKey on the API pool), SECRETS.md (names only), and a store
   section appended to docs/stripe-go-live.md (events, API-version pin, Tax registrations, Link order,
   no Stripe receipts, KnownProxies, migrate before deploy, the dark-fill-open steps, rollback).
+- (S4b) Subcategories. StoreCategory.ParentCategoryId (M5). The on-sale rule now also needs the
+  category's parent shown; its nine copies (catalogue, cart ×2, checkout, stock, settings checklist,
+  order slugs, product preview flag, admin lists) all name the parent, and
+  StoreSellableRuleNamesTheParentTests fails on any store query that reads a category's IsActive
+  without it. Shoppers: category cards in tree order with ParentId; a parent counts its children's
+  products; the front page shows top-level only; /store/c/{slug} covers subcategories and answers
+  404 when nothing under it is on sale (Ben's rule — the gap S2 left). Admin: "Sits under" in the
+  editor (off for a category with subcategories), one level deep, never under itself, no delete while
+  it has subcategories, the hide warning counts subcategories' products, arrows move among siblings,
+  the product picker reads "Category › Subcategory", the preview breadcrumb shows the parent.
+- (S4b, found by the Store category run) The carried page state has no fixed size: the e2e database
+  had grown 217 shelves (every test product made its own), and /store carried 75 KB. Past the
+  connection's 128 KB the page would be drawn but dead. StoreCarry (48 KB) now carries a page only
+  when it fits — too big and it loads again when live. Test products share one shelf
+  (StoreTestApi.SharedShelf), and the 137 old per-product shelves on IsHauntedDb_e2e were hidden
+  through the admin API.
 - (S4.11) Not in the browser suite: "Without Stripe the checkout says so" needs a host with no keys
   and no fake — the refusal (PaymentsNotSetUp, 503 prose) is covered by StoreCheckoutServiceTests.
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one
@@ -352,6 +368,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | Built 09/24/2026 — PublicStoreController 12 facts (9 breaks caught), shared components 16 render facts (10 breaks), query string 8 facts; StoreBrowseTests/StoreProductTests/StoreFeatureFlagTests + crawls + admin 25/25 on IsHauntedDb_e2e with the store on; visual audit light+dark at four widths; guards StoreControllersAreGated, StoreLinksResolve, StoreProductProseClassIsGlobal, the Smarty deny-list, each broken once |
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | Built 09/24/2026 — server: StoreCartService/Controller 30 facts, 20 breaks caught; website: cookie, client headers, cart state, card button 20 facts, 14 breaks caught; guards StorePublicWritesAreRateLimited, StoreCartSurfacesAgree (incl. the badge outside the signed-in branch), cart-refusal and the two Apply rows, each broken once; StoreCartTests 7/7 + store/crawl/header suite 33/33 on IsHauntedDb_e2e. Between S3.3 and S3.4, at Ben's request: the Seller role and the editor's live preview (below) |
 | S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | Built 09/24/2026 in fake mode — every new fact seen failing on a deliberate break (mutation runs per sitting, recorded in the commits); Playwright StoreCheckoutTests 8, StoreOrderTests 8, Store category 51/51 on IsHauntedDb_e2e; unit suite green (Ben.Web.Tests 7,296). By eye: checkout desktop/phone, light/dark; order page, invoice, lookup, returns. **Still open for S4 exit:** the real test-mode run (`BEN_STRIPE_E2E=1`: 4242 card, self-signed webhook 200 / forged 400, tax adds up) and the webhook signature fixtures captured with the Stripe CLI — both need Ben's Stripe TEST key in the gitignored dev settings. |
+| S4b | subcategories (Ben, 09/24): nullable parent, one level deep; shelves shown only when something is on sale under them; empty shelf 404 | Built 09/24/2026 — migration M5 StoreSubcategories (one nullable column, index, NoAction FK); StoreSubcategoryTests 11 + the sellable-rule guard, 10 breaks all caught; Playwright StoreSubcategoryTests 2; Store category 52/52; unit suite green |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
 | S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | |
 | S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | |

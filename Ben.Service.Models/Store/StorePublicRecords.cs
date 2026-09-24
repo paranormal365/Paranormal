@@ -5,8 +5,11 @@ namespace Ben.Service.Models.Store;
 // What the public store sends to anybody, signed in or not (storefront S2.1). Nothing here carries
 // stock counts beyond what a buyer needs, a cost, an admin note or a hidden product.
 
+/// <param name="ProductCount">What is on sale here, its subcategories' products included.</param>
+/// <param name="ParentId">The top-level category this is a subcategory of; null at the top.</param>
 public sealed record StoreCategoryCard(
-    Guid Id, string Name, string Slug, string? Description, Guid? ImageUploadFileId, bool IsNew, int ProductCount);
+    Guid Id, string Name, string Slug, string? Description, Guid? ImageUploadFileId, bool IsNew, int ProductCount,
+    Guid? ParentId = null);
 
 /// <param name="CompareAtPrice">The old price, when the cheapest variant has one — drawn struck through.</param>
 /// <param name="DiscountPercent">How much the old price is cut, rounded down; null when there is no old price.</param>
@@ -86,4 +89,4 @@ public sealed record StoreProductDetail(
     IReadOnlyList<StoreOptionRecord> Options, IReadOnlyList<StoreVariantPublicRecord> Variants,
     IReadOnlyList<StoreSpecGroup> Specs, StoreReviewSummary Reviews, StoreEquipmentLink? Equipment,
     IReadOnlyList<StoreProductCard> Related, int LowStockThreshold, int ReturnsWindowDays,
-    DateTime LastUpdatedUtc, bool IsPreview);
+    DateTime LastUpdatedUtc, bool IsPreview, string? ParentCategoryName = null, string? ParentCategorySlug = null);

@@ -8,14 +8,19 @@ namespace Ben.Service.Models.Store;
 // ── Categories ───────────────────────────────────────────────────────────────
 
 /// <param name="ProductCount">Every product filed here, live or not — what blocks a delete.</param>
-/// <param name="LiveProductCount">Products a buyer can see today. Hiding the category takes exactly
-/// these off the store, so the confirm dialog reads it BEFORE anything is saved.</param>
+/// <param name="LiveProductCount">Products a buyer can see today, its subcategories' included. Hiding the
+/// category takes exactly these off the store, so the confirm dialog reads it BEFORE anything is saved.</param>
+/// <param name="ParentCategoryId">The top-level category this is a subcategory of; null for a top-level one.</param>
+/// <param name="SubcategoryCount">How many subcategories sit under it — a category with any cannot become one.</param>
 public sealed record StoreCategoryAdminRecord(
     Guid Id, string Name, string Slug, string? Description, Guid? ImageUploadFileId, int SortOrder,
-    bool IsActive, bool IsNew, int ProductCount, int LiveProductCount, DateTime DateCreated);
+    bool IsActive, bool IsNew, int ProductCount, int LiveProductCount, DateTime DateCreated,
+    Guid? ParentCategoryId = null, string? ParentName = null, int SubcategoryCount = 0);
 
 /// <param name="Slug">Empty = made from the name.</param>
-public sealed record SaveStoreCategoryRequest(string Name, string? Slug, string? Description, bool IsActive, bool IsNew);
+/// <param name="ParentCategoryId">Null files it at the top level; otherwise the top-level category it sits under.</param>
+public sealed record SaveStoreCategoryRequest(
+    string Name, string? Slug, string? Description, bool IsActive, bool IsNew, Guid? ParentCategoryId = null);
 
 /// <summary>What saving a category did, beyond saving it.</summary>
 /// <param name="HiddenProducts">Live products this save took off the store (0 unless it hid the category).</param>

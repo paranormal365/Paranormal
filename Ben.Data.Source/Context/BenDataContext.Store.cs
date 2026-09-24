@@ -53,6 +53,11 @@ namespace Ben.Data.Source.Context
             category.HasIndex(e => new { e.IsActive, e.SortOrder });
             category.HasOne(e => e.ImageUploadFile).WithMany()
                 .HasForeignKey(e => e.ImageUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // A parent is never deleted from under its subcategories: the admin refuses with a
+            // sentence first, and the database refuses too (NoAction, no cascade).
+            category.HasOne(e => e.ParentCategory).WithMany(e => e.Subcategories)
+                .HasForeignKey(e => e.ParentCategoryId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            category.HasIndex(e => e.ParentCategoryId);
             StoreAudit<StoreCategory>(modelBuilder);
 
             // Products: the root every catalogue child cascades from.

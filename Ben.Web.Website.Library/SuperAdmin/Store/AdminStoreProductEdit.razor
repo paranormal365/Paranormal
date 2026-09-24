@@ -68,9 +68,11 @@
                         <div class="col-md-4">
                             <label class="form-label" for="product-category">Category</label>
                             <select id="product-category" class="form-select" @bind="_details.CategoryId" @bind:after="MarkDirty">
+                                @* In tree order: every category and subcategory is here for filing, shown or
+                                   empty — shoppers only ever see the ones with something on sale. *@
                                 @foreach (var c in _categories.Items)
                                 {
-                                    <option value="@c.Id">@c.Name@(c.IsActive ? "" : " (hidden)")</option>
+                                    <option value="@c.Id">@(c.ParentName is { } parent ? $"{parent} › {c.Name}" : c.Name)@(c.IsActive ? "" : " (hidden)")</option>
                                 }
                             </select>
                         </div>
@@ -455,6 +457,7 @@
     private StoreProductDetail PreviewDetail(StoreProductAdminRecord saved)
     {
         var category = _categories.Items.FirstOrDefault(c => c.Id == _details.CategoryId);
+        var parent = category?.ParentCategoryId is { } parentId ? _categories.Items.FirstOrDefault(c => c.Id == parentId) : null;
         var model = _models.Items.FirstOrDefault(m => m.Id == _details.EquipmentModelId);
         var settings = _settings.Item;
         return StoreProductPreview.Build(saved,
@@ -465,7 +468,8 @@
             new StoreProductPreviewContext(
                 category?.Name ?? saved.CategoryName, category?.Slug ?? "",
                 model is { UrlName: { } modelSlug, BrandUrlName: { } brandSlug } ? new StoreEquipmentLink(model.BrandName, brandSlug, model.Name, modelSlug) : null,
-                settings?.LowStockThreshold ?? 3, settings?.ReturnsWindowDays ?? 30, DateTime.UtcNow));
+                settings?.LowStockThreshold ?? 3, settings?.ReturnsWindowDays ?? 30, DateTime.UtcNow,
+                parent?.Name, parent?.Slug));
     }
 
     /// <summary>Delivery, returns and "need help", from the store settings.</summary>

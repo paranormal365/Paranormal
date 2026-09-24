@@ -65,10 +65,11 @@ public sealed class PublicStoreController(
         StoreProductCard Card(StoreCatalogue.Entry e) => StoreCatalogue.Card(e, s.LowStockThreshold, now);
 
         Response.Headers.CacheControl = "public, max-age=60";
+        var topLevel = categories.Where(c => c.ParentId is null).ToList();
         return Ok(new StoreHomeResponse(
-            Slides: categories.Where(c => c.ImageUploadFileId is not null).Take(RailSize)
+            Slides: topLevel.Where(c => c.ImageUploadFileId is not null).Take(RailSize)
                 .Select(c => new StoreHeroSlide(c.Name, c.Description, c.ImageUploadFileId!.Value, $"/store/c/{c.Slug}")).ToList(),
-            Categories: categories,
+            Categories: topLevel,
             Featured: StoreCatalogue.Popular(entries.Where(e => e.Product.IsFeatured)).Take(RailSize).Select(Card).ToList(),
             NewArrivals: entries.OrderByDescending(e => StoreCatalogue.IsNew(e.Product, now)).ThenByDescending(e => e.Product.DateCreated)
                 .Take(RailSize).Select(Card).ToList(),
@@ -88,8 +89,13 @@ public sealed class PublicStoreController(
     public async Task<ActionResult<StoreListingResponse>> Category(string slug, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var category = await db.StoreCategories.AsNoTracking().FirstOrDefaultAsync(c => c.Slug == slug && c.IsActive, ct);
+        var category = await db.StoreCategories.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Slug == slug && c.IsActive && (c.ParentCategoryId == null || c.ParentCategory!.IsActive), ct);
         if (category is null) return NotFound(NoSuchCategory);
+        // A shelf with nothing on sale under it is for sellers, not shoppers: its address answers
+        // exactly as a missing one does (Ben, 09/24).
+        if (!await StoreCatalogue.LiveProducts(db).AnyAsync(p => p.CategoryId == category.Id || p.Category.ParentCategoryId == category.Id, ct))
+            return NotFound(NoSuchCategory);
         return Ok(await ListingAsync(db, category.Id, ct));
     }
 
@@ -113,7 +119,7 @@ public sealed class PublicStoreController(
         Response.Headers.CacheControl = "no-store";
 
         var product = await (previewing ? db.StoreProducts : StoreCatalogue.LiveProducts(db)).AsNoTracking()
-            .Where(p => p.Slug == slug).Select(p => new { p.Id, Live = p.IsActive && p.Category.IsActive })
+            .Where(p => p.Slug == slug).Select(p => new { p.Id, Live = p.IsActive && p.Category.IsActive && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive) })
             .FirstOrDefaultAsync(ct);
         if (product is null) return NotFound(NoSuchProduct);
 
@@ -173,7 +179,8 @@ public sealed class PublicStoreController(
             new StoreReviewSummary(ratings.Count == 0 ? 0m : Math.Round((decimal)ratings.Sum() / ratings.Count, 2, MidpointRounding.AwayFromZero),
                 ratings.Count, Enumerable.Range(1, 5).Select(n => ratings.Count(r => r == n)).ToList()),
             equipment, related, s.LowStockThreshold, s.ReturnsWindowDays,
-            e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live));
+            e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live,
+            e.Category.ParentCategory?.Name, e.Category.ParentCategory?.Slug));
     }
 
     /// <summary>Counts a look at a product, for "most popular". Always 204 — a hidden or missing product is not news to the caller.</summary>
@@ -216,7 +223,7 @@ public sealed class PublicStoreController(
         var entries = await StoreCatalogue.LoadAsync(db, StoreCatalogue.LiveProducts(db), ct);
         var categories = await CategoryCardsAsync(db, entries, ct);
 
-        var shelf = entries.Where(e => categoryId is null || e.Product.CategoryId == categoryId)
+        var shelf = entries.Where(e => categoryId is null || e.Product.CategoryId == categoryId || e.Category.ParentCategoryId == categoryId)
                            .Where(e => StoreCatalogue.MatchesSearch(e, query.Q)).ToList();
         var matching = StoreCatalogue.Sort(shelf.Where(e => StoreCatalogue.Matches(e, query)), query.Sort!).ToList();
 
@@ -231,14 +238,33 @@ public sealed class PublicStoreController(
     }
 
     /// <summary>Shown shelves with a live product on them, in the admin's order.</summary>
-    private static async Task<List<StoreCategoryCard>> CategoryCardsAsync(
+    /// <summary>
+    /// The shelves a shopper sees, as a tree read top to bottom: each top-level category followed by
+    /// its subcategories. Only those with something on sale under them (Ben, 09/24) — a parent counts
+    /// its subcategories' products, so it shows when only a subcategory has stock.
+    /// </summary>
+    internal static async Task<List<StoreCategoryCard>> CategoryCardsAsync(
         BenDataContext db, IReadOnlyList<StoreCatalogue.Entry> entries, CancellationToken ct)
     {
-        var counts = entries.GroupBy(e => e.Product.CategoryId).ToDictionary(g => g.Key, g => g.Count());
+        // Every entry is live, so its category and its parent are both shown.
+        var own = entries.GroupBy(e => e.Product.CategoryId).ToDictionary(g => g.Key, g => g.Count());
+        var underParent = entries.Where(e => e.Category.ParentCategoryId is not null)
+            .GroupBy(e => e.Category.ParentCategoryId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        int Count(Guid id) => own.GetValueOrDefault(id) + underParent.GetValueOrDefault(id);
+
         var categories = await db.StoreCategories.AsNoTracking().Where(c => c.IsActive)
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync(ct);
-        return categories.Where(c => counts.ContainsKey(c.Id))
-            .Select(c => new StoreCategoryCard(c.Id, c.Name, c.Slug, c.Description, c.ImageUploadFileId, c.IsNew, counts[c.Id]))
-            .ToList();
+        var children = categories.Where(c => c.ParentCategoryId is not null).ToLookup(c => c.ParentCategoryId!.Value);
+
+        StoreCategoryCard Card(StoreCategory c) =>
+            new(c.Id, c.Name, c.Slug, c.Description, c.ImageUploadFileId, c.IsNew, Count(c.Id), c.ParentCategoryId);
+
+        var cards = new List<StoreCategoryCard>();
+        foreach (var top in categories.Where(c => c.ParentCategoryId is null && Count(c.Id) > 0))
+        {
+            cards.Add(Card(top));
+            cards.AddRange(children[top.Id].Where(c => Count(c.Id) > 0).Select(Card));
+        }
+        return cards;
     }
 }

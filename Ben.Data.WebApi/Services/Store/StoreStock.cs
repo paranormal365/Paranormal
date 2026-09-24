@@ -43,7 +43,8 @@ public static class StoreStock
             .Where(v => v.Id == variantId
                      && v.IsActive
                      && v.StockOnHand - v.StockReserved >= quantity
-                     && db.StoreProducts.Any(p => p.Id == v.ProductId && p.IsActive && p.Category.IsActive))
+                     && db.StoreProducts.Any(p => p.Id == v.ProductId && p.IsActive && p.Category.IsActive
+                         && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive)))
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.StockReserved, v => v.StockReserved + quantity), ct);
         return rows == 1;
     }

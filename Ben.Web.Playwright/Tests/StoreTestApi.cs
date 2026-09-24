@@ -113,10 +113,34 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
     private static string? Text(JsonElement e, string name)
         => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetString();
 
+    /// <summary>The one shelf every buyable test product goes on.</summary>
+    /// <remarks>
+    /// It used to be a new shelf per product, which the e2e database keeps for ever: after a few
+    /// weeks of runs the store had hundreds of shelves, and the listing's side list alone carried
+    /// 75 KB into the page (found 09/24, StoreBrowseTests.The_carried_state_fits_the_connection).
+    /// </remarks>
+    public const string SharedShelf = "E2E test products";
+
+    private async Task<Guid> SharedShelfAsync()
+    {
+        async Task<Guid?> FindAsync()
+        {
+            foreach (var c in (await SendAsync(HttpMethod.Get, "/api/admin/store/categories")).EnumerateArray())
+                if (c.GetProperty("name").GetString() == SharedShelf) return c.GetProperty("id").GetGuid();
+            return null;
+        }
+        if (await FindAsync() is { } found) return found;
+
+        // Two fixtures can race to make it; the loser's "already a category called…" is fine.
+        using var made = await http.PostAsync("/api/admin/store/categories", JsonContent.Create(
+            new { name = SharedShelf, slug = (string?)null, description = (string?)null, isActive = true, isNew = false }));
+        return await FindAsync() ?? throw new InvalidOperationException($"The shared test shelf could not be made: {(int)made.StatusCode}");
+    }
+
     /// <summary>A live, one-variant product with stock — the card adds it straight to the cart.</summary>
     public async Task<JsonElement> BuyableAsync(string name, decimal price, int onHand = 10)
     {
-        var product = await ProductAsync(await CategoryAsync(name + " shelf"), name, live: true, price: price);
+        var product = await ProductAsync(await SharedShelfAsync(), name, live: true, price: price);
         await SetStockAsync(product, onHand);
         return product;
     }

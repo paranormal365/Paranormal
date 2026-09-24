@@ -130,7 +130,8 @@ public sealed class StoreOrderController(
     private static async Task<IReadOnlyDictionary<Guid, string>> ProductSlugsAsync(BenDataContext db, StoreOrder order, CancellationToken ct)
     {
         var ids = order.Items.Select(i => i.ProductId).Distinct().ToList();
-        return await db.StoreProducts.AsNoTracking().Where(p => ids.Contains(p.Id) && p.IsActive && p.Category.IsActive)
+        return await db.StoreProducts.AsNoTracking().Where(p => ids.Contains(p.Id) && p.IsActive && p.Category.IsActive
+                && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive))
             .ToDictionaryAsync(p => p.Id, p => p.Slug, ct);
     }
 
