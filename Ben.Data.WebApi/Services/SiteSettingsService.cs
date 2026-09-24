@@ -198,6 +198,17 @@ public static class SiteSettingKeys
     public const string FeaturePublications = "features.publications";
 
     /// <summary>
+    /// The gear store: catalogue, cart and checkout. Off until the store ships (branch storefront).
+    /// </summary>
+    /// <remarks>
+    /// Hides what SELLS and what ENGAGES — the shop pages, the cart, checkout, favourites and
+    /// reviews. It never hides a buyer's money: order pages, the thank-you page Stripe returns to,
+    /// emailed order links, webhook fulfilment and the admin store screens all keep working with it
+    /// off. Pausing orders without hiding the shop is <c>store.checkout-enabled</c>.
+    /// </remarks>
+    public const string FeatureStore = "features.store";
+
+    /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
     /// </summary>
@@ -286,6 +297,8 @@ public static class SiteSettingKeys
             "The site-wide feed any signed-in member can post to, with mentions, hashtags and following. Off by default. Turning it on also turns on the moderation queue, which is where reported posts arrive."),
         (FeaturePublications, "Feature — Publications",
             "Long-form publications a group writes and readers subscribe to. Off by default. Subscriptions are free; nothing here charges anyone."),
+        (FeatureStore, "Feature — Store",
+            "The gear store: catalogue, cart and checkout. Off by default until it ships. Turning it off hides the shop and stops new orders; existing orders, their status pages, the thank-you page and emailed links, stock and the admin screens are untouched. To pause orders without hiding the shop use 'Take orders' under Store."),
     ];
 
     /// <summary>
@@ -336,7 +349,7 @@ public static class SiteSettingKeys
          + "just its links — and nothing stored is deleted.",
          [FeatureVideoEditor, FeatureEquipment, FeatureEvents, FeatureDiscovery, FeatureCmsPages,
           FeatureMediaLibrary, FeatureOrgMessaging, FeatureVoting, FeaturePublicFeed,
-          FeaturePublications]),
+          FeaturePublications, FeatureStore]),
     ];
 
     /// <summary>
@@ -398,6 +411,7 @@ public static class SiteSettingKeys
         (FeatureVoting,       true),
         (FeaturePublicFeed,   false),
         (FeaturePublications, false),
+        (FeatureStore,        false),
     ];
 
     /// <summary>Just the feature keys, in declaration order.</summary>

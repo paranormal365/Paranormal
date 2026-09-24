@@ -86,11 +86,13 @@ public sealed class SiteFeatureFlagTests
         // not be reachable because a default was written optimistically.
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublicFeed));
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublications));
+        Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeatureStore));
 
         // ...and everything that already works must stay working when the flags ship.
         foreach (var (key, defaultWhenUnset) in SiteSettingKeys.FeatureDefaults)
         {
-            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications)
+            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications
+                    or SiteSettingKeys.FeatureStore)
                 continue;
 
             Assert.True(defaultWhenUnset,

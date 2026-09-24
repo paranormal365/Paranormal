@@ -34,6 +34,9 @@ public class ParameterisedRouteCrawlTests : BenTestBase
     private static readonly string[] TokenPlaceholders =
         { "{Token}", "{AccessToken:guid}" };
 
+    /// <summary>Pages under a switched prefix that never depend on the switch.</summary>
+    private static readonly string[] NotBehindAnySwitch = ["/store/orders", "/store/checkout/complete"];
+
     /// <summary>Whether this URL only exists when a feature switch is on, and that switch is off.</summary>
     private static async Task<bool> IsBehindAnOffSwitchAsync(string url)
     {
@@ -43,7 +46,14 @@ public class ParameterisedRouteCrawlTests : BenTestBase
             ("features.video-editor",  "/video-editor"),
             ("features.media-library", "/media"),
             ("features.equipment",     "/equipment-catalog"),
+            ("features.store",         "/store"),
         ];
+
+        // Prefixes swallow everything under them, and /store would swallow the pages that must
+        // stay walked while the store is dark: a buyer's orders and the thank-you page Stripe
+        // returns to. Those are consulted first (storefront plan §5.3).
+        if (NotBehindAnySwitch.Any(p => url.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            return false;
 
         foreach (var (flag, prefix) in switched)
         {

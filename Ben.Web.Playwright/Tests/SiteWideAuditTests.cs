@@ -63,10 +63,20 @@ public class SiteWideAuditTests : BenTestBase
         ("features.media-library", "/media"),
         ("features.discovery",     "/find"),
         ("features.events",        "/events"),
+        ("features.store",         "/store"),
     ];
+
+    /// <summary>
+    /// Pages under a switched prefix that never depend on the switch: a buyer's orders and the
+    /// thank-you page Stripe returns to stay reachable with the store dark (storefront plan §5.3).
+    /// </summary>
+    private static readonly string[] NotBehindAnySwitch = ["/store/orders", "/store/checkout/complete"];
 
     private async Task<bool> IsSwitchedOffAsync(string path)
     {
+        if (NotBehindAnySwitch.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
         foreach (var (flag, prefix) in SwitchedRoutes)
         {
             if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)

@@ -39,6 +39,11 @@ public class RouteCrawlTests : BenTestBase
         ("features.equipment",    ["/equipment-catalog", "/my-equipment", "/my-checkouts"]),
         ("features.video-editor", ["/video-editor", "/my-videos"]),
         ("features.events",       ["/events"]),
+        // The store's SHOP pages only. /store/checkout/complete (Stripe's return page) and the
+        // /store/orders pages are deliberately absent: they stay reachable with the switch off,
+        // because a buyer's order never depends on it (storefront plan §5.3).
+        ("features.store",        ["/store", "/store/products", "/store/cart", "/store/checkout",
+                                   "/store/favourites", "/store/returns"]),
     ];
 
     private static async Task<HashSet<string>> RoutesBehindOffSwitchesAsync()

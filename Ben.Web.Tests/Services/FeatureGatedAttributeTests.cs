@@ -107,6 +107,29 @@ public sealed class FeatureGatedAttributeTests
         Assert.True(ranWhenOn, "switching the flag on must let the action run");
     }
 
+    /// <summary>
+    /// The store answers nothing on a site that has never touched its switch (storefront, S0.2).
+    /// </summary>
+    /// <remarks>
+    /// The store ships dark: production has no <c>features.store</c> row the day the API deploys, and
+    /// a gate that read an unset flag as on would open a shop with an empty catalogue — and a
+    /// checkout — to every visitor before anybody had entered a product.
+    /// </remarks>
+    [Fact]
+    public async Task The_store_is_dark_until_somebody_turns_it_on()
+    {
+        var gate = new FeatureGatedAttribute(SiteSettingKeys.FeatureStore);
+
+        var (unsetResult, ranWhenUnset) = await Support.FeatureGateProbe.RunAsync(
+            gate, await Support.FeatureGateProbe.SettingsAsync());
+        Assert.False(ranWhenUnset, "features.store has no settings row, yet the gated action ran");
+        Assert.IsType<NotFoundResult>(unsetResult);
+
+        var (_, ranWhenOn) = await Support.FeatureGateProbe.RunAsync(
+            gate, await Support.FeatureGateProbe.SettingsAsync(SiteSettingKeys.FeatureStore, "true"));
+        Assert.True(ranWhenOn, "switching the store on must let the action run");
+    }
+
     /// <summary>The flags that were gated before any of this defaulted on, and still do.</summary>
     [Theory]
     [InlineData(SiteSettingKeys.FeatureCmsPages)]

@@ -19,6 +19,9 @@ internal static class UploadFileTypeSeeder
     internal const string ProfilePhotoFileTypeName   = "Profile Photo";
     internal const string EquipmentPhotoFileTypeName = "Equipment Photo";
 
+    // Fixed GUID. Several controllers (case, field-session, event and venue files) hold their own copy of this value.
+    internal static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+
     // Fixed GUID so VideoProjectController can reference it without a DB lookup.
     internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
 
@@ -69,6 +72,24 @@ internal static class UploadFileTypeSeeder
     internal static readonly Guid ResearchFileTypeId = new("90000000-0000-0000-0000-000000000001");
 
     internal const string ResearchFileTypeName = "Research";
+
+    /// <summary>
+    /// The upload type of a gear-store product picture (storefront, S0.10).
+    /// </summary>
+    /// <remarks>
+    /// <para>A store picture is a site-owned upload: no owner person or group, no expiry, so the
+    /// media retention sweep never takes it. <c>IsPublic</c> stays FALSE even though every visitor
+    /// sees these pictures — they are served by the store's own image endpoint, which answers for
+    /// pictures of sellable products (and for the back office while the shop is dark), never by the
+    /// general file routes.</para>
+    /// <para>Browser-displayable rasters only: no GIF (a product photo is not an animation) and no
+    /// SVG (a document that can carry script, rendered to anonymous visitors).</para>
+    /// </remarks>
+    internal static readonly Guid StoreImageFileTypeId = new("A0000000-0000-0000-0000-000000000001");
+
+    internal const string StoreImageFileTypeName = "Store Image";
+
+    private static readonly string[] StoreImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
     /// <summary>
     /// What a feed post may carry: browser-displayable photos, and video the &lt;video&gt; element
@@ -134,6 +155,8 @@ internal static class UploadFileTypeSeeder
         await SeedProfilePhotoFileTypeAsync(db, owner.Id);
 
         await SeedEquipmentPhotoFileTypeAsync(db, owner.Id);
+
+        await SeedStoreImageFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -197,7 +220,7 @@ internal static class UploadFileTypeSeeder
 
         db.UploadFileTypes.Add(new UploadFileType
         {
-            Id                 = new Guid("20000000-0000-0000-0000-000000000001"), // fixed — referenced by MyCaseController
+            Id                 = EvidenceFileTypeId,
             Name               = EvidenceFileTypeName,
             Description        = "Client-submitted evidence files attached to case occurrences — photos, audio, video and documents",
             IsActive           = true,
@@ -412,6 +435,39 @@ internal static class UploadFileTypeSeeder
             {
                 Id                 = Guid.NewGuid(),
                 UploadFileTypeId   = FeedMediaFileTypeId,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Store Image file type exists (fixed GUID; see <see cref="StoreImageFileTypeId"/>).</summary>
+    private static async Task SeedStoreImageFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == StoreImageFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = StoreImageFileTypeId,
+            Name               = StoreImageFileTypeName,
+            Description        = "Gear store product pictures — JPEG, PNG, WebP",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 11,
+            AllowAllExtensions = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        foreach (var ext in StoreImageExtensions)
+        {
+            db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = StoreImageFileTypeId,
                 Pattern            = ext,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = ownerId,

@@ -247,6 +247,13 @@ public sealed class AccountClosureService
 
         await db.SaveChangesAsync(ct);
 
+        // ── their store orders ────────────────────────────────────────────────
+        // Kept — a sale is a tax record — but no longer theirs: finished orders lose the name,
+        // email, phone and street now; an order still on its way keeps its address until it is
+        // delivered (storefront, Ben 09/24/2026). Here rather than in each caller, for the reason
+        // above: closure and the SuperAdmin purge must not disagree about what an order keeps.
+        await Store.StoreOrderScrub.DetachAndScrubAsync(db, userId, DateTime.UtcNow, ct);
+
         // Bytes after the rows, and never fatal: a closure that has already anonymised the
         // account must not fail because one blob would not delete. It is logged instead.
         if (media is not null)

@@ -1,0 +1,262 @@
+# Storefront — the gear store (branch `storefront`, from master d2d27c26, 09/23/2026)
+
+## Goal
+Sell physical electronic devices for ghost hunts to anyone — guests included — with our own
+checkout page and the Stripe Payment Element, Stripe Tax, flat-rate US shipping, per-variant
+stock, discount codes, favourites, moderated buyer reviews, and an admin fulfilment desk with
+Stripe refunds and printable invoices. Ships dark behind `features.store` (default OFF).
+
+## Ben's decisions (verbatim)
+PAYMENT UI: our own checkout page (Smarty's layout) with Stripe Payment Element; card data never
+touches our server. SALES TAX: Stripe Tax — Calculation API before payment, Tax Transaction after;
+TaxResolver/TaxRateRule are NOT reused. SHIPPING: flat rate per order, free over a threshold, both
+admin-set; ship-to US only. STOCK: per variant; sold out stays listed but cannot be bought;
+"3 left" note; checkout refuses more than on hand. BUYERS: anyone — guest checkout with email +
+address; signed-in orders attach to the account (My Orders); guests get their order by emailed
+link. OPTIONS: variants with own price/SKU/stock chosen with swatches/pills; NO price-changing
+add-ons. EXTRAS: discount codes (store coupon table), favourites (signed-in), reviews (buyers only,
+moderated). NOT brands. FULFILMENT: Paid → Packed → Shipped (carrier + tracking, emails the buyer)
+→ Delivered; Cancelled / Refunded; full or partial Stripe refunds that restore stock; printable
+invoice. STORE SWITCH: site-wide, default OFF; each product/variant active or inactive. ADMIN: a
+"Store" section in Administration.
+
+## The three rules
+DESIGN RULE — Smarty supplies the structure, our site the skin (Bootstrap 5.3 in smartapp.min.css,
+night.min.css, ben-kit.css, our header/nav/footer, light AND dark). No Smarty CSS/JS/jQuery/icon
+font; the few Smarty-only classes are recreated as ben-* classes in wwwroot/kit/ben-store.css.
+Smarty utility names (link-normal, link-muted, text-danger-hover, article-format, bg-cover,
+text-dashed, gap-auto-*) are never copied into markup — ComponentClassesAreStyledTests denies them.
+Product descriptions use `ben-store-description` (global, in ben-store.css) — NOT `ben-article-body`,
+whose rules live only in the CSS-isolated PublicationPostReader.razor.css and never reach a store page.
+CART RULE — the four cart surfaces (header dropdown, slide-out drawer, cart page, empty-cart page)
+follow Smarty's HTML: −/+ quantity, remove, coupon entry (popup on the page, collapsible in the
+drawer), "N in stock", unit price, old price + "You save $x", the step indicator Cart → Place order
+→ Payment → Complete (all four labels from the first sitting; the checkout page marks Payment
+active once the Stripe element is mounted), "Secured checkout", Returns/Privacy/Terms + "Need help?".
+Substitutions: Smarty's summary Products / Shipping / Fees / Total (vat incl.) becomes Products /
+Discount / Shipping amount·Free·– / Sales tax / Total before tax (cart) or Total (checkout) —
+Fees → Sales tax (a `@* fees slot *@` marks where a fee line would go), "vat incl." → tax on its
+own line, the drawer's gift line is a `@* gift slot *@`, reward points are a `@* reward-points
+slot *@` only. The header dropdown shows three small rows (Products / Shipping / Total before tax),
+not Smarty's one Subtotal line. Smarty's "Update cart" button is dropped — quantities update live.
+When `store.checkout-enabled` is off every cart surface and the product page say "The store isn't
+taking orders at the moment." instead of offering checkout.
+
+DEVICE RULE (Ben, 09/23) — the store runs in browsers on phones, tablets and computers, all first-class:
+every store screen, public and admin, is designed for touch and checked at 375×812 (phone), 768×1024 and
+1024×768 (tablet) and desktop. Concretely (the plan's §6): the listing sidebar, the product gallery/buy-box
+and the checkout form/summary stack below Bootstrap's `lg` (992 px) and sit side by side from there; the
+Categories/Filters full-screen panels and the `.ben-checkout-bar` show below `lg`; the cart drawer is
+`min(420px, 100vw)`; every tappable control is ≥ 44×44 CSS px on `(hover: none)` devices; the product card's
+heart/cart rail is ALWAYS visible under `(hover: none)` (Smarty's hover-only rail leaves a touchscreen with no
+buttons); the gallery is swipeable with the browser's own pinch-zoom; admin grids scroll inside the page on a
+tablet; `VisualAuditWalk` gains tablet passes (768×1024, 1024×768); `StoreDeviceTests` checks the main screens
+at 375, 768, 1024 and 1280 for sideways scroll, stacking and the primary control being on screen.
+
+## Where things live
+Entities `Ben.Data.Source/Entities/BenDataModel.Store*.cs`, config `Context/BenDataContext.Store.cs`,
+enums `Ben.Data.Common/Enums/Store*.cs`; services `Ben.Data.WebApi/Services/Store/`; Stripe seams
+`Services/Billing/Stripe/StoreStripeGateway.cs` (+ Fake) and `Services/Store/StoreTaxProbe.cs`,
+`StoreTaxService.cs` (namespace Ben.Data.WebApi.Services.Billing.StripeIntegration for the gateway);
+jobs `Ben.Data.WebApi/Services/Scheduling/Store*Job.cs` (beside MediaRetentionJob.cs);
+controllers `Controllers/Public/PublicStore*.cs`, `Controllers/Store/*.cs`, `Controllers/Admin/Store/*.cs`;
+DTOs `Ben.Service.Models/Store/` (incl. StoreMoney.Cents — the ONE dollars→cents conversion);
+client `Ben.Web.Services/IBenStoreClient.cs`, `IBenStoreAdminClient.cs`,
+`WebApi/BenAdminClientAdapter.Store*.cs`; state `Ben.Web.Services/Store/`; pages
+`Ben.Web.Website.Library/Store/` and `SuperAdmin/Store/`; CSS
+`Ben.Web.Website.Library/wwwroot/kit/ben-store.css`; help `Ben.Web.Services/Help/Content/
+shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web.Tests/Store/`,
+`Ben.Web.Playwright/Tests/Store*.cs`; webhook fixtures `Ben.Web.Tests/Fixtures/stripe/`.
+
+## Rules that bit, written down
+- Every FK to AppUsers is NoAction; the purge decides. Orders are detached and scrubbed, never
+  deleted; in-flight orders keep the address until delivered (PendingAnonymisationSinceUtc).
+  The scrub uses tracked entities + one SaveChanges inside the caller's transaction, so the
+  InMemory AccountClosureTests keeps working; the discriminating closure fact is on SqliteTestDb.
+- UploadFile.AppUserId is the model's ONE Cascade FK to AppUsers, so store images are ownerless,
+  site-owned uploads: AppUserId and OwnerOrganizationId null, CreatedByAppUserId = the admin,
+  ExpiresAtUtc null (the retention sweep never takes them). Storage accounting has never seen this.
+- The fixed UploadFileType id series is 30…/40…/50…/60…/70… AND 80… (Board Snapshot) AND 90…
+  (Research); Store Image is A0000000-…-0001. UploadFileTypeSeederTests asserts every fixed id is
+  distinct so nobody repeats a slot again.
+- Child rows cascade from ONE root only (SQL Server refuses two paths); Image→Variant,
+  VariantOptionValue→OptionValue, RefundItem→OrderItem are NoAction with app-side rules.
+- No rowversion anywhere: every race is a one-statement conditional ExecuteUpdateAsync (stock
+  reservation, status transitions, coupon cap, idempotent MarkPaid, order reuse, release) —
+  identical on SQL Server and SqliteTestDb. ReleaseAsync is idempotent because its FIRST
+  statement is the conditional order update; a second release moves nothing.
+- The stock guard is `StockOnHand + @delta >= StockReserved`, never `>= 0`: a CHECK violation is a
+  provider exception, not DbUpdateException (item 220), and the admin would see a 500.
+- Reserve lines in VariantId order: opposite orders deadlock on SQL Server (SqlException 1205),
+  which SqliteTestDb can never show. The victim gets "Stock is being updated — try again."
+- Coupons are reserved at PLACEMENT inside the stock transaction and released with the stock; the
+  discount is clamped to the subtotal and never touches shipping or tax (CouponMath.cs:199 kept).
+- "Sellable" is one predicate: variant AND product AND category active — the cart view, the stock
+  reserve and favourites all use it, or a hidden category stays purchasable from a cart.
+- The buyer's own open reservation is credited back when the same cart prepares again; otherwise
+  the last unit reads "Sold out." to the person holding it.
+- SQLite money rule: never SumAsync/OrderBy over a decimal column in a service a SQLite test
+  runs; load the lines and sum in C#. SqliteTestDb for anything that executes an update/delete.
+- Migrations: `dotnet ef migrations add <Name> --project Ben.Data.Source --startup-project
+  Ben.Data.WebApi`; apply with `--connection "<player|e2e|live>"` only (`dotnet ef` ignores the env
+  var; IsHauntedDb is production). M1 StoreCatalog, M2 StoreCartsAndOrders,
+  M3 StoreFavouritesAndReviews.
+- The confirmation, shipped and refund letters are queued through IOutboxEmailQueue INSIDE the
+  transaction that changes the order — a refused letter refuses the change.
+- NO Stripe call inside a SQL transaction: MarkPaid commits first, the tax transaction is a second
+  short save; the store StripeClient gets a 20 s timeout through StripeClientOptions.HttpClient
+  (there is no HttpTimeout member) and IStoreStripeGateway forwards to the ONE StripeGateway singleton.
+- The fake Stripe gateway registers only in Development with no secret key and
+  Stripe:AllowFakeCheckout=true; a Production container never resolves it (unit-tested), and a
+  production-shaped container always gives StripeFulfillmentService its store dependency — a store
+  intent with a missing dependency THROWS (Stripe retries) instead of being "ignored" with 200.
+- Admin store controllers, the admin nav group, the image endpoint, every order-viewing door AND
+  the thank-you page (/store/checkout/complete, Stripe's return_url) are not feature-gated: the
+  switch hides the shop, not the back office or a buyer's money. Favourites/reviews/votes ARE
+  gated (MyStoreEngagementController). `store.checkout-enabled` is the rollback lever.
+- The API is public: never key a rate limit on a client-supplied value. The store policies key on
+  the existing RateLimiting.ClientKey (user: else ip:) — reused, not copied as a "StoreClientKey"
+  that could drift — through RateLimiting.StorePartition, the one function both the registered
+  policies and StoreRateLimitPartitionTests call; the website forwards the visitor's address (X-Forwarded-For, trusted from loopback) so ip:
+  means the visitor. HostedEmailPickPolicy inherits the same repair.
+- A reservation costs the caller nothing: 3 open checkouts per address/email, 15-minute holds, the
+  expiry job every minute, "Units held by open checkouts" on the dashboard with a Release action.
+- StoreCheckoutPolicy sits on the three checkout POST actions, never the class: the complete page
+  polls the status door up to 30× a minute.
+- A class-level [AllowAnonymous] silences every [Authorize] action on the controller; the precedent
+  is LinkPreviewsController.cs — two classes, one anonymous, one authorised (no mixed controller).
+- Anonymous store endpoints authenticate the Entra scheme by hand
+  (GetCurrentUserIdOrNullAcrossSchemesAsync) or a Microsoft-signed-in member shops as a guest forever.
+- MarkPaid: an intent id that differs from the row's is NOT this order's payment — attention only,
+  no status change, no stock (dashboard-made payments carry editable metadata). Only a Cancelled
+  order paid on its OWN intent re-takes stock, and then it falls into the normal path (letter,
+  cart, tax) with the flag set; the one early return is "stock is gone", whose reason says no tax
+  transaction was filed. The amount check runs only when the event carries an amount; the
+  calculation committed is the intent's ih_tax_calc, not the row's, and the row is rewritten from
+  it when they disagree.
+- Flow-B webhook handlers are each one conditional UPDATE … WHERE Status = PendingPayment: Stripe
+  delivers out of order and more than once.
+- A failed payment past the reservation cancels the intent AT STRIPE first (the element is still
+  mounted on it) and releases only on Cancelled.
+- refund.created/refund.updated/refund.failed, never charge.refunded; our refund id rides in the
+  refund's metadata; a created refund is not a succeeded one — CompleteAsync runs only on
+  `succeeded`, a pending refund waits for its event, a failed one marks the row Failed with no
+  stock, letter or reversal to undo.
+- Stripe idempotency keys live 24 h and replay the ORIGINAL response, errors included: Retry LISTS
+  the refunds first and adopts what it finds; a fresh create uses store-refund-{Id}-{Attempt}.
+- Stripe Tax `reference` is unique across the whole account: ours is {OrderNumber}-{8 hex of the
+  order id}, reversals -R{n}; an invalid_request_error on commit is terminal (attention, no more
+  retries); transient retries cap at 20; a refund that precedes the tax transaction is reversed by
+  the retry job right after the commit; `full` only with no prior reversal and amount == Total.
+- A buyer's bad address is customer_tax_location_invalid — an invalid_request_error that is the
+  BUYER's problem (400, no bell), classified by StripeError.Code before Type.
+- Explicit payment_method_types may only name ACTIVATED types: Link is opt-in
+  (store.link-enabled) and a refusal falls back to card once with a warning.
+- Webhook payloads are rendered in the ENDPOINT's pinned API version: pin both endpoints to the
+  SDK's version, record it here, assert it on every fixture; a null latest_charge is tolerated.
+- The Stripe.net XML doc lacks comments for AddressOptions and RefundCreateOptions.Amount — compile
+  is the proof; the Tax line-item pager is ListLineItemsAutoPagingAsync(id,
+  CalculationLineItemListOptions) — CalculationListLineItemsOptions does not exist.
+- Webhook fixtures are captured (stripe listen --print-json … + stripe trigger), never typed.
+- The checkout form locks once a ClientSecret is held; "Edit" disposes the element and re-prepares.
+- Dollars→cents is StoreMoney.Cents (AwayFromZero) everywhere: decimal.Round(x, 0) is banker's.
+- The cookie middleware is NEW (Program.cs:398 sets no cookie); Secure = Request.IsHttps.
+- An email correction re-mints the order's AccessToken: the old mailbox loses the link.
+- Every public store page is an AuthReadyOnRoutablePagesTests.Exempt row (works signed out).
+- Playwright OFF-exclusions match by StartsWith: a NotBehind set keeps /store/orders* and
+  /store/checkout/complete crawled while the switch is off; OrderId lives only in the admin
+  prefix's _routeIds, never in TokenPlaceholders.
+- SaveInOneTransactionAsync is protected static on BenControllerBase: static helpers open their
+  own transaction with the IsRelational() guard.
+- No seeder had a SeedCoreAsync before StoreDemoSeeder introduced one; tests call the core.
+- The S4 sittings go mailer → alerts → payments → checkout service → jobs → controllers (+ e2e
+  script) → client → pages → seed orders → account pages; StatCard has Href; a link never
+  precedes its page (StoreLinksResolveTests) — dashboard tiles are inert until S5.5.
+- The buyer help stub (S2.0) exists before any page links to it, like the admin one (S1.10).
+- Every buying Playwright test purchases investigators-field-bag; single-unit-probe is the
+  refusal test's own product and is restored in teardown.
+- Guards born green are broken once on purpose (StoreReviewQueueHasAnEntranceTests,
+  StoreRefusalReachesThePageTests) and the slice row below says when.
+- (S0, 09/24) The FIRST StoreCatalog migration was generated before the catalogue's audit keys were
+  NoAction: nine cascading keys from AppUsers and two cascade paths to product pictures — SQL
+  Server refuses that. Every model guard passed (they read the model, which was right), and the
+  next migration "fixed" it by dropping and re-adding M1's keys. Both were regenerated;
+  MigrationsMatchTheModelTests (HasPendingModelChanges, no database) now fails on a model with no
+  migration, and all three migrations were applied to IsHauntedDb_e2e with --connection to prove
+  SQL Server accepts them. After `migrations add`, check the new migration touches no EXISTING table.
+- (S0) The order scrub lives in the SHARED AccountClosureService.AnonymiseAsync — one call that
+  closure and the SuperAdmin purge both reach — not in each caller. StoreOrder and
+  StoreCouponRedemption are detached, not deleted, so they sit in the purge's sweptEntities and in
+  AppUserPurgeCoverageTests' clearedByAnonymise, with StoreOrderScrubTests as the proof.
+- (S0) The purge brings each review's HelpfulCount down BEFORE it sweeps the person's votes, or
+  "12 people found this helpful" outlives the 12.
+- (S0) Emails compare through StoreEmail.Normalize (trim + upper-case, Identity's rule) — checkout,
+  the per-buyer coupon cap and order lookup must agree it is the same buyer.
+- (S0) Moved: the "PrepareAsync reserves in VariantId order" fact needs the checkout service, so it
+  lands in S4. The AdminDeleteUser kept-orders proof is a JSON contract test (service record → DTO)
+  plus the sentence, not an HtmlRenderer fact: the page loads its preview in OnAfterRenderAsync,
+  which a static render never runs. StoreMoney's "on the seeded totals" identity runs on sample
+  totals now; the seeded orders arrive in S4.
+
+## Slices (status)
+| Slice | What | Status |
+|---|---|---|
+| S0 | flag, 21 entities, 3 migrations, purge, static helpers, rate-limit partition | Built 09/24/2026 — every new fact seen failing first (mutations recorded in the commit) |
+| S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | |
+| S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | |
+| S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | |
+| S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | |
+| S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
+| S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | |
+| S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | |
+| S8 | rollout | |
+
+## Rejected (and why)
+- Extending BillingLedgerEntry, or a second StoreLedgerEntries table — the order row plus
+  append-only refunds and events is the money record; a ledger nobody reads is a table without a
+  consumer. Consequence: store money is not on /admin/billing-ledger (note + anchor there);
+  reconcile from /admin/store/orders, the CSV exports and the order number in the Stripe
+  statement descriptor.
+- Reusing TaxResolver/TaxRateRule or the subscription Coupon — Ben's decision; both are
+  period-shaped.
+- Hosted Checkout instead of the Payment Element — Ben's decision.
+- A shipping UserAddressType — the address is a snapshot on the order.
+- Cart token in localStorage / a Guid in the route — an HttpOnly cookie set by middleware is
+  never in JS and renders the badge on first interactive render.
+- Product-level low-stock threshold — one site setting keeps card, page, dashboard and digest
+  agreeing.
+- Hashing the order access token — three letters over an order's life carry the link (it is
+  re-minted only when the buyer email is corrected).
+- A SuperAdmin bypass of the store switch — QA happens on e2e/UAT with the flag on; a preview of
+  an INACTIVE product (?preview=1) is built instead.
+- Feature-gating the image endpoint — the back office needs pictures while the shop is dark.
+- Automatic payment methods — ACH/BNPL sit in processing for days; card (+ opt-in Link) only.
+- Stripe's own receipt email — two reference numbers for one order.
+- Line-level tax reversals — they need transaction line-item ids we never store; flat amounts.
+- Keying rate limits by cart token or lookup token — client-supplied values are not a limit.
+- Re-sending a refund with the same idempotency key — replays the original for 24 h, doubles after.
+- The `ben-article-body` prose class — scoped to PublicationPostReader; a global class instead.
+
+## NOT built (v1)
+Reward points (slot comment only), brands and brand pages (the product page links to the one
+equipment-catalogue model, labelled as such), compare, quick-view, grid/list toggle, countdown and
+typed-text offer cards, newsletter, promo popup, Smarty's 0–10 recommendation box, customer
+photos on reviews, a review-request letter, non-US shipping, price-changing add-ons, category
+parents (one nullable column later), admin-managed hero banners (slides are categories with a
+picture), Size Guide popup (no sizes to guide), "+ gift" badge and gift lines (no gifts), "Pickup
+in store" (no store), billing VAT/bank/IBAN fields (US-only, card-only), account sub-pages My
+reviews / My refunds / My coupons / My addresses (reviews and refunds are on the order and product
+pages; addresses are typed per order), product-page file upload (nothing to customise), the
+benefit strip repeated above the footer (once is enough), bank debits/BNPL (PaymentMethodTypes is
+explicit), line-level tax reversals, per-star rating checkboxes with counts ("& up" is one query
+with the same intent), the checkout's "New client (creates account)" radio (sign-up is one anchor
+away: "Create an account" → /register?returnUrl=/store/checkout), the 250×292 empty-cart
+illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" review sort IS built
+(popular = most helpful first, the default).
+
+## Stripe test-mode run
+(date, payment intent id, tax transaction id, refund id — filled in at S4 exit)
+Fixture capture: (command, date, webhook endpoint api_version — filled in at S4.2)
+
+## Rollout state
+Flag OFF in production until Ben turns it on; §8 of the plan is the checklist.

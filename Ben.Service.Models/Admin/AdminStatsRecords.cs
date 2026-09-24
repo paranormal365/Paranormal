@@ -210,6 +210,8 @@ public sealed record AppUserPurgePreview(
     int GroupMessages,
     int GroupFieldSessions,
     int EventEvidence,
+    int StoreOrdersKept,
+    int StoreOrdersStillShipping,
     int OtherAuthoredRecords,
 
     bool RowWillSurvive,

@@ -94,6 +94,14 @@
                     </div>
                 }
 
+                @if (_preview.StoreOrdersStillShipping > 0)
+                {
+                    @* Ben, 09/24/2026: a parcel on its way keeps the address it is going to. *@
+                    <p class="small text-secondary mt-2 mb-0" data-testid="store-orders-shipping">
+                        @StillShippingSentence(_preview.StoreOrdersStillShipping)
+                    </p>
+                }
+
                 @* ── what will actually be left ─────────────────────────────
                    Said before the button, not discovered after it. "Delete" that leaves a row
                    behind is a promise this screen has to stop making in advance. *@
@@ -248,10 +256,15 @@
         ("group messages", p.GroupMessages),
         ("group field sessions", p.GroupFieldSessions),
         ("event evidence", p.EventEvidence),
+        ("store orders", p.StoreOrdersKept),
         ("other records", p.OtherAuthoredRecords),
     ];
 
     private static int KeptTotal(AppUserPurgePreview p) => Kept(p).Sum(l => l.Count);
+
+    internal static string StillShippingSentence(int orders) => orders == 1
+        ? "1 store order is still on its way, so it keeps its delivery address until it is delivered."
+        : $"{orders:N0} store orders are still on their way, so they keep their delivery address until they are delivered.";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

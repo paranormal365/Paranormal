@@ -214,6 +214,11 @@
                 // one of the few entries that matters more signed out than signed in.
                 if (Features.IsOn(SiteFeatures.Publications))
                     main.Add(new NavItem("Publications", "book-open", "/publications"));
+
+                // The gear store (branch storefront). Dark until it ships: the switch defaults off,
+                // and the store's own pages refuse their URLs through the same provider.
+                if (Features.IsOn(SiteFeatures.Store))
+                    main.Add(new NavItem("Store", "shopping-cart", "/store"));
             }
 
             if (IsAuthenticated)

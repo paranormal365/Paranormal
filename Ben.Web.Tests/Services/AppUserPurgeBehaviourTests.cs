@@ -3,6 +3,8 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Admin;
+using Ben.Data.WebApi.Services.Store;
+using Ben.Web.Tests.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -463,5 +465,75 @@ public sealed class AppUserPurgeBehaviourTests
             Assert.Equal(preview!.RowWillSurvive, !result!.RowRemoved);
             Assert.Equal(writesForTheGroup, result.RowRemoved is false);
         }
+    }
+
+    /// <summary>
+    /// A person who bought from the store: their orders stay (a sale is a tax record) without
+    /// their name, the parcel still on its way keeps its street, their cart, favourites and votes
+    /// go — and nothing left points at them, so the row goes too, as the preview promised
+    /// (storefront S0.12).
+    /// </summary>
+    [Fact]
+    public async Task A_buyer_leaves_their_orders_without_their_name_and_the_row_still_goes()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+        Guid delivered, shipped, reviewId;
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            var admin = await db.AppUsers.SingleAsync(u => u.Id == h.AdminId);
+            var buyer = await db.AppUsers.SingleAsync(u => u.Id == h.TargetId);
+            var variant = StoreTestData.Variant(db, admin);
+            var coupon = StoreTestData.Coupon(db, admin, perBuyer: null);
+
+            var deliveredOrder = StoreTestData.Order(db, StoreOrderStatus.Delivered, buyer, "sam@example.com");
+            var shippedOrder = StoreTestData.Order(db, StoreOrderStatus.Shipped, buyer, "sam@example.com");
+            db.StoreCouponRedemptions.Add(new StoreCouponRedemption
+            {
+                Id = Guid.NewGuid(), CouponId = coupon.Id, OrderId = deliveredOrder.Id, BuyerAppUserId = buyer.Id,
+                BuyerEmailNormalized = deliveredOrder.BuyerEmailNormalized, DiscountAmount = 5m, RedeemedUtc = StoreTestData.Now,
+            });
+
+            var cart = new StoreCart { Id = Guid.NewGuid(), AppUserId = buyer.Id, LastActivityUtc = StoreTestData.Now, DateCreated = StoreTestData.Now };
+            db.StoreCarts.Add(cart);
+            db.StoreCartItems.Add(new StoreCartItem { Id = Guid.NewGuid(), CartId = cart.Id, VariantId = variant.Id, Quantity = 2, DateCreated = StoreTestData.Now });
+            db.StoreFavourites.Add(new StoreFavourite { Id = Guid.NewGuid(), AppUserId = buyer.Id, ProductId = variant.ProductId, DateCreated = StoreTestData.Now });
+
+            // Somebody else's review, which the buyer found helpful.
+            var adminOrder = StoreTestData.Order(db, StoreOrderStatus.Delivered, admin, "admin@example.com");
+            var review = new StoreReview
+            {
+                Id = Guid.NewGuid(), ProductId = variant.ProductId, AuthorAppUserId = admin.Id, OrderId = adminOrder.Id,
+                Rating = 5, Title = "Works", Body = "Spiked in the cellar.", Status = StoreReviewStatus.Approved,
+                HelpfulCount = 1, DateCreated = StoreTestData.Now, CreatedByAppUserId = admin.Id,
+            };
+            db.StoreReviews.Add(review);
+            db.StoreReviewVotes.Add(new StoreReviewVote { Id = Guid.NewGuid(), ReviewId = review.Id, AppUserId = buyer.Id, DateCreated = StoreTestData.Now });
+            await db.SaveChangesAsync();
+            (delivered, shipped, reviewId) = (deliveredOrder.Id, shippedOrder.Id, review.Id);
+        }
+
+        var (purge, _) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.Equal((2, 1, false), (preview!.StoreOrdersKept, preview.StoreOrdersStillShipping, preview.RowWillSurvive));
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.True(result!.RowRemoved, "the preview promised the row would go; something store-shaped still points at it");
+
+        await using var check = await h.Sqlite.NewContextAsync();
+        var finished = await check.StoreOrders.AsNoTracking().SingleAsync(o => o.Id == delivered);
+        var onItsWay = await check.StoreOrders.AsNoTracking().SingleAsync(o => o.Id == shipped);
+        Assert.Equal((StoreOrderScrub.RemovedStreet, AccountClosure.FormerMemberName, (Guid?)null),
+            (finished.ShipStreet1, finished.ShipName, finished.BuyerAppUserId));
+        Assert.Equal(("13 Crossroads Lane", (Guid?)null), (onItsWay.ShipStreet1, onItsWay.BuyerAppUserId));
+        Assert.NotNull(onItsWay.PendingAnonymisationSinceUtc);
+
+        Assert.False(await check.StoreCarts.AnyAsync());
+        Assert.False(await check.StoreCartItems.AnyAsync());
+        Assert.False(await check.StoreFavourites.AnyAsync());
+        Assert.False(await check.StoreReviewVotes.AnyAsync());
+        Assert.Equal(0, (await check.StoreReviews.AsNoTracking().SingleAsync(r => r.Id == reviewId)).HelpfulCount);
+        Assert.Null((await check.StoreCouponRedemptions.AsNoTracking().SingleAsync()).BuyerAppUserId);
     }
 }

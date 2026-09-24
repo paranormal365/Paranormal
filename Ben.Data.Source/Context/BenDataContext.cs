@@ -238,6 +238,29 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CanvasDocument> CanvasDocuments { get; set; }
         public virtual DbSet<LinkUnfurlCache> LinkUnfurlCache { get; set; }
 
+        // ── The gear store (branch storefront) ─────────────────────────────────────
+        public virtual DbSet<StoreCategory> StoreCategories { get; set; }
+        public virtual DbSet<StoreProduct> StoreProducts { get; set; }
+        public virtual DbSet<StoreProductOption> StoreProductOptions { get; set; }
+        public virtual DbSet<StoreProductOptionValue> StoreProductOptionValues { get; set; }
+        public virtual DbSet<StoreProductVariant> StoreProductVariants { get; set; }
+        public virtual DbSet<StoreProductVariantOptionValue> StoreProductVariantOptionValues { get; set; }
+        public virtual DbSet<StoreProductImage> StoreProductImages { get; set; }
+        public virtual DbSet<StoreProductSpec> StoreProductSpecs { get; set; }
+        public virtual DbSet<StoreCoupon> StoreCoupons { get; set; }
+        public virtual DbSet<StoreCart> StoreCarts { get; set; }
+        public virtual DbSet<StoreCartItem> StoreCartItems { get; set; }
+        public virtual DbSet<StoreOrder> StoreOrders { get; set; }
+        public virtual DbSet<StoreOrderItem> StoreOrderItems { get; set; }
+        public virtual DbSet<StoreOrderEvent> StoreOrderEvents { get; set; }
+        public virtual DbSet<StoreRefund> StoreRefunds { get; set; }
+        public virtual DbSet<StoreRefundItem> StoreRefundItems { get; set; }
+        public virtual DbSet<StoreCouponRedemption> StoreCouponRedemptions { get; set; }
+        public virtual DbSet<StoreStockMovement> StoreStockMovements { get; set; }
+        public virtual DbSet<StoreFavourite> StoreFavourites { get; set; }
+        public virtual DbSet<StoreReview> StoreReviews { get; set; }
+        public virtual DbSet<StoreReviewVote> StoreReviewVotes { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder); // configures Identity tables
@@ -4690,6 +4713,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentCheckoutRenewal>().Property(e => e.ReviewNotes).HasMaxLength(1000);
             modelBuilder.Entity<EquipmentCheckoutRenewal>().HasIndex(e => new { e.EquipmentCheckoutId, e.Status });
 
+            // The gear store lives in its own partial (BenDataContext.Store.cs), called last.
+            ConfigureStore(modelBuilder);
         }
     }
 }

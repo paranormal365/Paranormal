@@ -40,6 +40,8 @@ public sealed record AppUserPurgePreview(
     int GroupMessages,
     int GroupFieldSessions,
     int EventEvidence,
+    int StoreOrdersKept,
+    int StoreOrdersStillShipping,
     int OtherAuthoredRecords,
 
     // ── consequences worth reading before pressing the button ─────────────────
@@ -136,6 +138,8 @@ public sealed class AppUserPurge
         var evidence = await db.EventEvidenceSubmissions.AsNoTracking().CountAsync(x => x.SubmittedByAppUserId == userId, ct);
         var groupSessions = await db.FieldSessionUploads.AsNoTracking()
             .CountAsync(s => s.SubmittedByAppUserId == userId && s.InvestigationId != null, ct);
+        var storeOrders = await db.StoreOrders.AsNoTracking()
+            .Where(o => o.BuyerAppUserId == userId).Select(o => o.Status).ToListAsync(ct);
 
         var counted = new AppUserPurgePreview(
             AppUserId:            userId,
@@ -161,6 +165,8 @@ public sealed class AppUserPurge
             GroupMessages:        groupMessages,
             GroupFieldSessions:   groupSessions,
             EventEvidence:        evidence,
+            StoreOrdersKept:          storeOrders.Count,
+            StoreOrdersStillShipping: storeOrders.Count(s => !Store.StoreOrderScrub.IsTerminal(s)),
             OtherAuthoredRecords: 0,
 
             RowWillSurvive:    true,
@@ -260,6 +266,15 @@ public sealed class AppUserPurge
             // AppUser is NoAction, so leaving it would have made every walk-up who ever scanned a
             // code permanently undeletable, with the census correctly and uselessly reporting why.
             await db.InvestigationGuestPasses.Where(p => p.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // Their gear-store cart, favourites and helpful votes (storefront): about the person
+            // and nobody else. A vote is also counted on the review it was cast for, so that
+            // count comes down first — otherwise "12 people found this helpful" outlives the 12.
+            await db.StoreReviews
+                .Where(r => r.HelpfulCount > 0 && db.StoreReviewVotes.Any(v => v.ReviewId == r.Id && v.AppUserId == userId))
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.HelpfulCount, r => r.HelpfulCount - 1), ct);
+            await db.StoreReviewVotes.Where(v => v.AppUserId == userId).ExecuteDeleteAsync(ct);
+            await db.StoreFavourites.Where(f => f.AppUserId == userId).ExecuteDeleteAsync(ct);
+            await db.StoreCarts.Where(c => c.AppUserId == userId).ExecuteDeleteAsync(ct);
 
             // ── the person ────────────────────────────────────────────────────
             // Shared with self-service closure rather than restated. Two copies of these rules
@@ -440,6 +455,10 @@ public sealed class AppUserPurge
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),
             nameof(EventBookingAlertPreference), nameof(EventBookingAlertState), nameof(EventPhotoConsent),
             nameof(InvestigationGuestPass),
+            nameof(StoreReviewVote), nameof(StoreFavourite), nameof(StoreCart),
+            // Detached rather than deleted, by the shared anonymise step (StoreOrderScrub): after
+            // it no order or redemption names the account, so the preview must not count them.
+            nameof(StoreOrder), nameof(StoreCouponRedemption),
         };
 
         var total = 0;

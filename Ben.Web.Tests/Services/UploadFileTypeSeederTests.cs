@@ -181,6 +181,49 @@ public class UploadFileTypeSeederTests
         Assert.Equal(2, await db.UploadFileTypeExtensions.CountAsync());
     }
 
+    // ── Fixed type ids ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every fixed type id is its own slot (storefront S0.10: the store took <c>A0000000…</c>
+    /// because <c>80000000…</c> and <c>90000000…</c> were already Board Snapshot and Research).
+    /// Two types sharing an id would make the second seeder's "already there" check skip it, and
+    /// every upload of the second kind would be filed — and served, and swept — as the first.
+    /// </summary>
+    [Fact]
+    public void Every_fixed_type_id_is_distinct()
+    {
+        var ids = typeof(UploadFileTypeSeeder)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
+            .Where(f => f.FieldType == typeof(Guid) && f.IsInitOnly)
+            .Select(f => (f.Name, Id: (Guid)f.GetValue(null)!))
+            .ToList();
+
+        Assert.True(ids.Count >= 9, $"expected every fixed type id as a field; found {ids.Count}");
+        var repeats = ids.GroupBy(i => i.Id).Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key}: {string.Join(", ", g.Select(i => i.Name))}").ToList();
+        Assert.True(repeats.Count == 0, "These fixed type ids share a value:\n  " + string.Join("\n  ", repeats));
+    }
+
+    [Fact]
+    public async Task The_store_image_type_is_seeded_once_with_its_fixed_id()
+    {
+        await using var db = CreateDb();
+        var ownerId = Guid.NewGuid();
+        var seed = typeof(UploadFileTypeSeeder).GetMethod("SeedStoreImageFileTypeAsync", BindingFlags.NonPublic | BindingFlags.Static)
+                   ?? throw new MissingMethodException(nameof(UploadFileTypeSeeder), "SeedStoreImageFileTypeAsync");
+
+        await (Task)seed.Invoke(null, [db, ownerId])!;
+        await (Task)seed.Invoke(null, [db, ownerId])!;
+
+        var type = await db.UploadFileTypes.SingleAsync();
+        Assert.Equal(new Guid("A0000000-0000-0000-0000-000000000001"), type.Id);
+        Assert.Equal(UploadFileTypeSeeder.StoreImageFileTypeName, type.Name);
+        Assert.False(type.IsPublic, "store pictures are served by the store's own endpoint, never the general file routes");
+        Assert.False(type.AllowAllExtensions);
+        var patterns = await db.UploadFileTypeExtensions.Select(e => e.Pattern).OrderBy(p => p).ToListAsync();
+        Assert.Equal([".jpeg", ".jpg", ".png", ".webp"], patterns);
+    }
+
     // ── Private helper ────────────────────────────────────────────────────────
 
     private static string[] GetPrivateArray(string fieldName) =>

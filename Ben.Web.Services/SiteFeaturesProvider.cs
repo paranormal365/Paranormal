@@ -47,6 +47,7 @@ public sealed class SiteFeaturesProvider
             [SiteFeatures.Voting]       = true,
             [SiteFeatures.PublicFeed]   = false,
             [SiteFeatures.Publications] = false,
+            [SiteFeatures.Store]        = false,
         };
 
     // A scope factory rather than the client itself: this is a singleton and IBenAdminClient is
@@ -219,11 +220,12 @@ public static class SiteFeatures
     public const string Voting       = "features.voting";
     public const string PublicFeed   = "features.public-feed";
     public const string Publications = "features.publications";
+    public const string Store        = "features.store";
 
     /// <summary>Every declared key, for the guard test and the admin help text.</summary>
     public static readonly IReadOnlyList<string> All =
     [
         VideoEditor, Equipment, Events, Discovery, CmsPages,
-        MediaLibrary, OrgMessaging, Voting, PublicFeed, Publications,
+        MediaLibrary, OrgMessaging, Voting, PublicFeed, Publications, Store,
     ];
 }
