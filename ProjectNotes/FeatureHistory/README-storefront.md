@@ -304,6 +304,23 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   untouched, a seed_ tax transaction id so StoreTaxRetryJob skips them, the abandoned one already
   released. Development seeds only (SeedData:DevData:Enabled; the dev settings name
   IsHauntedDb_player, production has it off). Six breaks, all caught.
+- (S4.13) The buyer's order pages, none behind the switch: /store/orders (My Orders, paid only, a
+  months filter), /store/orders/{id} (buyer or ?t=), /store/orders/{id}/invoice (StoreInvoiceSheet,
+  printed alone by a print stylesheet), /store/orders/lookup, /store/returns. "See your order" on the
+  thank-you page; a "Placed an order?" line on the store front; the summary's Returns → /store/returns.
+  - NAV, changed from the plan: "My Orders" everywhere-signed-in would announce a shop that launches
+    dark (Ben's rule, 09/24). It sits in the Store group while the switch is on, and on its own with
+    the switch off only for a person who has a paid order.
+  - The returns page states the window (a setting) and how a return is arranged — nothing about
+    condition or who pays postage: that policy is Ben's to decide.
+  - Found by StoreOrderTests: the shared item reader calls every 404 a failure, so a stranger got
+    "The server answered 404" with a Retry, and a signed-out buyer was never sent to sign in. The
+    order doors' client reads the status and answers nothing on 404 (StoreOrderDoorClientTests,
+    seen failing without it).
+- (S4.14) StripePublishableKey: secrets template, deploy script (refuses a secret key in that slot and
+  a live/test mix; sets Stripe__PublishableKey on the API pool), SECRETS.md (names only), and a store
+  section appended to docs/stripe-go-live.md (events, API-version pin, Tax registrations, Link order,
+  no Stripe receipts, KnownProxies, migrate before deploy, the dark-fill-open steps, rollback).
 - (S4.11) Not in the browser suite: "Without Stripe the checkout says so" needs a host with no keys
   and no fake — the refusal (PaymentsNotSetUp, 503 prose) is covered by StoreCheckoutServiceTests.
 - (S3) StoreCartState takes IBenAdminClient, not IBenStoreClient: the website registers the one
@@ -334,7 +351,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | Built 09/24/2026 — unit facts each seen failing on a deliberate break (64 breaks across S1.1–S1.12, all caught but one that exposed a redundant check, removed); AdminStoreCatalogTests 8/8 and AdminPageTests on IsHauntedDb_e2e with the shop off; new guards StoreClientRoutesTests, StoreRefusalReachesThePageTests, StoreReviewQueueHasAnEntranceTests each broken once |
 | S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | Built 09/24/2026 — PublicStoreController 12 facts (9 breaks caught), shared components 16 render facts (10 breaks), query string 8 facts; StoreBrowseTests/StoreProductTests/StoreFeatureFlagTests + crawls + admin 25/25 on IsHauntedDb_e2e with the store on; visual audit light+dark at four widths; guards StoreControllersAreGated, StoreLinksResolve, StoreProductProseClassIsGlobal, the Smarty deny-list, each broken once |
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | Built 09/24/2026 — server: StoreCartService/Controller 30 facts, 20 breaks caught; website: cookie, client headers, cart state, card button 20 facts, 14 breaks caught; guards StorePublicWritesAreRateLimited, StoreCartSurfacesAgree (incl. the badge outside the signed-in branch), cart-refusal and the two Apply rows, each broken once; StoreCartTests 7/7 + store/crawl/header suite 33/33 on IsHauntedDb_e2e. Between S3.3 and S3.4, at Ben's request: the Seller role and the editor's live preview (below) |
-| S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | |
+| S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | Built 09/24/2026 in fake mode — every new fact seen failing on a deliberate break (mutation runs per sitting, recorded in the commits); Playwright StoreCheckoutTests 8, StoreOrderTests 8, Store category 51/51 on IsHauntedDb_e2e; unit suite green (Ben.Web.Tests 7,296). By eye: checkout desktop/phone, light/dark; order page, invoice, lookup, returns. **Still open for S4 exit:** the real test-mode run (`BEN_STRIPE_E2E=1`: 4242 card, self-signed webhook 200 / forged 400, tax adds up) and the webhook signature fixtures captured with the Stripe CLI — both need Ben's Stripe TEST key in the gitignored dev settings. |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
 | S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | |
 | S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | |

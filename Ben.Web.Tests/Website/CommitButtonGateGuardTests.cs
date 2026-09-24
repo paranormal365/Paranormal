@@ -47,6 +47,7 @@ public sealed class CommitButtonGateGuardTests
         ("store-place-order", "StoreCheckoutPage.razor"),
         ("store-place-order-bar", "StoreCheckoutPage.razor"),
         ("checkout-discount-apply", "StoreCheckoutPage.razor"),
+        ("lookup-send", "StoreOrderLookup.razor"),
     ];
 
     private static DirectoryInfo RepoRoot()

@@ -138,11 +138,33 @@ do, that is included in the sales tax line.
 
 ## Your orders
 
-Following an order, with or without an account. (Written with the order pages.)
+**With an account.** Orders you place while signed in are under **My Orders** in the menu (also
+linked at the bottom of the store's front page). Each one shows its number, date, total and where
+it has got to: *Paid — being prepared*, *Packed*, *Shipped*, *Delivered*, *Cancelled* or *Refunded*.
+Open an order to see where it's going, what's in it, what it came to, and its tracking number once
+it ships. Checkouts you started but never paid for aren't orders, so they aren't listed.
+
+**As a guest.** Your receipt email has a private link to your order — keep that email, because it
+is the way back. If you've lost it, go to **Find my order** (at the bottom of the store's front
+page), enter the order number and the email address you used, and the link is sent again. The page
+says the same thing whether or not those match an order, so nobody can use it to find out what
+someone else bought.
+
+**The invoice.** Once an order is paid, its page has an **Invoice** link — a printable invoice with
+who it's from and to, each item with its discount and tax, and any refund. Press **Print** to print
+it or save it as a PDF.
+
+Your orders stay open to you even if the store is closed for a while.
 
 ## Returns and refunds
 
-How returns and refunds work. (Written with the order pages.)
+Every order can be returned within the store's returns window — the **Returns** page (linked from
+every order summary) and your invoice say how many days, counted from delivery. Get in touch with
+your order number first and we'll tell you where to send it.
+
+A refund goes back to the card you paid with; banks usually show it within 5–10 business days. It
+appears on your order page and your invoice as soon as it's made, and you're emailed when it is. A
+part refund shows what was refunded and what's left.
 
 ## Favourites
 

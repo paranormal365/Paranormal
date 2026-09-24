@@ -1,0 +1,73 @@
+@page "/store/orders/{Id:guid}/invoice"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState User
+@inject NavigationManager Nav
+
+<PageTitle>Invoice — Store</PageTitle>
+
+@*
+    A printable invoice for a paid order (storefront S4.13). Opened like the order: by its buyer
+    signed in, or with the order's private link. Print prints the sheet alone (ben-store.css).
+    NOT behind the store switch.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 ben-invoice-toolbar">
+        <a class="ben-link-muted small d-inline-flex align-items-center gap-1" href="@BackHref"><BenIcon Name="arrow-left" /> Back to the order</a>
+        <div class="d-flex align-items-center gap-2">
+            <HelpLink Slug="shopping-at-the-store" Anchor="returns-and-refunds" />
+            @if (_invoice is not null)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="invoice-print" onclick="window.print()"><BenIcon Name="printer" /> Print</button>
+            }
+        </div>
+    </div>
+
+    @if (_loaded is null)
+    {
+        <div class="text-center text-secondary py-5"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading the invoice…</div>
+    }
+    else if (_invoice is { } invoice)
+    {
+        <StoreInvoiceSheet Invoice="invoice" />
+    }
+    else if (_refusal is not null)
+    {
+        <div class="alert alert-danger" role="alert" id="invoice-refusal">@_refusal</div>
+    }
+    else
+    {
+        <StoreEmptyState Icon="file-text" Title="There's no invoice here"
+                         Lead="An invoice is ready once an order is paid, and opens for the person who placed it."
+                         LinkText="Find my order" LinkHref="/store/orders/lookup" />
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "t")] public string? Token { get; set; }
+
+    private StoreInvoiceRecord? _invoice;
+    private bool? _loaded;
+    private string? _refusal;
+
+    private string BackHref => string.IsNullOrEmpty(Token) ? $"/store/orders/{Id}" : $"/store/orders/{Id}?t={Uri.EscapeDataString(Token)}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        var read = await Store.GetStoreOrderInvoiceAsync(Id, Token);
+        if (read.IsEmpty && string.IsNullOrEmpty(Token) && !User.IsAuthenticated)
+        {
+            Nav.NavigateTo(SignInLink.For(Nav));
+            return;
+        }
+        var error = read.Failed ? read.Reason ?? "The invoice couldn't be loaded just now." : null;
+        _refusal = error;
+        _invoice = read.Item;
+        _loaded = true;
+        StateHasChanged();
+    }
+}

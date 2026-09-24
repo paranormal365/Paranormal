@@ -1,0 +1,275 @@
+@page "/store/orders/{Id:guid}"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState User
+@inject NavigationManager Nav
+@inject IMediaUrlBuilder MediaUrls
+
+<PageTitle>@(_order is { } o ? $"Order no. {o.OrderNumber}" : "Your order") — Store</PageTitle>
+
+@*
+    One order (storefront S4.13), after Smarty's account-order-detail.html: the number, date and
+    status; shipping, billing and payment side by side with the invoice; delivery and tracking;
+    the items; what it came to; and any refunds.
+
+    Opened by its buyer signed in, or by anybody holding its private link (?t=, from the letter).
+    Anyone else is told there is nothing here — the server answers 404, never 403, so a stranger
+    cannot learn that an order with this address exists. NOT behind the store switch.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/store">Store</a></li>
+            @if (User.IsAuthenticated)
+            {
+                <li class="breadcrumb-item"><a href="/store/orders">My orders</a></li>
+            }
+            <li class="breadcrumb-item active" aria-current="page">Order</li>
+        </ol>
+    </nav>
+
+    @if (_loaded is null)
+    {
+        <div class="text-center text-secondary py-5" data-testid="order-loading">
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading the order…
+        </div>
+    }
+    else if (_order is not { } order)
+    {
+        @if (_refusal is not null)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="order-refusal">@_refusal</div>
+                <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Retry</button>
+            </div>
+        }
+        else
+        {
+            <StoreEmptyState Icon="package" Title="There's no order here"
+                             Lead="This link doesn't open an order for you. If you ordered as a guest, use the link in your email — or have it sent again."
+                             LinkText="Find my order" LinkHref="/store/orders/lookup" />
+        }
+    }
+    else
+    {
+        <h1 class="h3 mb-3">Order detail<HelpLink Slug="shopping-at-the-store" Anchor="your-orders" /></h1>
+
+        <div class="card mb-3">
+            <div class="card-body p-lg-4">
+                <h2 class="h4 mb-1" data-testid="order-number">Order no. @order.OrderNumber</h2>
+                <div class="text-secondary small mb-2">Date: @order.PlacedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy h:mm tt")</div>
+                <span class="badge rounded-pill bg-@StoreOrderStatusText.Tone(order.Status)-subtle text-@StoreOrderStatusText.Tone(order.Status)-emphasis d-inline-flex align-items-center gap-2 py-2 px-3" data-testid="order-status">
+                    <span class="ben-bull bg-@StoreOrderStatusText.Tone(order.Status)" aria-hidden="true"></span>@StoreOrderStatusText.Label(order.Status)
+                </span>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body p-lg-4">
+                <div class="row g-4">
+                    <div class="col-md-6 col-xl-4">
+                        <h3 class="h6 fw-bold mb-3">Shipping</h3>
+                        <div class="small" data-testid="order-ship-to">
+                            <span class="d-block text-secondary">To</span>
+                            <p>
+                                @order.Shipping.Name
+                                @if (order.Shipping.Phone is { } phone) { <br />@phone }
+                            </p>
+                            <span class="d-block text-secondary">Address</span>
+                            <p class="mb-0">@Address(order.Shipping)</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-4">
+                        <h3 class="h6 fw-bold mb-3">Billing</h3>
+                        <div class="small">
+                            @if (order.Billing is { } bill)
+                            {
+                                <span class="d-block text-secondary">For</span>
+                                <p>
+                                    @bill.Name
+                                    @if (bill.Company is { } company) { <br />@company }
+                                </p>
+                                <span class="d-block text-secondary">Address</span>
+                                <p class="mb-0">@Address(bill)</p>
+                            }
+                            else
+                            {
+                                <p class="mb-0">Same as shipping</p>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-xl-4 d-flex flex-column">
+                        <div class="flex-grow-1">
+                            <h3 class="h6 fw-bold mb-3">Payment</h3>
+                            <span class="badge bg-primary-subtle text-primary-emphasis">Card</span>
+                            <span class="small ms-2">@order.PaymentStatus</span>
+                        </div>
+                        <div class="mt-3">
+                            <p class="mb-2">Total order @StoreMoney.Format(order.Totals.Total)</p>
+                            @if (order.PaidUtc is not null)
+                            {
+                                <a href="@InvoiceHref(order)" class="ben-invoice-link" id="order-invoice">Invoice</a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="small mb-4" data-testid="order-delivery">
+            @if (order.Carrier is { } carrier)
+            {
+                <span>Delivery: @carrier</span>
+                @if (order.TrackingNumber is { } tracking)
+                {
+                    <span> · Tracking </span>
+                    @if (order.TrackingUrl is { } trackingUrl)
+                    {
+                        <a href="@trackingUrl" target="_blank" rel="noopener" data-testid="order-tracking">@tracking</a>
+                    }
+                    else
+                    {
+                        <span>@tracking</span>
+                    }
+                }
+                @if (order.DeliveredUtc is { } delivered)
+                {
+                    <span> · Delivered @delivered.ToViewerLocalTime(User).ToString("MM/dd/yyyy")</span>
+                }
+                else if (order.ShippedUtc is { } shipped)
+                {
+                    <span> · Shipped @shipped.ToViewerLocalTime(User).ToString("MM/dd/yyyy")</span>
+                }
+            }
+            else
+            {
+                <span>Delivery: standard shipping — we'll email the tracking number when it ships.</span>
+            }
+        </div>
+
+        <div class="border-top pt-3">
+            @foreach (var item in order.Items)
+            {
+                <div class="border-bottom pb-3 mb-3 d-flex" data-testid="order-item">
+                    <div class="flex-shrink-0 me-3" style="width:80px;">
+                        @if (item.ImageUploadFileId is { } picture)
+                        {
+                            <img class="img-fluid rounded border" src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" loading="lazy" />
+                        }
+                    </div>
+                    <div class="row g-2 w-100">
+                        <div class="col">
+                            @if (item.ProductSlug is { } slug)
+                            {
+                                <a href="@($"/store/p/{slug}")" class="ben-link-normal fw-medium">@item.ProductName</a>
+                            }
+                            else
+                            {
+                                <span class="fw-medium">@item.ProductName</span>
+                            }
+                            @if (item.VariantName is { } variant) { <span class="d-block text-secondary small">@variant</span> }
+                            <span class="d-block text-secondary small">SKU: @item.Sku</span>
+                            @if (item.QuantityRefunded > 0)
+                            {
+                                <span class="d-block small text-warning-emphasis">@item.QuantityRefunded refunded</span>
+                            }
+                        </div>
+                        <div class="col-auto text-end">
+                            @StoreMoney.Format(item.LineTotal)
+                            <small class="d-block">@item.Quantity × @StoreMoney.Format(item.UnitPrice)</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="row justify-content-end mb-4">
+            <div class="col-md-7 col-lg-5">
+                <div class="ben-summary" data-testid="order-totals">
+                    <div class="ben-summary__row"><span>Products</span><span>@StoreMoney.Format(order.Totals.Subtotal)</span></div>
+                    @if (order.Totals.Discount > 0)
+                    {
+                        <div class="ben-summary__row text-success"><span>Discount@(order.CouponCode is { } c ? $" ({c})" : null)</span><span>−@StoreMoney.Format(order.Totals.Discount)</span></div>
+                    }
+                    <div class="ben-summary__row"><span>Shipping</span><span>@(order.Totals.Shipping == 0 ? "Free" : StoreMoney.Format(order.Totals.Shipping))</span></div>
+                    <div class="ben-summary__row" data-testid="order-tax">
+                        <span>Sales tax@(order.Totals.ShippingTax > 0 ? $" (includes {StoreMoney.Format(order.Totals.ShippingTax)} on shipping)" : null)</span>
+                        <span>@StoreMoney.Format(order.Totals.Tax)</span>
+                    </div>
+                    <div class="ben-summary__row ben-summary__total"><span>Total</span><span>@StoreMoney.Format(order.Totals.Total)</span></div>
+                    @if (order.RefundedAmount > 0)
+                    {
+                        <div class="ben-summary__row text-warning-emphasis" data-testid="order-refunded"><span>Refunded</span><span>−@StoreMoney.Format(order.RefundedAmount)</span></div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (order.Refunds.Count > 0)
+        {
+            <h2 class="h6 fw-bold">Refunds</h2>
+            <ul class="list-unstyled small mb-4" data-testid="order-refunds">
+                @foreach (var refund in order.Refunds)
+                {
+                    <li>@refund.DateCreated.ToViewerLocalTime(User).ToString("MM/dd/yyyy") — @StoreMoney.Format(refund.Amount), @refund.Reason (@RefundWords(refund.Status))</li>
+                }
+            </ul>
+        }
+
+        <p class="small text-secondary mb-0">
+            Something wrong with it? You have @order.ReturnsWindowDays days from delivery to <a href="/store/returns">return it</a>.
+            @if (order.SupportEmail is { } support)
+            {
+                <text>Questions: <a href="@($"mailto:{support}")">@support</a>.</text>
+            }
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    /// <summary>The order's private link token, for a guest.</summary>
+    [SupplyParameterFromQuery(Name = "t")] public string? Token { get; set; }
+
+    private StoreOrderView? _order;
+    private bool? _loaded;
+    private string? _refusal;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var read = await Store.GetStoreOrderAsync(Id, Token);
+        if (read.IsEmpty && string.IsNullOrEmpty(Token) && !User.IsAuthenticated)
+        {
+            // A signed-in buyer's order opened while signed out (the letter's link for a member has no token).
+            Nav.NavigateTo(SignInLink.For(Nav));
+            return;
+        }
+        var error = read.Failed ? read.Reason ?? "The order couldn't be loaded just now." : null;
+        _refusal = error;
+        _order = read.Item;
+        _loaded = true;
+        StateHasChanged();
+    }
+
+    private string InvoiceHref(StoreOrderView order)
+        => string.IsNullOrEmpty(Token) ? $"/store/orders/{order.Id}/invoice" : $"/store/orders/{order.Id}/invoice?t={Uri.EscapeDataString(Token)}";
+
+    private static string Address(StoreOrderAddressView a)
+        => string.Join(", ", new[] { a.Street1, a.Street2, a.City, $"{a.State} {a.Zip}" }.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+    private static string RefundWords(StoreRefundStatus status) => status switch
+    {
+        StoreRefundStatus.Succeeded => "refunded",
+        StoreRefundStatus.Pending => "on its way back to your card",
+        _ => "not completed — we're looking into it",
+    };
+}

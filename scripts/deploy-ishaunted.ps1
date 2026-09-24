@@ -486,6 +486,7 @@ if (-not $sqlConn) { $sqlConn = $SqlConnectionString }
 $smtpPassword = Get-JsonValue $secrets 'SmtpPassword'
 $stripeSecret  = Get-JsonValue $secrets 'StripeSecretKey'
 $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
+$stripePublishable = Get-JsonValue $secrets 'StripePublishableKey'
 
 # The two Stripe values are indistinguishable to everything downstream — both are opaque strings
 # on an app pool — so the wrong one in the wrong slot fails silently, at the worst moment, in a
@@ -495,7 +496,7 @@ $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
 # somebody is watching, rather than in a dashboard delivery log three days later.
 if ($stripeSecret -and -not $stripeSecret.StartsWith('sk_')) {
     if ($stripeSecret.StartsWith('pk_')) {
-        throw "StripeSecretKey holds a PUBLISHABLE key (pk_...). The publishable key is not used by this app at all - it belongs to browser-side checkout, which this site does not use. Put the SECRET key (sk_live_... from Stripe > Developers > API keys) here."
+        throw "StripeSecretKey holds a PUBLISHABLE key (pk_...). The publishable key has its own slot, StripePublishableKey - the store's checkout page uses it in the browser. Put the SECRET key (sk_live_... from Stripe > Developers > API keys) here."
     }
     throw "StripeSecretKey does not look like a Stripe secret key - it should start with sk_ (sk_live_ in production, sk_test_ in a sandbox)."
 }
@@ -504,6 +505,17 @@ if ($stripeWebhook -and -not $stripeWebhook.StartsWith('whsec_')) {
         throw "StripeWebhookSecret holds an API key, not a signing secret. The signing secret starts with whsec_ and is shown on the webhook endpoint's own page in Stripe > Developers > Webhooks - not on the API keys page."
     }
     throw "StripeWebhookSecret does not look like a Stripe signing secret - it should start with whsec_."
+}
+# The store's publishable key (storefront): the one Stripe value a browser sees. A secret key here
+# would be handed to every buyer's browser, so that is refused outright, not warned about.
+if ($stripePublishable -and -not $stripePublishable.StartsWith('pk_')) {
+    if ($stripePublishable.StartsWith('sk_') -or $stripePublishable.StartsWith('rk_')) {
+        throw "StripePublishableKey holds a SECRET key. It would be sent to every buyer's browser. Put the publishable key (pk_live_...) here and the secret key in StripeSecretKey."
+    }
+    throw "StripePublishableKey does not look like a Stripe publishable key - it should start with pk_ (pk_live_ in production)."
+}
+if ($stripeSecret -and $stripePublishable -and ($stripeSecret.StartsWith('sk_live_') -ne $stripePublishable.StartsWith('pk_live_'))) {
+    throw "StripeSecretKey and StripePublishableKey are from different modes (one live, one test). Stripe keeps live and test apart, so the card form could never confirm the payment - use both live keys."
 }
 if ($stripeSecret -and $stripeSecret.StartsWith('sk_test_')) {
     Write-Warn 'StripeSecretKey is a TEST key. Real cards will be refused and no money will move. Use sk_live_ for production.'
@@ -1114,6 +1126,10 @@ if (($Apps -contains 'webapi') -or ($Apps -contains 'website')) {
         else { Write-Warn 'StripeSecretKey is not in the secrets file. Online payment will report itself unavailable; manual subscription entry still works.' }
         if ($stripeWebhook) { Set-PoolEnv $WebApiPool 'Stripe__WebhookSecret' $stripeWebhook }
         elseif ($stripeSecret) { Write-Warn 'StripeSecretKey is set but StripeWebhookSecret is not. Checkouts and renewals still fulfill synchronously, but Stripe''s webhook deliveries will all be refused - register the endpoint in the dashboard and put its whsec here.' }
+        # The store confirms payments in the browser and learns of them ONLY by webhook, so without
+        # the publishable key its checkout says payment is not set up (no order is ever placed).
+        if ($stripePublishable) { Set-PoolEnv $WebApiPool 'Stripe__PublishableKey' $stripePublishable }
+        elseif ($stripeSecret) { Write-Warn 'StripePublishableKey is not in the secrets file. Subscriptions work; the store''s checkout will say online payment is not set up.' }
     }
 
     # On the root pool, not the API's: Ben.Web.Website is the confidential client that redeems the

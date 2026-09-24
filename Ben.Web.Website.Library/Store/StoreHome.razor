@@ -88,6 +88,11 @@
                 {
                     <StoreEmptyState Title="Nothing on the shelves yet" Lead="The store is being stocked — come back soon." LinkText="Back to the home page" LinkHref="/" />
                 }
+
+                @* Smarty's account strip, in one line: the way back to an order for a guest (S4.13). *@
+                <p class="text-center small text-secondary mt-4 mb-0" data-testid="store-find-order">
+                    Placed an order? <a href="/store/orders">My Orders</a> · <a href="/store/orders/lookup">Find my order</a> · <a href="/store/returns">Returns</a>
+                </p>
             </ChildContent>
         </BenItemState>
     </div>

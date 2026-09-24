@@ -131,7 +131,12 @@ public class StoreBrowseTests : BenTestBase
         await box.PressSequentiallyAsync("e");
         var list = Page.Locator("[data-testid=store-search-suggestions]");
         await Expect(list).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Expect(list).ToContainTextAsync("REM Pod");
+
+        // Which products "re" suggests depends on what else the e2e database has gathered — the
+        // admin fixtures leave "Recorder …" products that fill the list ahead of the REM Pod. A
+        // third letter narrows it to the product this test knows.
+        await box.PressSequentiallyAsync("m");
+        await Expect(list).ToContainTextAsync("REM Pod", new() { Timeout = 10_000 });
     }
 
     [Test]

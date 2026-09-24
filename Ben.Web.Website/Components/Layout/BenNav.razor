@@ -288,12 +288,17 @@
                 main.Add(Group("Media", "layers", media.ToArray()));
 
                 // ── Store ─────────────────────────────────────────────────────
-                // Storefront. Browse now; Favourites join with S6.3, and My Orders with S4.13 —
-                // that one OUTSIDE this switch, because a buyer's orders must stay reachable when
-                // the shop is dark (the Reported Posts precedent in the admin menu).
+                // Storefront. Browse and My Orders; Favourites join with S6.3. A buyer's orders
+                // must stay reachable when the shop is dark (the Reported Posts precedent in the
+                // admin menu) — but the store launches dark, and a "My Orders" for everybody would
+                // announce a shop that is not open. So with the switch off it is shown only to a
+                // person who has an order (S4.13, Ben's dark-launch rule of 09/24).
                 if (Features.IsOn(SiteFeatures.Store))
                     main.Add(Group("Store", "shopping-cart",
-                        new NavItem("Browse the Store", "shopping-bag", "/store")));
+                        new NavItem("Browse the Store", "shopping-bag", "/store"),
+                        new NavItem("My Orders", "package", "/store/orders")));
+                else if (_hasStoreOrders)
+                    main.Add(new NavItem("My Orders", "package", "/store/orders"));
 
                 // ── Community ─────────────────────────────────────────────────
                 var community = new List<NavItem>();
@@ -520,6 +525,9 @@
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
     private int? _userCount;
 
+    /// <summary>Whether this person has a paid store order — read only while the shop is dark (see the Store group).</summary>
+    private bool _hasStoreOrders;
+
     /// <summary>
     /// An inventory count, shaped as the bucket the badge renderer already takes.
     /// </summary>
@@ -546,6 +554,12 @@
         try
         {
             _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+
+            if (!Features.IsOn(SiteFeatures.Store))
+            {
+                var orders = await AdminClient.GetMyStoreOrdersAsync();
+                _hasStoreOrders = !orders.Failed && orders.Items.Count > 0;
+            }
 
             // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
             _organizationCount = (await AdminClient.GetOrganizationsAsync()).Items.Count;

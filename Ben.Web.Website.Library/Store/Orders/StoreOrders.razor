@@ -1,0 +1,111 @@
+@page "/store/orders"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState User
+@inject NavigationManager Nav
+
+<PageTitle>My orders — Store</PageTitle>
+
+@*
+    My Orders (storefront S4.13), after Smarty's account-orders.html: a filter by how far back, then
+    one card per order — "Order no.", the date and total, and the status in its colour — each the
+    whole way into the order.
+
+    NOT behind the store switch: a buyer's orders stay theirs to read when the shop is dark. Only
+    paid orders are listed; a checkout that was never paid for is not an order anybody placed.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/store">Store</a></li>
+            <li class="breadcrumb-item active" aria-current="page">My orders</li>
+        </ol>
+    </nav>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h1 class="h3 mb-0">My orders<HelpLink Slug="shopping-at-the-store" Anchor="your-orders" /></h1>
+        <select class="form-select w-auto" id="orders-months" aria-label="How far back" value="@_months" @onchange="MonthsChangedAsync">
+            <option value="0">All orders</option>
+            <option value="3">Last 3 months</option>
+            <option value="6">Last 6 months</option>
+            <option value="12">Last 12 months</option>
+        </select>
+    </div>
+
+    @if (_orders is not { } orders)
+    {
+        <div class="text-center text-secondary py-5" data-testid="orders-loading">
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading your orders…
+        </div>
+    }
+    else if (orders.Failed)
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="orders-refusal">@_refusal</div>
+            <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+    else if (orders.IsEmpty)
+    {
+        <StoreEmptyState Icon="package" Title="@(_months > 0 ? "No orders in that time" : "No orders yet")"
+                         Lead="Orders you place while signed in are listed here."
+                         LinkText="Go to the store" LinkHref="/store" />
+    }
+    else
+    {
+        @foreach (var order in orders.Items)
+        {
+            <a href="@($"/store/orders/{order.Id}")" class="card mb-3 ben-link-normal" data-testid="order-card">
+                <div class="card-body p-lg-4">
+                    <div class="row">
+                        <div class="col">
+                            <h2 class="h5 fw-bold">Order no. @order.OrderNumber</h2>
+                            <p class="mb-0 small">
+                                Date: @order.PlacedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy h:mm tt") | Total: @StoreMoney.Format(order.Total)
+                            </p>
+                        </div>
+                        <div class="col-12 border-top my-2 d-lg-none"></div>
+                        <div class="col-lg-4 text-lg-end">
+                            <span class="d-block fw-medium text-@StoreOrderStatusText.Tone(order.Status)-emphasis" data-testid="order-status">@StoreOrderStatusText.Label(order.Status)</span>
+                            <span class="d-block small text-secondary">@order.ItemCount @(order.ItemCount == 1 ? "item" : "items") · @order.PaymentStatus</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        }
+    }
+</div>
+
+@code {
+    private LoadResult<StoreOrderSummaryView>? _orders;
+    private string? _refusal;
+    private int _months;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        if (!User.IsAuthenticated)
+        {
+            Nav.NavigateTo(SignInLink.For(Nav));
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await Store.GetMyStoreOrdersAsync(_months > 0 ? _months : null);
+        var error = result.Failed ? result.Reason ?? "Your orders couldn't be loaded just now." : null;
+        _refusal = error;
+        _orders = result;
+        StateHasChanged();
+    }
+
+    private async Task MonthsChangedAsync(ChangeEventArgs e)
+    {
+        _months = int.TryParse(e.Value?.ToString(), out var m) ? m : 0;
+        _orders = null;
+        await LoadAsync();
+    }
+}

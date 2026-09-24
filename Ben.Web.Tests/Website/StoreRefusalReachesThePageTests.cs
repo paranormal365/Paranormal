@@ -25,6 +25,11 @@ public sealed class StoreRefusalReachesThePageTests
         { "Ben.Web.Website.Library/Store/Cart/StoreCartPage.razor", "cart-refusal" },
         // "Only 1 of … left", "Enter a 5-digit ZIP code", a declined card (S4.11).
         { "Ben.Web.Website.Library/Store/Checkout/StoreCheckoutPage.razor", "checkout-refusal" },
+        // The order pages (S4.13): a list or an order that failed to load must not read as "none".
+        { "Ben.Web.Website.Library/Store/Orders/StoreOrders.razor", "orders-refusal" },
+        { "Ben.Web.Website.Library/Store/Orders/StoreOrderDetail.razor", "order-refusal" },
+        { "Ben.Web.Website.Library/Store/Orders/StoreInvoice.razor", "invoice-refusal" },
+        { "Ben.Web.Website.Library/Store/Orders/StoreOrderLookup.razor", "lookup-refusal" },
     };
 
     private static string Read(string relative)

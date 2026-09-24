@@ -85,13 +85,38 @@ public sealed partial class BenAdminClientAdapter
         => string.IsNullOrEmpty(accessToken) ? path : $"{path}?t={Uri.EscapeDataString(accessToken)}";
 
     public Task<ItemResult<StoreOrderStatusView>> GetStoreOrderStatusAsync(Guid orderId, string? accessToken, CancellationToken token = default)
-        => _api.GetItemAsync<StoreOrderStatusView>(WithToken($"/api/store/orders/{orderId}/status", accessToken), token);
+        => OrderDoorAsync<StoreOrderStatusView>(WithToken($"/api/store/orders/{orderId}/status", accessToken), token);
 
     public Task<ItemResult<StoreOrderView>> GetStoreOrderAsync(Guid orderId, string? accessToken, CancellationToken token = default)
-        => _api.GetItemAsync<StoreOrderView>(WithToken($"/api/store/orders/{orderId}", accessToken), token);
+        => OrderDoorAsync<StoreOrderView>(WithToken($"/api/store/orders/{orderId}", accessToken), token);
 
     public Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default)
-        => _api.GetItemAsync<StoreInvoiceRecord>(WithToken($"/api/store/orders/{orderId}/invoice", accessToken), token);
+        => OrderDoorAsync<StoreInvoiceRecord>(WithToken($"/api/store/orders/{orderId}/invoice", accessToken), token);
+
+    /// <summary>
+    /// An order door's answer: the record, NOTHING on 404, or a failure for anything else.
+    /// </summary>
+    /// <remarks>
+    /// The order doors answer 404 on purpose for "not yours" (never 403), and the pages need to
+    /// tell that apart from "the server could not answer": the first is "there's no order here"
+    /// or a sign-in, the second a Retry. The shared item reader calls every 404 a failure, which
+    /// drew "The server answered 404 (Not Found)." with a Retry that could never work — found by
+    /// StoreOrderTests.A_stranger_sees_no_order (S4.13).
+    /// </remarks>
+    private async Task<ItemResult<T>> OrderDoorAsync<T>(string path, CancellationToken token)
+    {
+        try
+        {
+            var (result, error, status) = await _api.SendWithStatusAsync<object, T>(HttpMethod.Get, path, null, token);
+            return status is >= 200 and < 300 ? ItemResult<T>.Ok(result)
+                 : status == 404 ? ItemResult<T>.Ok(default)
+                 : ItemResult<T>.Failure(error);
+        }
+        catch (HttpRequestException)
+        {
+            return ItemResult<T>.Failure();
+        }
+    }
 
     public Task<LoadResult<StoreOrderSummaryView>> GetMyStoreOrdersAsync(int? months = null, CancellationToken token = default)
         => _api.GetListAsync<StoreOrderSummaryView>("/api/me/store/orders" + (months is > 0 ? $"?months={months}" : ""), token);

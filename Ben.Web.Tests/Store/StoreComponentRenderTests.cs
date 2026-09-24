@@ -1,3 +1,4 @@
+using Ben.Service.Models.Store;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.RegularExpressions;
 using Ben.Web.Website.Library.Store.Shared;
@@ -120,5 +121,33 @@ public sealed class StoreComponentRenderTests
         });
         Assert.Contains("Your cart is empty", html);
         Assert.Contains("href=\"/store\"", html);
+    }
+
+    private static StoreInvoiceRecord Invoice(decimal refunded) => new(
+        100042, new DateTime(2026, 9, 20, 15, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 20, 15, 2, 0, DateTimeKind.Utc),
+        new StoreInvoiceParty("IsHaunted.com", null, "401 Church St", null, "Nashville", "TN", "37219", "shop@example.com"),
+        new StoreInvoiceParty("Ada Buyer", "Spook Co", "9 Oak Ave", null, "Memphis", "TN", "38103", "ada@example.com"),
+        new StoreInvoiceParty("Ada Buyer", null, "1 Elm St", "Apt 2", "Nashville", "TN", "37203", null),
+        [new StoreInvoiceLine("K-II EMF Meter", "KII-EMF", 2, 59.99m, 12m, 10.09m, 119.98m)],
+        119.98m, 12m, "GHOST10", 7.95m, 10.83m, 126.76m, refunded, 126.76m - refunded, "USPS", "9400 1", 30, "shop@example.com");
+
+    /// <summary>The invoice (S4.13): three parties, the line's discount and tax, and a balance only once something was refunded.</summary>
+    [Fact]
+    public async Task The_invoice_shows_its_parties_and_a_balance_only_after_a_refund()
+    {
+        var viewer = new Moq.Mock<Ben.Web.Services.IBenUserState>();
+        viewer.SetupGet(u => u.BrowserTimeZone).Returns(TimeZoneInfo.Utc);
+        void Utc(IServiceCollection c) => c.AddSingleton(viewer.Object);
+        var paid = await RenderAsync<Ben.Web.Website.Library.Store.Orders.StoreInvoiceSheet>(new() { ["Invoice"] = Invoice(0m) }, Utc);
+        var refunded = await RenderAsync<Ben.Web.Website.Library.Store.Orders.StoreInvoiceSheet>(new() { ["Invoice"] = Invoice(26.76m) }, Utc);
+
+        Assert.Contains("Invoice: #100042", paid);
+        Assert.Contains("09/20/2026 3:02 PM", paid);   // paid, not placed
+        foreach (var party in new[] { "401 Church St", "Spook Co", "Apt 2" }) Assert.Contains(party, paid);
+        Assert.Contains("−$12.00", paid);
+        Assert.Contains("Discount (GHOST10)", paid);
+        Assert.DoesNotContain("invoice-balance", paid);
+        Assert.Contains("−$26.76", refunded);
+        Assert.Matches("invoice-balance\"[^>]*>\\$100\\.00<", refunded);
     }
 }

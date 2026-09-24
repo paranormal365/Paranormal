@@ -288,3 +288,18 @@
     .ben-store-invoice { max-width: none; }
     .ben-no-print { display: none !important; }
 }
+
+/* ── Orders and the invoice (S4.13) ─────────────────────────────────────── */
+/* The status dot inside an order's pill (Smarty's .bull). */
+.ben-bull { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; }
+/* Smarty's dashed "Invoice" box on the order page. */
+.ben-invoice-link { display: block; text-align: center; padding: .25rem .5rem; border: 1px dashed var(--bs-primary); border-radius: var(--bs-border-radius); text-decoration: none; }
+.ben-invoice-link:hover, .ben-invoice-link:focus-visible { background: var(--bs-primary-bg-subtle); }
+.ben-invoice address { font-style: normal; }
+/* Print the sheet alone: the site's header, menu and the page's own buttons stay on screen. */
+@media print {
+    body * { visibility: hidden; }
+    .ben-invoice, .ben-invoice * { visibility: visible; }
+    .ben-invoice { position: absolute; inset: 0 0 auto 0; border: 0; box-shadow: none; }
+    .ben-invoice-toolbar { display: none; }
+}

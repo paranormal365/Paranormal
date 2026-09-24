@@ -38,6 +38,7 @@ public sealed class PrerenderedFormsTests
         ["Ben.Web.Website.Library/Organization/StartGroupPage.razor",        "<BenWizard"],
         // The store's checkout (S4.11): a guest types an address before anything else is warm.
         ["Ben.Web.Website.Library/Store/Checkout/StoreCheckoutPage.razor",   "id=\"checkout-email\""],
+        ["Ben.Web.Website.Library/Store/Orders/StoreOrderLookup.razor",      "id=\"lookup-number\""],
     ];
 
     [Theory]

@@ -11,8 +11,9 @@ mode. Everything below is the flip from test to live.
 | Secret key | `sk_live_…` | **Move money.** Create charges against any saved card | API app pool env: `Stripe__SecretKey` |
 | Webhook signing secret | `whsec_…` | Authenticate Stripe's callbacks — the one anonymous route that can move a subscription | API app pool env: `Stripe__WebhookSecret` |
 
-The publishable key (`pk_live_…`) is not needed: checkout is Stripe-hosted, so no key ever runs
-in the browser. The rule for the other two is the `Smtp__Password` rule: **pool environment,
+For subscriptions the publishable key (`pk_live_…`) is not needed: their checkout is Stripe-hosted,
+so no key runs in the browser. **The store needs it** — its checkout is our own page with Stripe's card
+form — see [The store](#the-store-storefront-092426) at the end. The rule for the other two is the `Smtp__Password` rule: **pool environment,
 never a deployed file, never source control, never chat.** The double underscore is how .NET maps
 an environment variable onto the nested key — `Stripe__SecretKey` becomes `Stripe:SecretKey`.
 
@@ -131,3 +132,72 @@ Stripe dashboard, `C:\ishaunted-deploy\secrets.json`, and the pool environment.
   catches a payment completed after a browser crash mid-checkout.
 - **Renewals log `Renewal charge declined`** → normal for an expired card; the group gets the
   existing lapse treatment unless a later retry lands. Nothing to operate.
+
+## The store (storefront, 09/24/26)
+
+The store (branch `storefront`) takes cards through Stripe's Payment Element on our own checkout page,
+works out sales tax with Stripe Tax, and learns that a payment went through **only** by webhook. This
+is the checklist for turning that on in production. Subscriptions already run on the same Stripe
+account and the same webhook endpoint; nothing here changes them.
+
+Do these in order. The store stays dark (`features.store` off) until the last step.
+
+### 1. Stripe dashboard
+
+1. **Stripe Tax.** Settings → Tax: turn Stripe Tax on, set the origin address to the ship-from address
+   you will enter on `/admin/store/settings`, and add a registration for every state where you collect
+   sales tax. A state with no registration is taxed at $0 — the store's settings page lists the states
+   Stripe reports as registered.
+2. **Webhook events.** Developers → Webhooks → the existing endpoint
+   `https://ishaunted.com/webapi/api/stripe/webhook`: add these events (keep the subscription ones):
+   `payment_intent.succeeded`, `payment_intent.processing`, `payment_intent.payment_failed`,
+   `payment_intent.canceled`, `refund.created`, `refund.updated`, `refund.failed`.
+   Do **not** add `charge.refunded` — refunds are recorded from the refund events.
+3. **Pin both webhook endpoints to the SDK's API version** (the version Stripe.net 52.4.0 was built
+   for). An endpoint on a newer version sends payloads the parser was not written for.
+4. **Payment methods.** The store asks for cards only (`PaymentMethodTypes` is explicit, so Apple Pay and
+   Google Pay arrive through the card element). Do not enable bank debits or buy-now-pay-later in the
+   dashboard — nothing would offer them, but keep the dashboard tidy so nobody wonders.
+5. **Link** is off at launch. If it is ever wanted: activate Link in the dashboard **first**, then turn
+   on `store.link-enabled` in the store settings. The other way round, every checkout fails once and
+   falls back to card (and SuperAdmins get an hourly bell saying so).
+6. **Receipts.** Stripe's own emailed receipts are never sent: the store sets no `receipt_email` and
+   attaches no Customer. The buyer's receipt is our confirmation letter.
+
+### 2. Secrets
+
+On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for the names):
+
+- `StripePublishableKey` — `pk_live_…` (new; the store's checkout page uses it)
+- `StripeSecretKey` — `sk_live_…` (already set for subscriptions)
+- `StripeWebhookSecret` — `whsec_…` (already set)
+
+`deploy-ishaunted.ps1` refuses a secret key in the publishable slot and a live/test mix.
+
+### 3. Database, then deploy
+
+1. Apply the store's migrations to the LIVE database **before** deploying the code (M1–M4:
+   21 store tables and the product seller column; nothing existing changes). Always with an explicit
+   `--connection`; `dotnet ef` ignores the connection-string environment variable.
+2. Deploy both sites. The store is still dark.
+3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count
+   buyers separately. The API trusts that header from loopback only. If the website's peer at the API is
+   not loopback, add its address to the API's `KnownProxies` — otherwise every buyer shares one limit.
+
+### 4. While dark
+
+1. As a SuperAdmin, fill the catalogue on `/admin/store/…` (categories, products, pictures, stock).
+2. `/admin/store/settings`: ship-from address, shipping rate and free-shipping threshold, returns
+   window, support email. The **Ready to sell** checklist must be all green.
+3. Preview every product (the editor's Preview tab works while the store is dark).
+
+### 5. Open
+
+1. Turn `features.store` on.
+2. Buy the cheapest item with a real card. Check: the thank-you page, the confirmation letter, the order
+   under My Orders, the invoice, the new-order bell, and in Stripe the payment and its tax transaction.
+3. Mark it shipped, then refund it. Check the refund in Stripe, the tax reversal, and the buyer's letter.
+4. Look at it on a phone, a tablet and a computer, in light and dark.
+
+**Rollback:** `store.checkout-enabled` off pauses orders without hiding anything; `features.store` off
+hides the shop. Buyers' order pages, invoices, "Find my order" and the thank-you page stay open either way.

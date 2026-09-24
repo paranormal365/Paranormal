@@ -4,6 +4,7 @@
 @inject IBenAdminClient Store
 @inject StoreCartState CartState
 @inject NavigationManager Nav
+@inject IBenUserState User
 @inject IMediaUrlBuilder MediaUrls
 
 <PageTitle>Order complete — Store</PageTitle>
@@ -112,8 +113,13 @@
             </div>
         }
 
-        @* "See your order" arrives with the order page (S4.13). *@
-        <a href="/store" class="btn btn-primary">Continue shopping</a>
+        <div class="d-flex flex-wrap gap-2">
+            @if (paid.OrderUrl is { } orderUrl)
+            {
+                <a href="@orderUrl" class="btn btn-outline-secondary" id="complete-see-order">See your order</a>
+            }
+            <a href="/store" class="btn btn-primary">Continue shopping</a>
+        </div>
     }
     else
     {
@@ -158,6 +164,10 @@
         // Only once the circuit is up: the cart header that proves this browser placed the order
         // rides the interactive calls.
         if (!firstRender || !RendererInfo.IsInteractive || _query.OrderId is not { } id) return;
+        // A signed-in buyer is let in by their account: asked before sign-in has been restored,
+        // the call went out anonymous and the buyer's own order read as "not from this browser"
+        // (StoreOrderTests.Order_pages_still_open_with_the_store_off, S4.13).
+        await User.AuthReady;
         await PollAsync(id);
     }
 
