@@ -13445,3 +13445,64 @@ the ranking; and the place page's charts and evidence list.
   deciding deliberately whether that is a claim the site makes.
 - **How a file reaches a place** when it also belongs to a case or an event — the same file must
   not count twice, which is the shape of the duplicate problem already open in the media library.
+
+## 251. Store enhancements: sellers, cost basis, fulfilment ledger and product extras (QUEUED — after storefront S8, 2026-09-24)
+
+Ben's list (`Store Enhancements.md`, 09/24/2026), queued to start after the storefront ships
+(`ProjectNotes/FeatureHistory/README-storefront.md`). Each item below is marked as already planned
+or built on the `storefront` branch, planned with a smaller scope, or new.
+
+### Already planned or built. Only the gap is new work
+
+| Ben asked for | What the store already has | The gap |
+|---|---|---|
+| Admin grid of every item | `/admin/store/products` (S1): thumbnail, name, price range, stock, active | Columns for category, cost, markup, subtotal, tax, Stripe fee, total and seller. There are no subcategories because category parents were left out of v1 (one nullable column later) |
+| Order status ledger with the time each status was set | `StoreOrderEvent` (S0) is append-only and timestamped (Placed, Paid, Packed, Shipped with tracking, Delivered, Cancelled, refund events); shown on the admin order page (S5) | Seller steps Acknowledged, Building and Ready for shipment. A refund *request* flow: request, then approve or deny, then return received, then verified, then refunded. v1 refunds start from the admin |
+| Money ledger with a receipt modal | The order row plus append-only refunds is the money record; `/admin/store/orders`, the CSV exports and the printable invoice (S5). A second ledger table was rejected | A running-total view over the orders (a view, not a new table) with the invoice in a modal, the seller's cost and fee grid under it, and "seller paid" |
+| Description in the Telerik HTML editor | Built: `BenEditor`, sanitised on save (S1) | — |
+| Comments and ratings | Moderated buyer reviews and helpful votes (S6) | A per-product on/off switch |
+| Return policy | A store-wide `store.returns-window-days` setting, shown in the product page's Returns panel | Per-product return and warranty text |
+| Date added / last updated / units sold | `DateCreated`, `DateUpdated`, `UnitsSold` on `StoreProduct` | Date last sold; earned by the seller and by the site |
+| Primary image and other images | Store pictures are ownerless uploads (1600 px plus a thumbnail); the first by sort order is the one on the card and in the cart | The request says a blob in the row and a `store/{itemId}/` folder. The site moved file bytes out of the database onto disk storage, so decide that first. Videos are new |
+
+### New
+
+- **Sellers are site members.** Every product has a seller. Admin and seller views show the seller
+  name, their notes, and their earnings per item and per order.
+- **Parts list (BOM) per product.** Each part has:
+  - name
+  - quantity per pack
+  - price per pack or per piece
+  - computed cost each
+  - quantity needed per unit
+  - info link and buy link
+  - thumbnail
+  - on hand
+
+  An "Other" line holds consumables such as solder, tape and filament. Together these give a **cost basis per unit**. The seller adds their price on top, then the site adds its markup (percent or dollars).
+  Tax and Stripe fees are shown per unit.
+- **Seller files** under `store/{itemId}/`:
+  - an instruction manual, written as HTML or uploaded as .txt, .md or .docx
+  - firmware
+  - 3D-print files, schematics and code
+
+  Decide which files buyers can download and which only the seller and admin see.
+- **FAQs.** Can be turned on per product; shown in an accordion at the bottom of the product page.
+- **Questions to the seller** from shoppers.
+- **Versions.** A new version links back to the old one and the old one links forward. The seller
+  chooses what happens to the old one: sell out the remaining stock, keep offering it, or
+  discontinue it.
+- Ben's point 8 in the source list stops mid-sentence ("This will show the"). Ask Ben.
+
+### Decide before building
+
+- **Is the store a marketplace?** The v1 plan has the site selling its own stock. Sellers who are
+  members raise several questions:
+  - **Payouts:** Stripe Connect transfers, or a manual "seller paid" mark as the list implies?
+  - **Who is the merchant of record for sales tax?**
+  - **Year-end reporting:** a seller paid through the site may need a 1099-K or 1099-NEC.
+  - **Seller access:** can a seller edit their own products and see their own orders, or does only a SuperAdmin?
+- **Where images are stored.** Picture bytes in the product row versus the disk storage the site
+  moved to.
+- **Fee model.** The Stripe fee is known only after the charge (from the balance transaction). A
+  per-unit fee column is an estimate until then.

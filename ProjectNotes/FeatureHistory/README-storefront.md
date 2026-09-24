@@ -303,6 +303,27 @@ away: "Create an account" → /register?returnUrl=/store/checkout), the 250×292
 illustration (a Smarty asset; a sprite icon instead). Smarty's "Popular First" review sort IS built
 (popular = most helpful first, the default).
 
+## Queued after S8: Ben's store enhancements (09/24/2026)
+Ben's `Store Enhancements.md` list is backlog item 251 in `ProjectNotes/Future-Improvements.md`.
+It is to be started once the store ships. Nothing in it changes S3–S8.
+
+Where it overlaps what this branch builds, it widens something that exists:
+- the admin product grid gets cost, fee and seller columns
+- `StoreOrderEvent` is already the status ledger with a time on every row; it gains seller steps and a refund-request flow
+- the orders page and invoice gain a running-total view with a receipt modal
+- reviews gain a per-product switch
+- the store-wide returns window gains per-product return and warranty text
+
+The rest is new:
+- sellers who are members
+- a parts list and cost basis per unit
+- seller files and videos
+- FAQs
+- questions to the seller
+- product versions
+
+Whether sellers make the store a marketplace (payouts, merchant of record) is the first thing to decide.
+
 ## Stripe test-mode run
 (date, payment intent id, tax transaction id, refund id — filled in at S4 exit)
 Fixture capture: (command, date, webhook endpoint api_version — filled in at S4.2)
