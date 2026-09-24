@@ -142,6 +142,23 @@ account and the same webhook endpoint; nothing here changes them.
 
 Do these in order. The store stays dark (`features.store` off) until the last step.
 
+### 0. Proving the store in test mode (before any of the below)
+
+Every Stripe account has a test mode (the dashboard's **Test mode** toggle, or a Sandbox) with its own
+keys, `pk_test_…` / `sk_test_…`, where no money moves. Never put the live key in development.
+
+1. In test mode: turn on **Stripe Tax**, set the origin address, and add a registration (Tennessee is
+   enough) so orders to that state carry tax.
+2. Install the Stripe CLI and pair it with the account: `brew install stripe/stripe-cli/stripe`, then
+   `stripe login`.
+3. In `Ben.Data.WebApi/appsettings.Development.json` (gitignored): `Stripe:SecretKey` = the `sk_test_`
+   key, `Stripe:PublishableKey` = the `pk_test_` key, `Stripe:WebhookSecret` = the `whsec_` printed by
+   `stripe listen --print-secret` (it stays the same for this computer and account).
+4. `BEN_STRIPE_E2E=1 scripts/run-e2e.sh --filter "TestCategory=Store" -e BEN_STRIPE_E2E=1`. The harness
+   refuses a live key, forwards Stripe's test events to the API with `stripe listen` for the length of
+   the run, and the checkout tests pay with the 4242 test card; `StoreStripeWebhookTests` proves a signed
+   event is taken and a forged one refused.
+
 ### 1. Stripe dashboard
 
 1. **Stripe Tax.** Settings → Tax: turn Stripe Tax on, set the origin address to the ship-from address

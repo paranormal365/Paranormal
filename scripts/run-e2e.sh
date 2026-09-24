@@ -214,8 +214,49 @@ start_host() {
 # The store's test checkout (storefront S4.9): the pretend Stripe gateway and tax service, which
 # only exist in Development with NO secret key and the flag on — so the key is blanked here even
 # if the developer's own settings carry a test one. Nothing in a normal run ever talks to Stripe.
+#
+# BEN_STRIPE_E2E=1 is the one exception (storefront S4 exit): the API keeps the Stripe keys and webhook
+# secret from the developer's own gitignored appsettings.Development.json — none of them pass through
+# this script — and the checkout tests pay with Stripe's 4242 test card. Test keys only: a live key there
+# would take real money, so the run refuses before anything starts. Stripe's events reach this machine
+# through `stripe listen --forward-to` (see docs/stripe-go-live.md, "Proving the store in test mode").
+API_STRIPE_ENV="Stripe__AllowFakeCheckout=true Stripe__SecretKey= Stripe__PublishableKey="
+if [[ "${BEN_STRIPE_E2E:-}" == "1" ]]; then
+  DEV_SETTINGS="$ROOT_DIR/Ben.Data.WebApi/appsettings.Development.json"
+  if grep -q '_live_' "$DEV_SETTINGS" 2>/dev/null; then
+    echo "REFUSING: $DEV_SETTINGS holds a live Stripe key. BEN_STRIPE_E2E takes test keys (sk_test_/pk_test_) only."
+    exit 1
+  fi
+  if ! grep -q '"sk_test_' "$DEV_SETTINGS" 2>/dev/null || ! grep -q '"pk_test_' "$DEV_SETTINGS" 2>/dev/null; then
+    echo "BEN_STRIPE_E2E=1 needs Stripe:SecretKey (sk_test_…) and Stripe:PublishableKey (pk_test_…) in $DEV_SETTINGS."
+    exit 1
+  fi
+  echo "   Stripe: TEST MODE — real Stripe, test keys from the developer's settings"
+  API_STRIPE_ENV="Stripe__AllowFakeCheckout=false"
+  # A real payment is only marked paid when Stripe's event reaches the webhook, and Stripe cannot
+  # reach localhost: the Stripe CLI forwards test-mode events here for the length of the run. Its
+  # whsec_ must be the Stripe:WebhookSecret in the same settings file (`stripe listen --print-secret`).
+  if ! command -v stripe >/dev/null; then
+    echo "BEN_STRIPE_E2E=1 needs the Stripe CLI (brew install stripe/stripe-cli/stripe, then stripe login)."
+    exit 1
+  fi
+  if ! grep -q '"WebhookSecret": *"whsec_' "$DEV_SETTINGS"; then
+    echo "BEN_STRIPE_E2E=1 needs Stripe:WebhookSecret in $DEV_SETTINGS — the whsec_ from: stripe listen --print-secret"
+    exit 1
+  fi
+  STRIPE_FORWARD=1
+fi
 start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
-  "FileStorage__RootPath=$UPLOADS_DIR Stripe__AllowFakeCheckout=true Stripe__SecretKey= Stripe__PublishableKey="
+  "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV"
+if [[ "${STRIPE_FORWARD:-}" == "1" ]]; then
+  echo "── Forwarding Stripe's test events to the API ──────────────────────────"
+  nohup stripe listen --forward-to "$API_URL/api/stripe/webhook" >"$LOG_DIR/stripe-listen.log" 2>&1 &
+  echo $! >"$LOG_DIR/stripe-listen.pid"
+  STARTED_PIDS+=("$(cat "$LOG_DIR/stripe-listen.pid")")
+  for _ in $(seq 1 30); do grep -q "Ready!" "$LOG_DIR/stripe-listen.log" 2>/dev/null && break; sleep 1; done
+  grep -q "Ready!" "$LOG_DIR/stripe-listen.log" || { echo "stripe listen never became ready:"; tail -10 "$LOG_DIR/stripe-listen.log"; exit 1; }
+  echo "   stripe listen ready"
+fi
 start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
