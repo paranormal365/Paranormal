@@ -98,7 +98,7 @@ public static class StoreCartRules
 }
 
 /// <summary>The checkout's limits (storefront).</summary>
-public static class StoreCheckoutRules
+public static partial class StoreCheckoutRules
 {
     /// <summary>Open (PendingPayment) checkouts one visitor address or email may hold at once.</summary>
     public const int MaxOpenCheckoutsPerCaller = 3;

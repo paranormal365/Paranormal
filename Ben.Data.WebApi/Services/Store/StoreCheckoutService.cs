@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
@@ -40,7 +39,7 @@ public sealed record StoreCheckoutResult(
 /// re-checked with the email now known, shipping from the settings, tax from Stripe Tax on each
 /// line net of its share of the discount.</para>
 /// </remarks>
-public sealed partial class StoreCheckoutService(
+public sealed class StoreCheckoutService(
     IDbContextFactory<BenDataContext> dbFactory, IStoreStripeGateway gateway, IStoreTaxService tax,
     StoreOrderPayments payments, StoreAlerts alerts, StorePaymentSetup setup, IOptions<StripeOptions> stripe,
     ILogger<StoreCheckoutService> log, TimeProvider? clock = null)
@@ -49,34 +48,8 @@ public sealed partial class StoreCheckoutService(
 
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
-    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
-    private static partial Regex EmailShape();
-
-    [GeneratedRegex(@"^\d{5}(-\d{4})?$")]
-    private static partial Regex ZipShape();
-
     /// <summary>The first thing wrong with what was typed, in the buyer's words; null when all is well.</summary>
-    public static string? Problem(StoreCheckoutRequest r)
-    {
-        if (string.IsNullOrWhiteSpace(r.Email) || !EmailShape().IsMatch(r.Email.Trim()) || r.Email.Length > 256)
-            return StoreCheckoutSentences.EmailInvalid;
-        foreach (var a in r.Billing is null ? [r.Shipping] : new[] { r.Shipping, r.Billing })
-            if (AddressProblem(a) is { } why) return why;
-        if (!r.AgreedToTerms) return StoreCheckoutSentences.AgreeToTerms;
-        return null;
-    }
-
-    private static string? AddressProblem(StoreAddressInput? a)
-    {
-        if (a is null) return StoreCheckoutSentences.Required("The address");
-        if (string.IsNullOrWhiteSpace(a.FullName)) return StoreCheckoutSentences.Required("Full name");
-        if (string.IsNullOrWhiteSpace(a.Phone)) return StoreCheckoutSentences.Required("Phone");
-        if (string.IsNullOrWhiteSpace(a.Street1)) return StoreCheckoutSentences.Required("Street address");
-        if (string.IsNullOrWhiteSpace(a.City)) return StoreCheckoutSentences.Required("City");
-        if (!UsStates.IsValid(a.State)) return StoreCheckoutSentences.ChooseAState;
-        if (string.IsNullOrWhiteSpace(a.Zip) || !ZipShape().IsMatch(a.Zip.Trim())) return StoreCheckoutSentences.ZipInvalid;
-        return null;
-    }
+    public static string? Problem(StoreCheckoutRequest r) => StoreCheckoutRules.Problem(r);
 
     /// <summary>What makes two attempts "the same checkout": contents at their prices, the code, the address and the email.</summary>
     public static string Fingerprint(IEnumerable<(Guid VariantId, int Quantity, decimal UnitPrice)> lines, Guid? couponId,
