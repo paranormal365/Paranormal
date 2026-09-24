@@ -72,6 +72,9 @@ public interface IStoreStripeGateway
 
     Task<StripeCancelOutcome> CancelPaymentIntentAsync(string paymentIntentId, CancellationToken ct);
 
+    /// <summary>An existing intent's client secret — how a reused order's page mounts the same payment form.</summary>
+    Task<string> GetClientSecretAsync(string paymentIntentId, CancellationToken ct);
+
     Task<StoreRefundOutcome> CreateRefundAsync(StoreRefundSpec spec, CancellationToken ct);
 
     /// <summary>Every refund Stripe holds on an intent — how a retry finds one it already made.</summary>

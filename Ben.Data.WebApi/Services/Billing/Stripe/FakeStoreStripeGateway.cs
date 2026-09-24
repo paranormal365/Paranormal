@@ -52,6 +52,9 @@ public sealed class FakeStoreStripeGateway : IStoreStripeGateway
         return Task.CompletedTask;
     }
 
+    public Task<string> GetClientSecretAsync(string paymentIntentId, CancellationToken ct)
+        => Task.FromResult(paymentIntentId + SecretSuffix);
+
     public Task<StripeCancelOutcome> CancelPaymentIntentAsync(string paymentIntentId, CancellationToken ct)
     {
         Cancelled.Add(paymentIntentId);

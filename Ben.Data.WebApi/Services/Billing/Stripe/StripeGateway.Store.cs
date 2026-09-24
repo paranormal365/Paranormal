@@ -79,6 +79,9 @@ public sealed partial class StripeGateway
         }
     }
 
+    public async Task<string> GetClientSecretAsync(string paymentIntentId, CancellationToken ct)
+        => (await new PaymentIntentService(StoreClient).GetAsync(paymentIntentId, cancellationToken: ct)).ClientSecret;
+
     public async Task<StripeCancelOutcome> CancelPaymentIntentAsync(string paymentIntentId, CancellationToken ct)
     {
         try

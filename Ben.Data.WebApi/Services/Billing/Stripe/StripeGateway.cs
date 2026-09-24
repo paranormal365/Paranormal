@@ -57,7 +57,12 @@ public sealed record StripeCompletedCheckout(
     string? PaymentIntentRef,
     string? CustomerRef,
     string? PaymentMethodRef,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    // Storefront S4.6: what a store order's payment needs beyond the subscription path's facts.
+    // The charge may be null (older API versions carry no latest_charge); the amount is null for a
+    // checkout-session event, which carries none.
+    string? ChargeRef = null,
+    long? AmountReceivedCents = null);
 
 /// <summary>
 /// The seam between this API and Stripe's — everything that talks to their servers.
@@ -228,7 +233,8 @@ public sealed partial class StripeGateway : IStripeGateway, IStoreStripeGateway
         {
             return new StripeCompletedCheckout(
                 renewal.Id, renewal.Id, renewal.CustomerId, renewal.PaymentMethodId,
-                renewal.Metadata ?? new Dictionary<string, string>());
+                renewal.Metadata ?? new Dictionary<string, string>(),
+                ChargeRef: renewal.LatestChargeId, AmountReceivedCents: renewal.AmountReceived);
         }
 
         if (stripeEvent.Type != "checkout.session.completed") return null;

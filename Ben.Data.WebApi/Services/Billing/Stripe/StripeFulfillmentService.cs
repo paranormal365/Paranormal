@@ -36,16 +36,20 @@ public sealed class StripeFulfillmentService
     /// here are about money landing on the ledger correctly, not about mail, and none of them
     /// should have to learn what a mailer is to keep testing that.</para>
     /// </param>
+    private readonly Ben.Data.WebApi.Services.Store.StoreOrderPayments? _store;
+
     public StripeFulfillmentService(
         IDbContextFactory<BenDataContext> dbFactory,
         ILogger<StripeFulfillmentService> log,
         Ben.Data.Common.Interfaces.IEmailService? email = null,
-        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity>? site = null)
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity>? site = null,
+        Ben.Data.WebApi.Services.Store.StoreOrderPayments? store = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _site = site?.Value ?? new Ben.Data.Common.SiteIdentity();
         _log = log;
+        _store = store;
     }
 
     /// <summary>The frozen facts a checkout was created with, read back from metadata.</summary>
@@ -145,6 +149,25 @@ public sealed class StripeFulfillmentService
     /// </summary>
     public async Task FulfillAsync(StripeCompletedCheckout checkout, CancellationToken ct = default)
     {
+        // A store order's payment (storefront S4.6) — first, and never allowed to fall through to
+        // the subscription path below, whose "no usable metadata" branch ignores and answers 200.
+        // With the store's service missing that would drop a real payment on the floor, so it
+        // throws instead: the webhook answers 500 and Stripe delivers it again.
+        if (checkout.Metadata.TryGetValue(StoreStripeKeys.Order, out var storeOrderRaw))
+        {
+            if (_store is null)
+                throw new InvalidOperationException("A store order was paid but the store's payment service is not registered.");
+            if (!Guid.TryParse(storeOrderRaw, out var storeOrderId))
+            {
+                _log.LogError("Stripe payment {Reference} carries an unreadable store order id.", checkout.PaymentIntentRef ?? checkout.SessionId);
+                return;
+            }
+            checkout.Metadata.TryGetValue(StoreStripeKeys.TaxCalculation, out var taxCalc);
+            await _store.MarkPaidAsync(storeOrderId, checkout.PaymentIntentRef, checkout.ChargeRef,
+                checkout.PaymentIntentRef ?? checkout.SessionId, checkout.AmountReceivedCents, taxCalc, ct);
+            return;
+        }
+
         if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Seat, out var seatRaw)
             && Guid.TryParse(seatRaw, out var seatId))
         {

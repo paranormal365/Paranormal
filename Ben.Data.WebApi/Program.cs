@@ -428,6 +428,8 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe>(sp 
 // S4.4-S4.5: the store's letters (through the outbox) and its bells.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreAlerts>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderPayments>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreCheckoutService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
