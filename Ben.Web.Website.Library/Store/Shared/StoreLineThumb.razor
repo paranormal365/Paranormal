@@ -1,0 +1,27 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A line item's picture, small and rounded (Ben, 09/24): the order desk's items, its refund dialog —
+    anywhere a line is listed. The line keeps the picture it was bought with (StoreOrderItem.
+    ImageUploadFileId); a line without one gets a quiet placeholder so the names still line up.
+*@
+
+@if (ImageUploadFileId is { } picture)
+{
+    <img class="ben-line-thumb" src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="@Alt" loading="lazy"
+         style="@($"width:{Size}px;height:{Size}px;")" />
+}
+else
+{
+    <span class="ben-line-thumb ben-line-thumb--none" style="@($"width:{Size}px;height:{Size}px;")" aria-hidden="true"><BenIcon Name="package" /></span>
+}
+
+@code {
+    [Parameter] public Guid? ImageUploadFileId { get; set; }
+
+    /// <summary>What the picture shows, for a screen reader; empty when the name is right beside it.</summary>
+    [Parameter] public string Alt { get; set; } = "";
+
+    /// <summary>Width and height in pixels.</summary>
+    [Parameter] public int Size { get; set; } = 48;
+}

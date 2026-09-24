@@ -305,3 +305,8 @@
     .ben-invoice { position: absolute; inset: 0 0 auto 0; border: 0; box-shadow: none; }
     .ben-invoice-toolbar { display: none; }
 }
+
+/* A line item's picture (StoreLineThumb): small, rounded, cropped square; a placeholder keeps rows lined up. */
+.ben-line-thumb { flex: 0 0 auto; object-fit: cover; border-radius: var(--bs-border-radius); border: 1px solid var(--bs-border-color); background: var(--bs-secondary-bg); }
+.ben-line-thumb--none { display: inline-grid; place-items: center; color: var(--bs-secondary-color); }
+.ben-line-thumb--none svg { width: 45%; height: 45%; }
