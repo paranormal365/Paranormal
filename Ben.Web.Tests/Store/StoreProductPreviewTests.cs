@@ -92,6 +92,10 @@ public sealed class StoreProductPreviewTests
         Assert.Contains("Not on sale", html);
         Assert.Contains("editor-note", html);
         Assert.DoesNotContain("data-testid=\"store-preview\"", html);   // the editor's note replaces the shop's
+        // Nobody keeps or reviews a preview (S6.3).
+        Assert.DoesNotContain("store-heart", html);
+        Assert.Contains("Shoppers write reviews here once they've bought it.", html);
+        Assert.DoesNotContain("review-sign-in", html);
     }
 
     [Fact]

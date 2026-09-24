@@ -48,6 +48,8 @@ public sealed class CommitButtonGateGuardTests
         ("store-place-order-bar", "StoreCheckoutPage.razor"),
         ("checkout-discount-apply", "StoreCheckoutPage.razor"),
         ("lookup-send", "StoreOrderLookup.razor"),
+        // A review (S6.3): no stars or no words answers in the rule's sentence.
+        ("store-submit-review", "StoreReviewModal.razor"),
     ];
 
     private static DirectoryInfo RepoRoot()

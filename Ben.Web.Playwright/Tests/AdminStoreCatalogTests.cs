@@ -238,7 +238,10 @@ public class AdminStoreCatalogTests : BenTestBase
             await SetAsync("#store-ship-state", "tn");
             await SetAsync("#store-shipping", "7.5");
             await Page.Locator("#store-settings-save").ClickAsync();
-            await Expect(Page.Locator("#store-settings-refusal")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+            // The refusal clears as the save STARTS, so its absence proves nothing — reloading then
+            // read the old flat rate back (09/24). The toast comes only once the server has it.
+            await Expect(Page.GetByText(new Regex(@"^Saved\."))).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await Expect(Page.Locator("#store-settings-refusal")).ToHaveCountAsync(0);
 
             await Page.ReloadAsync();
             await WaitForTheCircuitAsync();

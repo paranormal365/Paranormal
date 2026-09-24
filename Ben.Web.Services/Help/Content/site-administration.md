@@ -1233,6 +1233,10 @@ or refuses it. Only approved reviews count toward a product's stars. Refusing ne
 because the reviewer is told why. The shop can reply under an approved review; refusing a review
 later takes the reply down with it. The queue shows the oldest waiting review first.
 
+The reviewer sees their own review on the product page the whole time — "Waiting for approval", then
+published, or the reason it wasn't. A reviewer who edits a published review sends it back to the
+queue, and it comes down until it's approved again.
+
 ## Store settings
 
 The store settings page holds the flat shipping rate and the free-shipping threshold, the low-stock

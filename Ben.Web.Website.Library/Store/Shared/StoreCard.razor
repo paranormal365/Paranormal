@@ -11,7 +11,7 @@
 
     The cart button (S3.5) adds a product with one live variant straight to the cart; a product
     with choices gets a link to its page instead, where the choice is made. A sold-out card has
-    neither — there is nothing to buy (Sold_out_card_has_no_cart_button). The heart joins in S6.3.
+    neither — there is nothing to buy (Sold_out_card_has_no_cart_button). The heart (S6.3) is on every card.
 *@
 
 <div class="ben-card @(Card.InStock ? null : "ben-card--soldout")" data-testid="store-card" data-slug="@Card.Slug">
@@ -31,6 +31,10 @@
                aria-label="@($"Choose options for {Card.Name}")" title="Choose options">
                 <BenIcon Name="sliders" />
             </a>
+        }
+        @if (ShowHeart)
+        {
+            <StoreHeart ProductId="Card.Id" ProductName="@Card.Name" />
         }
         @Rail
     </div>
@@ -56,6 +60,9 @@
 
     /// <summary>More buttons beside the cart one — the heart (S6.3). Outside the card's link.</summary>
     [Parameter] public RenderFragment? Rail { get; set; }
+
+    /// <summary>The heart on the rail; the Favourites page puts its own Remove there instead.</summary>
+    [Parameter] public bool ShowHeart { get; set; } = true;
 
     private bool _adding;
 

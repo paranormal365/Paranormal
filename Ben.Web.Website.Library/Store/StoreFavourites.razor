@@ -1,0 +1,117 @@
+@page "/store/favourites"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState User
+@inject StoreFavouriteState Favourites
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+<PageTitle>Favourites — Store</PageTitle>
+
+@*
+    Favourites (storefront S6.3), after Smarty's account-favourites.html: the products a person
+    has hearted, as the store's own cards, each with Remove. Remove asks first — on this page a
+    tap takes the product off the list, and the heart that put it there is a page away.
+
+    Behind the store switch: with the shop dark there is nothing to go back and buy. A product
+    taken off sale drops out of the list (the API reads live products only) and comes back if it
+    returns.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Store">
+    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a href="/store">Store</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Favourites</li>
+            </ol>
+        </nav>
+        <h1 class="h3 mb-3">Favourites<HelpLink Slug="shopping-at-the-store" Anchor="favourites" /></h1>
+
+        @if (_cards is not { } cards)
+        {
+            <div class="text-center text-secondary py-5" data-testid="favourites-loading">
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading your favourites…
+            </div>
+        }
+        else if (cards.Failed)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="favourites-refusal">@_refusal</div>
+                <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Retry</button>
+            </div>
+        }
+        else if (_shown.Count == 0)
+        {
+            <StoreEmptyState Icon="heart" Title="No favourites yet"
+                             Lead="Tap the heart on a product to keep it here."
+                             LinkText="Browse the store" LinkHref="/store/products" />
+        }
+        else
+        {
+            <p class="text-secondary small">@_shown.Count @(_shown.Count == 1 ? "product" : "products")</p>
+            <div class="row g-3" data-testid="favourites-grid">
+                @foreach (var card in _shown)
+                {
+                    <div class="col-6 col-md-4 col-xl-3" @key="card.Id">
+                        <StoreCard Card="card" ShowHeart="false">
+                            <Rail>
+                                <button type="button" class="btn btn-light btn-sm shadow-sm" data-testid="favourite-remove"
+                                        title="Remove from favourites" aria-label="@($"Remove {card.Name} from your favourites")"
+                                        @onclick="@(() => _removing = card)">
+                                    <BenIcon Name="x" />
+                                </button>
+                            </Rail>
+                        </StoreCard>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <BenConfirmDialog Visible="@(_removing is not null)" VisibleChanged="@(v => { if (!v) _removing = null; })"
+                      Title="Remove from favourites?" Message="@($"Remove {_removing?.Name} from your favourites?")"
+                      ConfirmText="Remove" Busy="_busy" OnConfirm="RemoveAsync" />
+</FeatureGate>
+
+@code {
+    private LoadResult<StoreProductCard>? _cards;
+    private List<StoreProductCard> _shown = [];
+    private string? _refusal;
+    private StoreProductCard? _removing;
+    private bool _busy;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        if (!User.IsAuthenticated)
+        {
+            Nav.NavigateTo(SignInLink.For(Nav));
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await Store.GetMyStoreFavouritesAsync();
+        var error = result.Failed ? result.Reason ?? "Your favourites couldn't be loaded just now." : null;
+        _refusal = error;
+        _cards = result;
+        _shown = result.Items.ToList();
+        StateHasChanged();
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_removing is not { } card) return;
+        _busy = true;
+        var refused = await Favourites.RemoveAsync(card.Id);
+        _busy = false;
+        _removing = null;
+        if (refused is not null) { Toasts.Warning(refused); return; }
+        _shown.Remove(card);
+        Toasts.Success($"{card.Name} was removed from your favourites.");
+    }
+}

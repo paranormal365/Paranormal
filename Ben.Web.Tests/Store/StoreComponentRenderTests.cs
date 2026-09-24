@@ -18,13 +18,17 @@ public sealed class StoreComponentRenderTests
     {
         var collection = new ServiceCollection();
         services?.Invoke(collection);
-        // What the cart buttons on cards and the product page reach for (S3.5), unless the test
+        // What the cart buttons and hearts on cards and the product page reach for (S3.5, S6.3), unless the test
         // brought its own.
         collection.TryAddSingleton(new Moq.Mock<Ben.Web.Services.IBenUserState>().Object);
         collection.TryAddScoped(sp => new Ben.Web.Services.StoreCartState(
             sp.GetService<Ben.Web.Services.IBenAdminClient>() ?? new Moq.Mock<Ben.Web.Services.IBenAdminClient>().Object,
             sp.GetRequiredService<Ben.Web.Services.IBenUserState>()));
         collection.TryAddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
+        // The heart on every card (S6.3).
+        collection.TryAddScoped(sp => new Ben.Web.Services.StoreFavouriteState(
+            sp.GetService<Ben.Web.Services.IBenAdminClient>() ?? new Moq.Mock<Ben.Web.Services.IBenAdminClient>().Object,
+            sp.GetRequiredService<Ben.Web.Services.IBenUserState>()));
         await using var provider = collection.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, NullLoggerFactory.Instance);
         return await renderer.Dispatcher.InvokeAsync(async () =>

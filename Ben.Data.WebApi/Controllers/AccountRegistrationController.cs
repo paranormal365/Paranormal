@@ -218,6 +218,10 @@ public sealed class AccountRegistrationController : ControllerBase
             // still nothing" is the whole diagnostic.
             user.DateEmailConfirmed = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
+
+            // Store orders placed as a guest with this address become theirs (storefront S6.1).
+            await using var db = await _db.CreateDbContextAsync(ct);
+            await Ben.Data.WebApi.Services.Store.StoreGuestOrders.AttachAsync(db, user.Id, ct);
         }
 
         return Ok(result.Succeeded

@@ -1,0 +1,264 @@
+@inject IBenAdminClient Client
+@inject IBenUserState User
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+@*
+    A product's reviews (storefront S6.3), after Smarty's: the average, then the reviews a page at
+    a time with a sort, each with its stars, the buyer's words, the store's reply and "Helpful".
+    Only a buyer can write one (the API decides and says why not); a guest is offered sign-in.
+    The reader's own review shows here whatever its state — "Waiting for approval" while the
+    moderators have it, the reason when they refused it — so a review is never sent into silence.
+
+    Everything here is read once the circuit is up: the reader's part needs their sign-in, and the
+    list is below the fold.
+*@
+
+<section class="mb-5" id="reviews" aria-labelledby="reviews-heading">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h4 mb-0 me-auto" id="reviews-heading">Reviews<HelpLink Slug="shopping-at-the-store" Anchor="reviews" /></h2>
+        @if (_page is { Total: > 1 })
+        {
+            <label class="visually-hidden" for="reviews-sort">Sort reviews by</label>
+            <select id="reviews-sort" class="form-select form-select-sm w-auto" value="@_sort" @onchange="OnSortChanged">
+                @foreach (var (key, label) in StoreReviewSorts.All)
+                {
+                    <option value="@key">@label</option>
+                }
+            </select>
+        }
+    </div>
+
+    @if (Count == 0)
+    {
+        <p class="text-secondary" data-testid="reviews-none">No reviews yet.</p>
+    }
+    else
+    {
+        <p><StoreStars Rating="@Average" Count="@Count" /> <span class="ms-1">@Average.ToString("0.0") out of 5</span></p>
+    }
+
+    @if (Preview)
+    {
+        <p class="text-secondary small">Shoppers write reviews here once they've bought it.</p>
+    }
+    else
+    {
+        @MyPart
+
+        <div id="reviews-refusal" class="text-danger small" role="alert">@_refusal</div>
+
+        @if (_page is { } current)
+        {
+            <div class="ben-review-list" data-testid="review-list">
+                @foreach (var review in current.Reviews)
+                {
+                    <article class="ben-review" data-testid="review" data-review-id="@review.Id">
+                        <div class="d-flex flex-wrap align-items-baseline gap-2">
+                            <StoreStars Rating="@review.Rating" Count="1" ShowCount="false" />
+                            <strong>@review.Title</strong>
+                        </div>
+                        <div class="small text-secondary mb-2">
+                            @review.AuthorName · @review.CreatedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy") · Verified buyer
+                        </div>
+                        <p class="ben-review__body mb-2">@review.Body</p>
+                        @if (!string.IsNullOrWhiteSpace(review.AdminReply))
+                        {
+                            <div class="ben-review__reply" data-testid="review-reply">
+                                <div class="small fw-semibold">The store replied</div>
+                                <p class="mb-0 small">@review.AdminReply</p>
+                            </div>
+                        }
+                        <div class="d-flex align-items-center gap-2 small mt-2">
+                            @if (review.IsMine)
+                            {
+                                <span class="text-secondary">Your review</span>
+                            }
+                            else if (!User.IsAuthenticated)
+                            {
+                                <a class="btn btn-link btn-sm p-0" href="@SignInLink.For(Nav)">Sign in to say it helped</a>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-testid="review-helpful"
+                                        aria-pressed="@(review.IVotedHelpful ? "true" : "false")" disabled="@(_voting == review.Id)"
+                                        @onclick="@(() => VoteAsync(review))">
+                                    <BenIcon Name="thumbs-up" /> Helpful
+                                </button>
+                            }
+                            @if (review.HelpfulCount > 0)
+                            {
+                                <span class="text-secondary" data-testid="review-helpful-count">@review.HelpfulCount @(review.HelpfulCount == 1 ? "person" : "people") found this helpful</span>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+
+            @if (current.Total > current.PageSize)
+            {
+                var pages = (current.Total + current.PageSize - 1) / current.PageSize;
+                <nav aria-label="Review pages" class="mt-3">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(current.Page <= 1 ? "disabled" : null)">
+                            <button type="button" class="page-link" @onclick="@(() => LoadAsync(current.Page - 1))">Previous</button>
+                        </li>
+                        <li class="page-item disabled"><span class="page-link">Page @current.Page of @pages</span></li>
+                        <li class="page-item @(current.Page >= pages ? "disabled" : null)">
+                            <button type="button" class="page-link" data-testid="reviews-next" @onclick="@(() => LoadAsync(current.Page + 1))">Next</button>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        }
+        else if (_refusal is null && Count > 0)
+        {
+            <p class="text-secondary small">Loading reviews…</p>
+        }
+
+        <StoreReviewModal @bind-Visible="_writing" ProductId="ProductId" ProductName="@ProductName" Existing="_viewer?.MyReview" OnSaved="OnSavedAsync" />
+        <BenConfirmDialog @bind-Visible="_deleting" Title="Delete your review?" Message="@($"Your review of {ProductName} will be removed. You can write another later.")"
+                          ConfirmText="Delete review" Busy="_busy" OnConfirm="DeleteAsync" />
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProductId { get; set; }
+    [Parameter, EditorRequired] public string ProductSlug { get; set; } = "";
+    [Parameter, EditorRequired] public string ProductName { get; set; } = "";
+
+    /// <summary>The published average and count, from the product itself.</summary>
+    [Parameter] public decimal Average { get; set; }
+    [Parameter] public int Count { get; set; }
+
+    /// <summary>The editor's preview: the heading and average only — nobody reviews a preview.</summary>
+    [Parameter] public bool Preview { get; set; }
+
+    private StoreReviewPage? _page;
+    private string _sort = StoreReviewSorts.Popular;
+    private StoreProductViewerState? _viewer;
+    private string? _refusal;
+    private Guid? _voting;
+    private bool _writing, _deleting, _busy;
+    private Guid? _loadedFor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Preview || !RendererInfo.IsInteractive || _loadedFor == ProductId) return;
+        _loadedFor = ProductId;   // the product page swaps products without a new component
+        _page = null;
+        _viewer = null;
+        _sort = StoreReviewSorts.Popular;
+        await User.AuthReady;
+        await Task.WhenAll(LoadAsync(1), LoadViewerAsync());
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        var result = await Client.GetStoreReviewsAsync(ProductSlug, _sort, Math.Max(1, page));
+        if (result.Failed) { _refusal = result.Reason ?? "The reviews couldn't be loaded."; return; }
+        _refusal = null;
+        _page = result.Item;
+    }
+
+    private async Task LoadViewerAsync()
+    {
+        if (!User.IsAuthenticated) return;
+        var result = await Client.GetStoreProductViewerStateAsync(ProductId);
+        if (!result.Failed) _viewer = result.Item;
+    }
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        _sort = StoreReviewSorts.Normalize(e.Value?.ToString());
+        await LoadAsync(1);
+    }
+
+    private async Task VoteAsync(StoreReviewRecord review)
+    {
+        _voting = review.Id;
+        var (result, error) = await Client.SetStoreReviewHelpfulAsync(review.Id, !review.IVotedHelpful);
+        _voting = null;
+        if (result is null) { Toasts.Warning(error ?? "That vote didn't count — try again."); return; }
+        if (_page is { } page)
+        {
+            _page = page with
+            {
+                Reviews = page.Reviews.Select(r => r.Id == review.Id ? r with { HelpfulCount = result.HelpfulCount, IVotedHelpful = result.IVotedHelpful } : r).ToList(),
+            };
+        }
+    }
+
+    private async Task OnSavedAsync(MyStoreReviewRecord saved)
+    {
+        _viewer = _viewer is null ? new StoreProductViewerState(false, true, null, saved) : _viewer with { MyReview = saved };
+        Toasts.Success("Thanks — your review will appear once it's approved.");
+        await LoadAsync(1);   // an edit takes a published review down until it's approved again
+    }
+
+    private async Task DeleteAsync()
+    {
+        _busy = true;
+        var (deleted, error) = await Client.DeleteMyStoreReviewAsync(ProductId);
+        _busy = false;
+        _deleting = false;
+        if (!deleted) { _refusal = error ?? "Your review couldn't be deleted — try again."; return; }
+        _viewer = _viewer! with { MyReview = null };
+        Toasts.Success("Your review was deleted.");
+        await LoadAsync(1);
+    }
+
+    /// <summary>
+    /// The reader's part: sign in (a guest), write one (a buyer who hasn't), their own review and
+    /// its state (a buyer who has), or nothing (signed in, never bought it — the API's reason).
+    /// </summary>
+    private RenderFragment MyPart => __builder =>
+    {
+        if (!RendererInfo.IsInteractive) return;
+        if (!User.IsAuthenticated)
+        {
+            <p class="small" data-testid="review-sign-in"><a href="@SignInLink.For(Nav)">Sign in</a> to review what you've bought.</p>
+        }
+        else if (_viewer is { MyReview: { } mine })
+        {
+            <div class="ben-review ben-review--mine mb-3" data-testid="my-review">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <StoreStars Rating="@mine.Rating" Count="1" ShowCount="false" />
+                    <strong>@mine.Title</strong>
+                    @switch (mine.Status)
+                    {
+                        case StoreReviewStatus.Pending:
+                            <span class="badge text-bg-warning" data-testid="my-review-pending">Waiting for approval</span>
+                            break;
+                        case StoreReviewStatus.Rejected:
+                            <span class="badge text-bg-danger" data-testid="my-review-rejected">Not published</span>
+                            break;
+                        default:
+                            <span class="badge text-bg-success">Published</span>
+                            break;
+                    }
+                </div>
+                @if (mine.Status == StoreReviewStatus.Rejected && !string.IsNullOrWhiteSpace(mine.RejectionReason))
+                {
+                    <p class="small mb-1 mt-1">The moderator said: @mine.RejectionReason</p>
+                }
+                <p class="ben-review__body small mb-2 mt-1">@mine.Body</p>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" data-testid="my-review-edit" @onclick="@(() => _writing = true)">Edit</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-testid="my-review-delete" @onclick="@(() => _deleting = true)">Delete</button>
+                </div>
+            </div>
+        }
+        else if (_viewer is { CanReview: true })
+        {
+            <button type="button" class="btn btn-outline-primary mb-3" data-testid="write-review" @onclick="@(() => _writing = true)">
+                <BenIcon Name="edit-3" /> Write a review
+            </button>
+        }
+        else if (_viewer is { CannotReviewReason: { } why })
+        {
+            <p class="small text-secondary" data-testid="review-cannot">@why</p>
+        }
+    };
+}

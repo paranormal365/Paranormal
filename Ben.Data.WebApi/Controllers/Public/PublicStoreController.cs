@@ -184,6 +184,47 @@ public sealed class PublicStoreController(
     }
 
     /// <summary>Counts a look at a product, for "most popular". Always 204 — a hidden or missing product is not news to the caller.</summary>
+    public const int ReviewPageSize = 10;
+
+    /// <summary>
+    /// A product's approved reviews (storefront S6.1), a page at a time. Most popular first —
+    /// the most helpful, then the newest.
+    /// </summary>
+    [HttpGet("products/{slug}/reviews")]
+    public async Task<ActionResult<StoreReviewPage>> Reviews(string slug, [FromQuery] string? sort, [FromQuery] int? page, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var productId = await StoreCatalogue.LiveProducts(db).Where(p => p.Slug == slug).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(ct);
+        if (productId is null) return NotFound(NoSuchProduct);
+
+        var me = await GetCurrentUserIdOrNullAcrossSchemesAsync();
+        var key = StoreReviewSorts.Normalize(sort);
+        var approved = db.StoreReviews.AsNoTracking().Where(r => r.ProductId == productId && r.Status == StoreReviewStatus.Approved);
+        var sorted = key switch
+        {
+            StoreReviewSorts.Newest => approved.OrderByDescending(r => r.DateCreated),
+            StoreReviewSorts.Highest => approved.OrderByDescending(r => r.Rating).ThenByDescending(r => r.DateCreated),
+            StoreReviewSorts.Lowest => approved.OrderBy(r => r.Rating).ThenByDescending(r => r.DateCreated),
+            StoreReviewSorts.Helpful => approved.OrderByDescending(r => r.HelpfulCount).ThenByDescending(r => r.Rating).ThenByDescending(r => r.DateCreated),
+            _ => approved.OrderByDescending(r => r.HelpfulCount).ThenByDescending(r => r.DateCreated),
+        };
+        var total = await approved.CountAsync(ct);
+        var number = Math.Max(1, page ?? 1);
+        var rows = await sorted.Skip((number - 1) * ReviewPageSize).Take(ReviewPageSize)
+            .Select(r => new
+            {
+                r.Id, r.Rating, r.Title, r.Body, r.AuthorAppUserId, Author = r.AuthorAppUser.DisplayName ?? r.AuthorAppUser.FirstName,
+                r.DateCreated, r.HelpfulCount, r.AdminReply, r.AdminRepliedUtc,
+                Voted = me != null && db.StoreReviewVotes.Any(v => v.ReviewId == r.Id && v.AppUserId == me),
+            })
+            .ToListAsync(ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new StoreReviewPage(rows.Select(r => new StoreReviewRecord(
+                r.Id, r.Rating, r.Title, r.Body, string.IsNullOrWhiteSpace(r.Author) ? "A buyer" : r.Author!, r.DateCreated, r.HelpfulCount,
+                r.AdminReply, r.AdminRepliedUtc, r.AuthorAppUserId == me, r.Voted)).ToList(),
+            total, number, ReviewPageSize, key));
+    }
+
     [HttpPost("products/{id:guid}/viewed")]
     public async Task<IActionResult> Viewed(Guid id, CancellationToken ct)
     {

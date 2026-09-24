@@ -19,7 +19,7 @@ public sealed class StoreDemoSeederTests
             var admin = StoreTestData.Person(db);
             StoreTestData.StoreImageType(db, admin);
             if (withPeople)
-                foreach (var (email, first) in new[] { (StoreDemoSeeder.SarahEmail, "Sarah"), (StoreDemoSeeder.JamesEmail, "James") })
+                foreach (var (email, first) in new[] { (StoreDemoSeeder.SarahEmail, "Sarah"), (StoreDemoSeeder.JamesEmail, "James"), (StoreDemoSeeder.EmmaEmail, "Emma") })
                     db.AppUsers.Add(new Ben.Data.Source.Entities.AppUser
                     {
                         Id = Guid.NewGuid(), UserName = email, Email = email, NormalizedEmail = email.ToUpperInvariant(),
@@ -140,7 +140,7 @@ public sealed class StoreDemoSeederTests
         await using var db = await sqlite.NewContextAsync();
         var orders = await db.StoreOrders.Include(o => o.Items).ToListAsync();
 
-        Assert.Equal(7, orders.Count);
+        Assert.Equal(9, orders.Count);
         Assert.All(orders, o =>
         {
             Assert.Equal(o.Total, o.Subtotal - o.DiscountAmount + o.ShippingAmount + o.TaxAmount);
@@ -196,10 +196,10 @@ public sealed class StoreDemoSeederTests
         await using var _d = sqlite;
         await using var db = await sqlite.NewContextAsync();
 
-        Assert.Equal(7, await db.StoreOrders.CountAsync());
+        Assert.Equal(9, await db.StoreOrders.CountAsync());
         Assert.Single(await db.StoreCouponRedemptions.ToListAsync());
         Assert.Equal(1, (await db.StoreCoupons.SingleAsync(c => c.Code == StoreDemoSeeder.CouponCode)).RedemptionCount);
-        Assert.Equal(7, (await db.StoreOrders.Select(o => o.OrderNumber).Distinct().ToListAsync()).Count);
+        Assert.Equal(9, (await db.StoreOrders.Select(o => o.OrderNumber).Distinct().ToListAsync()).Count);
     }
 
     [Fact]
@@ -211,5 +211,62 @@ public sealed class StoreDemoSeederTests
 
         var only = Assert.Single(await db.StoreOrders.ToListAsync());
         Assert.Equal(StoreDemoSeeder.SeededOrders.Guest, only.Id);
+    }
+
+    // ── Reviews and favourites (S6.4) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Review_caches_equal_4_00_over_2_after_seeding()
+    {
+        var (sqlite, _) = await SeededAsync(times: 2, withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        var kii = await db.StoreProducts.SingleAsync(p => p.Slug == "k-ii-emf-meter");
+        Assert.Equal(4.00m, kii.AverageRating);
+        Assert.Equal(2, kii.ReviewCount);
+
+        var reviews = await db.StoreReviews.OrderBy(r => r.Id).ToListAsync();
+        Assert.Equal(3, reviews.Count);   // twice seeded, still three
+        var pending = Assert.Single(reviews, r => r.Status == Ben.Data.Common.Enums.StoreReviewStatus.Pending);
+        Assert.Equal(StoreDemoSeeder.SeededReviews.SarahKii, pending.Id);
+        Assert.Single(reviews, r => r.AdminReply != null);
+        Assert.All(reviews.Where(r => r.Status == Ben.Data.Common.Enums.StoreReviewStatus.Approved), r => Assert.Equal(1, r.HelpfulCount));
+        Assert.Equal(2, await db.StoreReviewVotes.CountAsync());
+    }
+
+    [Fact]
+    public async Task Every_seeded_review_hangs_on_an_order_its_author_paid_for_that_holds_the_product()
+    {
+        var (sqlite, _) = await SeededAsync(withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        foreach (var review in await db.StoreReviews.ToListAsync())
+            Assert.True(await db.StoreOrders.AnyAsync(o => o.Id == review.OrderId && o.BuyerAppUserId == review.AuthorAppUserId
+                && o.PaidUtc != null && o.Items.Any(i => i.ProductId == review.ProductId)), review.Title);
+        Assert.False(await db.StoreReviewVotes.AnyAsync(v => v.Review.AuthorAppUserId == v.AppUserId));
+    }
+
+    [Fact]
+    public async Task Sarah_keeps_two_favourites_once()
+    {
+        var (sqlite, _) = await SeededAsync(times: 2, withPeople: true);
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.Equal(["h1n-handy-recorder", "rem-pod"],
+            await db.StoreFavourites.Select(f => f.Product.Slug).OrderBy(s => s).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Without_the_demo_people_there_are_no_reviews()
+    {
+        var (sqlite, _) = await SeededAsync();
+        await using var _d = sqlite;
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.Empty(await db.StoreReviews.ToListAsync());
+        Assert.Equal((0m, 0), await db.StoreProducts.Where(p => p.Slug == "k-ii-emf-meter").Select(p => new ValueTuple<decimal, int>(p.AverageRating, p.ReviewCount)).SingleAsync());
     }
 }

@@ -74,6 +74,8 @@
 
     @if (IsAuthenticated)
     {
+        @* Favourites belong to a signed-in person (S6.3); the heart checks the store switch itself. *@
+        <BenFavouritesButton />
         <BenNotificationBell />
     }
 

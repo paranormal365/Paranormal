@@ -152,6 +152,7 @@ public sealed class MyStoreController(IDbContextFactory<BenDataContext> dbFactor
     {
         var me = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await StoreGuestOrders.AttachAsync(db, me, ct);   // orders placed as a guest with this confirmed email (S6.1)
         var query = db.StoreOrders.AsNoTracking().Include(o => o.Items).Where(o => o.BuyerAppUserId == me && o.PaidUtc != null);
         if (months is > 0) { var since = DateTime.UtcNow.AddMonths(-months.Value); query = query.Where(o => o.PlacedUtc >= since); }
         var orders = await query.OrderByDescending(o => o.PlacedUtc).ToListAsync(ct);

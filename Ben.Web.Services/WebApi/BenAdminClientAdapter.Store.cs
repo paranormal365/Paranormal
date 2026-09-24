@@ -129,4 +129,38 @@ public sealed partial class BenAdminClientAdapter
 
     public async Task<bool> ExpireReservationForTestAsync(Guid orderId, CancellationToken token = default)
         => (await _api.SendWithStatusAsync<object, object>(HttpMethod.Post, $"/api/store/checkout/dev/expire-reservation/{orderId}", new { }, token)).Status is >= 200 and < 300;
+
+    // ── Favourites and reviews (S6.3) ────────────────────────────────────────
+
+    public Task<ItemResult<StoreReviewPage>> GetStoreReviewsAsync(string productSlug, string? sort = null, int page = 1, CancellationToken token = default)
+        => _api.GetItemAsync<StoreReviewPage>(
+            $"/api/public/store/products/{Uri.EscapeDataString(productSlug)}/reviews?sort={Uri.EscapeDataString(sort ?? StoreReviewSorts.Popular)}&page={page}", token);
+
+    public Task<LoadResult<StoreProductCard>> GetMyStoreFavouritesAsync(CancellationToken token = default)
+        => _api.GetListAsync<StoreProductCard>("/api/me/store/engagement/favourites", token);
+
+    public Task<ItemResult<StoreFavouriteCount>> GetMyStoreFavouriteCountAsync(CancellationToken token = default)
+        => _api.GetItemAsync<StoreFavouriteCount>("/api/me/store/engagement/favourites/count", token);
+
+    public Task<(StoreFavouriteCount? Result, string? Error)> AddStoreFavouriteAsync(Guid productId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreFavouriteCount>(HttpMethod.Put, $"/api/me/store/engagement/favourites/{productId}", new { }, token);
+
+    public Task<(StoreFavouriteCount? Result, string? Error)> RemoveStoreFavouriteAsync(Guid productId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreFavouriteCount>(HttpMethod.Delete, $"/api/me/store/engagement/favourites/{productId}", new { }, token);
+
+    public Task<ItemResult<StoreProductViewerState>> GetStoreProductViewerStateAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreProductViewerState>($"/api/me/store/engagement/products/{productId}/state", token);
+
+    public Task<(MyStoreReviewRecord? Result, string? Error)> SaveStoreReviewAsync(Guid productId, SubmitStoreReviewRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SubmitStoreReviewRequest, MyStoreReviewRecord>(HttpMethod.Put, $"/api/me/store/engagement/products/{productId}/review", request, token);
+
+    public async Task<(bool Deleted, string? Error)> DeleteMyStoreReviewAsync(Guid productId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(HttpMethod.Delete, $"/api/me/store/engagement/products/{productId}/review", null, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error ?? "The review couldn't be removed.");
+    }
+
+    public Task<(StoreHelpfulVoteResult? Result, string? Error)> SetStoreReviewHelpfulAsync(Guid reviewId, bool helpful, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreHelpfulVoteResult>(helpful ? HttpMethod.Post : HttpMethod.Delete,
+            $"/api/me/store/engagement/reviews/{reviewId}/helpful", new { }, token);
 }

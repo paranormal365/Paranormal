@@ -187,6 +187,7 @@ internal static class StoreDemoSeeder
         }
 
         await SeedOrdersAsync(db, now, ct);
+        await SeedReviewsAsync(db, ownerId, now, ct);
     }
 
     // ── Orders (storefront S4.12) ────────────────────────────────────────────
@@ -194,12 +195,15 @@ internal static class StoreDemoSeeder
     internal const string SarahEmail = "sarah.mitchell@benco.dev";
     internal const string JamesEmail = "james.thornton@benco.dev";
     internal const string GuestEmail = "morgan.guest@example.com";
+    internal const string EmmaEmail = "emma.rodriguez@benco.dev";
 
     /// <summary>The seeded orders' fixed ids, for the tests that open them.</summary>
     internal static class SeededOrders
     {
         public static readonly Guid SarahPaid = Id(101), SarahShipped = Id(102), SarahDelivered = Id(103), SarahRefunded = Id(104),
-            Guest = Id(105), JamesDelivered = Id(106), SarahAbandoned = Id(107);
+            Guest = Id(105), JamesDelivered = Id(106), SarahAbandoned = Id(107),
+            // The K-II's reviewers bought one (S6.4): a review needs a paid order to hang on.
+            JamesKii = Id(108), EmmaKii = Id(109);
     }
 
     private sealed record LineSeed(string Sku, int Quantity);
@@ -210,7 +214,8 @@ internal static class StoreDemoSeeder
 
     /// <summary>
     /// Seven orders in the shapes the order pages have to draw (plan S4.12): Sarah's paid, shipped,
-    /// delivered-with-a-code, refunded and abandoned checkouts; a guest's; James's delivered one.
+    /// delivered-with-a-code, refunded and abandoned checkouts; a guest's; James's delivered one —
+    /// and two more (S6.4), James's and Emma's delivered K-IIs, which their reviews hang on.
     /// </summary>
     /// <remarks>
     /// <para><b>History, not sales.</b> Stock is not touched and no tax is filed: each paid order
@@ -236,6 +241,8 @@ internal static class StoreDemoSeeder
             new(SeededOrders.Guest, GuestEmail, StoreOrderStatus.Paid, [new("KII-EMF", 1), new("BAG-BLK-STD", 1)], 0m, 0.06m, false, "KY", "Louisville", "40202", 2),
             new(SeededOrders.JamesDelivered, JamesEmail, StoreOrderStatus.Delivered, [new("BAG-BLK-LRG", 1)], 7.95m, 0.07m, false, "IN", "Indianapolis", "46204", 14),
             new(SeededOrders.SarahAbandoned, SarahEmail, StoreOrderStatus.PendingPayment, [new("KII-EMF", 1)], 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 3, Abandoned: true),
+            new(SeededOrders.JamesKii, JamesEmail, StoreOrderStatus.Delivered, [new("KII-EMF", 1)], 7.95m, 0.07m, false, "IN", "Indianapolis", "46204", 45),
+            new(SeededOrders.EmmaKii, EmmaEmail, StoreOrderStatus.Delivered, [new("KII-EMF", 1)], 7.95m, 0.0625m, false, "TX", "Austin", "78701", 30),
         ];
 
         var skus = orders.SelectMany(o => o.Lines).Select(l => l.Sku).Distinct().ToList();
@@ -273,6 +280,94 @@ internal static class StoreDemoSeeder
                 await db.SaveChangesAsync(ct);
             }
         }
+    }
+
+    // ── Reviews and favourites (storefront S6.4) ─────────────────────────────
+
+    /// <summary>The seeded reviews' fixed ids, for the tests that find them.</summary>
+    internal static class SeededReviews
+    {
+        public static readonly Guid JamesKii = Id(121), EmmaKii = Id(122), SarahKii = Id(123);
+    }
+
+    private sealed record ReviewSeed(Guid Id, string Email, Guid OrderId, int Rating, string Title, string Body, StoreReviewStatus Status, int DaysAgo, string? Reply = null);
+
+    /// <summary>
+    /// The K-II's reviews (plan S6.4): James's five stars and Emma's three, both published, so it
+    /// shows 4.0 from two; Sarah's, still waiting for a moderator, so the review queue and "Waiting
+    /// for approval" have something to show. Each hangs on the order the reviewer bought it with. A
+    /// helpful vote on each published one, and two products in Sarah's favourites.
+    /// </summary>
+    /// <remarks>Only what is missing is added, and the product's stars are worked out from what is
+    /// published, the same sum the moderators' verbs do (StoreRatingCaches).</remarks>
+    private static async Task SeedReviewsAsync(BenDataContext db, Guid ownerId, DateTime now, CancellationToken ct)
+    {
+        var kii = await db.StoreProducts.AsNoTracking().Where(p => p.Slug == "k-ii-emf-meter").Select(p => (Guid?)p.Id).FirstOrDefaultAsync(ct);
+        if (kii is not { } productId) return;
+
+        var emails = new[] { SarahEmail, JamesEmail, EmmaEmail }.Select(e => e.ToUpperInvariant()).ToList();
+        var people = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail != null && emails.Contains(u.NormalizedEmail))
+            .ToDictionaryAsync(u => u.NormalizedEmail!, u => u.Id, ct);
+        Guid? Person(string email) => people.TryGetValue(email.ToUpperInvariant(), out var id) ? id : null;
+
+        ReviewSeed[] reviews =
+        [
+            new(SeededReviews.JamesKii, JamesEmail, SeededOrders.JamesKii, 5, "Does one thing and does it fast",
+                "Took it through the old county jail on a group walk. The lights jump the moment you pass the wiring, which is exactly why we sweep with it first — so we know where NOT to trust it later.",
+                StoreReviewStatus.Approved, 40),
+            new(SeededReviews.EmmaKii, EmmaEmail, SeededOrders.EmmaKii, 3, "Good meter, too twitchy near phones",
+                "It reacts to everything: phones, radios, the car. Fine once the whole team puts phones in airplane mode, but nobody told us that. Battery lasted three nights.",
+                StoreReviewStatus.Approved, 25,
+                Reply: "Thanks, Emma — airplane mode is the right call. We've added a note about phones to the product description."),
+            new(SeededReviews.SarahKii, SarahEmail, SeededOrders.SarahPaid, 5, "Our go-to first sweep",
+                "Light, simple, and the team can read it from across a room in the dark.",
+                StoreReviewStatus.Pending, 0),
+        ];
+
+        foreach (var seed in reviews)
+        {
+            if (Person(seed.Email) is not { } author) continue;                              // that demo person is not on this database
+            if (await db.StoreReviews.AnyAsync(r => r.Id == seed.Id || (r.ProductId == productId && r.AuthorAppUserId == author), ct)) continue;
+            if (!await db.StoreOrders.AnyAsync(o => o.Id == seed.OrderId && o.BuyerAppUserId == author, ct)) continue;
+
+            var written = now.AddDays(-seed.DaysAgo);
+            var approved = seed.Status == StoreReviewStatus.Approved;
+            db.StoreReviews.Add(new StoreReview
+            {
+                Id = seed.Id, ProductId = productId, AuthorAppUserId = author, OrderId = seed.OrderId, Rating = seed.Rating,
+                Title = seed.Title, Body = seed.Body, Status = seed.Status,
+                ModeratedByAppUserId = approved ? ownerId : null, ModeratedUtc = approved ? written.AddDays(1) : null,
+                AdminReply = seed.Reply, AdminReplyByAppUserId = seed.Reply is null ? null : ownerId,
+                AdminRepliedUtc = seed.Reply is null ? null : written.AddDays(1),
+                DateCreated = written, CreatedByAppUserId = author,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+
+        // One helpful vote on each published review, from somebody else.
+        foreach (var (reviewId, voterEmail) in new[] { (SeededReviews.JamesKii, SarahEmail), (SeededReviews.EmmaKii, JamesEmail) })
+        {
+            if (Person(voterEmail) is not { } voter) continue;
+            if (!await db.StoreReviews.AnyAsync(r => r.Id == reviewId, ct)) continue;
+            if (await db.StoreReviewVotes.AnyAsync(v => v.ReviewId == reviewId && v.AppUserId == voter, ct)) continue;
+            db.StoreReviewVotes.Add(new StoreReviewVote { Id = Guid.NewGuid(), ReviewId = reviewId, AppUserId = voter, DateCreated = now });
+            await db.SaveChangesAsync(ct);
+            var count = await db.StoreReviewVotes.CountAsync(v => v.ReviewId == reviewId, ct);
+            await db.StoreReviews.Where(r => r.Id == reviewId).ExecuteUpdateAsync(u => u.SetProperty(r => r.HelpfulCount, count), ct);
+        }
+
+        // Sarah keeps two products she has her eye on.
+        if (Person(SarahEmail) is { } sarah)
+        {
+            var wanted = await db.StoreProducts.AsNoTracking().Where(p => p.Slug == "rem-pod" || p.Slug == "h1n-handy-recorder")
+                .Select(p => p.Id).ToListAsync(ct);
+            foreach (var id in wanted)
+                if (!await db.StoreFavourites.AnyAsync(f => f.AppUserId == sarah && f.ProductId == id, ct))
+                    db.StoreFavourites.Add(new StoreFavourite { Id = Guid.NewGuid(), AppUserId = sarah, ProductId = id, DateCreated = now });
+            await db.SaveChangesAsync(ct);
+        }
+
+        await StoreRatingCaches.RecomputeAsync(db, productId, ct);
     }
 
     private static StoreOrder BuildOrder(OrderSeed seed, AppUser? buyer, IReadOnlyDictionary<string, StoreProductVariant> variants,

@@ -44,9 +44,10 @@ public sealed class VisualAuditWalk : BenTestBase
         // the guest-code sheet need an id and are photographed by VisualShots instead.
         ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new",
                      "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box", "/store/cart"]),
-        ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new"]),
+        ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new",
+                     "/store/orders", "/store/favourites", "/store/p/k-ii-emf-meter"]),
         ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals",
-                        "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings"]),
+                        "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings", "/admin/store/orders", "/admin/store/reviews"]),
     ];
 
     /// <summary>

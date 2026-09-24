@@ -168,8 +168,32 @@ part refund shows what was refunded and what's left.
 
 ## Favourites
 
-Keeping a list of things you like. (Written with favourites.)
+Tap the **heart** on a product — on its page, or on its card anywhere in the store — to keep it in
+your **Favourites**. The heart fills in once it's kept; tap it again to let it go. The heart at the
+top of the screen, beside the cart, shows how many you're keeping and opens the list (it's also
+under **Store → Favourites** in the menu).
+
+The Favourites page shows each product as it is today — its price, and whether it's in stock. **Remove**
+takes one off the list after asking. A product that stops being sold drops out of the list, and
+comes back if it returns.
+
+Favourites belong to your account, so you need to be signed in: a guest who taps a heart is asked to
+sign in first.
 
 ## Reviews
 
-Reviewing what you bought. (Written with reviews.)
+**Reading reviews.** A product's reviews are at the bottom of its page, with its average stars
+at the top. Sort them by *Most popular*, *Newest*, *Highest rated*, *Lowest rated* or *Most helpful*.
+Every review is from somebody who bought that product here, and some have a reply from the store.
+Signed in, you can mark a review **Helpful**; the count under it says how many people did.
+
+**Writing one.** Only somebody who has bought a product can review it. Sign in, open the product,
+and press **Write a review**: pick one to five stars, give it a title and say a few words about how
+it did. Every review is read by a moderator before it appears — until then yours shows on the
+product page, to you only, marked **Waiting for approval**. If it isn't published you'll see why.
+
+You can **Edit** or **Delete** your review from the same place. An edited review goes back to the
+moderator and is taken down until it's approved again. One review per product; a refunded item
+can't be reviewed.
+
+**Bought as a guest? Sign up with the email you ordered with — the order attaches to your account and you can review.**

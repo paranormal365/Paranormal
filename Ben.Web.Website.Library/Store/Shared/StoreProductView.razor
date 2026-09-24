@@ -54,14 +54,23 @@ else if (Product.IsPreview)
                 <p class="text-secondary mt-2">@Product.ShortDescription</p>
             }
 
-            <div class="my-3" data-testid="product-price">
-                @if (Chosen is { } v)
+            <div class="d-flex align-items-start justify-content-between gap-2 my-3">
+                <div data-testid="product-price">
+                    @if (Chosen is { } v)
+                    {
+                        <StorePrice Price="@v.Price" Was="@v.CompareAtPrice" Large="true" />
+                    }
+                    else if (Product.Variants.Count > 0)
+                    {
+                        <StorePrice Price="@Product.Variants.Min(x => x.Price)" Max="@Product.Variants.Max(x => x.Price)" Large="true" />
+                    }
+                </div>
+                @* The heart (S6.3) beside the price, clear of the buy row: the buy box is narrow beside the
+                   sidebar, and a sold-out product keeps it — it's the way back when it returns. Nobody
+                   keeps a preview. *@
+                @if (!Product.IsPreview)
                 {
-                    <StorePrice Price="@v.Price" Was="@v.CompareAtPrice" Large="true" />
-                }
-                else if (Product.Variants.Count > 0)
-                {
-                    <StorePrice Price="@Product.Variants.Min(x => x.Price)" Max="@Product.Variants.Max(x => x.Price)" Large="true" />
+                    <StoreHeart ProductId="Product.Id" ProductName="@Product.Name" Css="btn btn-outline-secondary ben-heart" />
                 }
             </div>
 
@@ -172,18 +181,8 @@ else if (Product.IsPreview)
     <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalogue</a></p>
 }
 
-<section class="mb-5" id="reviews" aria-labelledby="reviews-heading">
-    <h2 class="h4" id="reviews-heading">Reviews</h2>
-    @if (Product.Reviews.Count == 0)
-    {
-        <p class="text-secondary">No reviews yet.</p>
-    }
-    else
-    {
-        <p><StoreStars Rating="@Product.Reviews.Average" Count="@Product.Reviews.Count" /> <span class="ms-1">@Product.Reviews.Average.ToString("0.0") out of 5</span></p>
-    }
-    @* The reviews themselves, sorting and writing one arrive with S6. *@
-</section>
+<StoreReviewsBlock ProductId="Product.Id" ProductSlug="@Product.Slug" ProductName="@Product.Name"
+                   Average="@Product.Reviews.Average" Count="@Product.Reviews.Count" Preview="@Product.IsPreview" />
 
 <StoreProductRail Title="More from this shelf" Cards="Product.Related" MoreHref="@($"/store/c/{Product.CategorySlug}")" TestId="rail-related" />
 
@@ -222,7 +221,7 @@ else if (Product.IsPreview)
     private bool _adding;
 
     /// <summary>
-    /// The quantity and Add to cart (S3.5); the heart joins in S6.3. A preview or a sold-out
+    /// The quantity and Add to cart (S3.5); the heart sits beside the price (S6.3). A preview or a sold-out
     /// choice shows its disabled button instead. With the store paused the button stays — a cart
     /// can still be kept — and the sentence under it says why nothing can be ordered yet.
     /// </summary>

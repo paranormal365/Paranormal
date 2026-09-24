@@ -74,6 +74,29 @@ public interface IBenStoreClient
 
     /// <summary>Test checkout only: runs the order's reservation out.</summary>
     Task<bool> ExpireReservationForTestAsync(Guid orderId, CancellationToken token = default);
+
+    // ── Favourites and reviews (storefront S6.3) ─────────────────────────────
+
+    /// <summary>A product's approved reviews, a page at a time; <paramref name="sort"/> as StoreReviewSorts.</summary>
+    Task<ItemResult<StoreReviewPage>> GetStoreReviewsAsync(string productSlug, string? sort = null, int page = 1, CancellationToken token = default);
+
+    /// <summary>The signed-in shopper's favourites that are on the store today.</summary>
+    Task<LoadResult<StoreProductCard>> GetMyStoreFavouritesAsync(CancellationToken token = default);
+
+    Task<ItemResult<StoreFavouriteCount>> GetMyStoreFavouriteCountAsync(CancellationToken token = default);
+
+    Task<(StoreFavouriteCount? Result, string? Error)> AddStoreFavouriteAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StoreFavouriteCount? Result, string? Error)> RemoveStoreFavouriteAsync(Guid productId, CancellationToken token = default);
+
+    /// <summary>Whether the reader has hearted it, may review it, and their own review.</summary>
+    Task<ItemResult<StoreProductViewerState>> GetStoreProductViewerStateAsync(Guid productId, CancellationToken token = default);
+
+    Task<(MyStoreReviewRecord? Result, string? Error)> SaveStoreReviewAsync(Guid productId, SubmitStoreReviewRequest request, CancellationToken token = default);
+
+    Task<(bool Deleted, string? Error)> DeleteMyStoreReviewAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StoreHelpfulVoteResult? Result, string? Error)> SetStoreReviewHelpfulAsync(Guid reviewId, bool helpful, CancellationToken token = default);
 }
 
 /// <summary>What pressing Continue came to.</summary>

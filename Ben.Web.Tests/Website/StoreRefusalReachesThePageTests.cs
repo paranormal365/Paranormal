@@ -13,7 +13,7 @@ namespace Ben.Web.Tests.Website;
 /// page and the element its refusal lands in; the element must be bound to a field the page sets
 /// from the API's error.</para>
 ///
-/// <para>S3.5 adds the cart page's row and S4.11 the checkout page's.</para>
+/// <para>S3.5 adds the cart page's row, S4.11 the checkout page's and S6.3 the reviews' and favourites'.</para>
 /// </remarks>
 public sealed class StoreRefusalReachesThePageTests
 {
@@ -33,6 +33,10 @@ public sealed class StoreRefusalReachesThePageTests
         // The order desk (S5.5): a refused ship, refund or release is said on the page.
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreOrders.razor", "orders-refusal" },
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreOrderDetail.razor", "order-desk-refusal" },
+        // Favourites and reviews (S6.3): a refused review stays in its boxes with the reason under it.
+        { "Ben.Web.Website.Library/Store/Shared/StoreReviewModal.razor", "review-refusal" },
+        { "Ben.Web.Website.Library/Store/Shared/StoreReviewsBlock.razor", "reviews-refusal" },
+        { "Ben.Web.Website.Library/Store/StoreFavourites.razor", "favourites-refusal" },
     };
 
     private static string Read(string relative)

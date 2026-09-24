@@ -192,6 +192,7 @@ builder.Services.AddScoped<NotificationState>();
 builder.Services.AddScoped<StoreCartTokenHolder>();
 builder.Services.AddScoped<VisitorAddressHolder>();
 builder.Services.AddScoped<StoreCartState>();
+builder.Services.AddScoped<StoreFavouriteState>();   // storefront S6.3: the hearts
 // Scoped = per circuit. Avatar resolution depends on who is asking, so this must not be shared
 // across sessions — see AvatarCache.
 builder.Services.AddScoped<AvatarCache>();

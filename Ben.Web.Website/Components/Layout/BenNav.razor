@@ -34,6 +34,7 @@
 
     <nav id="nav-menu" class="primary-nav flex-grow-1 custom-scroll">
         <ul class="nav-menu">
+            @{ _activeUrl = MostSpecificMatch(); }
             @foreach (var section in VisibleSections)
             {
                 @if (section.Title is { } title)
@@ -288,7 +289,7 @@
                 main.Add(Group("Media", "layers", media.ToArray()));
 
                 // ── Store ─────────────────────────────────────────────────────
-                // Storefront. Browse and My Orders; Favourites join with S6.3. A buyer's orders
+                // Storefront. Browse, My Orders and Favourites (S6.3). A buyer's orders
                 // must stay reachable when the shop is dark (the Reported Posts precedent in the
                 // admin menu) — but the store launches dark, and a "My Orders" for everybody would
                 // announce a shop that is not open. So with the switch off it is shown only to a
@@ -296,7 +297,8 @@
                 if (Features.IsOn(SiteFeatures.Store))
                     main.Add(Group("Store", "shopping-cart",
                         new NavItem("Browse the Store", "shopping-bag", "/store"),
-                        new NavItem("My Orders", "package", "/store/orders")));
+                        new NavItem("My Orders", "package", "/store/orders"),
+                        new NavItem("Favourites", "heart", "/store/favourites")));
                 else if (_hasStoreOrders)
                     main.Add(new NavItem("My Orders", "package", "/store/orders"));
 
@@ -682,14 +684,37 @@
     private bool ContainsActive(NavItem group)
         => group.Children.Any(c => IsActive(c) || ContainsActive(c));
 
-    private bool IsActive(NavItem item)
+    /// <summary>
+    /// The one address lit in the menu: the longest entry that covers this page. "Browse the Store"
+    /// (/store) covers /store/favourites too, and lit beside "Favourites" it said the page was in
+    /// two places at once (seen by eye, 09/24). A page no entry names exactly — a case under
+    /// /cases — still lights the entry above it.
+    /// </summary>
+    private string? _activeUrl;
+
+    private string CurrentPath => "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
+
+    private string? MostSpecificMatch()
     {
-        if (string.IsNullOrEmpty(item.Url)) return false;
-        var path = "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
-        if (item.Url == "/") return path == "/";
-        return path.Equals(item.Url, StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith(item.Url + "/", StringComparison.OrdinalIgnoreCase);
+        var path = CurrentPath;
+        static IEnumerable<NavItem> All(IEnumerable<NavItem> items) => items.SelectMany(i => All(i.Children).Prepend(i));
+        return All(Sections.SelectMany(s => s.Items))
+            .Select(i => i.Url)
+            .Where(url => Covers(url, path))
+            .OrderByDescending(url => url!.Length)
+            .FirstOrDefault();
     }
+
+    private static bool Covers(string? url, string path)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        if (url == "/") return path == "/";
+        return path.Equals(url, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(url + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsActive(NavItem item)
+        => Covers(item.Url, CurrentPath) && string.Equals(item.Url, _activeUrl, StringComparison.OrdinalIgnoreCase);
 
     // Raised off the renderer's synchronization context by NotificationState's poll.
     private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);

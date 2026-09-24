@@ -378,6 +378,19 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   is no clean way to make the e2e API refuse the cart on demand. The refusal is covered by
   StoreRefusalReachesThePageTests (cart-refusal row) and StoreCartStateTests (a failed read keeps
   LoadError, never an empty cart).
+- (S6) Until the sign-in is known, a signed-in person looks signed out — so the heart was drawn as
+  the guest's "sign in" link, and a quick tap sent a member to the login page. StoreFavouritesTests
+  caught it on the first run. The heart is now still and disabled until StoreFavouriteState.IsReady
+  (the first read done); StoreFavouriteStateTests hold it (5 facts, 5 breaks caught).
+- (S6) A guest's order joins their account when they confirm the email they ordered with — and on
+  the next read of My Orders or a product page, for accounts confirmed before the store existed
+  (StoreGuestOrders.AttachAsync). Only paid orders nobody owns; never a scrubbed or unpaid one.
+- (S6) A review hangs on an order: StoreReview.OrderId is required, so the seed gives James and
+  Emma their own delivered K-II orders (#108, #109) — the seeded order count is now nine.
+- (S6) The product page's heart sits beside the price, not in the buy row: beside the sidebar at
+  1024 the buy box is ~274 px, and quantity + Add to cart + heart wrapped the heart onto a line of
+  its own (seen by eye; shrinking the button first did not fit either). A sold-out product keeps its
+  heart — it is the way back when it returns. A preview has neither heart nor review form.
 
 ## Slices (status)
 | Slice | What | Status |
@@ -388,8 +401,8 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | Built 09/24/2026 — server: StoreCartService/Controller 30 facts, 20 breaks caught; website: cookie, client headers, cart state, card button 20 facts, 14 breaks caught; guards StorePublicWritesAreRateLimited, StoreCartSurfacesAgree (incl. the badge outside the signed-in branch), cart-refusal and the two Apply rows, each broken once; StoreCartTests 7/7 + store/crawl/header suite 33/33 on IsHauntedDb_e2e. Between S3.3 and S3.4, at Ben's request: the Seller role and the editor's live preview (below) |
 | S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | Built 09/24/2026 in fake mode — every new fact seen failing on a deliberate break (mutation runs per sitting, recorded in the commits); Playwright StoreCheckoutTests 8, StoreOrderTests 8, Store category 51/51 on IsHauntedDb_e2e; unit suite green (Ben.Web.Tests 7,296). By eye: checkout desktop/phone, light/dark; order page, invoice, lookup, returns. **Still open for S4 exit:** the real test-mode run (`BEN_STRIPE_E2E=1`: 4242 card, self-signed webhook 200 / forged 400, tax adds up) and the webhook signature fixtures captured with the Stripe CLI — both need Ben's Stripe TEST key in the gitignored dev settings. |
 | S4b | subcategories (Ben, 09/24): nullable parent, one level deep; shelves shown only when something is on sale under them; empty shelf 404 | Built 09/24/2026 — migration M5 StoreSubcategories (one nullable column, index, NoAction FK); StoreSubcategoryTests 11 + the sellable-rule guard, 10 breaks all caught; Playwright StoreSubcategoryTests 2; Store category 52/52; unit suite green |
-| S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
-| S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | |
+| S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | Built 09/24/2026 — StoreRefundTests 18, StoreOrderTransitionsTests 19, AdminStoreOrderControllerTests 10, StoreLowStockJobTests 3, every fact seen failing on a deliberate break; Playwright StoreAdminOrderTests 6; Store category + admin walk 61/61; unit suite green (7,362). Tracking per Ben: a carrier + number makes the link, or "No tracking provided". Line thumbnails on the order desk (Ben, 09/24) |
+| S6 | favourites, reviews, helpful votes (MyStoreEngagementController, gated) | Built 09/24/2026 — StoreReviewRulesTests 14 (10 breaks), StoreFavouriteStateTests 5 (5 breaks), seed facts 4 (5 breaks), preview facts (2 breaks); guard rows: commit button, 3 refusals; Playwright StoreReviewTests 5, StoreFavouritesTests 4; Store category 68/68 on IsHauntedDb_e2e; every unit project green (Ben.Web.Tests 7,388). Found by eye: the kept heart went white on hover (now via --bs-btn-* variables) and the nav lit two entries. Visual audit now walks /store/orders, /store/favourites, the K-II and /admin/store/orders + reviews |
 | S7 | screenshots (incl. drawer, header menu, payment phase), product PDF, changelog, final guards | |
 | S8 | rollout | |
 

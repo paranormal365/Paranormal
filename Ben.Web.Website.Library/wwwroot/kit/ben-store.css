@@ -310,3 +310,32 @@
 .ben-line-thumb { flex: 0 0 auto; object-fit: cover; border-radius: var(--bs-border-radius); border: 1px solid var(--bs-border-color); background: var(--bs-secondary-bg); }
 .ben-line-thumb--none { display: inline-grid; place-items: center; color: var(--bs-secondary-color); }
 .ben-line-thumb--none svg { width: 45%; height: 45%; }
+
+/* The heart (S6.3): outlined until kept, then filled. */
+.ben-heart svg { transition: fill .15s ease; }
+/* Through the button's own variables: a plain colour lost to .btn:hover and :active, so a kept heart
+   went white under the pointer and stayed white after a tap on a phone (seen by eye, 09/24). */
+.ben-heart--on {
+    --bs-btn-color: var(--bs-danger); --bs-btn-hover-color: var(--bs-danger); --bs-btn-active-color: var(--bs-danger);
+    --bs-btn-hover-bg: var(--bs-danger-bg-subtle); --bs-btn-active-bg: var(--bs-danger-bg-subtle);
+    --bs-btn-border-color: var(--bs-danger-border-subtle); --bs-btn-hover-border-color: var(--bs-danger); --bs-btn-active-border-color: var(--bs-danger);
+    color: var(--bs-danger);
+}
+.ben-heart--on svg { fill: currentColor; }
+
+/* Reviews (S6.3): one card per review, the store's reply set in under it, the reader's own outlined. */
+.ben-review-list { display: grid; gap: .75rem; }
+.ben-review { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .875rem 1rem; background: var(--bs-body-bg); }
+.ben-review--mine { border-color: var(--bs-primary-border-subtle); background: var(--bs-primary-bg-subtle); }
+.ben-review__body { white-space: pre-line; overflow-wrap: anywhere; }
+.ben-review__reply { border-left: 3px solid var(--bs-secondary-border-subtle); padding: .25rem 0 .25rem .75rem; margin-top: .5rem; }
+.ben-review-body { min-height: 9rem; }
+
+/* The stars you give (S6.3): big enough for a thumb; gold up to the one chosen. */
+.ben-star-pick { display: flex; gap: .25rem; }
+.ben-star-pick__star {
+    border: 0; background: none; padding: 0; width: 44px; height: 44px; font-size: 1.75rem; line-height: 1;
+    color: var(--bs-secondary-color); opacity: .45; border-radius: .375rem;
+}
+.ben-star-pick__star:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+.ben-star-pick__star--on { color: var(--bs-warning); opacity: 1; }

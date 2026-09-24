@@ -1,0 +1,62 @@
+@implements IDisposable
+@inject StoreFavouriteState Favourites
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+@*
+    The heart (storefront S6.3): keep a product in Favourites, or let it go. Filled when kept. A
+    guest has no favourites, so for them the heart is a way to sign in and come back here. Until the
+    sign-in is known it is a still, disabled heart.
+*@
+
+@if (!Favourites.IsReady)
+{
+    @* Until the sign-in is known: neither a heart that can't be believed nor a sign-in link. *@
+    <button type="button" class="@Css" disabled aria-busy="true" aria-label="@($"Favourite {ProductName}")" data-testid="store-heart">
+        <BenIcon Name="heart" />
+    </button>
+}
+else if (!Favourites.IsSignedIn)
+{
+    <a class="@Css" href="@SignInLink.For(Nav)" title="Sign in to keep favourites" aria-label="@($"Sign in to keep {ProductName} in your favourites")"
+       data-testid="store-heart">
+        <BenIcon Name="heart" />
+    </a>
+}
+else
+{
+    var kept = Favourites.IsFavourite(ProductId);
+    <button type="button" class="@Css @(kept ? "ben-heart--on" : null)" disabled="@_busy" data-testid="store-heart"
+            aria-pressed="@(kept ? "true" : "false")" title="@(kept ? "In your favourites" : "Add to favourites")"
+            aria-label="@(kept ? $"Remove {ProductName} from your favourites" : $"Add {ProductName} to your favourites")"
+            @onclick="ToggleAsync">
+        <BenIcon Name="heart" />
+    </button>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProductId { get; set; }
+    [Parameter, EditorRequired] public string ProductName { get; set; } = "";
+
+    /// <summary>The button's classes: the card's small rail button, or the product page's large one.</summary>
+    [Parameter] public string Css { get; set; } = "btn btn-light btn-sm shadow-sm ben-heart";
+
+    private bool _busy;
+
+    protected override void OnInitialized() => Favourites.Changed += OnChanged;
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+        => firstRender ? Favourites.EnsureStartedAsync(RendererInfo.IsInteractive) : Task.CompletedTask;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task ToggleAsync()
+    {
+        _busy = true;
+        var refused = await Favourites.ToggleAsync(ProductId);
+        _busy = false;
+        if (refused is not null) Toasts.Warning(refused);
+    }
+
+    public void Dispose() => Favourites.Changed -= OnChanged;
+}
