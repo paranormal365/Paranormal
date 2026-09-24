@@ -855,6 +855,9 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     // Item 235's two plans. Needs the host group from the development seeders above, and makes
     // its own venue — a hotel with described rooms is the one thing the site had no example of.
     await Ben.Data.WebApi.SeedData.HostedEventDemoSeeder.SeedAsync(app.Services, app.Configuration);
+    // Storefront: a small store to open the screens on — five shelves, seven products, GHOST10.
+    // Needs the Store Image file type (UploadFileTypeSeeder) and the equipment models it links to.
+    await Ben.Data.WebApi.SeedData.StoreDemoSeeder.SeedAsync(app.Services, app.Configuration);
 
     // ── The backfills run a SECOND time, and have to ─────────────────────────
     //
