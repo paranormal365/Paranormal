@@ -227,6 +227,23 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
   tabbed screens re-run green.
 - (S1) The product editor refreshes only the drafts of the part a save changed (Drafts flags): a
   late answer to one save used to wipe what had been typed since in another part.
+- (S2) The public listing filters, counts, sorts and pages in memory (StoreCatalogue) after one
+  load of the live catalogue: identical on SQL Server and SQLite (which cannot order by a
+  decimal), and fine for a catalogue of hundreds. Push it into SQL if the store grows to thousands.
+- (S2) The product card component is StoreCard, not StoreProductCard — a component named like the
+  record it draws hides the record inside itself.
+- (S2) Add to cart AND the quantity box wait for S3.5 (a quantity with nothing to add it to does
+  nothing). Delivery/Returns/Need help are <details>, not a Bootstrap accordion: no script, every
+  device. The sort is a <select>, not a BenDropdown.
+- (S2) StoreListing watches NavigationManager.LocationChanged: a query-only change never reaches
+  OnParametersSetAsync (Blazor skips setting parameters when the route values are unchanged).
+- (S2) StoreNotFound: a 404 from the store API (hidden, retired, mistyped — or the API switched off
+  before this website's 30-second feature snapshot) draws the ordinary "Page not found".
+- (S2) VisualAuditWalk runs at desktop, 375, 768 and 1024-landscape for every seat (addendum §6.7).
+  Its two non-store dark-mode contrast findings (Telerik pager text on admin grids, /events times)
+  were spun off as a separate task.
+- (S2) Seeded shelf pictures carry no words (the hero draws the title); their file name is their
+  version, and an older one is repainted into the row on startup.
 - (S1) StoreDemoSeeder.SeedCoreAsync(db, ownerId, ct) — the owner, not a storage service: the
   pictures live in the row (FileData), so nothing is written to disk.
 
@@ -235,7 +252,7 @@ shopping-at-the-store.md` + `site-administration.md` "The store"; tests `Ben.Web
 |---|---|---|
 | S0 | flag, 21 entities, 3 migrations, purge, static helpers, rate-limit partition | Built 09/24/2026 — every new fact seen failing first (mutations recorded in the commit) |
 | S1 | admin catalogue (categories, products, options, variants, pictures, stock + CSV both ways, coupons, reviews moderation, settings, dashboard), tax probe, image serving, demo seed | Built 09/24/2026 — unit facts each seen failing on a deliberate break (64 breaks across S1.1–S1.12, all caught but one that exposed a redundant check, removed); AdminStoreCatalogTests 8/8 and AdminPageTests on IsHauntedDb_e2e with the shop off; new guards StoreClientRoutesTests, StoreRefusalReachesThePageTests, StoreReviewQueueHasAnEntranceTests each broken once |
-| S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | |
+| S2 | buyer help stub, public catalogue (home, listing, product + SuperAdmin preview), ben-store.css, nav | Built 09/24/2026 — PublicStoreController 12 facts (9 breaks caught), shared components 16 render facts (10 breaks), query string 8 facts; StoreBrowseTests/StoreProductTests/StoreFeatureFlagTests + crawls + admin 25/25 on IsHauntedDb_e2e with the store on; visual audit light+dark at four widths; guards StoreControllersAreGated, StoreLinksResolve, StoreProductProseClassIsGlobal, the Smarty deny-list, each broken once |
 | S3 | cart — four surfaces, cookie identity, coupons at the cart, paused-store sentence | |
 | S4 | checkout (locked form, Payment phase), Stripe gateway + tax, orders, confirmation letter, admin alert, seed orders, My Orders, invoice, guest/member lookup | |
 | S5 | admin orders, pack/ship/deliver/cancel, refunds (status-aware, list-then-retry), address edit, re-send, release, exports, shipped/refunded letters, stock digest | |
