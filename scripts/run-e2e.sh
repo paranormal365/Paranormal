@@ -193,11 +193,22 @@ start_host() {
   echo "── Starting $name ──────────────────────────────────────────────────────"
   (
     cd "$dir"
+    # EXPORTED, not handed to `env` as arguments: $CONN carries the SQL password, and an argument is
+    # readable by anyone running `ps` for as long as the process holding it lives.
+    export ASPNETCORE_ENVIRONMENT=Development
+    export ConnectionStrings__BenDbConnectionString="$CONN"
+    # The website reaches data only through the API, so it never reads that connection string — but
+    # its Serilog MSSqlServer sink (WriteTo index 0) ships pointed at a placeholder. A checkout with
+    # no appsettings.Development.json therefore had no error table (see Program.cs), and the main
+    # checkout's local file sends the website's errors to IsHauntedDb_player, a different database
+    # from the one under test. Pointed here, a website error lands in this run's Logs table beside
+    # the API's (Source = 'Website'). It also goes to web.log, via the Development console sink.
+    if [[ "$name" == web ]]; then
+      export Serilog__WriteTo__0__Args__connectionString="$CONN"
+    fi
     # shellcheck disable=SC2086
-    env ASPNETCORE_ENVIRONMENT=Development \
-        ConnectionStrings__BenDbConnectionString="$CONN" \
-        $extra_env \
-        nohup dotnet run --no-launch-profile --urls "$bind_url" >"$LOG_DIR/$name.log" 2>&1 &
+    if [[ -n "$extra_env" ]]; then export $extra_env; fi
+    nohup dotnet run --no-launch-profile --urls "$bind_url" >"$LOG_DIR/$name.log" 2>&1 &
     echo $! >"$LOG_DIR/$name.pid"
   )
   STARTED_PIDS+=("$(cat "$LOG_DIR/$name.pid")")

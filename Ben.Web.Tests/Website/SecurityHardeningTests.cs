@@ -93,6 +93,26 @@ public sealed class SecurityHardeningTests
     }
 
     [Fact]
+    public void Detailed_circuit_errors_are_switched_on_in_Development_only()
+    {
+        // DetailedErrors sends the server's exception and stack trace to the browser console, which
+        // is what makes a closed circuit debuggable locally (2026-09-24) and what must never reach
+        // a visitor. Every place Program.cs turns it on sits directly under an IsDevelopment()
+        // check, and neither committed settings file turns it on at all.
+        var lines = RepoFile("Ben.Web.Website/Program.cs").Split('\n');
+        var switchedOn = Enumerable.Range(0, lines.Length)
+            .Where(i => Regex.IsMatch(lines[i], @"DetailedErrors\s*=\s*true")).ToList();
+
+        Assert.NotEmpty(switchedOn);
+        foreach (var i in switchedOn)
+            Assert.True(i > 0 && lines[i - 1].Contains("builder.Environment.IsDevelopment()"),
+                $"Program.cs line {i + 1} turns DetailedErrors on without an IsDevelopment() check directly above it.");
+
+        foreach (var settings in new[] { "Ben.Web.Website/appsettings.json", "Ben.Web.Website/appsettings.UAT.json" })
+            Assert.DoesNotContain("DetailedErrors", RepoFile(settings));
+    }
+
+    [Fact]
     public void IIS_does_not_announce_its_version()
     {
         // The website ships its own web.config; the API's is generated at publish, so the deploy
