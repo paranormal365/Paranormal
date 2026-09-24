@@ -62,6 +62,34 @@ public abstract class BenControllerBase : ControllerBase
             && entra.Principal.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
     }
 
+    /// <summary>
+    /// The caller's account on an endpoint that does <b>not</b> require sign-in, whichever way they
+    /// signed in; null for a visitor (storefront S3.3).
+    /// </summary>
+    /// <remarks>
+    /// The same gap as <see cref="CallerIsSuperAdminAsync"/>: on an <c>[AllowAnonymous]</c> endpoint
+    /// only the local bearer is read, so a member signed in with Microsoft arrives with no principal
+    /// and would shop as a guest forever — their cart never following them to another device. The
+    /// Entra scheme is asked by hand, and only when it is registered (asking for an unregistered
+    /// scheme throws).
+    /// </remarks>
+    protected async Task<Guid?> GetCurrentUserIdOrNullAcrossSchemesAsync()
+    {
+        if (GetCurrentUserIdOrNull() is { } local) return local;
+
+        var schemes = HttpContext?.RequestServices?
+            .GetService<Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider>();
+        if (schemes is null) return null;
+        if (await schemes.GetSchemeAsync(Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme) is null)
+            return null;
+
+        var entra = await HttpContext!.AuthenticateAsync(Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme);
+        if (!entra.Succeeded || entra.Principal is null) return null;
+
+        var value = entra.Principal.FindFirstValue(EntraClaimsTransformation.AppUserIdClaimType);
+        return Guid.TryParse(value, out var id) && id != Guid.Empty ? id : null;
+    }
+
     /// <summary>The refusal for a Viewer who tries to change a group's work — a sentence, not a bare 403.</summary>
     protected static ObjectResult ViewerReadOnly()
         => new("You're a viewer in this group: you can see its work but not change it.") { StatusCode = 403 };

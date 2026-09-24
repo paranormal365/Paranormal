@@ -36,7 +36,10 @@ public sealed class StoreControllersAreGatedTests
 
     [Fact]
     public void The_discovery_finds_the_store_controllers()
-        => Assert.Contains(StoreControllers(), t => t == typeof(PublicStoreController));
+    {
+        Assert.Contains(StoreControllers(), t => t == typeof(PublicStoreController));
+        Assert.Contains(StoreControllers(), t => t == typeof(Ben.Data.WebApi.Controllers.Store.StoreCartController));
+    }
 
     [Fact]
     public void Every_store_controller_is_behind_the_switch_or_says_why_not()

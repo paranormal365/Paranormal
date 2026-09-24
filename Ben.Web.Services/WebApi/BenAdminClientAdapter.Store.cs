@@ -35,4 +35,38 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<LoadResult<StoreSearchSuggestion>> SuggestStoreProductsAsync(string text, CancellationToken token = default)
         => _api.GetListAsync<StoreSearchSuggestion>($"/api/public/store/search-suggest?q={Uri.EscapeDataString(text.Trim())}", token);
+
+    // ── The cart (S3.4) ──────────────────────────────────────────────────────
+
+    public Task<ItemResult<StoreCartView>> GetCartAsync(CancellationToken token = default)
+        => _api.GetItemAsync<StoreCartView>("/api/store/cart", token);
+
+    public Task<ItemResult<StoreCartCount>> GetCartCountAsync(CancellationToken token = default)
+        => _api.GetItemAsync<StoreCartCount>("/api/store/cart/count", token);
+
+    public async Task<StoreCartChange> AddToCartAsync(AddToCartRequest request, CancellationToken token = default)
+        => StoreCartChange.From(await _api.SendExpectingConflictAsync<AddToCartRequest, StoreCartView, StoreCartView>(
+            HttpMethod.Post, "/api/store/cart/items", request, token));
+
+    public async Task<StoreCartChange> SetCartQuantityAsync(Guid variantId, int quantity, CancellationToken token = default)
+        => StoreCartChange.From(await _api.SendExpectingConflictAsync<SetCartQuantityRequest, StoreCartView, StoreCartView>(
+            HttpMethod.Put, $"/api/store/cart/items/{variantId}", new SetCartQuantityRequest(quantity), token));
+
+    public async Task<StoreCartChange> RemoveFromCartAsync(Guid variantId, CancellationToken token = default)
+    {
+        var (cart, error, _) = await _api.SendWithStatusAsync<object, StoreCartView>(
+            HttpMethod.Delete, $"/api/store/cart/items/{variantId}", null, token);
+        return StoreCartChange.From((cart, error, null));
+    }
+
+    public async Task<StoreCartChange> ApplyCartCouponAsync(string code, CancellationToken token = default)
+        => StoreCartChange.From(await _api.SendExpectingConflictAsync<ApplyCartCouponRequest, StoreCartView, StoreCartView>(
+            HttpMethod.Post, "/api/store/cart/coupon", new ApplyCartCouponRequest(code), token));
+
+    public async Task<StoreCartChange> RemoveCartCouponAsync(CancellationToken token = default)
+    {
+        var (cart, error, _) = await _api.SendWithStatusAsync<object, StoreCartView>(
+            HttpMethod.Delete, "/api/store/cart/coupon", null, token);
+        return StoreCartChange.From((cart, error, null));
+    }
 }
