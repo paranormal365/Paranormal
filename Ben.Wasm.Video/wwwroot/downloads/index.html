@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
+    <!--
+      Windows leads with the Microsoft Store listing (Store ID 9PFGSM5QX5TZ), signed by Microsoft and
+      free of the SmartScreen prompt; the hosted .exe stays below for anyone without the Store. The
+      Store link only works once the listing is published — do not deploy this page before then.
+    -->
     <title>Sidecar Downloads — IsHaunted.com Video Editor</title>
     <link rel="icon" type="image/png" href="../favicon.png" />
     <!--
@@ -89,15 +94,35 @@
         and it sends nothing anywhere on its own.
     </p>
 
-    <div class="warn">
-        <strong>These are unsigned test builds.</strong>
-        This is a testing and verification release: the installers carry no code signature, so
-        your operating system will warn you — and the warnings are accurate, because nothing
-        cryptographically proves who built this software. Install it only if you were sent here
-        by us and you trust this site. Signed builds come later.
+    <h2>Windows (64-bit)</h2>
+    <div class="card">
+        <h3>IsHaunted.com SideCar — from the Microsoft Store</h3>
+        <p class="meta">Windows 10 or 11, x64 · free · checked and signed by Microsoft</p>
+        <a class="dl" href="https://apps.microsoft.com/detail/9PFGSM5QX5TZ" target="_blank" rel="noopener">Get it from the Microsoft Store</a>
+        <ol>
+            <li>Click <strong>Get</strong> (or <strong>Install</strong>) on the Store page. No warnings
+                to click through: Microsoft has checked it and signed it.</li>
+            <li>In the <a href="../">video editor</a>, click the sidecar chip in the toolbar and press
+                <strong>Turn on</strong>. Your browser asks whether to open
+                <em>IsHaunted.com SideCar</em> — allow it.</li>
+            <li>Click <strong>Show a pairing code</strong> in the same panel. A page opens with a
+                <strong>six-digit code</strong>; type it into the panel. You only do this once per
+                browser.</li>
+        </ol>
+        <p class="small">It does not start with Windows unless you let it: turn it on from the editor
+            when you want it, or switch it on in <strong>Settings → Apps → Startup</strong>. Remove it
+            from <strong>Settings → Apps → Installed apps</strong> like any other app.</p>
     </div>
 
-    <h2>Windows (64-bit)</h2>
+    <div class="warn">
+        <strong>The direct downloads below are unsigned test builds.</strong>
+        They carry no code signature, so your operating system will warn you — and the warnings are
+        accurate, because nothing cryptographically proves who built this software. Install one only
+        if you were sent here by us and you trust this site. On Windows, prefer the Microsoft Store
+        version above.
+    </div>
+
+    <h2>Windows — direct download</h2>
     <div class="card">
         <h3>BenVideoSidecar-win-x64.exe</h3>
         <p class="meta">Windows 10 or 11, x64 · about 150&nbsp;MB · no administrator rights needed</p>
@@ -173,7 +198,7 @@
     </ul>
 
     <footer>
-        IsHaunted.com — test builds for verification.
+        IsHaunted.com — the Windows version is on the Microsoft Store; the direct downloads are test builds.
         Back to <a href="../">the editor</a> · <a href="/help">help</a>
     </footer>
 </main>

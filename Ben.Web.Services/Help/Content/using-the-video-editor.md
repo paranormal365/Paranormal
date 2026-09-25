@@ -470,11 +470,14 @@ the in-browser engine, exactly as it does now.
 
 ### Installing and pairing
 
-1. **Install it** on the computer you edit on — download it from
-   [the sidecar downloads page](/editors/video/downloads/), which carries the install steps for Windows
-   and Mac. It runs quietly in the background and starts with your machine.
-2. **Pair this browser with it.** The Sidecar shows a **six-digit code**; type that into the
-   editor's pairing panel. That is all.
+1. **Install it** on the computer you edit on. On Windows it is in the **Microsoft Store** as
+   *IsHaunted.com SideCar* — free, and signed by Microsoft, so there are no warnings to click through.
+   For a Mac, or Windows without the Store, [the sidecar downloads page](/editors/video/downloads/)
+   has the installers and their install steps.
+2. **Turn it on**, if it isn't running: the chip's panel has a **Turn on** button on Windows, and
+   your browser asks whether to open the sidecar — allow it.
+3. **Pair this browser with it.** In the same panel, click **Show a pairing code**; the sidecar
+   shows a **six-digit code**. Type that into the panel. That is all.
 
 The chip on the toolbar tells you the state at a glance: *No sidecar* (none found), *Pair sidecar*
 (found, not yet paired) or *Native* (paired and in use).

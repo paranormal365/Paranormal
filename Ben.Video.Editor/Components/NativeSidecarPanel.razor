@@ -82,7 +82,18 @@
                         {
                             @* "pair.sh reopens it" is macOS wording and was shown to everybody,
                                Windows included, where no such file exists (2026-09-05 audit, F17). *@
-                            <p>Type the 6-digit code from the sidecar's pairing page. It opens by itself when the sidecar is installed, and the sidecar's own menu or shortcut reopens it. Each browser pairs once.</p>
+                            <p>Type the 6-digit code from the sidecar's pairing page. Each browser pairs once.</p>
+                        }
+                        @* The pairing page is the sidecar's own GET /pair, which shows a fresh code each time it is
+                           opened. The .exe installer opens it and puts a shortcut to it in the Start menu; a Microsoft
+                           Store install has neither, so without this a Store user had no way to reach a code at all.
+                           The editor has just found the sidecar, so it knows the port — link straight to it. *@
+                        @if (NativeSidecar.DiscoveredPort is { } pairPort)
+                        {
+                            <p class="bv-sidecar-panel__hint">
+                                <a href="@($"http://127.0.0.1:{pairPort}/pair")" target="_blank" rel="noopener"
+                                   data-testid="sidecar-pairing-page">Show a pairing code</a> — it opens in a new tab.
+                            </p>
                         }
                         <TelerikTextBox @bind-Value="_code" PlaceHolder="6-digit code" Width="100%" />
                         @if (NativeSidecar.LastError is not null)
