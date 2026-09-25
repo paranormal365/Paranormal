@@ -86,6 +86,11 @@
                         <div class="col-md-4">
                             <label class="form-label" for="product-category">Category</label>
                             <select id="product-category" class="form-select" @bind="_categoryId" @bind:after="MarkDirty">
+                                @if (!_categories.Items.Any(c => c.Id == p.CategoryId))
+                                {
+                                    @* Its shelf is one the store has since hidden: it stays, said so, until the seller picks an open one. *@
+                                    <option value="@p.CategoryId">@p.CategoryName (hidden by the store)</option>
+                                }
                                 @foreach (var c in _categories.Items)
                                 {
                                     <option value="@c.Id">@c.Name</option>

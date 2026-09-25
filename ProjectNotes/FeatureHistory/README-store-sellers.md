@@ -67,6 +67,12 @@ other suites green. Full Playwright run: 860 passed, 99 skipped (opt-in walks an
 and test-checkout-only tests), 3 failed and addressed (see the P15 row). Store category against real Stripe
 test mode: 97 passed, 9 skipped.
 
+**Found by the final runs and fixed (09/25):** the seller's shelf list offered shelves the store had hidden,
+so an item could be filed where it could never be approved — sellers now see and file only on shelves shoppers
+can see; the e2e database's leftover test shelves (135) had pushed the listing's carried state to 67 KB — test
+runs now hide them first (not a product limit a real catalogue meets). Store category re-run at the tip:
+104 passed, 2 skipped (real-Stripe-only).
+
 **Before the store goes live**, in this order (`docs/stripe-go-live.md` and `docs/deploy-production.md` say more):
 1. Apply the migrations to the target database with `--connection` (dotnet ef ignores the environment). From
    storefront: StoreCatalog, StoreCartsAndOrders, StoreFavouritesAndReviews, StoreProductSeller,

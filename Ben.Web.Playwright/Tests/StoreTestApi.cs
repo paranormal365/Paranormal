@@ -24,6 +24,36 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
     /// Sends without asserting, for cleanup whose refusals are expected — NUnit records a failed
     /// assertion even when it is caught, so SendAsync inside a try still fails the test.
     /// </summary>
+    public async Task<System.Net.HttpStatusCode> TrySendAsync(HttpMethod method, string path, object body)
+    {
+        using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+        using var response = await http.SendAsync(request);
+        return response.StatusCode;
+    }
+
+    /// <summary>
+    /// Hides the shelves earlier runs left behind — "Sold Out Shelf 2a3ce6", "Cameras fe68aa": a
+    /// test's own name with a six-character suffix. The e2e database keeps every run's, and by 09/25
+    /// there were 135 on the store's side list, carrying 67 KB into the listing page and failing
+    /// StoreBrowseTests.The_carried_state_fits_the_connection for a catalogue no shopper will have.
+    /// Hidden, not deleted: a hidden shelf and its products stay for any order that points at them.
+    /// </summary>
+    public static async Task HideLeftoverShelvesAsync()
+    {
+        using var api = await OpenAsync();
+        foreach (var c in (await api.SendAsync(HttpMethod.Get, "/api/admin/store/categories")).EnumerateArray())
+        {
+            var name = c.GetProperty("name").GetString() ?? "";
+            if (!c.GetProperty("isActive").GetBoolean() || !System.Text.RegularExpressions.Regex.IsMatch(name, @"\s[0-9a-f]{6}$")) continue;
+            await api.TrySendAsync(HttpMethod.Put, $"/api/admin/store/categories/{c.GetProperty("id").GetGuid()}", new
+            {
+                name, slug = c.GetProperty("slug").GetString(), description = Text(c, "description"), isActive = false,
+                isNew = c.GetProperty("isNew").GetBoolean(),
+                parentCategoryId = c.GetProperty("parentCategoryId").ValueKind == JsonValueKind.Null ? (Guid?)null : c.GetProperty("parentCategoryId").GetGuid(),
+            });
+        }
+    }
+
     public async Task<System.Net.HttpStatusCode> TrySendAsync(HttpMethod method, string path)
     {
         using var request = new HttpRequestMessage(method, path);

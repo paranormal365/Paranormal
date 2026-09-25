@@ -30,12 +30,15 @@ hidden from shoppers, and opens in its editor.
 
 ## Editing an item
 
-Open an item from My Items. Its editor has five tabs:
+Open an item from My Items. Its editor has these tabs:
 
 - **Details** — the name, the shelf, a short description, the full description and the
-  specifications (grouped under headings like Detection and Power). Press **Save**.
+  specifications (grouped under headings like Detection and Power). Press **Save**. The shelves
+  listed are the ones shoppers can see; if the store later hides the shelf an item is on, the editor
+  says "(hidden by the store)" and you can move it.
 - **Options & variants** — the choices a buyer makes, and a row for each combination.
 - **Pictures** — up to twelve.
+- **Parts & cost**, **Files**, **FAQ**, **Versions** and **Page** — each has its own section below.
 - **History** — every change to the item, yours and the store's, newest first.
 - **Preview** — the product page as a shopper will see it, including changes you haven't saved.
 

@@ -13,6 +13,10 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Store")]
 public class StoreBrowseTests : BenTestBase
 {
+    /// <summary>Test shelves from earlier runs off the side list first (<see cref="StoreTestApi.HideLeftoverShelvesAsync"/>).</summary>
+    [OneTimeSetUp]
+    public Task HideLeftoverShelves() => StoreTestApi.HideLeftoverShelvesAsync();
+
     private ILocator Card(string slug) => Page.Locator($"[data-testid=store-card][data-slug={slug}]");
 
     /// <summary>

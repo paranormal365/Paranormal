@@ -95,6 +95,16 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
 
     // ── making ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Shelves shoppers can see — shown, and under a shown parent. A seller files items only here: on a
+    /// hidden shelf an item can never be approved, and the seller can't see why (found by the e2e run
+    /// of 09/25/2026, when the first shelf in the seller's list was a hidden one).
+    /// </summary>
+    public static IQueryable<StoreCategory> VisibleShelves(BenDataContext db)
+        => db.StoreCategories.Where(c => c.IsActive && (c.ParentCategoryId == null || c.ParentCategory!.IsActive));
+
+    public const string HiddenShelf = "That shelf isn't open to shoppers — choose one that is.";
+
     /// <summary>A new item from just a name: hidden, with one $0.00 variant to price. A seller's is theirs.</summary>
     public async Task<(StoreProduct? Product, StoreEditRefusal? Refusal)> CreateAsync(
         BenDataContext db, string? rawName, Guid? categoryId, StoreEditActor actor, CancellationToken ct)
@@ -103,10 +113,13 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         if (string.IsNullOrEmpty(name)) return (null, StoreEditRefusal.BadRequest("A product needs a name."));
         if (name.Length > MaxNameLength) return (null, StoreEditRefusal.BadRequest($"A product name is {MaxNameLength} characters at most."));
 
+        var shelves = actor.IsSeller ? VisibleShelves(db) : db.StoreCategories;
         var category = categoryId
-            ?? await db.StoreCategories.OrderBy(c => c.SortOrder).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+            ?? await shelves.OrderBy(c => c.SortOrder).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
         if (category is null || !await db.StoreCategories.AnyAsync(c => c.Id == category, ct))
             return (null, StoreEditRefusal.BadRequest("Add a category first — every product is filed under one."));
+        if (actor.IsSeller && !await shelves.AnyAsync(c => c.Id == category, ct))
+            return (null, StoreEditRefusal.BadRequest(HiddenShelf));
 
         var now = DateTime.UtcNow;
         var product = new StoreProduct
@@ -145,6 +158,9 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         if (name.Length > MaxNameLength) return StoreEditRefusal.BadRequest($"A product name is {MaxNameLength} characters at most.");
         if (!await db.StoreCategories.AnyAsync(c => c.Id == edit.CategoryId, ct))
             return StoreEditRefusal.BadRequest("That category no longer exists.");
+        // A seller moves an item only onto a shelf shoppers can see; one it is already on stays, even hidden.
+        if (actor.IsSeller && edit.CategoryId != product.CategoryId && !await VisibleShelves(db).AnyAsync(c => c.Id == edit.CategoryId, ct))
+            return StoreEditRefusal.BadRequest(HiddenShelf);
         var shortDescription = Trimmed(edit.ShortDescription);
         if (shortDescription?.Length > MaxShortDescriptionLength)
             return StoreEditRefusal.BadRequest($"The short description is {MaxShortDescriptionLength} characters at most.");

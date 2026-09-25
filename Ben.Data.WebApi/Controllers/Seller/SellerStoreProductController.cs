@@ -52,12 +52,12 @@ public sealed class SellerStoreProductController(IDbContextFactory<BenDataContex
         return Ok(await StoreProductRecords.LoadForSellerAsync(db, id, ct));
     }
 
-    /// <summary>The shelves an item can be filed under, as a shopper would read them.</summary>
+    /// <summary>The shelves an item can be filed under, as a shopper would read them — only those shoppers can see.</summary>
     [HttpGet("categories")]
     public async Task<ActionResult<IEnumerable<SellerCategoryRecord>>> Categories(CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var rows = await db.StoreCategories.AsNoTracking()
+        var rows = await StoreProductEditor.VisibleShelves(db).AsNoTracking()
             .OrderBy(c => c.ParentCategory == null ? c.SortOrder : c.ParentCategory.SortOrder)
             .ThenBy(c => c.ParentCategoryId != null).ThenBy(c => c.SortOrder)
             .Select(c => new SellerCategoryRecord(c.Id, c.ParentCategory == null ? c.Name : c.ParentCategory.Name + " › " + c.Name))

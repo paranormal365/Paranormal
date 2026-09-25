@@ -87,6 +87,26 @@ public sealed class StoreSaleRequestTests : IAsyncLifetime
         return Ok(await seller.AddImage(item.Item.Id, StoreTestData.Upload(StoreTestData.Jpeg()), "front", null, default));
     }
 
+    [Fact]
+    public async Task A_seller_files_items_only_on_shelves_shoppers_can_see()
+    {
+        Guid hidden;
+        await using (var db = await _sqlite.NewContextAsync())
+        {
+            var shelf = StoreTestData.Category(db, await db.AppUsers.SingleAsync(u => u.Id == _admin.Id), "Aaa Hidden Shelf", active: false, sortOrder: -1);
+            await db.SaveChangesAsync();
+            hidden = shelf.Id;
+        }
+
+        var shelves = ((IEnumerable<SellerCategoryRecord>)Assert.IsType<OkObjectResult>((await SellerReads(_hazel).Categories(default)).Result).Value!).ToList();
+        Assert.DoesNotContain(shelves, c => c.Id == hidden);
+        Assert.Contains(shelves, c => c.Id == _categoryId);
+
+        Assert.Equal(StoreProductEditor.HiddenShelf, Said(await Seller(_hazel).Create(new CreateSellerItemRequest("Ghost Box", hidden), default)));
+        // With no shelf named, the first one a shopper can see — never the hidden one sorted first.
+        Assert.Equal(_categoryId, Ok(await Seller(_hazel).Create(new CreateSellerItemRequest("Ghost Box", null), default)).Item.CategoryId);
+    }
+
     private async Task PriceAsync(StoreProductAdminRecord item, decimal price = 149m)
     {
         var v = item.Variants.Single();
