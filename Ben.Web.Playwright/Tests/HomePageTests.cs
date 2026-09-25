@@ -35,11 +35,58 @@ public class HomePageTests : BenTestBase
     [Description("Hero section renders with logo and tagline.")]
     public async Task Hero_RendersLogoAndTagline()
     {
-        var logo = Page.Locator("img.home-hero__logo");
+        var logo = Page.Locator("img.home-hero__logo:visible");
+        await Expect(logo).ToHaveCountAsync(1);
         await Expect(logo).ToBeVisibleAsync();
 
         var tagline = Page.Locator(".home-hero__tagline");
         await Expect(tagline).ToBeVisibleAsync();
+
+        // The logo carries the site's name, so no title line repeats it (Ben, 09/25).
+        await Expect(Page.Locator(".home-hero__title")).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    [Description("The hero's logo resizes with the window: smaller on a narrow one, larger on a wide one, within its bounds.")]
+    public async Task Hero_logo_resizes_with_the_window()
+    {
+        async Task<double> WidthAtAsync(int windowWidth)
+        {
+            await Page.SetViewportSizeAsync(windowWidth, 900);
+            var shown = Page.Locator("img.home-hero__logo:visible");
+            await Expect(shown).ToHaveCountAsync(1);
+            return (await shown.BoundingBoxAsync())!.Width;
+        }
+
+        var phone = await WidthAtAsync(375);
+        var tablet = await WidthAtAsync(820);
+        var desktop = await WidthAtAsync(1440);
+        Assert.Multiple(() =>
+        {
+            Assert.That(phone, Is.EqualTo(220).Within(1), "a phone gets the smallest logo");
+            Assert.That(tablet, Is.GreaterThan(phone + 50).And.LessThan(desktop), "it grows with the window");
+            Assert.That(desktop, Is.EqualTo(460).Within(1), "and stops growing on a wide one");
+        });
+    }
+
+    [Test]
+    [Description("The hero shows the gray glass logo in dark mode and the white one in light mode, following the header's theme toggle.")]
+    public async Task Hero_logo_follows_the_theme()
+    {
+        async Task<string?> ShownLogoAsync(string theme)
+        {
+            // The site's own theme switch, as the header's toggle sets it — not only the device's preference.
+            await Page.EvaluateAsync($"document.documentElement.setAttribute('data-bs-theme', '{theme}')");
+            var shown = Page.Locator("img.home-hero__logo:visible");
+            await Expect(shown).ToHaveCountAsync(1);
+            // Loaded, not just placed: a lazy picture that never arrives would still count as visible.
+            await Expect(shown).ToHaveJSPropertyAsync("complete", true, new() { Timeout = 15_000 });
+            Assert.That(await shown.EvaluateAsync<int>("i => i.naturalWidth"), Is.GreaterThan(0), $"the {theme} logo did not load");
+            return await shown.GetAttributeAsync("src");
+        }
+
+        Assert.That(await ShownLogoAsync("dark"), Is.EqualTo("/static/images/logo-glass-gray.png"));
+        Assert.That(await ShownLogoAsync("light"), Is.EqualTo("/static/images/logo-glass-white.png"));
     }
 
     [Test]

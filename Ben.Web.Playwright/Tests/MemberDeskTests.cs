@@ -22,14 +22,14 @@ public class MemberDeskTests : BenTestBase
         }
         catch (TimeoutException)
         {
-            await Expect(Page.Locator(".home-hero__title")).ToBeVisibleAsync();
+            await Expect(Page.Locator(".home-hero__tagline")).ToBeVisibleAsync();
             Assert.Ignore("this account belongs to no group, so the hero is the right page for it");
         }
         await Expect(Page.Locator("[data-testid='desk-refusal']")).ToHaveCountAsync(0);
 
         // The desk, and not the poster.
         await Expect(Page.Locator("[data-testid='member-desk']")).ToBeVisibleAsync();
-        await Expect(Page.Locator(".home-hero__title")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+        await Expect(Page.Locator(".home-hero__tagline")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
 
         // Every tile is present and each opens what it counts.
         foreach (var tile in new[] { "desk-next-investigation", "desk-open-cases", "desk-unread", "desk-requests", "desk-gear" })
@@ -44,7 +44,7 @@ public class MemberDeskTests : BenTestBase
     public async Task A_visitor_still_gets_the_hero_and_no_desk()
     {
         await Page.GotoAsync($"{BaseUrl}/");
-        await Expect(Page.Locator(".home-hero__title")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator(".home-hero__tagline")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await Expect(Page.Locator("[data-testid='member-desk']")).ToHaveCountAsync(0);
     }
 }

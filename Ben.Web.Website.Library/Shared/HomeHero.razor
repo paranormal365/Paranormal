@@ -7,8 +7,14 @@
 @* ── Hero ─────────────────────────────────────────────────────────────────── *@
 <div class="home-hero">
     <div class="home-hero__brand">
-        <img src="/static/images/ghost glass 699x640.png" alt="IsHaunted logo" class="home-hero__logo" />
-        <h1 class="home-hero__title">@SiteOptions.Value.Name</h1>
+        @* The logo carries the site's name, so there is no title line under it. One picture per theme,
+           chosen by the site's own theme attribute (so the header's toggle is followed, not only the
+           device's setting); each blends into its page — #363c41 in dark, white in light. Lazy, so
+           the browser fetches only the one it shows: a hidden lazy image is never requested. *@
+        <img src="/static/images/logo-glass-white.png" alt="@SiteOptions.Value.Name"
+             class="home-hero__logo home-hero__logo--light" width="1254" height="1254" loading="lazy" />
+        <img src="/static/images/logo-glass-gray.png" alt="@SiteOptions.Value.Name"
+             class="home-hero__logo home-hero__logo--dark" width="1254" height="1254" loading="lazy" />
         <p class="home-hero__tagline">Connect with paranormal investigation groups near you</p>
     </div>
 
@@ -130,17 +136,17 @@
         margin: 0 auto;
     }
 
+    /* Fluid: follows the window as it is resized — never under 220px on a phone, never over 460px. */
     .home-hero__logo {
-        width: 220px;
+        width: clamp(220px, 42vw, 460px);
+        max-width: 90vw;
         height: auto;
-        opacity: .92;
     }
 
-    .home-hero__title {
-        font-size: 2.4rem;
-        font-weight: 700;
-        margin: .25rem 0 .1rem;
-    }
+    /* Light by default; the dark picture only under the dark theme. */
+    .home-hero__logo--dark { display: none; }
+    [data-bs-theme="dark"] .home-hero__logo--dark  { display: block; }
+    [data-bs-theme="dark"] .home-hero__logo--light { display: none; }
 
     .home-hero__tagline {
         color: var(--kendo-color-subtle-text, #888);
@@ -176,10 +182,6 @@
         justify-content: center;
     }
 
-    @@media (max-width: 480px) {
-        .home-hero__title { font-size: 1.8rem; }
-        .home-hero__logo  { width: 160px; }
-    }
 </style>
 
 @code {
