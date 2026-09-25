@@ -40,7 +40,7 @@
                 <div class="d-flex flex-wrap gap-2">
                     @if (it.Status == StoreSellerItemStatus.OnSale)
                     {
-                        <button type="button" class="btn btn-outline-warning" id="seller-off-sale" disabled="@_busy" @onclick="@(() => _confirmOffSale = true)">Take off sale</button>
+                        <button type="button" class="btn btn-outline-danger" id="seller-off-sale" disabled="@_busy" @onclick="@(() => _confirmOffSale = true)">Take off sale</button>
                     }
                     else if (it.Request is not { Status: StoreSaleRequestStatus.Open })
                     {

@@ -43,11 +43,24 @@ public sealed class VisualAuditWalk : BenTestBase
         // /tonight and /places/new added 2026-09-21 with items 248 and 250; a place's own page and
         // the guest-code sheet need an id and are photographed by VisualShots instead.
         ("visitor", ["/", "/pricing", "/events", "/publications", "/find", "/equipment-catalog", "/login", "/signup", "/help", "/changes", "/contact", "/privacy", "/terms", "/tonight", "/places/new",
-                     "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box", "/store/cart"]),
+                     "/store", "/store/products", "/store/c/field-accessories", "/store/p/p-sb7-spirit-box", "/store/cart",
+                     // Store sellers (backlog 251): a seller's item with its FAQ and extras, and a replaced version.
+                     "/store/p/hand-built-rem-pod", "/store/p/field-thermometer", "/store/p/field-thermometer-v2"]),
         ("member",  ["/", "/feed", "/notifications", "/profile", "/my-cases", "/my-requests", "/my-events", "/my-equipment", "/my-checkouts", "/my-evidence", "/my-field-sessions", "/organizations", "/media-library", "/tonight", "/places/new",
-                     "/store/orders", "/store/favourites", "/store/p/k-ii-emf-meter"]),
+                     "/store/orders", "/store/favourites", "/store/p/k-ii-emf-meter",
+                     "/store/questions", "/store/orders/a1000000-0000-0000-0000-000000000110"]),
         ("superadmin", ["/admin/dashboard", "/admin/users", "/admin/cases", "/admin/events", "/admin/site-settings", "/admin/subscription-tiers", "/admin/coupons", "/admin/org-subscriptions", "/admin/billing-ledger", "/admin/audit-log", "/admin/error-log", "/admin/file-types", "/admin/roles", "/admin/referrals",
-                        "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings", "/admin/store/orders", "/admin/store/reviews"]),
+                        "/admin/store", "/admin/store/products", "/admin/store/stock", "/admin/store/settings", "/admin/store/orders", "/admin/store/reviews",
+                        "/admin/store/sale-requests", "/admin/store/sellers", "/admin/store/questions",
+                        "/admin/store/orders/a1000000-0000-0000-0000-000000000110",
+                        "/admin/store/products/a1000000-0000-0000-0000-000000000028/edit?tab=parts"]),
+        // Store sellers: the demo seller's workspace.
+        ("seller",  ["/store/selling", "/store/selling/packages", "/store/selling/earnings", "/store/selling/questions",
+                     "/store/selling/items/a1000000-0000-0000-0000-000000000028",
+                     "/store/selling/items/a1000000-0000-0000-0000-000000000028?tab=files",
+                     "/store/selling/items/a1000000-0000-0000-0000-000000000028?tab=faq",
+                     "/store/selling/items/a1000000-0000-0000-0000-000000000028?tab=versions",
+                     "/store/selling/items/a1000000-0000-0000-0000-000000000028?tab=page"]),
     ];
 
     /// <summary>
@@ -115,9 +128,12 @@ public sealed class VisualAuditWalk : BenTestBase
                 }
                 else
                 {
-                    var (email, password) = seat == "superadmin"
-                        ? (SuperAdminEmail, SuperAdminPassword)
-                        : (UserEmail, UserPassword);
+                    var (email, password) = seat switch
+                    {
+                        "superadmin" => (SuperAdminEmail, SuperAdminPassword),
+                        "seller" => (SellerEmail, SellerPassword),
+                        _ => (UserEmail, UserPassword),
+                    };
 
                     if (string.IsNullOrWhiteSpace(password))
                     {

@@ -43,7 +43,7 @@
                     </button>
                     @if (p.IsActive)
                     {
-                        <button type="button" class="btn btn-outline-warning" id="product-deactivate" disabled="@_busy" @onclick="DeactivateAsync">Take off sale</button>
+                        <button type="button" class="btn btn-outline-danger" id="product-deactivate" disabled="@_busy" @onclick="DeactivateAsync">Take off sale</button>
                     }
                     else if (p.SellerAppUserId is null)
                     {
