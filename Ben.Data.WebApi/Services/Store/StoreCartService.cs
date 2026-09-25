@@ -255,14 +255,23 @@ public sealed class StoreCartService(BenDataContext db, TimeProvider? clock = nu
             if (couponProblem is null) discount = StoreCouponMath.DiscountFor(coupon, subtotal);
         }
 
+        // Each seller ships their own package, priced by the one plan checkout uses (store sellers P5).
         decimal? shipping = null;
         var free = false;
+        List<StoreCartParcelView>? parcels = null;
         if (lines.Count > 0)
         {
-            var afterDiscount = subtotal - discount;
-            free = settings.ShippingFlatRate <= 0m
-                || (settings.FreeShippingThreshold > 0m && afterDiscount >= settings.FreeShippingThreshold);
-            shipping = free ? 0m : settings.ShippingFlatRate;
+            var sellerOf = rows.GroupBy(r => r.Variant.Id).ToDictionary(g => g.Key, g => g.First().Product.SellerAppUserId);
+            var plan = StoreParcelPlan.Build(lines.Select(l => new StoreParcelLine(l.VariantId, sellerOf[l.VariantId], l.LineTotal)),
+                discount, settings.ShippingFlatRate, settings.FreeShippingThreshold);
+            var sellerIds = plan.Parcels.Where(x => x.SellerAppUserId is not null).Select(x => x.SellerAppUserId!.Value).ToList();
+            var names = sellerIds.Count == 0 ? [] : await db.AppUsers.AsNoTracking().Where(u => sellerIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.DisplayName }).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+            parcels = plan.Parcels.Select(x => new StoreCartParcelView(x.Number,
+                StoreParcelNames.ShipsFrom(x.SellerAppUserId, x.SellerAppUserId is { } id ? names.GetValueOrDefault(id) : null),
+                x.VariantIds, x.ItemsSubtotal, x.Shipping, x.IsFree, x.MoreForFree)).ToList();
+            shipping = plan.Shipping;
+            free = plan.AllFree;
         }
 
         var hasProblem = lines.Any(l => !l.IsPurchasable);
@@ -275,7 +284,7 @@ public sealed class StoreCartService(BenDataContext db, TimeProvider? clock = nu
             cart?.Id, lines, lines.Sum(l => l.Quantity), subtotal, couponCode, discount, couponProblem,
             shipping, free, settings.FreeShippingThreshold, settings.LowStockThreshold, support,
             subtotal - discount + (shipping ?? 0m), settings.CheckoutEnabled,
-            CanCheckout: lines.Count > 0 && why is null, why, notice);
+            CanCheckout: lines.Count > 0 && why is null, why, notice, parcels);
     }
 
     /// <summary>

@@ -51,12 +51,15 @@ public sealed class StoreCheckoutService(
     /// <summary>The first thing wrong with what was typed, in the buyer's words; null when all is well.</summary>
     public static string? Problem(StoreCheckoutRequest r) => StoreCheckoutRules.Problem(r);
 
-    /// <summary>What makes two attempts "the same checkout": contents at their prices, the code, the address and the email.</summary>
-    public static string Fingerprint(IEnumerable<(Guid VariantId, int Quantity, decimal UnitPrice)> lines, Guid? couponId,
+    /// <summary>
+    /// What makes two attempts "the same checkout": contents at their prices and whose they are (so
+    /// the same packages), the code, the address and the email.
+    /// </summary>
+    public static string Fingerprint(IEnumerable<(Guid VariantId, int Quantity, decimal UnitPrice, Guid? SellerAppUserId)> lines, Guid? couponId,
         StoreAddressInput shipTo, string email)
     {
         var sb = new StringBuilder();
-        foreach (var l in lines.OrderBy(l => l.VariantId)) sb.Append($"{l.VariantId:N}:{l.Quantity}:{l.UnitPrice:0.00};");
+        foreach (var l in lines.OrderBy(l => l.VariantId)) sb.Append($"{l.VariantId:N}:{l.Quantity}:{l.UnitPrice:0.00}:{l.SellerAppUserId:N};");
         sb.Append($"|{couponId}|{shipTo.FullName.Trim()}|{shipTo.Street1.Trim()}|{shipTo.Street2?.Trim()}|{shipTo.City.Trim()}|")
           .Append($"{UsStates.Normalize(shipTo.State)}|{shipTo.Zip.Trim()}|{shipTo.Phone.Trim()}|{StoreEmail.Normalize(email)}");
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
@@ -69,7 +72,12 @@ public sealed class StoreCheckoutService(
 
     private sealed record Priced(
         List<Line> Lines, decimal Subtotal, StoreCoupon? Coupon, decimal Discount, IReadOnlyList<decimal> Shares,
-        decimal Shipping, StoreTaxResult Tax, decimal Total);
+        decimal Shipping, StoreTaxResult Tax, decimal Total, StoreParcelPlanResult Plan)
+    {
+        /// <summary>Each package's share of the tax on shipping, to the cent, in package order.</summary>
+        public IReadOnlyList<decimal> ParcelShippingTax
+            => StoreParcelPlan.SplitShippingTax(Plan.Parcels.Select(x => x.Shipping).ToList(), Tax.ShippingTaxCents / 100m);
+    }
 
     public async Task<StoreCheckoutResult> PrepareAsync(StoreCartCaller caller, string? ip, StoreCheckoutRequest request, CancellationToken ct = default)
     {
@@ -131,12 +139,12 @@ public sealed class StoreCheckoutService(
                 return StoreCheckoutResult.Refused(StoreCheckoutOutcome.BadRequest, why);
             discount = StoreCouponMath.DiscountFor(coupon!, subtotal);
         }
-        var shares = StoreCouponMath.Allocate(lines.Select(l => l.LineTotal).ToList(), discount);
-
-        // 5. Shipping, judged after the discount.
-        var free = settings.ShippingFlatRate <= 0m
-                || (settings.FreeShippingThreshold > 0m && subtotal - discount >= settings.FreeShippingThreshold);
-        var shipping = free ? 0m : settings.ShippingFlatRate;
+        // 5. Packages — one per seller — and their shipping, each judged after its share of the
+        // discount (store sellers P5). The cart prices with the same plan, so they agree.
+        var plan = StoreParcelPlan.Build(lines.Select(l => new StoreParcelLine(l.Variant.Id, l.Product.SellerAppUserId, l.LineTotal)),
+            discount, settings.ShippingFlatRate, settings.FreeShippingThreshold);
+        var shares = lines.Select(l => plan.DiscountShares[l.Variant.Id]).ToList();
+        var shipping = plan.Shipping;
 
         // 4. Tax, on each line net of its share of the discount.
         if (!tax.IsAvailable(settings))
@@ -169,8 +177,8 @@ public sealed class StoreCheckoutService(
 
         var taxAmount = taxed.TaxCents / 100m;
         var total = subtotal - discount + shipping + taxAmount;
-        var priced = new Priced(lines, subtotal, coupon, discount, shares, shipping, taxed, total);
-        var fingerprint = Fingerprint(lines.Select(l => (l.Variant.Id, l.Quantity, l.Variant.Price)), coupon?.Id, request.Shipping, email);
+        var priced = new Priced(lines, subtotal, coupon, discount, shares, shipping, taxed, total, plan);
+        var fingerprint = Fingerprint(lines.Select(l => (l.Variant.Id, l.Quantity, l.Variant.Price, l.Product.SellerAppUserId)), coupon?.Id, request.Shipping, email);
 
         // 6. The same checkout again: rewrite the open order to what is charged now.
         if (open is not null)
@@ -208,6 +216,16 @@ public sealed class StoreCheckoutService(
                 .SetProperty(o => o.StripeTaxCalculationId, p.Tax.CalculationId)
                 .SetProperty(o => o.ReservationExpiresUtc, expires).SetProperty(o => o.DateUpdated, now), ct);
         if (rows == 0) return null;   // the expiry job released it between the read and here: place afresh
+
+        // The same contents from the same sellers: the same packages, at today's shipping.
+        var parcelTax = p.ParcelShippingTax;
+        for (var i = 0; i < p.Plan.Parcels.Count; i++)
+        {
+            var (number, amount, credit, taxOn) = (p.Plan.Parcels[i].Number, p.Plan.Parcels[i].Shipping, SellerCredit(p.Plan.Parcels[i]), parcelTax[i]);
+            await db.StoreOrderParcels.Where(x => x.OrderId == open.Id && x.Number == number)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ShippingAmount, amount).SetProperty(x => x.ShippingTaxAmount, taxOn)
+                                          .SetProperty(x => x.SellerShippingCredit, credit).SetProperty(x => x.DateUpdated, now), ct);
+        }
 
         for (var i = 0; i < p.Lines.Count; i++)
         {
@@ -279,6 +297,10 @@ public sealed class StoreCheckoutService(
             BuyerNotes = Blank(r.BuyerNotes), PlacedUtc = now, DateCreated = now,
         };
 
+        var sellerIds = p.Plan.Parcels.Where(x => x.SellerAppUserId is not null).Select(x => x.SellerAppUserId!.Value).ToList();
+        var sellerNames = sellerIds.Count == 0 ? new Dictionary<Guid, string?>()
+            : await db.AppUsers.AsNoTracking().Where(u => sellerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+
         var pictures = await db.StoreProductImages.AsNoTracking()
             .Where(i => p.Lines.Select(l => l.Product.Id).Contains(i.ProductId))
             .Select(i => new { i.ProductId, i.VariantId, i.UploadFileId, i.SortOrder }).ToListAsync(ct);
@@ -297,12 +319,30 @@ public sealed class StoreCheckoutService(
                 }
 
             db.StoreOrders.Add(order);
+
+            // One package per seller, the site's own stock first (store sellers P5).
+            var parcelTax = p.ParcelShippingTax;
+            var parcelOf = new Dictionary<Guid, Guid>();
+            for (var n = 0; n < p.Plan.Parcels.Count; n++)
+            {
+                var quote = p.Plan.Parcels[n];
+                var parcel = new StoreOrderParcel
+                {
+                    Id = Guid.NewGuid(), OrderId = order.Id, Number = quote.Number, SellerAppUserId = quote.SellerAppUserId,
+                    SellerName = quote.SellerAppUserId is { } sid ? sellerNames.GetValueOrDefault(sid) : null,
+                    Status = StoreParcelStatus.Waiting, ShippingAmount = quote.Shipping, ShippingTaxAmount = parcelTax[n],
+                    SellerShippingCredit = SellerCredit(quote), DateCreated = now,
+                };
+                db.StoreOrderParcels.Add(parcel);
+                foreach (var variantId in quote.VariantIds) parcelOf[variantId] = parcel.Id;
+            }
+
             for (var i = 0; i < p.Lines.Count; i++)
             {
                 var l = p.Lines[i];
                 db.StoreOrderItems.Add(new StoreOrderItem
                 {
-                    Id = Guid.NewGuid(), OrderId = order.Id, ProductId = l.Product.Id, VariantId = l.Variant.Id,
+                    Id = Guid.NewGuid(), OrderId = order.Id, ProductId = l.Product.Id, VariantId = l.Variant.Id, ParcelId = parcelOf[l.Variant.Id],
                     ProductName = l.Product.Name, VariantName = l.Variant.Name, Sku = l.Variant.Sku,
                     UnitPrice = l.Variant.Price, CompareAtPrice = l.Variant.CompareAtPrice is { } was && was > l.Variant.Price ? was : null,
                     Quantity = l.Quantity, LineTotal = l.LineTotal, LineDiscount = p.Shares[i],
@@ -387,6 +427,12 @@ public sealed class StoreCheckoutService(
             new StoreCheckoutTotals(p.Subtotal, p.Discount, p.Shipping, p.Tax.TaxCents / 100m, p.Total, p.Tax.ShippingTaxCents / 100m),
             paid, $"/store/checkout/complete?order={order.Id}", order.ReservationExpiresUtc ?? Now, fake, allowLink);
     }
+
+    /// <summary>
+    /// What a seller is credited for this package's label: the flat rate, even when the buyer's
+    /// shipping was free (Ben, 09/24/2026). The site's own stock credits nobody.
+    /// </summary>
+    private static decimal SellerCredit(StoreParcelQuote quote) => quote.SellerAppUserId is null ? 0m : quote.FlatRate;
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 

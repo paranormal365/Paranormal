@@ -520,6 +520,10 @@ internal static class StoreDemoSeeder
         if (seed.Abandoned)
         {
             Event(StoreOrderEventKind.ReservationExpired, placed.AddMinutes(16), note: "The buyer left without paying.");
+            var waiting = new StoreOrderParcel { Id = Guid.NewGuid(), OrderId = id, Number = 1, Status = StoreParcelStatus.Cancelled,
+                ShippingAmount = seed.Shipping, ShippingTaxAmount = shippingTax, CancelledUtc = placed.AddMinutes(16), DateCreated = placed };
+            order.Parcels.Add(waiting);
+            foreach (var item in items) item.ParcelId = waiting.Id;
             return order;
         }
         Event(StoreOrderEventKind.PaymentSucceeded, paid!.Value, StoreOrderStatus.Paid, amount: total);
@@ -539,6 +543,24 @@ internal static class StoreDemoSeeder
             order.DeliveredUtc = paid.Value.AddDays(4);
             Event(StoreOrderEventKind.Delivered, order.DeliveredUtc.Value, StoreOrderStatus.Delivered);
         }
+        // Every order ships as packages (store sellers P5); the seeded ones are the store's own stock.
+        var parcel = new StoreOrderParcel
+        {
+            Id = Guid.NewGuid(), OrderId = id, Number = 1, Status = seed.Status switch
+            {
+                StoreOrderStatus.Packed => StoreParcelStatus.Packed,
+                StoreOrderStatus.Shipped => StoreParcelStatus.Shipped,
+                StoreOrderStatus.Delivered => StoreParcelStatus.Delivered,
+                StoreOrderStatus.Cancelled => StoreParcelStatus.Cancelled,
+                _ => StoreParcelStatus.Waiting,
+            },
+            ShippingAmount = seed.Shipping, ShippingTaxAmount = shippingTax, Carrier = order.Carrier, TrackingNumber = order.TrackingNumber,
+            TrackingUrl = order.TrackingUrl, PackedUtc = order.PackedUtc, ShippedUtc = order.ShippedUtc, DeliveredUtc = order.DeliveredUtc,
+            DateCreated = placed,
+        };
+        order.Parcels.Add(parcel);
+        foreach (var item in items) item.ParcelId = parcel.Id;
+
         if (seed.Refunded)
         {
             var at = paid.Value.AddDays(3);

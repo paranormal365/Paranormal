@@ -38,9 +38,12 @@ public sealed record StoreCartView(
     string? CouponCode, decimal Discount, string? CouponProblem,
     decimal? Shipping, bool ShippingIsFree, decimal FreeShippingThreshold, int LowStockThreshold,
     string? SupportEmail, decimal TotalBeforeTax, bool CheckoutEnabled, bool CanCheckout, string? WhyNotCheckout,
-    string? Notice = null)
+    string? Notice = null, IReadOnlyList<StoreCartParcelView>? Parcels = null)
 {
     public bool IsEmpty => Lines.Count == 0;
+
+    /// <summary>More than one package: every surface then shows a shipping row per package.</summary>
+    public bool IsSplit => Parcels is { Count: > 1 };
 
     /// <summary>Shipping as every surface writes it: "–" with nothing in the cart, "Free", or the rate.</summary>
     public string ShippingText => Shipping is null ? "–" : ShippingIsFree ? "Free" : StoreMoney.Format(Shipping.Value);
@@ -75,3 +78,33 @@ public static class StoreCartSentences
     public static readonly string TooManyLines = $"Your cart can hold {StoreCartRules.MaxDistinctLines} different items — check out or remove one first.";
     public static string AtMost(int n) => $"You can buy up to {n} at a time.";
 }
+
+/// <summary>
+/// One package of a cart, as the buyer sees it (store sellers, backlog 251, P5): whose it is, what
+/// its shipping costs, and how much more would make it free. Each seller ships their own package
+/// (Ben, 09/24/2026).
+/// </summary>
+/// <param name="ShipsFrom">"IsHaunted.com" for the store's own stock, otherwise the seller's name.</param>
+/// <param name="MoreForFree">What more of this package's items would ship it free; null when it already does, or never can.</param>
+public sealed record StoreCartParcelView(
+    int Number, string ShipsFrom, IReadOnlyList<Guid> VariantIds, decimal ItemsSubtotal, decimal Shipping, bool IsFree, decimal? MoreForFree)
+{
+    /// <summary>"Package 2 · Ships from Hazel Marsh".</summary>
+    public string Title => $"Package {Number} · Ships from {ShipsFrom}";
+
+    public string ShippingText => IsFree ? "Free" : StoreMoney.Format(Shipping);
+}
+
+/// <summary>Names a package's sender (store sellers P5).</summary>
+public static class StoreParcelNames
+{
+    /// <summary>The store's own stock ships from the site.</summary>
+    public const string Site = "IsHaunted.com";
+
+    /// <summary>A seller with no display name still reads as a person, never as an email.</summary>
+    public const string UnnamedSeller = "An IsHaunted seller";
+
+    public static string ShipsFrom(Guid? sellerAppUserId, string? sellerName)
+        => sellerAppUserId is null ? Site : string.IsNullOrWhiteSpace(sellerName) ? UnnamedSeller : sellerName.Trim();
+}
+

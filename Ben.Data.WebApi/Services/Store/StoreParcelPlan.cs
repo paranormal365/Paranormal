@@ -10,7 +10,7 @@ public sealed record StoreParcelLine(Guid VariantId, Guid? SellerAppUserId, deci
 /// <param name="MoreForFree">How much more of this seller's items would make this package ship free; null when it already does, or never can.</param>
 public sealed record StoreParcelQuote(
     int Number, Guid? SellerAppUserId, IReadOnlyList<Guid> VariantIds, decimal ItemsSubtotal, decimal Discount,
-    decimal Shipping, bool IsFree, decimal? MoreForFree)
+    decimal Shipping, bool IsFree, decimal? MoreForFree, decimal FlatRate = 0m)
 {
     public decimal AfterDiscount => ItemsSubtotal - Discount;
 }
@@ -58,7 +58,7 @@ public static class StoreParcelPlan
                 var after = subtotal - off;
                 var free = flatRate <= 0m || (freeOver > 0m && after >= freeOver);
                 return new StoreParcelQuote(i + 1, g.Key, g.Select(l => l.VariantId).ToList(), subtotal, off,
-                    free ? 0m : flatRate, free, !free && freeOver > 0m ? freeOver - after : null);
+                    free ? 0m : flatRate, free, !free && freeOver > 0m ? freeOver - after : null, Math.Max(flatRate, 0m));
             })
             .ToList();
 

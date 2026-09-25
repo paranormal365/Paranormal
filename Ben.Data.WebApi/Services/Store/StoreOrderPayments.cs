@@ -236,6 +236,10 @@ public sealed class StoreOrderPayments(
                 order.Total = order.Subtotal - order.DiscountAmount + order.ShippingAmount + order.TaxAmount;
                 foreach (var item in order.Items)
                     if (charged.LineTaxCents.TryGetValue(item.Sku, out var lineTax)) item.TaxAmount = lineTax / 100m;
+                // Each package's share of the shipping tax follows the charged figure (store sellers P5).
+                var parcels = await db.StoreOrderParcels.Where(x => x.OrderId == order.Id).OrderBy(x => x.Number).ToListAsync(ct);
+                var split = StoreParcelPlan.SplitShippingTax(parcels.Select(x => x.ShippingAmount).ToList(), order.ShippingTaxAmount);
+                for (var i = 0; i < parcels.Count; i++) parcels[i].ShippingTaxAmount = split[i];
                 order.StripeTaxCalculationId = calculationId;
                 Raise(db, order, ChargedOnEarlierCalculation, now);
                 attention?.Add(ChargedOnEarlierCalculation);

@@ -37,11 +37,15 @@ namespace Ben.Data.Source.Entities
         public int QuantityRefunded { get; set; }
         public int QuantityRestocked { get; set; }
         public Guid? ImageUploadFileId { get; set; }
+
+        /// <summary>The package it ships in (store sellers P5). Null only on a row written before packages existed and not backfilled.</summary>
+        public Guid? ParcelId { get; set; }
         public DateTime DateCreated { get; set; }
 
         public virtual StoreOrder Order { get; set; } = null!;
         public virtual StoreProduct Product { get; set; } = null!;
         public virtual StoreProductVariant Variant { get; set; } = null!;
         public virtual UploadFile? ImageUploadFile { get; set; }
+        public virtual StoreOrderParcel? Parcel { get; set; }
     }
 }

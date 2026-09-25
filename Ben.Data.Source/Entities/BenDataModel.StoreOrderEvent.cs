@@ -18,6 +18,9 @@ namespace Ben.Data.Source.Entities
         public decimal? Amount { get; set; }
         public DateTime OccurredUtc { get; set; }
 
+        /// <summary>The package the event is about, when it is about one (store sellers P5).</summary>
+        public Guid? ParcelId { get; set; }
+
         public virtual StoreOrder Order { get; set; } = null!;
         public virtual AppUser? ActorAppUser { get; set; }
     }

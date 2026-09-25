@@ -359,7 +359,8 @@ database needs, in order, **before** the code is deployed:
    With the sellers work (branch `store-sellers`), then: `StoreProductSaleCounters` (one nullable
    column, backfilled from paid orders), `StoreProductHistory` (one new table, a "Created it."
    line backfilled per product) and `StoreSellerSaleRequests` (one new table, two nullable columns,
-   `FirstOnSaleUtc` backfilled) and `StoreProductParts` (one table, two columns). Additive as well.
+   `FirstOnSaleUtc` backfilled) `StoreProductParts` (one table, two columns) and `StoreOrderParcels` (one table, two nullable
+   columns; one package backfilled per existing order). Additive as well.
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

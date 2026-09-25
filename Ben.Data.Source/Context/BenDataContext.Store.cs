@@ -283,6 +283,27 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.ImageUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             item.ToTable(t => t.HasCheckConstraint("CK_StoreOrderItems_Quantity", "[Quantity] >= 1"));
 
+            // Store sellers P5: an order's packages, one per seller. The seller's key is NoAction —
+            // an account's closure anonymises the snapshot rather than losing the package.
+            var parcel = modelBuilder.Entity<StoreOrderParcel>();
+            parcel.Property(e => e.SellerName).HasMaxLength(200);
+            parcel.Property(e => e.ShippingAmount).HasPrecision(18, 2);
+            parcel.Property(e => e.ShippingTaxAmount).HasPrecision(18, 2);
+            parcel.Property(e => e.ShippingRefunded).HasPrecision(18, 2);
+            parcel.Property(e => e.SellerShippingCredit).HasPrecision(18, 2);
+            parcel.Property(e => e.Carrier).HasMaxLength(60);
+            parcel.Property(e => e.TrackingNumber).HasMaxLength(100);
+            parcel.Property(e => e.TrackingUrl).HasMaxLength(500);
+            parcel.HasIndex(e => new { e.OrderId, e.Number }).IsUnique();
+            parcel.HasIndex(e => new { e.SellerAppUserId, e.Status });
+            parcel.HasOne(e => e.Order).WithMany(o => o.Parcels)
+                .HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
+            parcel.HasOne(e => e.SellerAppUser).WithMany()
+                .HasForeignKey(e => e.SellerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            parcel.ToTable(t => t.HasCheckConstraint("CK_StoreOrderParcels_Refund", "[ShippingRefunded] >= 0 AND [ShippingRefunded] <= [ShippingAmount] + [ShippingTaxAmount]"));
+            item.HasOne(e => e.Parcel).WithMany(p => p.Items)
+                .HasForeignKey(e => e.ParcelId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             var orderEvent = modelBuilder.Entity<StoreOrderEvent>();
             orderEvent.Property(e => e.Note).HasMaxLength(1000);
             orderEvent.Property(e => e.Amount).HasPrecision(18, 2);
@@ -291,6 +312,8 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
             orderEvent.HasOne(e => e.ActorAppUser).WithMany()
                 .HasForeignKey(e => e.ActorAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            orderEvent.HasOne<StoreOrderParcel>().WithMany()
+                .HasForeignKey(e => e.ParcelId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // Refunds. StripeRefundId is unique: a redelivered refund event finds its row instead of
             // inserting a second one.

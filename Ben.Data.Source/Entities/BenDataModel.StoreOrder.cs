@@ -110,6 +110,9 @@ namespace Ben.Data.Source.Entities
         /// <summary>Set when the buyer's account was deleted while the order was still in flight.</summary>
         public DateTime? PendingAnonymisationSinceUtc { get; set; }
 
+        /// <summary>Its packages, one per seller (store sellers P5).</summary>
+        public virtual ICollection<StoreOrderParcel> Parcels { get; set; } = [];
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
 
