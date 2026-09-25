@@ -138,10 +138,17 @@
 
     /* Fluid: follows the window as it is resized — never under 220px on a phone, never over 460px. */
     .home-hero__logo {
-        width: clamp(220px, 42vw, 460px);
+        --logo-w: clamp(220px, 42vw, 460px);
+        width: var(--logo-w);
         max-width: 90vw;
         height: auto;
     }
+
+    /* The square pictures leave empty space under the reflection; the tagline moves up into it, by a
+       share of the logo's own width so the gap stays the same at every size. The light one only a
+       little: its dark halo reaches further down, and the grey tagline must not sit on it. */
+    .home-hero__logo--dark  { margin-bottom: calc(var(--logo-w) * -0.13); }
+    .home-hero__logo--light { margin-bottom: calc(var(--logo-w) * -0.05); }
 
     /* Light by default; the dark picture only under the dark theme. */
     .home-hero__logo--dark { display: none; }
