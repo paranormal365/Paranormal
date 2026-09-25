@@ -17,7 +17,12 @@ public sealed class StoreLowStockJobTests : IAsyncLifetime
 {
     private SqliteTestDb _sqlite = null!;
     private AppUser _admin = null!;
-    private static readonly DateTime Morning = new(2026, 9, 24, 14, 0, 0, DateTimeKind.Utc);
+    /// <summary>
+    /// Today's afternoon, not a fixed date: the job asks its clock what day it is, but the bell it
+    /// looks for is stamped by the message service with the real time. A fixed 09/24 clock passed
+    /// until midnight UTC on 09/25, when today's real bell looked like "tomorrow's" (09/25/2026).
+    /// </summary>
+    private static readonly DateTime Morning = DateTime.UtcNow.Date.AddHours(14);
 
     private sealed class Clock(DateTime now) : TimeProvider
     {

@@ -49,6 +49,9 @@ namespace Ben.Data.Source.Entities
         /// <summary>Cache for the "popular" sort: units sold across every variant.</summary>
         public int UnitsSold { get; set; }
 
+        /// <summary>When a unit of it last sold; null for a product that never has.</summary>
+        public DateTime? LastSoldUtc { get; set; }
+
         public int ViewCount { get; set; }
 
         /// <summary>Cache: the average of approved review ratings.</summary>

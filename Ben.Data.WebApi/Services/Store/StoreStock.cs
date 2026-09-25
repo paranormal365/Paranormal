@@ -62,8 +62,10 @@ public static class StoreStock
 
     /// <summary>
     /// Turns a paid hold into a sale: the units leave the shelf and the hold together, and the
-    /// variant's sold count goes up. False when the hold is not there to convert.
+    /// variant's and the product's sold counts go up. False when the hold is not there to convert.
     /// </summary>
+    /// <remarks>The product's count is the one the "popular" sort and the admin list read; until
+    /// 09/24/2026 only the variant's was kept, so both read 0 for every product.</remarks>
     public static async Task<bool> CommitSaleAsync(
         BenDataContext db, Guid variantId, int quantity, Guid orderId, DateTime now, CancellationToken ct = default)
     {
@@ -76,6 +78,12 @@ public static class StoreStock
                 .SetProperty(v => v.StockReserved, v => v.StockReserved - quantity)
                 .SetProperty(v => v.UnitsSold, v => v.UnitsSold + quantity), ct);
         if (rows != 1) return false;
+
+        await db.StoreProducts
+            .Where(p => p.Variants.Any(v => v.Id == variantId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.UnitsSold, p => p.UnitsSold + quantity)
+                .SetProperty(p => p.LastSoldUtc, now), ct);
 
         await RecordAsync(db, variantId, -quantity, StoreStockReason.Sold, null, orderId, null, null, now, ct);
         return true;

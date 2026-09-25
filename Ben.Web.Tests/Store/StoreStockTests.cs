@@ -96,6 +96,29 @@ public sealed class StoreStockTests
     }
 
     [Fact]
+    public async Task A_sale_counts_on_the_product_too_and_says_when()
+    {
+        // The product's count is what the "popular" sort and the admin list read; only the
+        // variant's was kept until 09/24/2026, so every product read 0.
+        var (sqlite, id) = await OneVariantAsync(onHand: 12, reserved: 5);
+        await using var _ = sqlite;
+        var orderId = Guid.NewGuid();
+        await using (var seed = await sqlite.NewContextAsync())
+        {
+            var order = StoreTestData.Order(seed);
+            order.Id = orderId;
+            await seed.SaveChangesAsync();
+        }
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.True(await StoreStock.CommitSaleAsync(db, id, 2, orderId, StoreTestData.Now));
+        Assert.True(await StoreStock.CommitSaleAsync(db, id, 3, orderId, StoreTestData.Now.AddHours(1)));
+
+        var product = await db.StoreProducts.AsNoTracking().SingleAsync();
+        Assert.Equal((5, StoreTestData.Now.AddHours(1)), (product.UnitsSold, product.LastSoldUtc));
+    }
+
+    [Fact]
     public async Task Taking_more_off_the_shelf_than_is_there_changes_nothing()
     {
         var (sqlite, id) = await OneVariantAsync(onHand: 12);
