@@ -201,6 +201,7 @@ public sealed class StoreProductFileTests : IAsyncLifetime
         foreach (var keeper in new[] { _hazel, _admin })
         {
             var stream = Assert.IsType<FileStreamResult>(await Keepers(keeper).Download(file.Id, default));
+            await using var served = stream.FileStream;   // ASP.NET closes it after sending; a test must, or Windows cannot delete the folder
             Assert.Equal("rempod-2.1.bin", stream.FileDownloadName);
             using var read = new MemoryStream();
             await stream.FileStream.CopyToAsync(read);
