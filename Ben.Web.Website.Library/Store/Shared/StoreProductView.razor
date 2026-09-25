@@ -37,6 +37,24 @@ else if (Product.IsPreview)
     </div>
 }
 
+@* Store sellers P13: an item's versions, each way. *@
+@if (Product.Discontinued)
+{
+    <div class="alert alert-secondary" data-testid="product-discontinued">
+        <strong>No longer made.</strong>
+        @if (Product.NewerVersion is { } replacement)
+        {
+            <span>It's been replaced by <a class="alert-link" href="@($"/store/p/{replacement.Slug}")" data-testid="product-replaced-by">@VersionName(replacement)</a>.</span>
+        }
+    </div>
+}
+else if (Product.NewerVersion is { } newer && !Product.IsPreview)
+{
+    <div class="alert alert-info" data-testid="product-newer-version">
+        A newer version is available: <a class="alert-link" href="@($"/store/p/{newer.Slug}")">@VersionName(newer)</a>.
+    </div>
+}
+
 <div class="row g-4 mb-5">
     <div class="col-lg-7">
         <StoreProductGallery Images="Product.Images" ProductName="@Product.Name" VariantId="@Chosen?.Id" />
@@ -44,7 +62,11 @@ else if (Product.IsPreview)
     <div class="col-lg-5">
         <div class="ben-buybox">
             <StoreBadges IsNew="@Product.IsNew" IsFeatured="@Product.IsFeatured" Discount="@Discount" />
-            <h1 class="h3 mt-2 mb-1">@Product.Name<HelpLink Slug="shopping-at-the-store" Anchor="options-and-prices" /></h1>
+            <h1 class="h3 mt-2 mb-1">@Product.Name@if (Product.VersionLabel is { } label) { <span class="badge bg-secondary-subtle text-secondary-emphasis fs-6 align-middle ms-2" data-testid="product-version">@label</span> }<HelpLink Slug="shopping-at-the-store" Anchor="options-and-prices" /></h1>
+            @if (Product.OlderVersion is { } older)
+            {
+                <div class="small"><a class="ben-link-muted" href="@($"/store/p/{older.Slug}")" data-testid="product-older-version">Previous version: @VersionName(older)</a></div>
+            }
             @if (Product.Reviews.Count > 0)
             {
                 <a class="ben-link-muted small" href="@($"/store/p/{Product.Slug}#reviews")"><StoreStars Rating="@Product.Reviews.Average" Count="@Product.Reviews.Count" /></a>
@@ -227,12 +249,14 @@ else if (Product.IsPreview)
     /// choice shows its disabled button instead. With the store paused the button stays — a cart
     /// can still be kept — and the sentence under it says why nothing can be ordered yet.
     /// </summary>
+    private static string VersionName(StoreVersionLink v) => v.VersionLabel is { } l ? $"{v.Name} ({l})" : v.Name;
+
     private RenderFragment BuyControls(StoreVariantPublicRecord? chosen) => __builder =>
     {
-        if (Product.IsPreview || chosen is { Available: <= 0 })
+        if (Product.IsPreview || Product.Discontinued || chosen is { Available: <= 0 })
         {
             <button type="button" class="btn btn-secondary btn-lg w-100" disabled data-testid="sold-out-button">
-                @(Product.IsPreview ? "Not on sale" : "Sold out")
+                @(Product.Discontinued ? "No longer made" : Product.IsPreview ? "Not on sale" : "Sold out")
             </button>
         }
         else

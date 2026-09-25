@@ -96,6 +96,14 @@ public interface IBenStoreAdminClient
 
     Task<(StorePartsRecord? Result, string? Error)> RemoveStorePartPictureAsync(Guid productId, Guid partId, CancellationToken token = default);
 
+    // ── versions (store sellers P13) ─────────────────────────────────────────────────────
+
+    Task<ItemResult<StoreVersionInfo>> GetStoreProductVersionAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StoreVersionInfo? Result, string? Error)> SaveStoreProductVersionAsync(Guid productId, SaveStoreVersionRequest request, CancellationToken token = default);
+
+    Task<(StoreNewVersionRecord? Result, string? Error)> StartStoreProductVersionAsync(Guid productId, StartStoreVersionRequest request, CancellationToken token = default);
+
     // ── FAQ and questions (store sellers P12) ────────────────────────────────
 
     Task<ItemResult<StoreFaqsRecord>> GetStoreProductFaqsAsync(Guid productId, CancellationToken token = default);

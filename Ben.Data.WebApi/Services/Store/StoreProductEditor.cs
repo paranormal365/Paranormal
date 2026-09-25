@@ -252,12 +252,17 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         var now = DateTime.UtcNow;
         product.IsActive = on;
         if (on) product.FirstOnSaleUtc ??= now;
+        // Back on sale by hand: no longer "discontinued" or selling out (store sellers P13).
+        if (on) (product.DiscontinuedUtc, product.SellingOutSinceUtc) = (null, null);
         product.DateUpdated = now;
         product.UpdatedByAppUserId = actor.UserId;
         StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Sale, on ? "Put it on sale." : "Took it off sale.",
             actor.UserId, actor.Role, now);
+        // A new version's first day on sale: what the seller chose for the one it replaces happens now.
+        var replaced = on ? await StoreProductVersions.ApplyPolicyAsync(db, product, actor, now, ct) : null;
         await db.SaveChangesAsync(ct);
         await StorePriceCaches.RecomputeAsync(db, product.Id, ct);
+        if (replaced is { } previous) await StorePriceCaches.RecomputeAsync(db, previous, ct);
         return null;
     }
 
@@ -271,6 +276,8 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
             return StoreEditRefusal.BadRequest("That product has been sold, so its record must stay. Deactivate it instead.");
         if (actor.IsSeller && (product.IsActive || product.FirstOnSaleUtc is not null))
             return StoreEditRefusal.BadRequest("Only a draft that has never been on sale can be deleted. Take it off sale instead.");
+        if (await db.StoreProducts.AnyAsync(p => p.PreviousVersionProductId == product.Id, ct))
+            return StoreEditRefusal.BadRequest("A newer version links back to this one, so it must stay. Take it off sale instead.");
 
         var id = product.Id;
         var pictures = await db.StoreProductImages.Where(i => i.ProductId == id).Select(i => i.UploadFileId).ToListAsync(ct);
@@ -1109,6 +1116,82 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         await db.SaveChangesAsync(ct);
         return null;
     }
+
+    // ── versions (P13) ───────────────────────────────────────────────────────
+
+    public const int MaxVersionLabelLength = 40;
+
+    private static string? VersionLabelProblem(string? label)
+    {
+        var l = label?.Trim();
+        if (string.IsNullOrEmpty(l)) return "Name the new version — “v2”, “2026 edition”.";
+        return l.Length > MaxVersionLabelLength ? $"A version's name is {MaxVersionLabelLength} characters at most." : null;
+    }
+
+    /// <summary>
+    /// Starts a new version of an item that has been on sale: a hidden draft copying everything but
+    /// the stock, the same seller's, linked back to this one. One newer version per item.
+    /// </summary>
+    public async Task<(Guid? NewId, StoreEditRefusal? Refusal)> StartVersionAsync(
+        BenDataContext db, StoreProduct source, StartStoreVersionRequest request, StoreEditActor actor, CancellationToken ct)
+    {
+        if (VersionLabelProblem(request.VersionLabel) is { } problem) return (null, StoreEditRefusal.BadRequest(problem));
+        if (!Enum.IsDefined(request.Policy)) return (null, StoreEditRefusal.BadRequest("Choose what happens to this version."));
+        if (source.FirstOnSaleUtc is null && source.UnitsSold == 0)
+            return (null, StoreEditRefusal.BadRequest("This one hasn't been on sale yet — change the draft itself rather than starting a new version."));
+        if (await db.StoreProducts.AsNoTracking().Where(p => p.PreviousVersionProductId == source.Id).Select(p => new { p.Name, p.VersionLabel }).FirstOrDefaultAsync(ct) is { } newer)
+            return (null, StoreEditRefusal.Conflict($"There's a newer version already: “{newer.Name}”{(newer.VersionLabel is { } l ? $" ({l})" : "")}. Start the next one from that."));
+
+        var label = request.VersionLabel.Trim();
+        var suffix = "-" + new string(label.ToUpperInvariant().Where(char.IsLetterOrDigit).Take(10).ToArray());
+        var now = DateTime.UtcNow;
+        var copy = await StoreProductCopier.CopyAsync(db, images, source.Id,
+            new StoreProductCopier.Plan(source.Name, suffix.Length > 1 ? suffix : "-NEW", Everything: true, source.SellerAppUserId,
+                PreviousVersionProductId: source.Id, VersionLabel: label, Policy: request.Policy, SlugSource: $"{source.Name} {label}"),
+            actor.UserId, now, ct);
+        if (copy is null) return (null, StoreEditRefusal.NotFound);
+
+        StoreProductHistory.Record(db, copy.Id, StoreProductChangeArea.Created,
+            $"Started version {label} from “{source.Name}”{(source.VersionLabel is { } was ? $" ({was})" : "")}. When it goes on sale, the old one {PolicyWords(request.Policy)}.",
+            actor.UserId, actor.Role, now);
+        StoreProductHistory.Record(db, source.Id, StoreProductChangeArea.Versions, $"Started a new version, {label}, as a draft.", actor.UserId, actor.Role, now);
+        await db.SaveChangesAsync(ct);
+        await StorePriceCaches.RecomputeAsync(db, copy.Id, ct);
+        return (copy.Id, null);
+    }
+
+    /// <summary>A version's label, and its policy until it has gone on sale (then it has happened, and is fixed).</summary>
+    public static async Task<StoreEditRefusal?> SaveVersionAsync(
+        BenDataContext db, StoreProduct product, SaveStoreVersionRequest request, StoreEditActor actor, CancellationToken ct)
+    {
+        var label = string.IsNullOrWhiteSpace(request.VersionLabel) ? null : request.VersionLabel.Trim();
+        if (label?.Length > MaxVersionLabelLength) return StoreEditRefusal.BadRequest($"A version's name is {MaxVersionLabelLength} characters at most.");
+        if (product.PreviousVersionProductId is not null && label is null) return StoreEditRefusal.BadRequest("A new version needs a name.");
+        if (!Enum.IsDefined(request.Policy)) return StoreEditRefusal.BadRequest("Choose what happens to the previous version.");
+
+        var said = new List<string>();
+        if (label != product.VersionLabel) said.Add(label is null ? "Removed the version name." : $"Called this version {label}.");
+        if (request.Policy != product.SupersededPolicy)
+        {
+            if (product.PreviousVersionProductId is null) return StoreEditRefusal.BadRequest("This is a first version — there's nothing before it.");
+            if (product.SupersededAppliedUtc is not null) return StoreEditRefusal.Conflict("This version has gone on sale, and what happened to the old one has happened.");
+            said.Add($"When this goes on sale, the old one {PolicyWords(request.Policy)}.");
+        }
+        if (said.Count == 0) return null;
+        product.VersionLabel = label;
+        product.SupersededPolicy = request.Policy;
+        product.DateUpdated = DateTime.UtcNow;
+        StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Versions, string.Join(" ", said), actor.UserId, actor.Role, product.DateUpdated.Value);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    public static string PolicyWords(StoreSupersededPolicy policy) => policy switch
+    {
+        StoreSupersededPolicy.SellOut => "sells what's left, then comes off sale",
+        StoreSupersededPolicy.Discontinue => "comes off sale straight away",
+        _ => "stays on sale beside it",
+    };
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

@@ -373,6 +373,14 @@ namespace Ben.Data.Source.Context
             question.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
             question.HasOne(e => e.AskerAppUser).WithMany().HasForeignKey(e => e.AskerAppUserId).OnDelete(DeleteBehavior.NoAction);
 
+            // Store sellers P13: versions. One newer version per product; NoAction — a product with a
+            // newer version is never deleted (it has been sold, or the editor refuses).
+            var versioned = modelBuilder.Entity<StoreProduct>();
+            versioned.Property(e => e.VersionLabel).HasMaxLength(40);
+            versioned.HasIndex(e => e.PreviousVersionProductId).IsUnique().HasFilter("[PreviousVersionProductId] IS NOT NULL");
+            versioned.HasOne(e => e.PreviousVersion).WithMany()
+                .HasForeignKey(e => e.PreviousVersionProductId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // Store sellers P10: what sellers are owed, and what they've been paid. Every person key is
             // NoAction: these are money records, kept when an account goes (its name is anonymised).
             var earning = modelBuilder.Entity<StoreSellerEarning>();

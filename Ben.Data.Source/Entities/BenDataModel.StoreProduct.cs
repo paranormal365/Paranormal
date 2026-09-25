@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
@@ -92,6 +93,34 @@ namespace Ben.Data.Source.Entities
         /// product turns it off; the page shows nothing either way until there's an entry.
         /// </summary>
         public bool FaqEnabled { get; set; } = true;
+
+        // ── versions (store sellers P13) ─────────────────────────────────────
+        // Ben's list: "A new version links back to the old one and the old one links forward. The
+        // seller chooses what happens to the old one: sell out the remaining stock, keep offering it,
+        // or discontinue it." A product has at most one newer version (a unique key).
+
+        /// <summary>The version this one replaces; null for a first version.</summary>
+        public Guid? PreviousVersionProductId { get; set; }
+
+        /// <summary>What this version is called — "v2", "2026 edition". Shown beside the name.</summary>
+        public string? VersionLabel { get; set; }
+
+        /// <summary>What happens to the previous version when this one first goes on sale.</summary>
+        public StoreSupersededPolicy SupersededPolicy { get; set; }
+
+        /// <summary>When this version's policy was applied to the previous one — once, on its first day on sale.</summary>
+        public DateTime? SupersededAppliedUtc { get; set; }
+
+        /// <summary>Replaced, and selling what's left: taken off sale when its stock runs out.</summary>
+        public DateTime? SellingOutSinceUtc { get; set; }
+
+        /// <summary>
+        /// Taken off sale because a newer version replaced it. Its page stays up — "no longer made,
+        /// replaced by" — so a link or a search doesn't end on nothing.
+        /// </summary>
+        public DateTime? DiscontinuedUtc { get; set; }
+
+        public virtual StoreProduct? PreviousVersion { get; set; }
 
         public virtual StoreCategory Category { get; set; } = null!;
         public virtual AppUser? SellerAppUser { get; set; }

@@ -262,6 +262,15 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="Versions" Id="versions">
+                    <div class="pt-3">
+                        <StoreVersionPanel Info="_version" Busy="_busy" Error="@_versionError" CanStart="@(p.FirstOnSaleUtc is not null || p.UnitsSold > 0)"
+                                           EditorHref="@(id => $"/admin/store/products/{id}/edit")" OnSave="SaveVersionAsync" OnStart="StartVersionAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="versions" /></Help>
+                        </StoreVersionPanel>
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
@@ -395,7 +404,7 @@
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
         _settings = await AdminClient.GetStoreSettingsAsync();
-        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "versions" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
     }
@@ -410,6 +419,7 @@
         if (_tab == "parts") await LoadPartsAsync();
         if (_tab == "files") await LoadFilesAsync();
         if (_tab == "faq") await LoadFaqsAsync();
+        if (_tab == "versions") await LoadVersionAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -782,5 +792,34 @@
             Toasts.Success("FAQ saved.");
         }
         finally { _busy = false; }
+    }
+
+    // ── versions (store sellers P13) ─────────────────────────────────────────
+
+    private ItemResult<StoreVersionInfo> _version;
+    private string? _versionError;
+
+    private async Task LoadVersionAsync() => _version = await AdminClient.GetStoreProductVersionAsync(ProductId);
+
+    private async Task SaveVersionAsync(SaveStoreVersionRequest request)
+    {
+        _busy = true; _versionError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductVersionAsync(ProductId, request);
+            if (saved is null) { _versionError = error ?? "The version could not be saved."; return; }
+            _version = ItemResult<StoreVersionInfo>.Ok(saved);
+            Toasts.Success("Saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<string?> StartVersionAsync(StartStoreVersionRequest request)
+    {
+        var (started, error) = await AdminClient.StartStoreProductVersionAsync(ProductId, request);
+        if (started is null) return error ?? "The new version could not be started.";
+        Toasts.Success("New version started — it's a draft.");
+        NavManager.NavigateTo($"/admin/store/products/{started.ProductId}/edit", forceLoad: true);
+        return null;
     }
 }

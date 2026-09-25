@@ -367,7 +367,9 @@ database needs, in order, **before** the code is deployed:
    `StoreSellerEarnings` (two new tables) and `StoreProductFiles` (one new table; the API's seeder adds the
    "Store Product File" upload type at start-up). Uploads of product files are up to 95 MB — under
    Cloudflare's 100 MB request cap; the API's request limit for that route is 100 MB. Then `StoreProductQuestions`
-   (two new tables and StoreProducts.FaqEnabled, default on).
+   (two new tables and StoreProducts.FaqEnabled, default on) and `StoreProductVersions` (six nullable/defaulted
+   columns on StoreProducts, a filtered unique index and a self-referencing key). A new scheduled job,
+   `store-superseded-sweep`, takes a replaced version off sale once it has nothing on hand.
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

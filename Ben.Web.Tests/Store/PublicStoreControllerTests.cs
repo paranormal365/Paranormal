@@ -60,7 +60,8 @@ public sealed class PublicStoreControllerTests : IAsyncLifetime
     public async Task A_hidden_product_is_nowhere_on_the_store()
     {
         var all = await ListAsync();
-        Assert.Equal(6, all.Total);
+        Assert.Equal(7, all.Total);   // six, and the Field Thermometer's live version — its old one is off sale (P13)
+        Assert.DoesNotContain(all.Products, p => p.Slug == "field-thermometer");
         Assert.DoesNotContain(all.Products, p => p.Slug == "boo-buddy");
 
         var missing = await Controller().Product("boo-buddy", null, default);
@@ -124,7 +125,7 @@ public sealed class PublicStoreControllerTests : IAsyncLifetime
         var second = await ListAsync("?page=2");
         var beyond = await ListAsync("?page=9");
 
-        Assert.Equal((18, 16, 2), (first.Total, first.Products.Count, second.Products.Count));
+        Assert.Equal((19, 16, 3), (first.Total, first.Products.Count, second.Products.Count));
         Assert.Empty(first.Products.Select(p => p.Id).Intersect(second.Products.Select(p => p.Id)));
         Assert.Equal(2, beyond.Page);
     }
@@ -212,7 +213,7 @@ public sealed class PublicStoreControllerTests : IAsyncLifetime
         Assert.Equal(5, home.Slides.Count);
         Assert.Equal(["k-ii-emf-meter"], home.Featured.Select(p => p.Slug));
         Assert.Equal("rem-pod", home.NewArrivals[0].Slug);
-        Assert.Equal(6, home.Popular.Count);
+        Assert.Equal(7, home.Popular.Count);
     }
 
     [Fact]

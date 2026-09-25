@@ -114,6 +114,21 @@ The item's **FAQ** tab holds its questions and answers — the ones people keep 
 They show on the item's page after the reviews, in the order you set. Switch **Show the FAQ** off to
 hide them for a while without losing them.
 
+## Versions
+
+Made a better one? On an item that has been on sale, open **Versions** and **Start a new version…**.
+Name it (“v2”, “2026 edition”) and choose what happens to the old one when the new one goes on sale:
+
+- **sells what's left, then comes off sale** — it stays on sale until its stock runs out;
+- **stays on sale beside it** — both are sold, each page linking to the other;
+- **comes off sale straight away**.
+
+The new version starts as a hidden draft with everything from the old one — words, pictures,
+options, variants, parts, FAQ and files — but no stock. Change what's new, add its stock, and ask for
+it to go on sale as usual. Nothing happens to the old one until then, and you can change your choice
+until that day; after it, it has happened. An old version that comes off sale keeps its page, which
+says it's no longer made and links to the new one.
+
 ## Sending packages
 
 **Each seller sends their own package.** When a paid order has your items in it you get an email and

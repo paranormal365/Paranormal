@@ -1234,6 +1234,18 @@ neither side is told who the other is. **Add to the FAQ…** copies an answered 
 product's FAQ, reworded if need be — the shopper's own answer is left as it was. A person's questions
 go with their account when it's closed or deleted.
 
+## Versions
+
+A product that has been on sale can have a **new version** (**Versions** tab → **Start a new
+version…**): a hidden draft copying everything but the stock — words, pictures, options and variants
+(new SKUs), parts, FAQ and files — linked back to the old one. Whoever starts it chooses what happens
+to the old one when the new one **first goes on sale**: sell what's left and then come off sale (a
+daily job takes it off once nothing is on hand), stay on sale beside it, or come off sale at once.
+It happens once; after that the choice is fixed. An old version taken off this way keeps its page —
+"No longer made", with a link to the new one — and can't be bought; putting it back on sale by hand
+clears that. Each product has one newer version at most, and a product a newer version links back to
+can't be deleted.
+
 ## Paying sellers
 
 Payouts are made by hand: the store takes the whole payment for every order and pays its sellers

@@ -121,6 +121,17 @@ public sealed class PublicStoreController(
         var product = await (previewing ? db.StoreProducts : StoreCatalogue.LiveProducts(db)).AsNoTracking()
             .Where(p => p.Slug == slug).Select(p => new { p.Id, Live = p.IsActive && p.Category.IsActive && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive) })
             .FirstOrDefaultAsync(ct);
+        // Store sellers P13: a version its newer version replaced keeps its page — "no longer made,
+        // replaced by" — so a link or a bookmark doesn't end on nothing. Never buyable.
+        var discontinued = false;
+        if (product is null)
+        {
+            product = await db.StoreProducts.AsNoTracking()
+                .Where(p => p.Slug == slug && !p.IsActive && p.DiscontinuedUtc != null
+                         && p.Category.IsActive && (p.Category.ParentCategoryId == null || p.Category.ParentCategory!.IsActive))
+                .Select(p => new { p.Id, Live = false }).FirstOrDefaultAsync(ct);
+            discontinued = product is not null;
+        }
         if (product is null) return NotFound(NoSuchProduct);
 
         var entries = await StoreCatalogue.LoadAsync(db, db.StoreProducts.Where(p => p.Id == product.Id), ct);
@@ -172,6 +183,16 @@ public sealed class PublicStoreController(
                 .Select(f => new StoreFaqView(f.Id, f.Question, f.Answer)).ToListAsync(ct)
             : [];
 
+        // Store sellers P13: the versions either side, when a shopper can reach them.
+        var newer = await StoreCatalogue.LiveProducts(db).AsNoTracking().Where(n => n.PreviousVersionProductId == e.Product.Id)
+            .Select(n => new StoreVersionLink(n.Id, n.Name, n.Slug, n.VersionLabel)).FirstOrDefaultAsync(ct);
+        var older = e.Product.PreviousVersionProductId is { } olderId
+            ? await db.StoreProducts.AsNoTracking()
+                .Where(o => o.Id == olderId && (o.IsActive || o.DiscontinuedUtc != null)
+                         && o.Category.IsActive && (o.Category.ParentCategoryId == null || o.Category.ParentCategory!.IsActive))
+                .Select(o => new StoreVersionLink(o.Id, o.Name, o.Slug, o.VersionLabel)).FirstOrDefaultAsync(ct)
+            : null;
+
         var related = StoreCatalogue.Popular(
                 (await StoreCatalogue.LoadAsync(db, StoreCatalogue.LiveProducts(db)
                     .Where(p => p.CategoryId == e.Product.CategoryId && p.Id != e.Product.Id), ct)))
@@ -185,9 +206,10 @@ public sealed class PublicStoreController(
             new StoreReviewSummary(ratings.Count == 0 ? 0m : Math.Round((decimal)ratings.Sum() / ratings.Count, 2, MidpointRounding.AwayFromZero),
                 ratings.Count, Enumerable.Range(1, 5).Select(n => ratings.Count(r => r == n)).ToList()),
             equipment, related, s.LowStockThreshold, s.ReturnsWindowDays,
-            e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live,
+            e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live && !discontinued,
             e.Category.ParentCategory?.Name, e.Category.ParentCategory?.Slug,
-            Faqs: faqs, CanAsk: product.Live));
+            Faqs: faqs, CanAsk: product.Live,
+            VersionLabel: e.Product.VersionLabel, NewerVersion: newer, OlderVersion: older, Discontinued: discontinued));
     }
 
     /// <summary>Counts a look at a product, for "most popular". Always 204 — a hidden or missing product is not news to the caller.</summary>

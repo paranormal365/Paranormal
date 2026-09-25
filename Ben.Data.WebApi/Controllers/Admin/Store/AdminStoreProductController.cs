@@ -182,88 +182,13 @@ public sealed partial class AdminStoreProductController(
     {
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-        var source = await db.StoreProducts.AsNoTracking()
-            .Include(p => p.Options).ThenInclude(o => o.Values)
-            .Include(p => p.Variants).ThenInclude(v => v.OptionValues)
-            .Include(p => p.Specs).Include(p => p.Images)
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(p => p.Id == id, ct);
+        var source = await db.StoreProducts.AsNoTracking().Where(p => p.Id == id).Select(p => new { p.Name }).FirstOrDefaultAsync(ct);
         if (source is null) return NotFound();
 
         var now = DateTime.UtcNow;
-        var copy = new StoreProduct
-        {
-            Id = Guid.NewGuid(), CategoryId = source.CategoryId, EquipmentModelId = source.EquipmentModelId,
-            Name = StoreProductEditor.Truncate($"{source.Name} (copy)", MaxNameLength), ShortDescription = source.ShortDescription,
-            LongDescriptionHtml = source.LongDescriptionHtml, IsActive = false, IsFeatured = false,
-            SortOrder = source.SortOrder + 1, StripeTaxCode = source.StripeTaxCode,
-            DateCreated = now, CreatedByAppUserId = userId,
-        };
-        copy.Slug = await StoreSlugs.ForProductAsync(db, copy.Id, copy.Name, ct);
-        db.StoreProducts.Add(copy);
-
-        var valueMap = new Dictionary<Guid, Guid>();
-        foreach (var option in source.Options)
-        {
-            var newOption = new StoreProductOption
-            {
-                Id = Guid.NewGuid(), ProductId = copy.Id, Name = option.Name, Kind = option.Kind,
-                SortOrder = option.SortOrder, DateCreated = now, CreatedByAppUserId = userId,
-            };
-            db.StoreProductOptions.Add(newOption);
-            foreach (var value in option.Values)
-            {
-                valueMap[value.Id] = Guid.NewGuid();
-                db.StoreProductOptionValues.Add(new StoreProductOptionValue
-                {
-                    Id = valueMap[value.Id], OptionId = newOption.Id, Value = value.Value, SwatchHex = value.SwatchHex,
-                    SortOrder = value.SortOrder, IsActive = value.IsActive, DateCreated = now, CreatedByAppUserId = userId,
-                });
-            }
-        }
-
-        var variantMap = new Dictionary<Guid, Guid>();
-        var takenSkus = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var variant in source.Variants)
-        {
-            variantMap[variant.Id] = Guid.NewGuid();
-            var sku = await StoreProductEditor.UniqueSkuAsync(db, StoreProductEditor.Truncate(variant.Sku, 58) + "-COPY", ct, takenSkus);
-            takenSkus.Add(sku);
-            var values = variant.OptionValues.Select(x => valueMap[x.OptionValueId]).ToList();
-            db.StoreProductVariants.Add(new StoreProductVariant
-            {
-                Id = variantMap[variant.Id], ProductId = copy.Id, Sku = sku, Name = variant.Name,
-                OptionSignature = StorePriceCaches.Signature(values), Price = variant.Price,
-                CompareAtPrice = variant.CompareAtPrice, IsActive = variant.IsActive, IsDefault = variant.IsDefault,
-                SortOrder = variant.SortOrder, DateCreated = now, CreatedByAppUserId = userId,
-            });
-            foreach (var valueId in values)
-                db.StoreProductVariantOptionValues.Add(new StoreProductVariantOptionValue
-                {
-                    Id = Guid.NewGuid(), VariantId = variantMap[variant.Id], OptionValueId = valueId, DateCreated = now,
-                });
-        }
-
-        foreach (var spec in source.Specs)
-            db.StoreProductSpecs.Add(new StoreProductSpec
-            {
-                Id = Guid.NewGuid(), ProductId = copy.Id, GroupName = spec.GroupName, Name = spec.Name,
-                Value = spec.Value, SortOrder = spec.SortOrder, DateCreated = now, CreatedByAppUserId = userId,
-            });
-
-        foreach (var picture in source.Images.OrderBy(i => i.SortOrder))
-        {
-            var file = await images.CopyAsync(db, picture.UploadFileId, $"products/{copy.Id:N}", userId, ct);
-            db.StoreProductImages.Add(new StoreProductImage
-            {
-                Id = Guid.NewGuid(), ProductId = copy.Id, UploadFileId = file.Id, SortOrder = picture.SortOrder,
-                AltText = picture.AltText,
-                VariantId = picture.VariantId is { } v ? variantMap[v] : null,
-                DateCreated = now, CreatedByAppUserId = userId,
-            });
-        }
-
+        var copy = await StoreProductCopier.CopyAsync(db, images, id,
+            new StoreProductCopier.Plan($"{source.Name} (copy)", "-COPY", Everything: false, SellerAppUserId: null), userId, now, ct);
+        if (copy is null) return NotFound();
         StoreProductHistory.Record(db, copy.Id, StoreProductChangeArea.Created, $"Copied it from “{source.Name}”.",
             userId, StoreChangeActor.Store, now);
         await db.SaveChangesAsync(ct);
@@ -487,6 +412,38 @@ public sealed partial class AdminStoreProductController(
         if (product is null) return NotFound();
         if (await _editor.SavePartsAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
+    }
+
+    // ── versions (store sellers P13) ─────────────────────────────────────────
+
+    [HttpGet("{id:guid}/version")]
+    public async Task<ActionResult<StoreVersionInfo>> Version(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await db.StoreProducts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        return product is null ? NotFound() : Ok(await StoreProductVersions.InfoAsync(db, product, ct));
+    }
+
+    [HttpPut("{id:guid}/version")]
+    public async Task<ActionResult<StoreVersionInfo>> SaveVersion(Guid id, [FromBody] SaveStoreVersionRequest request, CancellationToken ct)
+    {
+        var me = Me;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await db.StoreProducts.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (product is null) return NotFound();
+        if (await StoreProductEditor.SaveVersionAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductVersions.InfoAsync(db, product, ct));
+    }
+
+    [HttpPost("{id:guid}/new-version")]
+    public async Task<ActionResult<StoreNewVersionRecord>> StartVersion(Guid id, [FromBody] StartStoreVersionRequest request, CancellationToken ct)
+    {
+        var me = Me;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await db.StoreProducts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (product is null) return NotFound();
+        var (newId, refusal) = await _editor.StartVersionAsync(db, product, request, me, ct);
+        return refusal is not null ? this.Refused(refusal) : Ok(new StoreNewVersionRecord(newId!.Value));
     }
 
     // ── FAQ (store sellers P12) ──────────────────────────────────────────────

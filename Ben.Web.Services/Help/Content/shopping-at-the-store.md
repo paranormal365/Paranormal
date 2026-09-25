@@ -56,6 +56,12 @@ checkout.
 
 ![A product page: the picture, the price with its old price struck through, the heart, and Add to cart](/help/media/shopping-at-the-store/product.png)
 
+## Newer versions
+
+When an item is replaced by a better one, its page says so: **A newer version is available**, with a
+link. If the old one is no longer made, its page stays up — so a saved link still works — but says
+**No longer made** and points to the new one. A new version's page links back to the one before.
+
 ## Your cart
 
 You don't need an account to shop. Your cart belongs to your browser until you sign in, and then

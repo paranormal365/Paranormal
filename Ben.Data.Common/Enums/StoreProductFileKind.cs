@@ -27,3 +27,19 @@ public enum StoreQuestionStatus
     Answered = 1,
     Declined = 2,
 }
+
+/// <summary>
+/// What happens to the previous version of a product when a new version first goes on sale (store
+/// sellers P13). The seller chooses.
+/// </summary>
+public enum StoreSupersededPolicy
+{
+    /// <summary>Both stay on sale, each linking to the other.</summary>
+    KeepOffering = 0,
+
+    /// <summary>The old one stays on sale until its stock runs out, then comes off.</summary>
+    SellOut = 1,
+
+    /// <summary>The old one comes off sale at once; its page says what replaced it.</summary>
+    Discontinue = 2,
+}

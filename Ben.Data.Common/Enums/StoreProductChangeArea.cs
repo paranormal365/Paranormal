@@ -38,4 +38,7 @@ public enum StoreProductChangeArea
 
     /// <summary>The FAQ: entries written, changed, removed, promoted from a question; switched on or off (P12).</summary>
     Faq = 11,
+
+    /// <summary>Versions: a new one started, its label or policy changed, the old one replaced (P13).</summary>
+    Versions = 12,
 }

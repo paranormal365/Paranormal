@@ -53,8 +53,10 @@ public sealed class StoreDemoSeederTests
 
         Assert.Equal(["audio-recorders", "emf-meters", "field-accessories", "spirit-boxes", "trigger-objects"],
             await db.StoreCategories.Select(c => c.Slug).OrderBy(s => s).ToListAsync());
-        Assert.Equal(7, await db.StoreProducts.CountAsync());
+        Assert.Equal(9, await db.StoreProducts.CountAsync());   // seven, and the two versions of the Field Thermometer (P13)
         Assert.False((await db.StoreProducts.SingleAsync(p => p.Slug == "boo-buddy")).IsActive);
+        var (v1, v2) = (await db.StoreProducts.SingleAsync(p => p.Slug == "field-thermometer"), await db.StoreProducts.SingleAsync(p => p.Slug == "field-thermometer-v2"));
+        Assert.Equal((false, true, v1.Id, true), (v1.IsActive, v1.DiscontinuedUtc is not null, v2.PreviousVersionProductId, v2.IsActive));
 
         var bag = await db.StoreProducts.Include(p => p.Variants).SingleAsync(p => p.Slug == "investigators-field-bag");
         Assert.Equal(4, bag.Variants.Count);
@@ -75,9 +77,9 @@ public sealed class StoreDemoSeederTests
         await using var _d = sqlite;
         await using var db = await sqlite.NewContextAsync();
 
-        Assert.Equal((5, 7, 12, 1), (await db.StoreCategories.CountAsync(), await db.StoreProducts.CountAsync(),
+        Assert.Equal((5, 9, 14, 1), (await db.StoreCategories.CountAsync(), await db.StoreProducts.CountAsync(),
             await db.StoreProductVariants.CountAsync(), await db.StoreCoupons.CountAsync()));
-        Assert.Equal(13, await db.UploadFiles.CountAsync());
+        Assert.Equal(15, await db.UploadFiles.CountAsync());   // one picture each for the two Field Thermometers (P13)
     }
 
     [Fact]
@@ -318,6 +320,6 @@ public sealed class StoreDemoSeederTests
         await using var check = await sqlite.NewContextAsync();
         var hers = await check.StoreProducts.Where(p => p.SellerAppUserId == hazel).OrderBy(p => p.Name).ToListAsync();
         Assert.Equal([("Hand-Built REM Pod", true), ("Pocket EMF Logger", false)], hers.Select(p => (p.Name, p.IsActive)));
-        Assert.Equal(9, await check.StoreProducts.CountAsync());   // the store's seven, and hers
+        Assert.Equal(11, await check.StoreProducts.CountAsync());   // the store's nine, and hers
     }
 }

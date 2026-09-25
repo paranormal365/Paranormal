@@ -388,4 +388,13 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(StoreReceivedQuestionRecord? Result, string? Error)> PromoteStoreQuestionAsync(Guid questionId, PromoteStoreQuestionRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<PromoteStoreQuestionRequest, StoreReceivedQuestionRecord>(HttpMethod.Post, $"/api/admin/store/questions/{questionId}/promote", request, token);
+
+    public Task<ItemResult<StoreVersionInfo>> GetStoreProductVersionAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreVersionInfo>($"/api/admin/store/products/{productId}/version", token);
+
+    public Task<(StoreVersionInfo? Result, string? Error)> SaveStoreProductVersionAsync(Guid productId, SaveStoreVersionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreVersionRequest, StoreVersionInfo>(HttpMethod.Put, $"/api/admin/store/products/{productId}/version", request, token);
+
+    public Task<(StoreNewVersionRecord? Result, string? Error)> StartStoreProductVersionAsync(Guid productId, StartStoreVersionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<StartStoreVersionRequest, StoreNewVersionRecord>(HttpMethod.Post, $"/api/admin/store/products/{productId}/new-version", request, token);
 }

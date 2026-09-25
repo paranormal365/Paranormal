@@ -176,6 +176,27 @@ internal static class StoreDemoSeeder
             variants: [new("SINGLE-UNIT-PROBE", [], 9.99m, null, 1, Default: true)],
             specs: []);
 
+        // Store sellers P13: an item and its newer version. The first is off sale — "no longer made,
+        // replaced by" — and the second, on sale, links back to it.
+        await ProductAsync(db, ownerId, now, n: 30, shelf: 5, "Field Thermometer", "field-thermometer", null,
+            "An infrared thermometer for cold spots.", "<p>The first version — replaced by v2, with a faster reading.</p>",
+            featured: false, newUntil: null, active: true,
+            options: [], variants: [new("FIELD-THERMO-1", [], 29.99m, null, 0, Default: true)], specs: []);
+        await ProductAsync(db, ownerId, now, n: 31, shelf: 5, "Field Thermometer", "field-thermometer-v2", null,
+            "An infrared thermometer for cold spots — reads in half a second.", "<p>Version 2: a faster sensor and a backlit display.</p>",
+            featured: false, newUntil: null, active: true,
+            options: [], variants: [new("FIELD-THERMO-2", [], 34.99m, null, 12, Default: true)], specs: []);
+        var (first, second) = (await db.StoreProducts.FirstAsync(p => p.Id == Id(30), ct), await db.StoreProducts.FirstAsync(p => p.Id == Id(31), ct));
+        if (second.PreviousVersionProductId is null)
+        {
+            (first.VersionLabel, first.IsActive, first.DiscontinuedUtc) = ("v1", false, now);
+            (second.VersionLabel, second.PreviousVersionProductId, second.SupersededPolicy, second.SupersededAppliedUtc)
+                = ("v2", first.Id, StoreSupersededPolicy.Discontinue, now);
+            StoreProductHistory.Record(db, first.Id, StoreProductChangeArea.Versions, "Version v2 went on sale, replacing this one — taken off sale.",
+                ownerId, StoreChangeActor.Store, now.AddSeconds(3));
+            await db.SaveChangesAsync(ct);
+        }
+
         if (!await db.StoreCoupons.AnyAsync(c => c.Id == CouponId, ct))
         {
             db.StoreCoupons.Add(new StoreCoupon

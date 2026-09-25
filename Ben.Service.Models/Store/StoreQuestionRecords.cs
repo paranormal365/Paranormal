@@ -37,3 +37,25 @@ public sealed record AnswerStoreQuestionRequest(string? Answer, bool Decline);
 
 /// <summary>An answered question copied into the FAQ, reworded for everybody if need be.</summary>
 public sealed record PromoteStoreQuestionRequest(string Question, string Answer);
+
+// Store sellers, backlog 251, P13: versions.
+
+/// <summary>Starts a new version of an item: what it's called, and what happens to this one when it goes on sale.</summary>
+public sealed record StartStoreVersionRequest(string VersionLabel, StoreSupersededPolicy Policy);
+
+/// <summary>A version's label, and — until it has gone on sale — what happens to the one before.</summary>
+public sealed record SaveStoreVersionRequest(string? VersionLabel, StoreSupersededPolicy Policy);
+
+/// <summary>Another version of a product, to link to.</summary>
+public sealed record StoreVersionLink(Guid Id, string Name, string Slug, string? VersionLabel);
+
+/// <summary>
+/// An item's place among its versions, for its editors. <paramref name="PolicyApplied"/>: this version
+/// has gone on sale and its policy has been applied to <paramref name="Previous"/>, so it's fixed now.
+/// </summary>
+public sealed record StoreVersionInfo(
+    string? VersionLabel, StoreSupersededPolicy Policy, bool PolicyApplied, StoreVersionLink? Previous, StoreVersionLink? Next,
+    DateTime? SellingOutSinceUtc, DateTime? DiscontinuedUtc);
+
+/// <summary>The new version's id, for its editor.</summary>
+public sealed record StoreNewVersionRecord(Guid ProductId);

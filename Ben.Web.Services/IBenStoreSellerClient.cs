@@ -119,4 +119,12 @@ public interface IBenStoreSellerClient
     Task<(StoreReceivedQuestionRecord? Result, string? Error)> AnswerSellerQuestionAsync(Guid questionId, AnswerStoreQuestionRequest request, CancellationToken token = default);
 
     Task<(StoreReceivedQuestionRecord? Result, string? Error)> PromoteSellerQuestionAsync(Guid questionId, PromoteStoreQuestionRequest request, CancellationToken token = default);
+
+    // ── versions (P13) ─────────────────────────────────────────────────────
+
+    Task<ItemResult<StoreVersionInfo>> GetSellerItemVersionAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StoreVersionInfo? Result, string? Error)> SaveSellerItemVersionAsync(Guid productId, SaveStoreVersionRequest request, CancellationToken token = default);
+
+    Task<(StoreNewVersionRecord? Result, string? Error)> StartSellerItemVersionAsync(Guid productId, StartStoreVersionRequest request, CancellationToken token = default);
 }

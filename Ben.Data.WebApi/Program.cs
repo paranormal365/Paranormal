@@ -448,6 +448,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // Store sellers P9: what Stripe kept of each payment, read once its balance transaction settles.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.StoreFeeCaptureJob>();
+// Store sellers P13: a replaced version selling out comes off sale when it has nothing left.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreSupersededSweepJob>();
 // S5.6: the morning's low stock, once a day while the store is on.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.StoreLowStockJob>();

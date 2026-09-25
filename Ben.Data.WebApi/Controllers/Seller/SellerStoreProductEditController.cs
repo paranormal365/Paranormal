@@ -217,6 +217,38 @@ public sealed class SellerStoreProductEditController(
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
     }
 
+    // ── versions (store sellers P13) ─────────────────────────────────────────
+
+    [HttpGet("{id:guid}/version")]
+    public async Task<ActionResult<StoreVersionInfo>> Version(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await Mine(db).AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        return product is null ? NotFound() : Ok(await StoreProductVersions.InfoAsync(db, product, ct));
+    }
+
+    [HttpPut("{id:guid}/version")]
+    public async Task<ActionResult<StoreVersionInfo>> SaveVersion(Guid id, [FromBody] SaveStoreVersionRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await MineAsync(db, id, ct);
+        if (product is null) return NotFound();
+        if (await StoreProductEditor.SaveVersionAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductVersions.InfoAsync(db, product, ct));
+    }
+
+    [HttpPost("{id:guid}/new-version")]
+    public async Task<ActionResult<StoreNewVersionRecord>> StartVersion(Guid id, [FromBody] StartStoreVersionRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await Mine(db).AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (product is null) return NotFound();
+        var (newId, refusal) = await _editor.StartVersionAsync(db, product, request, me, ct);
+        return refusal is not null ? this.Refused(refusal) : Ok(new StoreNewVersionRecord(newId!.Value));
+    }
+
     // ── FAQ (store sellers P12) ──────────────────────────────────────────────
 
     [HttpGet("{id:guid}/faqs")]
