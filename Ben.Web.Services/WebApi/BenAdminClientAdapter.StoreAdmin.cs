@@ -122,6 +122,9 @@ public sealed partial class BenAdminClientAdapter
 
     // ── parts and cost (store sellers P4) ────────────────────────────────────
 
+    public Task<ItemResult<StoreProductEconomicsRecord>> GetStoreProductEconomicsAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreProductEconomicsRecord>($"/api/admin/store/products/{productId}/economics", token);
+
     public Task<ItemResult<StorePartsRecord>> GetStoreProductPartsAsync(Guid productId, CancellationToken token = default)
         => _api.GetItemAsync<StorePartsRecord>($"/api/admin/store/products/{productId}/parts", token);
 

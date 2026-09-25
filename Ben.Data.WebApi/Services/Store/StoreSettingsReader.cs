@@ -21,7 +21,10 @@ public sealed record StoreSettingsSnapshot(
     string? SupportEmail,
     int ReturnsWindowDays,
     int ReservationMinutes,
-    bool LinkEnabled);
+    bool LinkEnabled,
+    decimal MarkupPercent = StoreSettingsReader.DefaultMarkupPercent,
+    decimal FeePercent = StoreSettingsReader.DefaultFeePercent,
+    decimal FeeFixed = StoreSettingsReader.DefaultFeeFixed);
 
 /// <summary>
 /// Reads the store's settings in one query (storefront S1.1).
@@ -37,6 +40,9 @@ public static class StoreSettingsReader
     public const int DefaultLowStockThreshold = 3;
     public const int DefaultReturnsWindowDays = 30;
     public const int DefaultReservationMinutes = 15;
+    public const decimal DefaultMarkupPercent = 30m;
+    public const decimal DefaultFeePercent = 2.9m;
+    public const decimal DefaultFeeFixed = 0.30m;
 
     public static async Task<StoreSettingsSnapshot> ReadAsync(BenDataContext db, CancellationToken ct = default)
     {
@@ -55,6 +61,10 @@ public static class StoreSettingsReader
         decimal Money(string key)
             => decimal.TryParse(Text(key), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0m
                 ? d : 0m;
+
+        decimal Percent(string key, decimal whenUnset)
+            => decimal.TryParse(Text(key), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0m && d <= 100m
+                ? d : whenUnset;
 
         int Whole(string key, int min, int max, int whenUnset)
             => int.TryParse(Text(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= min && n <= max
@@ -77,6 +87,9 @@ public static class StoreSettingsReader
             SupportEmail: Text(SiteSettingKeys.StoreSupportEmail),
             ReturnsWindowDays: Whole(SiteSettingKeys.StoreReturnsWindowDays, 0, 365, DefaultReturnsWindowDays),
             ReservationMinutes: Whole(SiteSettingKeys.StoreReservationMinutes, 5, 240, DefaultReservationMinutes),
-            LinkEnabled: Bool(SiteSettingKeys.StoreLinkEnabled, whenUnset: false));
+            LinkEnabled: Bool(SiteSettingKeys.StoreLinkEnabled, whenUnset: false),
+            MarkupPercent: Percent(SiteSettingKeys.StoreMarkupPercent, DefaultMarkupPercent),
+            FeePercent: Percent(SiteSettingKeys.StoreFeePercent, DefaultFeePercent),
+            FeeFixed: Text(SiteSettingKeys.StoreFeeFixedUsd) is null ? DefaultFeeFixed : Money(SiteSettingKeys.StoreFeeFixedUsd));
     }
 }

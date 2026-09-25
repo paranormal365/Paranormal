@@ -173,8 +173,9 @@ public sealed class StoreOrderPayments(
             if (tx is not null) await tx.CommitAsync(ct);
         }
 
-        // ── outside any transaction: file the tax ────────────────────────────
+        // ── outside any transaction: file the tax, and read what Stripe kept ──
         await CommitTaxAsync(orderId, taxCalculationId, attention, ct);
+        await CaptureFeeAsync(orderId, ct);
 
         await alerts.OrderPaidAsync(orderId, ct);
         foreach (var why in attention) await alerts.OrderNeedsAttentionAsync(orderNumber, orderId, why, ct);
@@ -266,6 +267,33 @@ public sealed class StoreOrderPayments(
         await db.SaveChangesAsync(ct);
         if (refusedForGood is not null && attention is null)
             await alerts.OrderNeedsAttentionAsync(order.OrderNumber, order.Id, refusedForGood, ct);
+    }
+
+    /// <summary>
+    /// Reads what Stripe kept of the payment onto the order (store sellers P9). Best effort: a fee
+    /// Stripe hasn't settled yet, or a failure, leaves it for <c>StoreFeeCaptureJob</c>. A refund
+    /// never changes it — Stripe keeps the fee.
+    /// </summary>
+    public async Task<bool> CaptureFeeAsync(Guid orderId, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var order = await db.StoreOrders.AsNoTracking().Where(o => o.Id == orderId)
+                .Select(o => new { o.StripePaymentIntentId, o.StripeFeeAmount, o.PaidUtc }).FirstOrDefaultAsync(ct);
+            if (order is null || order.PaidUtc is null || order.StripeFeeAmount is not null) return false;
+            if (order.StripePaymentIntentId is not { Length: > 0 } pi || pi.StartsWith("seed_", StringComparison.Ordinal)) return false;
+
+            if (await gateway.GetChargeFeeAsync(pi, ct) is not { } fee) return false;
+            var (feeAmount, net) = (fee.FeeCents / 100m, fee.NetCents / 100m);
+            return await db.StoreOrders.Where(o => o.Id == orderId && o.StripeFeeAmount == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(o => o.StripeFeeAmount, feeAmount).SetProperty(o => o.StripeNetAmount, net), ct) == 1;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or Stripe.StripeException or TaskCanceledException)
+        {
+            log.LogWarning(ex, "Stripe's fee on store order {OrderId} could not be read yet; the sweep will ask again.", orderId);
+            return false;
+        }
     }
 
     public static string TaxReference(StoreOrder order) => $"{order.OrderNumber}-{order.Id.ToString("N")[..8]}";

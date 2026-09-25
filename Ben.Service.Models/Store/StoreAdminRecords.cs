@@ -179,13 +179,15 @@ public sealed record StoreSettingsAdminRecord(
     bool StoreIsOn, bool CheckoutEnabled, decimal? ShippingFlatRate, decimal? FreeShippingThreshold,
     int? LowStockThreshold, string? ShipFromStreet, string? ShipFromCity, string? ShipFromState,
     string? ShipFromZip, string? SupportEmail, int? ReturnsWindowDays, int? ReservationMinutes, bool LinkEnabled,
-    bool ReadyToSell, IReadOnlyList<string> NotReadyBecause, IReadOnlyList<string> TaxRegisteredStates);
+    bool ReadyToSell, IReadOnlyList<string> NotReadyBecause, IReadOnlyList<string> TaxRegisteredStates,
+    decimal? MarkupPercent = null, decimal? FeePercent = null, decimal? FeeFixed = null);
 
 /// <summary>Every store setting at once. Null = unset, so the default applies.</summary>
 public sealed record SaveStoreSettingsRequest(
     bool CheckoutEnabled, decimal? ShippingFlatRate, decimal? FreeShippingThreshold, int? LowStockThreshold,
     string? ShipFromStreet, string? ShipFromCity, string? ShipFromState, string? ShipFromZip,
-    string? SupportEmail, int? ReturnsWindowDays, int? ReservationMinutes, bool LinkEnabled);
+    string? SupportEmail, int? ReturnsWindowDays, int? ReservationMinutes, bool LinkEnabled,
+    decimal? MarkupPercent = null, decimal? FeePercent = null, decimal? FeeFixed = null);
 
 public sealed record StoreSales(decimal GrossUsd, decimal RefundedUsd, decimal NetUsd);
 

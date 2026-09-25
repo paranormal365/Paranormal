@@ -120,6 +120,25 @@ public static class StoreOrderDesk
             CanResendShipped: x.Carrier is not null)).ToList();
     }
 
+    /// <summary>
+    /// What the order came to for each side (store sellers P9), on what wasn't refunded: the sellers'
+    /// earnings and label credits, the store's margin, and what Stripe kept.
+    /// </summary>
+    public static StoreOrderEconomicsRecord Economics(StoreOrder o)
+    {
+        var lines = o.Items.OrderBy(i => i.DateCreated).Select(i => new StoreOrderEconomicsLine(
+            i.Id, i.UnitCostBasis, i.UnitSellerAsk, i.UnitSellerEarning, i.UnitSiteMarkup)).ToList();
+        var kept = o.Items.Select(i => (Item: i, Units: i.Quantity - i.QuantityRefunded)).ToList();
+        var sellerEarnings = kept.Sum(x => x.Item.UnitSellerEarning * x.Units);
+        var itemsMarkup = kept.Sum(x => x.Item.UnitSiteMarkup * x.Units);
+        var live = o.Parcels.Where(x => x.Status != StoreParcelStatus.Cancelled).ToList();
+        var credits = live.Sum(x => x.SellerShippingCredit);
+        var shippingKept = o.Parcels.Sum(x => x.ShippingAmount) - o.Parcels.Sum(x => Math.Min(x.ShippingRefunded, x.ShippingAmount));
+        var margin = itemsMarkup - o.DiscountAmount + shippingKept - credits - (o.StripeFeeAmount ?? 0m);
+        return new StoreOrderEconomicsRecord(lines, StoreMoney.Round(sellerEarnings), credits, StoreMoney.Round(itemsMarkup),
+            o.DiscountAmount, shippingKept, o.StripeFeeAmount, o.StripeNetAmount, StoreMoney.Round(margin));
+    }
+
     /// <summary>The payment in Stripe's dashboard, test or live by the key in use; null when there is none to open.</summary>
     public static string? DashboardUrl(StoreOrder o, string? secretKey)
         => RealPayment(o) && !o.StripePaymentIntentId!.StartsWith("pi_fake_", StringComparison.Ordinal)
@@ -161,7 +180,7 @@ public static class StoreOrderDesk
             o.RefundedAmount, refundable, o.CouponCode, StoreOrderViews.SoleShipment(o).Carrier, StoreOrderViews.SoleShipment(o).Number,
             StoreOrderViews.SoleShipment(o).Url,
             o.NeedsAttention, o.AttentionReason, o.StripePaymentIntentId, o.StripeTaxTransactionId, DashboardUrl(o, secretKey),
-            refunds, events, Abilities(o, refundable), o.ReservationExpiresUtc, ParcelsFor(o));
+            refunds, events, Abilities(o, refundable), o.ReservationExpiresUtc, ParcelsFor(o), Economics(o));
     }
 
     /// <summary>One row per order item — what a spreadsheet of sales wants.</summary>

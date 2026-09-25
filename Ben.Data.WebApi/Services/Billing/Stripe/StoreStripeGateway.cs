@@ -60,6 +60,9 @@ public sealed class StoreStripeRefusedException(string? code, string? type, stri
 /// the SAME singleton <see cref="StripeGateway"/> in production, or <see cref="FakeStoreStripeGateway"/>
 /// in a Development test checkout (<c>StoreStripeMode</c>).
 /// </summary>
+/// <summary>Stripe's fee on a payment and what reached the balance, in cents.</summary>
+public sealed record StoreChargeFee(long FeeCents, long NetCents);
+
 public interface IStoreStripeGateway
 {
     bool IsConfigured { get; }
@@ -76,6 +79,12 @@ public interface IStoreStripeGateway
     Task<string> GetClientSecretAsync(string paymentIntentId, CancellationToken ct);
 
     Task<StoreRefundOutcome> CreateRefundAsync(StoreRefundSpec spec, CancellationToken ct);
+
+    /// <summary>
+    /// What Stripe kept of a payment, from its charge's balance transaction (store sellers P9); null
+    /// while the balance transaction isn't there yet — a sweep asks again later.
+    /// </summary>
+    Task<StoreChargeFee?> GetChargeFeeAsync(string paymentIntentId, CancellationToken ct);
 
     /// <summary>Every refund Stripe holds on an intent — how a retry finds one it already made.</summary>
     Task<IReadOnlyList<StoreRefundOutcome>> ListRefundsAsync(string paymentIntentId, CancellationToken ct);

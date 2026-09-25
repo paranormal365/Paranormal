@@ -211,6 +211,36 @@
                                           OnPicture="@(x => PartPictureAsync(x.PartId, x.File))" OnRemovePicture="RemovePartPictureAsync">
                             <Help><HelpLink Slug="site-administration" Anchor="parts-and-cost" /></Help>
                         </StorePartsEditor>
+
+                        @* Store sellers P9: what a sale is worth to each side — the store's eyes only. *@
+                        @if (_economics.Item is { } e)
+                        {
+                            <div class="card mt-4" data-testid="product-economics">
+                                <div class="card-body small">
+                                    <h5 class="h6">Economics <HelpLink Slug="site-administration" Anchor="economics-and-fees" /></h5>
+                                    <div class="row g-3">
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Cost to make</div><div class="fs-6 fw-semibold">@StoreMoney.Format(e.CostBasis)</div></div>
+                                        @if (e.HasSeller)
+                                        {
+                                            <div class="col-6 col-md-3"><div class="text-secondary">Seller asks</div><div class="fs-6 fw-semibold">@(e.SellerAsk is { } ask ? StoreMoney.Format(ask) : "not approved yet")</div></div>
+                                            <div class="col-6 col-md-3"><div class="text-secondary">Seller earns a unit</div><div class="fs-6 fw-semibold" data-testid="economics-owed">@StoreMoney.Format(e.Owed)</div></div>
+                                        }
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Suggested price</div><div class="fs-6 fw-semibold" data-testid="economics-suggested">@StoreMoney.Format(e.SuggestedPrice)</div>
+                                            <div class="text-secondary">@e.MarkupPercent% markup, fee included</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Price</div><div class="fs-6 fw-semibold">@(e.Price is { } pr ? StoreMoney.Format(pr) : "not set")</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Card fee, bought alone</div><div class="fs-6 fw-semibold">@StoreMoney.Format(e.EstimatedFee)</div>
+                                            <div class="text-secondary">@e.FeePercent% + @StoreMoney.Format(e.FeeFixed)</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Store keeps a unit</div><div class="fs-6 fw-semibold @(e.BelowCost ? "text-danger" : null)" data-testid="economics-margin">@(e.Margin is { } m ? StoreMoney.Format(m) : "–")</div></div>
+                                    </div>
+                                    @if (e.BelowCost)
+                                    {
+                                        <div class="alert alert-danger py-2 mt-3 mb-0" data-testid="economics-below-cost">
+                                            At this price the store loses on every unit: it doesn't cover @(e.HasSeller ? "what the seller earns" : "what it costs") plus the card fee.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
                     </div>
                 </BenTab>
 
@@ -619,7 +649,13 @@
     private ItemResult<StorePartsRecord> _parts;
     private string? _partsError;
 
-    private async Task LoadPartsAsync() => _parts = await AdminClient.GetStoreProductPartsAsync(ProductId);
+    private ItemResult<StoreProductEconomicsRecord> _economics;
+
+    private async Task LoadPartsAsync()
+    {
+        _parts = await AdminClient.GetStoreProductPartsAsync(ProductId);
+        _economics = await AdminClient.GetStoreProductEconomicsAsync(ProductId);
+    }
 
     private async Task SavePartsAsync(SaveStorePartsRequest request)
     {
@@ -629,6 +665,7 @@
             var (saved, error) = await AdminClient.SaveStoreProductPartsAsync(ProductId, request);
             if (saved is null) { _partsError = error ?? "Saving failed."; return; }
             _parts = ItemResult<StorePartsRecord>.Ok(saved);
+            _economics = await AdminClient.GetStoreProductEconomicsAsync(ProductId);
             Toasts.Success("Parts saved.");
         }
         finally { _busy = false; }

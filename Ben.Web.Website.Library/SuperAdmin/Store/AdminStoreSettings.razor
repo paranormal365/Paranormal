@@ -94,6 +94,26 @@
                                 </div>
                             </div>
 
+                            @* Store sellers P9: what the economics panels suggest and estimate with. *@
+                            <h6>Prices and fees</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label small" for="store-markup">Markup (%)</label>
+                                    <input id="store-markup" type="number" step="0.01" min="0" max="100" class="form-control" placeholder="30" @bind="_form.MarkupPercent" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small" for="store-fee-percent">Card fee (%)</label>
+                                    <input id="store-fee-percent" type="number" step="0.01" min="0" max="100" class="form-control" placeholder="2.9" @bind="_form.FeePercent" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small" for="store-fee-fixed">Per payment ($)</label>
+                                    <input id="store-fee-fixed" type="number" step="0.01" min="0" class="form-control" placeholder="0.30" @bind="_form.FeeFixed" />
+                                </div>
+                                <div class="col-12 form-text">
+                                    For the suggested price and the fee estimate on each product. The fee an order really paid is read from Stripe.
+                                </div>
+                            </div>
+
                             @if (_error is not null)
                             {
                                 <div class="alert alert-danger py-2" id="store-settings-refusal">@_error</div>
@@ -172,6 +192,9 @@
         public int? ReturnsWindowDays { get; set; }
         public int? ReservationMinutes { get; set; }
         public bool LinkEnabled { get; set; }
+        public decimal? MarkupPercent { get; set; }
+        public decimal? FeePercent { get; set; }
+        public decimal? FeeFixed { get; set; }
     }
 
     protected override async Task OnInitializedAsync()
@@ -196,6 +219,7 @@
             LowStockThreshold = s.LowStockThreshold, ShipFromStreet = s.ShipFromStreet, ShipFromCity = s.ShipFromCity,
             ShipFromState = s.ShipFromState, ShipFromZip = s.ShipFromZip, SupportEmail = s.SupportEmail,
             ReturnsWindowDays = s.ReturnsWindowDays, ReservationMinutes = s.ReservationMinutes, LinkEnabled = s.LinkEnabled,
+            MarkupPercent = s.MarkupPercent, FeePercent = s.FeePercent, FeeFixed = s.FeeFixed,
         };
 
     private async Task SaveAsync()
@@ -206,7 +230,8 @@
             var (saved, error) = await AdminClient.SaveStoreSettingsAsync(new SaveStoreSettingsRequest(
                 _form.CheckoutEnabled, _form.ShippingFlatRate, _form.FreeShippingThreshold, _form.LowStockThreshold,
                 _form.ShipFromStreet, _form.ShipFromCity, _form.ShipFromState, _form.ShipFromZip, _form.SupportEmail,
-                _form.ReturnsWindowDays, _form.ReservationMinutes, _form.LinkEnabled));
+                _form.ReturnsWindowDays, _form.ReservationMinutes, _form.LinkEnabled,
+                _form.MarkupPercent, _form.FeePercent, _form.FeeFixed));
             if (saved is null) { _error = error ?? "Saving failed — nothing was changed."; return; }
             _result = ItemResult<StoreSettingsAdminRecord>.Ok(saved);
             Adopt(saved);

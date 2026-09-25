@@ -328,6 +328,24 @@ public class AdminStoreCatalogTests : BenTestBase
     }
 
     [Test]
+    [Description("The demo seller's REM pod shows its economics on the Parts & cost tab: $34.50 to make, $129.50 to its seller, the store's margin at $149.")]
+    public async Task The_economics_panel_says_what_each_side_gets()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var products = await api.SendAsync(HttpMethod.Get, "/api/admin/store/products?q=hand-built-rem-pod");
+        var id = products.EnumerateArray().First(p => p.GetProperty("slug").GetString() == "hand-built-rem-pod").GetProperty("id").GetGuid();
+
+        await Page.GotoAsync($"{BaseUrl}/admin/store/products/{id}/edit?tab=parts");
+        await WaitForTheCircuitAsync();
+
+        var panel = Page.Locator("[data-testid=product-economics]");
+        await Expect(panel).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(panel).ToContainTextAsync("$34.50");
+        await Expect(panel.Locator("[data-testid=economics-owed]")).ToHaveTextAsync("$129.50");
+        await Expect(panel.Locator("[data-testid=economics-below-cost]")).ToHaveCountAsync(0);
+    }
+
+    [Test]
     [Description("Hiding a category says how many live products go with it BEFORE saving, then hides them.")]
     public async Task Category_deactivate_warns_about_live_products()
     {

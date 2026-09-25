@@ -246,13 +246,22 @@ public static class SiteSettingKeys
     /// <summary>Offer Stripe Link in the payment form. Off at launch (Ben, 09/24/2026).</summary>
     public const string StoreLinkEnabled = "store.link-enabled";
 
+    /// <summary>The store's markup over cost and the seller's ask, as a percentage — the suggested price (store sellers P9).</summary>
+    public const string StoreMarkupPercent = "store.markup-percent";
+
+    /// <summary>Stripe's fee as a percentage of a payment, for the estimate before the real fee is known.</summary>
+    public const string StoreFeePercent = "store.fee-percent";
+
+    /// <summary>Stripe's fixed fee per payment, in dollars, for the same estimate.</summary>
+    public const string StoreFeeFixedUsd = "store.fee-fixed-usd";
+
     /// <summary>The store's keys in the order its settings page and the read-only group show them.</summary>
     public static readonly string[] StoreKeys =
     [
         StoreCheckoutEnabled, StoreShippingFlatRateUsd, StoreFreeShippingThresholdUsd,
         StoreLowStockThreshold, StoreShipFromStreet, StoreShipFromCity, StoreShipFromState,
         StoreShipFromZip, StoreSupportEmail, StoreReturnsWindowDays, StoreReservationMinutes,
-        StoreLinkEnabled,
+        StoreLinkEnabled, StoreMarkupPercent, StoreFeePercent, StoreFeeFixedUsd,
     ];
 
     /// <summary>The section the store keys are filed under, on both settings pages.</summary>
@@ -330,9 +339,9 @@ public static class SiteSettingKeys
         (StoreCheckoutEnabled, "Take orders",
             "Off pauses checkout while the catalogue stays visible — every cart and the checkout page say the store isn't taking orders at the moment. Orders already paid carry on. Hiding the shop altogether is 'Feature — Store' under Features."),
         (StoreShippingFlatRateUsd, "Flat shipping rate ($)",
-            "Charged once per order. Leave empty for $0."),
+            "Charged once per package — each seller ships their own. A seller is credited this for every package they send. Leave empty for $0."),
         (StoreFreeShippingThresholdUsd, "Free shipping over ($)",
-            "Orders whose product total after discount reaches this ship free. Leave empty to never ship free."),
+            "A package whose items, after any discount, reach this ships free. Leave empty to never ship free."),
         (StoreLowStockThreshold, "Low-stock note at",
             "Cards and the product page say 'Only N left' at or below this; the daily stock digest uses it too. Leave empty for 3."),
         (StoreShipFromStreet, "Ship-from street",
@@ -349,6 +358,12 @@ public static class SiteSettingKeys
             "Shown on the product page, the order page and the invoice. Leave empty for 30."),
         (StoreReservationMinutes, "Checkout reservation (minutes)",
             "How long stock and a discount code are held for a buyer who has reached the payment step. Leave empty for 15."),
+        (StoreMarkupPercent, "Store markup (%)",
+            "What the store adds over an item's cost and its seller's asking price, for the suggested price on a product's economics panel. Leave empty for 30."),
+        (StoreFeePercent, "Card fee (%)",
+            "Stripe's percentage fee, for the fee estimate before the real one is known. Leave empty for 2.9."),
+        (StoreFeeFixedUsd, "Card fee per payment ($)",
+            "Stripe's fixed fee on each payment, for the same estimate. Leave empty for $0.30."),
         (StoreLinkEnabled, "Offer Stripe Link",
             "When on, the payment form also offers Link, Stripe's saved-card checkout. Link has to be activated in the Stripe dashboard first. Off by default — cards, Apple Pay and Google Pay work either way."),
 

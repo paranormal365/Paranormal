@@ -306,6 +306,8 @@ public sealed class StoreCheckoutService(
         };
 
         var sellerNames = p.SellerNames;
+        // What each line is worth to its seller and to the store, fixed now (store sellers P9).
+        var costs = await StoreCostBasisReader.ReadAsync(db, p.Lines.Select(l => l.Product.Id).Distinct().ToList(), ct);
 
         var pictures = await db.StoreProductImages.AsNoTracking()
             .Where(i => p.Lines.Select(l => l.Product.Id).Contains(i.ProductId))
@@ -356,6 +358,12 @@ public sealed class StoreCheckoutService(
                     StripeTaxCode = l.Product.StripeTaxCode,
                     ImageUploadFileId = (pictures.Where(x => x.VariantId == l.Variant.Id).OrderBy(x => x.SortOrder).FirstOrDefault()
                                       ?? pictures.Where(x => x.ProductId == l.Product.Id).OrderBy(x => x.SortOrder).FirstOrDefault())?.UploadFileId,
+                    UnitCostBasis = costs.GetValueOrDefault(l.Product.Id),
+                    UnitSellerAsk = l.Product.SellerAppUserId is null ? 0m : l.Product.SellerAskPerUnit ?? 0m,
+                    UnitSellerEarning = StoreEconomics.SellerEarning(l.Product.SellerAppUserId is not null, costs.GetValueOrDefault(l.Product.Id), l.Product.SellerAskPerUnit),
+                    UnitSiteMarkup = StoreEconomics.Markup(l.Variant.Price, l.Product.SellerAppUserId is not null
+                        ? StoreEconomics.SellerEarning(true, costs.GetValueOrDefault(l.Product.Id), l.Product.SellerAskPerUnit)
+                        : costs.GetValueOrDefault(l.Product.Id)),
                     DateCreated = now,
                 });
             }

@@ -107,6 +107,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>Set when the buyer's account was deleted while the order was still in flight.</summary>
         public DateTime? PendingAnonymisationSinceUtc { get; set; }
 
+        /// <summary>What Stripe kept of the payment, read from its balance transaction after payment (store sellers P9); null until known.</summary>
+        public decimal? StripeFeeAmount { get; set; }
+
+        /// <summary>What reached the store's balance: the payment less Stripe's fee. Refunds don't change the fee — Stripe keeps it.</summary>
+        public decimal? StripeNetAmount { get; set; }
+
         /// <summary>Its packages, one per seller (store sellers P5).</summary>
         public virtual ICollection<StoreOrderParcel> Parcels { get; set; } = [];
 

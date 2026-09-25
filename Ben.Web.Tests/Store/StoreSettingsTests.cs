@@ -161,7 +161,7 @@ public sealed class StoreSettingsValidationTests
     [Fact]
     public void Every_store_key_is_declared_filed_under_Store_and_checked()
     {
-        Assert.Equal(12, SiteSettingKeys.StoreKeys.Length);
+        Assert.Equal(15, SiteSettingKeys.StoreKeys.Length);   // store sellers P9 added the markup and the two fee settings
         Assert.Equal(SiteSettingKeys.StoreKeys,
             SiteSettingKeys.Groups.Single(g => g.Name == SiteSettingKeys.StoreGroupName).Keys);
         Assert.All(SiteSettingKeys.StoreKeys, key =>

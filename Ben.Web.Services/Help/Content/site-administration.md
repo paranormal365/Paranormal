@@ -1214,6 +1214,26 @@ product's **cost basis**, rounded to the cent once at the end. A seller keeps th
 the store keeps the list for its own stock. A seller is paid cost basis plus their approved asking
 price for each unit sold. None of it is ever shown to shoppers.
 
+## Economics and fees
+
+A product's **Parts & cost** tab ends with its **Economics**: what a unit costs to make, what its
+seller asks and earns (cost + asking price), the price, the card fee on one bought alone, and what
+the store keeps. **Suggested price** covers the seller's earning (or the cost of the store's own
+stock), adds the store's markup, and leaves room for the card fee. A price that wouldn't cover the
+seller's earning plus the fee is flagged in red.
+
+The markup and the fee estimate are on **Store Settings → Prices and fees** (30%, 2.9% and $0.30
+unless changed). The estimate is for one unit bought alone; an order of several pays the fixed part
+once.
+
+**What an order came to** is fixed at checkout on every line — its cost, the seller's ask and
+earning, and the store's markup — so later changes to a parts list or an asking price change the
+next order, never one already placed. An order's **Economics** card shows the sellers' earnings and
+label credits, the items' markup less the discount, the shipping the store kept, the card fee Stripe
+really took (read from Stripe shortly after payment; "not known yet" until then) and what the store
+keeps — on what wasn't refunded. Stripe keeps its fee when a payment is refunded; the store absorbs
+discount codes and fees.
+
 ## A product's history
 
 The **History** tab on a product lists every change to it, newest first: who made it, when, and

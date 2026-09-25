@@ -69,6 +69,9 @@ public sealed class AdminStoreSettingsController(
             (SiteSettingKeys.StoreReturnsWindowDays, Whole(request.ReturnsWindowDays)),
             (SiteSettingKeys.StoreReservationMinutes, Whole(request.ReservationMinutes)),
             (SiteSettingKeys.StoreLinkEnabled, request.LinkEnabled ? "true" : "false"),
+            (SiteSettingKeys.StoreMarkupPercent, Money(request.MarkupPercent)),
+            (SiteSettingKeys.StoreFeePercent, Money(request.FeePercent)),
+            (SiteSettingKeys.StoreFeeFixedUsd, Money(request.FeeFixed)),
         };
 
         var checkedValues = new List<(string Key, string? Value)>();
@@ -119,7 +122,8 @@ public sealed class AdminStoreSettingsController(
             Text(SiteSettingKeys.StoreShipFromState), Text(SiteSettingKeys.StoreShipFromZip),
             Text(SiteSettingKeys.StoreSupportEmail),
             Whole(SiteSettingKeys.StoreReturnsWindowDays), Whole(SiteSettingKeys.StoreReservationMinutes),
-            s.LinkEnabled, reasons.Count == 0, reasons, tax.RegisteredStates);
+            s.LinkEnabled, reasons.Count == 0, reasons, tax.RegisteredStates,
+            Money(SiteSettingKeys.StoreMarkupPercent), Money(SiteSettingKeys.StoreFeePercent), Money(SiteSettingKeys.StoreFeeFixedUsd));
     }
 
     /// <summary>Every reason the store could not take an order now, in the order to fix them.</summary>

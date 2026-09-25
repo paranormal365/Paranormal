@@ -235,6 +235,8 @@ namespace Ben.Data.Source.Context
             order.Property(e => e.BuyerNotes).HasMaxLength(1000);
             order.Property(e => e.AdminNotes).HasMaxLength(2000);
             order.Property(e => e.AttentionReason).HasMaxLength(300);
+            order.Property(e => e.StripeFeeAmount).HasPrecision(18, 2);
+            order.Property(e => e.StripeNetAmount).HasPrecision(18, 2);
             order.HasIndex(e => e.OrderNumber).IsUnique();
             // The webhook's idempotency key and the order's identity at Stripe.
             order.HasIndex(e => e.StripePaymentIntentId).IsUnique().HasFilter("[StripePaymentIntentId] IS NOT NULL");
@@ -267,6 +269,10 @@ namespace Ben.Data.Source.Context
             item.Property(e => e.LineDiscount).HasPrecision(18, 2);
             item.Property(e => e.TaxAmount).HasPrecision(18, 2);
             item.Property(e => e.StripeTaxCode).HasMaxLength(32);
+            item.Property(e => e.UnitCostBasis).HasPrecision(18, 2);
+            item.Property(e => e.UnitSellerAsk).HasPrecision(18, 2);
+            item.Property(e => e.UnitSellerEarning).HasPrecision(18, 2);
+            item.Property(e => e.UnitSiteMarkup).HasPrecision(18, 2);
             item.HasIndex(e => e.OrderId);
             item.HasIndex(e => e.VariantId);
             item.HasIndex(e => new { e.ProductId, e.OrderId });

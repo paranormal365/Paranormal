@@ -73,7 +73,8 @@ public sealed record StoreOrderDetailAdminRecord(
     bool NeedsAttention, string? AttentionReason,
     string? StripePaymentIntentId, string? StripeTaxTransactionId, string? StripeDashboardUrl,
     IReadOnlyList<StoreRefundRecord> Refunds, IReadOnlyList<StoreOrderEventRecord> Events,
-    StoreOrderAbilities Can, DateTime? ReservationExpiresUtc, IReadOnlyList<StoreOrderParcelAdminRecord>? Parcels = null);
+    StoreOrderAbilities Can, DateTime? ReservationExpiresUtc, IReadOnlyList<StoreOrderParcelAdminRecord>? Parcels = null,
+    StoreOrderEconomicsRecord? Economics = null);
 
 /// <summary>
 /// One package of an order on the order desk (store sellers, backlog 251, P7): whose it is, what it

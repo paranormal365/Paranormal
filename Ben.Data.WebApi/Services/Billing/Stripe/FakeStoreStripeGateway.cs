@@ -86,6 +86,14 @@ public sealed class FakeStoreStripeGateway : IStoreStripeGateway
         return Task.FromResult(new StoreRefundOutcome($"re_fake_{spec.IdempotencyKey}", RefundStatus, spec.Metadata));
     }
 
+    /// <summary>The fake fee: Stripe's US card rate, 2.9% + 30¢ of the intent's amount.</summary>
+    public Task<StoreChargeFee?> GetChargeFeeAsync(string paymentIntentId, CancellationToken ct)
+    {
+        if (!Intents.TryGetValue(paymentIntentId, out var intent)) return Task.FromResult<StoreChargeFee?>(null);
+        var fee = (long)Math.Round(intent.AmountCents * 0.029m, MidpointRounding.AwayFromZero) + 30;
+        return Task.FromResult<StoreChargeFee?>(new StoreChargeFee(fee, intent.AmountCents - fee));
+    }
+
     public Task<IReadOnlyList<StoreRefundOutcome>> ListRefundsAsync(string paymentIntentId, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<StoreRefundOutcome>>(Refunds.Where(r => r.PaymentIntentId == paymentIntentId)
             .Select(r => new StoreRefundOutcome($"re_fake_{r.IdempotencyKey}", RefundStatus, r.Metadata)).ToList());

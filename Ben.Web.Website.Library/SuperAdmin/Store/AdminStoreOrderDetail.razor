@@ -183,6 +183,25 @@
             }
         </div>
 
+        @* Store sellers P9: what the order came to for each side, on what wasn't refunded. *@
+        @if (o.Economics is { } econ && o.PaidUtc is not null)
+        {
+            <div class="card mb-3" data-testid="order-economics">
+                <div class="card-body small">
+                    <h4 class="h6 fw-bold">Economics <HelpLink Slug="site-administration" Anchor="economics-and-fees" /></h4>
+                    <div class="row g-3">
+                        <div class="col-6 col-md-2"><div class="text-secondary">Sellers earn</div><div class="fw-semibold">@StoreMoney.Format(econ.SellerEarnings)</div></div>
+                        <div class="col-6 col-md-2"><div class="text-secondary">Label credits</div><div class="fw-semibold">@StoreMoney.Format(econ.SellerShippingCredits)</div></div>
+                        <div class="col-6 col-md-2"><div class="text-secondary">Items' markup</div><div class="fw-semibold">@StoreMoney.Format(econ.ItemsMarkup)</div></div>
+                        <div class="col-6 col-md-2"><div class="text-secondary">Discount</div><div class="fw-semibold">−@StoreMoney.Format(econ.Discount)</div></div>
+                        <div class="col-6 col-md-2"><div class="text-secondary">Card fee</div><div class="fw-semibold" data-testid="order-economics-fee">@(econ.StripeFee is { } fee ? StoreMoney.Format(fee) : "not known yet")</div></div>
+                        <div class="col-6 col-md-2"><div class="text-secondary">Store keeps</div><div class="fw-semibold" data-testid="order-economics-margin">@StoreMoney.Format(econ.StoreMargin)</div></div>
+                    </div>
+                    <div class="text-secondary mt-2">Sales tax passes through to the state and isn't counted. The store's own labels aren't counted either.</div>
+                </div>
+            </div>
+        }
+
         <div class="table-responsive mb-3">
             <table class="table align-middle mb-0" style="min-width:36rem;">
                 <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Line</th><th class="text-end">Refunded</th></tr></thead>

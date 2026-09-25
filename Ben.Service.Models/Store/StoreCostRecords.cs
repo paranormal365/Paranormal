@@ -69,3 +69,31 @@ public static class StoreCostMath
         return least;
     }
 }
+
+// ── Economics (P9) — the store's alone ───────────────────────────────────────
+
+/// <summary>
+/// What a product's sale is worth to each side, for the store's economics panel (store sellers P9).
+/// </summary>
+/// <param name="Owed">What a unit must pay out before the store earns: the seller's earning (cost + ask), or the cost of the store's own stock.</param>
+/// <param name="Price">The lowest live variant price; null while unpriced.</param>
+/// <param name="EstimatedFee">Stripe's fee on one unit bought alone at <paramref name="Price"/>.</param>
+/// <param name="Margin">What the store keeps of a unit at that price after the fee; null while unpriced.</param>
+/// <param name="BelowCost">The price doesn't cover what's owed plus the fee.</param>
+public sealed record StoreProductEconomicsRecord(
+    decimal CostBasis, bool HasSeller, decimal? SellerAsk, decimal Owed, decimal? Price, decimal? MaxPrice, decimal EstimatedFee,
+    decimal? Margin, decimal SuggestedPrice, bool BelowCost, decimal MarkupPercent, decimal FeePercent, decimal FeeFixed);
+
+/// <summary>One order line's economics, as fixed at checkout.</summary>
+public sealed record StoreOrderEconomicsLine(
+    Guid ItemId, decimal UnitCostBasis, decimal UnitSellerAsk, decimal UnitSellerEarning, decimal UnitSiteMarkup);
+
+/// <summary>
+/// What an order came to for each side (store sellers P9): the sellers' earnings and label credits,
+/// what Stripe kept, and the store's margin — on what wasn't refunded.
+/// </summary>
+/// <param name="StripeFee">Null until read from Stripe.</param>
+/// <param name="StoreMargin">Items' markup less the discount, plus shipping kept less sellers' label credits, less the fee (when known).</param>
+public sealed record StoreOrderEconomicsRecord(
+    IReadOnlyList<StoreOrderEconomicsLine> Lines, decimal SellerEarnings, decimal SellerShippingCredits, decimal ItemsMarkup,
+    decimal Discount, decimal ShippingKept, decimal? StripeFee, decimal? StripeNet, decimal StoreMargin);

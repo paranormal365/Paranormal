@@ -121,6 +121,13 @@ public sealed partial class StripeGateway
         }
     }
 
+    public async Task<StoreChargeFee?> GetChargeFeeAsync(string paymentIntentId, CancellationToken ct)
+    {
+        var intent = await new PaymentIntentService(StoreClient).GetAsync(paymentIntentId,
+            new PaymentIntentGetOptions { Expand = ["latest_charge.balance_transaction"] }, cancellationToken: ct);
+        return intent.LatestCharge?.BalanceTransaction is { } balance ? new StoreChargeFee(balance.Fee, balance.Net) : null;
+    }
+
     public async Task<IReadOnlyList<StoreRefundOutcome>> ListRefundsAsync(string paymentIntentId, CancellationToken ct)
     {
         var list = await new RefundService(StoreClient).ListAsync(

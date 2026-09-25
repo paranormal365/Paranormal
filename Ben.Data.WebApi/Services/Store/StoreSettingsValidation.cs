@@ -48,6 +48,14 @@ public static partial class StoreSettingsValidation
             SiteSettingKeys.StoreFreeShippingThresholdUsd
                 => Dollars(value, "The free-shipping threshold can't be negative.", "The free-shipping threshold"),
 
+            SiteSettingKeys.StoreFeeFixedUsd
+                => Dollars(value, "The card fee can't be negative.", "The card fee per payment"),
+            SiteSettingKeys.StoreMarkupPercent or SiteSettingKeys.StoreFeePercent
+                => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var pct) && pct >= 0m && pct <= 100m
+                   && pct == Math.Round(pct, 2)
+                    ? (pct.ToString("0.##", CultureInfo.InvariantCulture), null)
+                    : (null, $"{SiteSettingsService.LabelFor(key)} is a percentage from 0 to 100, like 2.9."),
+
             SiteSettingKeys.StoreLowStockThreshold   => Whole(value, 0, 100, "Low-stock warning is 0 to 100."),
             SiteSettingKeys.StoreReturnsWindowDays   => Whole(value, 0, 365, "Returns window is 0 to 365 days."),
             SiteSettingKeys.StoreReservationMinutes  => Whole(value, 5, 240, "Reservation is 5 to 240 minutes."),

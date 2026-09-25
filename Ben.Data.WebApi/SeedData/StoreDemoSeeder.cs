@@ -498,6 +498,16 @@ internal static class StoreDemoSeeder
             var order = BuildOrder(seed, buyer, variants, pictures, placed);
 
             // One package per seller: the store's own stock carries the order's shipping; Hazel's shipped free and is credited the rate.
+            // What each line was worth to each side at checkout (store sellers P9).
+            foreach (var item in order.Items)
+            {
+                var v = variants.Values.First(x => x.Id == item.VariantId);
+                var isHers = v.Product.SellerAppUserId is not null;
+                item.UnitCostBasis = isHers ? HazelRemPodCost : 0m;
+                item.UnitSellerAsk = isHers ? HazelAsk : 0m;
+                item.UnitSellerEarning = isHers ? HazelRemPodCost + HazelAsk : 0m;
+                item.UnitSiteMarkup = item.UnitPrice - (isHers ? HazelRemPodCost + HazelAsk : 0m);
+            }
             var only = order.Parcels.Single();
             order.Parcels.Clear();
             var n = 1;

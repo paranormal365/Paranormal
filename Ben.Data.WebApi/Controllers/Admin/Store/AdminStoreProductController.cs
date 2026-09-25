@@ -449,6 +449,28 @@ public sealed partial class AdminStoreProductController(
 
     // ── parts and cost (store sellers P4) ────────────────────────────────────
 
+    /// <summary>What a sale of this product is worth to each side (store sellers P9) — never a shopper's to see.</summary>
+    [HttpGet("{id:guid}/economics")]
+    public async Task<ActionResult<StoreProductEconomicsRecord>> Economics(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var p = await db.StoreProducts.AsNoTracking().Where(x => x.Id == id)
+            .Select(x => new { x.SellerAppUserId, x.SellerAskPerUnit, x.MinPrice, x.MaxPrice }).FirstOrDefaultAsync(ct);
+        if (p is null) return NotFound();
+        var settings = await StoreSettingsReader.ReadAsync(db, ct);
+        var cost = (await StoreCostBasisReader.ReadAsync(db, [id], ct)).GetValueOrDefault(id);
+        var hasSeller = p.SellerAppUserId is not null;
+        var owed = hasSeller ? StoreEconomics.SellerEarning(true, cost, p.SellerAskPerUnit) : cost;
+        decimal? price = p.MaxPrice > 0 ? p.MinPrice : null;
+        var fee = price is { } at ? StoreEconomics.EstimatedFee(at, settings.FeePercent, settings.FeeFixed) : 0m;
+        return Ok(new StoreProductEconomicsRecord(
+            cost, hasSeller, p.SellerAskPerUnit, owed, price, p.MaxPrice > 0 ? p.MaxPrice : null, fee,
+            price is { } priced ? StoreMoney.Round(priced - owed - fee) : null,
+            StoreEconomics.SuggestedPrice(owed, settings.MarkupPercent, settings.FeePercent, settings.FeeFixed),
+            price is { } check && StoreEconomics.BelowCost(check, owed, settings.FeePercent, settings.FeeFixed),
+            settings.MarkupPercent, settings.FeePercent, settings.FeeFixed));
+    }
+
     [HttpGet("{id:guid}/parts")]
     public async Task<ActionResult<StorePartsRecord>> Parts(Guid id, CancellationToken ct)
     {
