@@ -86,6 +86,12 @@ public static class MailSampleRows
                 "RefundReason" => ("Arrived damaged", false),
                 "RefundLines" => (MailBlocks.LineItems(), true),
                 "StockTable" => (MailBlocks.LineItems(), true),
+
+                "AcceptButton" => (MailBlocks.Button("Say yes and see what you need", url), true),
+                "Venue" => ("The Thomas House Hotel", false),
+                "Role" => ("Door", false),
+                "CanDo" => ("<ul><li>scan passes at the door and mark people in</li>"
+                          + "<li>see who is coming, including their names and anything they cannot eat</li></ul>", true),
                 _ => (url, false),
             };
         }

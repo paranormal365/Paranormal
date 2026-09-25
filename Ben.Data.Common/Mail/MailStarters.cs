@@ -194,7 +194,26 @@ public static class MailStarters
             MailBlocks.Card("The details", "Written out here: where, when, and anything to bring."),
             MailBlocks.Button("Answer", "{SiteUrl}"),
             MailBlocks.Paragraph("If this was not meant for you, ignore it.")),
-        [MailKinds.StaffInvite.Key, MailKinds.EventAnnouncement.Key]);
+        [MailKinds.EventAnnouncement.Key]);
+
+    /// <summary>
+    /// Asking somebody to help. Its own starter because the generic invitation has no accept link,
+    /// and <see cref="For"/> rightly will not offer a letter that would be refused on save.
+    /// </summary>
+    public static readonly MailStarter HelpAtAnEvent = new(
+        "help-at-an-event", "Asking somebody to help",
+        "Who is asking, where and when, what accepting lets them do, and the button that says yes.",
+        "Can you help at {HostedEvents.Name}?",
+        Branded(
+            MailBlocks.Heading("Can you help?"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. <strong>{Organizations.Name}</strong> has asked "
+                               + "you to help at <strong>{HostedEvents.Name}</strong>, starting {HostedEvents.StartsOn}."),
+            MailBlocks.Paragraph("Accepting lets you:"),
+            "{CanDo}",
+            "{AcceptButton}",
+            MailBlocks.Paragraph("The link works once and lasts a fortnight. If you were not expecting "
+                               + "this, ignore it — nothing happens until you click.")),
+        [MailKinds.StaffInvite.Key]);
 
     public static readonly MailStarter AccountMade = new(
         "account-made", "An account somebody else made",
@@ -288,7 +307,7 @@ public static class MailStarters
 
     public static readonly IReadOnlyList<MailStarter> All =
     [
-        Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
+        Confirmation, PasswordReset, Receipt, Invoice, Invitation, HelpAtAnEvent, AccountMade, HoldPlaces,
         RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink,
         OrderShipped, OrderRefunded, LowStock, SellerParcelToShip, Plain,
     ];
