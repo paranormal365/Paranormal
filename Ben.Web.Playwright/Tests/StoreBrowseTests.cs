@@ -172,7 +172,9 @@ public class StoreBrowseTests : BenTestBase
         await api.SetStockAsync(product, 0);
         var slug = product.GetProperty("slug").GetString()!;
 
-        await Page.GotoAsync($"{BaseUrl}/store/products");
+        // Found by name, not by its place on page one: "Popular" ranks by units sold, and since the
+        // product's own count is kept (store sellers P0) whatever earlier runs bought outranks it.
+        await Page.GotoAsync($"{BaseUrl}/store/products?q={Uri.EscapeDataString("P-SB7 Spirit Box")}");
         await Expect(Card("p-sb7-spirit-box")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await Expect(Card("p-sb7-spirit-box")).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("ben-card--soldout"));
 

@@ -428,6 +428,8 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe>(sp 
 // S4.4-S4.5: the store's letters (through the outbox) and its bells.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreAlerts>();
+// Store sellers (backlog 251): the bells between sellers and the store.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreSellerAlerts>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderPayments>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreCheckoutService>();
 // The order desk (storefront S5.3): refunds and the journey after payment.

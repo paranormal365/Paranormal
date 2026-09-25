@@ -50,6 +50,8 @@
                 <div class="col-6 col-lg-3"><StatCard Label="To ship" Value="@d.OrdersToShip.ToString()" Icon="truck" Href="/admin/store/orders?status=Packed" LinkLabel="Open the orders to ship" /></div>
                 <div class="col-6 col-lg-3"><StatCard Label="Needs attention" Value="@d.OrdersNeedingAttention.ToString()" Icon="alert-triangle" HigherIsBetter="false" Href="/admin/store/orders?attention=true" LinkLabel="Open the orders needing attention" /></div>
                 <div class="col-6 col-lg-3"><StatCard Label="Reviews waiting" Value="@d.ReviewsPending.ToString()" Icon="message-square" HigherIsBetter="false" Href="/admin/store/reviews" LinkLabel="Open the review queue" /></div>
+                @* Store sellers P3: sellers asking for their items to go on sale. *@
+                <div class="col-6 col-lg-3"><StatCard Label="Sale requests" Value="@d.SaleRequestsWaiting.ToString()" Icon="inbox" HigherIsBetter="false" Href="/admin/store/sale-requests" LinkLabel="Open the sale requests" /></div>
             </div>
 
             <div class="row g-3 mb-3">

@@ -1167,6 +1167,24 @@ variant, so choosing that colour shows that photograph. Every picture is stored 
 the camera details and location are removed — sized for a sharp product page, with a small copy
 for cards and the cart. A live product keeps at least one picture.
 
+## Sellers and sale requests
+
+A member with the **Seller** role (given on their Site Roles tab) has a **Selling** section of their
+own. There they add items as hidden drafts and edit their words, pictures, options, variants and
+stock — never the price, web address, placement, tax code or seller, and never another seller's
+item. A variant they add starts switched off and unpriced.
+
+A seller's item goes on sale only when they ask. **Store → Sale Requests** lists the requests
+waiting, oldest first, each with what the seller wants a unit (on top of cost) and what the item
+still needs before it can go on sale. Set the selling price on the item's **Options & variants**
+tab, then press **Approve and put on sale** — this fixes the seller's asking price onto the item as
+what they are paid. Or press **Decline…** and say why; the seller reads it. The dashboard's **Sale
+requests** tile and a **Waiting** badge on the products list show when any are waiting.
+
+**Put on sale** isn't offered on a seller's item: approving their request is the way, because it
+records what they are paid. A seller can take their own item off sale at any time, and the
+SuperAdmins get a message when they do.
+
 ## A product's history
 
 The **History** tab on a product lists every change to it, newest first: who made it, when, and

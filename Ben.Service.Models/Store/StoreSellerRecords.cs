@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Store;
 
 // Store sellers (backlog 251): what a seller's workspace reads. A seller works only on their own
@@ -50,3 +52,33 @@ public sealed record SellerProductListRecord(
 
 /// <summary>The counts at the top of the workspace.</summary>
 public sealed record SellerWorkspaceSummary(int Drafts, int OnSale, int OffSale);
+
+// ── The seller's editor (P3) ─────────────────────────────────────────────────
+// Every request below is the admin's with the store's fields left out — price, web address,
+// placement, featuring, tax and seller. SellerRequestsCarryNoStoreFieldsTests holds them to it.
+
+/// <summary>A new draft: a name and, optionally, a shelf.</summary>
+public sealed record CreateSellerItemRequest(string Name, Guid? CategoryId = null);
+
+/// <summary>The words about an item. The store's fields are not here to send.</summary>
+public sealed record SaveSellerItemRequest(
+    Guid CategoryId, string Name, string? ShortDescription, string? LongDescriptionHtml,
+    IReadOnlyList<StoreSpecGroup> Specs, DateTime? ExpectedDateUpdated);
+
+/// <summary>A variant, without its price: a new one starts off and unpriced until the store prices it.</summary>
+public sealed record SaveSellerVariantRequest(
+    string Sku, bool IsActive, bool IsDefault, int SortOrder, IReadOnlyList<Guid> OptionValueIds, int? InitialStock = null);
+
+/// <summary>Asking the store to put an item on sale, and what the seller wants a unit for it.</summary>
+public sealed record SellerSaleRequest(decimal AskingPrice, string? Note);
+
+/// <summary>A shelf a seller can file an item under.</summary>
+public sealed record SellerCategoryRecord(Guid Id, string Name);
+
+/// <summary>
+/// One of the seller's items, whole, for their editor: the item as the store's editor sees it,
+/// where it stands, and the request that is waiting or was last answered.
+/// </summary>
+public sealed record SellerItemRecord(
+    StoreProductAdminRecord Item, StoreSellerItemStatus Status, decimal? SellerAskPerUnit, StoreSaleRequestRecord? Request);
+

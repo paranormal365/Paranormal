@@ -64,6 +64,8 @@ public class AdminPageTests : BenTestBase
         ("/admin/store/reviews",       "Only approved ones count"),
         ("/admin/store/settings",      "Store Settings"),
         ("/admin/store/orders",        "Pack, ship and refund"),
+        // Store sellers P3: sellers asking for their items to go on sale.
+        ("/admin/store/sale-requests", "Sellers ask for their items to go on sale"),
     };
 
     [Test]

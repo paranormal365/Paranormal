@@ -49,6 +49,73 @@ public class StoreSellerWorkspaceTests : BenTestBase
     }
 
     [Test]
+    [Description("Hazel makes a draft with a picture and asks for it to go on sale; the store prices it and approves; she takes it off sale.")]
+    public async Task A_draft_goes_on_sale_by_asking_and_comes_off_by_the_seller()
+    {
+        var name = $"Spirit Lantern {Guid.NewGuid().ToString("N")[..6]}";
+
+        // The seller: a draft, a picture, and the ask.
+        await LoginAsync(SellerEmail, SellerPassword);
+        await Page.GotoAsync($"{BaseUrl}/store/selling");
+        await WaitForTheCircuitAsync();
+        await ClickUntilAsync(Page.Locator("#seller-add"), Page.Locator("#new-item-name"));
+        await FillAndConfirmAsync("#new-item-name", name);
+        await Page.Locator("#new-item-save").ClickAsync();
+        await Page.WaitForURLAsync(new Regex(@"/store/selling/items/[0-9a-f-]{36}$"), new() { Timeout = 30_000 });
+        var itemUrl = Page.Url;
+        var productId = itemUrl[^36..];
+        await Expect(Page.Locator("#seller-item-status")).ToHaveTextAsync("Draft", new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=seller-item-price]")).ToHaveTextAsync("not set yet");
+
+        await Page.GotoAsync($"{itemUrl}?tab=pictures");
+        await WaitForTheCircuitAsync();
+        await Page.Locator("#product-image-input").SetInputFilesAsync(StoreTestApi.FixturePhoto);
+        await Expect(Page.Locator("[data-testid=picture-card]")).ToHaveCountAsync(1, new() { Timeout = 30_000 });
+
+        await ClickUntilAsync(Page.Locator("#seller-ask"), Page.Locator("#ask-price"));
+        await FillAndConfirmAsync("#ask-price", "95");
+        await Page.Locator("#ask-save").ClickAsync();
+        await Expect(Page.Locator("[data-testid=seller-request-open]")).ToContainTextAsync("$95.00", new() { Timeout = 15_000 });
+
+        // The store: the queue says it needs a price; price it, then approve.
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/store/sale-requests");
+        await WaitForTheCircuitAsync();
+        var request = Page.Locator($"[data-testid=sale-request][data-product='{productId}']");
+        await Expect(request).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(request.Locator("[data-testid=sale-request-needs]")).ToContainTextAsync("Price the default variant first");
+        await Expect(request.Locator("[data-testid=sale-request-approve]")).ToBeDisabledAsync();
+
+        await Page.GotoAsync($"{BaseUrl}/admin/store/products/{productId}/edit?tab=variants");
+        await WaitForTheCircuitAsync();
+        var price = Page.Locator("[data-testid=variant-row] input[id^=variant-price-]");
+        await Expect(price).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await FillAndConfirmAsync($"#{await price.GetAttributeAsync("id")}", "189");
+        await Page.Locator("[data-testid=variant-save]").ClickAsync();
+        await Expect(Page.Locator("[data-testid=product-sale-request]")).ToContainTextAsync("asks to put this on sale");
+        await Expect(Page.Locator("#product-activate")).ToHaveCountAsync(0);   // not around the request
+
+        await Page.GotoAsync($"{BaseUrl}/admin/store/sale-requests");
+        await WaitForTheCircuitAsync();
+        await Expect(request.Locator("[data-testid=sale-request-price]")).ToHaveTextAsync("$189.00", new() { Timeout = 30_000 });
+        await request.Locator("[data-testid=sale-request-approve]").ClickAsync();
+        await Expect(request).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        // The seller: on sale at the store's price, paid her ask; then off sale by her own hand.
+        await LoginAsync(SellerEmail, SellerPassword);
+        await Page.GotoAsync(itemUrl);
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("#seller-item-status")).ToHaveTextAsync("On sale", new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=seller-item-price]")).ToHaveTextAsync("$189.00");
+        await Expect(Page.GetByText("you're paid $95.00 a unit")).ToBeVisibleAsync();
+
+        await ClickUntilAsync(Page.Locator("#seller-off-sale"), Page.GetByText("will disappear from the store"));
+        await Page.GetByRole(AriaRole.Dialog).GetByRole(AriaRole.Button, new() { Name = "Take off sale", Exact = true }).ClickAsync();
+        await Expect(Page.Locator("#seller-item-status")).ToHaveTextAsync("Off sale", new() { Timeout = 15_000 });
+        await Expect(Page.Locator("#seller-delete")).ToHaveCountAsync(0);   // it has been on sale, so it stays
+    }
+
+    [Test]
     [Description("A member without the Seller role has no Selling entry and is sent home from the address.")]
     public async Task Somebody_who_does_not_sell_is_turned_away()
     {

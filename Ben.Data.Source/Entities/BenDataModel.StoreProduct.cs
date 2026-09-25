@@ -66,6 +66,18 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public Guid? SellerAppUserId { get; set; }
 
+        /// <summary>
+        /// When it first went on sale; null for a draft that never has (store sellers, backlog 251).
+        /// A seller may delete only an item that never has.
+        /// </summary>
+        public DateTime? FirstOnSaleUtc { get; set; }
+
+        /// <summary>
+        /// What the seller is paid per unit on top of cost, fixed when the store approves their sale
+        /// request (store sellers, backlog 251). Null for the site's own stock.
+        /// </summary>
+        public decimal? SellerAskPerUnit { get; set; }
+
         public virtual StoreCategory Category { get; set; } = null!;
         public virtual AppUser? SellerAppUser { get; set; }
         public virtual EquipmentModel? EquipmentModel { get; set; }

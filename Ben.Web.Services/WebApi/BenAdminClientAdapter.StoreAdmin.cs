@@ -120,6 +120,20 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default)
         => _api.GetListAsync<StoreProductChangeRecord>($"/api/admin/store/products/{productId}/history", token);
 
+    // ── sale requests (store sellers P3) ─────────────────────────────────────
+
+    public Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default)
+        => _api.GetListAsync<StoreSaleRequestRecord>("/api/admin/store/sale-requests" + (decided ? "?decided=true" : ""), token);
+
+    public Task<(StoreSaleRequestRecord? Result, string? Error)> ApproveStoreSaleRequestAsync(Guid requestId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreSaleRequestRecord>(
+               HttpMethod.Post, $"/api/admin/store/sale-requests/{requestId}/approve", new { }, token);
+
+    public Task<(StoreSaleRequestRecord? Result, string? Error)> DeclineStoreSaleRequestAsync(
+        Guid requestId, DeclineSaleRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<DeclineSaleRequest, StoreSaleRequestRecord>(
+               HttpMethod.Post, $"/api/admin/store/sale-requests/{requestId}/decline", request, token);
+
     public Task<(StoreProductAdminRecord? Result, string? Error)> AddStoreProductImageAsync(
         Guid productId, MultipartFormDataContent content, CancellationToken token = default)
         => _api.PostMultipartExpectingReasonAsync<StoreProductAdminRecord>($"/api/admin/store/products/{productId}/images", content, token);

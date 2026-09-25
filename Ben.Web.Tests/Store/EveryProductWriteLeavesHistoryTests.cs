@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Ben.Data.WebApi.Controllers.Admin.Store;
+using Ben.Data.WebApi.Services.Store;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
 
@@ -16,7 +17,9 @@ namespace Ben.Web.Tests.Store;
 /// than none: it reads as complete.</para>
 ///
 /// <para>Source reads, like the other structural guards. A write passes when its body calls
-/// <c>StoreProductHistory.</c> itself, or a private helper of the same controller that does.</para>
+/// <c>StoreProductHistory.</c> itself, a private helper of the same controller that does, or a
+/// method of the shared editor (<c>StoreProductEditor</c>, <c>StoreProductSale</c>) that does —
+/// and every write method of those is held to the same rule.</para>
 /// </remarks>
 public sealed class EveryProductWriteLeavesHistoryTests
 {
@@ -25,7 +28,36 @@ public sealed class EveryProductWriteLeavesHistoryTests
     {
         [$"{nameof(AdminStoreProductController)}.{nameof(AdminStoreProductController.Delete)}"] =
             "only a never-sold item can be deleted, and its history goes with it (the audit log keeps the deletion)",
+        ["SellerStoreProductEditController.Delete"] = "only a draft that was never on sale can be deleted, and its history goes with it",
     };
+
+    /// <summary>Editor methods that change an item and leave no line, and why.</summary>
+    private static readonly Dictionary<string, string> EditorExempt = new()
+    {
+        [nameof(StoreProductEditor.DeleteAsync)] = "the item and its history go together",
+    };
+
+    private static string ServicesFile(string name) => Path.Combine(Root(), "Ben.Data.WebApi", "Services", "Store", name + ".cs");
+
+    /// <summary>The shared editor's methods whose bodies write a history line: callable by a write in its place.</summary>
+    private static IReadOnlyList<string> RecordingEditorMethods()
+    {
+        var found = new List<string>();
+        foreach (var type in new[] { typeof(StoreProductEditor), typeof(StoreProductSale) })
+        {
+            var source = File.ReadAllText(ServicesFile(type.Name));
+            foreach (var name in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                         .Select(m => m.Name).Distinct())
+                if (Body(source, name) is { } body && body.Contains("StoreProductHistory.", StringComparison.Ordinal))
+                    found.Add(name);
+        }
+        return found;
+    }
+
+    /// <summary>A body that writes a line itself or through the shared editor.</summary>
+    private static bool Records(string body, IReadOnlyList<string> editorMethods)
+        => body.Contains("StoreProductHistory.", StringComparison.Ordinal)
+           || editorMethods.Any(m => Regex.IsMatch(body, $@"(_editor|editor|StoreProductEditor|StoreProductSale)\.{m}\("));
 
     private static string Root()
     {
@@ -48,7 +80,7 @@ public sealed class EveryProductWriteLeavesHistoryTests
     /// <summary>A method's text: from its signature to the brace that closes it at method depth.</summary>
     private static string? Body(string source, string method)
     {
-        var start = Regex.Match(source, $@"^    (public|private|internal)[^\n(]*\b{Regex.Escape(method)}\(", RegexOptions.Multiline);
+        var start = Regex.Match(source, $@"^    (public|private|internal)[^\n]*?\b{Regex.Escape(method)}\(", RegexOptions.Multiline);
         if (!start.Success) return null;
         var end = Regex.Match(source[start.Index..], @"^    }\s*$", RegexOptions.Multiline);
         return end.Success ? source.Substring(start.Index, end.Index + end.Length) : source[start.Index..];
@@ -59,6 +91,7 @@ public sealed class EveryProductWriteLeavesHistoryTests
     {
         var missing = new List<string>();
         var checkedWrites = 0;
+        var editorMethods = RecordingEditorMethods();
 
         foreach (var (controller, file) in ItemControllers())
         {
@@ -66,7 +99,7 @@ public sealed class EveryProductWriteLeavesHistoryTests
             // Helpers of this controller that write a line, so a write calling one of them counts.
             var helpers = controller.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
                 .Select(m => m.Name).Distinct()
-                .Where(name => Body(source, name) is { } body && body.Contains("StoreProductHistory.", StringComparison.Ordinal))
+                .Where(name => Body(source, name) is { } body && Records(body, editorMethods))
                 .ToList();
 
             foreach (var write in controller.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
@@ -77,7 +110,7 @@ public sealed class EveryProductWriteLeavesHistoryTests
                 checkedWrites++;
                 var body = Body(source, write.Name);
                 Assert.True(body is not null, $"Could not find {key} in {Path.GetFileName(file)} — has the guard's reader fallen behind the code?");
-                if (!body!.Contains("StoreProductHistory.", StringComparison.Ordinal) && !helpers.Any(h => body.Contains(h + "(", StringComparison.Ordinal)))
+                if (!Records(body!, editorMethods) && !helpers.Any(h => body!.Contains(h + "(", StringComparison.Ordinal)))
                     missing.Add(key);
             }
         }
@@ -88,11 +121,31 @@ public sealed class EveryProductWriteLeavesHistoryTests
     }
 
     [Fact]
+    public void Every_write_of_the_shared_editor_leaves_a_history_line()
+    {
+        // A write here is a public method answering with a refusal (or a result carrying one).
+        var missing = new List<string>();
+        foreach (var type in new[] { typeof(StoreProductEditor), typeof(StoreProductSale) })
+        {
+            var source = File.ReadAllText(ServicesFile(type.Name));
+            foreach (var write in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                         .Where(m => m.ReturnType.ToString().Contains(nameof(StoreEditRefusal), StringComparison.Ordinal)))
+            {
+                if (EditorExempt.ContainsKey(write.Name)) continue;
+                var body = Body(source, write.Name);
+                Assert.True(body is not null, $"Could not find {type.Name}.{write.Name} in its file.");
+                if (!body!.Contains("StoreProductHistory.", StringComparison.Ordinal)) missing.Add($"{type.Name}.{write.Name}");
+            }
+        }
+        Assert.True(missing.Count == 0, "These editor writes leave no history line: " + string.Join(", ", missing));
+    }
+
+    [Fact]
     public void No_item_controller_adjusts_stock_around_the_history()
     {
         // StoreStock.AdjustManyAsync saves as it goes, so a controller calling it directly makes a
         // stock change with no line. StoreProductHistory.AdjustStockAsync wraps it with one.
-        foreach (var (_, file) in ItemControllers())
+        foreach (var file in ItemControllers().Select(c => c.File).Append(ServicesFile(nameof(StoreProductEditor))))
             Assert.DoesNotMatch(@"StoreStock\.AdjustManyAsync", File.ReadAllText(file));
     }
 

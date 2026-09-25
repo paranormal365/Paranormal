@@ -1,0 +1,176 @@
+@page "/admin/store/sale-requests"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Sale Requests</PageTitle>
+
+@*
+    Sellers asking for their items to go on sale (store sellers, backlog 251, P3). Oldest waiting
+    first. Each card says what the item still needs — the same checks approval runs — so Approve is
+    only offered when it will work; the store prices the item in its editor first. A no needs a
+    reason, because the seller reads it.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="mb-3">
+        <h3 class="mb-0">Sale requests<HelpLink Slug="site-administration" Anchor="sellers-and-sale-requests" /></h3>
+        <p class="text-secondary small mb-0">
+            Sellers ask for their items to go on sale, saying what they want to be paid for each one on top of its cost.
+            Set the selling price in the item's editor, then approve — or decline, saying why.
+        </p>
+    </div>
+
+    <div class="btn-group flex-wrap mb-3" role="group" aria-label="Which requests">
+        <button type="button" class="btn btn-sm @(!_decided ? "btn-primary" : "btn-outline-primary")" data-testid="sale-request-filter" @onclick="@(() => FilterAsync(false))">Waiting</button>
+        <button type="button" class="btn btn-sm @(_decided ? "btn-primary" : "btn-outline-primary")" data-testid="sale-request-filter" @onclick="@(() => FilterAsync(true))">Answered</button>
+    </div>
+
+    <BenListState TItem="StoreSaleRequestRecord" Result="_result" Loading="_loading"
+                  EmptyText="@(_decided ? "No requests have been answered yet" : "Nothing waiting — every request has been answered")" OnRetry="LoadAsync">
+        @foreach (var r in _result.Items)
+        {
+            <div class="card mb-3" data-testid="sale-request" data-product="@r.ProductId">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-3">
+                        <StoreLineThumb ImageUploadFileId="r.ImageUploadFileId" Alt="@r.ProductName" Size="64" />
+                        <div class="flex-grow-1" style="min-width:14rem;">
+                            <div class="fw-semibold"><a href="@($"/admin/store/products/{r.ProductId}/edit?tab=variants")">@r.ProductName</a></div>
+                            <div class="small text-secondary">
+                                @r.SellerName · asked @r.RequestedUtc.ToViewerLocalTime(UserState).ToDisplayDate()
+                            </div>
+                            <div class="mt-1">
+                                Seller asks <strong data-testid="sale-request-ask">@StoreMoney.Format(r.SellerAskingPrice)</strong> a unit ·
+                                store price <span data-testid="sale-request-price">@(r.MaxPrice > 0 ? StoreMoney.Format(r.MinPrice) : "not set yet")</span>
+                            </div>
+                            @if (r.SellerNote is { } note)
+                            {
+                                <div class="small mt-1" style="white-space:pre-line;">“@note”</div>
+                            }
+                        </div>
+                        <div class="text-end small">
+                            <span class="badge @Badge(r.Status)">@r.Status</span>
+                            @if (r.DecidedUtc is { } when)
+                            {
+                                <div class="text-secondary mt-1">@when.ToViewerLocalTime(UserState).ToDisplayDate()</div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (r.Status == StoreSaleRequestStatus.Open)
+                    {
+                        @if (r.Problems.Count > 0)
+                        {
+                            <div class="alert alert-warning py-2 small mt-3 mb-2" data-testid="sale-request-needs">
+                                <div class="fw-semibold">Before it can go on sale:</div>
+                                <ul class="mb-0 ps-3">
+                                    @foreach (var problem in r.Problems) { <li>@problem</li> }
+                                </ul>
+                            </div>
+                        }
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <a class="btn btn-sm btn-outline-primary" href="@($"/admin/store/products/{r.ProductId}/edit?tab=variants")">Price it</a>
+                            <button type="button" class="btn btn-sm btn-success" data-testid="sale-request-approve"
+                                    disabled="@(_busy || r.Problems.Count > 0)" @onclick="@(() => ApproveAsync(r))">Approve and put on sale</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="sale-request-decline"
+                                    disabled="@_busy" @onclick="@(() => OpenDecline(r))">Decline…</button>
+                        </div>
+                    }
+                    else if (r.DecisionNote is { } why)
+                    {
+                        <div class="alert alert-secondary py-2 small mt-3 mb-0">Declined: @why</div>
+                    }
+                </div>
+            </div>
+        }
+    </BenListState>
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" id="sale-request-refusal">@_error</div>
+    }
+</div>
+
+<BenModal @bind-Visible="_declining" Title="Decline this request">
+    <ChildContent>
+        <label class="form-label" for="decline-note">Why — the seller reads this</label>
+        <textarea id="decline-note" class="form-control" rows="3" maxlength="1000" @bind="_note" @bind:event="oninput"></textarea>
+        @if (_modalError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="decline-refusal">@_modalError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _declining = false)">Cancel</button>
+        <button type="button" class="btn btn-warning" id="decline-save" disabled="@_busy" @onclick="DeclineAsync">Decline</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    private LoadResult<StoreSaleRequestRecord> _result;
+    private bool _loading = true, _busy, _decided, _declining;
+    private string? _note, _error, _modalError;
+    private Guid _requestId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreSaleRequestsAsync(_decided);
+        _loading = false;
+    }
+
+    private async Task FilterAsync(bool decided)
+    {
+        _decided = decided;
+        await LoadAsync();
+    }
+
+    private async Task ApproveAsync(StoreSaleRequestRecord r)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (done, error) = await AdminClient.ApproveStoreSaleRequestAsync(r.Id);
+            if (done is null) { _error = error ?? "It couldn't be approved."; return; }
+            Toasts.Success($"{r.ProductName} is on sale.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void OpenDecline(StoreSaleRequestRecord r)
+    {
+        _requestId = r.Id; _note = null; _modalError = null;
+        _declining = true;
+    }
+
+    private async Task DeclineAsync()
+    {
+        _busy = true; _modalError = null;
+        try
+        {
+            var (done, error) = await AdminClient.DeclineStoreSaleRequestAsync(_requestId, new DeclineSaleRequest(_note ?? ""));
+            if (done is null) { _modalError = error ?? "It couldn't be declined."; return; }
+            _declining = false;
+            Toasts.Success("Declined — the seller has been told why.");
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private static string Badge(StoreSaleRequestStatus status) => status switch
+    {
+        StoreSaleRequestStatus.Open => "bg-info-subtle text-info-emphasis",
+        StoreSaleRequestStatus.Approved => "bg-success",
+        StoreSaleRequestStatus.Declined => "bg-warning-subtle text-warning-emphasis",
+        _ => "bg-secondary",
+    };
+}

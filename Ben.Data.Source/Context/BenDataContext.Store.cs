@@ -68,6 +68,7 @@ namespace Ben.Data.Source.Context
             product.Property(e => e.StripeTaxCode).HasMaxLength(32);
             product.Property(e => e.MinPrice).HasPrecision(18, 2);
             product.Property(e => e.MaxPrice).HasPrecision(18, 2);
+            product.Property(e => e.SellerAskPerUnit).HasPrecision(18, 2);
             product.Property(e => e.AverageRating).HasPrecision(3, 2);
             product.HasIndex(e => e.Slug).IsUnique();
             // The listing's four questions: a shelf in order, most popular, newest, cheapest.
@@ -355,6 +356,22 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
             change.HasOne(e => e.ActorAppUser).WithMany()
                 .HasForeignKey(e => e.ActorAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // Store sellers P3: a seller asking for an item to go on sale. One open request per
+            // item, held by a filtered unique index rather than by a check that two clicks can race.
+            var request = modelBuilder.Entity<StoreProductSaleRequest>();
+            request.Property(e => e.SellerAskingPrice).HasPrecision(18, 2);
+            request.Property(e => e.SellerNote).HasMaxLength(StoreProductSaleRequest.MaxNoteLength);
+            request.Property(e => e.DecisionNote).HasMaxLength(StoreProductSaleRequest.MaxNoteLength);
+            request.HasIndex(e => e.ProductId).IsUnique().HasFilter("[Status] = 0");
+            request.HasIndex(e => new { e.Status, e.RequestedUtc });
+            request.HasOne(e => e.Product).WithMany()
+                .HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            request.HasOne(e => e.SellerAppUser).WithMany()
+                .HasForeignKey(e => e.SellerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            request.HasOne(e => e.DecidedByAppUser).WithMany()
+                .HasForeignKey(e => e.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            request.ToTable(t => t.HasCheckConstraint("CK_StoreProductSaleRequests_Ask", "[SellerAskingPrice] > 0"));
         }
 
         // ── M3: favourites, reviews and helpful votes ─────────────────────────────────────

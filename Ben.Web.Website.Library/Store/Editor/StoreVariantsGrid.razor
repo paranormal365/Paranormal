@@ -1,0 +1,95 @@
+@*
+    An item's variants, one row each, saved row by row (store sellers, backlog 251, P3 — lifted from
+    the admin editor). With PriceEditable off — the seller's editor — the price is shown and never
+    an input: the store sets it (Ben, 09/24/2026). A refusal lands under the grid (#variant-refusal),
+    because a per-row Save whose "no" vanished would look exactly like a Save that worked.
+*@
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle" id="variants" style="min-width:52rem;">
+        <thead>
+            <tr>
+                <th>Variant</th><th>SKU</th><th>Price</th>
+                @if (PriceEditable)
+                {
+                    <th>Old price</th>
+                }
+                <th class="text-end">On hand</th><th class="text-end">Held</th>
+                <th>Offered</th><th>Default</th><th style="width:11rem;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var v in Variants)
+            {
+                var draft = Drafts[v.Id];
+                <tr data-testid="variant-row">
+                    <td class="text-nowrap">@v.Label</td>
+                    <td><label class="visually-hidden" for="@($"variant-sku-{v.Id}")">SKU</label>
+                        <input id="@($"variant-sku-{v.Id}")" class="form-control form-control-sm font-monospace" style="min-width:9rem;" @bind="draft.Sku" /></td>
+                    @if (PriceEditable)
+                    {
+                        <td><label class="visually-hidden" for="@($"variant-price-{v.Id}")">Price</label>
+                            <input id="@($"variant-price-{v.Id}")" type="number" step="0.01" min="0" class="form-control form-control-sm" style="width:6.5rem;" @bind="draft.Price" /></td>
+                        <td><label class="visually-hidden" for="@($"variant-old-{v.Id}")">Old price</label>
+                            <input id="@($"variant-old-{v.Id}")" type="number" step="0.01" min="0" class="form-control form-control-sm" style="width:6.5rem;" @bind="draft.CompareAtPrice" /></td>
+                    }
+                    else
+                    {
+                        <td class="text-nowrap" data-testid="variant-price">
+                            @if (v.Price > 0m)
+                            {
+                                @StoreMoney.Format(v.Price)
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Not priced yet</span>
+                            }
+                        </td>
+                    }
+                    <td class="text-end">@v.StockOnHand</td>
+                    <td class="text-end">@v.StockReserved</td>
+                    <td><input class="form-check-input" type="checkbox" aria-label="Offered" @bind="draft.IsActive" /></td>
+                    <td><input class="form-check-input" type="radio" name="variant-default" aria-label="Default" checked="@draft.IsDefault" @onchange="@(() => ChooseDefault(v.Id))" /></td>
+                    <td>
+                        <span class="text-nowrap">
+                            <BenGridAction Icon="check" Label="Save this variant" data-testid="variant-save" OnClick="@(() => OnSave.InvokeAsync(v))" />
+                            <BenGridAction Icon="box" Label="Adjust stock" data-testid="variant-stock" OnClick="@(() => OnStock.InvokeAsync(v))" />
+                            @if (OnLog.HasDelegate)
+                            {
+                                <BenGridAction Icon="clock" Label="Stock log" OnClick="@(() => OnLog.InvokeAsync(v))" />
+                            }
+                            <BenGridAction Icon="trash-2" Label="@(v.HasBeenOrdered ? "Ordered — switch it off instead" : "Delete this variant")"
+                                           Tone="GridActionTone.Danger" Disabled="@v.HasBeenOrdered" OnClick="@(() => OnDelete.InvokeAsync(v))" />
+                        </span>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Error is not null)
+{
+    <div class="alert alert-danger py-2" id="variant-refusal">@Error</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StoreVariantAdminRecord> Variants { get; set; } = [];
+    [Parameter, EditorRequired] public Dictionary<Guid, StoreVariantDraft> Drafts { get; set; } = [];
+
+    /// <summary>The store's editor: price and old price are inputs. Off, the price is only shown.</summary>
+    [Parameter] public bool PriceEditable { get; set; }
+
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<StoreVariantAdminRecord> OnSave { get; set; }
+    [Parameter] public EventCallback<StoreVariantAdminRecord> OnStock { get; set; }
+
+    /// <summary>Optional: without it the row has no stock-log action.</summary>
+    [Parameter] public EventCallback<StoreVariantAdminRecord> OnLog { get; set; }
+
+    [Parameter] public EventCallback<StoreVariantAdminRecord> OnDelete { get; set; }
+
+    private void ChooseDefault(Guid id)
+    {
+        foreach (var (key, draft) in Drafts) draft.IsDefault = key == id;
+    }
+}

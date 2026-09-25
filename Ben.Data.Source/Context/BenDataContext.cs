@@ -258,6 +258,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<StoreCouponRedemption> StoreCouponRedemptions { get; set; }
         public virtual DbSet<StoreStockMovement> StoreStockMovements { get; set; }
         public virtual DbSet<StoreProductChange> StoreProductChanges { get; set; }
+        public virtual DbSet<StoreProductSaleRequest> StoreProductSaleRequests { get; set; }
         public virtual DbSet<StoreFavourite> StoreFavourites { get; set; }
         public virtual DbSet<StoreReview> StoreReviews { get; set; }
         public virtual DbSet<StoreReviewVote> StoreReviewVotes { get; set; }

@@ -45,7 +45,7 @@
                     {
                         <button type="button" class="btn btn-outline-warning" id="product-deactivate" disabled="@_busy" @onclick="DeactivateAsync">Take off sale</button>
                     }
-                    else
+                    else if (p.SellerAppUserId is null)
                     {
                         <button type="button" class="btn btn-success" id="product-activate" disabled="@_busy" @onclick="ActivateAsync">Put on sale</button>
                     }
@@ -57,6 +57,26 @@
             @if (_pageError is not null)
             {
                 <div class="alert alert-danger" id="product-refusal">@_pageError</div>
+            }
+
+            @* A seller's hidden item goes on sale through their request, which records what they're paid. *@
+            @if (p.SellerAppUserId is not null && !p.IsActive)
+            {
+                <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="product-sale-request">
+                    @if (p.OpenSaleRequest is { } ask)
+                    {
+                        <div class="flex-grow-1">
+                            <strong>@ask.SellerName asks to put this on sale</strong>, for @StoreMoney.Format(ask.SellerAskingPrice) a unit to them.
+                            Set its price on the Options &amp; variants tab, then approve it.
+                            @if (ask.SellerNote is { } note) { <div class="small mt-1">“@note”</div> }
+                        </div>
+                        <a class="btn btn-sm btn-primary" href="/admin/store/sale-requests">Sale requests</a>
+                    }
+                    else
+                    {
+                        <div>Its seller, @(p.SellerName ?? "a seller"), hasn't asked for it to go on sale. It goes on sale when they do and you approve.</div>
+                    }
+                </div>
             }
 
             <BenTabs @bind-ActiveId="_tab" @bind-ActiveId:after="TabChangedAsync" NavClass="nav-tabs flex-wrap">
@@ -150,32 +170,7 @@
                         </div>
 
                         <div class="col-12">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <h5 class="mb-0">Specifications</h5>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="spec-add" @onclick="AddSpec">Add a line</button>
-                            </div>
-                            <p class="text-secondary small">Grouped under headings on the product page — Detection, Power, Size.</p>
-                            @foreach (var (spec, i) in _details.Specs.Select((s, i) => (s, i)))
-                            {
-                                var line = spec;
-                                <div class="row g-2 mb-2 align-items-end" data-testid="spec-row">
-                                    <div class="col-12 col-md-3">
-                                        <label class="form-label small" for="@($"spec-group-{i}")">Heading</label>
-                                        <input id="@($"spec-group-{i}")" class="form-control form-control-sm" maxlength="100" @bind="line.Group" @bind:after="MarkDirty" />
-                                    </div>
-                                    <div class="col-5 col-md-3">
-                                        <label class="form-label small" for="@($"spec-name-{i}")">Name</label>
-                                        <input id="@($"spec-name-{i}")" class="form-control form-control-sm" maxlength="100" @bind="line.Name" @bind:after="MarkDirty" />
-                                    </div>
-                                    <div class="col-5 col-md-5">
-                                        <label class="form-label small" for="@($"spec-value-{i}")">Value</label>
-                                        <input id="@($"spec-value-{i}")" class="form-control form-control-sm" maxlength="500" @bind="line.Value" @bind:after="MarkDirty" />
-                                    </div>
-                                    <div class="col-2 col-md-1">
-                                        <BenGridAction Icon="trash-2" Label="Remove this line" Tone="GridActionTone.Danger" OnClick="@(() => RemoveSpec(line))" />
-                                    </div>
-                                </div>
-                            }
+                            <StoreSpecLinesEditor Lines="_details.Specs" OnChanged="MarkDirty" />
                         </div>
 
                         <div class="col-12">
@@ -190,148 +185,23 @@
 
                 <BenTab Title="Options &amp; variants" Id="variants">
                     <div class="pt-3">
-                        <h5>Options <HelpLink Slug="site-administration" Anchor="options-variants-and-stock" /></h5>
-                        <p class="text-secondary small">What a buyer chooses — up to three, like Colour and Size.</p>
-                        @foreach (var (option, oi) in _options.Select((o, i) => (o, i)))
-                        {
-                            var opt = option;
-                            <div class="card mb-2" data-testid="option-card">
-                                <div class="card-body">
-                                    <div class="row g-2 align-items-end mb-2">
-                                        <div class="col-7 col-md-5">
-                                            <label class="form-label small" for="@($"option-name-{oi}")">Option</label>
-                                            <input id="@($"option-name-{oi}")" class="form-control form-control-sm" maxlength="60" placeholder="Colour" @bind="opt.Name" />
-                                        </div>
-                                        <div class="col-5 col-md-3">
-                                            <label class="form-label small" for="@($"option-kind-{oi}")">Shown as</label>
-                                            <select id="@($"option-kind-{oi}")" class="form-select form-select-sm" @bind="opt.Kind">
-                                                <option value="@StoreOptionKind.Pill">Buttons</option>
-                                                <option value="@StoreOptionKind.Swatch">Colour swatches</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-12 col-md-4 text-md-end">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => opt.Values.Add(new ValueDraft()))">Add a value</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => _options.Remove(opt))">Remove option</button>
-                                        </div>
-                                    </div>
-                                    @foreach (var (value, vi) in opt.Values.Select((v, i) => (v, i)))
-                                    {
-                                        var val = value;
-                                        <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
-                                            <label class="visually-hidden" for="@($"option-{oi}-value-{vi}")">Value</label>
-                                            <input id="@($"option-{oi}-value-{vi}")" class="form-control form-control-sm" style="max-width:14rem;" maxlength="60" placeholder="Black" @bind="val.Value" />
-                                            @if (opt.Kind == StoreOptionKind.Swatch)
-                                            {
-                                                <BenColorPicker @bind-Value="val.SwatchHex" ShowHex="true" AriaLabel="@($"Colour of {val.Value}")" />
-                                            }
-                                            <div class="form-check form-switch mb-0">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="@($"option-{oi}-value-{vi}-on")" @bind="val.IsActive" />
-                                                <label class="form-check-label small" for="@($"option-{oi}-value-{vi}-on")">Offered</label>
-                                            </div>
-                                            <BenGridAction Icon="x" Label="Remove this value" Tone="GridActionTone.Danger" OnClick="@(() => opt.Values.Remove(val))" />
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                        <div class="d-flex flex-wrap gap-2 mb-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="option-add" disabled="@(_options.Count >= StoreCatalogRules.MaxOptionsPerProduct)"
-                                    @onclick="@(() => _options.Add(new OptionDraft { Values = [new ValueDraft()] }))">Add an option</button>
-                            <button type="button" class="btn btn-sm btn-primary" id="options-save" disabled="@_busy" @onclick="SaveOptionsAsync">Save options</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="variants-generate" disabled="@(_busy || p.Options.Count == 0)" @onclick="GenerateAsync">Generate variants</button>
-                        </div>
-                        @if (_optionsError is not null)
-                        {
-                            <div class="alert alert-danger py-2" id="options-refusal">@_optionsError</div>
-                        }
+                        <StoreOptionsEditor Options="_options" Busy="_busy" CanGenerate="@(p.Options.Count > 0)" Error="@_optionsError"
+                                            OnSave="SaveOptionsAsync" OnGenerate="GenerateAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="options-variants-and-stock" /></Help>
+                        </StoreOptionsEditor>
 
                         <h5 class="mt-4">Variants</h5>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle" id="variants" style="min-width:52rem;">
-                                <thead>
-                                    <tr>
-                                        <th>Variant</th><th>SKU</th><th>Price</th><th>Old price</th>
-                                        <th class="text-end">On hand</th><th class="text-end">Held</th>
-                                        <th>Offered</th><th>Default</th><th style="width:11rem;">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var v in p.Variants)
-                                    {
-                                        var draft = _variants[v.Id];
-                                        <tr data-testid="variant-row">
-                                            <td class="text-nowrap">@v.Label</td>
-                                            <td><label class="visually-hidden" for="@($"variant-sku-{v.Id}")">SKU</label>
-                                                <input id="@($"variant-sku-{v.Id}")" class="form-control form-control-sm font-monospace" style="min-width:9rem;" @bind="draft.Sku" /></td>
-                                            <td><label class="visually-hidden" for="@($"variant-price-{v.Id}")">Price</label>
-                                                <input id="@($"variant-price-{v.Id}")" type="number" step="0.01" min="0" class="form-control form-control-sm" style="width:6.5rem;" @bind="draft.Price" /></td>
-                                            <td><label class="visually-hidden" for="@($"variant-old-{v.Id}")">Old price</label>
-                                                <input id="@($"variant-old-{v.Id}")" type="number" step="0.01" min="0" class="form-control form-control-sm" style="width:6.5rem;" @bind="draft.CompareAtPrice" /></td>
-                                            <td class="text-end">@v.StockOnHand</td>
-                                            <td class="text-end">@v.StockReserved</td>
-                                            <td><input class="form-check-input" type="checkbox" aria-label="Offered" @bind="draft.IsActive" /></td>
-                                            <td><input class="form-check-input" type="radio" name="variant-default" aria-label="Default" checked="@draft.IsDefault" @onchange="@(() => ChooseDefault(v.Id))" /></td>
-                                            <td>
-                                                <span class="text-nowrap">
-                                                    <BenGridAction Icon="check" Label="Save this variant" data-testid="variant-save" OnClick="@(() => SaveVariantAsync(v))" />
-                                                    <BenGridAction Icon="box" Label="Adjust stock" data-testid="variant-stock" OnClick="@(() => OpenStock(v))" />
-                                                    <BenGridAction Icon="clock" Label="Stock log" OnClick="@(() => OpenLogAsync(v))" />
-                                                    <BenGridAction Icon="trash-2" Label="@(v.HasBeenOrdered ? "Ordered — switch it off instead" : "Delete this variant")"
-                                                                   Tone="GridActionTone.Danger" Disabled="@v.HasBeenOrdered" OnClick="@(() => DeleteVariantAsync(v))" />
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                        @if (_variantError is not null)
-                        {
-                            <div class="alert alert-danger py-2" id="variant-refusal">@_variantError</div>
-                        }
+                        <StoreVariantsGrid Variants="p.Variants" Drafts="_variants" PriceEditable="true" Error="@_variantError"
+                                           OnSave="SaveVariantAsync" OnStock="OpenStock" OnLog="OpenLogAsync" OnDelete="DeleteVariantAsync" />
                     </div>
                 </BenTab>
 
                 <BenTab Title="Pictures" Id="pictures" Badge="@p.Images.Count">
                     <div class="pt-3">
-                        <label class="form-label" for="product-image-input">Add pictures <HelpLink Slug="site-administration" Anchor="product-pictures" /></label>
-                        <InputFile id="product-image-input" class="form-control mb-2" accept="image/*" multiple
-                                   disabled="@(p.Images.Count >= StoreCatalogRules.MaxImagesPerProduct || _busy)" OnChange="UploadPicturesAsync" />
-                        <div class="form-text mb-3">Up to @StoreCatalogRules.MaxImagesPerProduct. The first is the one on cards and in the cart.</div>
-                        @if (_pictureError is not null)
-                        {
-                            <div class="alert alert-danger py-2" id="picture-refusal">@_pictureError</div>
-                        }
-                        <div class="row g-3">
-                            @foreach (var (image, ii) in p.Images.Select((x, i) => (x, i)))
-                            {
-                                var picture = _pictures[image.Id];
-                                <div class="col-12 col-sm-6 col-lg-4" data-testid="picture-card">
-                                    <div class="card h-100">
-                                        <img src="@MediaUrls.StoreImage(image.UploadFileId, thumbnail: true)" class="card-img-top" alt="@(image.AltText ?? p.Name)"
-                                             style="aspect-ratio:4/3;object-fit:cover;" />
-                                        <div class="card-body">
-                                            <label class="form-label small" for="@($"picture-alt-{image.Id}")">Description</label>
-                                            <input id="@($"picture-alt-{image.Id}")" class="form-control form-control-sm mb-2" maxlength="200" @bind="picture.AltText" />
-                                            <label class="form-label small" for="@($"picture-variant-{image.Id}")">Shown for</label>
-                                            <select id="@($"picture-variant-{image.Id}")" class="form-select form-select-sm mb-2" @bind="picture.VariantId">
-                                                <option value="">Every variant</option>
-                                                @foreach (var v in p.Variants)
-                                                {
-                                                    <option value="@v.Id">@v.Label</option>
-                                                }
-                                            </select>
-                                            <span class="text-nowrap">
-                                                <BenGridAction Icon="check" Label="Save" OnClick="@(() => SavePictureAsync(image.Id))" />
-                                                <BenGridAction Icon="arrow-up" Label="Move earlier" Disabled="@(ii == 0)" OnClick="@(() => MovePictureAsync(ii, -1))" />
-                                                <BenGridAction Icon="arrow-down" Label="Move later" Disabled="@(ii == p.Images.Count - 1)" OnClick="@(() => MovePictureAsync(ii, +1))" />
-                                                <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => DeletePictureAsync(image.Id))" />
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
+                        <StorePicturesPanel Product="p" Drafts="_pictures" Busy="_busy" Error="@_pictureError" OnUpload="UploadPicturesAsync"
+                                            OnSave="SavePictureAsync" OnMove="@(m => MovePictureAsync(m.Index, m.By))" OnDelete="DeletePictureAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="product-pictures" /></Help>
+                        </StorePicturesPanel>
                     </div>
                 </BenTab>
 
@@ -344,30 +214,8 @@
 
                 <BenTab Title="Preview" Id="preview">
                     <div class="pt-3">
-                        <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="editor-preview">
-                            <div class="flex-grow-1">
-                                <strong>How shoppers will see this page.</strong>
-                                @if (_dirty)
-                                {
-                                    <span>It shows your unsaved changes — press <strong>Save</strong> on the Details tab to keep them.</span>
-                                }
-                                else
-                                {
-                                    <span>It follows the form as you edit.</span>
-                                }
-                                @if (!p.IsActive)
-                                {
-                                    <span>It isn't on sale yet, so the button reads "Not on sale".</span>
-                                }
-                            </div>
-                            @if (Features.IsOn(SiteFeatures.Store))
-                            {
-                                <a class="btn btn-sm btn-outline-secondary" href="@($"{p.PublicUrl}?preview=1")" target="_blank" rel="noopener">Open the saved page</a>
-                            }
-                        </div>
-                        <div class="border rounded-3 p-3 bg-body" data-testid="editor-preview-page">
-                            <StoreProductView Product="@PreviewDetail(p)" Info="@PreviewInfo" Banner="@NoBanner" />
-                        </div>
+                        <StoreEditorPreviewPanel Detail="@PreviewDetail(p)" Info="@PreviewInfo" Dirty="_dirty" IsActive="p.IsActive"
+                                                 SavedUrl="@(Features.IsOn(SiteFeatures.Store) ? $"{p.PublicUrl}?preview=1" : null)" />
                     </div>
                 </BenTab>
             </BenTabs>
@@ -377,41 +225,8 @@
 
 <BenLeaveGuard Dirty="_dirty" />
 
-<BenModal @bind-Visible="_stockOpen" Title="@($"Adjust stock — {_stockLabel}")">
-    <ChildContent>
-        <p class="text-secondary small">On hand @_stockOnHand, held by checkouts @_stockHeld. Give a change or a counted number.</p>
-        <div class="row g-2">
-            <div class="col-6">
-                <label class="form-label" for="stock-delta">Change by</label>
-                <input id="stock-delta" type="number" class="form-control" placeholder="e.g. 10 or -2" @bind="_stockDelta" />
-            </div>
-            <div class="col-6">
-                <label class="form-label" for="stock-setto">Or set to</label>
-                <input id="stock-setto" type="number" min="0" class="form-control" placeholder="counted" @bind="_stockSetTo" />
-            </div>
-            <div class="col-6">
-                <label class="form-label" for="stock-reason">Why</label>
-                <select id="stock-reason" class="form-select" @bind="_stockReason">
-                    <option value="@StoreStockReason.Received">Received</option>
-                    <option value="@StoreStockReason.Correction">Correction</option>
-                    <option value="@StoreStockReason.Damaged">Damaged</option>
-                </select>
-            </div>
-            <div class="col-6">
-                <label class="form-label" for="stock-note">Note</label>
-                <input id="stock-note" class="form-control" maxlength="200" @bind="_stockNote" />
-            </div>
-        </div>
-        @if (_stockError is not null)
-        {
-            <div class="alert alert-danger py-2 mt-3 mb-0" id="stock-adjust-refusal">@_stockError</div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _stockOpen = false)">Cancel</button>
-        <button type="button" class="btn btn-primary" id="stock-adjust-save" disabled="@_busy" @onclick="SaveStockAsync">Save</button>
-    </FooterContent>
-</BenModal>
+<StoreStockDialog @bind-Visible="_stockOpen" Label="@_stockLabel" OnHand="_stockOnHand" Held="_stockHeld" Busy="_busy" Error="@_stockError"
+                  OnSave="SaveStockAsync" />
 
 <BenModal @bind-Visible="_logOpen" Title="@($"Stock log — {_stockLabel}")" Size="lg">
     <ChildContent>
@@ -458,9 +273,6 @@
     private string? _tab = "details";
     private ItemResult<StoreSettingsAdminRecord> _settings;
 
-    /// <summary>The preview's own note replaces the page's "shoppers can't see this" banner.</summary>
-    private static readonly RenderFragment NoBanner = _ => { };
-
     /// <summary>The product page, built from the form as it stands.</summary>
     private StoreProductDetail PreviewDetail(StoreProductAdminRecord saved)
     {
@@ -486,26 +298,20 @@
             s.ReturnsWindowDays ?? 30, s.SupportEmail, PaymentsEnabled: false, FakeCheckout: false, PublishableKey: null)
         : null;
 
-    /// <summary>The specification lines as the page groups them — the save and the preview share it.</summary>
-    private List<StoreSpecGroup> SpecGroups() => _details.Specs
-        .Where(s => !string.IsNullOrWhiteSpace(s.Name) || !string.IsNullOrWhiteSpace(s.Value))
-        .GroupBy(s => s.Group.Trim())
-        .Select(g => new StoreSpecGroup(g.Key, g.Select(s => new StoreSpecRecord(s.Name, s.Value)).ToList()))
-        .ToList();
+    private List<StoreSpecGroup> SpecGroups() => StoreEditorDrafts.SpecGroups(_details.Specs);
+
     private string? _pageError, _detailsError, _optionsError, _variantError, _pictureError;
 
     private DetailsForm _details = new();
-    private List<OptionDraft> _options = [];
-    private Dictionary<Guid, VariantDraft> _variants = [];
-    private Dictionary<Guid, PictureDraft> _pictures = [];
+    private List<StoreOptionDraft> _options = [];
+    private Dictionary<Guid, StoreVariantDraft> _variants = [];
+    private Dictionary<Guid, StorePictureDraft> _pictures = [];
 
     private bool _stockOpen, _logOpen, _logLoading, _confirmDelete;
     private Guid _stockVariantId;
     private string _stockLabel = "";
     private int _stockOnHand, _stockHeld;
-    private int? _stockDelta, _stockSetTo;
-    private StoreStockReason _stockReason = StoreStockReason.Received;
-    private string? _stockNote, _stockError;
+    private string? _stockError;
     private LoadResult<StoreStockMovementRecord> _log;
 
     private sealed class DetailsForm
@@ -521,45 +327,7 @@
         public DateTime? NewUntil { get; set; }
         public string? StripeTaxCode { get; set; }
         public int SortOrder { get; set; }
-        public List<SpecLine> Specs { get; set; } = [];
-    }
-
-    private sealed class SpecLine
-    {
-        public string Group { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string Value { get; set; } = "";
-    }
-
-    private sealed class OptionDraft
-    {
-        public Guid? Id { get; set; }
-        public string Name { get; set; } = "";
-        public StoreOptionKind Kind { get; set; } = StoreOptionKind.Pill;
-        public List<ValueDraft> Values { get; set; } = [];
-    }
-
-    private sealed class ValueDraft
-    {
-        public Guid? Id { get; set; }
-        public string Value { get; set; } = "";
-        public string? SwatchHex { get; set; } = "#000000";
-        public bool IsActive { get; set; } = true;
-    }
-
-    private sealed class VariantDraft
-    {
-        public string Sku { get; set; } = "";
-        public decimal Price { get; set; }
-        public decimal? CompareAtPrice { get; set; }
-        public bool IsActive { get; set; }
-        public bool IsDefault { get; set; }
-    }
-
-    private sealed class PictureDraft
-    {
-        public string? AltText { get; set; }
-        public Guid? VariantId { get; set; }
+        public List<StoreSpecLine> Specs { get; set; } = [];
     }
 
     protected override async Task OnInitializedAsync()
@@ -622,30 +390,22 @@
                 ShortDescription = p.ShortDescription, LongDescriptionHtml = p.LongDescriptionHtml,
                 IsFeatured = p.IsFeatured, NewUntil = p.NewUntilUtc?.Date, StripeTaxCode = p.StripeTaxCode,
                 SortOrder = p.SortOrder,
-                Specs = p.Specs.SelectMany(g => g.Items.Select(i => new SpecLine { Group = g.GroupName, Name = i.Name, Value = i.Value })).ToList(),
+                Specs = StoreEditorDrafts.SpecLines(p),
             };
             _dirty = false;
         }
         if (refresh.HasFlag(Drafts.Options))
-            _options = p.Options.Select(o => new OptionDraft
-            {
-                Id = o.Id, Name = o.Name, Kind = o.Kind,
-                Values = o.Values.Select(v => new ValueDraft { Id = v.Id, Value = v.Value, SwatchHex = v.SwatchHex ?? "#000000", IsActive = v.IsActive }).ToList(),
-            }).ToList();
+            _options = StoreEditorDrafts.Options(p);
 
         // Variant and picture drafts are keyed by id: a row the server just sent that has no draft
         // gets one, and a refresh of that part replaces them all.
         foreach (var v in p.Variants.Where(v => refresh.HasFlag(Drafts.Variants) || !_variants.ContainsKey(v.Id)))
-            _variants[v.Id] = new VariantDraft { Sku = v.Sku, Price = v.Price, CompareAtPrice = v.CompareAtPrice, IsActive = v.IsActive, IsDefault = v.IsDefault };
+            _variants[v.Id] = StoreEditorDrafts.Variant(v);
         foreach (var i in p.Images.Where(i => refresh.HasFlag(Drafts.Pictures) || !_pictures.ContainsKey(i.Id)))
-            _pictures[i.Id] = new PictureDraft { AltText = i.AltText, VariantId = i.VariantId };
+            _pictures[i.Id] = StoreEditorDrafts.Picture(i);
     }
 
     private void MarkDirty() => _dirty = true;
-
-    private void AddSpec() { _details.Specs.Add(new SpecLine { Group = _details.Specs.LastOrDefault()?.Group ?? "" }); _dirty = true; }
-
-    private void RemoveSpec(SpecLine line) { _details.Specs.Remove(line); _dirty = true; }
 
     private async Task SaveDetailsAsync()
     {
@@ -657,7 +417,7 @@
                 _details.CategoryId, _details.EquipmentModelId, _details.Name, _details.Slug, _details.ShortDescription,
                 _details.LongDescriptionHtml, _details.IsFeatured, // A day, not an instant: "new until 10/31" is stored as that date.
                 _details.NewUntil is { } until ? DateTime.SpecifyKind(until.Date, DateTimeKind.Utc) : null, _details.StripeTaxCode,
-                _details.SortOrder, specs, _details.SellerAppUserId));
+                _details.SortOrder, specs, _details.SellerAppUserId, _product?.EditedAt));
             if (saved is null) { _detailsError = error ?? "Saving failed."; return; }
             Adopt(saved, Drafts.Details);
             Toasts.Success("Saved.");
@@ -713,9 +473,7 @@
         _busy = true; _optionsError = null;
         try
         {
-            var request = new SaveStoreOptionsRequest(_options.Select(o => new SaveStoreOptionRequest(o.Id, o.Name, o.Kind,
-                o.Values.Select(v => new SaveStoreOptionValueRequest(v.Id, v.Value, o.Kind == StoreOptionKind.Swatch ? v.SwatchHex : null, v.IsActive)).ToList())).ToList());
-            var (saved, error) = await AdminClient.SaveStoreProductOptionsAsync(ProductId, request);
+            var (saved, error) = await AdminClient.SaveStoreProductOptionsAsync(ProductId, StoreEditorDrafts.OptionsRequest(_options, _product?.EditedAt));
             if (saved is null) { _optionsError = error ?? "Saving failed."; return; }
             Adopt(saved, Drafts.Options | Drafts.Variants);
             Toasts.Success("Options saved.");
@@ -735,11 +493,6 @@
             if (fresh.Item is { } p) Adopt(p, Drafts.Options | Drafts.Variants);
         }
         finally { _busy = false; }
-    }
-
-    private void ChooseDefault(Guid id)
-    {
-        foreach (var (key, draft) in _variants) draft.IsDefault = key == id;
     }
 
     private async Task SaveVariantAsync(StoreVariantAdminRecord v)
@@ -773,17 +526,16 @@
     private void OpenStock(StoreVariantAdminRecord v)
     {
         _stockVariantId = v.Id; _stockLabel = $"{v.Label} ({v.Sku})"; _stockOnHand = v.StockOnHand; _stockHeld = v.StockReserved;
-        _stockDelta = null; _stockSetTo = null; _stockReason = StoreStockReason.Received; _stockNote = null; _stockError = null;
+        _stockError = null;
         _stockOpen = true;
     }
 
-    private async Task SaveStockAsync()
+    private async Task SaveStockAsync(AdjustStockRequest request)
     {
         _busy = true; _stockError = null;
         try
         {
-            var (saved, error) = await AdminClient.AdjustStoreVariantStockAsync(ProductId, _stockVariantId,
-                new AdjustStockRequest(_stockDelta, _stockSetTo, _stockReason, _stockNote));
+            var (saved, error) = await AdminClient.AdjustStoreVariantStockAsync(ProductId, _stockVariantId, request);
             if (saved is null) { _stockError = error ?? "The stock could not be changed."; return; }
             Adopt(saved, Drafts.None);
             _stockOpen = false;
@@ -813,13 +565,13 @@
         {
             foreach (var file in e.GetMultipleFiles(StoreCatalogRules.MaxImagesPerProduct))
             {
-                using var content = await StoreAdminUploads.ContentAsync(file);
+                using var content = await StoreUploads.ContentAsync(file);
                 var (saved, error) = await AdminClient.AddStoreProductImageAsync(ProductId, content);
                 if (saved is null) { _pictureError = $"{file.Name}: {error ?? "could not be uploaded."}"; break; }
                 Adopt(saved, Drafts.None);
             }
         }
-        catch (IOException) { _pictureError = StoreAdminUploads.TooLarge; }
+        catch (IOException) { _pictureError = StoreUploads.TooLarge; }
         finally { _busy = false; }
     }
 

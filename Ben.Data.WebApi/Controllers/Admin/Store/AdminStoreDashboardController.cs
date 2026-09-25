@@ -65,6 +65,7 @@ public sealed class AdminStoreDashboardController(IDbContextFactory<BenDataConte
             OrdersInRange: await paid.CountAsync(ct),
             Sales: new StoreSales(gross, refunded, gross - refunded),
             LowStock: low.Select(v => new StoreLowStockRow(
-                v.ProductId, v.Product, v.Id, v.Sku, StorePriceCaches.Label(v.Name), v.Available, threshold)).ToList()));
+                v.ProductId, v.Product, v.Id, v.Sku, StorePriceCaches.Label(v.Name), v.Available, threshold)).ToList(),
+            SaleRequestsWaiting: await db.StoreProductSaleRequests.CountAsync(r => r.Status == StoreSaleRequestStatus.Open, ct)));
     }
 }

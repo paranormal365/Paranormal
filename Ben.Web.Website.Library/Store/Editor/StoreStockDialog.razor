@@ -1,0 +1,65 @@
+@*
+    Adjusting one variant's stock: a change or a counted number, and why (store sellers, backlog
+    251, P3 — lifted from the admin editor). Every change leaves a movement and a history line; the
+    page makes the call and shows a refusal here.
+*@
+
+<BenModal Visible="Visible" VisibleChanged="VisibleChanged" Title="@($"Adjust stock — {Label}")">
+    <ChildContent>
+        <p class="text-secondary small">On hand @OnHand, held by checkouts @Held. Give a change or a counted number.</p>
+        <div class="row g-2">
+            <div class="col-6">
+                <label class="form-label" for="stock-delta">Change by</label>
+                <input id="stock-delta" type="number" class="form-control" placeholder="e.g. 10 or -2" @bind="_delta" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="stock-setto">Or set to</label>
+                <input id="stock-setto" type="number" min="0" class="form-control" placeholder="counted" @bind="_setTo" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="stock-reason">Why</label>
+                <select id="stock-reason" class="form-select" @bind="_reason">
+                    <option value="@StoreStockReason.Received">Received</option>
+                    <option value="@StoreStockReason.Correction">Correction</option>
+                    <option value="@StoreStockReason.Damaged">Damaged</option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="stock-note">Note</label>
+                <input id="stock-note" class="form-control" maxlength="200" @bind="_note" />
+            </div>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="stock-adjust-refusal">@Error</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => VisibleChanged.InvokeAsync(false))">Cancel</button>
+        <button type="button" class="btn btn-primary" id="stock-adjust-save" disabled="@Busy"
+                @onclick="@(() => OnSave.InvokeAsync(new AdjustStockRequest(_delta, _setTo, _reason, _note)))">Save</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int OnHand { get; set; }
+    [Parameter] public int Held { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<AdjustStockRequest> OnSave { get; set; }
+
+    private int? _delta, _setTo;
+    private StoreStockReason _reason = StoreStockReason.Received;
+    private string? _note;
+    private bool _wasVisible;
+
+    /// <summary>Each opening starts from an empty form, as the dialog always has.</summary>
+    protected override void OnParametersSet()
+    {
+        if (Visible && !_wasVisible) { _delta = null; _setTo = null; _reason = StoreStockReason.Received; _note = null; }
+        _wasVisible = Visible;
+    }
+}

@@ -1,5 +1,8 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services.Store;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Seller;
 
@@ -22,4 +25,11 @@ public abstract class SellerStoreControllerBase : BenControllerBase
         var me = GetCurrentUserIdOrThrow();
         return db.StoreProducts.Where(p => p.SellerAppUserId == me);
     }
+
+    /// <summary>One of the caller's items, tracked for an edit — or null, which the caller answers 404.</summary>
+    protected Task<StoreProduct?> MineAsync(BenDataContext db, Guid id, CancellationToken ct)
+        => Mine(db).FirstOrDefaultAsync(p => p.Id == id, ct);
+
+    /// <summary>The caller, editing as a seller: their changes read "You" to them and carry the Seller badge.</summary>
+    protected StoreEditActor Seller => new(GetCurrentUserIdOrThrow(), StoreChangeActor.Seller);
 }

@@ -46,7 +46,8 @@ public sealed class StoreClientRoutesTests
         var controllers = AdminStoreRoutes().Select(r => r.Controller).Distinct().Order().ToList();
         Assert.Equal([
             "AdminStoreCategoryController", "AdminStoreCouponController", "AdminStoreDashboardController",
-            "AdminStoreOrderController", "AdminStoreProductController", "AdminStoreReviewController", "AdminStoreSettingsController",
+            "AdminStoreOrderController", "AdminStoreProductController", "AdminStoreReviewController", "AdminStoreSaleRequestController",
+            "AdminStoreSettingsController",
             "AdminStoreStockController",
         ], controllers);
         Assert.True(AdminStoreRoutes().Count() >= 40, "Far fewer actions than the store has — the pattern is reading the wrong thing.");

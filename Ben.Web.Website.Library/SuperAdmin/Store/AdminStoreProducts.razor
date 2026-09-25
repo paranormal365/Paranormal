@@ -92,6 +92,11 @@
                                 @if (p.HiddenByCategory) { <span class="badge bg-warning-subtle text-warning-emphasis">Hidden (category)</span> }
                                 else if (p.IsActive) { <span class="badge bg-success">Live</span> }
                                 else { <span class="badge bg-secondary">Hidden</span> }
+                                @if (p.SaleRequested)
+                                {
+                                    @* Store sellers P3: its seller has asked for it to go on sale. *@
+                                    <a href="/admin/store/sale-requests" class="badge bg-info-subtle text-info-emphasis ms-1 text-decoration-none" data-testid="product-waiting">Waiting</a>
+                                }
                             </td>
                             <td>
                                 <span class="text-nowrap">

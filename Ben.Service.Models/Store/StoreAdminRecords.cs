@@ -35,17 +35,23 @@ public sealed record ReorderRequest(IReadOnlyList<Guid> OrderedIds);
 public sealed record StoreProductListAdminRecord(
     Guid Id, string Name, string Slug, Guid CategoryId, string CategoryName, bool IsActive, bool HiddenByCategory,
     bool IsFeatured, decimal MinPrice, decimal MaxPrice, int TotalStock, int LowStockVariants, int VariantCount,
-    int UnitsSold, Guid? PrimaryImageUploadFileId, DateTime? DateUpdated, string? SellerName = null);
+    int UnitsSold, Guid? PrimaryImageUploadFileId, DateTime? DateUpdated, string? SellerName = null,
+    bool SaleRequested = false);
 
 /// <summary>Just a name: a new product starts hidden, with one $0.00 variant to price.</summary>
 public sealed record CreateStoreProductRequest(string Name, Guid? CategoryId = null);
 
 /// <summary>A product's details. No <c>IsActive</c> — putting a product on sale is its own verb,
 /// because it has its own checks.</summary>
+/// <param name="ExpectedDateUpdated">
+/// When the editor loaded the item (its <c>DateUpdated ?? DateCreated</c>). A save made after
+/// somebody else's is refused with a 409 rather than overwriting it (store sellers P3). Null skips
+/// the check.
+/// </param>
 public sealed record SaveStoreProductRequest(
     Guid CategoryId, Guid? EquipmentModelId, string Name, string? Slug, string? ShortDescription,
     string? LongDescriptionHtml, bool IsFeatured, DateTime? NewUntilUtc, string? StripeTaxCode, int SortOrder,
-    IReadOnlyList<StoreSpecGroup> Specs, Guid? SellerAppUserId);
+    IReadOnlyList<StoreSpecGroup> Specs, Guid? SellerAppUserId, DateTime? ExpectedDateUpdated = null);
 
 public sealed record StoreProductAdminRecord(
     Guid Id, Guid CategoryId, string CategoryName, bool CategoryIsActive, Guid? EquipmentModelId, string Name,
@@ -55,7 +61,24 @@ public sealed record StoreProductAdminRecord(
     IReadOnlyList<StoreImageRecord> Images, IReadOnlyList<StoreOptionRecord> Options,
     IReadOnlyList<StoreVariantAdminRecord> Variants, IReadOnlyList<StoreSpecGroup> Specs,
     string PublicUrl, DateTime DateCreated, DateTime? DateUpdated,
-    Guid? SellerAppUserId = null, string? SellerName = null);
+    Guid? SellerAppUserId = null, string? SellerName = null,
+    decimal? SellerAskPerUnit = null, DateTime? FirstOnSaleUtc = null, StoreSaleRequestRecord? OpenSaleRequest = null)
+{
+    /// <summary>What a save sends back as its <c>ExpectedDateUpdated</c>.</summary>
+    public DateTime EditedAt => DateUpdated ?? DateCreated;
+}
+
+/// <summary>
+/// A seller's request for an item to go on sale (store sellers, backlog 251, P3), with what the
+/// item still needs before it can — empty <paramref name="Problems"/> means ready.
+/// </summary>
+public sealed record StoreSaleRequestRecord(
+    Guid Id, Guid ProductId, string ProductName, Guid SellerAppUserId, string SellerName, decimal SellerAskingPrice,
+    string? SellerNote, StoreSaleRequestStatus Status, DateTime RequestedUtc, DateTime? DecidedUtc, string? DecisionNote,
+    decimal MinPrice, decimal MaxPrice, IReadOnlyList<string> Problems, Guid? ImageUploadFileId);
+
+/// <summary>The store's no, with the reason the seller will read.</summary>
+public sealed record DeclineSaleRequest(string Note);
 
 /// <summary>Somebody who can be named as an item's seller: a holder of the Seller role.</summary>
 public sealed record StoreSellerRecord(Guid Id, string Name, string? Email);
@@ -74,7 +97,7 @@ public sealed record SaveStoreVariantRequest(
     IReadOnlyList<Guid> OptionValueIds, int? InitialStock = null);
 
 /// <summary>A product's options, whole: options and values missing from the list are removed.</summary>
-public sealed record SaveStoreOptionsRequest(IReadOnlyList<SaveStoreOptionRequest> Options);
+public sealed record SaveStoreOptionsRequest(IReadOnlyList<SaveStoreOptionRequest> Options, DateTime? ExpectedDateUpdated = null);
 
 public sealed record SaveStoreOptionRequest(
     Guid? Id, string Name, StoreOptionKind Kind, IReadOnlyList<SaveStoreOptionValueRequest> Values);
@@ -170,7 +193,7 @@ public sealed record StoreSales(decimal GrossUsd, decimal RefundedUsd, decimal N
 public sealed record StoreDashboardRecord(
     bool StoreIsOn, bool CheckoutEnabled, int Days, int OrdersToPack, int OrdersToShip, int OrdersNeedingAttention,
     int ReviewsPending, int UnitsHeldByOpenCheckouts, int OrdersInRange, StoreSales Sales,
-    IReadOnlyList<StoreLowStockRow> LowStock);
+    IReadOnlyList<StoreLowStockRow> LowStock, int SaleRequestsWaiting = 0);
 
 public sealed record StoreLowStockRow(
     Guid ProductId, string ProductName, Guid VariantId, string Sku, string VariantName, int Available, int Threshold);

@@ -1,4 +1,5 @@
 @page "/admin/store/categories"
+@using Ben.Web.Website.Library.Store.Editor
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -284,13 +285,13 @@
         _busy = true; _formError = null;
         try
         {
-            using var content = await StoreAdminUploads.ContentAsync(e.File);
+            using var content = await StoreUploads.ContentAsync(e.File);
             var (saved, error) = await AdminClient.SetStoreCategoryImageAsync(id, content);
             if (saved is null) { _formError = error ?? "That picture could not be uploaded."; return; }
             _editPicture = saved.ImageUploadFileId;
             await LoadAsync();
         }
-        catch (IOException) { _formError = StoreAdminUploads.TooLarge; }
+        catch (IOException) { _formError = StoreUploads.TooLarge; }
         finally { _busy = false; }
     }
 

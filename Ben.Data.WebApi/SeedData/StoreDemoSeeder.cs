@@ -201,6 +201,9 @@ internal static class StoreDemoSeeder
         public static readonly Guid RemPod = Id(28), EmfLogger = Id(29);
     }
 
+    /// <summary>What Hazel is paid for each REM pod on top of its cost, from her approved request.</summary>
+    internal const decimal HazelAsk = 95m;
+
     /// <summary>
     /// Hazel Marsh (the roster's demo seller) makes two things: a hand-built REM pod on sale, and
     /// a pocket logger still a draft — so her workspace has one of each to show. Only when she is
@@ -235,6 +238,19 @@ internal static class StoreDemoSeeder
             .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAppUserId, seller), ct);
         foreach (var id in given)
             StoreProductHistory.Record(db, id, StoreProductChangeArea.Seller, "Gave it to Hazel Marsh to sell.", ownerId, StoreChangeActor.Store, now.AddSeconds(1));
+
+        // The REM pod went on sale the way a seller's item does: Hazel asked, the store approved.
+        if (given.Contains(SeededSellerProducts.RemPod))
+        {
+            db.StoreProductSaleRequests.Add(new StoreProductSaleRequest
+            {
+                Id = Id(95), ProductId = SeededSellerProducts.RemPod, SellerAppUserId = seller, SellerAskingPrice = HazelAsk,
+                SellerNote = "Built and tested by hand — three ready to ship.", Status = StoreSaleRequestStatus.Approved,
+                RequestedUtc = now, DecidedUtc = now.AddSeconds(1), DecidedByAppUserId = ownerId,
+            });
+            await db.StoreProducts.Where(p => p.Id == SeededSellerProducts.RemPod)
+                .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAskPerUnit, HazelAsk), ct);
+        }
         await db.SaveChangesAsync(ct);
     }
 
@@ -531,6 +547,7 @@ internal static class StoreDemoSeeder
             Id = productId, CategoryId = Id(shelf), EquipmentModelId = modelId, Name = name, Slug = slug,
             ShortDescription = shortDescription, LongDescriptionHtml = html, IsActive = active, IsFeatured = featured,
             NewUntilUtc = newUntil, SortOrder = n, DateCreated = now, CreatedByAppUserId = ownerId,
+            FirstOnSaleUtc = active ? now : null,
         });
         // Its history opens as the admin pages would have written it (store sellers P2).
         StoreProductHistory.Record(db, productId, StoreProductChangeArea.Created, "Created it.", ownerId, StoreChangeActor.Store, now);

@@ -86,6 +86,15 @@ public interface IBenStoreAdminClient
     /// <summary>An item's history, newest first, every line with names (store sellers P2).</summary>
     Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default);
 
+    /// <summary>Sellers' requests to go on sale: the ones waiting, oldest first, or with <paramref name="decided"/> the answered ones.</summary>
+    Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default);
+
+    /// <summary>Puts the item on sale at the store's prices and fixes the seller's asking price onto it.</summary>
+    Task<(StoreSaleRequestRecord? Result, string? Error)> ApproveStoreSaleRequestAsync(Guid requestId, CancellationToken token = default);
+
+    Task<(StoreSaleRequestRecord? Result, string? Error)> DeclineStoreSaleRequestAsync(
+        Guid requestId, DeclineSaleRequest request, CancellationToken token = default);
+
     /// <summary>A multipart body: the picture in <c>file</c>, optionally <c>altText</c> and <c>variantId</c>.</summary>
     Task<(StoreProductAdminRecord? Result, string? Error)> AddStoreProductImageAsync(
         Guid productId, MultipartFormDataContent content, CancellationToken token = default);

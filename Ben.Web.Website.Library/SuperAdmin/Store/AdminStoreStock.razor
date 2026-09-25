@@ -1,4 +1,5 @@
 @page "/admin/store/stock"
+@using Ben.Web.Website.Library.Store.Editor
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -170,13 +171,13 @@
         _busy = true; _error = null;
         try
         {
-            using var content = await StoreAdminUploads.ContentAsync(e.File);
+            using var content = await StoreUploads.ContentAsync(e.File);
             var (done, error) = await AdminClient.ImportStoreStockAsync(content);
             if (done is null) { _error = error ?? "Nothing was changed."; return; }
             Toasts.Success($"{e.File.Name}: {done.VariantsChanged} {(done.VariantsChanged == 1 ? "variant" : "variants")} received.");
             await LoadAsync();
         }
-        catch (IOException) { _error = StoreAdminUploads.TooLarge; }
+        catch (IOException) { _error = StoreUploads.TooLarge; }
         finally { _busy = false; }
     }
 

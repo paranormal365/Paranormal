@@ -49,7 +49,7 @@ public sealed class AdminStoreStockController(IDbContextFactory<BenDataContext> 
         var lines = (request.Lines ?? []).Where(l => l.SetTo is not null || l.Delta is not null and not 0).ToList();
         if (lines.Count == 0) return BadRequest("Nothing was changed — no line had a quantity.");
         foreach (var line in lines)
-            if (AdminStoreProductController.StockRequestProblem(line.Delta, line.SetTo, request.Reason) is { } problem)
+            if (StoreProductEditor.StockRequestProblem(line.Delta, line.SetTo, request.Reason) is { } problem)
                 return BadRequest(problem);
         if (lines.Select(l => l.VariantId).Distinct().Count() != lines.Count)
             return BadRequest("Nothing was changed — the same item is listed twice.");

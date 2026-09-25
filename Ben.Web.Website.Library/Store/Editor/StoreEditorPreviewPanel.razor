@@ -1,0 +1,45 @@
+@using Ben.Web.Website.Library.Store.Shared
+
+@*
+    The product page as a shopper will see it, drawn from what is on the form now — saved or not —
+    by the same component the store uses (Ben, 09/24/2026; lifted from the admin editor in store
+    sellers P3). It works with the store switched off, which the store's own address does not.
+*@
+
+<div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="editor-preview">
+    <div class="flex-grow-1">
+        <strong>How shoppers will see this page.</strong>
+        @if (Dirty)
+        {
+            <span>It shows your unsaved changes — press <strong>Save</strong> on the Details tab to keep them.</span>
+        }
+        else
+        {
+            <span>It follows the form as you edit.</span>
+        }
+        @if (!IsActive)
+        {
+            <span>It isn't on sale yet, so the button reads "Not on sale".</span>
+        }
+    </div>
+    @if (SavedUrl is not null)
+    {
+        <a class="btn btn-sm btn-outline-secondary" href="@SavedUrl" target="_blank" rel="noopener">Open the saved page</a>
+    }
+</div>
+<div class="border rounded-3 p-3 bg-body" data-testid="editor-preview-page">
+    <StoreProductView Product="@Detail" Info="@Info" Banner="@NoBanner" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoreProductDetail Detail { get; set; } = null!;
+    [Parameter] public StorePublicInfo? Info { get; set; }
+    [Parameter] public bool Dirty { get; set; }
+    [Parameter] public bool IsActive { get; set; }
+
+    /// <summary>The live page's address, when there is one worth opening; null shows no link.</summary>
+    [Parameter] public string? SavedUrl { get; set; }
+
+    /// <summary>The preview's own note replaces the page's "shoppers can't see this" banner.</summary>
+    private static readonly RenderFragment NoBanner = _ => { };
+}

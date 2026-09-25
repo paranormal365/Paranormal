@@ -3,6 +3,7 @@
 @inject IBenStoreSellerClient Seller
 @inject IBenUserState User
 @inject NavigationManager Nav
+@inject BenToastService Toasts
 
 <PageTitle>My items — Selling</PageTitle>
 
@@ -18,8 +19,13 @@
 *@
 
 <div class="container-fluid px-3 py-3" style="max-width:72rem;">
-    <h1 class="h3 mb-1">My items<HelpLink Slug="selling-in-the-store" Anchor="your-items" /></h1>
-    <p class="text-secondary mb-3">The things you sell in the store, and where each one stands.</p>
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">My items<HelpLink Slug="selling-in-the-store" Anchor="your-items" /></h1>
+            <p class="text-secondary mb-0">The things you sell in the store, and where each one stands.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="seller-add" @onclick="OpenAddAsync"><BenIcon Name="plus" /> Add an item</button>
+    </div>
 
     @if (_summary is { } s)
     {
@@ -46,7 +52,7 @@
     else if (items.IsEmpty)
     {
         <StoreEmptyState Icon="box" Title="No items yet"
-                         Lead="Items the store lists for you appear here. Soon you'll be able to add your own." />
+                         Lead="Add something you make. It stays a draft, hidden from shoppers, until you ask the store to put it on sale." />
     }
     else
     {
@@ -70,7 +76,7 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <StoreLineThumb ImageUploadFileId="item.PrimaryImageUploadFileId" Alt="@item.Name" Size="40" />
                                     <div>
-                                        <div class="fw-semibold">@item.Name</div>
+                                        <a class="fw-semibold" href="@($"/store/selling/items/{item.Id}")" data-testid="seller-item-link">@item.Name</a>
                                         <div class="small text-secondary">@item.CategoryName</div>
                                     </div>
                                 </div>
@@ -85,11 +91,59 @@
                 </tbody>
             </table>
         </div>
-        <p class="small text-secondary">The store sets each item's price. To change one, get in touch.</p>
+        <p class="small text-secondary">The store sets each item's price. You say what you'd like for each one when you ask for it to go on sale.</p>
     }
 </div>
 
+<BenModal @bind-Visible="_adding" Title="Add an item">
+    <ChildContent>
+        <p class="small text-secondary">Give it a name and a shelf. It starts as a draft — add its words, pictures and choices next.</p>
+        <label class="form-label" for="new-item-name">Name</label>
+        <input id="new-item-name" class="form-control mb-2" maxlength="200" @bind="_newName" @bind:event="oninput" />
+        <label class="form-label" for="new-item-category">Category</label>
+        <select id="new-item-category" class="form-select" @bind="_newCategoryId">
+            @foreach (var c in _categories.Items)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+        @if (_addError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0" id="new-item-refusal">@_addError</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _adding = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="new-item-save" disabled="@_busy" @onclick="AddAsync">Add</button>
+    </FooterContent>
+</BenModal>
+
 @code {
+    private bool _adding, _busy;
+    private string? _newName, _addError;
+    private Guid? _newCategoryId;
+    private LoadResult<SellerCategoryRecord> _categories;
+
+    private async Task OpenAddAsync()
+    {
+        if (_categories.Items.Count == 0) _categories = await Seller.GetSellerCategoriesAsync();
+        _newName = null; _addError = null; _newCategoryId = _categories.Items.FirstOrDefault()?.Id;
+        _adding = true;
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true; _addError = null;
+        try
+        {
+            var (made, error) = await Seller.CreateSellerItemAsync(new CreateSellerItemRequest(_newName ?? "", _newCategoryId));
+            if (made is null) { _addError = error ?? "It couldn't be added."; return; }
+            Toasts.Success("Added — it's a draft until you ask for it to go on sale.");
+            Nav.NavigateTo($"/store/selling/items/{made.Item.Id}");
+        }
+        finally { _busy = false; }
+    }
+
     private LoadResult<SellerProductListRecord>? _items;
     private SellerWorkspaceSummary? _summary;
     private string? _refusal;

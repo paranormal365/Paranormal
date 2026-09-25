@@ -13,13 +13,15 @@ namespace Ben.Web.Tests.Website;
 /// page and the element its refusal lands in; the element must be bound to a field the page sets
 /// from the API's error.</para>
 ///
-/// <para>S3.5 adds the cart page's row, S4.11 the checkout page's and S6.3 the reviews' and favourites'.</para>
+/// <para>S3.5 adds the cart page's row, S4.11 the checkout page's and S6.3 the reviews' and favourites'.
+/// Store sellers P3 moved the product editor's grid into a shared component, drawn by both the
+/// admin's editor and the seller's: <see cref="ComponentSurfaces"/> holds each page to handing it a
+/// field set from the API's error.</para>
 /// </remarks>
 public sealed class StoreRefusalReachesThePageTests
 {
     public static TheoryData<string, string> Surfaces() => new()
     {
-        { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreProductEdit.razor", "variant-refusal" },
         { "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreStock.razor", "stock-refusal" },
         // A cart that failed to load must not look like an empty one (S3.5).
         { "Ben.Web.Website.Library/Store/Cart/StoreCartPage.razor", "cart-refusal" },
@@ -38,6 +40,29 @@ public sealed class StoreRefusalReachesThePageTests
         { "Ben.Web.Website.Library/Store/Shared/StoreReviewsBlock.razor", "reviews-refusal" },
         { "Ben.Web.Website.Library/Store/StoreFavourites.razor", "favourites-refusal" },
     };
+
+    /// <summary>A shared component that draws a refusal it is given, and the pages that give it one.</summary>
+    public static TheoryData<string, string, string, string> ComponentSurfaces() => new()
+    {
+        { "Ben.Web.Website.Library/Store/Editor/StoreVariantsGrid.razor", "variant-refusal", "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreProductEdit.razor", "StoreVariantsGrid" },
+        { "Ben.Web.Website.Library/Store/Editor/StoreVariantsGrid.razor", "variant-refusal", "Ben.Web.Website.Library/Store/Selling/SellerItemEdit.razor", "StoreVariantsGrid" },
+        { "Ben.Web.Website.Library/Store/Editor/StoreStockDialog.razor", "stock-adjust-refusal", "Ben.Web.Website.Library/SuperAdmin/Store/AdminStoreProductEdit.razor", "StoreStockDialog" },
+        { "Ben.Web.Website.Library/Store/Editor/StoreStockDialog.razor", "stock-adjust-refusal", "Ben.Web.Website.Library/Store/Selling/SellerItemEdit.razor", "StoreStockDialog" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ComponentSurfaces))]
+    public void A_shared_component_draws_the_refusal_each_page_hands_it(string component, string id, string page, string tag)
+    {
+        var drawn = Regex.Replace(Read(component), @"@\*.*?\*@", " ", RegexOptions.Singleline);
+        Assert.Matches($@"<(\w+)[^>]*\bid=""{Regex.Escape(id)}""[^>]*>\s*@Error\s*</\1>", drawn);
+
+        var source = Regex.Replace(Read(page), @"@\*.*?\*@", " ", RegexOptions.Singleline);
+        var use = Regex.Match(source, $@"<{tag}\b[^>]*\bError=""@(_\w+)""");
+        Assert.True(use.Success, $"{page} draws <{tag}> without handing it a refusal field as Error.");
+        // The field is set from the API's answer: "= error" directly, or through a small setter (e => field = e).
+        Assert.Matches($@"\b{Regex.Escape(use.Groups[1].Value)}\s*=\s*(error|e)\b", source);
+    }
 
     private static string Read(string relative)
     {
