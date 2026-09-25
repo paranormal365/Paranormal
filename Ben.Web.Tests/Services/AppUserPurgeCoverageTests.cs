@@ -136,6 +136,9 @@ public sealed class AppUserPurgeCoverageTests
             // Detached rather than deleted (StoreOrderScrub.DetachAndScrubAsync, called from the
             // anonymise step); StoreOrderScrubTests proves nothing in either names the account after.
             nameof(StoreOrder), nameof(StoreCouponRedemption),
+            // A shopper's questions (store sellers P12), removed by the anonymise step;
+            // StoreProductQuestionTests proves a closed account leaves none behind.
+            nameof(StoreProductQuestion),
         };
 
 

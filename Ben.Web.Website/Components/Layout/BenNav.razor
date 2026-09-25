@@ -301,7 +301,8 @@
                     main.Add(Group("Store", "shopping-cart",
                         new NavItem("Browse the Store", "shopping-bag", "/store"),
                         new NavItem("My Orders", "package", "/store/orders"),
-                        new NavItem("Favourites", "heart", "/store/favourites")));
+                        new NavItem("Favourites", "heart", "/store/favourites"),
+                        new NavItem("My Questions", "help-circle", "/store/questions")));
                 else if (_hasStoreOrders)
                     main.Add(new NavItem("My Orders", "package", "/store/orders"));
 
@@ -365,6 +366,7 @@
                         new NavItem("My Items", "box", "/store/selling"),
                         new NavItem("My Packages", "truck", "/store/selling/packages"),
                         new NavItem("My Earnings", "dollar-sign", "/store/selling/earnings"),
+                        new NavItem("Questions", "help-circle", "/store/selling/questions"),
                     ]),
                 }));
             }
@@ -494,6 +496,7 @@
             new NavItem("Stock",            "box",            "/admin/store/stock"),
             new NavItem("Discount Codes",   "tag",            "/admin/store/coupons"),
             new NavItem("Reviews",          "message-square", "/admin/store/reviews"),
+            new NavItem("Questions",        "help-circle",    "/admin/store/questions"),
             new NavItem("Store Settings",   "sliders",        "/admin/store/settings"),
         }),
         new NavItem("System", "settings", children: new[]

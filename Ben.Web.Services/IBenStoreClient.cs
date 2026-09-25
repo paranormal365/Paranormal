@@ -63,6 +63,12 @@ public interface IBenStoreClient
 
     Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default);
 
+    /// <summary>The signed-in shopper's questions about the store's items, newest first (store sellers P12).</summary>
+    Task<LoadResult<StoreAskedQuestionRecord>> GetMyStoreQuestionsAsync(CancellationToken token = default);
+
+    /// <summary>Asks a question about a product. The refusal says why in words.</summary>
+    Task<(StoreAskedQuestionRecord? Result, string? Error)> AskStoreQuestionAsync(Guid productId, string question, CancellationToken token = default);
+
     /// <summary>What a paid order lets its buyer download (store sellers P11). Empty when nothing, or not theirs.</summary>
     Task<ItemResult<List<StoreOrderDownloadRecord>>> GetStoreOrderDownloadsAsync(Guid orderId, string? accessToken, CancellationToken token = default);
 

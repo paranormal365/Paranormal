@@ -601,7 +601,7 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/experience-taxonomy", "/admin/delete-case", "/admin/delete-group", "/admin/delete-user",
                      "/admin/store", "/admin/store/categories", "/admin/store/products", "/admin/store/stock",
                      "/admin/store/coupons", "/admin/store/reviews", "/admin/store/settings", "/admin/store/orders",
-                     "/admin/store/sale-requests", "/admin/store/sellers",
+                     "/admin/store/sale-requests", "/admin/store/sellers", "/admin/store/questions",
                  })
             await StepAsync(route.Replace("/admin/", "admin "), () => GoAsync(route));
         await StepAsync("one user", async () =>

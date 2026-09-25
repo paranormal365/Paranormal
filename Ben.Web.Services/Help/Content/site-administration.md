@@ -1223,6 +1223,17 @@ everyone who bought the product, once paid, while the order isn't cancelled and 
 refunded in full; a private one is only for the store and the product's seller. The seller manages
 their own item's files; the store can change any. Changes are recorded in the product's history.
 
+## FAQ and questions
+
+Each product has an **FAQ** tab — questions and answers shown on its page after the reviews, with a
+switch to hide them. Signed-in shoppers can also **ask a question** from the page. A question about a
+seller's item goes to that seller; one about the store's own stock goes to every SuperAdmin, and waits
+under **Store → Questions** (**The store's own** shows those; **Every item** shows sellers' too, and the
+store can answer any). Answering or declining tells the shopper, who reads it under **My Questions**;
+neither side is told who the other is. **Add to the FAQ…** copies an answered question into the
+product's FAQ, reworded if need be — the shopper's own answer is left as it was. A person's questions
+go with their account when it's closed or deleted.
+
 ## Paying sellers
 
 Payouts are made by hand: the store takes the whole payment for every order and pays its sellers

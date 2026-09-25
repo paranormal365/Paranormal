@@ -217,6 +217,27 @@ public sealed class SellerStoreProductEditController(
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
     }
 
+    // ── FAQ (store sellers P12) ──────────────────────────────────────────────
+
+    [HttpGet("{id:guid}/faqs")]
+    public async Task<ActionResult<StoreFaqsRecord>> Faqs(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        return Ok(await StoreProductRecords.FaqsAsync(db, id, ct));
+    }
+
+    [HttpPut("{id:guid}/faqs")]
+    public async Task<ActionResult<StoreFaqsRecord>> SaveFaqs(Guid id, [FromBody] SaveStoreFaqsRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await MineAsync(db, id, ct);
+        if (product is null) return NotFound();
+        if (await StoreProductEditor.SaveFaqsAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FaqsAsync(db, id, ct));
+    }
+
     // ── files (store sellers P11) ────────────────────────────────────────────
 
     [HttpGet("{id:guid}/files")]

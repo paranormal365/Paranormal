@@ -284,6 +284,9 @@ public sealed class AccountClosureService
         // from" reads as a former seller. The packages and the earnings stay — they are money records.
         foreach (var sent in await db.StoreOrderParcels.Where(x => x.SellerAppUserId == userId && x.SellerName != null).ToListAsync(ct))
             sent.SellerName = AccountClosure.FormerMemberName;
+        // Their questions about the store's items (store sellers P12) are about them, and go with them.
+        // An answer promoted to an FAQ stays: it was copied, and names nobody.
+        db.StoreProductQuestions.RemoveRange(await db.StoreProductQuestions.Where(q => q.AskerAppUserId == userId).ToListAsync(ct));
         await db.SaveChangesAsync(ct);
 
         // Bytes after the rows, and never fatal: a closure that has already anonymised the

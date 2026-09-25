@@ -35,4 +35,7 @@ public enum StoreProductChangeArea
 
     /// <summary>Files: manuals, firmware, documents — added, changed, removed (P11).</summary>
     Files = 10,
+
+    /// <summary>The FAQ: entries written, changed, removed, promoted from a question; switched on or off (P12).</summary>
+    Faq = 11,
 }

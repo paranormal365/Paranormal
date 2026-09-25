@@ -357,6 +357,22 @@ namespace Ben.Data.Source.Context
             productFile.HasOne(e => e.UploadFile).WithMany()
                 .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // Store sellers P12: a product's FAQ, and shoppers' questions. The asker's key is NoAction —
+            // closing or purging the account removes their questions first (AccountClosureService).
+            // FaqEnabled starts true for existing products: the migration's column default says so.
+            var faq = modelBuilder.Entity<StoreProductFaq>();
+            faq.Property(e => e.Question).HasMaxLength(StoreProductFaq.MaxQuestionLength);
+            faq.Property(e => e.Answer).HasMaxLength(StoreProductFaq.MaxAnswerLength);
+            faq.HasIndex(e => new { e.ProductId, e.SortOrder });
+            faq.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            var question = modelBuilder.Entity<StoreProductQuestion>();
+            question.Property(e => e.Question).HasMaxLength(StoreProductQuestion.MaxQuestionLength);
+            question.Property(e => e.Answer).HasMaxLength(StoreProductQuestion.MaxAnswerLength);
+            question.HasIndex(e => new { e.ProductId, e.Status });
+            question.HasIndex(e => new { e.AskerAppUserId, e.DateCreated });
+            question.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            question.HasOne(e => e.AskerAppUser).WithMany().HasForeignKey(e => e.AskerAppUserId).OnDelete(DeleteBehavior.NoAction);
+
             // Store sellers P10: what sellers are owed, and what they've been paid. Every person key is
             // NoAction: these are money records, kept when an account goes (its name is anonymised).
             var earning = modelBuilder.Entity<StoreSellerEarning>();

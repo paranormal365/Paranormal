@@ -459,6 +459,8 @@ public sealed class AppUserPurge
             // Detached rather than deleted, by the shared anonymise step (StoreOrderScrub): after
             // it no order or redemption names the account, so the preview must not count them.
             nameof(StoreOrder), nameof(StoreCouponRedemption),
+            // Removed by the same anonymise step (store sellers P12): a question is about its asker.
+            nameof(StoreProductQuestion),
         };
 
         // Single columns the shared anonymise step sets to null, on tables it otherwise leaves

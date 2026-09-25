@@ -147,4 +147,19 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(List<StoreProductFileRecord>? Result, string? Error)> DeleteSellerItemFileAsync(Guid productId, Guid fileId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, List<StoreProductFileRecord>>(HttpMethod.Delete, $"/api/seller/store/products/{productId}/files/{fileId}", new { }, token);
+
+    public Task<ItemResult<StoreFaqsRecord>> GetSellerItemFaqsAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreFaqsRecord>($"/api/seller/store/products/{productId}/faqs", token);
+
+    public Task<(StoreFaqsRecord? Result, string? Error)> SaveSellerItemFaqsAsync(Guid productId, SaveStoreFaqsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreFaqsRequest, StoreFaqsRecord>(HttpMethod.Put, $"/api/seller/store/products/{productId}/faqs", request, token);
+
+    public Task<LoadResult<StoreReceivedQuestionRecord>> GetSellerQuestionsAsync(bool openOnly = false, CancellationToken token = default)
+        => _api.GetListAsync<StoreReceivedQuestionRecord>("/api/seller/store/questions" + (openOnly ? "?open=true" : ""), token);
+
+    public Task<(StoreReceivedQuestionRecord? Result, string? Error)> AnswerSellerQuestionAsync(Guid questionId, AnswerStoreQuestionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AnswerStoreQuestionRequest, StoreReceivedQuestionRecord>(HttpMethod.Put, $"/api/seller/store/questions/{questionId}/answer", request, token);
+
+    public Task<(StoreReceivedQuestionRecord? Result, string? Error)> PromoteSellerQuestionAsync(Guid questionId, PromoteStoreQuestionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<PromoteStoreQuestionRequest, StoreReceivedQuestionRecord>(HttpMethod.Post, $"/api/seller/store/questions/{questionId}/promote", request, token);
 }

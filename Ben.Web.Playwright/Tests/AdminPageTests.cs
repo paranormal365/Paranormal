@@ -68,6 +68,8 @@ public class AdminPageTests : BenTestBase
         ("/admin/store/sale-requests", "Sellers ask for their items to go on sale"),
         // Store sellers P10: what each seller is owed, and recording payments.
         ("/admin/store/sellers",       "What each seller has earned and been paid"),
+        // Store sellers P12: shoppers' questions, the store's own stock first.
+        ("/admin/store/questions",     "Questions about the store's own stock come here"),
     };
 
     [Test]

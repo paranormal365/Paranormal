@@ -166,6 +166,12 @@ public sealed class PublicStoreController(
                 .Select(m => new StoreEquipmentLink(m.EquipmentBrand.Name, m.EquipmentBrand.UrlName!, m.Name, m.UrlName!))
                 .FirstOrDefaultAsync(ct);
 
+        // Store sellers P12: the FAQ, when it's switched on. Names nobody and dates nothing.
+        var faqs = e.Product.FaqEnabled
+            ? await db.StoreProductFaqs.AsNoTracking().Where(f => f.ProductId == e.Product.Id).OrderBy(f => f.SortOrder).ThenBy(f => f.DateCreated)
+                .Select(f => new StoreFaqView(f.Id, f.Question, f.Answer)).ToListAsync(ct)
+            : [];
+
         var related = StoreCatalogue.Popular(
                 (await StoreCatalogue.LoadAsync(db, StoreCatalogue.LiveProducts(db)
                     .Where(p => p.CategoryId == e.Product.CategoryId && p.Id != e.Product.Id), ct)))
@@ -180,7 +186,8 @@ public sealed class PublicStoreController(
                 ratings.Count, Enumerable.Range(1, 5).Select(n => ratings.Count(r => r == n)).ToList()),
             equipment, related, s.LowStockThreshold, s.ReturnsWindowDays,
             e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live,
-            e.Category.ParentCategory?.Name, e.Category.ParentCategory?.Slug));
+            e.Category.ParentCategory?.Name, e.Category.ParentCategory?.Slug,
+            Faqs: faqs, CanAsk: product.Live));
     }
 
     /// <summary>Counts a look at a product, for "most popular". Always 204 — a hidden or missing product is not news to the caller.</summary>

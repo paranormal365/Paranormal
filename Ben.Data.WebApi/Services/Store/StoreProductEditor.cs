@@ -1042,6 +1042,74 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
     private static async Task<int> NextFileOrderAsync(BenDataContext db, Guid productId, CancellationToken ct)
         => (await db.StoreProductFiles.Where(f => f.ProductId == productId).MaxAsync(f => (int?)f.SortOrder, ct) ?? -1) + 1;
 
+    // ── FAQ (P12) ────────────────────────────────────────────────────────────
+
+    public const int MaxFaqs = 30;
+
+    /// <summary>
+    /// The FAQ, saved whole, and its switch. One history line says what changed; an unchanged save
+    /// writes nothing.
+    /// </summary>
+    public static async Task<StoreEditRefusal?> SaveFaqsAsync(BenDataContext db, StoreProduct product, SaveStoreFaqsRequest request,
+        StoreEditActor actor, CancellationToken ct)
+    {
+        if (request.Faqs.Count > MaxFaqs) return StoreEditRefusal.BadRequest($"An FAQ holds {MaxFaqs} entries at most.");
+        foreach (var (line, n) in request.Faqs.Select((l, i) => (l, i + 1)))
+        {
+            if (string.IsNullOrWhiteSpace(line.Question) || string.IsNullOrWhiteSpace(line.Answer))
+                return StoreEditRefusal.BadRequest($"Entry {n} needs both a question and an answer.");
+            if (line.Question.Trim().Length > StoreProductFaq.MaxQuestionLength)
+                return StoreEditRefusal.BadRequest($"Entry {n}'s question is {StoreProductFaq.MaxQuestionLength} characters at most.");
+            if (line.Answer.Trim().Length > StoreProductFaq.MaxAnswerLength)
+                return StoreEditRefusal.BadRequest($"Entry {n}'s answer is {StoreProductFaq.MaxAnswerLength} characters at most.");
+        }
+
+        var existing = await db.StoreProductFaqs.Where(f => f.ProductId == product.Id).ToListAsync(ct);
+        var kept = request.Faqs.Where(l => l.Id is { } id && existing.Any(e => e.Id == id)).Select(l => l.Id!.Value).ToHashSet();
+        var now = DateTime.UtcNow;
+        int added = 0, changed = 0, removed = 0, moved = 0;
+
+        foreach (var gone in existing.Where(e => !kept.Contains(e.Id)))
+        {
+            db.StoreProductFaqs.Remove(gone);
+            removed++;
+        }
+        for (var i = 0; i < request.Faqs.Count; i++)
+        {
+            var line = request.Faqs[i];
+            var (question, answer) = (line.Question.Trim(), line.Answer.Trim());
+            if (line.Id is { } id && existing.FirstOrDefault(e => e.Id == id) is { } row)
+            {
+                if (row.Question != question || row.Answer != answer) { row.Question = question; row.Answer = answer; row.DateUpdated = now; changed++; }
+                else if (row.SortOrder != i) moved++;
+                row.SortOrder = i;
+            }
+            else
+            {
+                db.StoreProductFaqs.Add(new StoreProductFaq
+                {
+                    Id = Guid.NewGuid(), ProductId = product.Id, Question = question, Answer = answer, SortOrder = i,
+                    DateCreated = now, CreatedByAppUserId = actor.UserId,
+                });
+                added++;
+            }
+        }
+
+        var said = new List<string>();
+        if (product.FaqEnabled != request.Enabled) said.Add(request.Enabled ? "Switched the FAQ on." : "Switched the FAQ off.");
+        product.FaqEnabled = request.Enabled;
+        var counts = new[] { (added, "added"), (changed, "changed"), (removed, "removed") }.Where(c => c.Item1 > 0)
+            .Select(c => $"{c.Item2} {c.Item1}").ToList();
+        if (counts.Count > 0) said.Add($"FAQ: {string.Join(", ", counts)}.");
+        else if (moved > 0) said.Add("Reordered the FAQ.");
+        if (said.Count == 0) return null;
+
+        product.DateUpdated = now;
+        StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Faq, string.Join(" ", said), actor.UserId, actor.Role, now);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
     // ── plumbing ─────────────────────────────────────────────────────────────
 
     private static async Task<string> VariantLabelAsync(BenDataContext db, Guid variantId, CancellationToken ct)

@@ -298,6 +298,48 @@ internal static class StoreDemoSeeder
                 DateCreated = now, CreatedByAppUserId = seller,
             });
         }
+        // Her FAQ, and shoppers' questions (P12): one answered and in the FAQ, one waiting for her,
+        // and one about the store's own stock waiting for the store. Each seeded on its own.
+        if (!await db.StoreProductFaqs.AnyAsync(f => f.ProductId == remPod.Id, ct))
+        {
+            db.StoreProductFaqs.Add(new StoreProductFaq
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000900"), ProductId = remPod.Id, SortOrder = 0,
+                Question = "How long do the batteries last?", Answer = "About 30 hours of use on four good AA batteries.",
+                DateCreated = now, CreatedByAppUserId = seller,
+            });
+            db.StoreProductFaqs.Add(new StoreProductFaq
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000901"), ProductId = remPod.Id, SortOrder = 1,
+                Question = "Is it loud enough for a large room?", Answer = "Yes — the alarm is louder than a standard REM pod's, and you'll hear it across a hall.",
+                DateCreated = now, CreatedByAppUserId = seller,
+            });
+        }
+        var sarah = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail == SarahEmail.ToUpperInvariant()).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        var james = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail == JamesEmail.ToUpperInvariant()).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        if (sarah is { } s && james is { } j && !await db.StoreProductQuestions.AnyAsync(q => q.ProductId == remPod.Id, ct))
+        {
+            db.StoreProductQuestions.Add(new StoreProductQuestion
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000950"), ProductId = remPod.Id, AskerAppUserId = j,
+                Question = "How long do the batteries last on this one?", Status = StoreQuestionStatus.Answered,
+                Answer = "About 30 hours of use on four good AA batteries.", AnsweredByAppUserId = seller, AnsweredUtc = now,
+                PromotedFaqId = new Guid("a1000000-0000-0000-0028-000000000900"), DateCreated = now.AddDays(-3),
+            });
+            db.StoreProductQuestions.Add(new StoreProductQuestion
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000951"), ProductId = remPod.Id, AskerAppUserId = s,
+                Question = "Does it come with a carrying case?", Status = StoreQuestionStatus.Open, DateCreated = now.AddDays(-1),
+            });
+            var siteItem = await db.StoreProducts.AsNoTracking().Where(p => p.SellerAppUserId == null && p.IsActive)
+                .OrderBy(p => p.Name).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(ct);
+            if (siteItem is { } site)
+                db.StoreProductQuestions.Add(new StoreProductQuestion
+                {
+                    Id = new Guid("a1000000-0000-0000-0028-000000000952"), ProductId = site, AskerAppUserId = s,
+                    Question = "Can this be used outdoors in the rain?", Status = StoreQuestionStatus.Open, DateCreated = now.AddHours(-5),
+                });
+        }
         await db.SaveChangesAsync(ct);
     }
 

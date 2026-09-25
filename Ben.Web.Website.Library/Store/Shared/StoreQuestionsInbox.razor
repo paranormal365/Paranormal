@@ -1,0 +1,125 @@
+@inject IBenUserState User
+
+@*
+    Shoppers' questions, for whoever answers them (store sellers, backlog 251, P12): the seller's
+    inbox and the store's both draw this. Nobody who asked is named — the records have nowhere to
+    put them. Answer, decline (with an optional note the asker reads), or put a good answer in the
+    item's FAQ, reworded for everybody. Each page brings its own client through the callbacks.
+*@
+
+<BenListState TItem="StoreReceivedQuestionRecord" Result="Result" Loading="Loading" EmptyText="@EmptyText" OnRetry="OnRetry">
+    @foreach (var q in Result.Items)
+    {
+        var x = q;
+        <div class="card mb-3" data-testid="store-question" data-status="@x.Status">
+            <div class="card-body small">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
+                    <span class="fw-semibold">@x.ProductName@(ShowSeller ? (x.SiteStock ? " · the store's own" : $" · {x.SellerName ?? "a seller"}") : null)</span>
+                    <span class="text-secondary">@x.AskedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy")</span>
+                </div>
+                <p class="mb-2" style="white-space:pre-line;">“@x.Question”</p>
+                @switch (x.Status)
+                {
+                    case StoreQuestionStatus.Open:
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-primary" data-testid="question-answer" @onclick="@(() => Open(x, Mode.Answer))">Answer…</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="question-decline" @onclick="@(() => Open(x, Mode.Decline))">Decline…</button>
+                        </div>
+                        break;
+                    case StoreQuestionStatus.Answered:
+                        <div class="border-start border-3 ps-2 mb-2" style="white-space:pre-line;" data-testid="question-answer-text">@x.Answer</div>
+                        @if (x.Promoted)
+                        {
+                            <span class="badge bg-success-subtle text-success-emphasis" data-testid="question-promoted">In the FAQ</span>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-testid="question-promote" @onclick="@(() => Open(x, Mode.Promote))">Add to the FAQ…</button>
+                        }
+                        break;
+                    default:
+                        <div class="text-secondary">Declined@(x.Answer is { } note ? $" — {note}" : null)</div>
+                        break;
+                }
+            </div>
+        </div>
+    }
+</BenListState>
+
+<BenModal @bind-Visible="_open" Title="@DialogTitle">
+    <ChildContent>
+        @if (_question is { } q)
+        {
+            <p class="small text-secondary mb-2">“@q.Question”</p>
+            @if (_mode == Mode.Promote)
+            {
+                <div class="mb-2">
+                    <label class="form-label" for="promote-question">Question, as everybody will read it</label>
+                    <input id="promote-question" class="form-control" maxlength="300" @bind="_faqQuestion" @bind:event="oninput" />
+                </div>
+                <label class="form-label" for="promote-answer">Answer</label>
+                <textarea id="promote-answer" class="form-control" rows="5" maxlength="4000" @bind="_text" @bind:event="oninput"></textarea>
+                <p class="small text-secondary mt-2 mb-0">A copy goes in the FAQ — nobody is named, and the shopper's own answer stays as it was.</p>
+            }
+            else
+            {
+                <label class="form-label" for="question-text">@(_mode == Mode.Answer ? "Your answer" : "Why not (optional — the shopper reads it)")</label>
+                <textarea id="question-text" class="form-control" rows="5" maxlength="4000" @bind="_text" @bind:event="oninput"></textarea>
+                <p class="small text-secondary mt-2 mb-0">Only the shopper who asked sees this. They're told straight away.</p>
+            }
+            @if (_error is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="question-refusal">@_error</div> }
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _open = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="question-confirm" disabled="@_busy" @onclick="ConfirmAsync">@ConfirmText</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public LoadResult<StoreReceivedQuestionRecord> Result { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "No questions yet";
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>The store's inbox says whose item each question is about; a seller's are all their own.</summary>
+    [Parameter] public bool ShowSeller { get; set; }
+
+    /// <summary>Answers or declines; returns the refusal in words, or null when it went.</summary>
+    [Parameter, EditorRequired] public Func<Guid, AnswerStoreQuestionRequest, Task<string?>> OnAnswer { get; set; } = null!;
+
+    /// <summary>Copies an answer into the FAQ; returns the refusal in words, or null when it went.</summary>
+    [Parameter, EditorRequired] public Func<Guid, PromoteStoreQuestionRequest, Task<string?>> OnPromote { get; set; } = null!;
+
+    private enum Mode { Answer, Decline, Promote }
+
+    private bool _open, _busy;
+    private Mode _mode;
+    private StoreReceivedQuestionRecord? _question;
+    private string? _text, _faqQuestion, _error;
+
+    private string DialogTitle => _mode switch { Mode.Answer => "Answer the question", Mode.Decline => "Decline the question", _ => "Add to the FAQ" };
+    private string ConfirmText => _mode switch { Mode.Answer => "Send the answer", Mode.Decline => "Decline", _ => "Add to the FAQ" };
+
+    private void Open(StoreReceivedQuestionRecord q, Mode mode)
+    {
+        _question = q; _mode = mode; _error = null;
+        _text = mode == Mode.Promote ? q.Answer : null;
+        _faqQuestion = mode == Mode.Promote ? q.Question : null;
+        _open = true;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_question is not { } q) return;
+        _busy = true; _error = null;
+        try
+        {
+            _error = _mode == Mode.Promote
+                ? await OnPromote(q.Id, new PromoteStoreQuestionRequest(_faqQuestion ?? "", _text ?? ""))
+                : await OnAnswer(q.Id, new AnswerStoreQuestionRequest(_text, _mode == Mode.Decline));
+            if (_error is null) _open = false;
+        }
+        finally { _busy = false; }
+    }
+}

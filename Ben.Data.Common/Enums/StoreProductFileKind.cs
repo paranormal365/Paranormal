@@ -19,3 +19,11 @@ public enum StoreFileAudience
     /// <summary>Anybody who has paid for the product: downloadable from their order.</summary>
     Buyers = 1,
 }
+
+/// <summary>Where a shopper's question about a product stands (store sellers P12).</summary>
+public enum StoreQuestionStatus
+{
+    Open = 0,
+    Answered = 1,
+    Declined = 2,
+}

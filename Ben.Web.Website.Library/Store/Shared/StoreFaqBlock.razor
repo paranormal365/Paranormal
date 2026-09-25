@@ -1,0 +1,107 @@
+@inject IBenAdminClient Client
+@inject IBenUserState User
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+@*
+    A product's FAQ and "Ask a question" (store sellers, backlog 251, P12), after the reviews. The FAQ
+    is whoever looks after the item answering what people ask most; a question goes privately to the
+    seller — or the store, for its own stock — and the answer comes back under My questions. Asking
+    needs an account, so the answer has somewhere to go; a guest is offered sign-in. Nothing to ask
+    in a preview.
+*@
+
+@if (Faqs.Count > 0 || CanAsk)
+{
+    <section class="mb-5" id="faq" aria-labelledby="faq-heading">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h2 class="h4 mb-0 me-auto" id="faq-heading">Questions and answers<HelpLink Slug="shopping-at-the-store" Anchor="asking-a-question" /></h2>
+            @if (CanAsk)
+            {
+                @if (_signedIn is true)
+                {
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="ask-open" @onclick="Open">Ask a question</button>
+                }
+                else if (_signedIn is false)
+                {
+                    <a class="btn btn-outline-primary btn-sm" id="ask-sign-in" href="@SignInLink.For(Nav)">Sign in to ask a question</a>
+                }
+            }
+        </div>
+        @if (Faqs.Count == 0)
+        {
+            <p class="text-secondary" data-testid="faq-empty">Nothing asked yet — be the first.</p>
+        }
+        else
+        {
+            <div data-testid="product-faq">
+                @foreach (var f in Faqs)
+                {
+                    <details class="ben-accordion" data-testid="faq-entry">
+                        <summary>@f.Question</summary>
+                        <div><p class="mb-0" style="white-space:pre-line;">@f.Answer</p></div>
+                    </details>
+                }
+            </div>
+        }
+    </section>
+}
+
+<BenModal @bind-Visible="_open" Title="@($"Ask about {ProductName}")">
+    <ChildContent>
+        <label class="form-label" for="ask-text">Your question</label>
+        <textarea id="ask-text" class="form-control" rows="4" maxlength="1000" @bind="_text" @bind:event="oninput"></textarea>
+        <p class="small text-secondary mt-2 mb-0">
+            It goes privately to whoever sells this item. You're told when it's answered, and the answer is under
+            <a href="/store/questions">My questions</a>. Only you see it, unless they add it to the questions and answers here —
+            without your name.
+        </p>
+        @if (_error is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="ask-refusal">@_error</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _open = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="ask-send" disabled="@_busy" @onclick="SendAsync">Send the question</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProductId { get; set; }
+    [Parameter, EditorRequired] public string ProductName { get; set; } = "";
+    [Parameter] public IReadOnlyList<StoreFaqView> Faqs { get; set; } = [];
+
+    /// <summary>A live product can be asked about; a preview can't.</summary>
+    [Parameter] public bool CanAsk { get; set; }
+
+    private bool _open, _busy;
+    private string? _text, _error;
+
+    /// <summary>Null until sign-in is known: the page renders before the circuit knows who is reading.</summary>
+    private bool? _signedIn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        _signedIn = User.IsAuthenticated;
+        StateHasChanged();
+    }
+
+    private void Open()
+    {
+        _text = null; _error = null;
+        _open = true;
+    }
+
+    private async Task SendAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (asked, error) = await Client.AskStoreQuestionAsync(ProductId, _text ?? "");
+            if (asked is null) { _error = error ?? "Your question couldn't be sent just now — try again."; return; }
+            _open = false;
+            Toasts.Success("Sent — you'll be told when it's answered.");
+        }
+        finally { _busy = false; }
+    }
+}

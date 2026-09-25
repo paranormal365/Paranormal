@@ -92,6 +92,8 @@ public class StoreSellerWorkspaceTests : BenTestBase
         await Expect(price).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await FillAndConfirmAsync($"#{await price.GetAttributeAsync("id")}", "189");
         await Page.Locator("[data-testid=variant-save]").ClickAsync();
+        // The save has to land before the page is left: the queue below reads the price it wrote.
+        await Expect(Page.GetByText("saved.", new() { Exact = false }).First).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await Expect(Page.Locator("[data-testid=product-sale-request]")).ToContainTextAsync("asks to put this on sale");
         await Expect(Page.Locator("#product-activate")).ToHaveCountAsync(0);   // not around the request
 

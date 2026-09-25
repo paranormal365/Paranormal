@@ -183,6 +183,14 @@ them under **Downloads**; they stay there for as long as you have the order. A m
 site opens as a page of its own, with a **Print** button. If an item is refunded in full, its
 downloads go with it.
 
+## Asking a question
+
+Not sure an item is right? Its page has **Questions and answers** after the reviews — what other
+shoppers have asked — and **Ask a question** (sign in first). Your question goes privately to whoever
+sells the item: the store, or the member who makes it. You get a message when it's answered, and the
+answer is under **My Questions** in the menu. Only you see it — unless they add it to the item's
+questions and answers for everybody, which never shows your name.
+
 ## Returns and refunds
 
 Every order can be returned within the store's returns window — the **Returns** page (linked from

@@ -96,6 +96,16 @@ public static class StoreProductRecords
                 f.ManualHtml != null, f.SortOrder, f.DateUpdated ?? f.DateCreated))
             .ToListAsync(ct);
 
+    /// <summary>A product's FAQ as its editor holds it (P12).</summary>
+    public static async Task<StoreFaqsRecord?> FaqsAsync(BenDataContext db, Guid productId, CancellationToken ct)
+    {
+        var enabled = await db.StoreProducts.AsNoTracking().Where(p => p.Id == productId).Select(p => (bool?)p.FaqEnabled).FirstOrDefaultAsync(ct);
+        if (enabled is null) return null;
+        var lines = await db.StoreProductFaqs.AsNoTracking().Where(f => f.ProductId == productId).OrderBy(f => f.SortOrder).ThenBy(f => f.DateCreated)
+            .Select(f => new StoreFaqLine(f.Id, f.Question, f.Answer)).ToListAsync(ct);
+        return new StoreFaqsRecord(enabled.Value, lines);
+    }
+
     /// <summary>The requests <paramref name="query"/> selects, newest first, each with what its item still needs.</summary>
     public static async Task<List<StoreSaleRequestRecord>> RequestsAsync(
         BenDataContext db, IQueryable<StoreProductSaleRequest> query, CancellationToken ct)

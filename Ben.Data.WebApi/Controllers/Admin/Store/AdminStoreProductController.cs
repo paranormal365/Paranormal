@@ -489,6 +489,26 @@ public sealed partial class AdminStoreProductController(
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
     }
 
+    // ── FAQ (store sellers P12) ──────────────────────────────────────────────
+
+    [HttpGet("{id:guid}/faqs")]
+    public async Task<ActionResult<StoreFaqsRecord>> Faqs(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await StoreProductRecords.FaqsAsync(db, id, ct) is { } faqs ? Ok(faqs) : NotFound();
+    }
+
+    [HttpPut("{id:guid}/faqs")]
+    public async Task<ActionResult<StoreFaqsRecord>> SaveFaqs(Guid id, [FromBody] SaveStoreFaqsRequest request, CancellationToken ct)
+    {
+        var me = Me;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await db.StoreProducts.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (product is null) return NotFound();
+        if (await StoreProductEditor.SaveFaqsAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FaqsAsync(db, id, ct));
+    }
+
     [HttpPost("{id:guid}/parts/{partId:guid}/picture")]
     [RequestSizeLimit(40_000_000)]
     public async Task<ActionResult<StorePartsRecord>> SetPartPicture(Guid id, Guid partId, IFormFile? file, CancellationToken ct)

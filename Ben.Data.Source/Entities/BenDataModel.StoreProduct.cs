@@ -87,6 +87,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>What the "other" line covers, in the seller's words.</summary>
         public string? OtherCostNote { get; set; }
 
+        /// <summary>
+        /// Whether the product page shows its FAQ (store sellers P12). On unless whoever looks after the
+        /// product turns it off; the page shows nothing either way until there's an entry.
+        /// </summary>
+        public bool FaqEnabled { get; set; } = true;
+
         public virtual StoreCategory Category { get; set; } = null!;
         public virtual AppUser? SellerAppUser { get; set; }
         public virtual EquipmentModel? EquipmentModel { get; set; }

@@ -89,4 +89,5 @@ public sealed record StoreProductDetail(
     IReadOnlyList<StoreOptionRecord> Options, IReadOnlyList<StoreVariantPublicRecord> Variants,
     IReadOnlyList<StoreSpecGroup> Specs, StoreReviewSummary Reviews, StoreEquipmentLink? Equipment,
     IReadOnlyList<StoreProductCard> Related, int LowStockThreshold, int ReturnsWindowDays,
-    DateTime LastUpdatedUtc, bool IsPreview, string? ParentCategoryName = null, string? ParentCategorySlug = null);
+    DateTime LastUpdatedUtc, bool IsPreview, string? ParentCategoryName = null, string? ParentCategorySlug = null,
+    IReadOnlyList<StoreFaqView>? Faqs = null, bool CanAsk = false);

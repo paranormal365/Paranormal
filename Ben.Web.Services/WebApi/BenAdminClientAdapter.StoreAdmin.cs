@@ -373,4 +373,19 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(List<StoreProductFileRecord>? Result, string? Error)> DeleteStoreProductFileAsync(Guid productId, Guid fileId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, List<StoreProductFileRecord>>(HttpMethod.Delete, $"/api/admin/store/products/{productId}/files/{fileId}", new { }, token);
+
+    public Task<ItemResult<StoreFaqsRecord>> GetStoreProductFaqsAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreFaqsRecord>($"/api/admin/store/products/{productId}/faqs", token);
+
+    public Task<(StoreFaqsRecord? Result, string? Error)> SaveStoreProductFaqsAsync(Guid productId, SaveStoreFaqsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreFaqsRequest, StoreFaqsRecord>(HttpMethod.Put, $"/api/admin/store/products/{productId}/faqs", request, token);
+
+    public Task<LoadResult<StoreReceivedQuestionRecord>> GetStoreQuestionsAsync(bool openOnly = false, bool siteStockOnly = false, CancellationToken token = default)
+        => _api.GetListAsync<StoreReceivedQuestionRecord>($"/api/admin/store/questions?open={(openOnly ? "true" : "false")}&siteStock={(siteStockOnly ? "true" : "false")}", token);
+
+    public Task<(StoreReceivedQuestionRecord? Result, string? Error)> AnswerStoreQuestionAsync(Guid questionId, AnswerStoreQuestionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AnswerStoreQuestionRequest, StoreReceivedQuestionRecord>(HttpMethod.Put, $"/api/admin/store/questions/{questionId}/answer", request, token);
+
+    public Task<(StoreReceivedQuestionRecord? Result, string? Error)> PromoteStoreQuestionAsync(Guid questionId, PromoteStoreQuestionRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<PromoteStoreQuestionRequest, StoreReceivedQuestionRecord>(HttpMethod.Post, $"/api/admin/store/questions/{questionId}/promote", request, token);
 }

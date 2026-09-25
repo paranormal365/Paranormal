@@ -184,6 +184,8 @@ else if (Product.IsPreview)
 <StoreReviewsBlock ProductId="Product.Id" ProductSlug="@Product.Slug" ProductName="@Product.Name"
                    Average="@Product.Reviews.Average" Count="@Product.Reviews.Count" Preview="@Product.IsPreview" />
 
+<StoreFaqBlock ProductId="Product.Id" ProductName="@Product.Name" Faqs="@(Product.Faqs ?? [])" CanAsk="@(Product.CanAsk && !Product.IsPreview)" />
+
 <StoreProductRail Title="More from this shelf" Cards="Product.Related" MoreHref="@($"/store/c/{Product.CategorySlug}")" TestId="rail-related" />
 
 @code {

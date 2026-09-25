@@ -1,0 +1,75 @@
+@page "/store/selling/questions"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenStoreSellerClient Seller
+@inject IBenUserState User
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+<PageTitle>Questions — Selling</PageTitle>
+
+@*
+    A seller's questions inbox (store sellers, backlog 251, P12): what shoppers asked about their
+    items, waiting ones first. Nobody who asked is named. Only the seller client is injected
+    (SellerPagesUseTheSellerClientTests).
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <h1 class="h3 mb-1">Questions<HelpLink Slug="selling-in-the-store" Anchor="faq-and-questions" /></h1>
+    <p class="text-secondary mb-3">What shoppers have asked about your items. Your answer goes to the person who asked; add the good ones to the item's FAQ for everybody.</p>
+
+    <div class="btn-group flex-wrap mb-3" role="group" aria-label="Which questions">
+        <button type="button" class="btn btn-sm @(_open ? "btn-primary" : "btn-outline-primary")" data-testid="questions-filter" @onclick="@(() => FilterAsync(true))">Waiting</button>
+        <button type="button" class="btn btn-sm @(!_open ? "btn-primary" : "btn-outline-primary")" data-testid="questions-filter" @onclick="@(() => FilterAsync(false))">All</button>
+    </div>
+
+    <StoreQuestionsInbox Result="_result" Loading="_loading" OnRetry="LoadAsync"
+                         EmptyText="@(_open ? "Nothing waiting — every question has been answered" : "No questions yet")"
+                         OnAnswer="AnswerAsync" OnPromote="PromoteAsync" />
+</div>
+
+@code {
+    private LoadResult<StoreReceivedQuestionRecord> _result;
+    private bool _loading = true, _open = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await Seller.GetSellerQuestionsAsync(_open);
+        _loading = false;
+    }
+
+    private async Task FilterAsync(bool open)
+    {
+        _open = open;
+        await LoadAsync();
+    }
+
+    private async Task<string?> AnswerAsync(Guid id, AnswerStoreQuestionRequest request)
+    {
+        var (saved, error) = await Seller.AnswerSellerQuestionAsync(id, request);
+        if (saved is null) return error ?? "That didn't go — try again.";
+        Toasts.Success(request.Decline ? "Declined — the shopper has been told." : "Answered — the shopper has been told.");
+        await LoadAsync();
+        StateHasChanged();
+        return null;
+    }
+
+    private async Task<string?> PromoteAsync(Guid id, PromoteStoreQuestionRequest request)
+    {
+        var (saved, error) = await Seller.PromoteSellerQuestionAsync(id, request);
+        if (saved is null) return error ?? "That didn't go — try again.";
+        Toasts.Success("Added to the item's FAQ.");
+        await LoadAsync();
+        StateHasChanged();
+        return null;
+    }
+}

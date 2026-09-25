@@ -93,6 +93,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default)
         => OrderDoorAsync<StoreInvoiceRecord>(WithToken($"/api/store/orders/{orderId}/invoice", accessToken), token);
 
+    public Task<LoadResult<StoreAskedQuestionRecord>> GetMyStoreQuestionsAsync(CancellationToken token = default)
+        => _api.GetListAsync<StoreAskedQuestionRecord>("/api/me/store/questions", token);
+
+    public Task<(StoreAskedQuestionRecord? Result, string? Error)> AskStoreQuestionAsync(Guid productId, string question, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AskStoreQuestionRequest, StoreAskedQuestionRecord>(
+               HttpMethod.Post, $"/api/me/store/questions/products/{productId}", new AskStoreQuestionRequest(question), token);
+
     public Task<ItemResult<List<StoreOrderDownloadRecord>>> GetStoreOrderDownloadsAsync(Guid orderId, string? accessToken, CancellationToken token = default)
         => OrderDoorAsync<List<StoreOrderDownloadRecord>>(WithToken($"/api/store/orders/{orderId}/downloads", accessToken), token);
 

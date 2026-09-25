@@ -1,0 +1,86 @@
+@page "/admin/store/questions"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+
+<PageTitle>SuperAdmin — Store Questions</PageTitle>
+
+@*
+    Shoppers' questions, for the store (store sellers, backlog 251, P12). The store's own stock is the
+    store's to answer — nobody else will; a seller's item is the seller's, and the store can step in.
+    Nobody who asked is named.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="mb-3">
+        <h3 class="mb-0">Questions<HelpLink Slug="site-administration" Anchor="faq-and-questions" /></h3>
+        <p class="text-secondary small mb-0">
+            What shoppers have asked. Questions about the store's own stock come here and nowhere else; a seller answers their own,
+            and the store can answer any.
+        </p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="btn-group flex-wrap" role="group" aria-label="Which questions">
+            <button type="button" class="btn btn-sm @(_open ? "btn-primary" : "btn-outline-primary")" data-testid="questions-filter" @onclick="@(() => FilterAsync(true, _siteStock))">Waiting</button>
+            <button type="button" class="btn btn-sm @(!_open ? "btn-primary" : "btn-outline-primary")" data-testid="questions-filter" @onclick="@(() => FilterAsync(false, _siteStock))">All</button>
+        </div>
+        <div class="btn-group flex-wrap" role="group" aria-label="Whose items">
+            <button type="button" class="btn btn-sm @(_siteStock ? "btn-primary" : "btn-outline-primary")" data-testid="questions-scope" @onclick="@(() => FilterAsync(_open, true))">The store's own</button>
+            <button type="button" class="btn btn-sm @(!_siteStock ? "btn-primary" : "btn-outline-primary")" data-testid="questions-scope" @onclick="@(() => FilterAsync(_open, false))">Every item</button>
+        </div>
+    </div>
+
+    <StoreQuestionsInbox Result="_result" Loading="_loading" OnRetry="LoadAsync" ShowSeller="true"
+                         EmptyText="@(_open ? "Nothing waiting — every question has been answered" : "No questions yet")"
+                         OnAnswer="AnswerAsync" OnPromote="PromoteAsync" />
+</div>
+
+@code {
+    private LoadResult<StoreReceivedQuestionRecord> _result;
+    private bool _loading = true, _open = true, _siteStock = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreQuestionsAsync(_open, _siteStock);
+        _loading = false;
+    }
+
+    private async Task FilterAsync(bool open, bool siteStock)
+    {
+        (_open, _siteStock) = (open, siteStock);
+        await LoadAsync();
+    }
+
+    private async Task<string?> AnswerAsync(Guid id, AnswerStoreQuestionRequest request)
+    {
+        var (saved, error) = await AdminClient.AnswerStoreQuestionAsync(id, request);
+        if (saved is null) return error ?? "That didn't go — try again.";
+        Toasts.Success(request.Decline ? "Declined — the shopper has been told." : "Answered — the shopper has been told.");
+        await LoadAsync();
+        StateHasChanged();
+        return null;
+    }
+
+    private async Task<string?> PromoteAsync(Guid id, PromoteStoreQuestionRequest request)
+    {
+        var (saved, error) = await AdminClient.PromoteStoreQuestionAsync(id, request);
+        if (saved is null) return error ?? "That didn't go — try again.";
+        Toasts.Success("Added to the item's FAQ.");
+        await LoadAsync();
+        StateHasChanged();
+        return null;
+    }
+}

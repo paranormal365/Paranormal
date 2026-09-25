@@ -99,6 +99,21 @@ A Word document is best uploaded as a file.
 **Edit** changes a file's title, kind, version or who gets it; **Remove** takes it away — buyers who
 had it lose it too. Every change is in the item's **History**.
 
+## FAQ and questions
+
+Shoppers can ask about your item from its page. A question comes to you privately — you get a
+message, and it waits under **Selling → Questions**. You're never told who asked, and they aren't
+told who answered: the store passes it on.
+
+- **Answer…** sends your answer to the person who asked, and only to them.
+- **Decline…** says you can't answer it, with a note if you like.
+- **Add to the FAQ…** copies a good answer into the item's **FAQ**, reworded for everybody if need be.
+  The shopper's own answer stays as it was, and nobody is named.
+
+The item's **FAQ** tab holds its questions and answers — the ones people keep asking, answered once.
+They show on the item's page after the reviews, in the order you set. Switch **Show the FAQ** off to
+hide them for a while without losing them.
+
 ## Sending packages
 
 **Each seller sends their own package.** When a paid order has your items in it you get an email and

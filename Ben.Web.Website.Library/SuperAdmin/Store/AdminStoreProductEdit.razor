@@ -253,6 +253,15 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="FAQ" Id="faq">
+                    <div class="pt-3">
+                        <StoreFaqEditor Saved="_faqs.Item" Busy="_busy" Error="@_faqError" OnSave="SaveFaqsAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="faq-and-questions" /></Help>
+                        </StoreFaqEditor>
+                        @if (_faqs.Failed) { <div class="alert alert-danger py-2 mt-2">@(_faqs.Reason ?? "The FAQ couldn't be loaded just now.")</div> }
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
@@ -386,7 +395,7 @@
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
         _settings = await AdminClient.GetStoreSettingsAsync();
-        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
     }
@@ -400,6 +409,7 @@
         if (_tab == "history") await LoadHistoryAsync();
         if (_tab == "parts") await LoadPartsAsync();
         if (_tab == "files") await LoadFilesAsync();
+        if (_tab == "faq") await LoadFaqsAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -753,4 +763,24 @@
 
     private Task DeleteFileAsync(Guid fileId)
         => FilesAnswerAsync(AdminClient.DeleteStoreProductFileAsync(ProductId, fileId), "The file could not be removed.", "File removed.");
+
+    // ── FAQ (store sellers P12) ──────────────────────────────────────────────
+
+    private ItemResult<StoreFaqsRecord> _faqs;
+    private string? _faqError;
+
+    private async Task LoadFaqsAsync() => _faqs = await AdminClient.GetStoreProductFaqsAsync(ProductId);
+
+    private async Task SaveFaqsAsync(SaveStoreFaqsRequest request)
+    {
+        _busy = true; _faqError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductFaqsAsync(ProductId, request);
+            if (saved is null) { _faqError = error ?? "The FAQ could not be saved."; return; }
+            _faqs = ItemResult<StoreFaqsRecord>.Ok(saved);
+            Toasts.Success("FAQ saved.");
+        }
+        finally { _busy = false; }
+    }
 }

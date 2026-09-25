@@ -46,7 +46,7 @@ public sealed class StoreClientRoutesTests
         var controllers = AdminStoreRoutes().Select(r => r.Controller).Distinct().Order().ToList();
         Assert.Equal([
             "AdminStoreCategoryController", "AdminStoreCouponController", "AdminStoreDashboardController",
-            "AdminStoreOrderController", "AdminStoreProductController", "AdminStoreReviewController", "AdminStoreSaleRequestController",
+            "AdminStoreOrderController", "AdminStoreProductController", "AdminStoreQuestionController", "AdminStoreReviewController", "AdminStoreSaleRequestController",
             "AdminStoreSellerController", "AdminStoreSettingsController",
             "AdminStoreStockController",
         ], controllers);
