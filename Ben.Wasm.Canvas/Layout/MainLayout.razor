@@ -1,0 +1,14 @@
+@inherits LayoutComponentBase
+
+@* The editor is the whole app: no nav, no chrome - the layout exists only because RouteView requires
+   one. TelerikRootComponent is the mandatory anchor for Telerik's popups. *@
+<TelerikRootComponent>
+    <main class="bwc-main">
+        @* Standalone only. Inside the site the editor follows the theme chosen in the site header;
+           on its own there is no header to choose from. A literal onclick rather than @@onclick: this
+           is host chrome and should work before and regardless of the WebAssembly runtime. *@
+        <button type="button" class="bwc-theme-toggle" onclick="benToggleTheme()"
+                title="Switch between light and dark" aria-label="Switch between light and dark"></button>
+        @Body
+    </main>
+</TelerikRootComponent>

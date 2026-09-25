@@ -36,6 +36,15 @@ public sealed class AppAdministratorRequirement : IAuthorizationRequirement { }
 public sealed class ModeratorRequirement : IAuthorizationRequirement { }
 
 /// <summary>
+/// Satisfied when the caller holds the Seller role — and only then (store sellers, backlog 251).
+/// </summary>
+/// <remarks>
+/// SuperAdmin does not count: a seller endpoint answers about the caller's own items, and an
+/// admin who is not a seller has none. The admin pages reach every item.
+/// </remarks>
+public sealed class SellerRequirement : IAuthorizationRequirement { }
+
+/// <summary>
 /// Resolves the <see cref="AppUser"/> behind a principal, whichever way it authenticated.
 /// </summary>
 /// <remarks>
@@ -175,5 +184,33 @@ public sealed class ModeratorHandler : AuthorizationHandler<ModeratorRequirement
                 return;
             }
         }
+    }
+}
+
+/// <summary>
+/// Handles <see cref="SellerRequirement"/> by the same two paths as the handlers above: the role
+/// claim, then the database for an Entra sign-in whose token carries no site roles.
+/// </summary>
+public sealed class SellerHandler : AuthorizationHandler<SellerRequirement>
+{
+    private readonly UserManager<AppUser> _userManager;
+
+    public SellerHandler(UserManager<AppUser> userManager)
+    {
+        _userManager = userManager;
+    }
+
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context, SellerRequirement requirement)
+    {
+        if (context.User.IsInRole(RoleNames.Seller))
+        {
+            context.Succeed(requirement);
+            return;
+        }
+
+        var user = await AppUserPrincipal.ResolveAsync(context.User, _userManager);
+        if (user is not null && await _userManager.IsInRoleAsync(user, RoleNames.Seller))
+            context.Succeed(requirement);
     }
 }

@@ -16,6 +16,9 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
     /// <summary>Item 186 F5: may review reported posts and media awaiting screening.</summary>
     public bool IsModerator { get; set; }
 
+    /// <summary>Store sellers (backlog 251): holds the Seller role.</summary>
+    public bool IsSeller { get; set; }
+
     // Impersonation
     public bool IsImpersonating { get; set; }
     public string? OriginalAccessToken { get; set; }

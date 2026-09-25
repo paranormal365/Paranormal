@@ -92,8 +92,23 @@ public static class TierAreaResolution
     private static async Task<(Guid? TierId, string? TierName)> EffectiveTierAsync(
         BenDataContext db, Guid organizationId, CancellationToken ct)
     {
+        // A subscription supplies its tier only while it is STANDING (2026-09-17 audit).
+        //
+        // This asked for the newest row and read its tier whatever its status, which contradicts
+        // the rule PaidPlan states for the same question: "Active, not merely present. A Lapsed
+        // subscription is not a paid plan — otherwise letting one expire would be a way to keep
+        // everything it bought, forever." That is exactly what happened here: a group that bought
+        // one month on a tier including private-residence work kept PrivateResidenceCases,
+        // CaseTransfers, MediaMetadataStripping, HostEvents and every permission area of that
+        // band indefinitely. SubscriptionLimitGuard stopped them ADDING records; the capability
+        // set never reverted, so the paid lane's defining capability was retained for free.
+        //
+        // Free counts: it is a tier that costs nothing, not a lesser kind of active, and using the
+        // tier somebody was actually put on beats re-deriving one from prices. Lapsed, Canceled
+        // and PendingPayment fall through to the free tier.
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
-            .Where(s => s.OrganizationId == organizationId)
+            .Where(s => s.OrganizationId == organizationId
+                     && (s.Status == SubscriptionStatus.Active || s.Status == SubscriptionStatus.Free))
             .OrderByDescending(s => s.DateCreated)
             .FirstOrDefaultAsync(ct);
 
@@ -161,8 +176,12 @@ public static class TierAreaResolution
         var (freeTierId, _) = await FreeTierAsync(db, ct);
 
         // The tier each group actually answers to: its subscription's, else its member band.
+        // Standing only, for the reason EffectiveTierAsync sets out at length: a Lapsed row is not
+        // a paid plan. The two must agree, or the group finder would show a capability the gate
+        // then refuses.
         var subs = await db.OrganizationSubscriptions.AsNoTracking()
-            .Where(s => organizationIds.Contains(s.OrganizationId))
+            .Where(s => organizationIds.Contains(s.OrganizationId)
+                     && (s.Status == SubscriptionStatus.Active || s.Status == SubscriptionStatus.Free))
             .OrderByDescending(s => s.DateCreated)
             .Select(s => new { s.OrganizationId, s.SubscriptionTierId })
             .ToListAsync(ct);

@@ -210,6 +210,8 @@ public sealed record AppUserPurgePreview(
     int GroupMessages,
     int GroupFieldSessions,
     int EventEvidence,
+    int StoreOrdersKept,
+    int StoreOrdersStillShipping,
     int OtherAuthoredRecords,
 
     bool RowWillSurvive,
@@ -243,7 +245,6 @@ public sealed record CasePurgePreview(
     int Files,
     int Notes,
     int Messages,
-    int ResearchEntries,
     int Reports,
     int Investigations,
     int Contacts,
@@ -259,7 +260,11 @@ public sealed record CasePurgePreview(
     int EvidenceVotesUnlinked,
     int PublicPagesUnlinked,
 
-    string? ClientName);
+    string? ClientName,
+
+    // Case canvas boards, destroyed with the case. Last and defaulted so an API that predates
+    // the canvas still deserialises.
+    int Boards = 0);
 
 /// <summary>What deleting a case actually did.</summary>
 public sealed record CasePurgeResult(

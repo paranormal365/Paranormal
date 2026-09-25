@@ -1,3 +1,4 @@
+using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -111,8 +112,8 @@ public sealed class VenueClaimController : BenControllerBase
                 .FirstOrDefault(c => c.Id == contactId);
             if (proving is null)
                 return BadRequest("That address can't prove this claim. Choose one from the list, or ask for a review.");
-            if (!_email.IsConfigured)
-                return Conflict("This site can't send email just now, so no code can be sent. Ask for a review instead.");
+            // No refusal when mail is not set up: the code is queued all the same and waits in the
+            // outbox until it is, readable by a site administrator at /admin/mail meanwhile.
         }
         else if (evidence is null)
         {
@@ -346,7 +347,16 @@ public sealed class VenueClaimController : BenControllerBase
                  + "<p>It works for 24 hours. If you don't know who this is, don't share it — nothing "
                  + "happens without the code.</p>";
 
-        await _email.SendAsync(new EmailMessage(to, $"A code to confirm who runs {placeName}", body), ct);
+        static Services.Mail.MailRows.Manual Named(string table, string name)
+            => new(table, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["Name"] = name });
+
+        await _email.SendAsync(new EmailMessage(to, $"A code to confirm who runs {placeName}", body,
+            Kind: MailKinds.VenueClaimCode.Key,
+            // The code is the letter, so a template of this kind is REQUIRED to carry {ClaimCode};
+            // until 2026-09-23 nothing declared or supplied it.
+            Payload: Services.Mail.MailRows.For(MailKinds.VenueClaimCode,
+                new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase) { ["ClaimCode"] = new(code) },
+                Services.Mail.MailRows.Person(to, null), Named("Places", placeName), Named("Organizations", orgName))), ct);
     }
 
     private async Task TellReviewersAsync(Guid senderId, string subject, string body, CancellationToken ct)

@@ -1558,6 +1558,60 @@ internal sealed class CommitImageDurationCommand : IEditorCommand
 /// </summary>
 /// <summary>Bundles multiple commands into a single undo/redo unit (item #57 T4 — "Apply style
 /// to all junctions" should undo in one click, not once per junction it touched).</summary>
+/// <summary>
+/// Undo/redo for the transitions an edit strands — see <c>ClipStore.ReconcileTransitions</c>.
+/// </summary>
+/// <remarks>
+/// Reconciliation used to drop them with no command at all, so the effect a person had chosen was
+/// gone and undo could not bring it back. Splitting a clip that a transition started from is the
+/// plain case: both halves are still there, the junction is still there, and yet the wipe was
+/// deleted with nothing to say so and no way back — and because the overlap it had opened was
+/// closed by its own separate undo step, undoing the split left two clips overlapping by a second
+/// with nothing to justify it, a state no edit could otherwise produce (2026-09-18 audit).
+/// </remarks>
+internal sealed class RemoveTransitionsCommand : IEditorCommand
+{
+    private readonly TimelineTrack                     _track;
+    private readonly List<(TrackItem Item, int Index)> _removed;
+
+    public RemoveTransitionsCommand(TimelineTrack track, List<(TrackItem Item, int Index)> removed)
+    {
+        _track   = track;
+        _removed = removed;
+    }
+
+    public string Description =>
+        _removed.Count == 1 ? $"Remove {_removed[0].Item.Name} transition"
+                            : $"Remove {_removed.Count} transitions";
+
+    public void Execute()
+    {
+        foreach (var (item, _) in _removed)
+        {
+            var idx = _track.Items.FindIndex(i => i.Id == item.Id);
+            if (idx >= 0) _track.Items.RemoveAt(idx);
+        }
+        Renumber();
+    }
+
+    public void Undo()
+    {
+        // Back to front, so each index is still the one it was captured at.
+        foreach (var (item, index) in _removed.OrderByDescending(r => r.Index))
+        {
+            if (_track.Items.Any(i => i.Id == item.Id)) continue;
+            _track.Items.Insert(Math.Min(index, _track.Items.Count), item);
+        }
+        Renumber();
+    }
+
+    private void Renumber()
+    {
+        for (var i = 0; i < _track.Items.Count; i++)
+            _track.Items[i] = _track.Items[i] with { Order = i };
+    }
+}
+
 internal sealed class CompositeCommand : IEditorCommand
 {
     private readonly List<IEditorCommand> _commands;

@@ -62,6 +62,34 @@
             }
         }
 
+        @* ── Where this case is, and who else has been there ──────────────── *@
+        @* Ben, 2026-09-17: linking a case to a place is what lets somebody "create their own
+           investigation" at somewhere other groups already work. A case that names a place says so
+           here, with the one fact that makes the place page worth opening: how many other groups
+           have been. Shown always rather than once — it is orientation, not a notice, and a banner
+           that vanishes on the second visit is a banner nobody can find again. *@
+        @if (_case.PlaceId is { } placeId)
+        {
+            <div class="alert alert-info d-flex align-items-center gap-3 flex-wrap py-2"
+                 data-testid="case-place-banner">
+                <div class="flex-grow-1 small">
+                    This case is at <strong>@(_case.PlaceName ?? "a place on file")</strong>.
+                    @if (_placeSummary is { } summary && summary.OrganizationCount > 1)
+                    {
+                        <text>
+                            @(summary.OrganizationCount - 1)
+                            @(summary.OrganizationCount - 1 == 1 ? "other group has" : "other groups have")
+                            investigated there.
+                        </text>
+                    }
+                </div>
+                <a class="btn btn-outline-secondary btn-sm text-nowrap" id="case-place-link"
+                   href="@($"/places/{placeId}")">
+                    <BenIcon Name="map-pin" Class="me-1" />See the place
+                </a>
+            </div>
+        }
+
         @* ── Header ────────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
             <div>
@@ -72,7 +100,7 @@
                 <div class="text-secondary small mt-1">
                     @_case.City, @_case.State ·
                     Opened @_case.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
-                    @if (_case.IsPublic && _case.Status != CaseStatus.Public) { <span class="badge bg-info text-dark ms-2">Public</span> }
+                    @if (_case.IsPublic && _case.Status != CaseStatus.Public) { <span class="badge bg-info ms-2">Public</span> }
                     @if (!string.IsNullOrEmpty(_case.PublicPseudonym))
                     {
                         <span class="ms-2 text-secondary">Public name: <em>@_case.PublicPseudonym</em></span>
@@ -286,6 +314,50 @@
             <BenTab Title="Transfers" Id="transfers">
                 <div class="mt-2">
                     <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)" />
+
+                    @* Who agreed to publish this case's footage to the feed (2026-09-17 audit).
+
+                       FeedPostConsent is append-only and its entity doc says what it is for:
+                       "When a client asks 'who put this footage up', this row is the answer." The
+                       table was entirely write-only, so the question had no answer anywhere. Shown
+                       here rather than on a page of its own — it is the same kind of fact as a
+                       transfer: something that happened to this case's privacy, recorded, with a
+                       person's name on it.
+
+                       Shown only when there IS one, because a case nobody published to the feed
+                       has nothing to account for. *@
+                    @if (_feedConsents.Count > 0)
+                    {
+                        <div class="mt-4" data-testid="case-feed-consents">
+                            <BenSectionHeading Text="Published to the feed" />
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var consent in _feedConsents)
+                                {
+                                    <li class="border-top pt-2 mt-2">
+                                        <div>
+                                            <strong>@consent.AgreedByDisplayName</strong>
+                                            agreed on
+                                            @consent.AgreedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @* "Agreed and then took it down" and "nobody ever
+                                               agreed" are different facts; the consent outlives
+                                               the post on purpose, so this says which. *@
+                                            @if (consent.PostExists)
+                                            {
+                                                <text>The post is still up.</text>
+                                            }
+                                            else
+                                            {
+                                                <text>That post is gone; the agreement stands on the record.</text>
+                                            }
+                                            <text> · wording version @consent.WordingVersion</text>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
                 </div>
             </BenTab>
 
@@ -306,9 +378,12 @@
             </BenTab>
 
             @* ── Research ─────────────────────────────────────────────────────── *@
+            @* Research is written on the canvas: on the writer's own machine, and theirs alone until they publish it.
+               There is no second editor behind a switch any more — Ben, 2026-09-16, chose to retire the flag rather
+               than carry two of them, and nobody was using the site yet, so nothing written needed keeping. *@
             <BenTab Title="Research" Id="research">
                 <div class="mt-2">
-                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
+                    <Ben.Web.Website.Library.Manage.Messenger.CaseResearchBoards OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@
@@ -384,11 +459,22 @@
     private CaseRecord? _case;
 
     /// <summary>
+    /// Recorded agreements to publish this case's footage to the feed (2026-09-17 audit).
+    /// </summary>
+    /// <remarks>
+    /// Empty for almost every case, and the section does not render then. Fetched quietly: an
+    /// accountability record that cannot be reached is not a reason to fail the case page, it is a
+    /// reason for the section to be absent.
+    /// </remarks>
+    private IReadOnlyList<CaseFeedConsentRecord> _feedConsents = [];
+
+    /// <summary>
     /// The client request this case came from, when there is one and the caller may read it.
     /// Null is the normal state for an internally-raised case, so it is not treated as an error.
     /// </summary>
     private CaseClientRequestRecord? _clientRequest;
     private bool _loaded;
+    private Ben.Web.Services.PlaceSummary? _placeSummary;
     private string? _error;
     private bool _isBusy;
     private int _unreadCount;
@@ -455,6 +541,21 @@
         catch { _error = "Failed to load case."; }
         _loaded = true;
         StateHasChanged();
+
+        // How many groups have worked this place — the one fact that makes the place worth
+        // opening. Separate and quiet for the same reason as the request below: the banner keeps
+        // its link either way, and it simply says less.
+        if (_case?.PlaceId is { } bannerPlaceId)
+        {
+            try { _placeSummary = await AdminClient.GetPlaceSummaryAsync(bannerPlaceId); }
+            catch { /* the banner just carries no count */ }
+            StateHasChanged();
+        }
+
+        // Quiet for the same reason: no consents is the ordinary answer, and an unreachable one
+        // costs a section rather than the page.
+        try { _feedConsents = (await AdminClient.GetCaseFeedConsentsAsync(OrgId, CaseId)).Items; }
+        catch { _feedConsents = []; }
 
         // Fetched separately and allowed to fail quietly: most cases have one, some don't, and a
         // missing original request should never stop the case page rendering.

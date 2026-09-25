@@ -17,7 +17,8 @@ public static class MediaProxy
 {
     public static async Task<IResult> StreamAsync(
         string upstreamUrl, string? accessToken,
-        IHttpClientFactory httpFactory, HttpContext ctx, CancellationToken ct)
+        IHttpClientFactory httpFactory, HttpContext ctx, CancellationToken ct,
+        string? cacheControl = null)
     {
         using var http = httpFactory.CreateClient();
         // A large recording is a slow read, not a failure.
@@ -71,7 +72,8 @@ public static class MediaProxy
             ctx.Response.Headers["Accept-Ranges"] = "bytes";
             // Private: one viewer's file. A shared cache must not keep it; the browser may, which
             // is what stops a scroll re-fetching every tile.
-            ctx.Response.Headers["Cache-Control"] = "private, max-age=3600";
+            // A caller serving something public and immutable (a store picture) says so instead.
+            ctx.Response.Headers["Cache-Control"] = cacheControl ?? "private, max-age=3600";
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             await stream.CopyToAsync(ctx.Response.Body, ct);

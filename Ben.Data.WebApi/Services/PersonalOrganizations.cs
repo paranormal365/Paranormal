@@ -21,6 +21,11 @@ namespace Ben.Data.WebApi.Services;
 /// pin, or a promoted card. "Their own" and "everybody's" are different questions, and only the
 /// second one is filtered.</para>
 ///
+/// <para><b>Hiding is now the ONLY thing this class does</b> (2026-09-17). It used to refuse a
+/// personal organization two actions as well; those were keyed on being personal when they meant
+/// to ask about the plan, and <c>PaidPlan</c> asks that properly. See the note above
+/// <see cref="Discoverable"/>.</para>
+///
 /// <para><b>Admin surfaces are deliberately NOT filtered.</b> A SuperAdmin looking at every
 /// organization must see these — they carry subscriptions and money, and a billing screen that
 /// silently omitted a paying customer would be worse than one that shows a row somebody has to
@@ -45,55 +50,28 @@ public static class PersonalOrganizations
     public static Expression<Func<Organization, bool>> Discoverable =>
         o => !o.IsPersonal && !o.IsUnlisted;
 
-    /// <summary>
-    /// Why this thing may not be done inside a personal organization, or null when it may.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>What a solo plan sells is privacy over your own data and evidence</b> (Ben,
-    /// 2026-08-31) — not a group in miniature. So the group-shaped machinery is not merely hidden
-    /// from the screens, it is refused at the door: there is nobody to add, no client to open a
-    /// case for, and no audience for a private investigation but the one person who made it.</para>
-    ///
-    /// <para><b>Refused here as well as hidden in the UI, and both matter.</b> Hiding alone leaves
-    /// the endpoint open to anybody who guesses the URL. Refusing alone leaves a person clicking a
-    /// button that always fails, which reads as the site being broken — the standing rule that a
-    /// server guard needs a UI path, applied in its other direction.</para>
-    ///
-    /// <para>The sentences say why rather than only no, because "not available on your plan" sends
-    /// somebody to the pricing page to buy something that would not help.</para>
-    /// </remarks>
-    public static string? WhyNotInAPersonalOrganization(Organization organization, PersonalAction action)
-    {
-        if (!organization.IsPersonal) return null;
-
-        return action switch
-        {
-            PersonalAction.CreateCase =>
-                "Cases are how a group takes on somebody else's haunting. A solo plan covers your "
-                + "own investigating and keeps your data private; it does not take client work.",
-            PersonalAction.CreatePrivateInvestigation =>
-                "A solo plan's investigations are public ones. Your readings, recordings and "
-                + "evidence stay private on your account — it is the investigation record itself "
-                + "that has no separate audience to be private from.",
-            _ => null,
-        };
-    }
-
-    /// <summary>The group-shaped things a personal organization does not do.</summary>
-    public enum PersonalAction
-    {
-        // AddMembers deliberately does NOT live here. "May this organization take another
-        // member" is one question with one answer — PaidPlan.WhyCannotAddMemberAsync — and it is
-        // about the plan, not about being personal: a solo person who pays may work with somebody,
-        // at which point their organization stops being personal and becomes a group. Two rules
-        // answering one question is how the two come to disagree.
-
-        /// <summary>Opening a case — client work, which a solo plan does not cover.</summary>
-        CreateCase = 2,
-
-        /// <summary>An investigation with any visibility other than Public.</summary>
-        CreatePrivateInvestigation = 3,
-    }
+    // ── There are no per-action refusals here any more (Ben, 2026-09-17) ─────────────────────
+    //
+    // This class used to refuse two things to a personal organization outright: opening a case
+    // ("a solo plan does not take client work") and scheduling anything but a public
+    // investigation. Both were keyed on IsPersonal — a fact about the RECORD — when the question
+    // they were reaching for was about the PLAN.
+    //
+    // Ben's rule of 2026-09-17 settles it: "if paid, they can make their work private. By default
+    // we should be able to collect information as public for unpaid plan." Keyed that way, the old
+    // gates were backwards in both directions at once. A paid solo subscriber — exactly the person
+    // the solo band is sold to — could not open a case at all, while an unpaid group of one could
+    // open one and keep it entirely to itself. So they are gone, and PaidPlan answers instead:
+    // PublicByDefaultAsync, WhyCannotKeepCasePrivateAsync, WhyCannotNarrowInvestigationAsync.
+    //
+    // What stays here is the ONE thing that really is about being personal rather than about
+    // money: a personal organization is nobody's group and must never appear where groups are
+    // presented to be found or joined. That is Discoverable, below, and it is untouched.
+    //
+    // AddMembers never lived here either, for the same reason, and the note explaining why was
+    // right the whole time: "May this organization take another member" is one question with one
+    // answer — PaidPlan.WhyCannotAddMemberAsync — and it is about the plan, not about being
+    // personal. Two rules answering one question is how the two come to disagree.
 
     /// <summary>
     /// The same rule for a query that has already projected past the organization — a membership

@@ -94,6 +94,31 @@ namespace Ben.Data.Source.Entities
         /// <summary>What that place is called, as the geocoder named it. Shown; never derived from.</summary>
         public string? PostedPlaceName { get; set; }
 
+        /// <summary>
+        /// The shared <see cref="Place"/> this post is ABOUT, for a post made on a place's page.
+        /// </summary>
+        /// <remarks>
+        /// <para>Ben, 2026-09-17: a public location should be "actually public for adding files,
+        /// messages etc". This is that, and it is one nullable column rather than a comment table
+        /// of its own — which means a post about a place inherits everything a feed post already
+        /// has: the media screener, the day-long upload pause after repeated refusals, reporting,
+        /// hiding, likes, replies, the moderator queues and the phone app's reader. A second table
+        /// would have been a second moderation story, and the second one is always the one nobody
+        /// finishes.</para>
+        ///
+        /// <para><b>Different from <see cref="PostedLatitude"/> and <see cref="PostedPlaceName"/>,
+        /// which are about the AUTHOR.</b> Those say where somebody was standing when they wrote
+        /// it — their whereabouts, volunteered. This says what the post is about, which is not the
+        /// same thing and is usually not the same place: somebody writes up Cragfont at home.</para>
+        ///
+        /// <para>Only ever a <c>PlaceKind.PublicLocation</c>. Posting about somebody's home is
+        /// theirs to agree to and there is no mechanism for asking, so the write door refuses a
+        /// residence outright.</para>
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        public virtual Place? Place { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

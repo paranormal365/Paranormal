@@ -1,0 +1,73 @@
+@*
+    Groups, drawn behind connectors and blocks. Only the label chip takes pointers: empty space inside a
+    group behaves like the board, so a marquee or a pan can start there.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<div class="bc-groups">
+    @foreach (var group in Store.Document.Groups.OrderBy(g => g.Z).ThenBy(g => g.Id))
+    {
+        var selected = Selection.GroupId == group.Id;
+        var count = Store.MembersOf(group.Id).Count();
+        <div @key="group.Id" class="bc-group @(group.Fill == GroupFill.Panel ? "bc-group--panel" : null)" role="group"
+             aria-label="@($"Group: {group.Label}, {(count == 1 ? "1 item" : $"{count} items")}")"
+             data-bc-selected="@(selected ? "true" : null)"
+             style="@GroupStyle(group)">
+            @if (Selection.EditingGroupId == group.Id)
+            {
+                <input class="bc-group__input form-control form-control-sm" aria-label="Group name" value="@group.Label"
+                       @onchange="@(e => Rename(group.Id, e.Value?.ToString()))"
+                       @onkeydown="@(e => OnRenameKey(e, group.Id))" />
+            }
+            else
+            {
+                <div class="bc-group__label" data-bc-group="@group.Id" tabindex="0" title="Drag to move the group">
+                    <BcIcon Name="@BlockRegistry.GroupIconName" />
+                    <span>@group.Label</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Selection.OnChanged += Refresh;
+    }
+
+    private static string GroupStyle(CanvasGroup g)
+    {
+        var style = FormattableString.Invariant(
+            $"left:{CssNumber.F(g.X)}px;top:{CssNumber.F(g.Y)}px;width:{CssNumber.F(g.Width)}px;height:{CssNumber.F(g.Height)}px");
+        return CanvasPalette.IsValid(g.ColorKey) ? style + $";--bc-node-color:var(--bc-color-{g.ColorKey})" : style;
+    }
+
+    private void Rename(Guid groupId, string? label)
+    {
+        Store.RenameGroup(groupId, label);
+        Selection.EndEdit();
+    }
+
+    private void OnRenameKey(KeyboardEventArgs e, Guid groupId)
+    {
+        if (e.Key == "Escape") Selection.EndEdit();
+    }
+
+    private void Changed(CanvasChange change)
+    {
+        if (change.Kind is CanvasChangeKind.Groups or CanvasChangeKind.Document or CanvasChangeKind.Reset or CanvasChangeKind.NodeGeometry)
+            _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Selection.OnChanged -= Refresh;
+    }
+}

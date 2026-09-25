@@ -24,6 +24,13 @@
 
     [Parameter] public string Height { get; set; } = "420px";
 
+    /// <summary>
+    /// What a shared pin counts — "investigations" on an investigations map, "sessions" on My Field Sessions.
+    /// The component is one map for several lists, and a cluster of field sessions used to announce itself as
+    /// "128 investigations here" (seen on the walk, 2026-09-16).
+    /// </summary>
+    [Parameter] public string Noun { get; set; } = "investigations";
+
     /// <summary>Raised with the pin's id when someone clicks a marker. A shared spot raises the first pin at it.</summary>
     [Parameter] public EventCallback<Guid> OnPinClicked { get; set; }
 
@@ -63,7 +70,7 @@
             var shared = group.Count > 1;
             return new BenMapPin(
                 (double)first.Latitude!.Value, (double)first.Longitude!.Value,
-                Title: shared ? $"{group.Count} investigations here" : first.Title,
+                Title: shared ? $"{group.Count} {Noun} here" : first.Title,
                 // A landmark anyone can visit is told apart by colour AND by its subtitle, so the
                 // difference survives colour vision. Only a KNOWN landmark: null means nobody checked.
                 Subtitle: first.IsPublicPlace == true ? "A place anyone can visit" : null,

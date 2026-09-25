@@ -31,10 +31,14 @@ namespace Ben.Video.Sidecar.Jobs;
 /// </summary>
 public static class ArgvFactory
 {
+    /// <param name="availableEncoders">What the bundled ffmpeg reports it can encode with, or null
+    /// when nothing has asked it — see <see cref="ToExportSettings"/>. Only the export pass reads
+    /// it; the preview passes have always used the defaults.</param>
     public static string[] Build(
-        SegmentRenderSpec spec, string inputPath, string outputName, ClipEffectRegistry registry)
+        SegmentRenderSpec spec, string inputPath, string outputName, ClipEffectRegistry registry,
+        IReadOnlyCollection<string>? availableEncoders = null)
     {
-        var settings = ResolveSettings(spec);
+        var settings = ResolveSettings(spec, availableEncoders);
 
         var appliedEffects = spec.AppliedEffects
             .Select(a => new AppliedEffect { EffectId = a.EffectId, Parameters = new Dictionary<string, double>(a.Parameters) })
@@ -105,12 +109,34 @@ public static class ArgvFactory
         }
     }
 
-    private static ExportSettings ResolveSettings(SegmentRenderSpec spec) => spec.Pass switch
+    /// <remarks>
+    /// The preview passes carry no codec of their own — they take <see cref="ExportSettings"/>'s
+    /// default, which is <c>libx264</c>. That default has to be re-chosen too, or on a build without
+    /// x264 the preview would fail exactly where the export would.
+    ///
+    /// <para>One thing to watch if that ever happens: <c>VideoEditor.razor</c> stream-copy-concats
+    /// native preview segments with wasm-rendered ones, which needs both sides to be the same codec.
+    /// The wasm build has x264 and is not affected by any of this, so a native build without x264
+    /// would be producing H.264 from a different encoder on one side of that concat. It is still
+    /// H.264 in mp4, but it is untested, and it is worth remembering before shipping a preview path
+    /// on a build that lacks x264.</para>
+    /// </remarks>
+    private static ExportSettings ResolveSettings(
+        SegmentRenderSpec spec, IReadOnlyCollection<string>? availableEncoders) => spec.Pass switch
     {
-        RenderPassKind.Rough => new ExportSettings { Preset = "ultrafast", Crf = 35 },
-        RenderPassKind.Fine => new ExportSettings(),
+        RenderPassKind.Rough => new ExportSettings
+        {
+            Preset = "ultrafast",
+            Crf = 35,
+            VideoCodec = VideoEncoders.Choose(ExportVideoCodec.H264, availableEncoders),
+        },
+        RenderPassKind.Fine => new ExportSettings
+        {
+            VideoCodec = VideoEncoders.Choose(ExportVideoCodec.H264, availableEncoders),
+        },
         RenderPassKind.Export => ToExportSettings(
-            spec.ExportQuality ?? throw new InvalidOperationException("Export pass requires ExportQuality.")),
+            spec.ExportQuality ?? throw new InvalidOperationException("Export pass requires ExportQuality."),
+            availableEncoders),
         _ => throw new InvalidOperationException($"Unknown pass '{spec.Pass}'."),
     };
 
@@ -120,15 +146,15 @@ public static class ArgvFactory
     /// <see cref="ExportSettings.PixelFormat"/> is deliberately left at its default
     /// (<c>yuv420p</c>) rather than trusted from the wire — see <see cref="ExportQualityDto"/>'s
     /// doc comment.</summary>
-    internal static ExportSettings ToExportSettings(ExportQualityDto q) => new()
+    /// <param name="availableEncoders">What the bundled ffmpeg reports it can encode with, or null
+    /// when nothing has asked it. Null keeps the original behaviour - x264 and x265 named outright -
+    /// so every caller that does not care is unaffected. A build licensed for the Microsoft Store
+    /// has neither, and passing its encoder list here is what lets the same sidecar use it.
+    /// See <see cref="VideoEncoders.Choose"/>.</param>
+    internal static ExportSettings ToExportSettings(
+        ExportQualityDto q, IReadOnlyCollection<string>? availableEncoders = null) => new()
     {
-        VideoCodec = q.VideoCodec switch
-        {
-            ExportVideoCodec.H264 => "libx264",
-            ExportVideoCodec.H265 => "libx265",
-            ExportVideoCodec.Vp9 => "libvpx-vp9",
-            _ => throw new InvalidOperationException($"Unknown video codec '{q.VideoCodec}'."),
-        },
+        VideoCodec = VideoEncoders.Choose(q.VideoCodec, availableEncoders),
         AudioCodec = q.AudioCodec switch
         {
             ExportAudioCodec.Aac => "aac",

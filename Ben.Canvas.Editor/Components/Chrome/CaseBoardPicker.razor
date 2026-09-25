@@ -1,0 +1,129 @@
+@*
+    Choosing a board on the case to link to, and optionally one card on it.
+
+    Only PUBLISHED boards are listed, and the sheet says so - a board missing from a list is a bug
+    report waiting to happen unless the list says why. The same sentence is its empty state.
+
+    The second step lists the published copy's blocks by the title the published picture prints, so
+    what somebody picks is what a reader would recognise.
+*@
+@using Ben.Canvas.Core.Persistence
+@using Ben.Canvas.Core.Serialization
+@inject BoardLinks Boards
+@inject ICanvasServerStore Server
+<BcModal @bind-Visible="Visible" Title="@Title" Size="lg" Scrollable="true">
+    <ChildContent>
+        <p class="bc-picker__note">@CanvasCopy.Sentences.OnlyPublishedBoardsLink</p>
+
+        @if (_loading)
+        {
+            <p class="text-muted">Loading…</p>
+        }
+        else if (_board is null)
+        {
+            @if (_boards.Count == 0)
+            {
+                <p class="bc-picker__empty" data-bc-empty="boards">@CanvasCopy.Sentences.OnlyPublishedBoardsLink</p>
+            }
+            else
+            {
+                <ul class="bc-picker__list">
+                    @foreach (var board in _boards)
+                    {
+                        <li>
+                            <button type="button" class="bc-picker__row" data-bc-board="@board.Id"
+                                    @onclick="@(() => ChooseBoardAsync(board))">
+                                <BcIcon Name="book-open" />
+                                <span class="bc-picker__name">@board.Name</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else
+        {
+            <p class="bc-picker__note">
+                <strong>@_board.Name</strong> — choose what to open at.
+            </p>
+            <ul class="bc-picker__list">
+                <li>
+                    <button type="button" class="bc-picker__row" data-bc-whole-board
+                            @onclick="@(() => PickAsync(null, null))">
+                        <BcIcon Name="book-open" /><span class="bc-picker__name">The whole board</span>
+                    </button>
+                </li>
+                @foreach (var (id, title) in _cards)
+                {
+                    <li>
+                        <button type="button" class="bc-picker__row" data-bc-card="@id"
+                                @onclick="@(() => PickAsync(id, title))">
+                            <BcIcon Name="square" /><span class="bc-picker__name">@title</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </ChildContent>
+</BcModal>
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>The board card being filled in.</summary>
+    [Parameter] public Guid NodeId { get; set; }
+
+    /// <summary>Called with the board and card chosen; a null card means the whole board.</summary>
+    [Parameter] public EventCallback<(Guid BoardId, string BoardTitle, Guid? CardId, string? CardTitle)> OnPick { get; set; }
+
+    private IReadOnlyList<CanvasServerSummary> _boards = [];
+    private CanvasServerSummary? _board;
+    private List<(Guid Id, string Title)> _cards = [];
+    private bool _loading;
+
+    private string Title => _board is null ? "Link to a board" : "Open at";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible)
+        {
+            _board = null;
+            _cards = [];
+            return;
+        }
+
+        if (_boards.Count > 0 || _loading) return;
+
+        _loading = true;
+        _boards = await Boards.PublishedAsync();
+        _loading = false;
+    }
+
+    private async Task ChooseBoardAsync(CanvasServerSummary board)
+    {
+        _board = board;
+        _cards = [];
+
+        // The blocks of the PUBLISHED copy, named the way the published picture names them — so what
+        // is picked is what a reader would recognise, not what the author is part way through typing.
+        var (document, _) = await Server.GetPublishedAsync(board.Id);
+        if (document is null) return;
+
+        var (parsed, _) = CanvasSerializer.Parse(document.DocumentJson);
+        if (parsed is null) return;
+
+        // Reading order, which is how somebody scanning the other board would find a card.
+        _cards = parsed.Nodes
+            .OrderBy(n => n.Y).ThenBy(n => n.X)
+            .Select(n => (n.Id, Title: BoardSnapshot.TitleOf(n)))
+            .Where(c => !string.IsNullOrWhiteSpace(c.Title))
+            .ToList();
+    }
+
+    private async Task PickAsync(Guid? cardId, string? cardTitle)
+    {
+        if (_board is null) return;
+        await OnPick.InvokeAsync((_board.Id, _board.Name, cardId, cardTitle));
+        await VisibleChanged.InvokeAsync(false);
+    }
+}

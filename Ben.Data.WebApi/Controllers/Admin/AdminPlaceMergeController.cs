@@ -20,7 +20,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// not to make. Without a merge the only cure is a database console.</para>
 ///
 /// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, hosted
-/// events, field sessions and rooms all point at places; leaving any behind would orphan somebody's
+/// events, field sessions, rooms and posts about the place all point at places; leaving any behind would orphan somebody's
 /// work at a record nothing links to any more. The delete is the last statement, in the same
 /// transaction, so a failure half way leaves both places intact rather than one gutted.</para>
 ///
@@ -163,7 +163,14 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     /// </summary>
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-        int FieldSessions, int Rooms, int HostedEvents);
+        int FieldSessions, int Rooms, int HostedEvents,
+        /// <summary>Posts about the place, moved with it (2026-09-17). Trailing and defaulted.</summary>
+        int Posts = 0,
+        /// <summary>
+        /// Evidence and pictures added straight to the place, moved with it (item 250). A file
+        /// already at the survivor is not counted here: it was not moved, it was already home.
+        /// </summary>
+        int Contributions = 0);
 
     /// <summary>Moves everything from one place onto another and deletes the empty one.</summary>
     [HttpPost("{id:guid}/merge")]
@@ -193,6 +200,13 @@ public sealed class AdminPlaceMergeController : BenControllerBase
             x => x.PlaceId = request.IntoPlaceId, ct);
         var events = await RepointAsync(db.OrgCalendarEvents.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+        // Posts ABOUT the place (2026-09-17). The foreign key is SetNull, so without this line a
+        // merge would not fail — it would quietly strip the place off every post about it, which
+        // is worse: the posts survive with their text and lose the one thing that put them on a
+        // page. Repointed here so they follow the record that is kept.
+        var posts = await RepointAsync(
+            db.OrgMessages.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
 
         // Hosted events (item 235) point at their venue with a NoAction key, so until this line
         // existed a merge of any place that had ever hosted one reached the delete below and was
@@ -204,6 +218,35 @@ public sealed class AdminPlaceMergeController : BenControllerBase
 
         var sessions = await RepointAsync(db.FieldSessionUploads.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+
+        // Evidence and pictures added straight to the place (item 250). Its key to Place is
+        // CASCADE, so until this line a merge did not fail — it silently destroyed everything
+        // anybody had contributed to the losing record, which is the worst way for a tool called
+        // "merge" to behave. Found by crawling the site (C6).
+        //
+        // Repointed by hand rather than through RepointAsync because of the unique
+        // (PlaceId, UploadFileId) index: the same file can already sit at the survivor — somebody
+        // added a photograph to both records of one building, which is the situation a merge
+        // exists for — and moving it would collide. A collision is the two records agreeing, so
+        // the loser's row is dropped and the survivor's kept, with its own votes and caption.
+        var movingEvidence = await db.PlaceEvidence.Where(x => x.PlaceId == id).ToListAsync(ct);
+        var alreadyThere = await db.PlaceEvidence
+            .Where(x => x.PlaceId == request.IntoPlaceId)
+            .Select(x => x.UploadFileId)
+            .ToListAsync(ct);
+
+        var survivorFiles = alreadyThere.ToHashSet();
+        var evidence = 0;
+        var collapsed = 0;
+        foreach (var row in movingEvidence)
+        {
+            // Added within this loop too: two rows of the loser can carry one file only if the
+            // index let them, which it does not — but the set keeps the arithmetic honest either way.
+            if (!survivorFiles.Add(row.UploadFileId)) { db.PlaceEvidence.Remove(row); collapsed++; continue; }
+
+            row.PlaceId = request.IntoPlaceId;
+            evidence++;
+        }
 
         // Rooms are named PER GROUP for a shared place (item 197), so two records of one building
         // can carry rooms of the same name from different groups. Moving them all is right — the
@@ -260,10 +303,13 @@ public sealed class AdminPlaceMergeController : BenControllerBase
 
         _log.LogInformation(
             "Place {Losing} merged into {Surviving}: {Investigations} investigations, {Cases} cases, "
-          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms moved.",
-            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms);
+          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms, "
+          + "{Posts} posts, {Evidence} contributions moved ({Collapsed} already at the survivor).",
+            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms,
+            posts, evidence, collapsed);
 
         return Ok(new MergeResult(
-            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents));
+            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents, posts,
+            evidence));
     }
 }

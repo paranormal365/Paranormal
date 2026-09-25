@@ -11200,7 +11200,7 @@ the fold hands back a y the mouse cannot reach and the drags land on whatever is
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
 
-## 224. A date field silently takes an impossible day as its second digit (OPEN)
+## 224. A date field silently takes an impossible day as its second digit (FIXED 2026-09-15 — `fix/date-picker-impossible-day-224`)
 
 Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
 
@@ -11232,6 +11232,31 @@ typing behaviour were wrong on the day this was found:
 
 **Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
 first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
+
+### Measured 2026-09-15 (branch `fix/date-picker-impossible-day-224`) — every option on the tree above fails
+
+Real keystrokes in Chromium against temporary pickers on `/styleguide`, value seeded 09/15/2026, typing from the month:
+
+| Field | Typed | Shows | Bound value |
+|---|---|---|---|
+| `TelerikDatePicker` (today's call sites) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikDatePicker AutoCorrectParts="false"` | 0 9 3 1 | 09/31/2026, red `k-invalid` | 09/15/2026 — Save keeps the old date |
+| …then 3 0 to fix the day | | 09/31/**0030** — focus had moved to the year | 09/15/2026 |
+| `TelerikDateTimePicker` (MM/dd/yyyy hh:mm tt) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikTimePicker` (hh:mm tt) | 1 3 | 03:00 PM | 15:00 — silent |
+| native `<input type="date" @bind>` | 0 9 3 1 | 01/01/0001 | 09/03/2026 |
+| **Telerik 15.0.1** (probe build only, reverted) | same | identical to 14.1 | identical |
+
+Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
+part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
+only a real click does, which matters for any automated test.
+
+**Done, as (1)** — and wider than this entry knew. `Kit/BenDateField` (`DateEntry` parses; a sentence and the kept value on refusal; TelerikCalendar inline) replaced all 34 Telerik pickers **and** the fourteen `type="date"` and three `type="datetime-local"` boxes added since, which failed too: `@bind` saved 01/01/0001 into a `DateTime`, erased a `DateTime?`, and an impossible `datetime-local` read as "none" posted a scheduled post at once. `BenDateFieldGuardTests` bans all of them; `type="time"` stays (it took 08:30 PM correctly).
+
+**What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
+date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
+with a guard; (2) intercepting Telerik's keystrokes in JS (fragile across Telerik versions; not recommended); (3) a
+support ticket to Telerik with the table above, and wait.
 
 ---
 
@@ -11711,7 +11736,15 @@ carry guides and capacity, and the guest mail knows how to say all of it.
 
 ---
 
-## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+## 235. Hosted events: the event creator band (SHIPPED through phase 17 — merged; the pieces left on purpose are FUTURE)
+
+**Relabelled 2026-09-21.** This read IN PROGRESS long after every phase had merged; the arc's
+own audit (`FeatureHistory/README-hosted-events-235-audit.md`) records what was left unbuilt and
+why: the waiting list that offers a lapsed place automatically, custom questions at booking,
+checklists and "staff here now", the rota, Apple Wallet, and the 14e reminders/widget/Live
+Activity. Each is its own small item when a venue asks — see `Plan-2026-09-22.md` §7. Payments
+stay out by decision 6.
+
 
 The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
 and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
@@ -12258,7 +12291,7 @@ Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 
 that changes what the site knows about people, and it should be a separate decision with its own
 sentence in `/privacy`.
 
-## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (A+B SHIPPED as item 235 phase 8a; C BUILT 2026-09-20)
 
 Ben, 2026-09-12, while phase 2.4 was being built:
 
@@ -12321,8 +12354,59 @@ and so a member with no email still sees it.
 - Whether an alert should ever go to a non-member (a hired door manager), which is the same
   question phase 5 asks about non-member staff.
 
+### Where it actually stands (checked 2026-09-20)
 
-## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
+**A and B shipped inside item 235**, as phase 8a, "the letters that tell a venue a booking arrived"
+— this entry had gone stale and still said they were open. They are built the way this asked:
+`EventBookingAlertPreference.Mode` is the per-person opt-out; `EventBookingAlertState` holds
+`LastAlertUtc` and `AlertsCoverUpToUtc` **per person per event**, which is the batching; and the
+job finds arrivals by WHEN THEY WERE MADE rather than by a hook in the request door, so an outage
+costs a late letter instead of a lost one. The digest is daily while an event is selling, weekly
+otherwise, and never sent when empty.
+
+**The gate this entry set for itself — "follows phase 5, not phase 2" — was satisfied** before C
+was built: `OrganizationPermissionArea.Events` and `HostedEventStaff` both exist. Phase 5 also
+answered the third open question without anyone revisiting it: `HostedEventStaff.AppUserId` is
+nullable with `Email` and `DisplayName` beside it, so **a hired door manager is already a
+first-class staff row** and an alert can reach one.
+
+**Ben chose per event** for grouping (2026-09-20), which is how the state table was already keyed.
+
+### C, as built (2026-09-20)
+
+- **`OrgMessageChannel.EventStaffRoom = 6`**, deliberately not a flag on `EventRoom`. They are the
+  two audiences a hosted event has; a flag is what somebody forgets in a query, and the cost of
+  forgetting is showing a guest what the staff said about them.
+- **`HostedEvent.StaffRoomCoversUpToUtc` / `StaffRoomLastPostUtc`** — the thread is shared, so its
+  cursor is the event's, mirroring `EventBookingAlertState`'s pair. Migration `EventStaffRoomCursors`,
+  two `AddColumn`s, nothing dropped in `Up`.
+- **`EventBookingAlerts.Decide` was split** so the thread and the letters share one definition of
+  "new", "a rush" and "long enough". Two rules that start identical do not stay identical. The
+  shared-thread call passes no `excludeLeadAppUserId`: one member booking a room IS news to the
+  rest of the venue, where it is not news to that member's own inbox.
+- **No new screen.** The org Messages page lists anything you are a recipient of and already has a
+  Reply button, so the thread arrives where the group talks — which is what this entry meant by
+  "a delivery target rather than a new feature". Only the root carries recipient rows; a reply
+  marks the root unread again, so the bell counts it without the message list growing a row per
+  booking.
+- **The whole job no longer stops when no mail server is configured.** It used to return early;
+  the letters are still gated, inside, but a site with mail switched off is exactly where being
+  told at all depends on the thread.
+- **Found and fixed on the way:** `MessageChannelDisplay` fell through to `channel.ToString()`, so
+  `EventRoom` had been rendering its own enum spelling in a badge since item 235 shipped it.
+  `MessageChannelDisplayTests` now asserts over the enum, so the next appended channel fails at the
+  moment it is cheapest to name.
+- Tests: 7 pure (`EventStaffRoomTests`, including that a post never carries the guest's name and
+  that an event called `<script>` is escaped), 6 end-to-end against SQLite in
+  `EventBookingAlertJobTests`, 5 in `MessageChannelDisplayTests`. The escaping and the unread
+  re-marking were each seen failing with their rule broken. Suite 6,516 pass.
+
+**Still to do before it ships:** the migration is written but **not applied** — applying it was
+refused here, so it needs running against `IsHauntedDb_player` and then production via the runbook.
+No Playwright fixture yet.
+
+
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b transactions SHIPPED 2026-09-23, its guard open — see Plan-2026-09-22 §3)
 
 Ben, 2026-09-12:
 
@@ -12448,12 +12532,63 @@ fails at once, a claimed row is not claimed twice, running twice sends once),
 `EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
 diagnostics controller may take `SmtpEmailService` directly).
 
+### Letters that carry a link now queue without a mail server (2026-09-23)
 
-## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+An audit found thirteen letters carrying something a person must use, and two followed anywhere in
+the browser suite. Nine could never be: their senders asked `IsConfigured` first and skipped the
+letter, and the test hosts (like every dev machine) have no SMTP. They now queue regardless — the
+pass letter, tour sign-up, staff invite, the three `/attending/` invitations, the co-client invite,
+the added-address confirmation and the venue claim code.
+
+- **The rule: queued is not sent.** Every "sent" a person is shown still means a mail server will
+  deliver it — the hosted invite's `Sent`, the co-client and address `EmailSent` (so the copy-link
+  fallback still appears), and the pass's `EmailedUtc` (so the board's "not sent yet" stays).
+- **"Send it again" buttons still refuse without mail** — the guest's and host's pass resend and the
+  staff-invite resend. Their only purpose is to send now; queueing would tell a guest their pass
+  was on its way when it was not.
+- **Browser tests:** `EmailedLinksAreFollowedTests` (reset, handover, request claim),
+  `HostedEventLettersAreFollowedTests`, `CalendarLettersAreFollowedTests`,
+  `AccountLettersAreFollowedTests` — each reads its letter from the outbox and uses it. The venue
+  claim test skips until its proving address has been on record 7 days (`ContactMinimumAge`).
+- **Two bugs they found, both from the 2026-08-18 ports:** the co-client invite page's "Create
+  Account & Accept" was `type="button"` with no handler, so nobody without an account could ever
+  accept (and both password boxes were `type="text"`); SuperAdmin File Types → Save the same.
+
+**Found 2026-09-23, FIXED the same day:**
+- **Tour dates said "You're coming" for a seat still awaiting approval.** `EventAttendanceConfirm`
+  said "You've asked for a place" only for hosted events; item 234 holds the tour welcome back for
+  exactly this reason. `EventAttendanceConfirmation.AwaitsApproval` now carries the tour case and
+  the page says what happened. `CalendarLettersAreFollowedTests` asserts it (failed on the old page).
+- **The API's `SiteIdentity:BaseUrl` was never set by either deploy path** (`deploy-ishaunted.ps1`,
+  `uat-webapi-config.py`) — only `AppBaseUrl`. So every link built with `_site.AbsoluteUrl` was
+  relative in production: seat pick, `/attending/`, `/helping/`, reset and handover, the pass link,
+  the mail header logo. Only the confirmation letter worked, by falling back to AppBaseUrl by hand.
+  Now: an unset BaseUrl falls back to AppBaseUrl at startup (`SiteIdentity.UseAppBaseUrlWhenUnset`),
+  and both deploy paths write it. **Takes effect on the next API deploy** — no config edit needed.
+- **The pass link pointed at the site origin**, which does not forward `/api` (the API is under
+  `/webapi`). New `SiteIdentity:ApiBaseUrl` (deploy writes `$ApiUrl`); pass links for hosted events
+  and tours use `ApiAbsoluteUrl`, which stays relative rather than falling back to the site.
+
+- **Twelve browser tests that failed with or without these changes — FIXED 2026-09-23, two causes:**
+  - *Ten:* the seeded paranormal365 plan (BillingDemoSeeder, ten days from renewal on purpose, seeded
+    once) ran out on 09-21; the lapse job made the group read-only and paused its open cases on
+    09-22. `run-e2e.sh` now renews the two seeded plans through the admin endpoint (which also
+    un-pauses the cases) when lapsed or within two days of ending, back to the seeder's shape.
+  - *Two (video editor imports):* moving the clip browser's styles to a global stylesheet on 09-22
+    kept three `::deep` rules, which a browser drops outside CSS isolation — the media bin's tab
+    strip lost its height and the grid covered the cards. Plain selectors now; a guard refuses
+    `::deep` in any global stylesheet.
+
+
+## 240. Two branches parked with real work on them (CLOSED 2026-09-19 — both merged)
 
 Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
 kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
 a branch nobody remembers, and one of these was only ever in a working directory.
+
+**Both merged to develop and master on 2026-09-19.** A and B below record what they were; what
+follows each is what finishing them actually took, because neither was the straight "build it and
+merge" this entry assumed.
 
 ### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
 
@@ -12478,6 +12613,36 @@ What it does, from the diff:
 check the help wording against the shipped screens, then merge. It is self-contained and touches
 nothing item 235 touches.
 
+### A, as finished (2026-09-19)
+
+**It was not self-contained after all.** The WIP branched from 2026-08-19. On 2026-09-05, commit
+`dccb09eb` fixed the same complaint from the other end: `GET brands?categoryId=` narrows the make
+list server-side, so choosing "Audio Recorder" stopped offering tripod makes. The WIP, written
+before that and unaware of it, keeps every make and LABELS the ones with nothing in the category.
+Two deliberate decisions in opposite directions.
+
+**Dropping a make turned out to introduce a defect.** The catalog refuses a near-duplicate make
+with a "did you mean". Choose Audio Recorder, type "FLIR", and the suggestion offered is the FLIR
+the category filter is hiding; taking it re-posts the name, the server returns the existing row,
+and `_brandId` is set to a make that is not in the filtered list. `BenSelect` renders its
+placeholder when the value matches no option, so the picker then reads "Choose a make…" while a
+make IS chosen, over an empty model list with nothing said about it.
+
+**Both answers are in.** Every make stays listed; makes with something in the chosen category sort
+first and the rest are labelled "(no models in this category yet)". The coverage set is the
+narrowing endpoint's own answer — the same call asked twice — so the labels follow the server's
+rule, carve-out for the caller's own pending proposal included, rather than a second copy of that
+rule in the browser. That also replaced the WIP's whole-category model search, which shipped every
+model in a category to the browser to collect brand ids.
+
+**The fixture it left behind failed on its first run, correctly.** It read the model select the
+instant a make was picked, which is before the server has answered, so it called Olympus a dead end
+while the API was serving it the one model the seed gives it. Waiting for the select to be
+*enabled* does not help — it is enabled, holding the previous make's answer. The editor now says
+which make its model list belongs to (`data-model-list-for`, a make id or "loading"), and the
+fixture waits for that. Green afterwards: 5 passed, 0 skipped, so it found a genuine dead end
+rather than ignoring itself.
+
 ### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
 
 Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
@@ -12489,6 +12654,22 @@ three components were rendering without styling somebody had written for them.
 `README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
 — all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
 the merge, or the root fills up again.
+
+### B, as finished (2026-09-19)
+
+The README warning was right and cost one `git mv`; the correction this branch adds to
+`README-remaining-work-nine-phases.md` followed that file through its rename on its own.
+
+**The one conflict was `FeedPostCard.razor.css`, added on both sides.** Item 233 (2026-09-11) gave
+the same component a scoped file for the "said at {place}" mark, and its header comment records the
+same discovery this branch acts on. Both sets of rules kept; the header now says the dead file is
+gone rather than that it sits unread.
+
+Verified structurally rather than by eye, since these rules had never applied and a mistake would
+look identical to the old behaviour: all five are in the library's scoped bundle carrying their
+components' scope attributes, each class is still written in the `.razor` file whose scope that is
+(develop had edited all three components since), and the website's own bundle `@import`s the
+library's — so they reach the page.
 
 
 ## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
@@ -12585,3 +12766,801 @@ clip on a Windows-class server. **Needs from Ben:** real recordings, including p
 ### Video (separate item when it comes)
 MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
 subtraction plus a small vision model; MCP could let an assistant use its results.
+## 243. Nine tests that only pass on a database somebody has already run the suite against (CLOSED 2026-09-19 — all nine fixed)
+
+A full run on a genuinely fresh database — `BEN_E2E_DB=IsHauntedDb_e2e_clean` — came back 693/9.
+The same nine had passed that morning on `IsHauntedDb_e2e`, before any change. They are not
+regressions. They are tests that depend on data an earlier run wrote, and the only reason nobody
+had noticed is that `IsHauntedDb_e2e` had never once been reset since item 200 created it.
+
+**This is the exact failure `scripts/run-e2e.sh` was built to prevent**, and its own header says so:
+
+> the drift MASKED a real bug: seeded groups were being created without their roles, ladder and
+> duties, and nobody could see it because the backfill on the next startup covered for it. It only
+> appeared on a genuinely fresh database.
+
+Giving the suite its own database stopped it writing to the dev one. It did not stop the suite
+writing to *itself*, and eight months of runs have left `IsHauntedDb_e2e` a place where these nine
+tests are true.
+
+### The eight hosted-event ones
+
+`A_guests_review_page_says_reviews_open_once_the_event_is_over`,
+`A_public_file_reaches_a_visitor_and_a_staff_file_does_not`,
+`A_picture_added_by_the_host_leads_the_event_page`, `On_a_phone_the_ask_button_stays_on_screen`,
+`A_guest_posts_a_photo_and_the_organizer_sees_it_on_the_wall`, `The_add_photos_page_fits_a_phone`,
+`The_room_shows_on_the_event_page_and_a_post_can_be_taken_down`.
+
+Each asks `GET /api/public/hosted-events/{RoomsEventId}` and asserts it answers. That endpoint
+requires `LifecycleState` in `HostedEventStates.OnThePublicSite` — Published, Live or Ended.
+`HostedEventDemoSeeder` creates both seeded events as `Draft`, **on purpose**, and says why:
+
+> Draft on purpose: the point of the seed is a plan to arrange, and publishing it would spend one
+> of the group's credits every time a database is built.
+
+So the seed is right and the tests are wrong. They pass only where some earlier run's test published
+that event and the row stayed. **The fix belongs in the fixtures**: publish the event as part of
+their own setup and assert afterwards, rather than inheriting a published one. Four files share the
+same `SlugAsync()` shape, so one helper covers all of them.
+
+A seeder change would be the wrong fix twice over — it would overrule a deliberate decision, and it
+would hide the same class of bug next time.
+
+### The other two
+
+- `List_AuthUser_SeesVoteButtons` — presses the vote button on the home page's first card and waits
+  for "Confirms the findings". The popover never opened on a fresh database. Whatever it needs — a
+  card with votable evidence — the seed does not make.
+- `A_post_about_a_place_appears_there_and_on_the_feed` — waits 30s for a "Latest" button on the
+  feed. A feed with nothing in it does not draw its sort control.
+
+### How each was fixed (2026-09-19)
+
+**The eight event ones — five fixtures, not four.** `EventGalleryTests`, `EventFilesTests`,
+`EventRoomTests`, `HostedEventProgrammeTests` and `EventAfterTests` publish the seeded event
+themselves in their setup, through the product's own endpoint. `BenTestBase.PublishSeededEventAsync`
+does it and answers with the public slug. Safe to repeat: the controller asks the entitlement only
+when `FirstPublishedUtc` is null, and the first publish is free anyway — tier capabilities are
+EXCLUDED per tier and nothing excludes `HostEvents`. A refusal now carries the server's own sentence
+instead of "not on the public site".
+
+`EventAfterTests` was missed on the first pass and cost a run to find; the guest's review page is
+public-side like the other four.
+
+**The risk in that approach, answered by evidence rather than argument.** Fifteen fixtures use the
+seeded event and only five need its public face; the other ten drive manage pages that work on a
+Draft, and a published event is not editable the way a draft is. Publishing it could have broken
+them. It did not — `Copying_an_event_makes_a_draft_and_says_what_to_check`, the layout designer, the
+seats and the staff fixtures all passed in the same run, after the publish. That is the only reason
+it is left published rather than restored in a teardown.
+
+**The feed one was the harness, not the test.** `TurnTheFeedOnAsync` wrote the setting and then
+polled `/api/feed` until the API agreed — and handed the browser a website that had not heard.
+`FeatureGate` reads `SiteFeaturesProvider`, a singleton on a 30-second snapshot which nothing primes
+when the switch arrives through the API rather than the admin page. The old database carried the
+feed already on, so the gap never showed. It polls the WEBSITE's own `/feed` for the tab strip now,
+for forty seconds — long enough to outlast a snapshot that refreshed the instant before the write.
+
+**And the vote one pressed a button before the circuit was live.** Opening the three choices is a
+round trip; the home page renders long before the circuit exists and a press in that window is lost.
+`ClickUntilAsync` is what this harness has for exactly that.
+
+Nothing was made weaker. Each test arranges the state it needs instead of finding it arranged.
+
+**Verified on a third fresh database** (`IsHauntedDb_e2e_v3`): 702 passed, 0 failed, 81 skipped.
+Three fresh builds in a row — 693/9, then 701/1, then 702/0 — each one a different database, because
+a fix for "depends on a used database" proves nothing when it is only checked on a used one.
+
+### What to do about the database itself
+
+`BEN_E2E_DB=<name>` already gives a fresh database AND a fresh uploads directory. Once these nine
+are honest, the suite should run on a fresh name regularly — a green that depends on eight months of
+residue is not a green. Worth deciding whether every run gets a fresh database, or whether that is
+reserved for a weekly check, since a fresh build costs migration and seeding time on every run.
+
+### Already fixed on the way to finding this (2026-09-19)
+
+Three separate fixtures were poisoning the ground for the ones after them, and they are done:
+
+- `AudioScrubModeTests` uploaded a 7MB MP3 into the seeded Belmont case on every run and never
+  removed it. That case held **399 files**; the Files tab rendered a wall of audio players, the
+  newest waveform could not decode in time, and both tests failed saying "Create Region" was
+  disabled. They were right about the button and wrong about why — the page was drowning. It now
+  clears every test-audio card before uploading.
+- `A_case_shows_its_contact_with_the_manager_fallback_and_a_choice_sticks` opened "the first card
+  whose reference contains #2026-", so it broke the moment anything added a case to that group. It
+  names Belmont now, as its three siblings already did.
+- `RouteCrawlTests` decided a page was broken by regex-matching the phrase "An unhandled error has
+  occurred" anywhere in the body — so `/changes` failed the crawl for *quoting* it in a changelog
+  line. It reads the chrome rather than the content now. Its 404 pattern had also never matched the
+  page's actual words.
+## 244. The dashboard's unbounded counts, and the rollup that would flatten them (OPEN — measured 2026-09-19)
+
+Ben, 2026-09-19: *"As the number of users grows, the dashboard page is going to take longer and
+longer to load."* He is right, and the cheap work is done — what is left is the part that changes
+the curve rather than the constant.
+
+### What was done, and what it bought
+
+Measured on the e2e database, cold cache and warm process:
+
+| | before | after |
+|---|---|---|
+| page total, warm cache | 502 ms | ~3 ms |
+| summary, cold | 65 ms | 91 ms |
+| charts, cold | 66 ms | ~65 ms |
+| sign-ins, cold | 312 ms | ~290 ms |
+
+- **Five minutes of cache per endpoint**, keyed by the range. The whole visible win, and it does
+  not touch the curve — it only stops the page paying for it on every load. The page says the
+  figures are worked out every few minutes rather than implying they are live.
+- **The "never arrived" anti-join is bounded at both ends.** It counted every account ever created
+  that had never signed in — two growing tables, no upper bound, and the single most expensive
+  query on the page. It asks about the last 90 days now, which is also the better funnel question.
+- **`DateCreated` is indexed on `AppUsers` and `Cases`.** The two "this week" tiles looked bounded
+  and were full scans wearing a date filter.
+
+### What was tried and REVERTED, with the number
+
+Running the summary's nine counts at once, each on its own `DbContext` — a context will not run
+two queries in parallel, so that is what concurrency costs here. It measured **153 ms against 91 ms
+sequential**. Creating nine contexts and opening nine connections costs more than nine counts that
+each take a few milliseconds on a connection already open.
+
+It would pay at a size where each count dwarfs a connection. At that size the answer is the rollup
+below, not nine parallel table scans. The figure is written into the controller so nobody re-derives
+it from first principles and re-adds it.
+
+### What is still unbounded
+
+Every one of these grows with the site for ever, and no amount of caching changes that:
+
+- `AppUsers`, `Organizations`, `Cases`, `Investigations` — four plain `COUNT(*)`
+- active memberships, `DISTINCT` over every one of them
+- cases grouped by status, and the three `TopStates` aggregates in the charts endpoint
+
+### The rollup, when the measurement says so
+
+`IScheduledJob`, `ScheduledWorkService` and `ScheduledJobLedger` already exist, so a snapshot row
+written every N minutes would make the dashboard O(1) in table size. That is the version of Ben's
+"a view or a sp" instinct that actually helps: a plain view is computed at read time and stays
+O(n); only a stored result is constant. SQL Server's indexed views disqualify most of these
+(no `DISTINCT`, no subqueries, `COUNT_BIG` only).
+
+### Measured again 2026-09-20, after Ben said it still takes ~5 seconds
+
+**The server is not the cost, and the rollup would not have helped.** Measured through the real
+page, signed in as SuperAdmin, against `IsHauntedDb_player`:
+
+| | |
+|---|---|
+| navigation | 42–62 ms |
+| first figures on screen | 81–115 ms |
+| **all nine charts drawn** | **789–948 ms** |
+
+| endpoint | cold | warm |
+|---|---|---|
+| summary | 86 ms | 1.3 ms |
+| charts (365 days) | 46 ms | 1.4 ms |
+| sign-ins (365 days) | 120 ms | 1.2 ms |
+
+So ~85% of the load is **drawing charts in the browser**, and the whole page is under a second here
+— which is the first thing to say about the five seconds: **it was not reproduced**. The player copy
+holds 24 users, 12 groups, 7 cases and 1,443 sign-in events, so every count is 4 ms because there is
+nothing to count. Whether the five seconds is production data or something else on the machine was
+never established; Ben chose to watch it rather than chase it (2026-09-20).
+
+### ApexCharts is super-linear in points, because SVG is a DOM node per point
+
+| points | ApexCharts (SVG) | Chart.js (canvas) |
+|---|---|---|
+| 30 | 38 ms | 15 ms |
+| 90 | 55 ms | 5 ms |
+| 180 | 130 ms | 6 ms |
+| 365 | **397 ms** (2,200 nodes) | 6 ms |
+| 730 | **1,329 ms** (4,281 nodes) | 7 ms |
+
+The eight-chart dashboard mix: **ApexCharts 334 ms, Chart.js 33 ms**; library 563 KB against 201 KB.
+Canvas is flat because it is one element and pixels, so it does not get worse as the site
+accumulates history — which the activity chart's 365 points already demonstrate.
+
+**Not a swap:** 6 razor files, the `ApexChart` wrapper, the theming, and **four e2e assertions that
+match `.apexcharts-svg`** — canvas leaves no DOM to assert against, so those need another way to
+prove a chart drew. Canvas also gives up per-element styling, screen-reader text, and crisp scaling
+unless `devicePixelRatio` is handled.
+
+### Cheaper than any of it, and worth doing first
+
+1. **Bucket the 365-point activity series weekly** (~52 points): 397 ms → ~40 ms, no port, no
+   library change, and the chart reads better at that width anyway.
+2. **The three endpoints are fetched in sequence** (`AdminDashboard.razor` `LoadAsync`) — summary,
+   then charts, then sign-ins, each awaiting the last. On production that is three times whatever
+   one costs.
+3. **Defer the charts below the fold** until they scroll into view.
+4. **One query still has no upper bound at all**: the "last ten distinct accounts to arrive" panel
+   groups the ENTIRE `SignInEvents` table with no date filter (`AdminStatsController` ~L315). It is
+   correct as written — somebody quiet for six months could genuinely be in the last ten — but on a
+   busy site the last ten are always recent, so a 90-day bound with a fallback is the same answer
+   for a fraction of the cost. It sits in the slowest endpoint.
+
+**Deliberately not built yet.** The trigger is a measurement, not a feeling: when a cold summary on
+production data stops being comfortable, this is the next step. It costs a table, a job, and a
+staleness story the page has to tell — all of which is worth paying for a real problem and not a
+predicted one.
+
+
+
+## 245. Letters somebody wrote, and a screen that shows what went out (BUILT — relabelled 2026-09-21)
+
+**Both asks exist.** Templates keyed by `Kind` with a fixed, validated placeholder set, starters,
+a preview against sample rows, publish and revert (`/admin/email-templates`, item 246's work);
+the outbox list and a sandboxed body viewer with the scrub date shown when the body is gone
+(`/admin/mail`). The remaining piece from 239 — enqueue inside the caller's transaction (239b) —
+is in `Plan-2026-09-22.md` §3.
+
+
+Ben, 2026-09-20:
+
+> I would like to be able to make a template to generate emails instead of relying on it to
+> generate without me seeing them. Also, I would like to create a page in administration where I
+> can see the emails generated, what email they are being sent to, when they were generated, when
+> they are sent and the ability to view their body on the site.
+
+Two asks, and **the second is mostly already built** — worth saying first so nobody builds it twice.
+
+### The screen is item 239b, plus one thing Ben added
+
+`OutboxEmail` (shipped 2026-09-12 as 239a) already records every letter the site produces: `To`,
+`Subject`, `HtmlBody`, `Kind`, `CreatedUtc`, `AcceptedBySmtpUtc`, `Attempts`, `LastError`. Ben's
+"when they were generated, when they are sent" are `CreatedUtc` and `AcceptedBySmtpUtc` — and that
+second name is deliberate: it means the SMTP server accepted it, not that it arrived, because
+nothing here can honestly claim delivery without bounce webhooks.
+
+So the list screen is **239b as already designed** and does not need re-specifying. What is new is
+**viewing the body on the site**, and it carries two questions the list does not:
+
+- **A letter is a copy of somebody's business.** A booking confirmation names a guest; a password
+  reset carries a working link; an event pass carries a QR that opens a door. `OutboxEmail`'s own
+  remarks already say so, which is why `BodyScrubbedUtc` exists. Viewing must therefore be
+  SuperAdmin-only, **audited** (a row in `AuditLogs` saying who read whose letter), and honest when
+  the body is gone: a scrubbed row shows its metadata and says the body was cleared on that date,
+  rather than showing an empty frame.
+- **It is untrusted HTML in an admin page.** Render it in a sandboxed `<iframe srcdoc>` with no
+  allow-scripts, not as a `MarkupString` — an admin screen that runs whatever was in a letter is a
+  worse bug than the one it was built to diagnose.
+
+### The templates are the new work
+
+Today eight files construct an `EmailMessage`, and two of them (`EventOrganizerMailer`,
+`EventGuestMailer`) build HTML with a `StringBuilder`. Nobody can see a letter without triggering
+the thing that sends it, and changing a word is a deploy.
+
+**What would actually help, in order of how much it buys:**
+
+1. **A preview, before any template exists.** Every `Kind` rendered against sample data on a
+   SuperAdmin page — no schema, no authoring, just a way to look. This is most of Ben's *"instead
+   of relying on it to generate without me seeing them"* and is a fraction of the cost. It also
+   makes a template's "before and after" visible, so it should come first either way.
+2. **Templates in the database**, keyed by `Kind`, with a plain-text body carrying named
+   placeholders, a stored default, and a revert. Not a general templating language: a fixed,
+   documented set of placeholders per `Kind`, validated on save, so a typo is refused at authoring
+   time rather than producing `{guestNmae}` in a guest's inbox.
+3. **One layout.** The eight call sites each build their own wrapper; a shared header/footer with
+   the site identity would let a template hold only the part that differs.
+
+**What has to be decided first:**
+
+- **Which letters may be edited at all.** A password reset and an event pass are mechanisms, not
+  prose; a booking confirmation is prose. Letting the first kind be edited invites a template that
+  drops the link. The honest split is probably: editable prose around a non-editable mechanism.
+- **What happens to a letter whose template is broken** — refuse the save, or fall back to the
+  built-in default at send time. Falling back silently is how somebody discovers in a month that
+  their edit never took effect.
+- **Whether the two `StringBuilder` mailers move first.** They are the ones whose wording Ben is
+  most likely to want to change, and they are the two the outbox already carries a `Kind` for.
+
+Related: [[239]] for the outbox and the list screen it already designed.
+
+
+## 247. A pass that is also a way in: QR tickets for tours, and what scanning one should do (FIRST ASK BUILT 2026-09-21; the second ask is item 248)
+
+Ben, while item 246 was being built:
+
+> And qr codes for ghost tour tickets for the staff to scan when they arrive for the tour.
+
+> Maybe the qr code scanned would also link them to be able to use their phone on the investigation
+> for people who are not already able to log into an investigation because they are not official
+> group members on a public investigation, ghost tour or event.
+
+**Two asks, and the second is much larger than the first.** Worth separating before anybody starts.
+
+### What already exists, and what does not
+
+`EventPasses` (item 235) mints a token, renders a PNG with `QRCoder`, serves it anonymously at
+`/api/public/event-passes/{token}.png`, and `EventGuestMailer` draws it into the letter **as a data
+URI first** with a linked copy as the fallback — *"a linked picture that a mail client blocked is a
+guest with no pass"*. That machinery is done and is the right thing to copy.
+
+**A tour has none of it.** A tour's attendance hangs off `OrgCalendarEvent` through
+`OrgCalendarEventAttendee`, which has an `Id` and no token; `TourGuestMailer.SendSignUpAsync` takes
+an address and a name and knows nothing about a per-person credential. So the first ask needs: a
+token on the attendee (or a pass table beside it), the PNG endpoint, minting at sign-up, the token
+in the letter, and **something for a guide to scan it with** — the last being the part with no
+equivalent at all, since a hosted event's door is a screen built for staff at a venue.
+
+**Item 246 is ready for the letter half.** `MailKindInfo.Supplied` already carries per-letter values,
+`{PassImage}` and `{PassUrl}` are declared for `booking-decided`, and `TourSignUp` gains the same
+two the moment a tour has a pass to put in them.
+
+### The second ask is a different feature
+
+A scanned code that **admits somebody to the working session on their phone** — a guest on a public
+investigation, a walk, or an event — is not a ticket check. It is a **credential**, and it has to
+answer questions a ticket does not:
+
+- **What may they do?** Contribute photos and readings to that session only, presumably, and not
+  see the group's case, its client, or anything that outlives the night.
+- **For how long?** A pass scanned at 7pm should not still open anything next March. The session's
+  own window is the obvious bound.
+- **Who is it, and does it matter?** A walk-up guest may have no account at all
+  (`project_walkup_guest_signup` built exactly that path), so the credential cannot assume one.
+- **What happens to what they contribute** when the night ends and they were never a member? The
+  field archive rule already has an answer for public places; this is the same question from the
+  other side.
+- **What if the code is photographed and shared?** A ticket that is copied gets somebody in twice;
+  a credential that is copied gets a stranger into the session. That difference decides whether
+  scanning binds the pass to a device, and whether a guide can revoke one.
+
+**None of that is decided**, and it touches Field Kit, the public-investigation rules and the
+walk-up guest path.
+
+**Ben refined it the same day, and it moved out of this item entirely**: *"It is probably not an
+e-mail... so this is not an email feature but one we have for the staff."* It is now
+**[[248]]** — a code staff generate, show or print, and a guest scans. This item keeps only the
+ticket.
+
+### Suggested order
+
+1. Tour passes: token, PNG, minting at sign-up, `{PassImage}`/`{PassUrl}` on the tour letter.
+2. A guide's scanning screen — the smallest thing that answers "is this person on tonight's walk".
+
+
+## 248. A code staff hold up, and a guest's phone joins the investigation (CLOSED — shipped 2026-09-21)
+
+**Shipped.** Staff press **Guest code** on an investigation and get a QR plus a short typed code
+to show or print. Anybody who scans it signs in and may send photographs, audio, video and
+readings to that one visit — and see only what they sent. Not the case, not the client, not the
+address, not anybody else's evidence, and nothing after the code expires (24 hours at the outside).
+
+Ben's three decisions (2026-09-21): contribute-only to tonight; one shared code minting a
+per-person credential; QR **plus** a typed code, because Apple has no deferred deep linking and a
+fresh install cannot know what was scanned.
+
+**The rule it is built around:** the guest door is deliberately NOT in `MayContributeAsync`, which
+is also the READ door — the shortcut would have handed a walk-up from the pavement every recording
+the team made inside somebody's house. `GuestPassReadDoorTests` was written against that shortcut
+first and seen to fail.
+
+Three faults surfaced only by opening the page: a back link to an address that is a tab, a
+controller asking for a bare `SiteIdentity` (the same mistake that reached production on
+2026-09-20 — `ValidateOnBuild` does not walk controllers, so `AddControllersAsServices` now puts
+them in it), and a Playwright fixture that skipped itself. The full suite then found a fourth,
+unrelated: a site-wide announcement nobody could withdraw, because two snapshot refreshes raced
+and the slower won.
+
+
+Ben, refining what had been the second half of [[247]]:
+
+> Maybe be able to generate a qr code for the employees to allow someone to scan with their phone
+> which would let the person scanning it to have credentials to use their phone for investigation
+> as well. It is probably not an e-mail. Maybe it is just something we let them generate and print
+> or generate and let others scan off their tablet, computer or phone... so this is not an email
+> feature but one we have for the staff.
+
+> So, if the user scans it and doesn't have the app, it directs them to download it on iphone or
+> ipad and then they have credentials.
+
+**What it is.** Not a ticket and not a letter: a guide or an investigator puts a code on a screen or
+a printed sheet, and anybody on tonight's walk points a phone at it and is working within seconds —
+contributing photos and readings to that session without being a member of the group and, quite
+possibly, without having an account at all.
+
+**Why it is the right shape.** Everything the site has for bringing somebody in assumes the site
+knows them first — an invitation to an address, a sign-up, a membership. The people this is for are
+standing in front of a guide in the dark. Anything needing a typed address, a confirmation letter
+and a password is not going to happen at the gate of a cemetery at 9pm, and that is exactly where
+the guests are.
+
+### What already exists
+
+- **Universal links are shipped** (item 209): `AppleAppSiteAssociation` serves the association file
+  and the app's entitlement covers the domain, with the claimed paths *deliberately narrower than
+  the parser*. `/join/*` would be a **server-side addition** — the file decides which paths open the
+  app, so no new App Store build is needed for the routing itself. (Installed phones cache the
+  association for a while, so it is not instant for existing installs.)
+- **QR rendering** (`EventPasses`, `QRCoder`) mints tokens and writes PNGs already.
+- **Walk-up guest sign-up** already accepts somebody with no account
+  ([[project_walkup_guest_signup]]), which is the closest existing answer to "who is this person".
+- **Field Kit** is the thing they would be using once they are in.
+
+### The three ways a scan can land, and only one is easy
+
+1. **iPhone or iPad with the app** — the universal link opens it, the code is redeemed, they are in.
+   This is the case that works.
+2. **iPhone or iPad without the app** — the link opens Safari instead, which shows a page offering
+   the App Store. **Apple has no deferred deep linking**: after installing, the app does not know
+   what they scanned. Nothing clever fixes this without a third party, so the honest design is that
+   **the printed sheet carries a short typed code beside the QR** and the app has a "have a code?"
+   box. Worth deciding early, because it changes what staff print.
+3. **Android, or a laptop** — no app exists, so the page has to say what this is and offer whatever
+   the browser can do. Possibly nothing, and saying so plainly beats a download link to an app they
+   cannot run.
+
+### What has to be decided
+
+- **What the credential lets them do**, and for how long. A session's own window is the obvious
+  bound; a code scanned at 7pm must not still open anything in March.
+- **Whether it binds to a device on first use.** A code on a printed sheet can be photographed. A
+  copied ticket gets somebody in twice; a copied credential gets a stranger into the session.
+- **Whether a guide can revoke one**, and whether they can see who is holding one tonight.
+- **What becomes of what a guest contributed** when the night ends and they were never a member.
+  The field archive rule answers this for public places; this is the same question from the other
+  side.
+- ~~**Whether the code is per session or per person.**~~ **DECIDED by Ben, 2026-09-20: one per
+  SESSION.** *"And for staff it is one point per session instead of one per person."* Which settles
+  more than it looks: revoking is then per session — a guide can end the night's code, not one
+  person's — and the device-binding question above becomes the only lever against a code that has
+  been photographed and passed on. It also makes the printed sheet a single artefact a guide can
+  hold up to a group, which is the thing that actually works in the dark.
+
+### Where it would live
+
+A SuperAdmin or group screen that generates the code for a session, shows it large enough to scan
+off a screen, and prints. Plus `/join/{code}` on the site, and the app's side of the universal link.
+
+
+## 246. Letters somebody wrote: templates, tokens and starting points (BUILT 2026-09-20 — every declared letter now sent; templates fill in, 2026-09-23)
+
+Ben's ask is recorded in full at [[245]]; this is what was built for it.
+
+### What works
+
+- **`MailKinds`** declares 35 letters — a stable key, what each is for, and **the tables a template
+  of that kind may read**. The context is the security boundary, not documentation. Ben chose it
+  over "every table with a column allowlist" (2026-09-20).
+- **`MailTokens`** resolves `{AppUsers.DisplayName}`, the ready-made `{Date}` `{Time}` `{FullDate}`
+  `{FullDateTime}` `{Year}` `{SiteName}` `{SiteUrl}`, and per-letter values the mailer hands in.
+  All in the READER's zone; all HTML-escaped except the few the site itself generates.
+- **`EmailTemplates` + `MailComposer`** — draft, publish, revert. **No row means the built-in
+  letter**, which is the whole safety story: a template only replaces one, deleting the row is the
+  revert, and every failure path falls back. A feature for editing letters must not become a way to
+  stop them going.
+- **`MailTemplateSchema`** is the second gate. `AppUser` derives from ASP.NET Identity's
+  `IdentityUser`, so `PasswordHash`, `SecurityStamp` and `ConcurrencyStamp` are real columns on a
+  table letters legitimately carry, and **none of them appears in the entity's own file**. A table
+  allowlist alone offers all three.
+- **`MailBlocks`** — heading, paragraph, card, two columns with the logo either side, button,
+  items-and-total, divider, footer. Tables and inline styles; the tests assert the constraints
+  rather than the markup, because a browser renders unsafe email HTML perfectly and Outlook does
+  not.
+- **`MailStarters`** — seven whole letters to start from, each checked against every kind it is
+  offered for.
+- The **editor** at `/admin/email-templates`, with the table → column → Add token dropdowns, the
+  block palette, the starters, and a preview against invented rows in a sandboxed frame.
+
+### Still to do
+
+- ~~**11 of the 35 kinds are declared but not yet wired to a sender**~~ — **one** is left
+  (`AccountMadeForYou`), done 2026-09-21. Two of the ten were not gaps but defects: all three
+  session letters went out as `AppealAnswered`, and the tour reminder as `TourSignUp`, so five of
+  the site's letters were filed under headings that had nothing to do with them and no template
+  written for any of them could ever have applied. The receipt is now posted too — the ledger has
+  carried receipt numbers since item 168 and nothing ever put one in front of the person who paid.
+  `AccountMadeForYou` remains because it wants a letter WRITTEN rather than a label moved.
+  Originally: **11 of the 35 kinds are declared but not yet wired to a sender**: AccountMadeForYou,
+  RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable, TourReminder, SessionMoved,
+  SessionCancelled, SessionPromoted, PaymentReceipt, SubscriptionLapsing, PlanChanged. Most go
+  through `PlatformMessageService.SendAsync` rather than `IEmailService` directly — that service
+  sends a letter AND a notification, so giving it a kind is a wider change than adding an argument,
+  and it is the right next slice.
+- **A person still has no time zone.** Everything renders in the site's until one exists; Ben chose
+  "ask the person, default to the site's" (2026-09-20).
+- **Only three letters actually consult a template today** (the two identity ones and the reset).
+  The rest declare a kind, which is what the outbox groups by — consulting the composer is one call
+  per mailer and wants doing where each letter's tables are in hand.
+- ~~The `EmailTemplates` migration is **not applied anywhere**.~~ Applied to production
+  (`IsHauntedDb`) and verified there 2026-09-21, along with `EventStaffRoomCursors`,
+  `DashboardDateIndexes` and `OrganizationJoinLink`. Nothing is pending on live.
+
+### Done 2026-09-21
+
+- **Every letter can now wear a template**, whether or not its mailer knows templates exist. The
+  composing moved out of the individual mailers and into `OutboxEmailService`, at queue time — one
+  place every letter already passes. A mailer opts in by NAMING ITS KIND; one that wants row tokens
+  hands them over in a `MailPayload` on the message. This is what unblocks the rest: the reason
+  three of thirty-five consulted a template was that doing so meant editing each mailer, and each
+  edit broke the tests mocking its sender.
+- **The tour reminder was filed as a sign-up.** One method sends both and named every letter
+  `TourSignUp`, so no reminder template could ever apply and `TourReminder` was used nowhere.
+- **`EveryMailKindHasASenderTests`** holds the gap open where it can be seen: a declared kind must
+  be sent by something or be listed with what it waits on, and the list may only get shorter.
+
+### Done 2026-09-23 — templates were armed and would have gone out blank
+
+"A mailer that wants row tokens hands them over in a `MailPayload`" — nineteen named a kind and
+handed over nothing, and a table token with no row renders as an empty string. **Seven templates
+were published on production (`IsHauntedDb`) for such letters**, none sent yet: bookings-arrived,
+guest-removed, case-status-changed, somebody-used-your-address, visit-cancelled, visit-rescheduled,
+visit-scheduled. The editor's preview fills every token with invented rows, so all seven looked
+right.
+
+- **Stopgap — DONE 2026-09-23 by Ben (7 rows affected; the session's production write was
+  refused, correctly):** all seven unpublished with
+  `UPDATE dbo.EmailTemplates SET PublishedUtc = NULL … WHERE Kind IN (…seven…)`. Drafts kept.
+  Republish each once this branch is live.
+- **`MailRows.For(kind, …entities)`** builds the rows from the entities a letter is about, through
+  the same readable/secret column rules the editor offers, dropping any table the kind does not
+  declare. All nineteen sends now use it; `EveryDeclaredLetterHandsOverItsRowsTests` fails on a
+  `new EmailMessage(… Kind: …)` without `Payload:`.
+- **The request letter was sharing the warning's kind.** A request made under somebody's address
+  and "somebody used your address" both went out as `somebody-used-your-address`, so the published
+  template — which has no link — would have replaced the request letter and dropped its only claim
+  link. It is now `request-made-under-your-address`, whose link is REQUIRED. The warning gained
+  `{SignInUrl}`/`{SignInButton}`; the venue code letter's `{ClaimCode}` is now required.
+- **Calendar dates printed as the evening before.** `HostedEvents.StartsOn` is a date with no zone;
+  rendered as UTC-into-Chicago it read "October 29, 7:00 PM" for the 30th. A non-UTC midnight now
+  prints as its own day.
+- **Before republishing guest-removed:** its `{HostedEvents.CancelledReason}` will always be blank —
+  removal clears it (the reason lives on `HostedEventRemoval.Note`). Edit that template first.
+- **Tests:** `APublishedTemplateFillsInTests` (unit, real outbox, five letters) and
+  `PublishedTemplateFillsInTests` (Playwright: publish, sign up twice with one address, read the
+  outbox). Each was run against the unfixed code and failed for the right reason.
+
+### Two mistakes worth not repeating
+
+**Every mailer converted from the three-argument `SendAsync` breaks the tests that mock it.** It
+happened twice (ClientStatusMailer, then AccountCreationService) and will happen again for each of
+the eleven. The fix is mechanical — watch `It.IsAny<EmailMessage>()` instead — but it is not
+optional, and the tests fail in a way that looks like the mail stopped.
+
+**A refusal must be a plain sentence, not a record.** `WebApiClient.SendExpectingReasonAsync` drops
+a non-2xx body starting with `{` so a ProblemDetails blob can never reach a person, and it drops a
+JSON refusal with it. The page then says "couldn't save that" instead of the reason.
+
+
+
+## 249. `/organization-security`: scaffolding nobody removed (CLOSED — deleted 2026-09-21)
+
+Found while extending the "every screen has a way in" guard past Administration.
+
+**What it is.** `Ben.Web.Website/Components/Pages/OrganizationSecurity.razor`, whose own subtitle
+says it: *"Starter management UI for tenant memberships, grants, and access checks."* Scaffolding
+from the `Ben.Service.Security` integration ([[project_ben_service_security_integration]]) that the
+real screens — the Members tab, Site Roles, the role editor — replaced without anybody deleting it.
+
+**Nothing links to it and nothing references it.** It is reachable only by typing the URL, which is
+why no crawl, walk, test or review had ever looked at it.
+
+**What it can do:** register a group, search every user on the site, add and change memberships, and
+set access grants.
+
+**It is not a hole, and that is worth stating precisely** rather than leaving somebody to worry: the
+endpoints behind it are gated where it matters. `SetAccessGrantAsync` calls
+`EnsureCanManageOrganizationAsync(actingUserId, organizationId)` before touching anything, and
+`IOrganizationSecurityService` documents the rule — *"Must be a SuperAdmin or an Owner/Administrator
+of the organization."* The controllers carry a class-level `[Authorize]`. A signed-in stranger
+typing the URL gets a page that refuses them.
+
+**So this is untidiness, with a sharp edge.** The page has no `[Authorize]` of its own, and it is
+the kind of surface that stops being harmless the day somebody adds an endpoint to it without
+checking what the service does. A scaffold that outlives its purpose is how that happens.
+
+**Recommendation: delete it.** Nothing references it, its replacement shipped, and a page that
+exists only for whoever remembers the URL is not a feature. If any part is still wanted, it belongs
+on an admin screen with a `[Authorize]` and an entry in the menu like everything else.
+
+**Deleted 2026-09-21**, at Ben's word. The page, its four browser tests, its two rows in the
+site-wide audit and its entry on `EveryAdminScreenIsWalkedTests.NoLinkNeeded` all went with it —
+an excuse on an allowlist outlives the thing it excuses otherwise.
+
+`OrganizationSecurityController` STAYS. It is not the scaffold: `MembershipDoorsAgreeTests` holds
+it to agreeing with the membership door, and `OrganizationMembershipController` names it in its own
+summary. What was scaffolding was the screen in front of it.
+
+
+
+## 250. Public places as permanent evidence pages, with voting and a hauntedness ranking (CLOSED — shipped 2026-09-21)
+
+**Shipped in three slices**, all merged to master the same day. Ben's three decisions: anyone
+signed in may add, screened through the feed's held pile; figures per place and **no league
+table**; one file counted once whatever route it arrived by.
+
+- **P1** — `/places/new` (there had been no way to create a place at all; they only appeared as a
+  side effect of a case or investigation), and evidence added straight to a public location with
+  no investigation behind it. `PlaceEvidence` table, `PlaceEvidencePublication` re-asks the place
+  kind on every read.
+- **P2** — `PlaceEvidenceTally` across the three routes (direct, published session, event
+  evidence), de-duplicated by file id; the site's own vote widget on each piece. Found that casting
+  a vote answered with a score of 0 (the argument was never passed).
+- **P3** — `Place.Description` (plain text, server-stripped), `PlaceMediaKind` keeping pictures OF
+  the building apart from evidence by a required argument, and a by-month chart.
+
+The "hauntedness ranking" in the title was decided against: a place shows its own figures and the
+site does not order one property against another.
+
+
+Ben's words: *"I would like to be able to create public locations like Cragfont in Castillian
+Springs, TN. Where people don't have to have a dedicated investigation to add files to the public
+location. They can add files to the location which can be voted on. All the files at a location
+becomes evidence where a person can then look up Cragfont and see all public files and vote on
+them. Then, we can count the number of files of evidence public — which even events or
+investigations with public evidence is there as well. We can count the number of votes. Then
+positive, negative, unknown and the average of each overall we can track. This helps determine
+their ranking and overall hauntedness. For this new type of permanent public location like
+cragfont, we can create a page with information about it, images of it — not evidence but the
+property and photos inside to show it. Then they will have charts of where the evidence stands and
+then lists of evidence."*
+
+### The shape
+
+A **public location** is a place that stands on its own rather than behind somebody's
+investigation. Anybody may add a file to it; every file added becomes evidence; every piece of
+evidence may be voted on; and the place's page reports what the evidence says.
+
+Two kinds of picture, and the distinction is the whole design — the page is useless if they mix:
+
+- **About the place.** The house, the grounds, the rooms. Not evidence, never voted on, and the
+  thing that makes the page worth reading for somebody who has never been.
+- **Evidence.** Files people added because of what is in them. Voted on, counted, charted.
+
+### What it counts
+
+Per place: how many public pieces of evidence (including evidence from events and from
+investigations that published theirs — one place, one total, whatever route the file arrived by);
+how many votes; the split of positive / negative / unknown; and the average of each. Those figures
+are what produce a **ranking** and an **overall hauntedness** for the place.
+
+### What already exists, and what does not
+
+Worth checking before this is designed, because a good deal of it is built:
+
+- `Place` and `/places/{id}` exist ([[project_area9_places_investigations]], item 88), including the
+  address-based dedup rule and the public place page.
+- Evidence **voting** exists on public cases — `PublicCaseCommentController` and the vote counts on
+  the home page's case cards (the "✓ 4 ✗ 0 ? 0" row) — so the positive / negative / unknown
+  vocabulary is already the site's.
+- The **field archive** already accumulates sessions published to a public place
+  ([[project_field_archive]]), which is the closest thing to "evidence gathers at a location".
+
+What does not exist: adding a file **to a place** without an investigation or a case behind it; the
+per-place evidence total across every route a file can arrive by; the vote aggregates and averages;
+the ranking; and the place page's charts and evidence list.
+
+### Things to decide before building
+
+- **Who may add.** Anybody signed in, or members of a group? An open door on a public page is a
+  moderation surface — the feed already has a screener and a held pile (item 217) and this would
+  need the same or a reason why not.
+- **Ranking is comparative and public**, so it says one place is more haunted than another. Worth
+  deciding deliberately whether that is a claim the site makes.
+- **How a file reaches a place** when it also belongs to a case or an event — the same file must
+  not count twice, which is the shape of the duplicate problem already open in the media library.
+
+## 251. Store enhancements: sellers, cost basis, fulfilment ledger and product extras (QUEUED — after storefront S8, 2026-09-24)
+
+Ben's list (`Store Enhancements.md`, 09/24/2026), queued to start after the storefront ships
+(`ProjectNotes/FeatureHistory/README-storefront.md`). Each item below is marked as already planned
+or built on the `storefront` branch, planned with a smaller scope, or new.
+
+### Already planned or built. Only the gap is new work
+
+| Ben asked for | What the store already has | The gap |
+|---|---|---|
+| Admin grid of every item | `/admin/store/products` (S1): thumbnail, name, price range, stock, active | Columns for category, cost, markup, subtotal, tax, Stripe fee, total and seller. There are no subcategories because category parents were left out of v1 (one nullable column later) |
+| Order status ledger with the time each status was set | `StoreOrderEvent` (S0) is append-only and timestamped (Placed, Paid, Packed, Shipped with tracking, Delivered, Cancelled, refund events); shown on the admin order page (S5) | Seller steps Acknowledged, Building and Ready for shipment. A refund *request* flow: request, then approve or deny, then return received, then verified, then refunded. v1 refunds start from the admin |
+| Money ledger with a receipt modal | The order row plus append-only refunds is the money record; `/admin/store/orders`, the CSV exports and the printable invoice (S5). A second ledger table was rejected | A running-total view over the orders (a view, not a new table) with the invoice in a modal, the seller's cost and fee grid under it, and "seller paid" |
+| Description in the Telerik HTML editor | Built: `BenEditor`, sanitised on save (S1) | — |
+| Comments and ratings | Moderated buyer reviews and helpful votes (S6) | A per-product on/off switch |
+| Return policy | A store-wide `store.returns-window-days` setting, shown in the product page's Returns panel | Per-product return and warranty text |
+| Date added / last updated / units sold | `DateCreated`, `DateUpdated`, `UnitsSold` on `StoreProduct` | Date last sold; earned by the seller and by the site |
+| Primary image and other images | Store pictures are ownerless uploads (1600 px plus a thumbnail); the first by sort order is the one on the card and in the cart | The request says a blob in the row and a `store/{itemId}/` folder. The site moved file bytes out of the database onto disk storage, so decide that first. Videos are new |
+
+### New
+
+- **Sellers are site members.** Every product has a seller. Admin and seller views show the seller
+  name, their notes, and their earnings per item and per order.
+- **Parts list (BOM) per product.** Each part has:
+  - name
+  - quantity per pack
+  - price per pack or per piece
+  - computed cost each
+  - quantity needed per unit
+  - info link and buy link
+  - thumbnail
+  - on hand
+
+  An "Other" line holds consumables such as solder, tape and filament. Together these give a **cost basis per unit**. The seller adds their price on top, then the site adds its markup (percent or dollars).
+  Tax and Stripe fees are shown per unit.
+- **Seller files** under `store/{itemId}/`:
+  - an instruction manual, written as HTML or uploaded as .txt, .md or .docx
+  - firmware
+  - 3D-print files, schematics and code
+
+  Decide which files buyers can download and which only the seller and admin see.
+- **FAQs.** Can be turned on per product; shown in an accordion at the bottom of the product page.
+- **Questions to the seller** from shoppers.
+- **Versions.** A new version links back to the old one and the old one links forward. The seller
+  chooses what happens to the old one: sell out the remaining stock, keep offering it, or
+  discontinue it.
+- Ben's point 8 in the source list stops mid-sentence ("This will show the"). Ask Ben.
+
+### Ben's seller rules (09/24/2026)
+
+- "A seller only has control over their individual items in the store, not the admin part or
+  pricing." A seller works on their own items only. They never see the store's admin pages and
+  never set a price.
+- **A seller can add items.** Each one starts as a hidden draft. An admin can still assign any item to any
+  seller.
+- **An admin approves going on sale:** the admin sets the price and puts the item on sale. A
+  seller may take their own item off sale at any time.
+- **Edits to an item already on sale show immediately.** The item's history records who changed
+  what.
+- **Built on the storefront branch:**
+  - the additive **Seller** site role, assigned on the Site Roles tab
+  - a Seller field on each item, listing only people who hold the role
+  - a Seller column in the product list
+  - a live preview of the product page while it is being edited
+- **Still to build, after the store ships:** the seller's own workspace — their items, create a
+  draft, edit words, pictures and specs, and ask for an item to go on sale — plus the rest of this
+  item.
+
+### Shipping questions (Ben asked 09/24/2026 how shipping normally works)
+
+v1 ships to the US only: one flat rate per order, free over a threshold, and the admin buys each
+label (e.g. on Pirate Ship) and types in the tracking number. Once there are sellers, and possibly
+international buyers, these need answers.
+
+**Sellers:**
+- Each seller packs and ships from home, so a cart with two sellers' items is **two parcels, two
+  labels and two tracking numbers**. An order needs shipments, each with its own seller, carrier,
+  tracking, status and date. The v1 order has exactly one tracking number.
+- **Who pays for shipping, and how is it split?** One flat rate split between the sellers, a flat
+  rate per seller in the cart, or each seller's own rate per item? And does free shipping over
+  the threshold still apply to the whole cart when two sellers must each pay for a label?
+- **Who buys the label?** The seller buys it and is repaid, or the site buys it on the seller's
+  behalf through a label API (Shippo, EasyPost). With the second, the label cost is a line in the
+  seller's payout ledger.
+- **Handling time per seller.** "Ships within N business days" can differ by seller, and the
+  store should show it. It also decides when an order counts as late.
+- **Ship-from address per seller.** Stripe Tax works sales tax out from the ship-from address;
+  v1 has one site-wide address.
+
+**International:**
+- **Which countries, if any?** Canada first is the usual easy step.
+- **Rates.** A flat rate per country or zone needs no product data. Live carrier rates need a
+  weight and box size on every product.
+- **Customs.**
+  - Every parcel needs a customs description, a value and a tariff (HS) code per product.
+  - Duties are either paid by the buyer on delivery (the default; parcels sometimes get refused) or
+    collected at checkout. Collecting means VAT registration in, for example, the EU (IOSS) and
+    the UK.
+- **Batteries.** Lithium batteries installed in a device can usually go abroad within size limits;
+  loose or spare ones often cannot go by airmail. This needs a per-product "can't ship abroad"
+  switch. Devices on AA or 9V alkaline batteries aren't affected.
+- **Returns.** International returns often cost more than the item. Offer none, or refund without
+  taking the item back.
+- **Insurance.** For items worth more than a label's included cover (USPS Ground Advantage
+  includes $100), should insurance be added automatically, and who pays for it?
+
+### Decide before building
+
+- **Is the store a marketplace?** The v1 plan has the site selling its own stock. Sellers who are
+  members raise several questions:
+  - **Payouts:** Stripe Connect transfers, or a manual "seller paid" mark as the list implies?
+  - **Who is the merchant of record for sales tax?**
+  - **Year-end reporting:** a seller paid through the site may need a 1099-K or 1099-NEC.
+  - **Seller access:** can a seller edit their own products and see their own orders, or does only a SuperAdmin?
+- **Where images are stored.** Picture bytes in the product row versus the disk storage the site
+  moved to.
+- **Fee model.** The Stripe fee is known only after the charge (from the balance transaction). A
+  per-unit fee column is an estimate until then.

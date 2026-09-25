@@ -1,0 +1,62 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    An item's pictures: add, describe, tie to a variant, reorder, remove (store sellers, backlog 251,
+    P3 — lifted from the admin editor). The page owns the drafts and makes each call.
+*@
+
+<label class="form-label" for="product-image-input">Add pictures @Help</label>
+<InputFile id="product-image-input" class="form-control mb-2" accept="image/*" multiple
+           disabled="@(Product.Images.Count >= StoreCatalogRules.MaxImagesPerProduct || Busy)" OnChange="OnUpload" />
+<div class="form-text mb-3">Up to @StoreCatalogRules.MaxImagesPerProduct. The first is the one on cards and in the cart.</div>
+@if (Error is not null)
+{
+    <div class="alert alert-danger py-2" id="picture-refusal">@Error</div>
+}
+<div class="row g-3">
+    @foreach (var (image, ii) in Product.Images.Select((x, i) => (x, i)))
+    {
+        var picture = Drafts[image.Id];
+        var index = ii;
+        <div class="col-12 col-sm-6 col-lg-4" data-testid="picture-card">
+            <div class="card h-100">
+                <img src="@MediaUrls.StoreImage(image.UploadFileId, thumbnail: true)" class="card-img-top" alt="@(image.AltText ?? Product.Name)"
+                     style="aspect-ratio:4/3;object-fit:cover;" />
+                <div class="card-body">
+                    <label class="form-label small" for="@($"picture-alt-{image.Id}")">Description</label>
+                    <input id="@($"picture-alt-{image.Id}")" class="form-control form-control-sm mb-2" maxlength="200" @bind="picture.AltText" />
+                    <label class="form-label small" for="@($"picture-variant-{image.Id}")">Shown for</label>
+                    <select id="@($"picture-variant-{image.Id}")" class="form-select form-select-sm mb-2" @bind="picture.VariantId">
+                        <option value="">Every variant</option>
+                        @foreach (var v in Product.Variants)
+                        {
+                            <option value="@v.Id">@v.Label</option>
+                        }
+                    </select>
+                    <span class="text-nowrap">
+                        <BenGridAction Icon="check" Label="Save" OnClick="@(() => OnSave.InvokeAsync(image.Id))" />
+                        <BenGridAction Icon="arrow-up" Label="Move earlier" Disabled="@(index == 0)" OnClick="@(() => OnMove.InvokeAsync((index, -1)))" />
+                        <BenGridAction Icon="arrow-down" Label="Move later" Disabled="@(index == Product.Images.Count - 1)" OnClick="@(() => OnMove.InvokeAsync((index, +1)))" />
+                        <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => OnDelete.InvokeAsync(image.Id))" />
+                    </span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoreProductAdminRecord Product { get; set; } = null!;
+    [Parameter, EditorRequired] public Dictionary<Guid, StorePictureDraft> Drafts { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnUpload { get; set; }
+    [Parameter] public EventCallback<Guid> OnSave { get; set; }
+
+    /// <summary>A picture's place and which way it moves: (index, -1) earlier, (index, +1) later.</summary>
+    [Parameter] public EventCallback<(int Index, int By)> OnMove { get; set; }
+
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+    /// <summary>The page's own help link — a literal there, so the help guards can check where it points.</summary>
+    [Parameter] public RenderFragment? Help { get; set; }
+}

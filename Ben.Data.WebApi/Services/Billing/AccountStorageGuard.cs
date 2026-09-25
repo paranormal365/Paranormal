@@ -55,17 +55,74 @@ public static class AccountStorageGuard
     /// space, and RETRACTING a publication is itself a paid feature. A free account cannot publish
     /// to clear its usage and then quietly take the contribution back.</para>
     ///
-    /// <para>Field-session files are the whole of it today. Written as its own method so that when
-    /// a second kind of personal upload appears, one place decides what "kept to yourself" means
-    /// rather than two queries that disagree.</para>
+    /// <para><b>Counted by where the bytes live, not by who the row names (C1, 2026-09-22).</b>
+    /// This used to add one term per kind of upload, and its own remarks admitted the cost: place
+    /// evidence arrived uncounted for a day because a term had to be remembered. The obvious fix —
+    /// count every <c>UploadFile</c> whose <c>AppUserId</c> is this person — is WRONG, and the
+    /// entity's own comment is what misleads: it says exactly one of <c>AppUserId</c> and
+    /// <c>OwnerOrganizationId</c> is set, but the latter is only set when a file is HANDED OVER to
+    /// a group (item 180 Phase B). Ordinary group work still sits under whoever uploaded it, so
+    /// counting by ownership charges a member for their group's case evidence.</para>
+    ///
+    /// <para>Storage paths do separate them, totally and with no exceptions: there are exactly
+    /// three builders — <c>users/{id}/</c>, <c>orgs/{id}/</c>, <c>cases/{id}/</c> — every write
+    /// goes through one, and the field-session code already chooses between the first two on
+    /// precisely this question ("a personal session lives under the person, not under a group they
+    /// may not belong to"). So one rule covers every personal door, including doors added later,
+    /// which is the property the per-kind list never had.</para>
+    ///
+    /// <para><b>What is exempt, and the principle behind it: a person is charged for what they can
+    /// SEE and REMOVE.</b></para>
+    ///
+    /// <para>Superseded versions are not counted. Replacing a file archives the old bytes — a row
+    /// carrying <c>ArchivedFromUploadFileId</c>, which every listing filters out and nothing
+    /// prunes. Counting those would mean somebody who cut a 1 GB video down to 100 MB watched
+    /// their usage RISE by their own good behaviour, with nothing on any screen showing the
+    /// difference and no button to remove it. A refusal nobody can act on is worse than storing a
+    /// few bytes we do not charge for; the archives want a retention job, not a surcharge.</para>
+    ///
+    /// <para><b>Clips and edited versions ARE counted, and the difference matters</b> (Ben,
+    /// 2026-09-22: <i>"sometimes videos are clipped or audio creates clips and they don't want to
+    /// delete the original version"</i>). A clip carries <c>ParentFileId</c> and no
+    /// <c>ArchivedFromUploadFileId</c>, so it appears in the listing beside its original and both
+    /// can be deleted. Keeping both is a deliberate choice somebody can undo, so both count —
+    /// and nothing may ever prune them. Any future cleanup keys on
+    /// <c>ArchivedFromUploadFileId</c>; keyed on <c>ParentFileId</c> it would delete exactly the
+    /// originals and clips people meant to keep.</para>
+    ///
+    /// <para>Published sessions stay exempt, for the reason given above.</para>
     /// </remarks>
     public static async Task<long> UsedBytesAsync(
         BenDataContext db, Guid appUserId, CancellationToken ct)
-        => await db.FieldSessionUploadFiles.AsNoTracking()
-            .Where(f => f.FieldSessionUpload.SubmittedByAppUserId == appUserId
-                     && f.FieldSessionUpload.InvestigationId == null
-                     && f.FieldSessionUpload.PublishedAtUtc == null)
-            .SumAsync(f => (long?)f.UploadFile.FileSize, ct) ?? 0L;
+    {
+        // The one discriminator. LocalFileStorageService.UserFilePath builds exactly this, and
+        // including the account id means the prefix is an ownership test as well as a personal-vs-
+        // group one — another person's files cannot match it however the row is otherwise filled in.
+        var mine = $"users/{appUserId}/";
+
+        var kept = await db.UploadFiles.AsNoTracking()
+            .Where(f => f.StoragePath != null
+                     && f.StoragePath.StartsWith(mine)
+                     && f.ArchivedFromUploadFileId == null)
+            .SumAsync(f => (long?)f.FileSize, ct) ?? 0L;
+
+        // Subtracted rather than filtered out of the sum above, because the exemption is a
+        // property of the SESSION (published, or attached to an investigation) and not of the
+        // file — it cannot be expressed as a condition on UploadFile at all.
+        var earnedItsDisk = await db.FieldSessionUploadFiles.AsNoTracking()
+            // The ! on the navigations is for the compiler, not the database: this is an
+            // expression tree, so nothing is dereferenced here — EF turns it into a join and the
+            // null test happens in SQL. Without them the build warns CS8602 twice, and only on
+            // -t:Rebuild, which is how these went unnoticed in the first place (2026-09-04 sweep).
+            .Where(f => f.UploadFile!.StoragePath != null
+                     && f.UploadFile.StoragePath.StartsWith(mine)
+                     && f.UploadFile.ArchivedFromUploadFileId == null
+                     && (f.FieldSessionUpload!.InvestigationId != null
+                      || f.FieldSessionUpload.PublishedAtUtc != null))
+            .SumAsync(f => (long?)f.UploadFile!.FileSize, ct) ?? 0L;
+
+        return kept - earnedItsDisk;
+    }
 
     /// <summary>The cap in bytes, from settings, falling back to the built-in default.</summary>
     public static async Task<long> CapBytesAsync(BenDataContext db, CancellationToken ct)
@@ -96,12 +153,13 @@ public static class AccountStorageGuard
     public static async Task<string?> WhyCannotStoreAsync(
         BenDataContext db, Guid appUserId, long incomingBytes, CancellationToken ct)
     {
-        var inAPayingGroup = await db.OrganizationUserMemberships.AsNoTracking()
-            .Where(m => m.AppUserId == appUserId && m.IsActive)
-            .AnyAsync(m => db.OrganizationSubscriptions
-                .Any(s => s.OrganizationId == m.OrganizationId
-                       && s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Active), ct);
-        if (inAPayingGroup) return null;
+        // Asked through PaidPlan rather than re-queried here (2026-09-17 audit). This held its own
+        // copy of that query — identical, so it was right, which is exactly how the drift starts:
+        // PaidPlan is where "covered by a plan somebody is paying for" is defined, and it says so
+        // in its own remarks ("there are now several callers and they must not drift"). A second
+        // copy means the next change to what counts as paid — seats, trials, a grace window —
+        // reaches storage only if somebody remembers this file.
+        if (await PaidPlan.CoversAsync(db, appUserId, ct)) return null;
 
         var cap = await CapBytesAsync(db, ct);
         var used = await UsedBytesAsync(db, appUserId, ct);

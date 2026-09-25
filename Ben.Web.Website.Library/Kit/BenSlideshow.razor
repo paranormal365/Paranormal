@@ -76,6 +76,12 @@ else if (Slides.Count > 1)
     /// </remarks>
     [Parameter] public string Fit { get; set; } = "cover";
 
+    /// <summary>
+    /// Drawn over each slide — a title and a button, the way a shop's hero reads (storefront).
+    /// Replaces the caption strip for that slide, so the words are not said twice.
+    /// </summary>
+    [Parameter] public RenderFragment<BenSlide>? Overlay { get; set; }
+
     private int IntervalMilliseconds => (int)Math.Max(1000, Interval.TotalMilliseconds);
 
     private string HeightStyle => $"height:{Height};";
@@ -96,7 +102,11 @@ else if (Slides.Count > 1)
                      class="ben-slideshow__image" style="@($"object-fit:{Fit};")" />
             }
 
-            @if (!string.IsNullOrWhiteSpace(slide.Caption) || !string.IsNullOrWhiteSpace(slide.Credit))
+            @if (Overlay is not null)
+            {
+                <div class="ben-slideshow__overlay">@Overlay(slide)</div>
+            }
+            else if (!string.IsNullOrWhiteSpace(slide.Caption) || !string.IsNullOrWhiteSpace(slide.Credit))
             {
                 <div class="ben-slideshow__strip">
                     @if (!string.IsNullOrWhiteSpace(slide.Caption))

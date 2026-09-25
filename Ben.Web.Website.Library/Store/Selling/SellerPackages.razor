@@ -1,0 +1,212 @@
+@page "/store/selling/packages"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenStoreSellerClient Seller
+@inject IBenUserState User
+@inject NavigationManager Nav
+@inject BenToastService Toasts
+
+<PageTitle>My packages — Selling</PageTitle>
+
+@*
+    The packages a seller sends (store sellers, backlog 251, P7). Each seller ships their own, with
+    their own carrier and tracking — or "No tracking provided" — and the buyer's order reads
+    "Partially shipped" until every package has gone (Ben, 09/24/2026). The buyer's address is shown
+    until the package is delivered. The seller buys the label as they usually do; they are credited
+    the flat rate for it.
+
+    Only the seller client is injected (SellerPagesUseTheSellerClientTests).
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:72rem;">
+    <h1 class="h3 mb-1">My packages<HelpLink Slug="selling-in-the-store" Anchor="sending-packages" /></h1>
+    <p class="text-secondary mb-3">Paid orders with your items in them. Send each package, then mark it shipped with its tracking.</p>
+
+    <div class="btn-group flex-wrap mb-3" role="group" aria-label="Which packages">
+        <button type="button" class="btn btn-sm @(_open ? "btn-primary" : "btn-outline-primary")" data-testid="packages-filter" @onclick="@(() => FilterAsync(true))">To send</button>
+        <button type="button" class="btn btn-sm @(!_open ? "btn-primary" : "btn-outline-primary")" data-testid="packages-filter" @onclick="@(() => FilterAsync(false))">All</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" id="packages-refusal">@_error</div>
+    }
+
+    <BenListState TItem="SellerParcelRecord" Result="_result" Loading="_loading"
+                  EmptyText="@(_open ? "Nothing to send — every package has gone" : "No packages yet")" OnRetry="LoadAsync">
+        <div class="row g-3">
+            @foreach (var parcel in _result.Items)
+            {
+                var x = parcel;
+                <div class="col-lg-6">
+                    <div class="card h-100" data-testid="seller-package" data-order="@x.OrderNumber">
+                        <div class="card-body small">
+                            <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                                <span class="fw-bold">Order @x.OrderNumber@(x.PackageCount > 1 ? $" · package {x.Number} of {x.PackageCount}" : "")</span>
+                                <span class="badge bg-@StoreOrderStatusText.Tone(x.Status)-subtle text-@StoreOrderStatusText.Tone(x.Status)-emphasis" data-testid="seller-package-status">@StoreOrderStatusText.Label(x.Status)</span>
+                            </div>
+                            @if (x.OnHold)
+                            {
+                                <div class="alert alert-warning py-1 px-2 mb-2">The store is looking at this order first — hold it for now.</div>
+                            }
+                            <ul class="list-unstyled mb-2">
+                                @foreach (var line in x.Lines)
+                                {
+                                    <li class="d-flex align-items-center gap-2 mb-1">
+                                        <StoreLineThumb ImageUploadFileId="line.ImageUploadFileId" Alt="@line.ProductName" Size="32" />
+                                        <span>@line.Quantity × @line.ProductName@(line.VariantName is { } v ? $" — {v}" : null)</span>
+                                        <span class="text-secondary font-monospace">@line.Sku</span>
+                                    </li>
+                                }
+                            </ul>
+                            @if (x.ShipTo is { } to)
+                            {
+                                <div class="mb-2" data-testid="seller-package-ship-to">
+                                    <div class="text-secondary">Ship to</div>
+                                    <div>@to.Name</div>
+                                    <div>@to.Street1@(to.Street2 is { } s2 ? $", {s2}" : null)</div>
+                                    <div>@to.City, @to.State @to.Zip</div>
+                                    @if (to.Phone is { } phone) { <div>@phone</div> }
+                                </div>
+                            }
+                            <div class="text-secondary mb-2">You're credited @StoreMoney.Format(x.LabelCredit) for the label.</div>
+                            @if (x.Carrier is { } carrier)
+                            {
+                                <div class="mb-2" data-testid="seller-package-tracking">
+                                    @carrier ·
+                                    @if (x.TrackingNumber is { } number)
+                                    {
+                                        @if (x.TrackingUrl is { } link) { <a href="@link" target="_blank" rel="noopener">@number</a> } else { <span>@number</span> }
+                                    }
+                                    else { <span class="text-secondary">@StoreOrderDeskSentences.NoTrackingLabel</span> }
+                                </div>
+                            }
+                            <div class="d-flex flex-wrap gap-2">
+                                @if (x.CanPack) { <button type="button" class="btn btn-sm btn-outline-primary" data-testid="seller-package-pack" disabled="@_busy" @onclick="@(() => PackAsync(x))">Mark packed</button> }
+                                @if (x.CanShip) { <button type="button" class="btn btn-sm btn-primary" data-testid="seller-package-ship" disabled="@_busy" @onclick="@(() => OpenShip(x, false))">Ship…</button> }
+                                @if (x.CanCorrectTracking) { <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="seller-package-tracking-edit" disabled="@_busy" @onclick="@(() => OpenShip(x, true))">@(x.TrackingNumber is null ? "Add tracking…" : "Correct tracking…")</button> }
+                                @if (x.CanDeliver) { <button type="button" class="btn btn-sm btn-outline-success" data-testid="seller-package-deliver" disabled="@_busy" @onclick="@(() => DeliverAsync(x))">Mark delivered</button> }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </BenListState>
+</div>
+
+<BenModal @bind-Visible="_shipOpen" Title="@(_correcting ? "Tracking" : $"Ship order {_parcel?.OrderNumber}")">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label" for="ship-carrier">Carrier</label>
+            <select id="ship-carrier" class="form-select" value="@_carrier" @onchange="@(e => _carrier = e.Value?.ToString() ?? "")">
+                <option value="">Choose…</option>
+                @foreach (var c in StoreCarriers.All) { <option value="@c">@c</option> }
+            </select>
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="ship-no-tracking" checked="@_noTracking" @onchange="@(e => _noTracking = (bool)(e.Value ?? false))" />
+            <label class="form-check-label" for="ship-no-tracking">@StoreOrderDeskSentences.NoTrackingLabel</label>
+        </div>
+        @if (!_noTracking)
+        {
+            <div class="mb-3">
+                <label class="form-label" for="ship-tracking">Tracking number</label>
+                <input id="ship-tracking" class="form-control" maxlength="64" autocomplete="off" @bind="_tracking" @bind:event="oninput" />
+            </div>
+            @if (_carrier == StoreCarriers.Other)
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="ship-link">Tracking link (optional, https://)</label>
+                    <input id="ship-link" type="url" class="form-control" @bind="_trackingLink" @bind:event="oninput" />
+                </div>
+            }
+        }
+        else
+        {
+            <p class="small text-secondary">The buyer is told it was sent without tracking.</p>
+        }
+        @if (!_correcting)
+        {
+            <p class="small text-secondary mb-0">Marking it shipped emails the buyer now.</p>
+        }
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="ship-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _shipOpen = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="ship-confirm" disabled="@_busy" @onclick="ShipAsync">@(_correcting ? "Save tracking" : "Mark shipped")</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    private LoadResult<SellerParcelRecord> _result;
+    private bool _loading = true, _busy, _open = true, _shipOpen, _correcting, _noTracking;
+    private string? _error, _dialogError, _trackingLink;
+    private string _carrier = "", _tracking = "";
+    private SellerParcelRecord? _parcel;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await Seller.GetMySellerParcelsAsync(_open);
+        _loading = false;
+    }
+
+    private async Task FilterAsync(bool open)
+    {
+        _open = open;
+        await LoadAsync();
+    }
+
+    private async Task<bool> RunAsync(Task<(SellerParcelRecord? Result, string? Error)> call, string done, bool inDialog = false)
+    {
+        _busy = true; _error = null; _dialogError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null)
+            {
+                if (inDialog) _dialogError = error ?? "That didn't work."; else _error = error ?? "That didn't work.";
+                return false;
+            }
+            Toasts.Success(done);
+            await LoadAsync();
+            return true;
+        }
+        finally { _busy = false; }
+    }
+
+    private Task PackAsync(SellerParcelRecord x) => RunAsync(Seller.PackSellerParcelAsync(x.Id), "Marked packed.");
+
+    private Task DeliverAsync(SellerParcelRecord x) => RunAsync(Seller.DeliverSellerParcelAsync(x.Id), "Marked delivered.");
+
+    private void OpenShip(SellerParcelRecord x, bool correcting)
+    {
+        _parcel = x;
+        _correcting = correcting;
+        _carrier = x.Carrier ?? "";
+        _tracking = x.TrackingNumber ?? "";
+        _noTracking = correcting && x.Carrier is not null && x.TrackingNumber is null;
+        _trackingLink = _carrier == StoreCarriers.Other ? x.TrackingUrl : null;
+        _dialogError = null;
+        _shipOpen = true;
+    }
+
+    private async Task ShipAsync()
+    {
+        if (_parcel is not { } x) return;
+        var shipment = new StoreShipmentInfo(_carrier, _noTracking ? null : _tracking, _noTracking ? null : _trackingLink, null, _noTracking);
+        var ok = _correcting
+            ? await RunAsync(Seller.CorrectSellerParcelTrackingAsync(x.Id, shipment), "Tracking saved.", inDialog: true)
+            : await RunAsync(Seller.ShipSellerParcelAsync(x.Id, shipment), "Shipped — the buyer has been emailed.", inDialog: true);
+        if (ok) _shipOpen = false;
+    }
+}

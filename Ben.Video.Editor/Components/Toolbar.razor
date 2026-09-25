@@ -43,7 +43,7 @@
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Info"
                        Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Eye"
-                       Title="Preview the final result at full resolution/quality (opens in a separate window)">
+                       Title="@WhyOrWhat("Preview the final result at full resolution/quality (opens in a separate window)")">
             Preview
         </ToolBarButton>
 
@@ -53,7 +53,7 @@
                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                        Overflow="@ToolBarItemOverflow.Never"
                        Icon="@SvgIcon.Download"
-                       Title="Render the final video locally in the browser (ffmpeg.wasm), then save or upload">
+                       Title="@WhyOrWhat("Render the final video locally in the browser (ffmpeg.wasm), then save or upload")">
             Export
         </ToolBarButton>
 
@@ -350,6 +350,18 @@
             "benImportEditorModule", "js/domInterop.js");
 
     [Parameter] public bool HasClips            { get; set; }
+
+    /// <summary>
+    /// The button's tooltip: what it does when it can, and why not when it cannot. A disabled Export
+    /// used to keep the "Render the final video…" title and dim barely at all, so a timeline holding
+    /// only text and callouts had a green Export that did nothing when pressed (2026-09-16).
+    /// </summary>
+    private string WhyOrWhat(string whenReady) =>
+        Ffmpeg.State != FfmpegState.Ready
+            ? "Press Initialize first — the renderer is not loaded yet."
+            : !HasClips
+                ? "Add a video or image clip to the timeline first — text and callouts are drawn on top of one."
+                : whenReady;
     [Parameter] public bool ShowMultiTrack      { get; set; }
     [Parameter] public bool ShowAudioTracks     { get; set; }
     [Parameter] public bool ShowTransitions     { get; set; }

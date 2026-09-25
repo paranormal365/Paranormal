@@ -75,6 +75,17 @@ public sealed record FeedPostRecord(
     decimal? PostedLatitude = null,
     decimal? PostedLongitude = null,
     string? PostedPlaceName = null,
+    // ── The place this post is ABOUT (2026-09-17) ───────────────────────────
+    /// <summary>
+    /// The shared place the post is about, for one made on a place's page. Distinct from
+    /// <paramref name="PostedPlaceName"/>, which is where the author was standing.
+    /// </summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// What that place is called, resolved at read so a rename shows everywhere at once. Falls
+    /// back to its address when the place has no name.
+    /// </summary>
+    string? AboutPlaceName = null,
     /// <summary>
     /// When it was set to appear, for a post that has not appeared yet.
     /// </summary>
@@ -153,7 +164,12 @@ public sealed record CreateFeedPostRequest(
     /// <summary>Where it was written, when the author chose to say. All three or none.</summary>
     decimal? PostedLatitude = null,
     decimal? PostedLongitude = null,
-    string? PostedPlaceName = null);
+    string? PostedPlaceName = null,
+    /// <summary>
+    /// The public location this post is about (2026-09-17). Must exist and must not be somebody's
+    /// home. A reply ignores it and takes its parent's place instead.
+    /// </summary>
+    Guid? PlaceId = null);
 
 // ── Org attribution (item 186 F7) ────────────────────────────────────────────
 
@@ -279,6 +295,50 @@ public sealed record FeedModerationSummary(
     /// <summary>How many feed posts exist, visible or not. Content accumulating while the
     /// feature is dark is the reminder's reason to exist.</summary>
     int FeedPostCount = 0);
+
+
+/// <summary>One published field session waiting on a reviewer's decision about its media.</summary>
+/// <remarks>
+/// <para>Carries the place and the contributor because that is what the decision turns on: a night
+/// at a public landmark and a night somewhere a reviewer does not recognise are different
+/// questions, and the readings are already public either way.</para>
+///
+/// <para>Moved here from the controller file on 2026-09-17. It had lived in the API project, which
+/// the website cannot reference — so the queue could not be rendered even in principle, and the
+/// two endpoints behind it sat uncalled while flagged sessions stayed held forever.</para>
+/// </remarks>
+public sealed record ArchiveMediaReviewRow(
+    Guid SessionId,
+    string ContributorName,
+    string? PlaceName,
+    Guid PlaceId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime PublishedAtUtc,
+    int FileCount,
+    FeedMediaReviewState State,
+    string? Note);
+
+/// <summary>
+/// One piece of event evidence, published to a place's archive and waiting on a decision.
+/// </summary>
+/// <remarks>
+/// The same question as <see cref="ArchiveMediaReviewRow"/> — should a stranger see this at this
+/// place — about the other thing that reaches a place archive. Its flag path set Held and wrote a
+/// reason for "the moderator queue" that did not exist (2026-09-17 audit), so one flag from one
+/// reader removed a guest's photograph permanently.
+/// </remarks>
+public sealed record ArchiveEvidenceReviewRow(
+    Guid SubmissionId,
+    Guid EventId,
+    string EventTitle,
+    string ContributorName,
+    string? PlaceName,
+    Guid? PlaceId,
+    string? Caption,
+    DateTime PublishedAtUtc,
+    FeedMediaReviewState State,
+    string? Note);
 
 
 /// <summary>

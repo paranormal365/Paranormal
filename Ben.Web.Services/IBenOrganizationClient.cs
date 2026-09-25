@@ -205,6 +205,27 @@ public interface IBenOrganizationClient
     Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Investigating on your own (2026-09-17) ───────────────────────────────
+
+    /// <summary>
+    /// This account's personal organization, or null when it has none.
+    /// </summary>
+    Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Creates this account's personal organization, or returns the one it already has.
+    /// </summary>
+    /// <remarks>
+    /// <para>Free, and idempotent — tapping twice gets the same organization rather than a second
+    /// one. It takes no payment: it produces the organization the rest of the site hangs work on,
+    /// and the ordinary billing flow does the rest if somebody later wants a plan.</para>
+    ///
+    /// <para>The endpoint has existed since the solo tier shipped and <b>had no caller anywhere</b>
+    /// until this: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This is the door.</para>
+    /// </remarks>
+    Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 
     // ── Member-title ladder (item 157) — seniority, never permission ─────────
@@ -285,6 +306,25 @@ public interface IBenOrganizationClient
     Task<LoadResult<OrganizationRoleMembershipRecord>> GetOrgRoleMembersAsync(Guid orgId, Guid roleId, CancellationToken token = default);
     Task<OrganizationRoleMembershipRecord?> AddOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
     Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
+
+    /// <summary>Saves a role, keeping the server's sentence when it refuses.</summary>
+    /// <remarks>
+    /// The roles endpoints refuse in words worth reading — "That role does not belong to this
+    /// group.", "Name is required." — and the page was writing "Failed to save role." over every
+    /// one of them, because the plain method returns null on any non-success and a null carries no
+    /// reason. Same shape as <c>DeleteInvestigationExpectingReasonAsync</c>: added beside the
+    /// original rather than replacing it, so callers move one at a time.
+    /// </remarks>
+    Task<(OrganizationRoleRecord? Result, string? Error)> UpdateOrgRoleExpectingReasonAsync(
+        Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default);
+
+    /// <summary>Adds somebody to a role, keeping the server's sentence when it refuses.</summary>
+    Task<(OrganizationRoleMembershipRecord? Result, string? Error)> AddOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default);
+
+    /// <summary>Takes somebody out of a role, keeping the server's sentence when it refuses.</summary>
+    Task<(bool Removed, string? Error)> RemoveOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default);
 
     // ── Org address member access ──────────────────────────────────────────────
     Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default);

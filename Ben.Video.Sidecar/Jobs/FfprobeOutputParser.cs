@@ -44,8 +44,17 @@ public static class FfprobeOutputParser
                 else if (audio is null && type == "audio") audio = stream;
             }
 
-            // Same precedence as the JS: video duration, else audio duration, else 0.
-            var duration = ReadDouble(video, "duration") ?? ReadDouble(audio, "duration") ?? 0.0;
+            // Same precedence as the JS: video duration, else audio duration - then the container's
+            // own, which is the only place a WebM keeps it. Matroska/WebM streams carry no duration
+            // field at all, so without this every browser recording (MediaRecorder writes WebM)
+            // probed as 0 seconds. Found installing the Store 1.1.2 on 2026-09-25: a 3-second VP9
+            // clip read back as 0 while the same clip as H.264 MP4 read 3. ProbeEndpoints already
+            // asks for -show_format; nothing was reading it.
+            JsonElement? format = doc.RootElement.TryGetProperty("format", out var f) ? f : null;
+            var duration = ReadDouble(video, "duration")
+                        ?? ReadDouble(audio, "duration")
+                        ?? ReadDouble(format, "duration")
+                        ?? 0.0;
             var width    = ReadInt(video, "width")  ?? 0;
             var height   = ReadInt(video, "height") ?? 0;
 

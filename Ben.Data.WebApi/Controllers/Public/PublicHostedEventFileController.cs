@@ -67,6 +67,7 @@ public sealed class PublicHostedEventFileController : BenControllerBase
         if (!_storage.Exists(path)) return NotFound();
 
         var stream = await _storage.OpenReadAsync(path, ct);
-        return File(stream, "application/octet-stream", row.UploadFile.FileName);
+        // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+        return File(stream, "application/octet-stream", row.UploadFile.FileName, enableRangeProcessing: true);
     }
 }

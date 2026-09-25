@@ -1,0 +1,48 @@
+@*
+    A rectangle, an ellipse or a diamond with words in the middle. The shape itself is CSS on one div -
+    a diamond is a rotated square with the text rotated back - so it scales with the block, prints in
+    the published picture, and needs no SVG.
+
+    A shape with nothing written in it still draws: a bubble is usually placed before it is named.
+*@
+@inherits BlockRendererBase
+@if (Editing)
+{
+    <div class="bc-shape__edit">
+        <label class="bc-field" for="@KindId"><span class="bc-field__label">Shape</span>
+            <select id="@KindId" class="form-select form-select-sm" value="@Shape.Kind" @onchange="OnKind">
+                @foreach (var kind in Enum.GetValues<ShapeKind>())
+                {
+                    <option value="@kind" selected="@(kind == Shape.Kind)">@Name(kind)</option>
+                }
+            </select>
+        </label>
+        <textarea @ref="FirstField" class="bc-shape__input" aria-label="Shape text"
+                  maxlength="@Options.Value.MaxTextChars"
+                  @bind="Shape.Text" @bind:event="oninput"></textarea>
+    </div>
+}
+else
+{
+    <div class="bc-shape bc-shape--@Shape.Kind.ToString().ToLowerInvariant()">
+        <span class="bc-shape__text">@Shape.Text</span>
+    </div>
+}
+@code {
+    private ShapeData Shape => Data as ShapeData ?? new ShapeData();
+
+    private string KindId => $"bc-shape-kind-{Node.Id:N}";
+
+    private void OnKind(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ShapeKind>(e.Value?.ToString(), out var kind)) Shape.Kind = kind;
+    }
+
+    /// <summary>The words a person would use, not the enum's.</summary>
+    private static string Name(ShapeKind kind) => kind switch
+    {
+        ShapeKind.Ellipse => "Ellipse",
+        ShapeKind.Diamond => "Diamond",
+        _ => "Rectangle",
+    };
+}

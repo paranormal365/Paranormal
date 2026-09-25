@@ -76,8 +76,13 @@ public sealed class EventBookingAlertJobTests
     private static EventOrganizerMailer Mailer(Mail mail)
         => new(mail.Service.Object, Options.Create(new SiteIdentity { BaseUrl = "https://example.test" }));
 
+    private static EventStaffRoomWriter Room()
+        => new(Options.Create(new SiteIdentity { BaseUrl = "https://example.test" }),
+               NullLogger<EventStaffRoomWriter>.Instance);
+
     private static EventBookingAlertJob AlertJob(SqliteTestDb sqlite, Mail mail)
-        => new(sqlite.Factory, Access(), Mailer(mail), NullLogger<EventBookingAlertJob>.Instance);
+        => new(sqlite.Factory, Access(), Mailer(mail), Room(),
+               NullLogger<EventBookingAlertJob>.Instance);
 
     private static EventBookingDigestJob DigestJob(SqliteTestDb sqlite, Mail mail)
         => new(sqlite.Factory, Access(), Mailer(mail), NullLogger<EventBookingDigestJob>.Instance);
@@ -326,5 +331,154 @@ public sealed class EventBookingAlertJobTests
         Assert.Equal(2, mail.Sent.Count);
         Assert.Contains("Waiting on an answer", mail.Sent[0].HtmlBody);
         Assert.Contains("3 days", mail.Sent[0].HtmlBody);
+    }
+    // ── the staff room (item 238C) ──────────────────────────────────────────
+
+    /// <summary>The same arrival, in the place the venue already talks.</summary>
+    [Fact]
+    public async Task A_booking_is_posted_into_the_events_staff_room()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        await AlertJob(sqlite, Mailbox()).RunAtAsync(Now, default);
+
+        await using var db = await sqlite.NewContextAsync();
+        var thread = await db.OrgMessages
+            .Where(m => m.ChannelType == OrgMessageChannel.EventStaffRoom)
+            .OrderBy(m => m.DateCreated)
+            .ToListAsync();
+
+        var root = Assert.Single(thread.Where(m => m.ParentMessageId == null));
+        var reply = Assert.Single(thread.Where(m => m.ParentMessageId == root.Id));
+
+        Assert.Equal(EventId, root.HostedEventId);
+        Assert.Contains("Bookings —", root.Subject);
+        Assert.Contains("has asked for", reply.Body);
+        Assert.False(root.IsPublic);
+    }
+
+    /// <summary>
+    /// One thread for the life of the event, however many bookings arrive.
+    /// </summary>
+    /// <remarks>
+    /// A root per booking would bury every other conversation the group is having on the weekend
+    /// the venue most needs to talk — which is the whole reason 238C is a thread and not a
+    /// notification.
+    /// </remarks>
+    [Fact]
+    public async Task A_second_rush_replies_to_the_same_thread()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        var job = AlertJob(sqlite, Mailbox());
+        await job.RunAtAsync(Now, default);
+
+        await AskAsync(sqlite, OtherGuestId, Now.AddHours(2));
+        await job.RunAtAsync(Now.AddHours(2).AddMinutes(1), default);
+
+        await using var db = await sqlite.NewContextAsync();
+        var all = await db.OrgMessages
+            .Where(m => m.ChannelType == OrgMessageChannel.EventStaffRoom).ToListAsync();
+
+        Assert.Single(all.Where(m => m.ParentMessageId == null));
+        Assert.Equal(2, all.Count(m => m.ParentMessageId != null));
+    }
+
+    /// <summary>The cursor, so a five-minute job does not repost every five minutes.</summary>
+    [Fact]
+    public async Task Running_again_posts_nothing_more()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        var job = AlertJob(sqlite, Mailbox());
+        await job.RunAtAsync(Now, default);
+        await job.RunAtAsync(Now.AddMinutes(5), default);
+        await job.RunAtAsync(Now.AddMinutes(30), default);
+
+        await using var db = await sqlite.NewContextAsync();
+        Assert.Equal(1, await db.OrgMessages.CountAsync(
+            m => m.ChannelType == OrgMessageChannel.EventStaffRoom && m.ParentMessageId != null));
+    }
+
+    /// <summary>
+    /// A new reply puts the thread back on the bell.
+    /// </summary>
+    /// <remarks>
+    /// The bell counts recipient rows whose <c>DateRead</c> is null, so marking the ROOT unread is
+    /// what reaches somebody — and it is why a reply does not get recipient rows of its own: that
+    /// would be a second row in the message list for every booking.
+    /// </remarks>
+    [Fact]
+    public async Task A_new_reply_marks_the_thread_unread_again()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        var job = AlertJob(sqlite, Mailbox());
+        await job.RunAtAsync(Now, default);
+
+        // The owner reads it.
+        await using (var read = await sqlite.NewContextAsync())
+        {
+            foreach (var r in await read.OrgMessageRecipients.ToListAsync()) r.DateRead = Now;
+            await read.SaveChangesAsync();
+        }
+
+        await AskAsync(sqlite, OtherGuestId, Now.AddHours(2));
+        await job.RunAtAsync(Now.AddHours(2).AddMinutes(1), default);
+
+        await using var db = await sqlite.NewContextAsync();
+        var rows = await db.OrgMessageRecipients.ToListAsync();
+
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.Null(r.DateRead));
+        Assert.All(rows, r => Assert.Equal(OwnerId, r.RecipientAppUserId));
+    }
+
+    /// <summary>
+    /// The room is most of the point for somebody who cannot or will not read mail.
+    /// </summary>
+    /// <remarks>
+    /// Before 238C the whole job returned early when no mail server was configured. A site with
+    /// mail switched off is exactly where being told at all depends on the thread.
+    /// </remarks>
+    [Fact]
+    public async Task With_no_mail_server_the_thread_is_still_written()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        var mail = Mailbox();
+        mail.Service.SetupGet(e => e.IsConfigured).Returns(false);
+
+        await AlertJob(sqlite, mail).RunAtAsync(Now, default);
+
+        await using var db = await sqlite.NewContextAsync();
+
+        Assert.Empty(mail.Sent);
+        Assert.Equal(1, await db.OrgMessages.CountAsync(
+            m => m.ChannelType == OrgMessageChannel.EventStaffRoom && m.ParentMessageId != null));
+
+        // And nobody was marked as having been told by letter, so the letters still go the day
+        // mail is switched on.
+        Assert.Empty(await db.EventBookingAlertStates.ToListAsync());
+    }
+
+    /// <summary>The thread's audience is the board's audience, and nobody else.</summary>
+    [Fact]
+    public async Task A_steward_handed_only_the_door_is_not_in_the_thread()
+    {
+        await using var sqlite = await SeedAsync();
+        await AskAsync(sqlite, GuestId, Now.AddMinutes(-2));
+
+        await AlertJob(sqlite, Mailbox()).RunAtAsync(Now, default);
+
+        await using var db = await sqlite.NewContextAsync();
+        var rows = await db.OrgMessageRecipients.ToListAsync();
+
+        Assert.DoesNotContain(rows, r => r.RecipientAppUserId == StewardId);
     }
 }

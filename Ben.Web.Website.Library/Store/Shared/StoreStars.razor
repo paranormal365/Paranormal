@@ -1,0 +1,26 @@
+@*
+    A star rating (storefront S2.5): five stars, filled to the nearest half, with the count when
+    there is one. Nothing at all for a product nobody has reviewed — five empty stars read as
+    "rated badly", not "not rated yet".
+*@
+
+@if (Count > 0)
+{
+    <span class="ben-stars" role="img" aria-label="@($"{Rating:0.#} out of 5 stars from {Count} {(Count == 1 ? "review" : "reviews")}")">
+        @for (var i = 1; i <= 5; i++)
+        {
+            @if (Rating >= i - 0.25m) { <span>★</span> }
+            else if (Rating >= i - 0.75m) { <span class="ben-stars__half">★</span> }
+            else { <span class="ben-stars__empty">★</span> }
+        }
+        @if (ShowCount) { <span class="ben-stars__count">(@Count)</span> }
+    </span>
+}
+
+@code {
+    [Parameter] public decimal Rating { get; set; }
+
+    [Parameter] public int Count { get; set; }
+
+    [Parameter] public bool ShowCount { get; set; } = true;
+}

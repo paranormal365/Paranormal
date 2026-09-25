@@ -87,7 +87,43 @@ public struct ReplayFrame: Sendable, Equatable {
     public var soundDbfs: Double?
     public var position: FieldReading.Position?
     public var headingDegrees: Double?
+    /// Which way they were walking at this moment, from the fix rather than the compass.
+    public var courseDegrees: Double?
     public var relativeAltitudeMeters: Double?
+
+    /// Which way to point the arrow on the map, and what that direction actually means.
+    ///
+    /// Ben, 2026-09-16: "See if the map is tracked using an arrow to point the direction and how
+    /// the person walks." Two different facts answer that — the compass says where they were
+    /// looking, the fix says where they were going — and a night usually has only one of them,
+    /// because a compass is useless indoors and a course needs a moving fix. Whichever exists is
+    /// drawn, and the screen says which it is rather than letting one be read as the other.
+    public enum Facing: Sendable, Equatable {
+        case looking(Double)
+        case walking(Double)
+
+        public var degrees: Double {
+            switch self {
+            case .looking(let value), .walking(let value): value
+            }
+        }
+
+        /// What the arrow means, for the label beside it.
+        public var what: String {
+            switch self {
+            case .looking: "looking"
+            case .walking: "walking"
+            }
+        }
+    }
+
+    /// The compass first: where somebody was pointed is what they were investigating. The
+    /// direction of travel stands in when there is no compass reading, which is most of a night.
+    public var facing: Facing? {
+        if let headingDegrees { return .looking(headingDegrees) }
+        if let courseDegrees { return .walking(courseDegrees) }
+        return nil
+    }
     /// The clip covering this moment, and how far into it — nil when nothing was recorded here.
     public var activeMedia: (segment: MediaSegment, offset: TimeInterval)?
     /// A marker within a second or so of the playhead, for highlighting as it passes.
@@ -103,6 +139,7 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.soundDbfs == rhs.soundDbfs
             && lhs.position == rhs.position
             && lhs.headingDegrees == rhs.headingDegrees
+            && lhs.courseDegrees == rhs.courseDegrees
             && lhs.activeMedia?.segment.id == rhs.activeMedia?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
             && lhs.room == rhs.room
@@ -127,6 +164,13 @@ public struct ReplayFrame: Sendable, Equatable {
 public final class SessionReplay {
 
     public private(set) var timeline: ReplayTimeline = .empty
+    /// The field line, thinned for drawing — see `FieldTrace`. Worked out once here rather than
+    /// by the chart on every tick.
+    public private(set) var fieldTrace: FieldTrace = .empty
+    /// Every fix in order, the path the map draws. The same once-only rule as the trace: a long
+    /// night is thousands of fixes, and the map used to walk every reading for them ten times a
+    /// second.
+    public private(set) var walkedPath: [FieldReading.Position] = []
     public private(set) var playhead: Date = .distantPast
     public private(set) var frame = ReplayFrame(at: .distantPast)
     public private(set) var isPlaying = false
@@ -233,6 +277,9 @@ public final class SessionReplay {
                 markers: markers.sorted { $0.at < $1.at },
                 media: media.sorted { $0.startedAt < $1.startedAt },
                 baselines: baselines)
+            fieldTrace = FieldTrace(readings: timeline.readings,
+                                    baselineMicrotesla: baselines.magneticMicrotesla)
+            walkedPath = timeline.track.map(\.position)
             playhead = timeline.startedAt
             frame = makeFrame(at: playhead)
             isLoaded = true
@@ -338,6 +385,7 @@ public final class SessionReplay {
             result.soundDbfs = reading.measurements?["sound_level"]?.numberValue
             result.relativeAltitudeMeters = reading.measurements?["relative_altitude"]?.numberValue
             result.headingDegrees = reading.motion?.headingDegrees
+            result.courseDegrees = reading.motion?.courseDegrees
             // Read from THIS reading rather than held forever: readings carry the room for as
             // long as one is set, so its absence here means they stopped saying, not that the
             // label was lost.

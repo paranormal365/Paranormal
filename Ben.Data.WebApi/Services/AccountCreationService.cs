@@ -1,3 +1,5 @@
+using Ben.Data.WebApi.Services.Mail;
+using Ben.Data.Common.Mail;
 using Ben.Data.Common;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -128,8 +130,9 @@ public sealed class AccountCreationService : IConfirmationSender
     /// tokens are not URL-safe. This is the same encoding <c>MapIdentityApi</c> uses, so the same
     /// confirmation endpoint accepts both.</para>
     ///
-    /// <para>Returns whether the message left this machine. When it did not, the sender has
-    /// already logged the link at Warning so a local sign-up can still be finished.</para>
+    /// <para>Returns whether the message left this machine. When it did not because mail is not
+    /// set up, the letter is still waiting in the outbox, and a local sign-up is finished from its
+    /// link at /admin/mail — never from the log, since the link finishes somebody's account.</para>
     /// </remarks>
     public async Task<bool> SendConfirmationAsync(AppUser user, string? returnUrl, CancellationToken ct)
     {
@@ -197,7 +200,9 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "<p>If it was not you, there is nothing to do. Your account has not changed and "
                 + "nobody has been given access to it.</p>",
                 buttonText: "Sign in", buttonUrl: $"{BaseUrl}/login"),
-            "their address was used in a sign-up attempt", ct);
+            "their address was used in a sign-up attempt", ct,
+            MailKinds.SomebodyUsedYourAddress,
+            Link("SignInUrl", "SignInButton", "Sign in", $"{BaseUrl}/login"));
     }
 
     /// <summary>
@@ -225,14 +230,35 @@ public sealed class AccountCreationService : IConfirmationSender
                 + "<p>If it was not you, there is nothing to do. Your account has not changed, and "
                 + "the request will be discarded on its own.</p>",
                 buttonText: "Sign in to finish it", buttonUrl: adoptLink),
-            "an investigation request was made under their address", ct);
+            "an investigation request was made under their address", ct,
+            // Its own kind since 2026-09-23: it shared the sign-up warning's, so one template
+            // replaced both — and the published one had no link, which would have taken away the
+            // only way to claim the request.
+            MailKinds.RequestMadeUnderYourAddress,
+            new Dictionary<string, MailSuppliedValue>(
+                Link("FinishUrl", "FinishButton", "Sign in to finish it", adoptLink), StringComparer.OrdinalIgnoreCase)
+            {
+                ["StreetAddress"] = new(streetAddress),
+            });
     }
 
-    private async Task TrySendAsync(AppUser to, string subject, string body, string what, CancellationToken ct)
+    /// <summary>A link and its ready-made button, as a template of these kinds is promised them.</summary>
+    private static Dictionary<string, MailSuppliedValue> Link(string urlToken, string buttonToken, string buttonText, string url)
+        => new(StringComparer.OrdinalIgnoreCase)
+        {
+            [urlToken] = new(url),
+            [buttonToken] = new(BenEmailLayout.ActionButton(buttonText, url), IsHtml: true),
+        };
+
+    private async Task TrySendAsync(AppUser to, string subject, string body, string what, CancellationToken ct,
+                                    MailKindInfo? kind = null,
+                                    IReadOnlyDictionary<string, MailSuppliedValue>? supplied = null)
     {
         try
         {
-            await _email.SendAsync(to.Email!, subject, body, ct);
+            await _email.SendAsync(new EmailMessage(to.Email!, subject, body, Kind: kind?.Key,
+                // The account holder, and the link the letter exists to carry (MailRows).
+                Payload: kind is null ? null : MailRows.For(kind, supplied, to)), ct);
         }
         catch (Exception ex)
         {

@@ -63,7 +63,6 @@ public sealed class PlaywrightTestsCanFailTests
         ["MyCaseDashboardTests.cs"]          = 10,
         ["ClientRequestNavTests.cs"]         = 6,
         ["InvestigationPanelTests.cs"]       = 5,
-        ["NavigationTests.cs"]               = 4,
         ["InvestigationReportTests.cs"]      = 4,
         ["PublishLeakWarningTests.cs"]       = 3,
         ["OrganizationTests.cs"]             = 3,
@@ -109,6 +108,26 @@ public sealed class PlaywrightTestsCanFailTests
             + "reports green. Use Assert.Ignore for a missing precondition and Assert.Fail (or a "
             + "real assertion) for missing behaviour:\n  " + string.Join("\n  ", newOffenders));
     }
+
+    // ── A guard that was attempted and withdrawn (2026-09-17) ────────────────
+    //
+    // The rule above counts one spelling of "cannot fail": Assert.Pass. The audit found a second
+    // and worse one — three tests in NavigationTests whose only assertions sat behind a condition
+    // that was false on every run (a selector matching nothing, a <button> asked for as a link, a
+    // control hidden at the default viewport). All three have been fixed and that file is now at
+    // zero, but nothing here would stop the shape returning.
+    //
+    // I tried to add that guard and withdrew it. The check has to know whether an assertion sits
+    // at the method's own brace depth or inside an `if`, and brace counting cannot tell, because
+    // C# object initialisers carry braces: `Expect(Main.GetByRole(AriaRole.Button, new() { Name =
+    // "Open Case" }))` shifts the depth mid-statement. The attempt therefore flagged roughly two
+    // hundred perfectly good fixtures, and a guard needing two hundred grandfathered entries
+    // gives no signal and gets switched off — which is the failure this file exists to prevent.
+    //
+    // Doing it properly means a syntax tree rather than a regex (Microsoft.CodeAnalysis.CSharp,
+    // walk each [Test] method and ask whether any InvocationExpression naming Assert/Expect has
+    // no ancestor IfStatement within the method body). That is a real dependency for a test
+    // project to take on, so it is recorded here as a decision rather than smuggled in.
 
     [Fact]
     public void The_number_of_soft_passes_only_goes_down()

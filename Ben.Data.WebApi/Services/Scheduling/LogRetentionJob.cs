@@ -95,7 +95,13 @@ public sealed class LogRetentionJob : IScheduledJob
     }
 
     /// <summary>Whether the missing-table warning has been given since the table was last seen.</summary>
-    private bool _missingTableReported;
+    /// <remarks>
+    /// <b>Static</b>, for the same reason <c>_lastSweptUtc</c> above is: jobs are resolved fresh
+    /// from a scope on every pass, so an instance field is always false on entry and "say so once"
+    /// said so every six hours instead (2026-09-17 audit). The reasoning was written down two
+    /// lines up and simply not applied here.
+    /// </remarks>
+    private static bool _missingTableReported;
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IConfiguration _configuration;

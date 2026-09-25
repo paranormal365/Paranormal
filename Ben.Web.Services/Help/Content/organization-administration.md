@@ -52,6 +52,12 @@ has decided its people stay unidentified to clients.
 ![The group's members list](help-media:organization-administration/members.png)
 *Members and their roles. Roles decide what each person may do inside the group.*
 
+**People who have left do not appear here.** When somebody closes their account, or has it closed
+for them, they drop off this list straight away — there is nothing useful left to do with the row,
+since a closed account cannot be given a role, invited, or asked to do anything. Everything they
+recorded for the group stays exactly where it was, signed "A former member", so the group's record
+of its own work is unaffected.
+
 | Role | Typically |
 |---|---|
 | Owner | Created the group. Full control. |
@@ -130,6 +136,31 @@ keep its own sessions to itself.
 The price is set by how many members the group has, and the **Billing** screen under Settings shows
 the band you are in and what it costs. If the price list has no charge for a group your size, that
 screen says there is nothing to buy rather than offering you a plan for nothing.
+
+### With no plan, work at a public place is public
+
+This is the bargain, and it is the same one the field archive has always made: what a free account
+records at a public location joins that location's own page, where anybody can read it. One group's
+night at a landmark is an anecdote. The same landmark recorded by eleven groups is a record worth
+having, and free accounts are what fill it.
+
+So on a group with no plan:
+
+- A case you open is **public from the start**, and the **Make Public** box on the Edit Case page
+  is ticked and cannot be unticked. The page says why, beside the box.
+- A visit to a public location is shared with **everyone**, and the narrower sharing choices are
+  not offered.
+- A session you publish to a place's archive cannot be taken back out.
+
+**A private residence is never touched by any of this.** Somebody's home is client work, it belongs
+to the paid lane, and publishing what happens inside it is theirs to agree to. A missing
+subscription is not their consent.
+
+A plan is what makes your work yours: you choose what to publish, you can narrow a visit's audience
+afterwards, and you can take a published session back out of the archive. **Nothing already private
+is changed by this.** A case that was private before your plan lapsed stays private, and you can go
+on saving it — the rule applies to new work, the same way the member limit never removes anybody
+already in your group.
 
 ## Custom-role permissions and your plan
 
@@ -253,6 +284,60 @@ takes it from whoever held it — and the current lead can hand it on, which is 
 somebody leaves halfway through the night. Somebody senior enough to lead every visit is better
 served by the permission above; somebody leading one Saturday is better served by the lead flag,
 which stops mattering on Sunday.
+
+## Guest codes
+
+**A phone on the night that isn't yours.** Some nights the people with the useful phones are not in your group. A walk-up at a tour, a
+homeowner's relative who came along, a volunteer somebody brought, a class on an open night. Their
+photographs and recordings used to be lost to you, because getting them in meant inviting them,
+waiting for an email, and adding them to something.
+
+A **guest code** replaces all of that with a sheet you hold up.
+
+Open **Investigations**, find the visit, and press **Guest code**. You get a square code to scan
+and a short code — something like `H4KP-9RQT` — printed beside it. Show it on a tablet, hold up a
+phone, or print it and pin it to the gate.
+
+Anybody who scans it is asked to sign in, and then they are on tonight's investigation.
+
+![The sheet a guide holds up](help-media:organization-administration/guest-code.png)
+
+### What a guest can and cannot do
+
+A guest code is not a way into your group. Somebody holding one can:
+
+- send you photographs, audio, video and readings against **this one investigation**
+- see what **they** sent
+
+They cannot see the case, the client, the address, what anybody else recorded, or anything at all
+once the night is over. Nothing they get expires into membership: when the code stops working, so
+does everything it gave them.
+
+### Ending the night, and stopping one person
+
+Two different buttons, on purpose.
+
+**New code** prints a fresh sheet and retires the last one — this is what you press when a sheet
+was left on a pub table. Everybody who already scanned the old one *keeps working*, because they
+are standing in the building and deleting their evening is not the remedy.
+
+**End the night** stops the code and every pass it gave out, all at once.
+
+To stop **one** phone, use the cross beside that person in **Working tonight**. Everybody else
+carries on, and you do not have to reprint anything. What they already sent up stays — this stops
+them adding more, it does not erase what happened.
+
+### If the code has run out
+
+A code stops working by itself after about half a day, and never lasts more than a day, whatever
+you ask for. A sheet that still opened something the following March would be worse than no sheet
+at all. Press **New code** and show the new one.
+
+### Somebody who has just installed the app
+
+The short code is there for exactly this. A phone that scans the square code without the app
+installed goes to the App Store, and the app it installs has no way of knowing what was scanned.
+So tell them to open the app, or go to the address on the sheet, and type the short code instead.
 
 ## Being found by clients
 
@@ -397,6 +482,35 @@ filter, and thumbnail or list views. Choosing one copies it into the group's lib
 files arrive **private by default**, and someone with publish permission approves them before
 they ever appear publicly. The original stays the owner's: only a file's owner can delete it,
 and a group removing its copy never touches the member's own file.
+
+### Editing a photo
+
+A photo in the Files tab has an **Edit image** button. It opens the photo editor across the whole
+screen, with the photo fitted to the space and its real size shown at the bottom.
+
+![The photo editor: tools down the left, the photo in the middle, adjustments and layers on the right](help-media:organization-administration/photo-editor.png)
+
+- **Zoom** with the buttons above the photo or by scrolling over it. **Fit** shows the whole photo
+  again, and **100%** shows it pixel for pixel.
+- **Move around** a zoomed photo by dragging it with **Select**. With any other tool chosen, hold
+  **Alt** and drag.
+- **Tools** each say what they do. The line above the photo says how to use the one that is chosen,
+  and it stays chosen until you pick another. **Ruler** measures in the photo's own pixels, and
+  **Redact** blacks out anything you drag over.
+- **Turn left** and **Turn right** turn the whole photo, along with anything you have drawn on it.
+- **Adjustments**, **Filter** and **Evidence Tools** are on the right. Everything you add is listed
+  under **Layers**, where you can hide it, fade it or delete it.
+
+**Save as New Version** keeps the original untouched and saves the edited photo beside it at the
+photo's full size. A JPEG stays a JPEG.
+
+**Save State** keeps your work without making a new photo: your marks, the last adjustment or
+filter, and how the photo was turned. The next time you open that photo in the editor, it comes back
+as you left it. The photo itself is not changed.
+
+Only the person who owns a photo can save work on it or save a new version. For a photo that belongs
+to a group, that is the group's owners and administrators. Site administrators can too. Anyone else
+who opens the editor is told the edit wasn't saved.
 
 ## Editing your public pages
 
@@ -1708,6 +1822,25 @@ a way a screen does not.
 
 Your own booking is never news to you.
 
+### The event's staff room
+
+**The same arrivals are posted into a thread of the event's own**, in your group's **Messages**, so
+you can talk about a request where the request is. You will see it there as *Event Staff*, named
+after the event — *Bookings — Halloween Lock-In*.
+
+- **One thread for the whole event**, not one per booking, so a weekend that sells out does not
+  bury every other conversation your group is having.
+- **A new arrival brings the thread back to your bell** rather than adding another row to your
+  messages. Reply to it exactly as you would any message.
+- **Everybody who may decide bookings is in it** — including anyone who set their letters to
+  *Nothing*. Turning off letters is a statement about letters, and the room is most of the point
+  for somebody who never reads mail.
+- **It says no more than a letter does**: what was asked for and when, never who. The names are on
+  the booking board.
+
+You do not switch this on, and there is nothing to set up: the thread is made the first time a
+booking arrives. An event nobody asks about never gets one.
+
 ![Choosing how often a group writes to you](help-media:organization-administration/event-booking-letters.png)
 
 **How often** is yours to choose, group by group, on the **Notifications** page under *Letters about
@@ -1835,6 +1968,35 @@ The page is readable standing in the kitchen with it, not only at a desk.
 bookings, and withheld from members who can't — an ordinary member of your group has no reason to
 read a stranger's allergy list. They never reach a public page, and the printed sheet is for the
 kitchen rather than the notice board.
+
+## Tour passes
+
+When you approve somebody's place on a walk, they are sent a pass — a square code in their
+confirmation letter, drawn into the letter itself so it still shows if their mail program blocks
+pictures. There is a link under it for the guest whose program strips the code instead.
+
+![Scanning guests in at the meeting point](help-media:organization-administration/tour-door.png)
+
+On the night, open the date from your tour and press **Scan guests in**. Point the camera at a
+guest's pass and the screen answers in one line:
+
+- **"Casey Hollow. Let them in."** — they hold a place on tonight's walk.
+- **"Casey Hollow — 3 places. Let them in."** — they booked for more than one person.
+- **"Casey Hollow is already in — scanned at 7.42."** — somebody has already scanned this pass.
+  Not a refusal; it is there so you can tell a queue-jumper from a guest whose friend scanned their
+  code a minute ago.
+- **"That pass is for Friday Night Ghost Walk, not tonight's walk."** — a real booking, the wrong
+  night. This is the commonest honest mistake at a meeting point, so it says which walk rather than
+  telling somebody their code is not recognised.
+- **"We don't recognise that code. Ask them to check the email, or look them up by name."**
+
+If the camera will not start — an old phone, a browser that will not give it permission, no light —
+type the code from the guest's screen into the box underneath instead. It does exactly the same
+thing.
+
+A pass only ever belongs to a place somebody actually holds. A seat that is still only requested,
+or one you turned down, has no pass, so nobody can arrive holding proof of a walk you did not agree
+to take them on.
 
 ## Public events
 

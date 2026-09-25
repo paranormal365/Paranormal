@@ -5,6 +5,16 @@
 @inject IBenUserState UserState
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@* The feed's own composer and card, reused rather than forked (2026-09-17). Without this using,
+   Razor does not recognise <FeedComposer> as a component and emits it as a literal HTML element —
+   no error, no warning, just an empty <feedcomposer> tag in the page. Which is exactly what
+   happened, and what cost an hour of looking at the server. *@
+@using Ben.Web.Website.Library.Feed
+@* And the scheduling window, for the same reason and after making the same mistake twice in one
+   afternoon: without this, <NewInvestigationWindow> emitted an empty <newinvestigationwindow>
+   element and the button that opens it did nothing at all. *@
+@using Ben.Web.Website.Library.Organization
+@using Ben.Web.Website.Library.Organization.Cases
 
 @*
    A place, and the history of what has happened there.
@@ -45,7 +55,7 @@
             @LocationLine
             @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
             {
-                <span class="badge bg-info text-dark ms-2">Public location</span>
+                <span class="badge bg-info ms-2">Public location</span>
             }
         </p>
 
@@ -56,7 +66,9 @@
            codebase keeps finding. *@
         @if (_myOrgs.Count > 0)
         {
-            <p class="mb-2 small">
+            @* WIDE: the chips, as they have always been. Four actions per group the viewer
+               belongs to, each naming its group when there is more than one. *@
+            <p class="mb-2 small d-none d-md-block">
                 @foreach (var org in _myOrgs)
                 {
                     <a class="btn btn-sm btn-outline-secondary me-1 mb-1"
@@ -76,8 +88,153 @@
                             <span class="text-secondary">· @org.Name</span>
                         }
                     </a>
+                    @* Ben, 2026-09-17: "if someone wants to create a case at a public case, they
+                       are given the option to link to the existing case and create their own
+                       investigation." This is the case half — the place is carried in the query, so
+                       the form arrives with it settled rather than asking for an address somebody
+                       is already looking at. Offered at a public location only: a case at
+                       somebody's home starts from the client, not from a page anyone can read. *@
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayOpenCaseIn.Contains(org.OrganizationId))
+                    {
+                        <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-open-case"
+                           href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
+                            <BenIcon Name="folder-plus" Class="me-1" />Open a case here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </a>
+                    }
+
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayInvestigateIn.Contains(org.OrganizationId))
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 place-investigate"
+                                @onclick="@(() => InvestigateWith(org.OrganizationId))">
+                            <BenIcon Name="calendar" Class="me-1" />Investigate here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </button>
+                    }
                 }
             </p>
+
+            @* NARROW: one menu per group instead (V2, measured 2026-09-22).
+               The chips are four per group, and somebody in three groups opened this page to
+               twelve of them stacked over eleven lines — 364px of an 812px phone, before a word
+               about the place itself. The actions are unchanged and so is their order; they are
+               behind a disclosure, which is what a phone has room for.
+
+               One menu PER GROUP rather than one menu holding everything: which group you are
+               acting as is the decision being made here, and burying it as a suffix inside a flat
+               list of twelve items is how somebody opens a case on the wrong group's books. *@
+            <div class="d-md-none mb-2">
+                @foreach (var org in _myOrgs)
+                {
+                    <BenDropdown Class="d-inline-block me-1 mb-1"
+                                 ToggleClass="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                 NoArrow="false" AlignEnd="false" MinWidth="220px"
+                                 Title="@($"Work here as {org.Name}")">
+                        <ToggleContent>
+                            <BenIcon Name="briefcase" Class="me-1" />
+                            @(_myOrgs.Count > 1 ? org.Name : "Work here")
+                        </ToggleContent>
+                        <ChildContent>
+                            <li>
+                                <a class="dropdown-item"
+                                   href="@($"/organizations/{org.OrganizationId}/places/{PlaceId}/rooms")">
+                                    <BenIcon Name="home" Class="me-2" />Rooms
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item place-our-venue"
+                                   href="@($"/organizations/{org.OrganizationId}/venue?place={PlaceId}")">
+                                    <BenIcon Name="map-pin" Class="me-2" />Our venue
+                                </a>
+                            </li>
+                            @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                 && _mayOpenCaseIn.Contains(org.OrganizationId))
+                            {
+                                <li>
+                                    <a class="dropdown-item place-open-case"
+                                       href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
+                                        <BenIcon Name="folder-plus" Class="me-2" />Open a case here
+                                    </a>
+                                </li>
+                            }
+                            @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                 && _mayInvestigateIn.Contains(org.OrganizationId))
+                            {
+                                <li>
+                                    <button type="button" class="dropdown-item place-investigate"
+                                            @onclick="@(() => InvestigateWith(org.OrganizationId))">
+                                        <BenIcon Name="calendar" Class="me-2" />Investigate here
+                                    </button>
+                                </li>
+                            }
+                        </ChildContent>
+                    </BenDropdown>
+                }
+            </div>
+        }
+
+        @* ── The door for somebody in no group at all (2026-09-17) ────────────
+           Ben: everything a solo person submits is public by default. Until now a person with no
+           group could record from the phone and nothing else — every other feature is org-scoped
+           and they had no org, and the endpoint that mints one had no caller anywhere on the site.
+           This is it. Offered only at a public location: a visit to somebody's home starts with
+           the client, not from a page anyone can read. *@
+        @if (UserState.IsAuthenticated && _myOrgs.Count == 0
+             && _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <p class="mb-2">
+                <button type="button" class="btn btn-sm btn-primary place-investigate-solo"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = true)">
+                    <BenIcon Name="calendar" Class="me-1" />Start investigating on your own
+                </button>
+            </p>
+        }
+
+        @* The sentence before the act, not after it: minting a space and publishing by default are
+           both things somebody should agree to knowingly. BenModal, never TelerikDialog. *@
+        <BenModal @bind-Visible="@_offeringSolo" Title="Investigating on your own" Size="sm">
+            <ChildContent>
+                <p>
+                    This creates a private space of your own to keep investigations in. It is free,
+                    and it is yours — nobody else joins it and it never appears in any list of groups.
+                </p>
+                <p class="mb-0">
+                    On a free account, what you record at a public location like
+                    <strong>@Title</strong> is <strong>public</strong>: it joins this place's page
+                    where anybody can read it. That is the bargain, and it is what makes a place's
+                    record worth reading. A plan is what makes your work yours instead.
+                </p>
+                @if (_soloError is not null)
+                {
+                    <div class="alert alert-danger py-2 small mt-3 mb-0" data-testid="solo-error">@_soloError</div>
+                }
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="btn btn-outline-secondary"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = false)">Cancel</button>
+                <button type="button" class="btn btn-primary" data-testid="solo-confirm"
+                        disabled="@_startingSolo" @onclick="StartInvestigatingAloneAsync">
+                    @(_startingSolo ? "Setting it up…" : "Create it and carry on")
+                </button>
+            </FooterContent>
+        </BenModal>
+
+        @* The scheduling window, for whichever organization was chosen above — one of the reader's
+           groups, or the personal one just minted. *@
+        @if (_investigatingWith is { } investigatingOrgId)
+        {
+            <NewInvestigationWindow OrgId="@investigatingOrgId"
+                                    PrechosenPlaceId="@PlaceId"
+                                    OnCreated="@OnInvestigationScheduledAsync"
+                                    OnClosed="@(() => _investigatingWith = null)" />
         }
 
         @* Who runs this place as its venue, when somebody has been confirmed as it (item 235 phase 9).
@@ -164,6 +321,118 @@
             {
                 @SignedInTable(shared, showVisibility: false)
             }
+        }
+
+        @* ── Your own groups' cases here ──────────────────────────────────── *@
+        @* The question a member actually arrives with: do we already have a case here? The public
+           list below cannot answer it, because the answer is usually a case nobody published and
+           never will. Scoped to the reader's own groups — another group's unpublished case is
+           their business, and having one is itself something they have not shared. *@
+        @if (_myCases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Your groups' cases here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-my-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _myCases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.DateCaseOpened.ToDisplayDate()</td>
+                                <td>
+                                    <a href="@($"/organizations/{row.OrganizationId}/cases/{row.Id}")">
+                                        @row.CaseReference — @row.Title
+                                    </a>
+                                </td>
+                                <td>@row.OrganizationName</td>
+                                <td class="text-nowrap">
+                                    <span class="badge @row.Status.BadgeClass()">@row.Status.Label()</span>
+                                    @if (row.IsPublished)
+                                    {
+                                        <span class="badge text-bg-info ms-1 fw-normal">Published</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* ── Posts about this place ───────────────────────────────────────── *@
+        @* Ben, 2026-09-17: a public location should be "actually public for adding files,
+           messages etc". These are ordinary feed posts carrying this place, which is what gives
+           them the screener, the upload pause after repeated refusals, reporting, hiding and the
+           moderator queues — and the phone app reads them already. The composer is offered to
+           anybody signed in, wider than the feed's front page on purpose: this record is the free
+           lane's whole point and somebody with no group is exactly who fills it. *@
+        @if (_canPost || _posts is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Posts about this place</h6>
+
+            @if (_canPost)
+            {
+                <div class="mb-3" data-testid="place-composer">
+                    <FeedComposer AboutPlaceId="@PlaceId"
+                                  Placeholder="@($"What did you find at {Title}?")"
+                                  OnPosted="OnPlacePosted" />
+                </div>
+            }
+
+            @if (_posts is { Count: > 0 })
+            {
+                <div class="d-flex flex-column gap-3" data-testid="place-posts">
+                    @foreach (var post in _posts)
+                    {
+                        <FeedPostCard Post="@post" />
+                    }
+                </div>
+
+                @* Only when there may be more than the page shows, so the link never promises a
+                   page identical to the one already being read. *@
+                @if (_posts.Count >= PlacePostsShown)
+                {
+                    <p class="mt-2 mb-0">
+                        <a href="@($"/feed/places/{PlaceId}")">See all posts about this place</a>
+                    </p>
+                }
+            }
+            else if (_canPost)
+            {
+                <p class="text-secondary small fst-italic" data-testid="place-posts-empty">
+                    Nothing posted about this place yet. Yours would be the first.
+                </p>
+            }
+        }
+
+        @* ── Cases written up here ────────────────────────────────────────── *@
+        @* Rendered for visitor and member alike from the anonymous endpoint, because published is
+           published. A case reaches this list only when its group published it AND its status says
+           so; a client's real name is replaced by the server before it ever arrives here. *@
+        @if (_cases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Cases written up here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _cases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.OpenedYear</td>
+                                <td>
+                                    <a href="@($"/o/{row.OrganizationUrlName}/cases/{row.UrlName}")">@row.Title</a>
+                                    @if (row.Status == Ben.Data.Common.Enums.CaseStatus.Haunted)
+                                    {
+                                        <span class="badge text-bg-danger ms-1 fw-normal">Haunted</span>
+                                    }
+                                </td>
+                                <td><a href="@($"/o/{row.OrganizationUrlName}")">@row.OrganizationName</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
 
         @* ── The field archive ────────────────────────────────────────────── *@
@@ -343,6 +612,300 @@
             </div>
         }
 
+        @* ── What this place is, and what it looks like (item 250) ────────── *@
+        @* Ben: "we can create a page with information about it, images of it — not evidence but
+           the property and photos inside to show it." The two galleries are kept apart on purpose:
+           a daylight photograph of a staircase and a photograph of the same staircase somebody
+           thinks has a figure on it are different claims, and mixed together the page is useless.
+           Nothing here is voted on or counted. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <div class="mt-4" id="place-about">
+                @* A heading, so a reader knows this paragraph is ABOUT the building rather than a
+                   caption on the map above it (V5). *@
+                <h6 class="fw-semibold">About this place</h6>
+                @if (!string.IsNullOrWhiteSpace(_place.Description) && !_editingAbout)
+                {
+                    @* Plain text, held as plain text and rendered as plain text. The server strips
+                       markup on the way in; this does not hand it back to the browser as HTML. *@
+                    <p style="white-space:pre-wrap;">@_place.Description</p>
+                }
+                else if (!_editingAbout)
+                {
+                    <p class="text-secondary small fst-italic">
+                        Nobody has written about this place yet.
+                    </p>
+                }
+
+                @if (UserState.IsAuthenticated)
+                {
+                    @if (_editingAbout)
+                    {
+                        <textarea id="place-about-text" class="form-control mb-2" rows="5"
+                                  maxlength="4000" @bind="_aboutDraft"
+                                  placeholder="What is this place? When was it built, who lived here, what is it now?"></textarea>
+                        <button type="button" class="btn btn-primary btn-sm me-1"
+                                id="place-about-save" @onclick="SaveAboutAsync" disabled="@_savingAbout">
+                            @(_savingAbout ? "Saving…" : "Save")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="@(() => _editingAbout = false)">Cancel</button>
+                        @if (_aboutSays is { Length: > 0 })
+                        {
+                            <div class="alert alert-warning mt-2 mb-0" id="place-about-says">@_aboutSays</div>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="place-about-edit" @onclick="StartEditingAbout">
+                            <BenIcon Name="edit-2" Class="me-1" />
+                            @(string.IsNullOrWhiteSpace(_place.Description) ? "Describe this place" : "Edit")
+                        </button>
+                    }
+                }
+            </div>
+
+            @if (_pictures is { Count: > 0 })
+            {
+                <h6 class="fw-semibold mt-4">The place itself</h6>
+                <p class="text-secondary small mb-2">
+                    Photographs of the building and its grounds. Not evidence — nobody is claiming
+                    anything about these, and they are not counted or voted on.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach (var pic in _pictures)
+                    {
+                        var picUrl = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, pic.Id);
+                        <figure class="m-0" style="width:220px;">
+                            <a href="@picUrl" target="_blank" rel="noopener">
+                                <img src="@picUrl" alt="@(pic.Caption ?? _place.Name)"
+                                     class="rounded" style="width:220px;height:150px;object-fit:cover;" />
+                            </a>
+                            @if (!string.IsNullOrWhiteSpace(pic.Caption))
+                            {
+                                <figcaption class="small text-secondary mt-1">@pic.Caption</figcaption>
+                            }
+                        </figure>
+                    }
+                </div>
+            }
+        }
+
+        @* ── What the evidence here adds up to (item 250) ─────────────────── *@
+        @* Ben: "positive, negative, unknown and the average of each overall we can track."
+           Per place and never compared across places — he decided against a league table on
+           2026-09-21, because Cragfont is a real building with real owners and "the third most
+           haunted house in Tennessee" is a claim about them.
+
+           One file counts ONCE here whatever route it arrived by; the server does that
+           de-duplication, because three counts added together report more evidence than exists. *@
+        @if (_figures is { EvidenceCount: > 0 })
+        {
+            <div class="card mt-4" id="place-figures">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3">What the evidence here says</h6>
+
+                    <div class="d-flex flex-wrap gap-4 mb-3">
+                        <div>
+                            <div class="h4 mb-0" id="place-figures-evidence">@_figures.EvidenceCount</div>
+                            <div class="text-secondary small">
+                                @(_figures.EvidenceCount == 1 ? "piece of evidence" : "pieces of evidence")
+                            </div>
+                        </div>
+                        <div>
+                            <div class="h4 mb-0" id="place-figures-votes">@_figures.VoteCount</div>
+                            <div class="text-secondary small">
+                                @* The space before "on" is written out. Razor eats the whitespace
+                                   between a @-expression and an @if, which rendered
+                                   "voteson 1 of them" — visible only in a photograph of the page. *@
+                                @(_figures.VoteCount == 1 ? "vote" : "votes")@if (_figures.VoteCount > 0)
+                                {
+                                    <text>&nbsp;on @_figures.VotedOnCount of them</text>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (_figures.VoteCount == 0)
+                    {
+                        @* Not a bar of zeroes. "Nobody has said" and "everybody said no" are
+                           different facts and a chart that draws them alike lies about an empty
+                           place. *@
+                        <p class="text-secondary small fst-italic mb-0">
+                            Nobody has voted on any of it yet.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="progress mb-2" style="height:1.25rem;" role="img"
+                             aria-label="@AriaForShares()">
+                            <div class="progress-bar bg-success"
+                                 style="width:@Pct(_figures.ConfirmsShare)"></div>
+                            <div class="progress-bar bg-secondary"
+                                 style="width:@Pct(_figures.InconclusiveShare)"></div>
+                            <div class="progress-bar bg-danger"
+                                 style="width:@Pct(_figures.DisputesShare)"></div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 small">
+                            <span><span class="badge bg-success">&nbsp;</span>
+                                  Something here — @_figures.Confirms (@Pct(_figures.ConfirmsShare))</span>
+                            <span><span class="badge bg-secondary">&nbsp;</span>
+                                  Can't tell — @_figures.Inconclusive (@Pct(_figures.InconclusiveShare))</span>
+                            <span><span class="badge bg-danger">&nbsp;</span>
+                                  Not convinced — @_figures.Disputes (@Pct(_figures.DisputesShare))</span>
+                        </div>
+                        @* The score never travels without its weight — a sum read on its own says
+                           nothing, which is the rule EvidenceVoteScore sets for every surface. *@
+                        @* A second chart, because "charts" was the ask and a split bar is one.
+                           This is the record accumulating — the thing a permanent public location
+                           is FOR, and the only figure on the page that shows time passing. *@
+                        @if (_byMonth.Count > 1)
+                        {
+                            <div class="mt-3">
+                                <div class="text-secondary small mb-1">Evidence added, by month</div>
+                                <div class="d-flex align-items-end gap-1" style="height:60px;"
+                                     role="img" aria-label="@AriaForMonths()">
+                                    @foreach (var (label, count) in _byMonth)
+                                    {
+                                        var height = _byMonth.Max(m => m.Count) is > 0 and var top
+                                            ? (int)Math.Round(count * 100.0 / top) : 0;
+                                        <div class="flex-fill d-flex flex-column justify-content-end"
+                                             title="@label: @count">
+                                            <div class="bg-primary rounded-top"
+                                                 style="height:@(height)%;min-height:2px;"></div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="d-flex justify-content-between text-secondary"
+                                     style="font-size:.7rem;">
+                                    <span>@_byMonth[0].Label</span>
+                                    <span>@_byMonth[^1].Label</span>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="text-secondary small mt-2" id="place-figures-score">
+                            Overall @(_figures.Score > 0 ? "+" : "")@_figures.Score across
+                            @_figures.VoteCount @(_figures.VoteCount == 1 ? "vote" : "votes").
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* ── What people have added here themselves (item 250) ────────────── *@
+        @* Ben, 2026-09-21: "people don't have to have a dedicated investigation to add files to
+           the public location." Its own section rather than folded into the two above, because
+           the ROUTE is the thing a reader judges evidence by: a night of readings by a group, a
+           photograph from a walk, and something somebody brought back on their own are three
+           different claims, and a page that blurs them is a page you cannot weigh. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <h6 class="fw-semibold mt-4">
+                Added by people who have been here
+                @if (_added is { Count: > 0 })
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis border ms-1"
+                          id="place-added-count">@_added.Count</span>
+                }
+            </h6>
+
+            @if (UserState.IsAuthenticated)
+            {
+                <div class="card mb-3" id="place-add-evidence">
+                    <div class="card-body">
+                        <label class="form-label" for="place-evidence-file">Add something you recorded here</label>
+                        <InputFile id="place-evidence-file" class="form-control mb-2"
+                                   OnChange="OnEvidenceChosen" accept="image/*,audio/*,video/*" />
+                        <label class="form-label" for="place-evidence-kind">What are you adding?</label>
+                        <select id="place-evidence-kind" class="form-select mb-2" @bind="_evidenceKind">
+                            <option value="@Ben.Data.Common.Enums.PlaceMediaKind.Evidence">
+                                Something I recorded here — evidence
+                            </option>
+                            <option value="@Ben.Data.Common.Enums.PlaceMediaKind.AboutThePlace">
+                                A photograph of the place itself
+                            </option>
+                        </select>
+
+                        <label class="form-label" for="place-evidence-caption">What is it?</label>
+                        <input id="place-evidence-caption" class="form-control mb-2" @bind="_evidenceCaption"
+                               maxlength="500"
+                               placeholder="Where in the building, what time, what to listen for" />
+                        <button type="button" class="btn btn-primary" id="place-evidence-add"
+                                @onclick="AddEvidenceAsync" disabled="@(_evidenceFile is null || _addingEvidence)">
+                            <BenIcon Name="upload-cloud" Class="me-1" />
+                            @(_addingEvidence ? "Adding…" : "Add it")
+                        </button>
+                        @* The screener's answer, in the server's own words. "Added" over something
+                           held is what teaches somebody to upload it again. *@
+                        @if (_evidenceSays is { Length: > 0 })
+                        {
+                            <div class="alert @(_evidenceShowing ? "alert-success" : "alert-info") mt-2 mb-0"
+                                 id="place-evidence-says">
+                                @_evidenceSays
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small">
+                    <a href="/login">Sign in</a> to add something you recorded here.
+                </p>
+            }
+
+            @if (_added is { Count: > 0 })
+            {
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach (var item in _added)
+                    {
+                        var url = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, item.Id);
+                        <div class="card" style="width:220px;">
+                            @if (item.ContentType.StartsWith("image/"))
+                            {
+                                <a href="@url" target="_blank" rel="noopener">
+                                    <img src="@url" alt="@(item.Caption ?? item.FileName)"
+                                         class="card-img-top" style="height:150px;object-fit:cover;" />
+                                </a>
+                            }
+                            else if (item.ContentType.StartsWith("video/"))
+                            {
+                                <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
+                            }
+                            else if (item.ContentType.StartsWith("audio/"))
+                            {
+                                <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
+                            }
+                            <div class="card-body p-2">
+                                @if (!string.IsNullOrWhiteSpace(item.Caption))
+                                {
+                                    <div class="small">@item.Caption</div>
+                                }
+                                <div class="text-secondary" style="font-size:.75rem;">
+                                    by @item.AddedBy · @item.AddedUtc.ToLocalTime().ToDisplayDate()
+                                </div>
+                                @* The site's one vote widget, not a second set of buttons. It
+                                   posts to api/evidence-votes, which is keyed on the FILE — so a
+                                   vote cast here is the same vote the file carries anywhere else
+                                   it appears, which is what makes the tally above mean anything. *@
+                                <div class="mt-2">
+                                    <EvidenceVoteWidget UploadFileId="@item.UploadFileId" Compact="true" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-secondary small fst-italic">
+                    Nobody has added anything here yet.
+                </p>
+            }
+        }
+
         @* ── Visitor view ─────────────────────────────────────────────────── *@
         @if (_publicRows is not null)
         {
@@ -399,6 +962,94 @@
     private List<PlaceInvestigationRow>? _rows;
     private LoadResult<PlaceInvestigationRow> _rowsResult;
     private List<PublicPlaceInvestigationRow>? _publicRows;
+    private List<Ben.Web.Services.PublicPlaceCaseRow>? _cases;
+    private List<Ben.Web.Services.PlaceCaseRow>? _myCases;
+
+    // ── Investigating here (2026-09-17) ──────────────────────────────────────
+    private Guid? _investigatingWith;
+    private bool _offeringSolo;
+    private bool _startingSolo;
+    private string? _soloError;
+
+    /// <summary>Opens the scheduling window for one of the reader's groups.</summary>
+    private void InvestigateWith(Guid organizationId) => _investigatingWith = organizationId;
+
+    /// <summary>
+    /// Mints the personal organization and goes straight on to scheduling.
+    /// </summary>
+    /// <remarks>
+    /// <para>Idempotent at the server, so somebody who tapped twice, or who did this on another
+    /// place last week, gets the space they already have rather than a second one.</para>
+    ///
+    /// <para>Straight on to the window rather than back to the page: the person pressed a button
+    /// that said "start investigating", and stopping at "you now have a space" would leave them to
+    /// work out where investigations live. The visibility is fixed to public by the plan rule
+    /// either way, which the sentence they just agreed to said.</para>
+    /// </remarks>
+    private async Task StartInvestigatingAloneAsync()
+    {
+        _startingSolo = true;
+        _soloError = null;
+        try
+        {
+            var (plan, error) = await AdminClient.StartSoloPlanAsync();
+            if (plan is null)
+            {
+                // The server's own sentence where it gave one; it knows why better than this does.
+                _soloError = error ?? "That could not be set up just now. Try again in a moment.";
+                return;
+            }
+
+            _offeringSolo = false;
+            _investigatingWith = plan.OrganizationId;
+
+            // The reader now belongs somewhere, so the per-group buttons and the signed-in
+            // sections have something to draw. Re-read rather than guessed at.
+            try
+            {
+                _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+                await LoadWhatMyGroupsMayDoAsync();
+            }
+            catch { /* the window is open either way, which is what they asked for */ }
+        }
+        catch (Exception ex)
+        {
+            _soloError = ex.Message;
+        }
+        finally
+        {
+            _startingSolo = false;
+        }
+    }
+
+    /// <summary>Closes the window and re-reads what the page shows about this place.</summary>
+    private async Task OnInvestigationScheduledAsync()
+    {
+        _investigatingWith = null;
+        if (UserState.IsAuthenticated) await LoadSignedInAsync();
+        else await LoadVisitorAsync();
+        StateHasChanged();
+    }
+    private List<Ben.Service.Models.Feed.FeedPostRecord>? _posts;
+    private bool _canPost;
+
+    /// <summary>Matches the server's own page size, so "See all" appears only when it might add.</summary>
+    private const int PlacePostsShown = 20;
+
+    /// <summary>
+    /// A new post goes straight to the top of the list rather than through a reload.
+    /// </summary>
+    /// <remarks>
+    /// The server would answer with it anyway, but a reload throws away everything else on the
+    /// page — the archive, the tables — to redraw one card, and on a slow connection the post
+    /// somebody just wrote appears to have vanished while that happens.
+    /// </remarks>
+    private void OnPlacePosted(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _posts ??= [];
+        _posts.Insert(0, post);
+        StateHasChanged();
+    }
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
 
@@ -411,6 +1062,47 @@
     /// </remarks>
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
 
+    /// <summary>
+    /// The groups of mine that may open a case, and the ones that may schedule a visit.
+    /// </summary>
+    /// <remarks>
+    /// <para>Membership is not permission. Both buttons were drawn once per membership and the
+    /// servers behind them require grants — <c>Cases.Create</c> and <c>Investigations.Create</c> —
+    /// so an ordinary member with no role clicked, filled the whole form, pressed the button and
+    /// was refused (2026-09-17 audit). The plan for this page said "members holding Cases.Create"
+    /// and the check was dropped in the build.</para>
+    ///
+    /// <para>One request per group of mine, which is one or two for almost everybody. A failure
+    /// leaves that group out of the sets and the button undrawn: refusing to offer something is
+    /// the safe direction, and the page still shows everything it is about.</para>
+    /// </remarks>
+    private readonly HashSet<Guid> _mayOpenCaseIn = [];
+    private readonly HashSet<Guid> _mayInvestigateIn = [];
+
+    private async Task LoadWhatMyGroupsMayDoAsync()
+    {
+        _mayOpenCaseIn.Clear();
+        _mayInvestigateIn.Clear();
+
+        foreach (var org in _myOrgs)
+        {
+            try
+            {
+                var perms = await AdminClient.GetMyOrgPermissionsAsync(org.OrganizationId);
+                if (perms is null) continue;
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayOpenCaseIn.Add(org.OrganizationId);
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayInvestigateIn.Add(org.OrganizationId);
+            }
+            catch { /* left out of both sets, so neither button is offered for this group */ }
+        }
+    }
+
     /// <summary>The session whose Report button is mid-flight, so it can disable just that one.</summary>
     private Guid? _flagging;
 
@@ -419,6 +1111,23 @@
 
     /// <summary>Guest evidence published to this place from public events held here.</summary>
     private List<PlaceEvidenceRow>? _evidence;
+
+    // ── What people added here themselves (item 250) ──────────────────────────
+    private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _added;
+    private Ben.Service.Models.Entities.PlaceEvidenceFigures? _figures;
+    private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _pictures;
+    private Ben.Data.Common.Enums.PlaceMediaKind _evidenceKind =
+        Ben.Data.Common.Enums.PlaceMediaKind.Evidence;
+    private bool _editingAbout;
+    private bool _savingAbout;
+    private string _aboutDraft = string.Empty;
+    private string? _aboutSays;
+    private List<(string Label, int Count)> _byMonth = new();
+    private IBrowserFile? _evidenceFile;
+    private string _evidenceCaption = string.Empty;
+    private bool _addingEvidence;
+    private string? _evidenceSays;
+    private bool _evidenceShowing;
 
     /// <summary>The verified venue here, when there is one.</summary>
     private PlaceVenueRecord? _venue;
@@ -460,6 +1169,27 @@
         // For the rooms link. A failure here costs a link, not the page, so it is not reported —
         // the rest of this view is about the place itself and stands without it.
         _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+        await LoadWhatMyGroupsMayDoAsync();
+
+        // Quiet on failure: the section simply does not appear, which is the same as having no
+        // case here — and is a great deal better than losing the rest of the page over it.
+        try { _myCases = (await AdminClient.GetMyPlaceCasesAsync(PlaceId)).Items.ToList(); }
+        catch { _myCases = null; }
+
+        // Asked AS SOMEBODY, unlike the archive below. The anonymous place endpoint carries the
+        // posts as well, and the website calls it without a token on purpose — so it can only ever
+        // answer "no" to whether this reader may post. Both endpoints read the posts through the
+        // feed's own method, so the two lists cannot disagree about what is visible.
+        try
+        {
+            if (await AdminClient.GetPlacePostsAsync(PlaceId) is { } mine)
+            {
+                _posts = mine.Posts.ToList();
+                _canPost = mine.CanPost;
+            }
+        }
+        catch { /* the section falls back to what the anonymous read gave it */ }
+
         await LoadArchiveAsync();
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }
@@ -474,6 +1204,13 @@
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
+        _added = response.AddedEvidence?.ToList();
+        _figures = response.Figures;
+        _pictures = response.Pictures?.ToList();
+        RebuildMonths();
+        _cases = response.Cases?.ToList();
+        _posts = response.Posts?.ToList();
+        _canPost = response.CanPost;
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
 
@@ -490,6 +1227,17 @@
         var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
+        _added = response?.AddedEvidence?.ToList();
+        _figures = response?.Figures;
+        _pictures = response?.Pictures?.ToList();
+        RebuildMonths();
+        _cases = response?.Cases?.ToList();
+
+        // NOT the posts, and not CanPost. This call is anonymous on purpose, so its answer to
+        // "may you post" is always no — and a signed-in reader has already asked that properly
+        // through GetPlacePostsAsync. Taking them from here as well would overwrite the real
+        // answer with the anonymous one, which is precisely what it did on the first run: the
+        // composer never appeared for anybody.
     }
 
     /// <summary>
@@ -546,6 +1294,16 @@
                 r.Id, r.Title, _place.Latitude, _place.Longitude, IsPast: true,
                 IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
             .ToList();
+
+        // A place whose only record is its archive — field sessions, no investigations — used to
+        // draw an empty map of the whole continent. The place itself is the pin then, so the map
+        // fits to it (seen on the walk, 2026-09-16).
+        if (_pins.Count == 0)
+        {
+            _pins.Add(new InvestigationMapPin(
+                _place.Id, _place.Name, _place.Latitude, _place.Longitude, IsPast: true,
+                IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation));
+        }
     }
 
     private RenderFragment SignedInTable(List<PlaceInvestigationRow> rows, bool showVisibility) =>@<div class="table-responsive">
@@ -589,8 +1347,129 @@
 
     private static string VisibilityBadge(Ben.Data.Common.Enums.InvestigationVisibility v) => v switch
     {
-        Ben.Data.Common.Enums.InvestigationVisibility.Public => "bg-info text-dark",
+        Ben.Data.Common.Enums.InvestigationVisibility.Public => "bg-info",
         Ben.Data.Common.Enums.InvestigationVisibility.PlaceInvestigators => "bg-primary",
         _ => "bg-secondary",
     };
+
+    private void OnEvidenceChosen(InputFileChangeEventArgs e)
+    {
+        _evidenceFile = e.FileCount > 0 ? e.File : null;
+        _evidenceSays = null;
+    }
+
+    /// <summary>
+    /// Sends one file to this place's evidence.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server's own sentence is shown rather than a word of this page's choosing,
+    /// because whether it is SHOWING is the part that matters and only the screener knows. A page
+    /// that says "added" over something held teaches people to upload it again.</para>
+    ///
+    /// <para>No size cap here on purpose: the account allowance and the server's own limits are
+    /// the rule, and a second number invented in the browser would be a different rule that
+    /// nothing enforces.</para>
+    /// </remarks>
+    private async Task AddEvidenceAsync()
+    {
+        if (_evidenceFile is null || _addingEvidence) return;
+
+        _addingEvidence = true;
+        _evidenceSays = null;
+        try
+        {
+            await using var content = _evidenceFile.OpenReadStream(long.MaxValue);
+            var (added, error) = await AdminClient.AddPlaceEvidenceAsync(
+                PlaceId, content, _evidenceFile.Name,
+                string.IsNullOrWhiteSpace(_evidenceFile.ContentType)
+                    ? "application/octet-stream"
+                    : _evidenceFile.ContentType,
+                _evidenceCaption, _evidenceKind);
+
+            if (added is null)
+            {
+                _evidenceShowing = false;
+                _evidenceSays = error ?? "That could not be added just now. Try again.";
+                return;
+            }
+
+            _evidenceShowing = added.Showing;
+            _evidenceSays = added.Says;
+            _evidenceFile = null;
+            _evidenceCaption = string.Empty;
+
+            // Only an APPROVED file is on the page, so only then is there anything new to fetch.
+            // Reloading after a held one would show the contributor nothing and read as a failure.
+            if (added.Showing) await LoadSignedInAsync();
+        }
+        finally { _addingEvidence = false; }
+    }
+
+    /// <summary>A share as a percentage string, or nothing when nobody has voted.</summary>
+    private static string Pct(double? share)
+        => share is { } value ? $"{value * 100:0}%" : "0%";
+
+    /// <summary>
+    /// The bar in words, for anybody who cannot see it.
+    /// </summary>
+    /// <remarks>
+    /// The bar is the only place three numbers are compared visually, so the alternative has to
+    /// carry the comparison rather than repeat the counts listed beneath it.
+    /// </remarks>
+    private string AriaForShares()
+        => _figures is null
+            ? "No votes yet"
+            : $"Of {_figures.VoteCount} votes: {Pct(_figures.ConfirmsShare)} say something is here, "
+            + $"{Pct(_figures.InconclusiveShare)} cannot tell, "
+            + $"{Pct(_figures.DisputesShare)} are not convinced";
+
+    private void StartEditingAbout()
+    {
+        _aboutDraft = _place?.Description ?? string.Empty;
+        _aboutSays = null;
+        _editingAbout = true;
+    }
+
+    private async Task SaveAboutAsync()
+    {
+        if (_savingAbout) return;
+        _savingAbout = true;
+        _aboutSays = null;
+        try
+        {
+            var (updated, error) = await AdminClient.SetPlaceDescriptionAsync(PlaceId, _aboutDraft);
+            if (updated is null)
+            {
+                _aboutSays = error ?? "That could not be saved just now. Try again.";
+                return;
+            }
+
+            _place = updated;
+            _editingAbout = false;
+        }
+        finally { _savingAbout = false; }
+    }
+
+    /// <summary>
+    /// Evidence added per month, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Built from what the page already holds rather than asked for separately — the list IS the
+    /// data, and a second round trip for the same rows would be a second answer that can disagree
+    /// with the one beside it. Only the directly-added rows carry a date the page knows; the chart
+    /// says "added" rather than "recorded" for that reason.
+    /// </remarks>
+    private void RebuildMonths()
+    {
+        _byMonth = (_added ?? [])
+            .GroupBy(e => new DateTime(e.AddedUtc.Year, e.AddedUtc.Month, 1))
+            .OrderBy(g => g.Key)
+            .Select(g => (Label: g.Key.ToString("MMM yyyy"), Count: g.Count()))
+            .ToList();
+    }
+
+    private string AriaForMonths()
+        => _byMonth.Count == 0
+            ? "Nothing added yet"
+            : "Evidence added by month: " + string.Join(", ", _byMonth.Select(m => $"{m.Label} {m.Count}"));
 }

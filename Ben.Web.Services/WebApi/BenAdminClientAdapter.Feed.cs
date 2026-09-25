@@ -19,7 +19,8 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null, Guid? experienceType = null)
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null,
+        Guid? place = null)
     {
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(mode))    query.Add($"mode={Uri.EscapeDataString(mode)}");
@@ -27,6 +28,7 @@ public sealed partial class BenAdminClientAdapter
         if (!string.IsNullOrWhiteSpace(cursor))  query.Add($"cursor={Uri.EscapeDataString(cursor)}");
         if (author is { } authorId)              query.Add($"author={authorId}");
         if (experienceType is { } typeId)        query.Add($"type={typeId}");
+        if (place is { } aboutPlaceId)           query.Add($"place={aboutPlaceId}");
 
         var url = "/api/feed" + (query.Count > 0 ? "?" + string.Join("&", query) : string.Empty);
         return _api.GetAsync<FeedPageRecord>(url, token);
@@ -54,6 +56,26 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<FeedModerationSummary>("/api/moderation/summary", token);
+
+    public Task<LoadResult<ArchiveMediaReviewRow>> GetArchiveMediaReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveMediaReviewRow>(
+            $"/api/moderation/archive-media?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveMediaAsync(
+        Guid sessionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-media/{sessionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
+
+    public Task<LoadResult<ArchiveEvidenceReviewRow>> GetArchiveEvidenceReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveEvidenceReviewRow>(
+            $"/api/moderation/archive-evidence?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveEvidenceAsync(
+        Guid submissionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-evidence/{submissionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
 
     public string GetModerationMediaUrl(Guid postId)
         => $"{_webApiBaseUrl}/api/moderation/feed-media/{postId}/file";
@@ -97,7 +119,8 @@ public sealed partial class BenAdminClientAdapter
         DateTime? scheduledForUtc = null,
         decimal? postedLatitude = null,
         decimal? postedLongitude = null,
-        string? postedPlaceName = null)
+        string? postedPlaceName = null,
+        Guid? aboutPlaceId = null)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(body), nameof(CreateFeedPostRequest.Body));
@@ -141,6 +164,11 @@ public sealed partial class BenAdminClientAdapter
             if (!string.IsNullOrWhiteSpace(postedPlaceName))
                 form.Add(new StringContent(postedPlaceName), nameof(CreateFeedPostRequest.PostedPlaceName));
         }
+
+        // The place the post is ABOUT — unrelated to the author's own position above, and sent on
+        // its own because a post about Cragfont is usually written at home.
+        if (aboutPlaceId is { } aboutPlace)
+            form.Add(new StringContent(aboutPlace.ToString()), nameof(CreateFeedPostRequest.PlaceId));
 
         StreamContent? mediaContent = null;
         if (media is not null && mediaFileName is not null)

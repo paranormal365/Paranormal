@@ -19,6 +19,12 @@ public static class MessageChannelDisplay
         OrgMessageChannel.DirectMessage => "Direct",
         OrgMessageChannel.CaseTeam      => "Case Team",
         OrgMessageChannel.PublicFeed    => "Public",
+        OrgMessageChannel.PublicCaseComment => "Case Comment",
+        OrgMessageChannel.EventRoom     => "Event Room",
+        OrgMessageChannel.EventStaffRoom => "Event Staff",
+        // Reached only by a channel nobody has named yet, and it shows the enum's own spelling —
+        // "EventStaffRoom" in a badge, which is how a reader learns the site was built by
+        // somebody who forgot. MessageChannelDisplayTests fails before a reader ever sees it.
         _                               => channel.ToString(),
     };
 
@@ -26,9 +32,12 @@ public static class MessageChannelDisplay
     public static string Badge(OrgMessageChannel channel) => channel switch
     {
         OrgMessageChannel.OrgBroadcast  => "bg-primary",
-        OrgMessageChannel.DirectMessage => "bg-info text-dark",
+        OrgMessageChannel.DirectMessage => "bg-info",
         OrgMessageChannel.CaseTeam      => "bg-warning text-dark",
         OrgMessageChannel.PublicFeed    => "bg-success",
+        OrgMessageChannel.PublicCaseComment => "bg-success",
+        OrgMessageChannel.EventRoom     => "bg-secondary",
+        OrgMessageChannel.EventStaffRoom => "text-bg-dark",
         _                               => "bg-secondary",
     };
 

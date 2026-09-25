@@ -121,6 +121,44 @@ final class HelpMediaCaptureTests: XCTestCase {
         XCTFail("None of the confirmed bookings has an issued pass — nothing to capture.")
     }
 
+    /// Field Kit: opening a `.ben`, what the server still holds, and a session pulled back down playing as its own.
+    ///
+    /// James is the account — a member whose own sessions were sent up as one file, so "On the server, not on this
+    /// phone" has a row to show. Needs `TEST_RUNNER_BEN_MEMBER_PASSWORD`. The first session the server can hand
+    /// back is downloaded and photographed; the home picture stands on its own when there is nothing to pull.
+    func testCaptureFieldKitBundles() {
+        let email = ProcessInfo.processInfo.environment["BEN_MEMBER_EMAIL"] ?? "james.thornton@benco.dev"
+        let password = TestSecrets.required("BEN_MEMBER_PASSWORD")
+        settle(4)
+        app.terminate()
+        // Scripted sensors: a simulator has no magnetometer, and the Field Kit refuses to open without one.
+        app.launchArguments = apiArguments + ["-fieldKitFakeSensors", "-autoSignIn", "\(email):\(password)"]
+        app.launch()
+        settle(6)
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app), "Could not reach the Field Kit.")
+        settle(3)
+        app.swipeUp()
+        settle(1)
+        snap("iphone-fieldkit-home")
+
+        let download = app.buttons["download-field-session"].firstMatch
+        guard download.waitForExistence(timeout: 5) else { return }
+        download.tap()
+        settle(8)
+        // The facts, with the Source line, are below the chart and the map. Swiping on the map pans it,
+        // so the scroll starts on the readouts above the chart.
+        let readouts = app.staticTexts["Field"].firstMatch
+        if readouts.waitForExistence(timeout: 5) {
+            let start = readouts.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -600)))
+        } else {
+            app.swipeUp()
+        }
+        settle(1)
+        snap("iphone-review-imported")
+    }
+
     /// During the event: the event's own screen, its programme, a menu and the room (item 235 phase 14b).
     ///
     /// Walks each booking's event screen until one has a programme to show, and photographs what that event has; a

@@ -1,0 +1,242 @@
+@page "/admin/session-files"
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Every session file on the server, newest first.
+
+    Ben, 2026-09-16: "I think the SuperAdmin should have another grid like the user grid, but it is
+    uploaded .ben files and the ability to view them by clicking a button in the row. They are
+    sorted new to old." And: "Also in the grid, the name of the person who recorded it and the name
+    of the person who uploaded it."
+
+    TWO NAMES, because they are two different facts. A device can be handed to a colleague to
+    upload, and a session recorded while signed out has nobody's name on it at all — so "Recorded
+    by" is allowed to be empty, and is drawn as "nobody signed in" rather than being quietly filled
+    in from whoever sent it. The upload door has kept those apart since it was written; a list that
+    collapsed them would be the first place in the product to lose the distinction.
+
+    Read-only on purpose. Deleting a session is its owner's decision on their own session, or the
+    orphan sweep for sessions whose bytes are gone (/admin/orphaned-sessions). Neither belongs on a
+    screen whose job is to show what is there.
+*@
+
+<PageTitle>SuperAdmin — Session files</PageTitle>
+
+<div class="container-fluid px-3">
+    <div class="row mb-1 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Session files</h3>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    disabled="@_loading" @onclick="LoadAsync" data-testid="session-files-refresh">
+                <BenIcon Name="refresh-cw" Class="me-1" />Refresh
+            </button>
+        </div>
+    </div>
+    <p class="text-muted">
+        Every field session that has been sent up, newest first. A <strong>.ben</strong> is the
+        whole session in one file — its readings and every recording it carries. Sessions sent
+        before session files existed are listed too, and say so.
+    </p>
+
+    <div class="mb-3 d-flex align-items-center gap-2">
+        <input type="text" class="form-control" style="max-width:340px;"
+               placeholder="Search by name, place or file…"
+               @bind="@_search" @bind:event="oninput" @bind:after="ApplySearch"
+               aria-label="Search session files" />
+        @if (!string.IsNullOrWhiteSpace(_search))
+        {
+            <button type="button" class="btn btn-link text-decoration-none flex-shrink-0"
+                    @onclick="ClearSearch">Clear</button>
+        }
+    </div>
+
+    <BenListState TItem="SessionFileRecord" Result="@_result" Loading="@_loading"
+                  EmptyText="No sessions have been sent up yet" OnRetry="@LoadAsync">
+        <ChildContent>
+            <TelerikGrid Data="@_filtered"
+                         TItem="SessionFileRecord"
+                         Pageable="true"
+                         PageSize="25"
+                         Sortable="true"
+                         Class="admin-session-files-grid">
+                <GridColumns>
+                    <GridColumn Field="@nameof(SessionFileRecord.StartedAt)" Title="Recorded" Width="150px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Field="@nameof(SessionFileRecord.FileName)" Title="File" Width="240px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            <div class="text-truncate" title="@row.FileName">@row.FileName</div>
+                            <div class="small text-secondary">
+                                @if (row.IsBundle)
+                                {
+                                    <span class="badge text-bg-success me-1">.ben</span>
+                                }
+                                else
+                                {
+                                    @* Not a fault and not a warning — just an older shape. The
+                                       approved 1.0.2 build still sends this way. *@
+                                    <span class="badge text-bg-secondary me-1">separate files</span>
+                                }
+                                @Weight(row.FileSize)
+                            </div>
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Field="@nameof(SessionFileRecord.LocationLabel)" Title="Where" Width="180px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @if (row.LocationLabel is { Length: > 0 } label)
+                            {
+                                @label
+                            }
+                            else
+                            {
+                                <span class="text-secondary">—</span>
+                            }
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Field="@nameof(SessionFileRecord.RecordedByName)" Title="Recorded by" Width="160px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @if (row.RecordedByName is { Length: > 0 } who)
+                            {
+                                @who
+                            }
+                            else
+                            {
+                                @* An empty cell would read as missing data. Nobody being signed
+                                   in while recording is an ordinary state the app allows on
+                                   purpose, and the list says which it is. *@
+                                <span class="text-secondary" title="Nobody was signed in on the device when this was recorded">
+                                    nobody signed in
+                                </span>
+                            }
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Field="@nameof(SessionFileRecord.UploadedByName)" Title="Uploaded by" Width="160px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @(row.UploadedByName ?? "—")
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Field="@nameof(SessionFileRecord.ReadingCount)" Title="Readings" Width="100px" />
+
+                    <GridColumn Field="@nameof(SessionFileRecord.FileCount)" Title="Recordings" Width="110px" />
+
+                    <GridColumn Field="@nameof(SessionFileRecord.InvestigationTitle)" Title="Attached to" Width="200px">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @if (row.InvestigationTitle is { Length: > 0 } title)
+                            {
+                                @title
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Their own</span>
+                            }
+                        </Template>
+                    </GridColumn>
+
+                    <GridColumn Title="" Width="90px" Sortable="false">
+                        <Template>
+                            @{ var row = (SessionFileRecord)context; }
+                            @* Opens the player, which is the one thing this screen exists to
+                               make reachable. A link rather than a handler so it can be opened
+                               in a new tab, which is what somebody comparing two nights does. *@
+                            <BenGridAction Icon="play"
+                                           Label="Open the player"
+                                           Href="@($"/field-sessions/{row.SessionId}")"
+                                           Tone="GridActionTone.Primary"
+                                           data-testid="open-session" />
+                        </Template>
+                    </GridColumn>
+                </GridColumns>
+            </TelerikGrid>
+        </ChildContent>
+    </BenListState>
+</div>
+
+@code {
+    private LoadResult<SessionFileRecord> _result;
+    private IReadOnlyList<SessionFileRecord> _filtered = [];
+
+    /// <summary>
+    /// True until the list has come back. A result nobody has fetched yet is empty, and without
+    /// this the page says "no sessions have been sent up yet" for as long as the fetch takes —
+    /// which to a SuperAdmin reads as a deployment with no data.
+    /// </summary>
+    private bool _loading = true;
+    private string _search = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+            NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetSessionFilesAsync();
+        _loading = false;
+        ApplySearch();
+    }
+
+    private void ApplySearch()
+    {
+        var rows = _result.Items;
+        var needle = _search.Trim();
+        _filtered = needle.Length == 0
+            ? rows
+            : rows.Where(r => Matches(r, needle)).ToList();
+    }
+
+    private static bool Matches(SessionFileRecord row, string needle)
+        => Contains(row.FileName, needle)
+        || Contains(row.LocationLabel, needle)
+        || Contains(row.RecordedByName, needle)
+        || Contains(row.UploadedByName, needle)
+        || Contains(row.InvestigationTitle, needle);
+
+    /// A size somebody can read at a glance. Whole megabytes past a megabyte — a session file is
+    /// never interesting to a tenth of one, and the decimals are just noise in a column.
+    private static string Weight(long bytes)
+        => bytes >= 1024L * 1024
+            ? $"{bytes / (1024 * 1024)} MB"
+            : $"{(bytes / 1024 < 1 ? 1 : bytes / 1024)} KB";
+
+    private static bool Contains(string? value, string needle)
+        => value is not null && value.Contains(needle, StringComparison.OrdinalIgnoreCase);
+
+    private void ClearSearch()
+    {
+        _search = "";
+        ApplySearch();
+    }
+}

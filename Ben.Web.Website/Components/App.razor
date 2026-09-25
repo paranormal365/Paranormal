@@ -33,6 +33,8 @@
     <link rel="stylesheet" href="/plugins/waves/waves.min.css" />
     @* Styles for the Kit components, shipped with the library that defines them. *@
     <link rel="stylesheet" href="/_content/Ben.Web.Website.Library/kit/ben-kit.css" />
+    @* The store's styles (storefront): Smarty's structure in our theme's colours. *@
+    <link rel="stylesheet" href="/_content/Ben.Web.Website.Library/kit/ben-store.css" />
 
     <!-- Applies theme + layout classes to <html> before first paint. Must stay render-blocking. -->
     <script src="/scripts/core/ben-boot.js"></script>
@@ -65,6 +67,11 @@
        Kendo tokens only the editor reads (--kendo-color-subtle-text alone drives every secondary
        label in its timeline). Without it the editor kept its own dark palette inside the site. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-theme.css" rel="stylesheet" />
+    @* The clip browser's styles, which are NOT scoped: most of that component is built by hand
+       with RenderTreeBuilder, which the compiler never stamps a scope attribute onto, and the
+       scope hash it does produce differs between machines. That file's header has the story.
+       After the theme so it can rely on the --bv-* variables. *@
+    <link href="/_content/Ben.Video.Editor/css/clip-browser.css" rel="stylesheet" />
     @* No themeSwitcher.js here — the old host's version swapped between two compiled Kendo
        theme files, which this host does not have. ben-boot.js owns setTheme/toggleTheme using
        the template's own layoutSettings convention. *@
@@ -118,6 +125,7 @@
     <!-- Serializes the EntraTokenHolder (HTTP scope) into the page HTML so
          the Interactive Server circuit can restore it via PersistentComponentState. -->
     <EntraTokenPersister />
+    <StoreCartTokenPersister />
     <Routes @rendermode="@InteractiveServer" />
     <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>

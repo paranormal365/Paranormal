@@ -44,6 +44,25 @@ public class AudioScrubModeTests : BenTestBase
         return true;
     }
 
+    /// <summary>
+    /// The card for the file this test just uploaded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Scoped to OUR file, not to the first one on the page</b> (2026-09-17). Both helpers
+    /// below used <c>.First</c> — <c>[id^='ws-']</c> and <c>[id^='afp-']</c> — and this fixture
+    /// uploads a fresh copy of the MP3 on every run into a case that keeps its files, because the
+    /// e2e database persists between runs. With one player on the page <c>.First</c> is the right
+    /// one by luck; after a few runs it is somebody else's file, which may not have decoded, and
+    /// the right-click lands on something with no "Open Full View" on it.</para>
+    ///
+    /// <para>That is why this test passed on its own and failed in the full suite, in both
+    /// directions, on two branches — it was reading the wrong element, not reporting a defect. The
+    /// wrapper id is a fresh GUID per component instance, so the file's own card is the only
+    /// stable handle.</para>
+    /// </remarks>
+    private ILocator OurFileCard =>
+        Main.Locator(".card", new() { HasText = "test-audio" }).Last;
+
     /// <summary>Uploads the fixture MP3 and waits for its compact waveform preview to render.</summary>
     private async Task<bool> UploadTestAudioAsync()
     {
@@ -51,16 +70,56 @@ public class AudioScrubModeTests : BenTestBase
 
         // Upload (SignalR round-trip) + fetch-back + client-side decode for a ~7MB file
         // can take a while — generous timeout to avoid flaking on a slow CI runner.
-        var waveform = Page.Locator("[id^='ws-']").First;
+        //
+        // .Last of our own cards: the newest upload is the one at the bottom, and every earlier
+        // run left one behind.
+        var waveform = OurFileCard.Locator("[id^='ws-']").First;
         try { await Expect(waveform).ToBeVisibleAsync(new() { Timeout = 45_000 }); }
         catch { return false; }
         return true;
     }
 
+    /// <summary>
+    /// Removes every test-audio file this fixture has ever left behind.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This fixture used to poison every later run.</b> It uploads a ~7MB MP3 into the
+    /// seeded Belmont case on each run, the e2e database and its uploads directory persist
+    /// between runs, and nothing removed them. After a day of runs that case held 399 files, the
+    /// Files tab rendered a wall of audio players, and the newest one's waveform could not decode
+    /// before the assertions gave up: "Create Region" stayed disabled and both tests in this
+    /// fixture failed. The tests were right that the button was disabled, and wrong about why —
+    /// the page was drowning, not broken (2026-09-19).</para>
+    ///
+    /// <para>So the fixture is its own janitor, the same shape as the one in
+    /// InvestigationDutyAndContactTests: it clears EVERY test-audio card, not just this run's,
+    /// because residue outlives the run that made it.</para>
+    ///
+    /// <para>Swallows its own failures. A cleanup that fails must not turn a passing test red —
+    /// the next run's janitor will find whatever this one left.</para>
+    /// </remarks>
+    private async Task RemoveTestAudioFilesAsync()
+    {
+        try
+        {
+            var cards = Main.Locator(".card", new() { HasText = "test-audio" });
+            for (var i = 0; i < 40 && await cards.CountAsync() > 0; i++)
+            {
+                var delete = cards.First.GetByRole(AriaRole.Button, new() { Name = "Delete file" });
+                if (await delete.CountAsync() == 0) return;   // not permitted here; leave it alone
+                await delete.First.ClickAsync();
+                await Page.WaitForTimeoutAsync(400);
+            }
+        }
+        catch { /* see the remarks: a janitor never fails a test */ }
+    }
+
     /// <summary>Right-clicks the compact preview and opens the full-view modal.</summary>
     private async Task OpenFullViewAsync()
     {
-        var wrapper = Page.Locator("[id^='afp-']").First;
+        var wrapper = OurFileCard.Locator("[id^='afp-']").First;
+        await Expect(wrapper).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
         await wrapper.ClickAsync(new() { Button = MouseButton.Right });
         await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
         await Page.WaitForTimeoutAsync(300); // modal open animation
@@ -77,6 +136,12 @@ public class AudioScrubModeTests : BenTestBase
             Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
+        // BEFORE the upload, not after: it leaves the page holding one player instead of every
+        // player this fixture has ever uploaded, which is what the waveform actually has to
+        // decode. Doing it afterwards would also have to dismiss the full-view modal first, and
+        // a cleanup that has to be right is a cleanup that will one day not run.
+        await RemoveTestAudioFilesAsync();
+
         if (!await UploadTestAudioAsync())
         {
             // Not a precondition: uploading the file and getting a player is the behaviour under
@@ -112,6 +177,12 @@ public class AudioScrubModeTests : BenTestBase
             Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
+        // BEFORE the upload, not after: it leaves the page holding one player instead of every
+        // player this fixture has ever uploaded, which is what the waveform actually has to
+        // decode. Doing it afterwards would also have to dismiss the full-view modal first, and
+        // a cleanup that has to be right is a cleanup that will one day not run.
+        await RemoveTestAudioFilesAsync();
+
         if (!await UploadTestAudioAsync())
         {
             // Not a precondition: uploading the file and getting a player is the behaviour under

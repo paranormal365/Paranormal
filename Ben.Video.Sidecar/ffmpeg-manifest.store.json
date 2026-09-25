@@ -1,0 +1,13 @@
+{
+  "_comment": "The ffmpeg pin for the MICROSOFT STORE package only. Same shape and same rules as ffmpeg-manifest.json beside it - scripts/fetch-ffmpeg.ps1 -Manifest takes either - and the packaging script copies THIS file into the package as ffmpeg-manifest.json, so FfmpegLocator.VerifyIntegrity checks the binaries the Store package actually carries. Everything we ship ourselves keeps using the GPL pin; nothing about the normal installer changes.",
+  "_why": "The GPL build carries libx264 and libx265, which are GPL, and a Store submission is a redistribution we would rather keep permissively licensed. This is the win64-LGPL variant of the SAME BtbN release as the GPL pin - identical n9.0.1 build line, same month-end tag - so the two differ in licence and encoders, not in vintage. Measured 2026-09-20: it has libopenh264, h264_mf, libkvazaar, libvpx-vp9, aac and libopus, and has NO libx264/libx265. VideoEncoders picks what is present, and a real export was run against this exact binary for H.264 (h264_mf) and VP9 (libvpx-vp9); H.265 is refused on this build with a message telling the person to choose another format, because libkvazaar rejects any frame size that is not a multiple of 8 and the 480p preset is 854x480.",
+  "_licence": "LGPL, but the build still carries --enable-version3, so parts of it are LGPLv3 rather than 2.1. Patents are a separate question from the licence: h264_mf uses the operating system's own H.264 encoder, where Microsoft holds the licence, which is why it is preferred over libopenh264 on Windows. Cisco's royalty cover for OpenH264 applies to Cisco's own downloaded binary, not to one bundled inside an ffmpeg build. None of this is legal advice.",
+  "_provenance": "Hashes recorded 2026-09-20 from the download itself, not checked against an independent publication of them - trust on first use, exactly as the GPL pin was. It MUST stay a month-end tag: BtbN keeps only about thirty daily builds but retains one build per month indefinitely. If this 404s, take the newest month-end tag from https://api.github.com/repos/BtbN/FFmpeg-Builds/releases, switch the GPL pin with it, and re-record all three hashes here.",
+  "win-x64": {
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-31-13-27/ffmpeg-n9.0.1-11-ge47273f4d9-win64-lgpl-9.0.zip",
+    "archiveSha256": "2484854ad6988d34560f4e6ea7a6ecb9dde0af7c229d2591815d056b04ec4f56",
+    "sha256": "63a0b3c76a245bc0d986853612d9ec43a2a2d1f1c7a3fa40ee459c248075b3a6",
+    "ffprobeSha256": "1ce64d9fdbfce857de2dd1f157c37eaa61c7501a356273dbcbe8b1674aef5879",
+    "version": "9.0.1"
+  }
+}

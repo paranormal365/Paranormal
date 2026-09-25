@@ -39,9 +39,29 @@ internal static class SubscriptionTierSeeder
     /// <summary>Yearly costs this many months. Ten is "two months free".</summary>
     private const int YearlyMonthsCharged = 10;
 
+    /// <remarks>
+    /// <para><b>Free is the first band and the default</b> (Ben, 2026-09-18). It was removed on
+    /// 2026-09-05 on the reasoning that "a group is free by having no subscription at all", which
+    /// is true of how a group PAYS and false of how it is GATED: <c>TierAreaResolution</c> resolves
+    /// a group with no subscription by looking for a band priced at nothing, and when it finds none
+    /// it returns null and every capability check <b>fails open</b>. The live site ran that way for
+    /// weeks — every group holding private-residence casework, case transfers, metadata stripping
+    /// and event hosting while paying nothing (2026-09-17 audit, round four). A fresh database must
+    /// not start in that state.</para>
+    ///
+    /// <para><b>One person, and the paid ladder starts at two</b>, which is the rule
+    /// <c>PaidPlan.WhyCannotAddMemberAsync</c> already enforces: "One person is free; working with
+    /// other people is the paid part." The free band cannot be wider than 1–1 without pushing every
+    /// band above it along, and it must start at 1 or <c>Validate</c> refuses the whole list.</para>
+    ///
+    /// <para>Priced at zero and therefore not sellable — <c>OrganizationCheckoutController.Start</c>
+    /// refuses a list price of zero, so this is a reference band rather than a product, and
+    /// <c>BillableUnits</c> prices a group that wants to BUY at the cheapest band actually sold.</para>
+    /// </remarks>
     private static readonly (string Name, int Min, int? Max, decimal Monthly, int Sort)[] Bands =
     [
-        ("Small group",  1,   10,  15m, 1),
+        ("Free",         1,    1,   0m, 0),
+        ("Small group",  2,   10,  15m, 1),
         ("Large group", 11, null,  40m, 2),
     ];
 
@@ -153,10 +173,10 @@ internal static class SubscriptionTierSeeder
         // deliberately configured that tier owns it from then on; a seeder that overwrote their
         // choice on every restart would be worse than one that never ran.
         //
-        // A FRESH database no longer seeds a free band at all (Ben, 2026-09-05), so this finds
-        // nothing and does nothing. It stays for the databases that already have one: those tiers
-        // are still live, still resolvable, and still ought to exclude private client work until
-        // somebody prices or removes them.
+        // A fresh database seeds a free band again (Ben, 2026-09-18 — see the Bands remarks), so
+        // this now runs on a new database as well as on the ones that already had one. Both need
+        // it: a free band with no exclusion rows includes everything, because capabilities fail
+        // open, which is the hole this whole paragraph exists to close.
         {
             var freeTier = await db.SubscriptionTiers.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Name == "Free");

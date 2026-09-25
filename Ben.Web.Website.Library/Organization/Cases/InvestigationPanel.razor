@@ -296,8 +296,8 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
                 <div class="d-flex gap-2">
-                    <TelerikDatePicker Id="investigationpanel-start-date" Format="MM/dd/yyyy" @bind-Value="@_form.StartDate" Width="160px" />
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.StartTime" Width="130px" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="investigationpanel-start-date" @bind-Value="@_form.StartDate" Width="160px" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.StartTime" Width="130px" />
                 </div>
             </div>
             @* One arrival and one departure is the ordinary shape, and it is allowed to cross
@@ -309,11 +309,11 @@
                 <label class="form-label fw-semibold">Ends (optional)</label>
                 @if (_form.MultiDay)
                 {
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EndDateTime" Width="100%" />
                 }
                 else
                 {
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.EndTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.EndTime" Width="100%" />
                     <div class="form-text">A time at or before the start is the next morning.</div>
                 }
                 <div class="form-check mt-2">
@@ -340,7 +340,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
@@ -352,21 +352,39 @@
                 @* Plain select: a Telerik dropdown that drops its selection would silently leave
                    the previous sharing scope in place, and this is the one field where quietly
                    keeping the old value could publish something. *@
+                @* An account that pays nothing shares a public place's findings with everyone and
+                   may not narrow them (Ben, 2026-09-17). The narrower options are not offered at
+                   all rather than offered and refused — the same treatment Public already gets at a
+                   private home. A home is untouched by the plan rule, so this only bites where the
+                   place is a public one, and this panel cannot always know the place from here:
+                   the server has the final say either way and its sentence is rendered below. *@
                 <select id="investigationpanel-who-can-see-the-e9a5" class="form-select" style="max-width:420px;" value="@_form.Visibility"
                         @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
-                    <option value="@InvestigationVisibility.GroupOnly"
-                            selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
-                        Just this group
-                    </option>
-                    <option value="@InvestigationVisibility.PlaceInvestigators"
-                            selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
-                        Groups who have also investigated this place
-                    </option>
+                    @if (!_publicByDefault)
+                    {
+                        <option value="@InvestigationVisibility.GroupOnly"
+                                selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
+                            Just this group
+                        </option>
+                        <option value="@InvestigationVisibility.PlaceInvestigators"
+                                selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
+                            Groups who have also investigated this place
+                        </option>
+                    }
                     <option value="@InvestigationVisibility.Public"
                             selected="@(_form.Visibility == InvestigationVisibility.Public)">
                         Anyone
                     </option>
                 </select>
+
+                @if (_publicByDefault)
+                {
+                    <div class="form-text" data-testid="investigation-scope-locked">
+                        On this account a visit to a public location is shared with everyone. What
+                        you find there joins the place's own page.
+                        <a href="/pricing">See what each plan includes.</a>
+                    </div>
+                }
 
                 @* The membership is dynamic, and that is not obvious from the wording alone. A
                    group that investigates this place next year gains access to what was shared
@@ -437,9 +455,9 @@
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
     // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
-    // enum cannot be listed under one name in this panel and another on the timeline. No Research:
-    // research is written on the case's Research tab, as a page with its own date (beta feedback,
-    // 2026-09-14) — see CaseTimelineEntryTypes.Pickable.
+    // enum cannot be listed under one name in this panel and another on the timeline. Three kinds,
+    // not every kind: a binder row is what happened on the night. Research is a thing somebody read
+    // afterwards, and it goes on the timeline proper or on a board.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
@@ -532,7 +550,7 @@
         CaseTimelineEntryType.InvestigatorNote  => "bg-primary",
         CaseTimelineEntryType.Evidence          => "bg-success",
         CaseTimelineEntryType.ResearchNote      => "bg-secondary",
-        CaseTimelineEntryType.InstrumentReading => "bg-info text-dark",
+        CaseTimelineEntryType.InstrumentReading => "bg-info",
         _                                       => "bg-secondary",
     };
 
@@ -559,10 +577,11 @@
 
     /// <summary>What this viewer may do with investigations here — see CaseList for the pattern.</summary>
     private MyOrgPermissionsItem? _perms;
+    private bool _publicByDefault;
 
     private async Task LoadAsync()
     {
-        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); _publicByDefault = _perms?.PublicByDefault ?? false; }
         catch { _perms = null; }   // unknown means the button stays hidden, not hopeful
 
         try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
@@ -785,7 +804,16 @@
         _isBusy = true;
         try
         {
-            await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id);
+            // Checked, like DeleteInvestigation twelve lines below — whose comment records this
+            // exact bug being fixed for the delete and not for the cancel (2026-09-17 audit).
+            // A discarded false closed the dialog and reloaded as though the visit had been
+            // cancelled, while the client and every attendee still had it in their calendar.
+            if (!await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id))
+            {
+                _dialogError = "This visit could not be cancelled, so it is still scheduled.";
+                return;
+            }
+
             _showDialog = false;
             await LoadAsync();
         }

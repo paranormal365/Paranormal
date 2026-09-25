@@ -1,7 +1,11 @@
+using Microsoft.Extensions.Options;
+using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ben.Data.WebApi.Services;
 
@@ -33,10 +37,12 @@ namespace Ben.Data.WebApi.Services;
 /// <see cref="IsConfigured"/> still reports the truth about the machine, and the queue fills
 /// regardless.</para>
 /// </remarks>
-public sealed class OutboxEmailService : IEmailService
+public sealed class OutboxEmailService : IEmailService, IOutboxEmailQueue
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IEmailService _sender;
+    private readonly SiteIdentity _site;
+    private readonly Mail.MailComposer _composer;
     private readonly ILogger<OutboxEmailService> _log;
 
     /// <summary>
@@ -61,11 +67,29 @@ public sealed class OutboxEmailService : IEmailService
     /// </remarks>
     public const int MaximumAttachmentBytes = 8 * 1024 * 1024;
 
+    /// <param name="site">
+    /// Taken as <c>IOptions</c> and unwrapped here, like every other consumer.
+    /// <para><b>A bare <c>SiteIdentity</c> cannot be resolved</b> — the host registers it with
+    /// <c>Configure&lt;T&gt;</c>, which provides <c>IOptions&lt;T&gt;</c> and nothing else. This
+    /// service is registered as <c>IEmailService</c>, which almost everything depends on, so
+    /// asking for it bare took the API down: it started, passed its health check, and returned 500
+    /// to every request before <c>[Authorize]</c> ran. That is what the production smoke checks
+    /// caught on 2026-09-20, and what <c>OptionsAreNeverInjectedBareTests</c> now refuses.</para>
+    /// </param>
+    /// <param name="composer">
+    /// What turns a written template into this letter's words.
+    /// <para><b>Here rather than in each mailer</b> (item 246). A letter gains a template by
+    /// consulting the composer before it sends, and three of thirty-five did — because doing it
+    /// meant editing each mailer, and each edit broke the tests mocking its sender. Every letter
+    /// already passes through here, so this is the one place that has to know how.</para>
+    /// </param>
     public OutboxEmailService(
         IDbContextFactory<BenDataContext> db,
         SmtpEmailService sender,
+        IOptions<SiteIdentity> site,
+        Mail.MailComposer composer,
         ILogger<OutboxEmailService> log)
-    { _db = db; _sender = sender; _log = log; }
+    { _db = db; _sender = sender; _site = site.Value; _composer = composer; _log = log; }
 
     /// <summary>
     /// Whether this machine could actually send. Unchanged in meaning, and still worth asking.
@@ -84,8 +108,12 @@ public sealed class OutboxEmailService : IEmailService
     {
         try
         {
+            if (await WasDeclinedAsync(message, ct)) return;
+
+            message = await WithAnyTemplateAsync(message, ct);
+
             await using var db = await _db.CreateDbContextAsync(ct);
-            db.OutboxEmails.Add(Row(message, DateTime.UtcNow));
+            db.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
             await db.SaveChangesAsync(ct);
         }
         catch (Exception ex)
@@ -95,17 +123,168 @@ public sealed class OutboxEmailService : IEmailService
             // leave the same silence behind.
             _log.LogError(ex,
                 "Could not queue the {Kind} letter to {To}; it will not be sent.",
-                Kind(message.Subject), message.To);
+                message.Kind ?? Kind(message.Subject), message.To);
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>The same two questions <see cref="SendAsync(EmailMessage, CancellationToken)"/> asks
+    /// — has this person declined this kind of letter, and does the site have wording on file for
+    /// it — then the row goes into the CALLER'S context and is deliberately NOT saved. Their
+    /// <c>SaveChangesAsync</c> commits the letter with whatever it is about.</para>
+    ///
+    /// <para>Declining still wins: a letter somebody has opted out of is not queued, and that is
+    /// not a failure, so the caller's write goes ahead without one.</para>
+    ///
+    /// <para>Nothing is caught here. SendAsync catches because a letter must not take down the
+    /// request that asked for it; this one exists precisely so that it does — an un-queued letter
+    /// means the booking it was about should not commit either (item 239b).</para>
+    /// </remarks>
+    public async Task EnqueueAsync(
+        Ben.Data.Source.Context.BenDataContext callersDb,
+        EmailMessage message,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(callersDb);
+
+        // The preference is read through the CALLER'S context, not a fresh one (item 239b). This
+        // method exists to be called inside the caller's transaction, and a second connection
+        // opened in the middle of one is a reader the transaction can lock out: the opt-out query
+        // joins AppUsers, which a booking writes. Where readers wait on writers that is a stall to
+        // the command timeout, which the catch below would then turn into the letter going out
+        // anyway - the opt-out silently ignored. Both databases have read-committed snapshot on
+        // today, so they do not wait; nothing in the repository turns it on, so a rebuilt one would.
+        if (await WasDeclinedAsync(message, ct, callersDb)) return;
+
+        message = await WithAnyTemplateAsync(message, ct);
+        callersDb.OutboxEmails.Add(Row(message, DateTime.UtcNow, _site));
+    }
+
+    /// <summary>
+    /// One letter as a row, with the two size rules applied and the header put on.
+    /// </summary>
+    /// <remarks>
+    /// <para>Internal so a test can read what would be stored without a database.</para>
+    ///
+    /// <para><b>This is where the header goes on, and it is the only place it could.</b> Ben asked
+    /// for the header from his templates to be the standard for the letters he had not written a
+    /// template for (2026-09-20) - about forty of them, each a bare <c>&lt;p&gt;</c> fragment built
+    /// in its own mailer. Every one of those passes through here on its way to the queue, so one
+    /// change covers them all; editing forty call sites would have missed the forty-first.</para>
+    ///
+    /// <para><b>A letter that already has a header is left exactly alone</b> - a template from the
+    /// editor, or a body already wrapped in the shell. Two headers stacked up would be worse than
+    /// none, and the check is on the icon's file name, which both carry and nothing else does.</para>
+    /// </remarks>
+    /// <summary>
+    /// Whether this person has asked not to receive this letter.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Here, because here is where every letter passes.</b> A preference enforced at each
+    /// mailer is a preference that holds for the mailers somebody remembered — and the one letter
+    /// that forgot is the one that makes a person stop trusting the switch.</para>
+    ///
+    /// <para><b>The kind's own flag is checked first, and the table second.</b> Proving an address,
+    /// resetting a password and a receipt cannot be declined, so no lookup happens for them at all
+    /// and a stray row could not silence one. The screen never offers them, but this is the rule
+    /// rather than the screen's good manners.</para>
+    ///
+    /// <para>A failure here sends the letter. Someone receiving a notice they had switched off is
+    /// a nuisance; a database hiccup silently swallowing everybody's mail is the failure the whole
+    /// outbox exists to prevent.</para>
+    /// </remarks>
+    /// <param name="callersDb">
+    /// The context to read through when the letter is being queued inside somebody else's
+    /// transaction (<see cref="EnqueueAsync"/>); null to open one of our own.
+    /// </param>
+    private async Task<bool> WasDeclinedAsync(
+        EmailMessage message, CancellationToken ct,
+        Ben.Data.Source.Context.BenDataContext? callersDb = null)
+    {
+        if (message.Kind is not { Length: > 0 } kind) return false;
+        if (MailKinds.Find(kind) is not { CanDecline: true }) return false;
+        if (string.IsNullOrWhiteSpace(message.To)) return false;
+
+        try
+        {
+            await using var own = callersDb is null ? await _db.CreateDbContextAsync(ct) : null;
+            var db = callersDb ?? own!;
+
+            var declined = await db.UserEmailOptOuts.AsNoTracking()
+                .AnyAsync(o => o.Kind == kind
+                            && o.AppUser != null
+                            && o.AppUser.Email == message.To, ct);
+
+            if (declined)
+            {
+                _log.LogInformation(
+                    "The {Kind} letter to {Recipient} was not sent: they asked not to receive it.",
+                    kind, message.To);
+            }
+
+            return declined;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "Could not read email preferences for the {Kind} letter to {Recipient}; it was "
+              + "sent rather than withheld.", kind, message.To);
+            return false;
         }
     }
 
     /// <summary>
-    /// One letter as a row, with the two size rules applied.
+    /// The letter as a written template would have it, or exactly as it arrived.
     /// </summary>
-    /// <remarks>Internal so a test can read what would be stored without a database.</remarks>
-    internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc)
+    /// <remarks>
+    /// <para>Applied at QUEUE time, not at send time, because the outbox row is what the
+    /// administration screen shows somebody who asks "what did we actually send" — and a row
+    /// holding the built-in words while the template's words went out would answer that question
+    /// wrongly.</para>
+    ///
+    /// <para>A letter with no declared kind is left alone. The outbox still guesses a kind from
+    /// the subject for grouping, but a template keyed to a guess would stop applying the day
+    /// somebody reworded a subject line, which is a worse failure than having no template.</para>
+    /// </remarks>
+    private async Task<EmailMessage> WithAnyTemplateAsync(EmailMessage message, CancellationToken ct)
     {
-        var body = message.HtmlBody ?? string.Empty;
+        if (message.Kind is not { Length: > 0 } kind || MailKinds.Find(kind) is not { } info)
+            return message;
+
+        var tables = message.Payload?.Tables
+            ?? new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+
+        var supplied = message.Payload?.Supplied?.ToDictionary(
+            pair => pair.Key,
+            pair => (pair.Value.Value, pair.Value.IsHtml),
+            StringComparer.OrdinalIgnoreCase);
+
+        var (subject, html) = await _composer.ComposeAsync(
+            info, tables, SiteZone, message.Subject, message.HtmlBody,
+            DateTime.UtcNow, ct, supplied);
+
+        return message with { Subject = subject, HtmlBody = html };
+    }
+
+    /// <summary>The clock the site keeps, for a template's date and time tokens.</summary>
+    private static TimeZoneInfo SiteZone
+    {
+        get
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(Ben.Data.Common.Constants.HouseClock.ZoneId); }
+            catch (Exception) { return TimeZoneInfo.Utc; }
+        }
+    }
+
+    internal static OutboxEmail Row(EmailMessage message, DateTime nowUtc, SiteIdentity? site = null)
+    {
+        // The footer says where to turn this off, for the letters that may be turned off. A
+        // preference screen nothing links to is one nobody finds.
+        var canDecline = message.Kind is { Length: > 0 } k
+                      && MailKinds.Find(k) is { CanDecline: true };
+
+        var body = Headed(message.HtmlBody ?? string.Empty, site, message.TimesShownInZone, canDecline);
         var truncated = body.Length > MaximumBodyBytes;
 
         var row = new OutboxEmail
@@ -114,7 +293,7 @@ public sealed class OutboxEmailService : IEmailService
             To = Clip(message.To, 320),
             Subject = Clip(message.Subject, 400),
             ReplyTo = message.ReplyTo is { Length: > 0 } r ? Clip(r, 320) : null,
-            Kind = Kind(message.Subject),
+            Kind = message.Kind ?? Kind(message.Subject),
             HtmlBody = truncated
                 ? body[..MaximumBodyBytes] + "\n<!-- truncated: the letter was longer than the outbox keeps -->"
                 : body,
@@ -155,6 +334,33 @@ public sealed class OutboxEmailService : IEmailService
         }
 
         return row;
+    }
+
+    /// <summary>
+    /// The body with the site's header on it, or unchanged when it has one already.
+    /// </summary>
+    /// <remarks>
+    /// <para>Left alone in three cases, each for its own reason:</para>
+    /// <list type="bullet">
+    ///   <item><b>It already has the header</b> - a template from the editor, or a body the mailer
+    ///   wrapped itself. Two would be worse than none.</item>
+    ///   <item><b>It is a whole HTML document</b>, with its own head and charset. Nesting one
+    ///   document inside another is rendered differently by every client there is.</item>
+    ///   <item><b>There is no site identity to build one from</b>, which is the case in a unit test
+    ///   that only wants to know what the row looks like.</item>
+    /// </list>
+    /// <para>No title is passed: these bodies were written as whole letters and open with their own
+    /// first line, so a heading taken from the subject would say the same thing twice.</para>
+    /// </remarks>
+    private static string Headed(string body, SiteIdentity? site, string? timesShownInZone,
+                                 bool canDecline = false)
+    {
+        if (site is null) return body;
+        if (string.IsNullOrWhiteSpace(body)) return body;
+        if (MailHeader.IsAlreadyHeaded(body) || MailHeader.IsWholeDocument(body)) return body;
+
+        return BenEmailLayout.Wrap(site, title: "", bodyHtml: body, timesShownInZone: timesShownInZone,
+                                   canDecline: canDecline);
     }
 
     /// <summary>

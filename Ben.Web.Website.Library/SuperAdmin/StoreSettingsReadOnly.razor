@@ -1,0 +1,57 @@
+@using Ben.Service.Models.Entities
+
+@*
+    The Store section of Site Settings, shown and not edited (storefront S1.1).
+
+    Store values reach money — the shipping charge, the address Stripe Tax works sales tax out
+    from, how long a checkout holds the last unit — so they have one door, the store settings page,
+    which checks every value. A second editor here would either repeat those rules or skip them,
+    and the API refuses store keys from this page's save anyway: an input here would only ever
+    produce a refusal. So the values are listed as they stand, with one way to go and change them.
+*@
+
+<div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2" data-testid="store-settings-elsewhere">
+    <span>These are shown here for reference. They are edited on the store settings page, which checks each value.</span>
+    <a class="btn btn-primary btn-sm text-nowrap" href="@EditHref">Edit on the store settings page</a>
+</div>
+
+@foreach (var s in Settings)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">@s.Label</div>
+                    <div class="text-secondary small">@s.Description</div>
+                    <div class="text-muted font-monospace" style="font-size:.7rem;">@s.Key</div>
+                </div>
+                <span class="badge flex-shrink-0 @(string.IsNullOrWhiteSpace(s.Value) ? "bg-secondary" : "bg-success")">
+                    @(string.IsNullOrWhiteSpace(s.Value) ? "Not set" : "Set")
+                </span>
+            </div>
+            <div class="mt-2" data-testid="store-setting-value">@Shown(s)</div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Where store settings are edited.</summary>
+    public const string EditHref = "/admin/store/settings";
+
+    /// <summary>The section's name as the server files it (<c>SiteSettingKeys.StoreGroupName</c>).</summary>
+    public const string GroupName = "Store";
+
+    /// <summary>The Store section's settings, in the server's order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<SiteSettingRecord> Settings { get; set; } = [];
+
+    /// <summary>What the setting currently does, in words: on/off for a switch, the value otherwise.</summary>
+    internal static string Shown(SiteSettingRecord s)
+    {
+        if (s.IsBoolean)
+        {
+            var on = bool.TryParse(s.Value, out var set) ? set : s.DefaultWhenUnset;
+            return string.IsNullOrWhiteSpace(s.Value) ? $"{(on ? "On" : "Off")} (default)" : on ? "On" : "Off";
+        }
+        return string.IsNullOrWhiteSpace(s.Value) ? "Not set — the default applies." : s.Value;
+    }
+}

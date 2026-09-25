@@ -33,5 +33,9 @@ public interface IWebApiAuthService
     void Logout();
 
     Task<bool> ImpersonateAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default);
-    Task StopImpersonatingAsync(CancellationToken token = default);
+    /// <summary>
+    /// Returns to the caller's own identity. False means they are themselves again but their
+    /// roles could not be confirmed, so Administration will refuse them until they sign in again.
+    /// </summary>
+    Task<bool> StopImpersonatingAsync(CancellationToken token = default);
 }

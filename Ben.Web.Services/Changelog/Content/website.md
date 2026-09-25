@@ -16,6 +16,358 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-25
+
+- The IsHaunted store is built and waiting for its products: investigation gear from the site itself
+  and from members who make their own. It opens once its shelves are stocked, and this page will say
+  when.
+- On a phone, the account menu and the notification bell now open when tapped and stay open. Before,
+  the tap closed them again straight away — so on a phone, Sign Out did nothing.
+- Links in the emails the site sends open from your mail app again: choosing seats, event
+  invitations, your pass for the night, getting back into your account, and taking over an account
+  made for you.
+- Somebody invited to a case who has no account yet can accept again; the button to create the
+  account and accept had stopped doing anything.
+- After confirming a request for seats on a tour, the page now says you've asked for a place — the
+  tour still has to approve it — instead of telling you you're coming.
+- When an event is taken off the site, its organizers' letter says so plainly, gives the times in
+  the event's own time zone, and explains how to appeal and what happened to the event credit.
+- Codes handed out for a night are cleared a month after the night, rather than kept for good.
+- When sharing a file into a group, clicking a picture now chooses it. It used to open the picture
+  full size over the window, hiding the button that uses it.
+- In the video editor, the media panel's tabs and cards are the right size again, and the cards can
+  be clicked.
+
+## 2026-09-22
+
+- Text across the site is easier to read in dark mode. Links, the coloured words used for status
+  and warnings, and the outline buttons were all too close to the background behind them; they now
+  meet the readability standard on the surfaces they actually sit on.
+- Green badges and buttons — vote counts, "accepting new cases", the editor's Export — had white
+  text on a green too light to carry it. The green is a little deeper now so the words read.
+- On a public location's page, the buttons for voting on a piece of evidence were missing
+  entirely. The page showed the tally and offered no way to add to it. They are there now.
+- A code for tonight cannot be made for a visit to somebody's home, and when one is made the visit
+  is named to a guest the same guarded way the public page names it.
+- Anything you add to a public location now counts towards your own storage, and you are told when
+  you are out of room instead of the upload simply failing.
+- A public location's description has a heading over it, so it is clear what you are reading.
+- If somebody set an account up for you, the page where you finish setting it up no longer sends
+  you to a "request a new link" line that could never have worked for you. It now says to ask
+  whoever created the account to send it again.
+- In the video editor, the "no video yet" and "no pictures yet" panels no longer sit jammed against
+  the edge of their panel.
+- In day mode, the quiet messages that tell you there is nothing to do — "you're all caught up",
+  "open the place's own page" — were drawn in a grey so pale they were nearly invisible on white.
+  They read properly now, along with the small print under headings and figures.
+- A link sitting inside a coloured notice took the page's link colour, which barely showed against
+  the notice behind it. Those links now follow the notice's own colour and are underlined, so you
+  can still tell they are links.
+- Badges showing a status — "Public", a member's level, an equipment state — had dark lettering on
+  a dark background and were hard to read. They are white on colour now.
+- A group's member list no longer shows people who have left or closed their account. Everything
+  they recorded for the group stays exactly where it was.
+- The site now tells you when your storage is running low — once at about 90% used, and again more
+  firmly at 95%. Clear some space and drop back under 90% and it forgets it warned you, so you are
+  told again if you fill up later rather than meeting the limit in silence.
+- Everything you keep to yourself now counts towards that allowance, not just recorded sessions.
+  A group's own work never does, and neither does the old version of a file you have replaced —
+  cutting a long recording down to a short one lowers what you are using.
+- On a phone, a public location's page no longer opens with a stack of buttons for every group you
+  belong to. Each group now has one menu holding the same choices.
+- On a phone, the heading on a group's Investigations tab no longer sits against its Schedule
+  button.
+
+## 2026-09-21
+
+- You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
+  public location** is on the Places tab of what's near you. Until now a place only appeared as a
+  side effect of somebody's case or investigation, so somewhere nobody had worked yet could not be
+  named at all.
+- On a public location's page, anybody signed in can add a photograph, a recording or a video with
+  a line about what it is. It joins what groups have published from their own investigations there.
+  Everything added is looked at first, and the page tells you whether yours is showing yet.
+- Homes are not added this way, and cannot be. A private residence gets its page through the group
+  a client invited.
+- Evidence at a public location can be voted on — something here, can't tell, or not convinced —
+  and the page adds it up: how many pieces it holds, how many votes, and what share falls each way.
+  A file counts once however it got there, so the same photograph on two routes is one piece of
+  evidence and not two.
+- Places are not ranked against each other, and will not be. A place shows its own figures.
+- A public location's page can say what the place is — when it was built, who lived there, what it
+  is now. Anybody signed in can write it and anybody after them can improve it.
+- You can add photographs of the building itself as well as evidence: the frontage, the grounds,
+  the rooms in daylight. They are kept apart, never voted on and never counted, because a picture
+  showing you what a house looks like and a picture somebody thinks has a figure in it are two
+  different claims.
+- The place's page also charts the evidence added there month by month.
+- Voting on a piece of evidence now answers with the right overall number straight away. It used to
+  come back as zero until the page was reloaded.
+
+- If an account is ever made for you before you asked for one, you are now told. The email names
+  who set it up and carries a button that puts the account in your hands alone. It is one of the
+  few emails that cannot be turned off.
+
+- A guest on the night can send you what their own phone recorded. Open an investigation, press
+  **Guest code**, and show the square code it gives you — on a tablet, a phone, or a printed sheet.
+  Anybody who scans it signs in and can send photographs, audio, video and readings to that one
+  visit.
+- A guest code lets somebody give you things. It does not let them look around: they see what they
+  sent and nothing else — not the case, not the client, not the address, and not what anybody else
+  recorded.
+- Two ways to take a code back. **New code** prints a fresh one and retires the old sheet while
+  everybody already working carries on, and **End the night** stops the code and every phone it
+  let in. To stop one person, there is a cross beside their name.
+- A code runs out by itself after about half a day, and can never last more than a day.
+- There is a short code printed beside the square one — something like `H4KP-9RQT` — for anybody
+  who had to install the app after scanning. Type it at the address on the sheet.
+
+- Your place on a walk comes with a pass. It is in your confirmation email as a square code, drawn
+  into the letter itself so it still shows if your mail program blocks pictures, with a link under
+  it in case it strips the code instead.
+- At the meeting point your guide scans it and is told in one line whether you are on tonight's
+  walk, how many places you booked, and whether somebody has already scanned that pass. A pass for
+  a different night says which night, rather than "not recognised".
+- You can choose which of the site's emails you get. "Choose your emails" is on your profile and at
+  the foot of every letter you can turn off. Everything is on to begin with, and a switch takes
+  effect on the next letter.
+- A few letters are always sent — the ones that get you back into your account, a warning that
+  somebody used your address, and a receipt for something you paid for. That page says which.
+- More of what the site tells you now arrives by email as well as in the bell: a session cancelled,
+  moved, or a place coming free; an investigation request that went to another group; a plan about
+  to lapse or one that changed. These are the ones worth knowing about when you are not here.
+- A receipt is sent when a payment goes through. Every receipt is still on your group's billing
+  page.
+- What's on: an event you opened from the home page now offers the way back to where you came from,
+  as well as the group hosting it.
+- The help badge beside a heading is a badge again rather than a stray question mark.
+- Times on public event pages are shown on the event's own clock instead of UTC.
+- Your group's name in the list of groups is a link, so it can be opened in a new tab.
+- Opening a new case tells you what is still missing instead of leaving the button greyed out.
+- Starting a group names the address fields it is waiting for.
+- Your media library holds what you uploaded, once each. Profile pictures, the site's default
+  avatars, and files whose contents have gone are no longer listed.
+
+## 2026-09-20
+
+- Administrators can write the site's emails. Pick a letter, pick a table and a column, and add a
+  token like {AppUsers.DisplayName} that is filled in when the letter is written. Dates and times
+  are shown in the reader's own time zone. Preview uses made-up details, so nobody's real name
+  appears, and deleting what you wrote puts the site's own letter back.
+
+- Bookings for an event are now posted into a thread of the event's own, in your group's
+  Messages, so you can talk about a request where the request is. One thread per event, and a
+  new arrival brings it back to your bell rather than filling your messages with a row per
+  booking. Everybody who may decide bookings sees it — including anyone who turned the letters
+  off. Like the letters, it says what was asked for and never who.
+- Messages from an event now say which room they came from instead of showing an internal name.
+- Administrators can read a letter the site sent, as the person received it, from the recent
+  letters list. Opening one is recorded against the account that opened it, a letter whose words
+  have already been cleared says so instead of showing an empty page, and the letter is drawn in
+  a sealed frame that runs nothing.
+
+## 2026-09-19
+
+- Files you own can be deleted from the Media Library, not only from the upload page. If a
+  group is using one, it still asks the two questions first — remove it everywhere, or hand
+  it over — rather than deleting something out from under them.
+- The administration dashboard loads in a moment instead of half a second. Its figures are
+  worked out every few minutes rather than on every visit, and the page says so.
+- The privacy page now says what is kept when you sign in: that you did, when, and which way
+  in — and that your IP address, your device and where you were are not recorded.
+- Opening the Messages tab of a case nobody has written to yet no longer breaks the page. It
+  ended with "An unhandled error has occurred" and needed a reload; it now shows the empty
+  thread and the box to write in.
+- Reopening a case clears its closed date. A case put back to Proposed, Accepted, Active or
+  Summarized used to keep the date it was closed on, so a case being worked on still read
+  "Closed" in its details.
+- Line breaks in a feed post are kept. A post typed as three short lines arrived as one
+  run-on paragraph. Names and tags in a post read as links now, and rows in the message list
+  light up under the pointer and show where the keyboard is. None of that styling had ever
+  reached a page.
+- Every make is offered when you add a piece of equipment. Makes that already have something
+  in the category you picked come first, and the rest say *(no models in this category yet)* —
+  so the first person to own, say, a FLIR audio recorder can still choose FLIR and add the
+  model. Picking one of those now says the model list is empty and points at the box that adds
+  one, instead of leaving a blank list with no explanation.
+- Arrows in the video editor draw their whole arrow. The line was missing, so pointing at
+  something in a clip left a small arrowhead floating on its own — and the head is bigger now on a
+  long arrow, instead of staying the same size however far it reaches.
+- The button that adds a transition sits on the join between the two clips it applies to. It used
+  to sit at the far left of the track wherever the join actually was, and with three clips you got
+  three identical buttons in the same spot.
+- All sixteen transition styles can be picked. The list opened downwards off the bottom of the
+  window, so only the first few could be clicked. They read as words now — "Wipe left", "Fade
+  through black" — rather than run together.
+- Split at Playhead works from a clip's right-click menu. It was greyed out every time.
+- Undo puts back a transition that an edit removed. Splitting a clip could delete the effect you
+  had chosen with no way to get it back, and left the two clips overlapping with nothing to show
+  why. Deleting, trimming or nudging a clip now tidies up its transition properly too.
+- Clip names and lengths can be read in the light theme. On the timeline they were dark grey on a
+  dark block.
+- Sounds can be faded in and out from the timeline, not only from the panel on the right.
+- Changing a clip's speed now shows the real length on the timeline. A clip set to double speed
+  kept its full width while the finished video was half as long, and the difference came out as
+  black nobody had been warned about. Speed can also be undone.
+
+## 2026-09-18
+
+- New board now asks what to start from. Five choices: a blank board, a moodboard of coloured
+  sections with a cluster of themes, a research plan with a four-square and a grid of four weeks, a
+  family tree, and a presentation deck of slide frames. Everything on one is yours to move, rename or
+  delete — it is a head start, not a form.
+- The family tree gives every person a photo frame above their name. It starts empty, and empty is
+  finished: paste a photograph in, put any picture you like there instead, or leave them all blank and
+  let the names do the work. The lines join the names, so going without a photograph moves nothing.
+- A board can hold a grid. A table block is for anything that reads across — owners and the years
+  they held a house, four weeks of who is doing what, a set of readings. Tab moves along and out of the
+  last cell into a new row, and the header row can be turned off.
+- A shape block puts a box, a circle or a diamond with a word or two in it on the board, for the
+  things a card would overdress — a theme, a question, a step, a label on part of the board. A
+  published board now draws them as the shapes they are; they used to come out as plain boxes.
+- A table grows as you fill it in. Adding a row or a column makes the block big enough to show it,
+  rather than leaving the new row below the bottom edge, and an empty grid is now a grid you can read
+  and click into rather than a pair of hairlines. One undo takes back the rows and the room together.
+- Choosing "Arrows at both ends" on a connector now puts arrows at both ends. It used to leave
+  whatever you had already chosen for one end, so the words and the line could disagree.
+- Pasting a grid of text onto a board now makes a table of it rather than a wall of words in a note.
+- Colour goes further. Any block can be filled with its colour rather than striped with it, and a
+  group can be drawn as a filled, titled panel rather than an outline — so part of a board reads as a
+  section of it. Both are kept when the board is published.
+- A line can say what it means. Choose its route (a curve, a straight line, or right angles), what
+  each end looks like (an arrow, a diamond, a dot or nothing, per end), whether it is solid or dashed,
+  a label along it, and a one- or two-character badge on it.
+- A card can now open another board. One board fills up, so a card can point at another board on
+  the same case — and at one card on it. The header then shows the boards you came through, oldest
+  first, and any one of them takes you back to it. Only published
+  boards can be linked to, and the picker says so; a board with a link on it will not publish until its
+  target is published. If the target is deleted, the card says so when clicked rather than going
+  anywhere, and if only the card you pointed at is gone, the board still opens.
+
+## 2026-09-17
+
+- Your two-week renewal notice now quotes the right number. A group billed quarterly or every six
+  months was shown its price "per month", and a tour business was shown the price of one tour
+  rather than of all of them. The notice exists so the charge is never a surprise, so both are
+  worth saying plainly.
+- Paying for a place of your own in a group stops when the group's plan grows to cover you. It used
+  to carry on alongside what the group was already paying, so the group's own upgrade quietly left
+  you paying twice.
+- Adding a tour part way through a period is priced at the rate you signed up at, not at a price
+  that has gone up since. If the price has come DOWN, you get the lower one.
+- Buying a plan you are already paid up for is now refused, with the date you are covered to,
+  instead of taking a second payment for a month you already own. Changing between monthly and
+  yearly still works exactly as before.
+- A group whose plan has ended no longer keeps the things the plan paid for. Everything already
+  recorded stays readable, as it always has.
+- Coupon codes handle some odd cases properly: a code with a fixed amount beside a zero percentage
+  now takes the amount off instead of nothing, and a code that would have ADDED to the price is
+  refused outright.
+
+- Places are searchable now. "What's near you" has a fourth tab: public locations near you that
+  groups have published work at. A location only appears once there is something to read at it, and
+  somebody's home never appears.
+- A published case now links to its place, so you can go from one group's write-up to everything
+  anybody has shared about that location. Only for public locations.
+- Your field sessions page shows how much storage you have used, and warns you before the cap rather
+  than when an upload is refused. If a group's paid plan covers you, it says so instead of showing
+  a cap that is not yours.
+- A group that has gone read-only now says so at the top of the group, instead of letting you find
+  out by pressing something.
+- Accepting somebody into your group now tells you why when it cannot, with a link to your plan —
+  it used to say "please try again" about the one thing trying again never fixes.
+- Notification badges use the icon and colour set for that kind of message.
+- An event that cannot be booked now says **why** — called off, or bookings closed — rather than
+  showing a form or a greyed-out grid.
+- Your event pass says who scanned you in. A case transfer says which person asked for it. Your
+  desk shows how many borrowed items are overdue, not just which ones.
+- A group's public page no longer names the city of an address you marked private. Two settings
+  that never did anything — the address map and directions switches — have been withdrawn rather
+  than left looking like they work.
+- Withdrawing your own request for access to a file works properly, and a request somebody has
+  already answered can no longer be withdrawn out from under them.
+- Groups can rename a make, a model or an experience type, and are offered a merge when the name is
+  already taken. Correcting a typo used to be impossible.
+- Hosts can invite a guest by email, and book somebody in, from the bookings board — both of which
+  the help has described for a while.
+- A field session or a photograph that somebody flagged can now be looked at and put back. One
+  report used to hide it permanently.
+- You no longer need a group to investigate. A public location's page offers **Start investigating on
+  your own** to anybody signed in with no group: it explains what it does, then sets up a private
+  space of your own and opens the form to schedule your first visit there, in one step. It is free
+  and nobody else joins it. What you record at a public location is public on a free account, which
+  the page says before you agree to it.
+- A public location also offers **Investigate here** for each of your groups, with the place already
+  filled in.
+- A public location's page now takes **posts**. Anybody signed in can add a note or a photograph
+  about somewhere anyone can visit, and it appears on the place's page and on the feed alike, with a
+  link back. Photos are checked, reported and hidden exactly as anywhere else on the feed. Somebody's
+  home takes no posts.
+- Signed in, a place also lists your own groups' cases there — published or not — so you can tell at
+  a glance whether your group already has one.
+- A case now names the place it is about. As you type the address, a place already on file that
+  looks like it is offered, so your case joins the one everybody else has been working at instead of
+  making a second copy of it. You say whether it is a public location or somebody's home, and the
+  answer decides who may see the case.
+- A place's page lists the cases groups have published there, beside the investigations and the field
+  archive. A public place also offers **Open a case here**, and a case that names a place says at the
+  top how many other groups have investigated the same location.
+- A group with no plan now collects what it finds at public places in public. A case you open is
+  public from the start, and a visit to a public location is shared with everyone; both say so where
+  you would otherwise have been refused. A plan is what makes your work yours. Somebody's home is
+  never affected, and nothing already private is changed.
+- Investigating on your own no longer means doing without cases. What you may keep private is decided
+  by your plan rather than by whether you work alone.
+- A case you open yourself is accepted as you open it, instead of waiting as **Proposed** for a
+  decision nobody was asked to make. If you would rather the group decided, tick the box on the new
+  case form and it waits as it used to. Anyone who may open a case but not change one still proposes
+  it, as before.
+- Adding a file to a case shows it going. The file is named as soon as you choose it, with a bar
+  that fills as it uploads, so a long recording is something you can watch rather than a still page
+  you have to guess about. Several files at once each get their own line, and a refusal now says
+  what the trouble was.
+- On a research board, something you paste or drop no longer lands on top of a card that was already
+  there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
+- A map box can be given an address instead of coordinates: write it and press Find. Pasting an address
+  onto a board now makes a map of that place, and text nobody can place is still the note it was.
+- A card, note or message with an address written in it offers **Make a map** on its own menu. The map
+  lands beside it, and what you wrote stays where it is.
+- A video or a recording on a case plays where it sits instead of showing a black rectangle with
+  dead controls, and you can drag through it. The same applies to a case's public page, a place's
+  archive, an event's evidence and a group's files.
+- A busy research board keeps finding clear ground for new blocks. Past about thirty of them, anything
+  added, pasted or dropped landed on the same square as everything else.
+- The session player shades the stretch a phone was put away for, with the phone's own line under
+  the trace saying what carried on, and names the two marks that bracket it.
+- A link pasted on a research board builds a proper card — title, description, the site's name and a
+  picture — and the picture is our own copy, so a published board still shows it to everyone reading.
+- A research board can reach for what the client wrote. The case files button now opens two tabs, and
+  the second lists the client's messages: pick one and their words land on the board with their name
+  and the date, so what sent you looking sits beside what you found.
+- A file added to a research board is marked **Research** in the case's Files, so you can tell which
+  files the research is built from and rename the ones that came off a camera with a number for a name.
+- A research card can be a historical note, an article, an experience, a quote or a person as well as evidence, each
+  asking for what that kind of thing needs. Pick the kind while editing a card; changing it keeps what
+  you typed. Until a card has a title, its heading says which kind it is rather than "Card".
+
+## 2026-09-16
+
+- A session's sound recordings no longer sit held out of a place's archive: the picture screener used to hold every audio file as an image that would not decode, so an archived night could show its readings but never its sound.
+- A field session that was sent from the app as one session file can now be added to a public place's archive, and its recordings play there like any other.
+- Research on a case is now a board you lay out yourself: cards, notes, pictures, maps, links and files, placed where they belong. It opens in its own editor, keeps what you are writing on your own machine, and stays yours until you publish it. Once published the group sees it, and anybody who can edit the case can add to it — changing what somebody else put there is for whoever put it there, a group administrator, or an administrator of the site.
+- The older research pages have been replaced by boards. Research is also a kind of timeline entry again, for a note about what you read that belongs on the day it happened.
+- Select a card on a board and four small + handles appear on its sides. Click one and the next card arrives there, already joined by an arrow and ready to type in; drag one onto empty board to put it where you let go, or onto another card to join those two. Ctrl+Shift and an arrow key does the same from the keyboard, and one Undo takes back the card and its arrow together.
+- Present walks a board a card at a time, full screen, with everything else dimmed — for the meeting where a case gets talked through. Nothing to set up first: the cards are the slides, and the order is the one the board already shows — your groups if you drew any, otherwise the arrows, then down the page. Arrows, space or Page Down move through it; Escape leaves. Presenting changes nothing, so somebody who can only read a case can still drive.
+- Zooming a map with a trackpad or wheel no longer scrolls the page out from under it part way through. The map keeps the gesture; the page stays where it was.
+- A board can reach for a file the case already has, instead of sending a second copy of a photograph you uploaded last week.
+- Recordings dropped on a board play where they sit — sound as a waveform, video in its own small screen at card size, resizable to whatever suits.
+
+## 2026-09-15
+
+- When a site role cannot be saved, the page now says exactly why instead of naming a SuperAdmin rule that may have nothing to do with it.
+- Dates and times are typed the way you write them, like 09/15/2026 8:00 PM. A date that does not exist, such as September 31, is refused with a sentence saying why, instead of quietly becoming a different day; the calendar button is still there.
+- When an administrator's new account is refused, the page now says exactly why instead of a general apology.
+
 ## 2026-09-14
 
 - In every table, the line under a row now runs under its action buttons too.

@@ -584,6 +584,34 @@ public class MyContactInfoControllerTests
                                      It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// With no mail set up the confirmation letter is still queued, and the reply says not sent.
+    /// </summary>
+    /// <remarks>
+    /// It used to be skipped (2026-09-23). ValidationEmailSent must stay false: it is what makes
+    /// the page show the link itself, which is how a machine without mail finishes this.
+    /// </remarks>
+    [Fact]
+    public async Task With_no_mail_the_letter_still_waits_and_the_page_still_shows_the_link()
+    {
+        var factory = await SeedAsync();
+
+        var mail = new Mock<IEmailService>();
+        mail.SetupGet(x => x.IsConfigured).Returns(false);
+        mail.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                                    It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var created = Value(await Build(factory, Guid.NewGuid()).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "waiting@example.test", false, false),
+            mail.Object, Config(), default));
+
+        Assert.False(created.ValidationEmailSent);
+        Assert.NotNull(created.ValidationLink);
+        mail.Verify(x => x.SendAsync("waiting@example.test", It.IsAny<string>(), It.IsAny<string>(),
+                                     It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task A_mail_server_that_throws_does_not_lose_the_address()
     {

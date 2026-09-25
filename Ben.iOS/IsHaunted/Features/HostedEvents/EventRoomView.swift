@@ -281,14 +281,19 @@ struct EventRoomView: View {
             } else {
                 RoomCache.applicationSupport().remove(hostedEventId)
             }
-        case .failed(_, let status) where (status == nil || status! >= 500) && RoomCache.applicationSupport().load(hostedEventId) != nil:
-            // No signal: the room as it was last read, so a photo can still be added and kept for later.
-            let saved = RoomCache.applicationSupport().load(hostedEventId)!
-            room = saved.room
-            messages = saved.room.messages
-            olderMayExist = false
-            roomSavedAt = saved.savedAt
-            failure = nil
+        case .failed(let reason, let status) where status == nil || status! >= 500:
+            // No signal: the room as it was last read, so a photo can still be added and kept for
+            // later. Read once and kept — the cache used to be read to decide and read again to
+            // use, with the second read unwrapped as if the first had promised it.
+            if let saved = RoomCache.applicationSupport().load(hostedEventId) {
+                room = saved.room
+                messages = saved.room.messages
+                olderMayExist = false
+                roomSavedAt = saved.savedAt
+                failure = nil
+            } else {
+                failure = reason ?? "Check your connection and try again."
+            }
         case .failed(let reason, _):
             failure = reason ?? "Check your connection and try again."
         case .sessionEnded:
@@ -374,8 +379,10 @@ private struct RoomPhoto: View {
             }
         }
         .task {
+            // Decoded no larger than the 220-point frame needs on the widest phone, not at the
+            // twelve megapixels the phone that took it produced.
             guard let data = await loader.data(for: messageId, from: HostedEventsStore.roomMediaEndpoint(eventId, message: messageId)),
-                  let decoded = UIImage(data: data) else {
+                  let decoded = await Thumbnails.load(data, maxPixels: 1400) else {
                 failed = true
                 return
             }

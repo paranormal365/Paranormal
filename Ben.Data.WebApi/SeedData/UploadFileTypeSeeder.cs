@@ -19,6 +19,9 @@ internal static class UploadFileTypeSeeder
     internal const string ProfilePhotoFileTypeName   = "Profile Photo";
     internal const string EquipmentPhotoFileTypeName = "Equipment Photo";
 
+    // Fixed GUID. Several controllers (case, field-session, event and venue files) hold their own copy of this value.
+    internal static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+
     // Fixed GUID so VideoProjectController can reference it without a DB lookup.
     internal static readonly Guid PublishedVideoFileTypeId = new("30000000-0000-0000-0000-000000000001");
 
@@ -35,6 +38,66 @@ internal static class UploadFileTypeSeeder
     internal static readonly Guid FeedMediaFileTypeId = new("70000000-0000-0000-0000-000000000001");
 
     internal const string FeedMediaFileTypeName = "Feed Media";
+
+    /// <summary>
+    /// The upload type of a case canvas board's published PNG snapshot (canvas plan review R22).
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own type rather than Case Evidence because the picture is not evidence somebody
+    /// chose to share: it is a screenshot of the team's working board, and it bakes in whatever the
+    /// board held — witness names, a client's home address, pinned locations. The type is how the
+    /// rest of the site can tell. <c>BoardSnapshots</c> refuses a timeline entry holding one being
+    /// made Public, and <c>CaseMediaPublication</c> never offers one for a public page.</para>
+    ///
+    /// <para>Fixed GUID, like the others, so the publish endpoint and the refusals name it directly.</para>
+    /// </remarks>
+    internal static readonly Guid BoardSnapshotFileTypeId = new("80000000-0000-0000-0000-000000000001");
+
+    internal const string BoardSnapshotFileTypeName = "Board Snapshot";
+
+    /// <summary>
+    /// The upload type of a file put on a case's research board — dropped, pasted, or added from the
+    /// board's own toolbar.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: "if the researchers add files which have strange names, they will know
+    /// which ones are used in the research board… That might help a researcher know which files they
+    /// are using and to go back and rename them to something more obvious." A file dropped on a board
+    /// lands in the case's Files as well, where it sat among everything else under a camera's name for
+    /// it, and nothing said where it came from or that anything was pointing at it.</para>
+    /// <para>It is a label, not a fence: the file is an ordinary case file, reached and served the same
+    /// way, and anybody who may see the case's files may see it. What the type adds is the sentence
+    /// "this one is on a board".</para>
+    /// </remarks>
+    internal static readonly Guid ResearchFileTypeId = new("90000000-0000-0000-0000-000000000001");
+
+    internal const string ResearchFileTypeName = "Research";
+
+    /// <summary>
+    /// The upload type of a gear-store product picture (storefront, S0.10).
+    /// </summary>
+    /// <remarks>
+    /// <para>A store picture is a site-owned upload: no owner person or group, no expiry, so the
+    /// media retention sweep never takes it. <c>IsPublic</c> stays FALSE even though every visitor
+    /// sees these pictures — they are served by the store's own image endpoint, which answers for
+    /// pictures of sellable products (and for the back office while the shop is dark), never by the
+    /// general file routes.</para>
+    /// <para>Browser-displayable rasters only: no GIF (a product photo is not an animation) and no
+    /// SVG (a document that can carry script, rendered to anonymous visitors).</para>
+    /// </remarks>
+    internal static readonly Guid StoreImageFileTypeId = new("A0000000-0000-0000-0000-000000000001");
+
+    internal const string StoreImageFileTypeName = "Store Image";
+
+    /// <summary>
+    /// A product's files — manuals, firmware, software, documents (store sellers P11). Never public:
+    /// each download is checked for who is asking. Fixed id, like the picture type.
+    /// </summary>
+    internal static readonly Guid StoreProductFileTypeId = new("A0000000-0000-0000-0000-000000000002");
+
+    internal const string StoreProductFileTypeName = "Store Product File";
+
+    private static readonly string[] StoreImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
     /// <summary>
     /// What a feed post may carry: browser-displayable photos, and video the &lt;video&gt; element
@@ -91,11 +154,18 @@ internal static class UploadFileTypeSeeder
 
         await SeedPublishedVideoFileTypeAsync(db, owner.Id);
 
+        await SeedBoardSnapshotFileTypeAsync(db, owner.Id);
+
+        await SeedResearchFileTypeAsync(db, owner.Id);
+
         await SeedAudioMixFileTypeAsync(db, owner.Id);
 
         await SeedProfilePhotoFileTypeAsync(db, owner.Id);
 
         await SeedEquipmentPhotoFileTypeAsync(db, owner.Id);
+
+        await SeedStoreImageFileTypeAsync(db, owner.Id);
+        await SeedStoreProductFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -159,12 +229,36 @@ internal static class UploadFileTypeSeeder
 
         db.UploadFileTypes.Add(new UploadFileType
         {
-            Id                 = new Guid("20000000-0000-0000-0000-000000000001"), // fixed — referenced by MyCaseController
+            Id                 = EvidenceFileTypeId,
             Name               = EvidenceFileTypeName,
             Description        = "Client-submitted evidence files attached to case occurrences — photos, audio, video and documents",
             IsActive           = true,
             IsPublic           = false,
             SortOrder          = 3,
+            AllowAllExtensions = true,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Research file type exists (fixed GUID so the case-files endpoint can use it directly).</summary>
+    /// <remarks>
+    /// <c>AllowAllExtensions</c>, like case evidence: a board carries whatever the research is —
+    /// a scanned deed, a photograph of a gravestone, a recording of an interview, somebody's PDF.
+    /// </remarks>
+    private static async Task SeedResearchFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == ResearchFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = ResearchFileTypeId,
+            Name               = ResearchFileTypeName,
+            Description        = "Files put on a case's research board — what the research is made of, rather than evidence from the night",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 10,
             AllowAllExtensions = true,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
@@ -186,6 +280,34 @@ internal static class UploadFileTypeSeeder
             IsPublic           = false,
             SortOrder          = 5,
             AllowAllExtensions = true, // any video format the editor produces
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures the Board Snapshot file type exists (fixed GUID so the canvas publish endpoint can use
+    /// it directly). Never public: see <see cref="BoardSnapshotFileTypeId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Seeded at startup like the others, and it has to be: the publish endpoint writes this id into
+    /// <c>UploadFiles.UploadFileTypeId</c>, a foreign key, so on a database where the row is missing
+    /// the first publish would be refused by SQL Server rather than by anything that says why.
+    /// </remarks>
+    private static async Task SeedBoardSnapshotFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == BoardSnapshotFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = BoardSnapshotFileTypeId,
+            Name               = BoardSnapshotFileTypeName,
+            Description        = "Pictures of case canvas boards, published to the case. They show what the board held, so they stay inside the case.",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 10,
+            AllowAllExtensions = true, // the editor's own output: a PNG, served as a sanitised derivative
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
         });
@@ -322,6 +444,53 @@ internal static class UploadFileTypeSeeder
             {
                 Id                 = Guid.NewGuid(),
                 UploadFileTypeId   = FeedMediaFileTypeId,
+                Pattern            = ext,
+                DateCreated        = DateTime.UtcNow,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Store Product File type exists (store sellers P11).</summary>
+    private static async Task SeedStoreProductFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == StoreProductFileTypeId)) return;
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id = StoreProductFileTypeId, Name = StoreProductFileTypeName,
+            Description = "Store product files — manuals, firmware, software, documents",
+            IsActive = true, IsPublic = false, SortOrder = 12, AllowAllExtensions = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Store Image file type exists (fixed GUID; see <see cref="StoreImageFileTypeId"/>).</summary>
+    private static async Task SeedStoreImageFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == StoreImageFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = StoreImageFileTypeId,
+            Name               = StoreImageFileTypeName,
+            Description        = "Gear store product pictures — JPEG, PNG, WebP",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 11,
+            AllowAllExtensions = false,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        foreach (var ext in StoreImageExtensions)
+        {
+            db.UploadFileTypeExtensions.Add(new UploadFileTypeExtension
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileTypeId   = StoreImageFileTypeId,
                 Pattern            = ext,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = ownerId,

@@ -1,0 +1,53 @@
+@*
+    An item's specification lines (store sellers, backlog 251, P3 — lifted from the admin editor):
+    grouped under headings on the product page. Shared by the admin's editor and the seller's; the
+    page owns the lines and saves them.
+*@
+
+<div class="d-flex align-items-center justify-content-between">
+    <h5 class="mb-0">Specifications</h5>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="spec-add" @onclick="AddAsync">Add a line</button>
+</div>
+<p class="text-secondary small">Grouped under headings on the product page — Detection, Power, Size.</p>
+@foreach (var (spec, i) in Lines.Select((s, i) => (s, i)))
+{
+    var line = spec;
+    <div class="row g-2 mb-2 align-items-end" data-testid="spec-row">
+        <div class="col-12 col-md-3">
+            <label class="form-label small" for="@($"spec-group-{i}")">Heading</label>
+            <input id="@($"spec-group-{i}")" class="form-control form-control-sm" maxlength="100" @bind="line.Group" @bind:after="ChangedAsync" />
+        </div>
+        <div class="col-5 col-md-3">
+            <label class="form-label small" for="@($"spec-name-{i}")">Name</label>
+            <input id="@($"spec-name-{i}")" class="form-control form-control-sm" maxlength="100" @bind="line.Name" @bind:after="ChangedAsync" />
+        </div>
+        <div class="col-5 col-md-5">
+            <label class="form-label small" for="@($"spec-value-{i}")">Value</label>
+            <input id="@($"spec-value-{i}")" class="form-control form-control-sm" maxlength="500" @bind="line.Value" @bind:after="ChangedAsync" />
+        </div>
+        <div class="col-2 col-md-1">
+            <BenGridAction Icon="trash-2" Label="Remove this line" Tone="GridActionTone.Danger" OnClick="@(() => RemoveAsync(line))" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<StoreSpecLine> Lines { get; set; } = [];
+
+    /// <summary>Anything typed, added or removed — the page marks itself unsaved.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Task ChangedAsync() => OnChanged.InvokeAsync();
+
+    private Task AddAsync()
+    {
+        Lines.Add(new StoreSpecLine { Group = Lines.LastOrDefault()?.Group ?? "" });
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task RemoveAsync(StoreSpecLine line)
+    {
+        Lines.Remove(line);
+        return OnChanged.InvokeAsync();
+    }
+}

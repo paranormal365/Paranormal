@@ -1,0 +1,132 @@
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject NavigationManager NavManager
+
+@*
+    How a group's own people get in.
+
+    Until 2026-09-20 this card did not exist and neither did anything like it: a membership was
+    created by founding a group, by an accepted application, by the solo plan or by a seeder, so
+    somebody who had just founded a group sat on this screen with one row and no way to add a
+    second person — while the hub's guided tour told them the Members tab was for inviting people.
+
+    The plan's answer is said HERE, before the link is shared, rather than landing on the friend
+    who clicks it.
+*@
+
+<div class="card mb-4" id="invite-card">
+    <div class="card-header fw-semibold py-2">Invite someone</div>
+    <div class="card-body">
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2" id="invite-error">@_error</div>
+        }
+
+        @if (_link?.PlanRefusal is { Length: > 0 } refusal)
+        {
+            @* Said beside the control, not after the attempt — item 193. The link can still be
+               made and shared: it keeps working, and starts letting people in the moment the
+               group has a plan. *@
+            <div class="alert alert-warning py-2" id="invite-needs-plan">
+                @refusal
+                <a class="alert-link ms-1" href="@($"/organizations/{OrgId}/billing")">See your group's plan</a>.
+            </div>
+        }
+
+        @if (_link?.Token is { Length: > 0 } token)
+        {
+            <p class="text-secondary small">
+                Anybody with this link can join <strong>@OrgName</strong> as a member. Share it with
+                your own people — a group chat, a message, however you already talk to them.
+            </p>
+
+            <div class="input-group mb-2">
+                <label class="visually-hidden" for="invite-link">Invitation link</label>
+                <input id="invite-link" class="form-control" readonly value="@LinkFor(token)" />
+            </div>
+
+            <p class="text-secondary small mb-3" id="invite-expires">
+                It stops working @(_link.ExpiresUtc is { } until ? until.ToLocalTime().ToString("MMMM d, yyyy") : "in a fortnight").
+            </p>
+
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="invite-new"
+                        @onclick="IssueAsync" disabled="@_busy">
+                    @(_busy ? "Working…" : "Make a new link")
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="invite-revoke"
+                        @onclick="RevokeAsync" disabled="@_busy">
+                    Stop this link working
+                </button>
+            </div>
+            <div class="form-text">
+                A new link replaces this one, which is also how you take it back: there is only ever
+                one live link for a group.
+            </div>
+        }
+        else
+        {
+            <p class="text-secondary small">
+                Your group has no invitation link. Make one and share it with the people you work
+                with — they open it, sign in, and they are in.
+            </p>
+            <button type="button" class="btn btn-primary btn-sm" id="invite-make"
+                    @onclick="IssueAsync" disabled="@_busy">
+                @(_busy ? "Making it…" : "Make an invitation link")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter] public string OrgName { get; set; } = "this group";
+
+    private OrganizationJoinLinkRecord? _link;
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>
+    /// The whole address, because the point of the card is something to paste.
+    /// </summary>
+    /// <remarks>
+    /// Built from the site's own base address rather than assembled by the reader: a link that
+    /// arrives in a message as "/join/abc" is not a link.
+    /// </remarks>
+    private string LinkFor(string token)
+        => NavManager.ToAbsoluteUri($"/join/{token}").ToString();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        // A 403 here means this person may not invite anybody, which the parent already decides;
+        // a null simply leaves the card offering to make the first link.
+        _link = await AdminClient.GetJoinLinkAsync(OrgId);
+    }
+
+    private async Task IssueAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var made = await AdminClient.IssueJoinLinkAsync(OrgId);
+            if (made is null) _error = "That link could not be made. Please try again.";
+            else _link = made;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RevokeAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            if (await AdminClient.RevokeJoinLinkAsync(OrgId)) await LoadAsync();
+            else _error = "That link could not be taken back. Please try again.";
+        }
+        finally { _busy = false; }
+    }
+}

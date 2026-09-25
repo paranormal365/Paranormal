@@ -77,7 +77,31 @@ public sealed record IngestedMedia(
     UploadFileMetadata Metadata,
     long ServedFileSize,
     string ServedContentType,
-    bool WasSanitized);
+    bool WasSanitized)
+{
+    /// <summary>
+    /// The name to record for what viewers download: the uploaded name, with the extension of what
+    /// is actually served.
+    /// </summary>
+    /// <remarks>
+    /// Sanitizing re-encodes every picture as JPEG, and every caller used to record the uploaded
+    /// name regardless — so <c>corridor.png</c> was served as JPEG bytes under a .png name, and a
+    /// download opened in anything that trusts the extension got the wrong decoder (crawl C5,
+    /// 2026-09-21). Only the extension changes: the name is the uploader's, and it is what they
+    /// will look for.
+    /// </remarks>
+    public string ServedFileName(string uploadedName)
+    {
+        if (ServedContentType != "image/jpeg" || string.IsNullOrEmpty(uploadedName)) return uploadedName;
+
+        var extension = System.IO.Path.GetExtension(uploadedName);
+        if (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
+            return uploadedName;
+
+        return System.IO.Path.GetFileNameWithoutExtension(uploadedName) + ".jpg";
+    }
+}
 
 /// <inheritdoc />
 public sealed class MediaIngestService(

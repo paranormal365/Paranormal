@@ -1,0 +1,34 @@
+@*
+    − [n] + (storefront S2.5), Smarty's quantity control. Bounded by Min and Max; the buttons
+    switch off at the ends rather than refusing after the fact.
+*@
+
+<div class="ben-qty" role="group" aria-label="@($"Quantity of {ItemName}")">
+    <button type="button" class="btn btn-light" aria-label="One fewer" disabled="@(Disabled || Value <= Min)" @onclick="@(() => SetAsync(Value - 1))">−</button>
+    <input type="number" inputmode="numeric" id="@Id" min="@Min" max="@Max" value="@Value" disabled="@Disabled"
+           aria-label="@($"Quantity of {ItemName}")" @onchange="OnTypedAsync" />
+    <button type="button" class="btn btn-light" aria-label="One more" disabled="@(Disabled || Value >= Max)" @onclick="@(() => SetAsync(Value + 1))">+</button>
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; } = 1;
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+    [Parameter] public int Min { get; set; } = 1;
+    [Parameter] public int Max { get; set; } = StoreCartRules.MaxQuantityPerLine;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Id { get; set; }
+
+    /// <summary>What is being counted, for screen readers — "K-II EMF Meter".</summary>
+    [Parameter] public string ItemName { get; set; } = "this item";
+
+    private Task OnTypedAsync(ChangeEventArgs e)
+        => SetAsync(int.TryParse(e.Value?.ToString(), out var n) ? n : Value);
+
+    private async Task SetAsync(int value)
+    {
+        var bounded = Math.Clamp(value, Min, Math.Max(Min, Max));
+        if (bounded == Value) { StateHasChanged(); return; }
+        Value = bounded;
+        await ValueChanged.InvokeAsync(bounded);
+    }
+}

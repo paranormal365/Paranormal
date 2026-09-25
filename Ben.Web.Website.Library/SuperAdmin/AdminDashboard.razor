@@ -62,9 +62,14 @@
             else
             {
             <h3 class="mb-0">Dashboard<HelpLink Slug="site-administration" Anchor="the-dashboard" /></h3>
+            @* Said, because the figures are held for five minutes and a dashboard that looks
+               live while being minutes old is a dashboard somebody will one day trust too far
+               (2026-09-19). Nothing here is a number acted on inside a minute, which is what
+               makes the cache reasonable — and saying so is what keeps it honest. *@
             <p class="text-secondary small mb-0">
                 How the site is being used. Everything here counts accounts and their activity —
-                visitors who never sign in are not recorded anywhere.
+                visitors who never sign in are not recorded anywhere. The figures are worked out
+                every few minutes rather than on every visit, so they can be a little behind.
             </p>
             }
         </div>
@@ -136,9 +141,16 @@
         </div>
     }
 
+    @* id, like #events-dashboard and #event-health on the other two tabs: it exists only once the
+       charts have arrived, so it is a readiness signal a walk can WAIT for. The site tab was the
+       one without one, so ProductWalk checked it by looking for a string instead — a check made
+       once, after the screenshot, with nothing to wait on. The dashboard's loader is a "Loading…"
+       paragraph rather than a .spinner-border, so the walk's settle logic never saw it either, and
+       the step photographed a loading page and then said it "never said Sign-ins and
+       registrations". (2026-09-22, W2.) *@
     @if (!_loading && _charts is not null)
     {
-        <div class="row g-3">
+        <div class="row g-3" id="site-dashboard">
             <div class="col-xl-8">
                 <div class="card h-100"><div class="card-body">
                     <div class="small text-secondary mb-2">Sign-ins and registrations</div>
@@ -228,15 +240,17 @@
     {
         <h5 class="mt-4 mb-2" id="sign-ins">Sign-ins</h5>
         <p class="text-secondary small">
-            Password and Apple sign-ins over the selected period.
+            Sign-ins over the selected period, by every way in: a password, Apple, Microsoft and
+            the editor handoff.
             @if (!_signIns.CoversAppleSignIns)
             {
                 <span class="text-warning">
                     No Apple sign-in has been recorded yet — figures here may be password-only.
                 </span>
             }
-            Microsoft sign-ins are never counted: they arrive as a token on every request, so
-            there is no single moment to record as the sign-in.
+            A Microsoft session is a token that arrives on every request rather than a moment
+            somebody signs in, so it is counted once per twelve hours of use — and only from
+            19 September 2026, when it began being recorded at all.
         </p>
 
         <div class="row g-3">

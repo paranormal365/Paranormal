@@ -35,7 +35,15 @@
     --bs-body-bg:           #fff;
     --bs-body-color:        #505050;
     --bs-border-color:      #dee2e6;
-    --bs-secondary-color:   rgba(70, 79, 87, .70);
+    /* Solid, not translucent, and darker than the site template's own. The template's
+       rgba(70, 79, 87, .70) composites to rgb(126,132,137): 3.80:1 on white and 3.69:1 on the
+       #f8f9fa panels, where small text needs 4.5:1. In the editor this token is --bv-text-muted,
+       which is the timeline's heading and duration, the preview timecode, the media-card meta and
+       the panel tab labels — measured at 3.69:1 on 2026-09-19. An alpha colour takes its contrast
+       from whatever is behind it, which is how one token gave two different answers; this one
+       gives 4.85:1 on white and 4.60:1 on #f8f9fa wherever it lands. Kept in step with the same
+       override in Ben.Web.Website/wwwroot/app.css. */
+    --bs-secondary-color:   #667380;
     --bs-secondary-bg:      #e9ecef;
     --bs-tertiary-bg:       #f8f9fa;
     --bs-emphasis-color:    #000;

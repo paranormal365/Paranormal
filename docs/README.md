@@ -55,7 +55,7 @@ text that is plainly present will not match — a search there returns false neg
 
 ## The developer handover documents
 
-Eight documents for handing the project to another developer — two for the apps, six for the
+Nine documents for handing the project to another developer — two for the apps, seven for the
 website, **one per user type**, each named for its audience:
 
 | Document | Who it is for |
@@ -67,6 +67,7 @@ website, **one per user type**, each named for its audience:
 | `IsHaunted-Web-Viewer.pdf` | A member who may look and change nothing |
 | `IsHaunted-Web-Owner.pdf` | A group's owner or administrator |
 | `IsHaunted-Web-Superadmin.pdf` | Runs the platform |
+| `IsHaunted-Web-Seller.pdf` | A member who sells their own gear through the store (store sellers, 09/25) |
 
 **One document per seat rather than one with six chapters.** The permission model is real: the site
 is a different application from each of those seats, and a reader only needs their own. More to the
@@ -81,7 +82,7 @@ Website — one run per seat, with all three hosts up (`scripts/run-e2e.sh --kee
 
 ```bash
 source scripts/seeded-passwords.sh
-for p in visitor client member viewer owner superadmin; do
+for p in visitor client member viewer owner superadmin seller; do
   BEN_PERSONA=$p BEN_PERSONA_OUT="$PWD/docs/web-media" BEN_BASE_URL=http://localhost:5078 \
     dotnet vstest Ben.Web.Playwright/bin/Debug/net10.0/Ben.Web.Playwright.dll \
     --TestCaseFilter:"FullyQualifiedName~PersonaDocCaptureTests"
@@ -93,6 +94,10 @@ python3 docs/build-persona-documentation.py
 the gitignored `Ben.Data.WebApi/appsettings.Development.json` and printing none of them. It is the
 same file `run-e2e.sh` uses, so a capture run and a test run sign in as the same people. Without
 those variables each persona signs in as nobody and photographs seven refusals.
+
+**Switch the store on as well** (`features.store`, the same way): the visitor, member, SuperAdmin and
+seller seats photograph store pages, which are "Page not found" — and the seller's menu is absent —
+while it is off. `scripts/run-e2e.sh` switches it on in its own database.
 
 **Switch the feed on first.** Three of the six seats photograph `/feed`, and the help capture puts
 that flag back to whatever it found — so a persona run that follows one captures "Page not found"
@@ -120,7 +125,16 @@ python3 docs/build-ios-documentation.py iphone
 
 The export writes files named by UUID plus a `manifest.json` that maps each one to its
 `suggestedHumanReadableName`; rename them to the leading `NN-slug.png` before they land in
-`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix.
+`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix. A run
+covers 21 of the guide's frames — the hosted-event and door ones come from `HelpMediaCaptureTests`
+and are left alone, so copy the renamed frames over rather than emptying the folder first.
+
+**The store-set script does this renaming itself** (`Ben.iOS/scripts/capture-app-store-media.sh`),
+into a directory of its own before copying the finished frames across. It used to export straight
+into the set, where the iPhone's resize loop then globbed the FINISHED frames and re-encoded them
+in place while that run's real captures sat beside them unrenamed: the set looked refreshed and was
+the old pictures, re-compressed (2026-09-17). If you write a capture step of your own, export
+somewhere else and copy in at the end.
 
 **The iPhone guide is also on the website**, as the App Store listing's Marketing URL:
 `Ben.Web.Website/wwwroot/guides/IsHaunted-iOS-iPhone.pdf`, served at

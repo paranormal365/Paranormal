@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Constants;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Cms;
@@ -125,7 +126,7 @@ public sealed class TourController : OrgCmsControllerBase
             StartOrganizationAddressId = request.StartOrganizationAddressId,
             DurationMinutes = request.DurationMinutes,
             DefaultCapacity = request.DefaultCapacity,
-            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : "America/Chicago",
+            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : HouseClock.ZoneId,
             AllowReviews = request.AllowReviews,
             IsBookable = request.IsBookable,
             ContactLine = Trimmed(request.ContactLine),

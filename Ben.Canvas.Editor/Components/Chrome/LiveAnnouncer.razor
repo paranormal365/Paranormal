@@ -1,0 +1,16 @@
+@*
+    The board's polite live region. Rendered once, outside the board, so the board's render gates never
+    hold back an announcement.
+*@
+@implements IDisposable
+@inject AnnouncerService Announcer
+
+<div id="bc-live" class="visually-hidden" aria-live="polite" aria-atomic="true">@Announcer.Text</div>
+
+@code {
+    protected override void OnInitialized() => Announcer.OnChanged += Refresh;
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Announcer.OnChanged -= Refresh;
+}

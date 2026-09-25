@@ -1,0 +1,875 @@
+@page "/admin/store/products/{ProductId:guid}/edit"
+@using Ben.Web.Website.Library.Store.Shared
+@using Ben.Web.Website.Library.Store.Editor
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
+@inject BenToastService Toasts
+@inject SiteFeaturesProvider Features
+
+<PageTitle>SuperAdmin — @(_product?.Name ?? "Product")</PageTitle>
+
+@*
+    One product, whole (storefront S1.11): its details, the options that make its variants, each
+    variant's price and stock, and its pictures. Every refusal lands on the page in the server's
+    words — the variant grid's under the grid (#variant-refusal), because a per-row Save whose
+    "no" vanished would look exactly like a Save that worked.
+
+    The Preview tab (Ben, 09/24/2026) is the product page as a shopper will see it, drawn from
+    what is on the form now — saved or not — by the same component the store uses. It works with
+    the store switched off, which the store's own address does not.
+*@
+
+<div class="container-fluid px-3" style="max-width:72rem;">
+    <div class="mb-2"><a href="/admin/store/products" class="small">← Products</a></div>
+
+    <BenItemState TItem="StoreProductAdminRecord" Result="_result" Loading="_loading"
+                  LoadingText="Loading the product…" OnRetry="LoadAsync">
+        <ChildContent Context="p">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                <div>
+                    <h3 class="mb-0">@p.Name<HelpLink Slug="site-administration" Anchor="categories-and-products" /></h3>
+                    <div class="text-secondary small">
+                        <span class="font-monospace">@p.PublicUrl</span> ·
+                        @if (p.IsActive && !p.CategoryIsActive) { <span class="badge bg-warning-subtle text-warning-emphasis">Hidden (category)</span> }
+                        else if (p.IsActive) { <span class="badge bg-success" id="product-status">Live</span> }
+                        else { <span class="badge bg-secondary" id="product-status">Hidden</span> }
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-testid="product-preview" @onclick="@(() => _tab = "preview")">
+                        <BenIcon Name="eye" /> Preview
+                    </button>
+                    @if (p.IsActive)
+                    {
+                        <button type="button" class="btn btn-outline-danger" id="product-deactivate" disabled="@_busy" @onclick="DeactivateAsync">Take off sale</button>
+                    }
+                    else if (p.SellerAppUserId is null)
+                    {
+                        <button type="button" class="btn btn-success" id="product-activate" disabled="@_busy" @onclick="ActivateAsync">Put on sale</button>
+                    }
+                    <button type="button" class="btn btn-outline-secondary" id="product-duplicate" disabled="@_busy" @onclick="DuplicateAsync">Duplicate</button>
+                    <button type="button" class="btn btn-outline-danger" id="product-delete" disabled="@_busy" @onclick="@(() => _confirmDelete = true)">Delete</button>
+                </div>
+            </div>
+
+            @if (_pageError is not null)
+            {
+                <div class="alert alert-danger" id="product-refusal">@_pageError</div>
+            }
+
+            @* A seller's hidden item goes on sale through their request, which records what they're paid. *@
+            @if (p.SellerAppUserId is not null && !p.IsActive)
+            {
+                <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="product-sale-request">
+                    @if (p.OpenSaleRequest is { } ask)
+                    {
+                        <div class="flex-grow-1">
+                            <strong>@ask.SellerName asks to put this on sale</strong>, for @StoreMoney.Format(ask.SellerAskingPrice) a unit to them.
+                            Set its price on the Options &amp; variants tab, then approve it.
+                            @if (ask.SellerNote is { } note) { <div class="small mt-1">“@note”</div> }
+                        </div>
+                        <a class="btn btn-sm btn-primary" href="/admin/store/sale-requests">Sale requests</a>
+                    }
+                    else
+                    {
+                        <div>Its seller, @(p.SellerName ?? "a seller"), hasn't asked for it to go on sale. It goes on sale when they do and you approve.</div>
+                    }
+                </div>
+            }
+
+            <BenTabs @bind-ActiveId="_tab" @bind-ActiveId:after="TabChangedAsync" NavClass="nav-tabs flex-wrap">
+                <BenTab Title="Details" Id="details">
+                    <div class="row g-3 pt-3">
+                        <div class="col-md-8">
+                            <label class="form-label" for="product-name">Name</label>
+                            <input id="product-name" class="form-control" maxlength="200" @bind="_details.Name" @bind:event="oninput" @bind:after="MarkDirty" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="product-category">Category</label>
+                            <select id="product-category" class="form-select" @bind="_details.CategoryId" @bind:after="MarkDirty">
+                                @* In tree order: every category and subcategory is here for filing, shown or
+                                   empty — shoppers only ever see the ones with something on sale. *@
+                                @foreach (var c in _categories.Items)
+                                {
+                                    <option value="@c.Id">@(c.ParentName is { } parent ? $"{parent} › {c.Name}" : c.Name)@(c.IsActive ? "" : " (hidden)")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="product-slug">Web address</label>
+                            <div class="input-group">
+                                <span class="input-group-text">/store/p/</span>
+                                <input id="product-slug" class="form-control" maxlength="220" @bind="_details.Slug" @bind:event="oninput" @bind:after="MarkDirty" />
+                            </div>
+                            <div class="form-text">Kept when the name changes — shared links use it.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="product-model">Equipment model</label>
+                            <select id="product-model" class="form-select" @bind="_details.EquipmentModelId" @bind:after="MarkDirty">
+                                <option value="">None</option>
+                                @foreach (var m in _models.Items.OrderBy(m => m.BrandName).ThenBy(m => m.Name))
+                                {
+                                    <option value="@m.Id">@m.BrandName — @m.Name</option>
+                                }
+                            </select>
+                            <div class="form-text">Links the product page to the model's page in the equipment catalogue.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="product-seller">Seller</label>
+                            <select id="product-seller" class="form-select" @bind="_details.SellerAppUserId" @bind:after="MarkDirty">
+                                <option value="">The site's own stock</option>
+                                @foreach (var s in _sellers.Items)
+                                {
+                                    <option value="@s.Id">@s.Name@(s.Email is { } e && e != s.Name ? $" ({e})" : "")</option>
+                                }
+                                @if (_details.SellerAppUserId is { } current && _sellers.Items.All(s => s.Id != current))
+                                {
+                                    @* Somebody who has since lost the Seller role stays on the item they had. *@
+                                    <option value="@current">@(_product?.SellerName ?? "A former seller")</option>
+                                }
+                            </select>
+                            <div class="form-text">
+                                The member who makes and sells this item. Only people with the Seller role are listed —
+                                give it on their Site Roles tab. Shoppers never see this.
+                            </div>
+                            @if (_sellers.Failed)
+                            {
+                                <div class="small text-danger">The list of sellers couldn't be loaded.</div>
+                            }
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="product-short">Short description</label>
+                            <textarea id="product-short" class="form-control" rows="2" maxlength="500" @bind="_details.ShortDescription" @bind:after="MarkDirty"></textarea>
+                            <div class="form-text">One or two sentences, shown on cards and at the top of the product page.</div>
+                        </div>
+                        <div class="col-12">
+                            <span class="form-label d-block" id="product-long-label">Description</span>
+                            <div aria-labelledby="product-long-label">
+                                <BenEditor @bind-Value="_details.LongDescriptionHtml" @bind-Value:after="MarkDirty" Height="260px" />
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="form-check form-switch mt-md-4">
+                                <input class="form-check-input" type="checkbox" role="switch" id="product-featured" @bind="_details.IsFeatured" @bind:after="MarkDirty" />
+                                <label class="form-check-label" for="product-featured">Featured</label>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="product-new-until">"New" until</label>
+                            <BenDateField Id="product-new-until" Mode="DateEntryMode.Date" @bind-Value="_details.NewUntil" @bind-Value:after="MarkDirty" Width="100%" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="product-tax-code">Stripe tax code</label>
+                            <input id="product-tax-code" class="form-control" placeholder="txcd_…" maxlength="32" @bind="_details.StripeTaxCode" @bind:after="MarkDirty" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="product-sort">Order on the shelf</label>
+                            <input id="product-sort" type="number" class="form-control" @bind="_details.SortOrder" @bind:after="MarkDirty" />
+                        </div>
+
+                        <div class="col-12">
+                            <StoreSpecLinesEditor Lines="_details.Specs" OnChanged="MarkDirty" />
+                        </div>
+
+                        <div class="col-12">
+                            @if (_detailsError is not null)
+                            {
+                                <div class="alert alert-danger py-2" id="details-refusal">@_detailsError</div>
+                            }
+                            <button type="button" class="btn btn-primary" id="product-save" disabled="@_busy" @onclick="SaveDetailsAsync">Save</button>
+                        </div>
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Options &amp; variants" Id="variants">
+                    <div class="pt-3">
+                        <StoreOptionsEditor Options="_options" Busy="_busy" CanGenerate="@(p.Options.Count > 0)" Error="@_optionsError"
+                                            OnSave="SaveOptionsAsync" OnGenerate="GenerateAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="options-variants-and-stock" /></Help>
+                        </StoreOptionsEditor>
+
+                        <h5 class="mt-4">Variants</h5>
+                        <StoreVariantsGrid Variants="p.Variants" Drafts="_variants" PriceEditable="true" Error="@_variantError"
+                                           OnSave="SaveVariantAsync" OnStock="OpenStock" OnLog="OpenLogAsync" OnDelete="DeleteVariantAsync" />
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Pictures" Id="pictures" Badge="@p.Images.Count">
+                    <div class="pt-3">
+                        <StorePicturesPanel Product="p" Drafts="_pictures" Busy="_busy" Error="@_pictureError" OnUpload="UploadPicturesAsync"
+                                            OnSave="SavePictureAsync" OnMove="@(m => MovePictureAsync(m.Index, m.By))" OnDelete="DeletePictureAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="product-pictures" /></Help>
+                        </StorePicturesPanel>
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Parts &amp; cost" Id="parts">
+                    <div class="pt-3">
+                        <StorePartsEditor Saved="_parts.Item" Busy="_busy" Error="@_partsError" OnSave="SavePartsAsync"
+                                          OnPicture="@(x => PartPictureAsync(x.PartId, x.File))" OnRemovePicture="RemovePartPictureAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="parts-and-cost" /></Help>
+                        </StorePartsEditor>
+
+                        @* Store sellers P9: what a sale is worth to each side — the store's eyes only. *@
+                        @if (_economics.Item is { } e)
+                        {
+                            <div class="card mt-4" data-testid="product-economics">
+                                <div class="card-body small">
+                                    <h5 class="h6">Economics <HelpLink Slug="site-administration" Anchor="economics-and-fees" /></h5>
+                                    <div class="row g-3">
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Cost to make</div><div class="fs-6 fw-semibold">@StoreMoney.Format(e.CostBasis)</div></div>
+                                        @if (e.HasSeller)
+                                        {
+                                            <div class="col-6 col-md-3"><div class="text-secondary">Seller asks</div><div class="fs-6 fw-semibold">@(e.SellerAsk is { } ask ? StoreMoney.Format(ask) : "not approved yet")</div></div>
+                                            <div class="col-6 col-md-3"><div class="text-secondary">Seller earns a unit</div><div class="fs-6 fw-semibold" data-testid="economics-owed">@StoreMoney.Format(e.Owed)</div></div>
+                                        }
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Suggested price</div><div class="fs-6 fw-semibold" data-testid="economics-suggested">@StoreMoney.Format(e.SuggestedPrice)</div>
+                                            <div class="text-secondary">@e.MarkupPercent% markup, fee included</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Price</div><div class="fs-6 fw-semibold">@(e.Price is { } pr ? StoreMoney.Format(pr) : "not set")</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Card fee, bought alone</div><div class="fs-6 fw-semibold">@StoreMoney.Format(e.EstimatedFee)</div>
+                                            <div class="text-secondary">@e.FeePercent% + @StoreMoney.Format(e.FeeFixed)</div></div>
+                                        <div class="col-6 col-md-3"><div class="text-secondary">Store keeps a unit</div><div class="fs-6 fw-semibold @(e.BelowCost ? "text-danger" : null)" data-testid="economics-margin">@(e.Margin is { } m ? StoreMoney.Format(m) : "–")</div></div>
+                                    </div>
+                                    @if (e.BelowCost)
+                                    {
+                                        <div class="alert alert-danger py-2 mt-3 mb-0" data-testid="economics-below-cost">
+                                            At this price the store loses on every unit: it doesn't cover @(e.HasSeller ? "what the seller earns" : "what it costs") plus the card fee.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Files" Id="files">
+                    <div class="pt-3">
+                        <StoreFilesPanel Files="_files" Loading="_filesLoading" Busy="_busy" Error="@_filesError" OnRetry="LoadFilesAsync"
+                                         OnUpload="UploadFileAsync" OnManual="WriteManualAsync" OnSave="@(x => SaveFileAsync(x.FileId, x.Meta))" OnDelete="DeleteFileAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="product-files" /></Help>
+                        </StoreFilesPanel>
+                    </div>
+                </BenTab>
+
+                <BenTab Title="FAQ" Id="faq">
+                    <div class="pt-3">
+                        <StoreFaqEditor Saved="_faqs.Item" Busy="_busy" Error="@_faqError" OnSave="SaveFaqsAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="faq-and-questions" /></Help>
+                        </StoreFaqEditor>
+                        @if (_faqs.Failed) { <div class="alert alert-danger py-2 mt-2">@(_faqs.Reason ?? "The FAQ couldn't be loaded just now.")</div> }
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Versions" Id="versions">
+                    <div class="pt-3">
+                        <StoreVersionPanel Info="_version" Busy="_busy" Error="@_versionError" CanStart="@(p.FirstOnSaleUtc is not null || p.UnitsSold > 0)"
+                                           EditorHref="@(id => $"/admin/store/products/{id}/edit")" OnSave="SaveVersionAsync" OnStart="StartVersionAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="versions" /></Help>
+                        </StoreVersionPanel>
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Page" Id="page">
+                    <div class="pt-3">
+                        <StorePageExtrasPanel Saved="_extras.Item" Busy="_busy" Error="@_extrasError" CanSwitchReviews="true"
+                                              OnSave="@(x => SaveExtrasAsync(x.Returns, x.Warranty, x.Reviews))" OnVideo="AddVideoAsync" OnRemoveVideo="RemoveVideoAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="the-items-page" /></Help>
+                        </StorePageExtrasPanel>
+                        @if (_extras.Failed) { <div class="alert alert-danger py-2 mt-2">@(_extras.Reason ?? "The page extras couldn't be loaded just now.")</div> }
+                    </div>
+                </BenTab>
+
+                <BenTab Title="History" Id="history">
+                    <div class="pt-3">
+                        <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
+                        <StoreProductHistoryList Result="_history" Loading="_historyLoading" OnRetry="LoadHistoryAsync" />
+                    </div>
+                </BenTab>
+
+                <BenTab Title="Preview" Id="preview">
+                    <div class="pt-3">
+                        <StoreEditorPreviewPanel Detail="@PreviewDetail(p)" Info="@PreviewInfo" Dirty="_dirty" IsActive="p.IsActive"
+                                                 SavedUrl="@(Features.IsOn(SiteFeatures.Store) ? $"{p.PublicUrl}?preview=1" : null)" />
+                    </div>
+                </BenTab>
+            </BenTabs>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+<BenLeaveGuard Dirty="_dirty" />
+
+<StoreStockDialog @bind-Visible="_stockOpen" Label="@_stockLabel" OnHand="_stockOnHand" Held="_stockHeld" Busy="_busy" Error="@_stockError"
+                  OnSave="SaveStockAsync" />
+
+<BenModal @bind-Visible="_logOpen" Title="@($"Stock log — {_stockLabel}")" Size="lg">
+    <ChildContent>
+        <BenListState TItem="StoreStockMovementRecord" Result="_log" Loading="_logLoading" EmptyText="No stock changes yet" OnRetry="ReloadLogAsync">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0" id="stock-log">
+                    <thead><tr><th>When</th><th>Why</th><th class="text-end">Change</th><th class="text-end">Left</th><th>By</th><th>Note</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _log.Items)
+                        {
+                            <tr data-testid="stock-log-row">
+                                <td class="text-nowrap">@m.OccurredUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</td>
+                                <td>@m.Reason@(m.OrderNumber is { } n ? $" · order {n}" : "")</td>
+                                <td class="text-end">@(m.Delta > 0 ? $"+{m.Delta}" : m.Delta.ToString())</td>
+                                <td class="text-end">@m.QuantityAfter</td>
+                                <td>@(m.ActorDisplayName ?? "The store")</td>
+                                <td>@m.Note</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </BenListState>
+    </ChildContent>
+</BenModal>
+
+<BenConfirmDialog @bind-Visible="_confirmDelete" Title="Delete this product?" ConfirmText="Delete" Busy="_busy" OnConfirm="DeleteAsync"
+                  Message="@($"{_product?.Name} and its pictures will be removed. A product that has been sold can only be taken off sale.")" />
+
+@code {
+    [Parameter] public Guid ProductId { get; set; }
+
+    /// <summary>Which tab to open on — the products list's Preview action opens "preview".</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private ItemResult<StoreProductAdminRecord> _result;
+    private StoreProductAdminRecord? _product;
+    private LoadResult<StoreCategoryAdminRecord> _categories;
+    private LoadResult<EquipmentModelRecord> _models;
+    private LoadResult<StoreSellerRecord> _sellers;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _dirty;
+    private string? _tab = "details";
+    private ItemResult<StoreSettingsAdminRecord> _settings;
+
+    /// <summary>The product page, built from the form as it stands.</summary>
+    private StoreProductDetail PreviewDetail(StoreProductAdminRecord saved)
+    {
+        var category = _categories.Items.FirstOrDefault(c => c.Id == _details.CategoryId);
+        var parent = category?.ParentCategoryId is { } parentId ? _categories.Items.FirstOrDefault(c => c.Id == parentId) : null;
+        var model = _models.Items.FirstOrDefault(m => m.Id == _details.EquipmentModelId);
+        var settings = _settings.Item;
+        return StoreProductPreview.Build(saved,
+            new StoreProductPreviewDraft(
+                _details.Name, _details.ShortDescription, _details.LongDescriptionHtml, _details.IsFeatured,
+                _details.NewUntil, SpecGroups(),
+                _variants.ToDictionary(kv => kv.Key, kv => new StoreVariantPreviewDraft(kv.Value.Price, kv.Value.CompareAtPrice, kv.Value.IsActive))),
+            new StoreProductPreviewContext(
+                category?.Name ?? saved.CategoryName, category?.Slug ?? "",
+                model is { UrlName: { } modelSlug, BrandUrlName: { } brandSlug } ? new StoreEquipmentLink(model.BrandName, brandSlug, model.Name, modelSlug) : null,
+                settings?.LowStockThreshold ?? 3, settings?.ReturnsWindowDays ?? 30, DateTime.UtcNow,
+                parent?.Name, parent?.Slug));
+    }
+
+    /// <summary>Delivery, returns and "need help", from the store settings.</summary>
+    private StorePublicInfo? PreviewInfo => _settings.Item is { } s
+        ? new StorePublicInfo(s.CheckoutEnabled, s.ShippingFlatRate ?? 0m, s.FreeShippingThreshold is > 0m ? s.FreeShippingThreshold : null,
+            s.ReturnsWindowDays ?? 30, s.SupportEmail, PaymentsEnabled: false, FakeCheckout: false, PublishableKey: null)
+        : null;
+
+    private List<StoreSpecGroup> SpecGroups() => StoreEditorDrafts.SpecGroups(_details.Specs);
+
+    private string? _pageError, _detailsError, _optionsError, _variantError, _pictureError;
+
+    private DetailsForm _details = new();
+    private List<StoreOptionDraft> _options = [];
+    private Dictionary<Guid, StoreVariantDraft> _variants = [];
+    private Dictionary<Guid, StorePictureDraft> _pictures = [];
+
+    private bool _stockOpen, _logOpen, _logLoading, _confirmDelete;
+    private Guid _stockVariantId;
+    private string _stockLabel = "";
+    private int _stockOnHand, _stockHeld;
+    private string? _stockError;
+    private LoadResult<StoreStockMovementRecord> _log;
+
+    private sealed class DetailsForm
+    {
+        public string Name { get; set; } = "";
+        public string? Slug { get; set; }
+        public Guid CategoryId { get; set; }
+        public Guid? EquipmentModelId { get; set; }
+        public Guid? SellerAppUserId { get; set; }
+        public string? ShortDescription { get; set; }
+        public string? LongDescriptionHtml { get; set; }
+        public bool IsFeatured { get; set; }
+        public DateTime? NewUntil { get; set; }
+        public string? StripeTaxCode { get; set; }
+        public int SortOrder { get; set; }
+        public List<StoreSpecLine> Specs { get; set; } = [];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        _categories = await AdminClient.GetStoreCategoriesAsync();
+        _models = await AdminClient.GetAdminEquipmentModelsAsync();
+        _sellers = await AdminClient.GetStoreSellersAsync();
+        _settings = await AdminClient.GetStoreSettingsAsync();
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "versions" or "page" or "history" or "preview") _tab = Tab;
+        await LoadAsync();
+        await TabChangedAsync();
+    }
+
+    private LoadResult<StoreProductChangeRecord> _history;
+    private bool _historyLoading;
+
+    /// <summary>The history loads when its tab opens, so it always includes the save just made.</summary>
+    private async Task TabChangedAsync()
+    {
+        if (_tab == "history") await LoadHistoryAsync();
+        if (_tab == "parts") await LoadPartsAsync();
+        if (_tab == "files") await LoadFilesAsync();
+        if (_tab == "faq") await LoadFaqsAsync();
+        if (_tab == "versions") await LoadVersionAsync();
+        if (_tab == "page") await LoadExtrasAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _historyLoading = true;
+        _history = await AdminClient.GetStoreProductHistoryAsync(ProductId);
+        _historyLoading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreProductAsync(ProductId);
+        if (_result.Item is { } p) { _variants.Clear(); _pictures.Clear(); Adopt(p, Drafts.All); }
+        _loading = false;
+    }
+
+    /// <summary>The parts of the page whose unsaved edits a fresh record may replace.</summary>
+    [Flags]
+    private enum Drafts { None = 0, Details = 1, Options = 2, Variants = 4, Pictures = 8, All = 15 }
+
+    /// <summary>
+    /// Takes a fresh record from the server, replacing only the drafts of the part that was just
+    /// saved. A save answers after the person may have moved on — pricing a variant, then straight
+    /// into the options — and rebuilding every draft from that answer threw away what they had
+    /// typed since (found by AdminStoreCatalogTests: the options vanished under a variant save).
+    /// </summary>
+    private void Adopt(StoreProductAdminRecord p, Drafts refresh)
+    {
+        _product = p;
+        _result = ItemResult<StoreProductAdminRecord>.Ok(p);
+        if (refresh.HasFlag(Drafts.Details))
+        {
+            _details = new DetailsForm
+            {
+                Name = p.Name, Slug = p.Slug, CategoryId = p.CategoryId, EquipmentModelId = p.EquipmentModelId,
+                SellerAppUserId = p.SellerAppUserId,
+                ShortDescription = p.ShortDescription, LongDescriptionHtml = p.LongDescriptionHtml,
+                IsFeatured = p.IsFeatured, NewUntil = p.NewUntilUtc?.Date, StripeTaxCode = p.StripeTaxCode,
+                SortOrder = p.SortOrder,
+                Specs = StoreEditorDrafts.SpecLines(p),
+            };
+            _dirty = false;
+        }
+        if (refresh.HasFlag(Drafts.Options))
+            _options = StoreEditorDrafts.Options(p);
+
+        // Variant and picture drafts are keyed by id: a row the server just sent that has no draft
+        // gets one, and a refresh of that part replaces them all.
+        foreach (var v in p.Variants.Where(v => refresh.HasFlag(Drafts.Variants) || !_variants.ContainsKey(v.Id)))
+            _variants[v.Id] = StoreEditorDrafts.Variant(v);
+        foreach (var i in p.Images.Where(i => refresh.HasFlag(Drafts.Pictures) || !_pictures.ContainsKey(i.Id)))
+            _pictures[i.Id] = StoreEditorDrafts.Picture(i);
+    }
+
+    private void MarkDirty() => _dirty = true;
+
+    private async Task SaveDetailsAsync()
+    {
+        _busy = true; _detailsError = null;
+        try
+        {
+            var specs = SpecGroups();
+            var (saved, error) = await AdminClient.SaveStoreProductAsync(ProductId, new SaveStoreProductRequest(
+                _details.CategoryId, _details.EquipmentModelId, _details.Name, _details.Slug, _details.ShortDescription,
+                _details.LongDescriptionHtml, _details.IsFeatured, // A day, not an instant: "new until 10/31" is stored as that date.
+                _details.NewUntil is { } until ? DateTime.SpecifyKind(until.Date, DateTimeKind.Utc) : null, _details.StripeTaxCode,
+                _details.SortOrder, specs, _details.SellerAppUserId, _product?.EditedAt));
+            if (saved is null) { _detailsError = error ?? "Saving failed."; return; }
+            Adopt(saved, Drafts.Details);
+            Toasts.Success("Saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ActivateAsync() => await SwitchAsync(AdminClient.ActivateStoreProductAsync(ProductId), "It's on sale.");
+
+    private async Task DeactivateAsync() => await SwitchAsync(AdminClient.DeactivateStoreProductAsync(ProductId), "Taken off sale.");
+
+    private async Task SwitchAsync(Task<(StoreProductAdminRecord? Result, string? Error)> call, string done)
+    {
+        _busy = true; _pageError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _pageError = error ?? "That didn't work."; return; }
+            Adopt(saved, Drafts.None);
+            Toasts.Success(done);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DuplicateAsync()
+    {
+        _busy = true; _pageError = null;
+        try
+        {
+            var (copy, error) = await AdminClient.DuplicateStoreProductAsync(ProductId);
+            if (copy is null) { _pageError = error ?? "The copy could not be made."; return; }
+            NavManager.NavigateTo($"/admin/store/products/{copy.Id}/edit");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _busy = true;
+        try
+        {
+            var (deleted, error) = await AdminClient.DeleteStoreProductAsync(ProductId);
+            _confirmDelete = false;
+            if (!deleted) { _pageError = error ?? "The product could not be deleted."; return; }
+            Toasts.Success("Deleted.");
+            NavManager.NavigateTo("/admin/store/products");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveOptionsAsync()
+    {
+        _busy = true; _optionsError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductOptionsAsync(ProductId, StoreEditorDrafts.OptionsRequest(_options, _product?.EditedAt));
+            if (saved is null) { _optionsError = error ?? "Saving failed."; return; }
+            Adopt(saved, Drafts.Options | Drafts.Variants);
+            Toasts.Success("Options saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task GenerateAsync()
+    {
+        _busy = true; _optionsError = null;
+        try
+        {
+            var (generated, error) = await AdminClient.GenerateStoreVariantsAsync(ProductId);
+            if (generated is null) { _optionsError = error ?? "Variants could not be generated."; return; }
+            Toasts.Success(generated.Added == 0 ? "Every combination already has a variant." : $"Added {generated.Added} {(generated.Added == 1 ? "variant" : "variants")}.");
+            var fresh = await AdminClient.GetStoreProductAsync(ProductId);
+            if (fresh.Item is { } p) Adopt(p, Drafts.Options | Drafts.Variants);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveVariantAsync(StoreVariantAdminRecord v)
+    {
+        var d = _variants[v.Id];
+        _busy = true; _variantError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreVariantAsync(ProductId, v.Id,
+                new SaveStoreVariantRequest(d.Sku, d.Price, d.CompareAtPrice, d.IsActive, d.IsDefault, v.SortOrder, v.OptionValueIds));
+            if (saved is null) { _variantError = error ?? "Saving failed."; return; }
+            _variants.Remove(v.Id);
+            Adopt(saved, Drafts.None);
+            Toasts.Success($"{v.Label} saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteVariantAsync(StoreVariantAdminRecord v)
+    {
+        _busy = true; _variantError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.DeleteStoreVariantAsync(ProductId, v.Id);
+            if (saved is null) { _variantError = error ?? "The variant could not be deleted."; return; }
+            Adopt(saved, Drafts.None);
+        }
+        finally { _busy = false; }
+    }
+
+    private void OpenStock(StoreVariantAdminRecord v)
+    {
+        _stockVariantId = v.Id; _stockLabel = $"{v.Label} ({v.Sku})"; _stockOnHand = v.StockOnHand; _stockHeld = v.StockReserved;
+        _stockError = null;
+        _stockOpen = true;
+    }
+
+    private async Task SaveStockAsync(AdjustStockRequest request)
+    {
+        _busy = true; _stockError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.AdjustStoreVariantStockAsync(ProductId, _stockVariantId, request);
+            if (saved is null) { _stockError = error ?? "The stock could not be changed."; return; }
+            Adopt(saved, Drafts.None);
+            _stockOpen = false;
+            Toasts.Success("Stock updated.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task OpenLogAsync(StoreVariantAdminRecord v)
+    {
+        _stockVariantId = v.Id; _stockLabel = $"{v.Label} ({v.Sku})";
+        _logOpen = true;
+        await ReloadLogAsync();
+    }
+
+    private async Task ReloadLogAsync()
+    {
+        _logLoading = true;
+        _log = await AdminClient.GetStoreVariantStockLogAsync(ProductId, _stockVariantId);
+        _logLoading = false;
+    }
+
+    private async Task UploadPicturesAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true; _pictureError = null;
+        try
+        {
+            foreach (var file in e.GetMultipleFiles(StoreCatalogRules.MaxImagesPerProduct))
+            {
+                using var content = await StoreUploads.ContentAsync(file);
+                var (saved, error) = await AdminClient.AddStoreProductImageAsync(ProductId, content);
+                if (saved is null) { _pictureError = $"{file.Name}: {error ?? "could not be uploaded."}"; break; }
+                Adopt(saved, Drafts.None);
+            }
+        }
+        catch (IOException) { _pictureError = StoreUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task SavePictureAsync(Guid imageId)
+    {
+        var d = _pictures[imageId];
+        _pictureError = null;
+        var (saved, error) = await AdminClient.SaveStoreProductImageAsync(ProductId, imageId, new UpdateStoreImageRequest(d.AltText, d.VariantId));
+        if (saved is null) { _pictureError = error ?? "Saving failed."; return; }
+        _pictures.Remove(imageId);
+        Adopt(saved, Drafts.None);
+        Toasts.Success("Picture saved.");
+    }
+
+    private async Task MovePictureAsync(int index, int by)
+    {
+        if (_product is null) return;
+        var ids = _product.Images.Select(i => i.Id).ToList();
+        (ids[index], ids[index + by]) = (ids[index + by], ids[index]);
+        var (saved, error) = await AdminClient.ReorderStoreProductImagesAsync(ProductId, new ReorderRequest(ids));
+        if (saved is null) { _pictureError = error ?? "The pictures could not be reordered."; return; }
+        Adopt(saved, Drafts.None);
+    }
+
+    private async Task DeletePictureAsync(Guid imageId)
+    {
+        _pictureError = null;
+        var (saved, error) = await AdminClient.DeleteStoreProductImageAsync(ProductId, imageId);
+        if (saved is null) { _pictureError = error ?? "The picture could not be removed."; return; }
+        Adopt(saved, Drafts.None);
+    }
+
+    // ── parts and cost (store sellers P4) ────────────────────────────────────
+
+    private ItemResult<StorePartsRecord> _parts;
+    private string? _partsError;
+
+    private ItemResult<StoreProductEconomicsRecord> _economics;
+
+    private async Task LoadPartsAsync()
+    {
+        _parts = await AdminClient.GetStoreProductPartsAsync(ProductId);
+        _economics = await AdminClient.GetStoreProductEconomicsAsync(ProductId);
+    }
+
+    private async Task SavePartsAsync(SaveStorePartsRequest request)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductPartsAsync(ProductId, request);
+            if (saved is null) { _partsError = error ?? "Saving failed."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+            _economics = await AdminClient.GetStoreProductEconomicsAsync(ProductId);
+            Toasts.Success("Parts saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task PartPictureAsync(Guid partId, InputFileChangeEventArgs e)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(e.File);
+            var (saved, error) = await AdminClient.SetStorePartPictureAsync(ProductId, partId, content);
+            if (saved is null) { _partsError = error ?? "The picture could not be added."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+        }
+        catch (IOException) { _partsError = StoreUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task RemovePartPictureAsync(Guid partId)
+    {
+        _partsError = null;
+        var (saved, error) = await AdminClient.RemoveStorePartPictureAsync(ProductId, partId);
+        if (saved is null) { _partsError = error ?? "The picture could not be removed."; return; }
+        _parts = ItemResult<StorePartsRecord>.Ok(saved);
+    }
+
+    // ── files (store sellers P11) ────────────────────────────────────────────
+
+    private LoadResult<StoreProductFileRecord> _files;
+    private bool _filesLoading;
+    private string? _filesError;
+
+    private async Task LoadFilesAsync()
+    {
+        _filesLoading = true;
+        _files = await AdminClient.GetStoreProductFilesAsync(ProductId);
+        _filesLoading = false;
+    }
+
+    private async Task<bool> FilesAnswerAsync(Task<(List<StoreProductFileRecord>? Result, string? Error)> call, string failed, string? done = null)
+    {
+        _busy = true; _filesError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _filesError = error ?? failed; return false; }
+            _files = LoadResult<StoreProductFileRecord>.Ok(saved);
+            if (done is not null) Toasts.Success(done);
+            return true;
+        }
+        // The panel calls these through a Func, not an EventCallback, so nothing re-renders this page by itself.
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private async Task<bool> UploadFileAsync(IBrowserFile file, SaveStoreProductFileRequest meta)
+    {
+        _filesError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(file, new Dictionary<string, string?>
+            {
+                ["title"] = meta.Title, ["kind"] = meta.Kind.ToString(), ["audience"] = meta.Audience.ToString(), ["versionLabel"] = meta.VersionLabel,
+            }, StoreUploads.MaxFileBytes);
+            return await FilesAnswerAsync(AdminClient.AddStoreProductFileAsync(ProductId, content), "The file could not be added.", "File added.");
+        }
+        catch (IOException) { _filesError = StoreUploads.FileTooLarge; StateHasChanged(); return false; }
+    }
+
+    private Task<bool> WriteManualAsync(SaveStoreManualRequest request)
+        => FilesAnswerAsync(AdminClient.AddStoreProductManualAsync(ProductId, request), "The manual could not be added.", "Manual added.");
+
+    private Task SaveFileAsync(Guid fileId, SaveStoreProductFileRequest meta)
+        => FilesAnswerAsync(AdminClient.SaveStoreProductFileAsync(ProductId, fileId, meta), "The file could not be saved.", "File saved.");
+
+    private Task DeleteFileAsync(Guid fileId)
+        => FilesAnswerAsync(AdminClient.DeleteStoreProductFileAsync(ProductId, fileId), "The file could not be removed.", "File removed.");
+
+    // ── FAQ (store sellers P12) ──────────────────────────────────────────────
+
+    private ItemResult<StoreFaqsRecord> _faqs;
+    private string? _faqError;
+
+    private async Task LoadFaqsAsync() => _faqs = await AdminClient.GetStoreProductFaqsAsync(ProductId);
+
+    private async Task SaveFaqsAsync(SaveStoreFaqsRequest request)
+    {
+        _busy = true; _faqError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductFaqsAsync(ProductId, request);
+            if (saved is null) { _faqError = error ?? "The FAQ could not be saved."; return; }
+            _faqs = ItemResult<StoreFaqsRecord>.Ok(saved);
+            Toasts.Success("FAQ saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    // ── versions (store sellers P13) ─────────────────────────────────────────
+
+    private ItemResult<StoreVersionInfo> _version;
+    private string? _versionError;
+
+    private async Task LoadVersionAsync() => _version = await AdminClient.GetStoreProductVersionAsync(ProductId);
+
+    private async Task SaveVersionAsync(SaveStoreVersionRequest request)
+    {
+        _busy = true; _versionError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductVersionAsync(ProductId, request);
+            if (saved is null) { _versionError = error ?? "The version could not be saved."; return; }
+            _version = ItemResult<StoreVersionInfo>.Ok(saved);
+            Toasts.Success("Saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<string?> StartVersionAsync(StartStoreVersionRequest request)
+    {
+        var (started, error) = await AdminClient.StartStoreProductVersionAsync(ProductId, request);
+        if (started is null) return error ?? "The new version could not be started.";
+        Toasts.Success("New version started — it's a draft.");
+        NavManager.NavigateTo($"/admin/store/products/{started.ProductId}/edit", forceLoad: true);
+        return null;
+    }
+
+    // ── page extras (store sellers P14) ──────────────────────────────────────
+
+    private ItemResult<StoreExtrasRecord> _extras;
+    private string? _extrasError;
+
+    private async Task LoadExtrasAsync() => _extras = await AdminClient.GetStoreProductExtrasAsync(ProductId);
+
+    private async Task<bool> ExtrasAnswerAsync(Task<(StoreExtrasRecord? Result, string? Error)> call, string failed, string done)
+    {
+        _busy = true; _extrasError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _extrasError = error ?? failed; return false; }
+            _extras = ItemResult<StoreExtrasRecord>.Ok(saved);
+            Toasts.Success(done);
+            return true;
+        }
+        // The panel's video upload comes through a Func, which doesn't re-render this page by itself.
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private Task SaveExtrasAsync(string? returns, string? warranty, bool reviews)
+        => ExtrasAnswerAsync(AdminClient.SaveStoreProductExtrasAsync(ProductId, new SaveStoreExtrasRequest(returns, warranty, reviews)), "The page couldn't be saved.", "Saved.");
+
+    private async Task<bool> AddVideoAsync(IBrowserFile file, string? title)
+    {
+        _extrasError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(file, new Dictionary<string, string?> { ["title"] = title }, StoreUploads.MaxFileBytes);
+            return await ExtrasAnswerAsync(AdminClient.AddStoreProductVideoAsync(ProductId, content), "The video couldn't be added.", "Video added.");
+        }
+        catch (IOException) { _extrasError = "That video is too large — 95 MB at most."; StateHasChanged(); return false; }
+    }
+
+    private Task RemoveVideoAsync(Guid videoId)
+        => ExtrasAnswerAsync(AdminClient.DeleteStoreProductVideoAsync(ProductId, videoId), "The video couldn't be removed.", "Video removed.");
+}

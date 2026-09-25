@@ -127,6 +127,16 @@ public interface IBenCaseClient
     Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// The table behind this is append-only and was entirely write-only until the 2026-09-17
+    /// audit, so the question its own entity doc names — "who put this footage up" — had no
+    /// answer anywhere. Answered to the GROUP: a client asks their group and the group answers.
+    /// </remarks>
+    Task<WebApi.LoadResult<CaseFeedConsentRecord>> GetCaseFeedConsentsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
     /// Advisory warnings when this title or pseudonym would carry the client's name or the street
     /// address onto the public case page (item 176). The caller decides what a failed check means —
     /// for an advisory, failure must never block publishing.
@@ -207,21 +217,15 @@ public interface IBenCaseClient
 
     // ── Case Research ─────────────────────────────────────────────────────────
 
-    Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-
-    // ── Research pages (2026-09-14) ──────────────────────────────────────────
-    /// <summary>A new research page, with the server's refusal sentence when there is one.</summary>
-    Task<(CaseResearchEntryDto? Result, string? Error)> CreateCaseResearchPageAsync(Guid orgId, Guid caseId, string title, CancellationToken token = default);
-    Task<ItemResult<CaseResearchPageDto>> GetCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-    Task<ResearchDraftSaveOutcome> SaveCaseResearchDraftAsync(Guid orgId, Guid caseId, Guid entryId, SaveResearchDraftRequest request, CancellationToken token = default);
-    Task<(CaseResearchPageDto? Result, string? Error)> PublishCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-    Task<(CaseResearchAttachmentDto? Result, string? Error)> UploadCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<(CaseResearchAttachmentDto? Result, string? Error)> AddCaseResearchLinkAsync(Guid orgId, Guid caseId, Guid entryId, AddResearchLinkRequest request, CancellationToken token = default);
-    Task<(bool Ok, string? Error)> DeleteCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Guid attachmentId, CancellationToken token = default);
+    /// <summary>
+    /// The case's canvas boards: every published one, plus the caller's own unpublished drafts (item 243).
+    /// </summary>
+    /// <remarks>
+    /// The whole of research, since 2026-09-16. The block-editor research pages that stood here until
+    /// then are gone: two ways to write up a case is one more than anybody needed, and the boards are
+    /// the one Ben kept.
+    /// </remarks>
+    Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
@@ -300,10 +304,21 @@ public interface IBenCaseClient
     Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
-    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Records what the client says happened, or hands back why it could not be recorded.
+    /// </summary>
+    /// <remarks>
+    /// Returns the reason, not just a null. The transport maps every server refusal to null rather
+    /// than throwing, so the page's <c>catch</c> never saw a 404 or a 400 — and this is the
+    /// client's own account of what is happening in their house, typed once. The 2026-09-17 audit
+    /// found the result discarded entirely: the dialog closed, the list refreshed, and the text
+    /// was gone.
+    /// </remarks>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Updates a previously logged occurrence.</summary>
-    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>Edits one, or hands back why it could not be edited. See above.</summary>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);

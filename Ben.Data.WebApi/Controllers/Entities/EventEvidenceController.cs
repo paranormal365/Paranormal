@@ -142,7 +142,7 @@ public sealed class EventEvidenceController : BenControllerBase
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
-            FileName = file.FileName, StoredFileName = storedName,
+            FileName = ingested.ServedFileName(file.FileName), StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
             DateCreated = now, CreatedByAppUserId = userId,
@@ -494,7 +494,8 @@ public sealed class EventEvidenceController : BenControllerBase
         if (!string.IsNullOrEmpty(file.StoragePath))
         {
             var stream = await _fileStorage.OpenReadAsync(file.StoragePath, ct);
-            return File(stream, file.ContentType, file.FileName);
+            // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+            return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
         }
 
         return file.FileData is not null

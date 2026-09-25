@@ -1,4 +1,5 @@
 using Ben.Video.Core.SidecarContracts;
+using Ben.Video.Editor.Models;
 using Microsoft.JSInterop;
 
 namespace Ben.Video.Editor.Services;
@@ -41,6 +42,15 @@ public sealed class NativeSidecarService(
     /// <see cref="ProbeTimeout"/> because at this point something is definitely listening.</summary>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(2);
 
+    /// <summary>How long to keep looking for a sidecar after asking Windows to start one.</summary>
+    /// <remarks>
+    /// Patient on purpose. The browser may show the person a prompt first and wait on their answer,
+    /// and the sidecar itself re-hashes two ~145 MB binaries at startup before it serves anything.
+    /// </remarks>
+    private static readonly TimeSpan StartupWait = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan StartupPollEvery = TimeSpan.FromSeconds(1);
+
     public NativeSidecarState State { get; private set; } = NativeSidecarState.Disabled;
     public HealthInfo? Info { get; private set; }
     public int? DiscoveredPort { get; private set; }
@@ -71,6 +81,42 @@ public sealed class NativeSidecarService(
     /// from scratch rather than trusting cached state, since the sidecar may have been
     /// restarted/reset/closed between calls.
     /// </summary>
+    /// <summary>
+    /// Tells a connected sidecar that the editor is still open, so it does not stop underneath one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-19: the sidecar should run only while the video editor is being used. It
+    /// decides that by how long it has been since anything asked it for anything — which without
+    /// this would mean "since the last render", not "since the editor was closed". An hour of local
+    /// editing with no export looks exactly like a closed editor from the sidecar's side, and it
+    /// would stop; the next export would then have to wake it and re-render every retained segment,
+    /// because a new process means a new InstanceId and the remote-segment index is dropped.</para>
+    ///
+    /// <para>A plain health GET, because any request at all is what the sidecar counts. It is
+    /// deliberately quiet about failure: a sidecar that has gone away is not news here — the next
+    /// real call reports it properly, and this must never put an error in front of somebody who is
+    /// editing.</para>
+    /// </remarks>
+    public async Task HeartbeatAsync(CancellationToken ct = default)
+    {
+        if (DiscoveredPort is not { } port) return;
+
+        try
+        {
+            await transport.SendAsync(
+                "GET", $"http://127.0.0.1:{port}/v1/health", token: string.Empty,
+                timeout: ProbeTimeout, ct: ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Gone, asleep, or busy. Not this method's business.
+        }
+    }
+
     public async Task ProbeAsync(CancellationToken ct = default)
     {
         for (var port = SidecarProtocol.DefaultPort; port <= SidecarProtocol.DefaultPort + SidecarProtocol.DefaultPortScanRange; port++)
@@ -233,6 +279,134 @@ public sealed class NativeSidecarService(
         Capabilities = SidecarCapabilitySet.None;
         SetState(NativeSidecarState.Disconnected);
     }
+
+    /// <summary>
+    /// Whether to offer the on/off switch, asked of the browser once and remembered.
+    /// </summary>
+    /// <remarks>
+    /// Null until something has asked. <see cref="RefreshSwitchAvailabilityAsync"/> settles it.
+    /// </remarks>
+    public bool? SwitchIsOffered { get; private set; }
+
+    /// <summary>How many jobs the sidecar said were running the last time it refused to stop.</summary>
+    public int LastRefusedJobCount { get; private set; }
+
+    /// <summary>
+    /// Asks the browser what it is running on, to decide whether the switch can do anything here.
+    /// </summary>
+    public async Task RefreshSwitchAvailabilityAsync()
+    {
+        if (SwitchIsOffered is not null) return;
+
+        await EnsureModuleAsync();
+        string? platform = null;
+        if (_module is not null)
+        {
+            try { platform = await _module.InvokeAsync<string?>("getPlatform"); }
+            catch { /* stays null, which offers no switch - see SidecarSwitch.IsOfferedOn */ }
+        }
+
+        SwitchIsOffered = SidecarSwitch.IsOfferedOn(platform);
+        OnChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Turns the sidecar on: asks Windows to start it, then looks for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The launch itself tells us nothing - a page cannot learn whether a program started -
+    /// so this probes until one answers or the wait runs out. Starting a self-contained .NET app
+    /// that hashes two large binaries at startup is not instant, hence a patient deadline rather
+    /// than a single look.</para>
+    ///
+    /// <para>The browser may put a prompt in front of the person first ("Open BenVideo Sidecar?"),
+    /// and they may take a moment over it, or refuse. Refusing looks exactly like not starting,
+    /// and is reported the same way: nothing answered.</para>
+    /// </remarks>
+    /// <returns>True when a sidecar answered before the deadline.</returns>
+    public async Task<bool> StartAsync(CancellationToken ct = default)
+    {
+        await EnsureModuleAsync();
+        if (_module is null) return false;
+
+        try { await _module.InvokeVoidAsync("launchViaProtocol", ct, SidecarSwitch.LaunchUri); }
+        catch { return false; }
+
+        var deadline = DateTimeOffset.UtcNow + StartupWait;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(StartupPollEvery, ct);
+            await ProbeAsync(ct);
+            if (State is not NativeSidecarState.Disconnected) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Turns the sidecar off, by asking it to stop.
+    /// </summary>
+    /// <param name="force">Stop even though work is in progress. The person gives this answer
+    /// after being told what it will cost, by pressing the switch a second time.</param>
+    /// <remarks>
+    /// Only ever asks a sidecar we are paired with: the endpoint is token-gated, so an unpaired
+    /// editor has nothing to ask with. A sidecar found but not paired is left alone rather than
+    /// being reported as a failure - nothing was connected, and nothing is being turned off.
+    /// </remarks>
+    public async Task<SidecarStopOutcome> StopAsync(bool force = false, CancellationToken ct = default)
+    {
+        if (await GetConnectionAsync() is not { } connection)
+            return SidecarStopOutcome.NotConnected;
+        var (port, token) = connection;
+
+        SidecarTransport.Response response;
+        try
+        {
+            response = await transport.SendAsync(
+                "POST", $"http://127.0.0.1:{port}/v1/shutdown?force={(force ? "true" : "false")}",
+                token, timeout: RequestTimeout, ct: ct);
+        }
+        catch
+        {
+            // Connection refused mid-request is not a failure to stop; it is the process having
+            // gone while we were asking. Treat it as stopped, because it is.
+            Capabilities = SidecarCapabilitySet.None;
+            DiscoveredPort = null;
+            SetState(NativeSidecarState.Disconnected);
+            return SidecarStopOutcome.Stopped;
+        }
+
+        var outcome = SidecarSwitch.ReadStopResponse(response.Status);
+
+        if (outcome == SidecarStopOutcome.WorkInProgress)
+        {
+            LastRefusedJobCount = ReadActiveJobs(response);
+            return outcome;
+        }
+
+        if (outcome == SidecarStopOutcome.Stopped)
+        {
+            // Said before it is proven, and correctly: the sidecar answered that it is stopping,
+            // and anything still routed at it in the meantime would be routed at a dying process.
+            Capabilities = SidecarCapabilitySet.None;
+            DiscoveredPort = null;
+            SetState(NativeSidecarState.Disconnected);
+        }
+
+        return outcome;
+    }
+
+    /// <summary>How many jobs the sidecar said it was running, or one when it would not say.</summary>
+    /// <remarks>
+    /// Only ever used for wording. A body that cannot be read still means work is in progress -
+    /// that was the status code, not the body - so the safe answer is "something", not "none".
+    /// </remarks>
+    private static int ReadActiveJobs(SidecarTransport.Response response)
+    {
+        try { return response.ReadJson<ShutdownRefusedBody>()?.ActiveJobs ?? 1; }
+        catch { return 1; }
+    }
+
+    private sealed record ShutdownRefusedBody(int ActiveJobs);
 
     /// <summary>Forgets the stored token and returns to the unpaired state, e.g. if the user
     /// wants to pair with a different sidecar instance.</summary>

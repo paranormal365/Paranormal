@@ -1,0 +1,202 @@
+@typeparam TValue
+
+@*
+    The site's date, date-and-time and time field (item 224). Replaces TelerikDatePicker, TelerikDateTimePicker and
+    TelerikTimePicker everywhere; BenDateFieldGuardTests keeps them out.
+
+    Telerik's segmented input turns an impossible day into a different real one — 0-9-3-1 becomes 09/01, 1-3 in the
+    hour becomes 03 PM — silently (measured 2026-09-15, 14.1 and 15.0.1). Here the text is typed freely and read by
+    DateEntry when the field is left or Enter is pressed. A date that cannot exist is refused with a sentence, and the
+    field goes back to showing the value it still holds, so what is on screen is always what Save will send.
+
+    Plain Blazor markup and a TelerikCalendar (the month grid, not the segmented input) opened inline beneath the
+    field: nothing to clip inside a modal, no popup layer, no JavaScript.
+*@
+
+<div class="ben-date-field @Class" data-mode="@Mode.ToString().ToLowerInvariant()" style="@(Width is not null ? $"width:{Width};" : null)">
+    <div class="input-group flex-nowrap">
+        <input @key="_inputVersion"
+               id="@Id"
+               type="text"
+               class="form-control @(_error is null ? null : "is-invalid")"
+               value="@_text"
+               placeholder="@(Placeholder ?? DateEntry.Example(Mode))"
+               disabled="@(!Enabled)"
+               autocomplete="off"
+               aria-invalid="@(_error is null ? "false" : "true")"
+               aria-describedby="@(_error is null ? null : ErrorId)"
+               @onchange="OnTextChangedAsync"
+               @onkeydown="OnKeyDown" />
+        @if (Mode != DateEntryMode.Time)
+        {
+            <button type="button" class="btn btn-outline-secondary ben-date-field__open"
+                    title="Choose from a calendar" aria-label="Choose from a calendar"
+                    aria-expanded="@(_calendarOpen ? "true" : "false")"
+                    disabled="@(!Enabled)" @onclick="ToggleCalendar">
+                <BenIcon Name="calendar" />
+            </button>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="invalid-feedback d-block" id="@ErrorId" role="alert">@_error</div>
+    }
+
+    @if (_calendarOpen)
+    {
+        <div class="ben-date-field__calendar mt-1" @onkeydown="OnKeyDown">
+            <TelerikCalendar Value="@(Current ?? DateTime.Today)"
+                             ValueChanged="@((DateTime picked) => OnCalendarPickedAsync(picked))"
+                             Min="@(Min ?? new DateTime(1900, 1, 1))"
+                             Max="@(Max ?? new DateTime(2199, 12, 31))" />
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// The bound value: <c>DateTime</c>, <c>DateTimeOffset</c>, or either nullable (which may be left blank). An offset is
+    /// kept as stored: the field edits the clock time and writes it back with the same offset, as Telerik's picker did.
+    /// </summary>
+    [Parameter] public TValue Value { get; set; } = default!;
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public System.Linq.Expressions.Expression<Func<TValue>>? ValueExpression { get; set; }
+
+    [Parameter] public DateEntryMode Mode { get; set; } = DateEntryMode.Date;
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Width { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool Enabled { get; set; } = true;
+
+    /// <summary>Earliest value accepted, compared at the field's own precision.</summary>
+    [Parameter] public DateTime? Min { get; set; }
+
+    /// <summary>Latest value accepted.</summary>
+    [Parameter] public DateTime? Max { get; set; }
+
+    private static readonly bool Nullable = typeof(TValue) == typeof(DateTime?) || typeof(TValue) == typeof(DateTimeOffset?);
+    private static readonly bool HasOffset = typeof(TValue) == typeof(DateTimeOffset) || typeof(TValue) == typeof(DateTimeOffset?);
+
+    private string _text = string.Empty;
+    private string? _error;
+    private bool _calendarOpen;
+    private int _inputVersion;
+    private DateTime? _shown;
+    private readonly string _fallbackId = "ben-date-" + Guid.NewGuid().ToString("N")[..8];
+
+    private string ErrorId => $"{Id ?? _fallbackId}-error";
+    private DateTime? Current => Value switch
+    {
+        DateTime d => d,
+        DateTimeOffset o => o.DateTime,
+        _ => null,
+    };
+
+    protected override void OnInitialized()
+    {
+        if (typeof(TValue) != typeof(DateTime) && typeof(TValue) != typeof(DateTimeOffset) && !Nullable)
+            throw new InvalidOperationException($"BenDateField binds DateTime or DateTimeOffset (or either nullable), not {typeof(TValue).Name}.");
+    }
+
+    protected override void OnParametersSet()
+    {
+        // A value set from outside (a reset, a loaded record) replaces what is shown and any refusal about old text.
+        if (Current != _shown)
+        {
+            _shown = Current;
+            _text = Current is { } d ? DateEntry.Format(d, Mode) : string.Empty;
+            _error = null;
+        }
+    }
+
+    private async Task OnTextChangedAsync(ChangeEventArgs e)
+    {
+        var typed = e.Value?.ToString() ?? string.Empty;
+        var result = DateEntry.Parse(typed, Mode, Current);
+
+        var error = result.Error;
+        if (error is null && result.Value is null && !Nullable)
+            error = Mode == DateEntryMode.Time ? "Enter a time." : "Enter a date.";
+        if (error is null && result.Value is { } candidate)
+            error = OutOfRange(candidate);
+
+        if (error is not null)
+        {
+            // Refused: say why, and show the value the field still holds, so Save never sends something other than
+            // what is on screen.
+            _error = Current is { } kept
+                ? $"{error} It is still {DateEntry.Format(kept, Mode)}."
+                : error;
+            ShowText(typed, Current is { } k ? DateEntry.Format(k, Mode) : string.Empty);
+            return;
+        }
+
+        _error = null;
+        await CommitAsync(result.Value, typed);
+    }
+
+    private async Task OnCalendarPickedAsync(DateTime picked)
+    {
+        // The calendar picks a day; the time already in the field stays.
+        var value = picked.Date + (Current?.TimeOfDay ?? TimeSpan.Zero);
+        var error = OutOfRange(value);
+        _calendarOpen = false;
+        if (error is not null)
+        {
+            _error = error;
+            return;
+        }
+        _error = null;
+        await CommitAsync(value, typed: null);
+    }
+
+    private async Task CommitAsync(DateTime? value, string? typed)
+    {
+        _shown = value;
+        ShowText(typed, value is { } v ? DateEntry.Format(v, Mode) : string.Empty);
+        await ValueChanged.InvokeAsync(ToValue(value));
+    }
+
+    private TValue ToValue(DateTime? value)
+    {
+        if (value is not { } set) return default!;
+        if (!HasOffset) return (TValue)(object)set;
+        var offset = Value is DateTimeOffset kept ? kept.Offset : TimeSpan.Zero;
+        return (TValue)(object)new DateTimeOffset(DateTime.SpecifyKind(set, DateTimeKind.Unspecified), offset);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="text"/> in the box. Blazor diffs the value attribute against what it last rendered, not
+    /// against what the person typed, so when the last render already said this text the typed characters would stay
+    /// on screen; a new element key replaces the input instead.
+    /// </summary>
+    private void ShowText(string? typed, string text)
+    {
+        if (typed is not null && typed != text && _text == text) _inputVersion++;
+        _text = text;
+    }
+
+    private string? OutOfRange(DateTime value)
+    {
+        if (Min is { } min && Truncate(value) < Truncate(min))
+            return $"Choose {(Mode == DateEntryMode.Time ? "a time" : "a date")} on or after {DateEntry.Format(min, Mode)}.";
+        if (Max is { } max && Truncate(value) > Truncate(max))
+            return $"Choose {(Mode == DateEntryMode.Time ? "a time" : "a date")} on or before {DateEntry.Format(max, Mode)}.";
+        return null;
+    }
+
+    private DateTime Truncate(DateTime d) => Mode switch
+    {
+        DateEntryMode.Date => d.Date,
+        _ => new DateTime(d.Year, d.Month, d.Day, d.Hour, d.Minute, 0),
+    };
+
+    private void ToggleCalendar() => _calendarOpen = !_calendarOpen;
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _calendarOpen = false;
+    }
+}

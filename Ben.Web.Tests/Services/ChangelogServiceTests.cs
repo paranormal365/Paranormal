@@ -87,6 +87,55 @@ public sealed class ChangelogServiceTests
         }
     }
 
+    /// <summary>
+    /// Words that name an administration surface rather than something the reader can use.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-21: <i>"On the changelog, don't show changes to administration pages or
+    /// methods."</i> This page is read by somebody deciding whether to sign up. A line about the
+    /// administration dashboard or a SuperAdmin screen tells them about a room they will never be
+    /// in, and it pads a page whose whole value is that every line is about them.
+    /// </remarks>
+    private static readonly string[] AdministrationWords =
+    [
+        "administrator", "administration", "superadmin", "super admin", "/admin",
+    ];
+
+    /// <summary>
+    /// Entries written before the rule, with what each names.
+    /// </summary>
+    /// <remarks>
+    /// A ratchet, not a rewrite. These are published lines a reader may have already seen, and
+    /// silently editing a public changelog is worse than an old entry that does not meet a rule
+    /// written after it. The list may only get shorter.
+    /// </remarks>
+    /// <remarks>
+    /// Sixteen is the count on the day the rule was written, not a figure anybody chose. A ceiling
+    /// picked by guesswork would either pass while the problem grew or fail on day one for no
+    /// reason a reader could act on.
+    /// </remarks>
+    private static readonly int LegacyAdministrationEntries = 16;
+
+    [Fact]
+    public void NoEntryIsAboutAnAdministrationScreen()
+    {
+        var offenders = _changelog.Days()
+            .SelectMany(day => day.Entries.Select(entry => (day, entry)))
+            .Where(pair => AdministrationWords.Any(
+                w => pair.entry.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .Select(pair => $"{pair.day.Stream} {pair.day.Date}: \"{Short(pair.entry)}\"")
+            .ToList();
+
+        Assert.True(offenders.Count <= LegacyAdministrationEntries,
+            $"{offenders.Count} entries name an administration surface, and the agreed ceiling is "
+          + $"{LegacyAdministrationEntries}. The changelog is read by somebody deciding whether to "
+          + "sign up, so a line about a screen they will never see is padding:\n  "
+          + string.Join("\n  ", offenders));
+
+        static string Short(string entry)
+            => entry.Length <= 90 ? entry : entry[..90] + "…";
+    }
+
     [Fact]
     public void NoEntryCarriesAnInternalItemNumberOrABranchName()
     {

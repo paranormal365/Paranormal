@@ -35,7 +35,8 @@ public sealed class ArchiveMediaPublicationTests
         PlaceKind kind = PlaceKind.PublicLocation,
         FeedMediaReviewState review = FeedMediaReviewState.Approved,
         bool published = true,
-        bool attachedToPlace = true)
+        bool attachedToPlace = true,
+        bool insideBundle = false)
     {
         var f = CreateFactory();
         Guid userId = Guid.NewGuid(), placeId = Guid.NewGuid(),
@@ -73,15 +74,27 @@ public sealed class ArchiveMediaPublicationTests
             ReadingCount = 900, MarkerCount = 3,
             DateCreated = now, CreatedByAppUserId = userId,
         });
-        db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
-        {
-            Id = Guid.NewGuid(), FieldSessionUploadId = sessionId, UploadFileId = fileId,
-            RelativePath = "media/photo-001.jpg",
-            DateCreated = now, CreatedByAppUserId = userId,
-        });
+        // Sent on its own: the row points at the UploadFile above. Sent inside the session's .ben:
+        // no file of its own, the member's path instead, and the ROW's id is what the archive hands
+        // out — so that is the id the world reports as the file's.
+        var rowId = Guid.NewGuid();
+        db.FieldSessionUploadFiles.Add(insideBundle
+            ? new FieldSessionUploadFile
+            {
+                Id = rowId, FieldSessionUploadId = sessionId, UploadFileId = null,
+                BundleEntryPath = "media/photo-001.jpg", RelativePath = "media/photo-001.jpg",
+                ContentType = "image/jpeg", FileSize = 1024,
+                DateCreated = now, CreatedByAppUserId = userId,
+            }
+            : new FieldSessionUploadFile
+            {
+                Id = rowId, FieldSessionUploadId = sessionId, UploadFileId = fileId,
+                RelativePath = "media/photo-001.jpg",
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
         await db.SaveChangesAsync();
 
-        return new World(f, sessionId, fileId, placeId);
+        return new World(f, sessionId, insideBundle ? rowId : fileId, placeId);
     }
 
     private static async Task<(bool MayServe, int Listed)> AskAsync(World w)
@@ -106,6 +119,34 @@ public sealed class ArchiveMediaPublicationTests
     /// Publication is an act somebody performed. A session sitting on the server unpublished has
     /// had nothing decided about it, and "not yet decided" is not permission.
     /// </summary>
+    /// <summary>
+    /// The phone sends a night as one .ben since 1.0.3, so its recordings have no file of their own;
+    /// they were refused at the archive's door until the archive could read a member of the session
+    /// file. Listed under the row's id, and served by it.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_inside_the_session_file_is_listed_under_its_own_id_and_may_be_served()
+    {
+        var w = await SeedAsync(insideBundle: true);
+        var (mayServe, listed) = await AskAsync(w);
+        Assert.True(mayServe);
+        Assert.Equal(1, listed);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var item = Assert.Single(await ArchiveMediaPublication.ServableFilesAsync(db, w.SessionId, default));
+        Assert.Equal(w.FileId, item.UploadFileId);
+        Assert.Equal("image/jpeg", item.ContentType);
+        Assert.Equal("photo-001.jpg", item.FileName);
+    }
+
+    [Fact]
+    public async Task A_recording_inside_another_sessions_file_is_refused_under_this_one()
+    {
+        var w = await SeedAsync(insideBundle: true);
+        await using var db = await w.F.CreateDbContextAsync();
+        Assert.False(await ArchiveMediaPublication.MayServeAsync(db, Guid.NewGuid(), w.FileId, default));
+    }
+
     [Fact]
     public async Task An_unpublished_session_serves_nothing()
     {

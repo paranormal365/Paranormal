@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The browser the canvas suite launches. Copied from Ben.Web.Playwright: Chromium plays media through
+  its own fake sink rather than the machine's sound card, so nothing depends on the speakers.
+-->
+<RunSettings>
+  <Playwright>
+    <LaunchOptions>
+      <Args>["--disable-audio-output"]</Args>
+    </LaunchOptions>
+  </Playwright>
+</RunSettings>

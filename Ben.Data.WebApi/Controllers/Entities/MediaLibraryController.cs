@@ -27,11 +27,16 @@ public sealed class MediaLibraryController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
+    private readonly Ben.Data.Common.Interfaces.IFileStorageService _storage;
 
-    public MediaLibraryController(IDbContextFactory<BenDataContext> db, IMapper mapper)
+    public MediaLibraryController(
+        IDbContextFactory<BenDataContext> db,
+        IMapper mapper,
+        Ben.Data.Common.Interfaces.IFileStorageService storage)
     {
-        _db     = db;
-        _mapper = mapper;
+        _db      = db;
+        _mapper  = mapper;
+        _storage = storage;
     }
 
     // GET /api/media-library/files[?contentTypePrefixes=video/,audio/,image/]
@@ -127,11 +132,18 @@ public sealed class MediaLibraryController : BenControllerBase
                 .ToListAsync(ct));
         }
 
-        // 5. Public
-        idSet.UnionWith(await db.UploadFiles.AsNoTracking()
-            .Where(f => f.IsPublic)
-            .Select(f => f.Id)
-            .ToListAsync(ct));
+        // 5. Shared publicly — DELIBERATELY, by somebody choosing to.
+        //
+        // The blanket `f.IsPublic` union used to sit here too, and it is what turned this library
+        // into a dumping ground for the whole site (Ben, 2026-09-21: "when someone uploads media,
+        // it should not automatically be added to the media library as public"). IsPublic is set
+        // by a dozen internal paths that have nothing to do with a media library — a venue
+        // photograph, an event gallery, a tour gallery, a feed post's picture, an accepted piece
+        // of event evidence, an avatar — and every one of them landed in every user's library.
+        //
+        // A Public SHARE is different in kind: somebody opened a file and chose to share it with
+        // everyone. That is a library entry. A flag set as a side effect of publishing a gallery
+        // is not.
         idSet.UnionWith(await db.UploadFileShares.AsNoTracking()
             .Where(s => s.IsActive && s.TargetType == ShareTargetType.Public)
             .Select(s => s.UploadFileId)
@@ -181,8 +193,18 @@ public sealed class MediaLibraryController : BenControllerBase
 
         // Archived prior versions (item #6 phase 3) are implementation detail, not a real listing —
         // excluded regardless of which scope above happened to surface their Id.
+        //
+        // A profile photograph is not library media either. It is somebody's face, attached to
+        // their account, and it appeared here for the same reason everything else did: avatars are
+        // public so that other people can see them (Ben, 2026-09-21: "the library should not
+        // include profile pictures even if they are public"). The site's default avatars —
+        // so-user-circle.png and its siblings — are profile photographs owned by the site, so the
+        // same rule removes them; the three that are named in settings are removed by id as well,
+        // in case one was ever uploaded under another type.
         var query = db.UploadFiles.AsNoTracking()
-            .Where(f => idSet.Contains(f.Id) && f.ArchivedFromUploadFileId == null);
+            .Where(f => idSet.Contains(f.Id)
+                     && f.ArchivedFromUploadFileId == null
+                     && f.UploadFileTypeId != SeedData.UploadFileTypeSeeder.ProfilePhotoFileTypeId);
 
         var prefixes = contentTypePrefixes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -190,8 +212,82 @@ public sealed class MediaLibraryController : BenControllerBase
         if (prefixes is { Length: > 0 })
             listed = listed.Where(f => prefixes.Any(p => f.ContentType.StartsWith(p, StringComparison.OrdinalIgnoreCase))).ToList();
 
+        var defaultAvatars = await DefaultAvatarIdsAsync(db, ct);
+        if (defaultAvatars.Count > 0)
+            listed = listed.Where(f => !defaultAvatars.Contains(f.Id)).ToList();
+
+        listed = OnlyFilesThatExist(listed);
+        listed = OnlyOnce(listed);
+
         return Ok(await WithOwnerAndCaseAsync(db, listed, ct));
     }
+
+    /// <summary>The site's default avatars, which are media in the same sense a road sign is.</summary>
+    private static async Task<HashSet<Guid>> DefaultAvatarIdsAsync(BenDataContext db, CancellationToken ct)
+    {
+        var ids = new HashSet<Guid>();
+        foreach (var key in new[]
+                 {
+                     Services.SiteSettingKeys.DefaultAvatarUploadFileId,
+                     Services.SiteSettingKeys.DefaultAvatarManUploadFileId,
+                     Services.SiteSettingKeys.DefaultAvatarWomanUploadFileId,
+                 })
+        {
+            if (await Services.SiteSettingsService.GetGuidAsync(db, key, ct) is { } id) ids.Add(id);
+        }
+        return ids;
+    }
+
+    /// <summary>
+    /// Drops the rows whose bytes are not there.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"p201.jpg or test-photo.jpg can't be loaded so they should not
+    /// show up in the media library"</i>. A row whose file is missing is worse than absent — it is
+    /// a card that never draws, a download that fails, and a thing a person tries twice before
+    /// concluding the site is broken.</para>
+    ///
+    /// <para>Rows are checked against storage rather than trusted, because the two go out of step:
+    /// a file deleted from disk, a row restored from a backup, an upload that recorded itself and
+    /// then failed to write. Legacy rows that still carry their bytes in the database column are
+    /// kept — they load fine, they simply predate storage paths.</para>
+    /// </remarks>
+    private List<Ben.Data.Source.Entities.UploadFile> OnlyFilesThatExist(
+        List<Ben.Data.Source.Entities.UploadFile> files)
+        => files.Where(f =>
+        {
+            if (f.FileData is { Length: > 0 }) return true;
+            if (string.IsNullOrWhiteSpace(f.StoragePath)) return false;
+
+            // Never let a storage fault empty the library: a provider that cannot answer is not
+            // evidence that the file is gone.
+            try { return _storage.Exists(f.StoragePath); }
+            catch (Exception) { return true; }
+        }).ToList();
+
+    /// <summary>
+    /// One row per file, however many times it was uploaded.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-21: <i>"files in the media library should only appear once"</i> — he
+    /// found IMG_1997.JPG listed several times. Each listing is a real and separate row: the same
+    /// photograph uploaded to a case, to an event and to a group is three uploads, and every one
+    /// of them is reachable by somebody who can see all three.</para>
+    ///
+    /// <para>Identity is name, size and type together. There is no content hash on
+    /// <c>UploadFile</c>, and of the available answers this is the one that does not collapse
+    /// different files: two photographs that share a name differ in length, and two that share
+    /// both are the same picture by any standard a person would apply. The <b>oldest</b> row
+    /// survives, because it is the one the others were copied from and the one whose links are
+    /// already shared.</para>
+    /// </remarks>
+    private static List<Ben.Data.Source.Entities.UploadFile> OnlyOnce(
+        List<Ben.Data.Source.Entities.UploadFile> files)
+        => files
+            .GroupBy(f => (f.FileName.ToLowerInvariant(), f.FileSize, f.ContentType.ToLowerInvariant()))
+            .Select(g => g.OrderBy(f => f.DateCreated).First())
+            .OrderByDescending(f => f.DateCreated)
+            .ToList();
 
     /// <summary>
     /// The mapped records, each told who owns it and which case it belongs to.

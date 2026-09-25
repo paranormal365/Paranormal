@@ -9,7 +9,7 @@ namespace Ben.Data.Common.Constants;
 /// <c>UserManager.IsInRoleAsync</c>, and Serilog enrichment properties —
 /// so that a future rename requires only a single change here.
 /// <para>
-/// Two app-wide roles exist. Organization-level permissions are a separate system entirely
+/// Four app-wide roles exist (SuperAdmin, Admin, Moderator, Seller). Organization-level permissions are a separate system entirely
 /// (<c>OrganizationMemberRole</c> plus the org security service) and are not represented here.
 /// </para>
 /// </remarks>
@@ -54,6 +54,21 @@ public static class RoleNames
     /// <c>ModeratorRequirement</c> — so nobody has to hold two roles to do one job.</para>
     /// </remarks>
     public const string Moderator = "Moderator";
+
+    /// <summary>
+    /// A member who sells their own items in the store (storefront, Ben 09/24/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Additive and narrow.</b> It sits beside whatever else a person holds and opens no
+    /// administration: in Ben's words, "a seller only has control over their individual items in
+    /// the store, not the admin part or pricing." Prices, putting an item on sale and every store
+    /// setting stay with SuperAdmin.</para>
+    ///
+    /// <para>Today it decides who can be named as an item's seller (the Seller field on the
+    /// product editor lists only holders). The seller's own workspace — their items, drafts,
+    /// words and pictures — is backlog item 251.</para>
+    /// </remarks>
+    public const string Seller = "Seller";
 
     /// <summary>Both app-wide administration roles, for checks that accept either.</summary>
     public static readonly string[] AppAdministrators = [SuperAdmin, Admin];

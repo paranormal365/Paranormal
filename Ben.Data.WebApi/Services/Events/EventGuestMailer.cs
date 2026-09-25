@@ -1,3 +1,5 @@
+using Ben.Data.Common.Mail;
+using Ben.Data.WebApi.Services.Mail;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Interfaces;
@@ -36,11 +38,30 @@ public sealed class EventGuestMailer
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<EventGuestMailer> _log;
 
+    private readonly IOutboxEmailQueue? _queue;
+
+    /// <param name="queue">
+    /// Optional, and LAST, so the fourteen existing test constructions keep compiling — DI still
+    /// supplies the real one, because it is registered. A method that needs it says so loudly
+    /// rather than falling back to the non-atomic path, which would be the bug quietly restored
+    /// (item 239b).
+    /// </param>
     public EventGuestMailer(
         IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        ILogger<EventGuestMailer> log)
-    { _email = email; _site = site.Value; _log = log; }
+        ILogger<EventGuestMailer> log,
+        IOutboxEmailQueue? queue = null)
+    { _email = email; _site = site.Value; _log = log; _queue = queue; }
+
+    /// <summary>
+    /// The organization row for a template: the loaded entity when there is one, else just its name.
+    /// </summary>
+    private static object? OrganizationRow(HostedEvent ev, string? organizationName)
+        => (object?)ev.Organization
+        ?? (organizationName is { Length: > 0 }
+            ? new MailRows.Manual("Organizations",
+                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["Name"] = organizationName })
+            : null);
 
     /// <summary>Whether a letter could go at all.</summary>
     public bool IsConfigured => _email.IsConfigured;
@@ -56,72 +77,92 @@ public sealed class EventGuestMailer
     /// <para><b>The calendar file carries one entry per booked night</b>, each with the room. A
     /// single entry spanning the weekend would sit across it as one block and tell a guest nothing
     /// about where they are sleeping on Saturday.</para>
+    ///
+    /// <para><b>Queued into the caller's context, and NOT saved here (item 239b).</b> The letter,
+    /// and the <c>EmailedUtc</c> stamp on the pass that says it went, are written by the caller's
+    /// own save — for a decision, in the same transaction as the decision itself. So a venue's
+    /// "yes" and the letter carrying the pass commit together, or neither does.</para>
+    ///
+    /// <para>This used to catch everything, on the rule that <i>nothing here may undo a decision
+    /// the venue has made</i> — right when the letter was a call out to a mail system that might
+    /// not answer. It is now a row in the same database, in the same transaction; the sending
+    /// happens later from the outbox and is retried without touching the decision. The only way
+    /// that row fails to write is the database failing, and then the honest outcome is that the
+    /// decision did not happen either and the host is told to try again — not a confirmation the
+    /// guest never hears about. So failures now reach the caller.</para>
+    ///
+    /// <para><b>Queued whether or not mail is set up</b>, like every letter since the outbox: it
+    /// waits there until it is, and a site administrator — or the browser tests — can read it at
+    /// /admin/mail meanwhile. It used to be skipped outright, so the one letter carrying the pass
+    /// could never be followed by a test.</para>
     /// </remarks>
-    /// <returns>True when a letter was sent.</returns>
+    /// <returns>
+    /// True when a letter was queued; false when there is nothing to send — no booking, no
+    /// address. Anything that goes wrong beyond that throws.
+    /// </returns>
     public async Task<bool> SendDecisionAsync(
         BenDataContext db, Guid bookingId, CancellationToken ct)
     {
-        if (!_email.IsConfigured) return false;
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendDecisionAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or a venue's decision and the "
+          + "letter carrying the pass stop being atomic (item 239b).");
 
-        try
+        var booking = await LoadAsync(db, bookingId, ct);
+        if (booking is null) return false;
+
+        var to = booking.LeadAppUser?.Email;
+        if (string.IsNullOrWhiteSpace(to)) return false;
+
+        var ev = booking.HostedEvent;
+        var confirmed = booking.Status == HostedEventBookingStatus.Confirmed;
+
+        var pass = confirmed
+            ? await db.HostedEventPasses.AsNoTracking()
+                .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
+                .OrderByDescending(p => p.IssuedUtc)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var (subject, body) = booking.Status switch
         {
-            var booking = await LoadAsync(db, bookingId, ct);
-            if (booking is null) return false;
+            HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass),
+            HostedEventBookingStatus.TurnedDown => TurnedDown(booking, ev),
+            _                                   => Released(booking, ev),
+        };
 
-            var to = booking.LeadAppUser?.Email;
-            if (string.IsNullOrWhiteSpace(to)) return false;
+        var attachments = new List<EmailAttachment>();
+        if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
+            attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
 
-            var ev = booking.HostedEvent;
-            var confirmed = booking.Status == HostedEventBookingStatus.Confirmed;
-
-            var pass = confirmed
-                ? await db.HostedEventPasses.AsNoTracking()
-                    .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
-                    .OrderByDescending(p => p.IssuedUtc)
-                    .FirstOrDefaultAsync(ct)
-                : null;
-
-            var (subject, body) = booking.Status switch
-            {
-                HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass),
-                HostedEventBookingStatus.TurnedDown => TurnedDown(booking, ev),
-                _                                   => Released(booking, ev),
-            };
-
-            var attachments = new List<EmailAttachment>();
-            if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
-                attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
-
-            await _email.SendAsync(new EmailMessage(
-                to, subject, body,
-                Attachments: attachments,
-                // A guest hitting reply means to reach the venue whose spare room they are sleeping
-                // in, not our support address.
-                ReplyTo: ev?.Organization?.PublicEmail), ct);
-
-            // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
-            // can see at a glance whose replacement has not gone out yet.
-            if (pass is not null)
-            {
-                var tracked = await db.HostedEventPasses.FirstOrDefaultAsync(p => p.Id == pass.Id, ct);
-                if (tracked is not null)
-                {
-                    tracked.EmailedUtc = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                }
-            }
-
-            return true;
-        }
-        catch (Exception ex)
+        // The pass travels in the letter; a template of this kind is promised it as PassImage and
+        // PassUrl (MailKinds.BookingDecided), and until 2026-09-23 was handed neither.
+        var passSupplied = pass is null ? null : new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
         {
-            // A guest who is confirmed but whose mail bounced is a confirmed guest. Nothing here
-            // may undo a decision the venue has made.
-            _log.LogWarning(ex,
-                "Could not send the decision letter for booking {BookingId}; the decision stands.",
-                bookingId);
-            return false;
+            ["PassImage"] = new($"<img src=\"{EventPasses.DataUri(pass.Token)}\" alt=\"Your entry pass\" width=\"180\" height=\"180\" />", IsHtml: true),
+            ["PassUrl"] = new(_site.ApiAbsoluteUrl(Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token))),
+        };
+
+        await queue.EnqueueAsync(db, new EmailMessage(
+            to, subject, body,
+            Attachments: attachments,
+            // A guest hitting reply means to reach the venue whose spare room they are sleeping
+            // in, not our support address.
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingDecided.Key,
+            Payload: MailRows.For(MailKinds.BookingDecided, passSupplied, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
+
+        // Recorded on the pass rather than the booking, so a reissue starts unsent and a host
+        // can see at a glance whose replacement has not gone out yet. Written by the caller's
+        // save with the letter itself, so the mark can no longer clear for a letter that was
+        // never queued — which it did while the send swallowed its own failures. Not stamped when
+        // mail is not set up: queued with nowhere to go is not sent, and the mark stays honest.
+        if (pass is not null && _email.IsConfigured)
+        {
+            var tracked = await db.HostedEventPasses.FirstOrDefaultAsync(p => p.Id == pass.Id, ct);
+            if (tracked is not null) tracked.EmailedUtc = DateTime.UtcNow;
         }
+
+        return true;
     }
 
     // ── the letters ──────────────────────────────────────────────────────────
@@ -156,7 +197,8 @@ public sealed class EventGuestMailer
 
         if (pass is not null)
         {
-            var url = _site.AbsoluteUrl(
+            // The API's origin, not the site's: the website does not serve /api (SiteIdentity.ApiBaseUrl).
+            var url = _site.ApiAbsoluteUrl(
                 Controllers.Entities.HostedEventBookingController.PassImageUrl(pass.Token));
 
             body.Append("<p><strong>Show this at the door.</strong> One code admits your whole "
@@ -249,7 +291,8 @@ public sealed class EventGuestMailer
             to,
             $"The places you chose at {ev?.Name ?? "the event"} have gone back",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldLapsed.Key,
+            Payload: MailRows.For(MailKinds.HoldLapsed, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -288,11 +331,22 @@ public sealed class EventGuestMailer
                   + "they answer.</p>");
         body.Append("<p>Nothing is paid through this site.</p>");
 
-        await _email.SendAsync(new EmailMessage(
+        // Queued into the CALLER'S context, not sent through one of our own (item 239b). This
+        // letter is the one that says "nothing is held yet", so a guest who does not get it
+        // assumes the opposite and turns up with a suitcase — it must not be able to go missing
+        // while the request it describes commits. The caller opens a transaction and saves after
+        // this returns; see PublicHostedEventBookingController and PublicEventAttendanceController.
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendAskedAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or the letter and the "
+          + "request it describes stop being atomic — which is the whole point of item 239b.");
+
+        await queue.EnqueueAsync(db, new EmailMessage(
             to,
             $"We've passed your request for {ev?.Name ?? "the event"} on",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.BookingAsked.Key,
+            Payload: MailRows.For(MailKinds.BookingAsked, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -336,7 +390,8 @@ public sealed class EventGuestMailer
             to,
             $"Your places at {ev?.Name ?? "the event"} are held",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.HoldPlaced.Key,
+            Payload: MailRows.For(MailKinds.HoldPlaced, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
 
         return true;
     }
@@ -352,8 +407,10 @@ public sealed class EventGuestMailer
     /// going to somebody who never visited the site. Nothing is held for them beyond the fifteen
     /// minutes and no account exists until the button is pressed.</para>
     ///
-    /// <para>When mail is not set up the link is logged instead, as the public sign-up link is, so a
-    /// developer's machine and the browser tests can still follow it.</para>
+    /// <para>When mail is not set up the letter is queued all the same, and waits in the outbox —
+    /// where a developer, or the browser tests, read its link at /admin/mail. It used to be written
+    /// to the log instead; the link holds somebody's places, so it is a credential, and a log is not
+    /// where one belongs (NoCredentialsInLogsTests).</para>
     /// </remarks>
     /// <returns>True when a letter was written.</returns>
     public async Task<bool> SendEmailPickLinkAsync(
@@ -362,23 +419,26 @@ public sealed class EventGuestMailer
     {
         var link = _site.AbsoluteUrl($"/event-picks/{token}");
 
+        // Queued either way (see the remarks). Said, without the link, so a developer knows where
+        // to look rather than wondering why no mail arrived.
         if (!_email.IsConfigured)
-        {
             _log.LogInformation(
-                "Email is not configured; the pick link for {Email} was not sent. Pick token: {Token}",
-                pick.Email, token);
-            return false;
-        }
+                "Email is not configured; the pick letter for {Email} is waiting in the outbox at /admin/mail.",
+                pick.Email);
 
         var name = Safe(ev.Name);
         var org = Safe(ev.Organization?.Name ?? "the organizer");
+
+        // Once, for the letter below and for a template's {Places} alike, so the two cannot drift.
+        var placesHtml = places.Count > 0
+            ? $"<ul><li>{string.Join("</li><li>", places.Select(Safe))}</li></ul>"
+            : string.Empty;
 
         var body = new System.Text.StringBuilder();
         body.Append($"<p>Hello {Safe(pick.FirstName)},</p>");
         body.Append($"<p>You picked places at <strong>{name}</strong>. They are waiting for you until "
                   + $"<strong>{AtTheVenue(pick.ExpiresUtc, ev)}</strong> — press the button to hold them.</p>");
-        if (places.Count > 0)
-            body.Append($"<ul><li>{string.Join("</li><li>", places.Select(Safe))}</li></ul>");
+        body.Append(placesHtml);
         body.Append($"<p><a href=\"{link}\">Hold my places</a></p>");
         body.Append($"<p>Once they are held, {org} answers you, and nobody else can take them in the "
                   + "meantime. Nothing is paid through this site.</p>");
@@ -386,11 +446,45 @@ public sealed class EventGuestMailer
         body.Append("<p>If this wasn't you, do nothing: the places go back by themselves and no account "
                   + "is made.</p>");
 
+        // What a written template of this kind may use (MailKinds.HoldYourPlaces). Without it a
+        // template could be saved — the editor requires the hold link — and then render with the
+        // link empty, because nothing handed it over.
+        var payload = new MailPayload(
+            Tables: new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
+            {
+                // The person, not an account: nobody has one until they press the button.
+                ["AppUsers"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Email"] = pick.Email,
+                    ["DisplayName"] = pick.FirstName,
+                    ["FirstName"] = pick.FirstName,
+                },
+                ["HostedEvents"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Name"] = ev.Name,
+                },
+                ["Organizations"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Name"] = ev.Organization?.Name,
+                    ["PublicEmail"] = ev.Organization?.PublicEmail,
+                },
+            },
+            Supplied: new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HoldUrl"] = new(link),
+                ["HoldButton"] = new(BenEmailLayout.ActionButton("Hold my places", link), IsHtml: true),
+                ["HoldUntil"] = new(AtTheVenue(pick.ExpiresUtc, ev)),
+                ["Places"] = new(placesHtml, IsHtml: true),
+            });
+
         await _email.SendAsync(new EmailMessage(
             pick.Email,
             $"Hold your places at {ev.Name} within 15 minutes",
             body.ToString(),
-            ReplyTo: ev.Organization?.PublicEmail), ct);
+            // This one prints a deadline through AtTheVenue, which labels nothing — so the footer
+            // says which clock that deadline is on. Missing it by hours is the whole risk here.
+            ReplyTo: ev.Organization?.PublicEmail, Kind: MailKinds.HoldYourPlaces.Key,
+            TimesShownInZone: ZoneLabel(ev), Payload: payload), ct);
 
         return true;
     }
@@ -414,7 +508,9 @@ public sealed class EventGuestMailer
 
         var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl);
         await _email.SendAsync(new EmailMessage(to, subject, body,
-            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail), ct);
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventThankYou.Key,
+            Payload: MailRows.For(MailKinds.EventThankYou, booking.LeadAppUser, booking.HostedEvent,
+                                  booking.HostedEvent?.Organization)), ct);
         return true;
     }
 
@@ -454,6 +550,40 @@ public sealed class EventGuestMailer
         }
 
         return ($"Thank you for coming to {ev.Name}", body.ToString());
+    }
+
+    /// <summary>
+    /// Which clock this event's letters are written on, for the footnote — or null when there is
+    /// nothing worth saying.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-20: say so when a letter only reports UTC. The hazard is specific, and it
+    /// is <see cref="AtTheVenue"/>'s: an event with no <c>TimeZoneId</c> resolves to UTC, the
+    /// conversion SUCCEEDS, and the time is printed with <b>no label at all</b> — so the reader
+    /// sees "7:00 PM" and reads it as their own evening. A mail client, unlike a browser, tells us
+    /// nothing about where the reader is, so the letter has to name the clock it means.</para>
+    ///
+    /// <para>An event WITH a zone still gets a note, worded more quietly: the venue's clock is the
+    /// right one to print, and it is still not necessarily the reader's.</para>
+    /// </remarks>
+    internal static string ZoneLabel(HostedEvent? ev)
+    {
+        if (string.IsNullOrWhiteSpace(ev?.TimeZoneId)) return "UTC";
+
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(ev.TimeZoneId);
+            if (zone == TimeZoneInfo.Utc) return "UTC";
+
+            var name = zone.IsDaylightSavingTime(DateTime.UtcNow) ? zone.DaylightName : zone.StandardName;
+            var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length >= 2 ? new string([.. words.Select(w => w[0])]) : name;
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            // The same fallback AtTheVenue takes, so the footnote cannot disagree with the times.
+            return "UTC";
+        }
     }
 
     /// <summary>A moment on the venue's clock, as the letters write it.</summary>
@@ -519,7 +649,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key,
+                    Payload: MailRows.For(MailKinds.EventCalledOff, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -570,7 +701,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventCalledOff.Key,
+                    Payload: MailRows.For(MailKinds.EventCalledOff, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -620,7 +752,8 @@ public sealed class EventGuestMailer
             {
                 await _email.SendAsync(new EmailMessage(
                     to, $"{ev?.Name ?? "An event"} is going ahead", body.ToString(),
-                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventGoingAhead.Key,
+                    Payload: MailRows.For(MailKinds.EventGoingAhead, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -649,12 +782,27 @@ public sealed class EventGuestMailer
     /// <para>Here rather than in a mailer of its own because this class already knows how to write
     /// a letter about an event: the venue's name, the reply-to, the safe encoding. A second class
     /// would be a second set of those to keep true.</para>
+    ///
+    /// <para><b>Queued into the caller's context, and not saved here (item 239b).</b> Every
+    /// invitation carries a fresh token, and reissuing one kills the link in the letter before
+    /// it. So a token saved without its letter leaves somebody with a dead link and nothing to
+    /// replace it, and a letter queued for a token that rolled back is a link that never worked.
+    /// The caller saves the row, queues this, saves again and commits once.</para>
+    ///
+    /// <para><b>Queued whether or not mail is set up</b>; it waits in the outbox until it is (see
+    /// <see cref="SendDecisionAsync"/>).</para>
     /// </remarks>
-    /// <returns>True when a letter was sent.</returns>
+    /// <returns>
+    /// True when a letter was queued; false when there is nothing to send — no token, no address.
+    /// Anything that goes wrong beyond that throws.
+    /// </returns>
     public async Task<bool> SendStaffInviteAsync(
         BenDataContext db, Guid staffId, CancellationToken ct)
     {
-        if (!_email.IsConfigured) return false;
+        var queue = _queue ?? throw new InvalidOperationException(
+            "SendStaffInviteAsync queues its letter into the caller's transaction and needs an "
+          + "IOutboxEmailQueue. Construct EventGuestMailer with one, or an invitation's token and "
+          + "the letter carrying it stop being atomic (item 239b).");
 
         var staff = await db.HostedEventStaff.AsNoTracking()
             .Include(s => s.AppUser)
@@ -687,11 +835,23 @@ public sealed class EventGuestMailer
         body.Append("<p>The link works once and lasts a fortnight. If you were not expecting this, "
                   + "ignore it — nothing happens until you click.</p>");
 
-        await _email.SendAsync(new EmailMessage(
+        await queue.EnqueueAsync(db, new EmailMessage(
             to,
             $"Can you help at {ev?.Name ?? "an event"}?",
             body.ToString(),
-            ReplyTo: ev?.Organization?.PublicEmail), ct);
+            ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.StaffInvite.Key,
+            // An invited helper usually has no account yet: the row is the person as invited. The
+            // link, venue, role and permissions are no column of anything a template can read.
+            Payload: MailRows.For(MailKinds.StaffInvite,
+                new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["AcceptUrl"] = new(url),
+                    ["AcceptButton"] = new(BenEmailLayout.ActionButton("Say yes and see what you need", url), IsHtml: true),
+                    ["Venue"] = new(ev?.Place?.Name ?? ""),
+                    ["Role"] = new(staff.RoleLabel ?? ""),
+                    ["CanDo"] = new("<ul><li>" + string.Join("</li><li>", WhatTheyCanDo(staff).Select(Safe)) + "</li></ul>", IsHtml: true),
+                },
+                (object?)staff.AppUser ?? MailRows.Person(to, staff.DisplayName), ev, ev?.Organization)), ct);
 
         return true;
     }
@@ -894,7 +1054,7 @@ public sealed class EventGuestMailer
                 $"<p>A place came free in <strong>{Safe(session.Title)}</strong> at "
                 + $"{Safe(session.HostedEvent.Name)}, and it's yours — {Safe(when)}.</p>"
                 + "<p>If you can't come after all, leave it from the programme so the next person gets it.</p>"),
-            ct);
+            MailKinds.SessionPromoted, ct);
 
     /// <summary>Tells everybody signed up — or waiting — that a session is off.</summary>
     public Task<int> SendSessionCancelledAsync(BenDataContext db, Guid sessionId, string? reason, CancellationToken ct)
@@ -904,7 +1064,7 @@ public sealed class EventGuestMailer
                 + "has been cancelled.</p>"
                 + (Trimmed(reason) is { } why ? $"<p>{Safe(session.HostedEvent.Organization?.Name ?? "The organizers")} said: “{Safe(why)}”</p>" : "")
                 + "<p>Your place at the event itself is unchanged.</p>"),
-            ct);
+            MailKinds.SessionCancelled, ct);
 
     /// <summary>Tells everybody signed up that a session's time or place has changed.</summary>
     public Task<int> SendSessionMovedAsync(BenDataContext db, Guid sessionId, CancellationToken ct)
@@ -912,7 +1072,7 @@ public sealed class EventGuestMailer
             (session, when) => ($"Changed: {session.Title}",
                 $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} has moved. "
                 + $"It is now {Safe(when)}.</p><p>You still have your place.</p>"),
-            ct);
+            MailKinds.SessionMoved, ct);
 
     /// <summary>
     /// A host's letter to the people coming (phase 17a, audit finding A4). One letter per party's lead; returns how many
@@ -937,7 +1097,9 @@ public sealed class EventGuestMailer
                      + $"<a href=\"{page}\">{Safe(ev.Name)}</a>. Reply to write back to {Safe(organizationName)}.</p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo, Kind: MailKinds.EventAnnouncement.Key,
+                    Payload: MailRows.For(MailKinds.EventAnnouncement, MailRows.Person(to, recipient.Name), ev,
+                                          OrganizationRow(ev, organizationName))), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -967,21 +1129,33 @@ public sealed class EventGuestMailer
         foreach (var (id, email, name) in recipients)
         {
             if (email is not { Length: > 0 } to) continue;
+            var creditNote = creditReturned
+                ? "The event credit spent on it has been returned, and can be used for another event."
+                : "";
             var body = (name is { Length: > 0 } n ? $"<p>Hello {Safe(n)},</p>" : "<p>Hello,</p>")
                      + $"<p><strong>{Safe(ev.Name)}</strong>, hosted by {Safe(organizationName)}, has been removed from "
                      + $"{Safe(_site.Name)} because it doesn't meet our guidelines for hosted events.</p>"
                      + "<p>It is no longer on the site and can't take bookings. Anybody who had a place or had asked for one "
                      + "has been told it is not going ahead.</p>"
-                     + (creditReturned
-                         ? "<p>The event credit spent on it has been returned, and can be used for another event.</p>"
-                         : "")
+                     + (creditReturned ? $"<p>{creditNote}</p>" : "")
                      + "<p><strong>If you think this was a mistake</strong>, you can appeal. Tell us what the event is and "
                      + "anything you've changed, and a person will review it. If the appeal is upheld the event comes back "
                      + "as a draft, ready for you to publish again.</p>"
                      + $"<p><a href=\"{appeal}\">Appeal this decision</a></p>";
             try
             {
-                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body), ct);
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body, Kind: MailKinds.GuestRemoved.Key,
+                    // The rows a template of this kind reads (MailRows), and the three things only this
+                    // sender knows: where to appeal, and whether the credit came back. A removal CLEARS
+                    // CancelledReason on purpose (see MailKinds.GuestRemoved), so there is no reason to give.
+                    Payload: MailRows.For(MailKinds.GuestRemoved,
+                        new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["AppealUrl"] = new(appeal),
+                            ["AppealButton"] = new(BenEmailLayout.ActionButton("Appeal this decision", appeal), IsHtml: true),
+                            ["CreditNote"] = new(creditNote),
+                        },
+                        MailRows.Person(to, name), ev, ev.Organization)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1014,7 +1188,8 @@ public sealed class EventGuestMailer
             try
             {
                 await _email.SendAsync(new EmailMessage(to,
-                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body), ct);
+                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body, Kind: MailKinds.AppealAnswered.Key,
+                    Payload: MailRows.For(MailKinds.AppealAnswered, MailRows.Person(to, name), ev, ev.Organization)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -1027,7 +1202,8 @@ public sealed class EventGuestMailer
 
     private async Task<int> SendToSignUpsAsync(
         BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEventSessionSignUp, bool>> which,
-        Func<HostedEventSession, string, (string Subject, string Body)> write, CancellationToken ct)
+        Func<HostedEventSession, string, (string Subject, string Body)> write,
+        MailKindInfo kind, CancellationToken ct)
     {
         if (!_email.IsConfigured) return 0;
 
@@ -1048,8 +1224,18 @@ public sealed class EventGuestMailer
 
             try
             {
+                // WhenAndWhere writes the session's times with no zone beside them, so the footer
+                // has to name the clock — see ZoneLabel.
                 await _email.SendAsync(new EmailMessage(to, subject, greeting + body,
-                    ReplyTo: session.HostedEvent.Organization?.PublicEmail), ct);
+                    // The kind the CALLER named. Every letter this method sends — promoted,
+                    // cancelled, moved — went out as AppealAnswered, a kind about a moderation
+                    // appeal and nothing to do with a session. So three of the site's letters were
+                    // filed under an unrelated heading in the outbox, and no template written for
+                    // any of them could ever apply (item 246, found 2026-09-21).
+                    ReplyTo: session.HostedEvent.Organization?.PublicEmail, Kind: kind.Key,
+                    TimesShownInZone: ZoneLabel(session.HostedEvent),
+                    Payload: MailRows.For(kind, signUp.AppUser, session.HostedEvent,
+                                          session.HostedEvent.Organization, session)), ct);
                 sent++;
             }
             catch (Exception e) when (e is not OperationCanceledException)

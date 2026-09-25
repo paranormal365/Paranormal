@@ -1,0 +1,69 @@
+/*
+    A side handle does two things: dragged it aims a connector, clicked it makes the next block
+    already joined to this one (Ben, 2026-09-16: "Can we make it like Miro?"). So it wears a plus —
+    what it makes is the part that is not obvious from a dot.
+*/
+.bc-port {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--bc-accent);
+    background: var(--bc-surface-1);
+    color: var(--bc-accent);
+    font: 600 12px/1 system-ui, sans-serif;
+    pointer-events: auto;
+    cursor: crosshair;
+    touch-action: none;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--bc-zoom, 1)));
+}
+
+/* The plus itself, drawn rather than typed so no font substitution can move it off centre. */
+.bc-port::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
+    background:
+        linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+        linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+}
+
+.bc-port:hover,
+.bc-port:focus-visible {
+    background: var(--bc-accent);
+    color: var(--bc-surface-1);
+}
+
+.bc-port::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+}
+
+.bc-port:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 2px;
+}
+
+.bc-port--top { left: 50%; top: -18px; }
+.bc-port--right { left: calc(100% + 18px); top: 50%; }
+.bc-port--bottom { left: 50%; top: calc(100% + 18px); }
+.bc-port--left { left: -18px; top: 50%; }
+
+@media (pointer: coarse) {
+    .bc-port::before { width: 44px; height: 44px; }
+    .bc-port { display: none; }
+    .bc-selection--connect .bc-port { display: block; }
+}

@@ -11,15 +11,24 @@ struct LiveSessionView: View {
     @Environment(Router.self) private var router
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     let sessionId: UUID
 
     @State private var showingSettings = false
     @State private var camera = FieldCameraSession()
     @State private var blackout = false
+
+    /// Why Start refused, shown on the bar. Nil while nothing has refused.
+    @State private var startProblem: String?
     @State private var showingEVP = false
     @State private var brightnessBeforeBlackout: CGFloat?
     @State private var showingLocationExplainer = false
+    /// Whether this person has already been told what location is for. Somebody who said
+    /// "Record without it" was asked again at the start of every session afterwards, because
+    /// declining our own sheet never changes what the SYSTEM thinks — it stays undetermined
+    /// forever. Asked once; the Position card is the way back.
+    @AppStorage("fieldkit.location-explained") private var locationExplained = false
     @State private var choosingRoom = false
     @State private var askingForNote = false
     @State private var errorMessage: String?
@@ -46,7 +55,8 @@ struct LiveSessionView: View {
             .toolbar { toolbarItems }
             .sheet(isPresented: $showingSettings) { levelsSheet }
             .sheet(isPresented: $showingLocationExplainer) {
-                LocationExplainerSheet { await active?.requestLocation() }
+                LocationExplainerSheet(onAnswered: { locationExplained = true },
+                                       onAllow: { await active?.requestLocation() })
             }
             .sheet(isPresented: $askingForNote) { noteComposer }
             .sheet(isPresented: $choosingRoom) { roomSheet }
@@ -71,6 +81,19 @@ struct LiveSessionView: View {
             }
             .onChange(of: store.active?.isArmed) { _, armed in
                 UIApplication.shared.isIdleTimerDisabled = armed == true || blackout
+            }
+            // The session carries on while the app is put away — the background-audio mode is
+            // declared for exactly this — and the stretch is marked so the review says so.
+            // `.inactive` is not away: it is the control centre, a notification, the way out and
+            // the way back in. Only `.background` counts, and only `.active` ends it.
+            .onChange(of: scenePhase) { _, phase in
+                Task {
+                    switch phase {
+                    case .background: await store.active?.appWentToBackground()
+                    case .active: await store.active?.appReturned()
+                    default: break
+                    }
+                }
             }
             .onDisappear {
                 camera.stop()
@@ -154,7 +177,8 @@ struct LiveSessionView: View {
         await store.activate(sessionId)
         if store.active?.channels.contains(.video) == true { camera.start() }
         if store.active?.channels.contains(.location) == true,
-           store.active?.locationAuthorization == .notDetermined {
+           store.active?.locationAuthorization == .notDetermined,
+           !locationExplained {
             showingLocationExplainer = true
         }
     }
@@ -231,6 +255,12 @@ struct LiveSessionView: View {
                     Text("over report level")
                         .font(.caption2.bold()).foregroundStyle(Theme.warning)
                 }
+                if let startProblem {
+                    Text(startProblem)
+                        .font(.caption2).foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("start-problem")
+                }
             }
             Spacer()
             Button {
@@ -260,7 +290,15 @@ struct LiveSessionView: View {
                 // Start. Ben: "They may want to set everything up first and then start."
                 Button {
                     Task {
-                        try? await store.beginRecording(sessionId)
+                        startProblem = nil          // a fresh attempt, not last time's answer
+                        do {
+                            try await store.beginRecording(sessionId)
+                        } catch {
+                            // Ben, 2026-09-16: "I can set the base, but when I hit start, nothing happens." It was
+                            // `try?`: every reason Start could refuse — a session a crash had left behind, a database
+                            // that would not open — was swallowed, and the bar stayed on "not started".
+                            startProblem = error.localizedDescription
+                        }
                     }
                 } label: {
                     Label("Start", systemImage: "record.circle")
@@ -331,7 +369,10 @@ struct LiveSessionView: View {
                             headingDegrees: active.sample.headingDegrees,
                             relativeAltitudeMeters: active.sample.relativeAltitudeMeters,
                             isEnabled: active.channels.contains(.location)
-                                && active.locationAuthorization.canLocate)
+                                && active.locationAuthorization.canLocate,
+                            onUseLocation: active.channels.contains(.location)
+                                && active.locationAuthorization == .notDetermined
+                                ? { showingLocationExplainer = true } : nil)
                 .padding(12)
                 .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
         }
@@ -403,7 +444,7 @@ struct LiveSessionView: View {
                     .accessibilityIdentifier("open-evp")
                 }
 
-                FieldCaptureBar(session: active)
+                FieldCaptureBar(session: active, camera: camera)
             }
 
             SentryPanel(session: active, camera: camera)
@@ -585,6 +626,8 @@ private struct LevelsSheet: View {
 /// anybody gets — and so a refusal is an informed one.
 struct LocationExplainerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Called whichever way this is answered, so it is never asked twice unbidden.
+    var onAnswered: () -> Void
     var onAllow: () async -> Void
 
     var body: some View {
@@ -602,14 +645,17 @@ struct LocationExplainerSheet: View {
                 Spacer()
 
                 Button {
+                    onAnswered()
                     Task { await onAllow(); dismiss() }
                 } label: {
                     Text("Continue").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("location-continue")
 
-                Button("Record without it") { dismiss() }
+                Button("Record without it") { onAnswered(); dismiss() }
                     .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("location-decline")
             }
             .padding(20)
             .navigationBarTitleDisplayMode(.inline)

@@ -81,6 +81,97 @@ public class AdminAppUserControllerTests
         return (ctrl, factory);
     }
 
+    // ── The sign-in columns on /admin/users (Ben, 2026-09-19) ────────────────
+
+    private static SignInEvent Arrival(Guid userId, DateTime utc, string method, bool ok = true)
+        => new() { Id = Guid.NewGuid(), AppUserId = userId, Utc = utc, Succeeded = ok, Method = method };
+
+    /// <summary>
+    /// The whole point of the column: every way in counts, and the last one is the latest.
+    /// </summary>
+    [Fact]
+    public async Task The_summary_counts_every_method_and_reports_the_latest()
+    {
+        var (ctrl, factory) = Build();
+        var user = await SeedUserAsync(factory);
+        var newest = new DateTime(2026, 9, 19, 18, 0, 0, DateTimeKind.Utc);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(user.Id, newest.AddDays(-3), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(user.Id, newest.AddDays(-2), Ben.Data.WebApi.Services.RecordingSignInManager.AppleMethod),
+                Arrival(user.Id, newest.AddDays(-1), Ben.Data.WebApi.Services.RecordingSignInManager.HandoffMethod),
+                Arrival(user.Id, newest,             Ben.Data.WebApi.Services.RecordingSignInManager.EntraMethod));
+            await db.SaveChangesAsync();
+        }
+
+        var row = Assert.Single(Ok(await ctrl.GetSignInSummary(default)));
+        Assert.Equal(user.Id, row.AppUserId);
+        Assert.Equal(4, row.Count);
+        Assert.Equal(newest, row.LastUtc);
+    }
+
+    /// <summary>
+    /// A failed attempt is kept in the table, and is not somebody signing in. Counting it would
+    /// make an account under attack look like the site's most active user.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_attempt_is_not_a_sign_in()
+    {
+        var (ctrl, factory) = Build();
+        var user = await SeedUserAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(user.Id, DateTime.UtcNow.AddHours(-2), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(user.Id, DateTime.UtcNow.AddHours(-1), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod, ok: false));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, Assert.Single(Ok(await ctrl.GetSignInSummary(default))).Count);
+    }
+
+    /// <summary>
+    /// Accounts with nothing recorded are absent, not returned as zeroes — the screen says
+    /// "Never" for anybody it finds no row for, which is the same fact without the freight.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_who_has_never_signed_in_has_no_row()
+    {
+        var (ctrl, factory) = Build();
+        await SeedUserAsync(factory);
+
+        Assert.Empty(Ok(await ctrl.GetSignInSummary(default)));
+    }
+
+    [Fact]
+    public async Task Each_account_is_counted_on_its_own()
+    {
+        var (ctrl, factory) = Build();
+        var one = await SeedUserAsync(factory, "One", "one@example.com");
+        var two = await SeedUserAsync(factory, "Two", "two@example.com");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(one.Id, DateTime.UtcNow.AddHours(-3), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(one.Id, DateTime.UtcNow.AddHours(-2), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(two.Id, DateTime.UtcNow.AddHours(-1), Ben.Data.WebApi.Services.RecordingSignInManager.EntraMethod));
+            await db.SaveChangesAsync();
+        }
+
+        var rows = Ok(await ctrl.GetSignInSummary(default)).ToDictionary(r => r.AppUserId);
+        Assert.Equal(2, rows[one.Id].Count);
+        Assert.Equal(1, rows[two.Id].Count);
+    }
+
+    private static IEnumerable<Ben.Service.Models.Admin.UserSignInSummary> Ok(
+        ActionResult<IEnumerable<Ben.Service.Models.Admin.UserSignInSummary>> result)
+        => Assert.IsAssignableFrom<IEnumerable<Ben.Service.Models.Admin.UserSignInSummary>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
     private static async Task<AppUser> SeedUserAsync(IDbContextFactory<BenDataContext> factory,
         string displayName = "Test User", string email = "test@example.com")
     {
@@ -169,7 +260,10 @@ public class AdminAppUserControllerTests
         var result = await c.CreateUser(
             new AdminCreateUserRequest("fail@test.com", "weak", "Fail User", null, false, false), default);
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        // A sentence, not a JSON list: the New User page shows the server's reason as prose and drops anything that
+        // looks like JSON, which is how every refusal used to read "the server rejected the request".
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Too weak.", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]
@@ -328,7 +422,10 @@ public class AdminAppUserControllerTests
 
         var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Wizard"]), default);
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        // A sentence naming the role, which the Site Roles tab shows as it stands. It used to show the site's two
+        // SuperAdmin rules for every refusal, whatever had actually gone wrong (Ben, 2026-09-15).
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("Wizard", Assert.IsType<string>(bad.Value));
         rig.UserMgr.Verify(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
     }
 
@@ -350,6 +447,24 @@ public class AdminAppUserControllerTests
         rig.UserMgr.Verify(x => x.UpdateSecurityStampAsync(user), Times.Once);
         rig.Audit.Verify(x => x.LogUpdateAsync("AppUserRoles", user.Id, It.IsAny<object>(), It.IsAny<object>(),
             It.IsAny<Guid>(), It.IsAny<string>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Identity throws rather than failing when a role row's lookup name does not match its name, or when a membership
+    /// is already there. That reached the Site Roles page as a 500 with no body, which the page could only report as
+    /// "the server did not say why" (Ben, 2026-09-15).
+    /// </summary>
+    [Fact]
+    public async Task SetRoles_SaysWhatTheAccountSystemThrew_RatherThanFailingWithNothing()
+    {
+        var (rig, user) = await BuildForRolesAsync([], callerId: Guid.NewGuid());
+        rig.UserMgr.Setup(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()))
+                   .ThrowsAsync(new InvalidOperationException("Role SuperAdmin does not exist."));
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["SuperAdmin"]), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("Role SuperAdmin does not exist.", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]

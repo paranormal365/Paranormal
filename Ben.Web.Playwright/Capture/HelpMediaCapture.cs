@@ -180,6 +180,35 @@ public sealed class HelpMediaCapture : BenTestBase
     /// <summary>An iPhone's height, so a narrow shot is a phone and not a letterbox.</summary>
     private const int PhoneHeight = 812;
 
+    /// <summary>
+    /// Waits for the page to stop moving, without insisting the network goes quiet.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>NetworkIdle can never arrive on this site, and it is not the page's fault.</b>
+    /// Signing in lands on the home page, which starts fetching an 836 KB hero image; navigating
+    /// on to an admin screen cancels it, and a cancelled request can leave the idle state
+    /// unreachable for ever. Measured: one request still counted as in flight five seconds after
+    /// everything had rendered, and it was that image.</para>
+    ///
+    /// <para>So the wait is best-effort and the real guarantee is <c>proves</c> — the words the
+    /// picture is supposed to contain. A capture that hangs for thirty seconds and then fails on a
+    /// page that looks perfect teaches nobody anything, which is the same complaint this fixture
+    /// makes about empty screenshots.</para>
+    /// </remarks>
+    private async Task SettleAsync()
+    {
+        try
+        {
+            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 5_000 });
+        }
+        catch (TimeoutException)
+        {
+            // Expected on any page reached after a login bounce; see above.
+        }
+
+        await WaitUntilLoadedAsync();
+    }
+
     private async Task ShootAtCurrentSizeAsync(
         string slug, string name, bool gated, string? selector, string? proves, Around? around)
     {
@@ -189,14 +218,12 @@ public sealed class HelpMediaCapture : BenTestBase
         // the picture is supposed to show turns that into a failed capture.
         if (proves is not null)
         {
-            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-            await WaitUntilLoadedAsync();
+            await SettleAsync();
             await Expect(Page.GetByText(proves, new() { Exact = false }).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
         }
 
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await WaitUntilLoadedAsync();
+        await SettleAsync();
 
         await Page.AddStyleTagAsync(new() { Content = HideOperatorAvatarCss });
 
@@ -295,7 +322,7 @@ public sealed class HelpMediaCapture : BenTestBase
     private async Task GoAsync(string route)
     {
         await Page.GotoAsync($"{BaseUrl}{route}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await SettleAsync();
     }
 
     // ── Everyone ──────────────────────────────────────────────────────────────
@@ -380,6 +407,105 @@ public sealed class HelpMediaCapture : BenTestBase
             await LoginAsync(SuperAdminEmail, SuperAdminPassword);
             await GoAsync("/admin/feed-reports");
             await ShootAsync("moderating-the-feed", "queue.png", gated: true, proves: "Reported by");
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
+    /// The place hub: a public location's page, the case that names one, and investigating alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>Four screens the 2026-09-17 arc added, and every one of them is a screen the help now
+    /// describes in words. The place page is the load-bearing shot: it is the only page on the site
+    /// that gathers several groups' work at one location, and a paragraph explaining that is no
+    /// substitute for seeing the sections stacked up.</para>
+    ///
+    /// <para>The feed flag is turned on for the duration and put back afterwards, because place
+    /// posts are feed posts and the composer does not exist without it.</para>
+    /// </remarks>
+    [Test]
+    [Description("working-a-case, the-feed and getting-started: places, and investigating alone.")]
+    public async Task Capture_Places()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            await LoginAsync(UserEmail, UserPassword);
+
+            // ── New Case, at the place already on file ───────────────────────
+            if (await OpenOrganizationAsync("Paranormal365"))
+            {
+                await OpenTabAsync("Cases", Main.GetByTestId("new-case"));
+                await ClickUntilUrlAsync(Main.GetByTestId("new-case").First, @"/cases/new");
+                await WaitUntilLoadedAsync();
+
+                await Main.Locator("#casecreatepage-case-title-b1b1").FillAsync("Another look at the cave");
+                await Main.Locator("#casecreatepage-street-address-5b76").FillAsync("430 Keysburg Rd");
+                await Main.Locator("#casecreatepage-city-4662").FillAsync("Adams");
+                await Main.Locator("#casecreatepage-state-7b45").FillAsync("TN");
+                await Main.Locator("#casecreatepage-zip-code-ba79").FillAsync("37010");
+                await Main.Locator("#case-place-name").FillAsync("Bell Witch Cave");
+
+                // The offer is debounced and then a round trip, so it is waited for rather than
+                // hoped for — a picture of the moment before it arrives teaches the wrong thing.
+                var offer = Main.GetByTestId("place-candidates");
+                try { await Expect(offer).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
+                catch (AssertionException) { /* shot below still shows the kind choice */ }
+
+                // The whole form, not a crop around the radio: anchoring on the input itself gave
+                // a 40-pixel sliver of sidebar, because "around" grows from the element's own box
+                // and a radio button's box is a radio button.
+                await ShootAsync("working-a-case", "new-case-place.png",
+                                 proves: "What kind of place is this?");
+            }
+
+            // ── A place's own page, signed in ────────────────────────────────
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+            await Expect(Main.GetByText("Shared by other groups", new() { Exact = false }))
+                .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("working-a-case", "place-page.png", proves: "Shared by other groups");
+
+            // ── Posting about a place ────────────────────────────────────────
+            var composer = Main.GetByTestId("place-composer");
+            if (await composer.CountAsync() > 0)
+            {
+                await composer.Locator("textarea").First.FillAsync(
+                    "Two of us felt the cold spot on the lower stair, about 20 minutes apart. "
+                    + "Readings going up with the session.");
+                await composer.GetByTestId("feed-composer-post").ClickAsync();
+                await Expect(Main.GetByTestId("place-posts")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await ShootAsync("the-feed", "place-posts.png",
+                                 selector: "[data-testid='place-composer']",
+                                 around: new Around(Top: 60, Bottom: 320));
+            }
+
+            // ── The door for somebody in no group ────────────────────────────
+            // Wren belongs to nothing, which is what makes the offer appear at all. If an earlier
+            // run gave her a space the offer is gone and there is nothing to photograph; the shot
+            // is skipped rather than faked with a different button.
+            await LogoutAsync();
+            await LoginAsync(SoloEmail, SoloPassword);
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+
+            var solo = Main.Locator(".place-investigate-solo");
+            if (await solo.CountAsync() > 0)
+            {
+                await solo.First.ClickAsync();
+                var dialog = Page.Locator(".modal, [role='dialog']").Filter(
+                    new() { HasTextString = "Investigating on your own" }).First;
+                await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                // Proved on the button rather than on the word "public": that word appears in
+                // several places on the page behind the dialog, and the first match wins.
+                await ShootAsync("getting-started", "investigate-alone.png",
+                                 proves: "Create it and carry on");
+            }
         }
         finally
         {
@@ -640,6 +766,129 @@ public sealed class HelpMediaCapture : BenTestBase
             }
             await api.DisposeAsync();
         }
+    }
+
+    [Test]
+    [Description("getting-started: a public location's page — what it is, its evidence and the figures.")]
+    public async Task Capture_PublicLocation()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        // Founded for the shot rather than borrowed from the seed: the picture has to show a page
+        // with a description, both kinds of picture and some votes on it, and no seeded place has
+        // all three. It is a public location like any other afterwards.
+        await GoAsync("/places/new");
+        await Page.Locator("#newplace-name").FillAsync("Cragfont");
+        await Page.Locator("#newplace-street").FillAsync("200 Cragfont Road");
+        await Page.Locator("#newplace-city").FillAsync("Castalian Springs");
+        await Page.Locator("#newplace-state").FillAsync("TN");
+        await ClickUntilUrlAsync(Page.Locator("#newplace-add"), @"/places/[0-9a-f\-]{36}");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        await ClickUntilAsync(Page.Locator("#place-about-edit"), Page.Locator("#place-about-text"));
+        await Page.Locator("#place-about-text").FillAsync(
+            "Built in 1802 by General James Winchester, on a bluff above the Cumberland. "
+          + "Lived in by the family until 1864 and held by the state since.");
+        await ClickUntilAsync(Page.Locator("#place-about-save"), Page.Locator("#place-about-edit"));
+
+        foreach (var (caption, kind) in new[]
+        {
+            ("The upstairs corridor, about 11pm", "Evidence"),
+            ("The frontage from the drive", "AboutThePlace"),
+        })
+        {
+            // A real photograph, not the one-pixel PNG the walks use. Scaled up it renders as a
+            // black rectangle, and a help picture showing two black rectangles teaches the reader
+            // that the feature is broken.
+            await Page.Locator("#place-evidence-file").SetInputFilesAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#place-evidence-caption").FillAsync(caption);
+            await Page.Locator("#place-evidence-kind").SelectOptionAsync(kind);
+            await ClickUntilAsync(Page.Locator("#place-evidence-add"),
+                                  Page.Locator("#place-evidence-says"));
+        }
+
+        // Votes, so the picture shows what the paragraph beside it describes. A shot reading
+        // "nobody has voted on any of it yet" illustrates the empty case, which is the one the
+        // help does not need a photograph of.
+        // Asked of the API directly. A fetch() from the page hits the WEBSITE's origin, where
+        // /api/... is not an API at all — it is the Blazor shell, and the answer is a DOCTYPE.
+        var placeId = System.Text.RegularExpressions.Regex
+            .Match(Page.Url, @"/places/([0-9a-f\-]{36})").Groups[1].Value;
+
+        var reader = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var listed = await reader.GetAsync($"/api/public/places/{placeId}/evidence");
+        var fileId = listed.Ok
+            ? (await listed.JsonAsync())!.Value.EnumerateArray().FirstOrDefault()
+                .GetProperty("uploadFileId").GetString()
+            : null;
+        await reader.DisposeAsync();
+
+        if (fileId is { Length: > 0 })
+        {
+            foreach (var (email, password, vote) in new[]
+            {
+                (UserEmail, UserPassword, 0),
+                (MemberEmail, MemberPassword, 0),
+                (ClientEmail, ClientPassword, 1),
+            })
+            {
+                var token = await TokenForCaptureAsync(email, password);
+                if (token is null) continue;
+
+                var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+                await api.PostAsync($"/api/evidence-votes/{fileId}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+                    DataObject = new { voteType = vote },
+                });
+                await api.DisposeAsync();
+            }
+        }
+
+        await Page.ReloadAsync();
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        // SELECTOR, not the whole page. The first version shot the viewport and "proves" passed on
+        // text that was eight hundred pixels below the fold — the figures and both galleries were
+        // in the DOM and out of frame, so the picture showed a map and a contact card while the
+        // paragraph beside it talked about evidence. A proof that reads the DOM says nothing about
+        // what is in the photograph.
+        //
+        // Around widens it to take the evidence and the pictures underneath the figures panel,
+        // which is what the help is actually describing.
+        await ShootAsync("getting-started", "public-location.png",
+                         selector: "#place-figures",
+                         around: new Around(Top: 340, Bottom: 420, Left: 12, Right: 12),
+                         proves: "What the evidence here says");
+    }
+
+    [Test]
+    [Description("organization-administration: the sheet a guide holds up so a guest's phone can join.")]
+    public async Task Capture_GuestCode()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await GoAsync($"/organizations/{orgId}?tab=investigations");
+
+        var codeButton = Main.GetByRole(AriaRole.Button, new() { Name = "Guest code" }).First;
+        Assert.That(await codeButton.CountAsync(), Is.GreaterThan(0),
+            "the seeded administrator should be able to make a code for a seeded investigation");
+        await ClickUntilUrlAsync(codeButton, @"/investigations/[0-9a-f\-]+/join-code");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        var make = Page.Locator("#join-code-make");
+        if (await make.CountAsync() > 0)
+            await ClickUntilAsync(make, Page.Locator("#join-code-typed"));
+
+        // "proves" is the picture's own claim: a shot of this screen with no code on it would be
+        // a photograph of the button that makes one, which is not what the help paragraph says.
+        await ShootAsync("organization-administration", "guest-code.png",
+                         gated: true, proves: "Stops working");
     }
 
     [Test]
@@ -917,6 +1166,70 @@ public sealed class HelpMediaCapture : BenTestBase
         await Page.GetByRole(AriaRole.Tab, new() { Name = "About" })
                   .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
         await ShootAsync("your-profile", "profile.png");
+    }
+
+    [Test]
+    [Description("organization-administration: the meeting point, where a guide scans guests in.")]
+    public async Task Capture_TourDoor()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        // A date to stand at. The door is per-event, so the picture needs a real walk rather than
+        // a made-up id — a "that date could not be found" card teaches nobody anything.
+        var eventId = await AnyTourDateAsync(orgId);
+        if (eventId is null) Assert.Ignore("no tour date in the seed to stand a door at");
+
+        await GoAsync($"/organizations/{orgId}/events/{eventId}/tour-door");
+
+        // Wait for the box, not the page: the heading renders before the scanner does, and a shot
+        // between the two is a door with no door in it.
+        await Page.Locator("#tour-door-code")
+                  .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
+
+        await ShootAsync("organization-administration", "tour-door.png",
+                         gated: true, proves: "Or type the code");
+    }
+
+    /// <summary>Any published tour date on this group, or null.</summary>
+    private async Task<string?> AnyTourDateAsync(string orgId)
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+
+        var response = await Page.APIRequest.GetAsync(
+            $"{ApiUrl}/api/organizations/{orgId}/calendar",
+            new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+        if (!response.Ok) return null;
+
+        var json = await response.JsonAsync();
+        if (json is not { ValueKind: System.Text.Json.JsonValueKind.Array } rows) return null;
+
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.TryGetProperty("id", out var id) && id.GetString() is { Length: > 0 } value)
+                return value;
+        }
+        return null;
+    }
+
+    [Test]
+    [Description("your-profile: choosing which of the site's emails you get.")]
+    public async Task Capture_YourEmails()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        await GoAsync("/email-preferences");
+
+        // Wait for the LIST, not the page. The heading and the closing paragraph render before the
+        // preferences arrive, so a shot taken between the two is a page of prose about switches
+        // with no switches in it — which is the picture, and the wrong one.
+        await Page.Locator("#email-preferences .form-check-input").First
+                  .WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 20_000 });
+
+        await ShootAsync("your-profile", "your-emails.png",
+                         proves: "Some letters are always sent");
     }
 
     [Test]
@@ -1458,39 +1771,79 @@ public sealed class HelpMediaCapture : BenTestBase
 
     // ── Group members ─────────────────────────────────────────────────────────
 
-    /// <summary>The research page the development seed puts on the Belmont case.</summary>
-    private const string SeededResearchPageId = "12000001-0000-0000-0000-000000000001";
-
     /// <summary>
-    /// working-a-case: the Edit Case page, and a research page — whole, on a phone, and its map block.
+    /// working-a-case: the Edit Case page, the case's boards, and a board being grown and presented.
     /// </summary>
     /// <remarks>
-    /// Beta feedback, 2026-09-14. The research page is the seeded one (text, a link and a two-place driving map),
-    /// so the shots change nothing. Opened as Sarah, who manages the case, so the page shows as its author sees it: the
-    /// save status, Save now and Publish, and Files and links beside it.
+    /// The board is the seeded one on the Belmont case — four cards joined in a chain and a note beside them — so the
+    /// shots change nothing. Opened as Sarah, who manages the case, so it shows as its author sees it. The growing
+    /// shot selects a card to bring its side handles up; the presenting shot starts the walk and steps once, so the
+    /// picture shows a card being talked about rather than the first one.
     /// </remarks>
     [Test]
-    [Description("working-a-case: the Edit Case page and a research page with its map.")]
-    public async Task Capture_EditCaseAndResearchPages()
+    [Description("working-a-case: the Edit Case page, research boards, growing a card and presenting.")]
+    public async Task Capture_EditCaseAndResearchBoards()
     {
         await LoginAsync(UserEmail, UserPassword);
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("The seeded Belmont case is not in this database.");
-        var caseUrl = Page.Url.Split('?')[0];
 
+        var caseUrl = Page.Url;
         await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
         await Expect(Page.Locator("#case-edit-description .k-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await ShootAsync("working-a-case", "edit-case.png", proves: "Status and publishing");
 
-        await Page.GotoAsync($"{caseUrl}/research/{SeededResearchPageId}");
-        await WaitForTheCircuitAsync();
-        await Expect(Page.Locator("#research-page-title")).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        await Page.Locator("[data-testid=map-block] .ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
-        await Page.WaitForTimeoutAsync(4_000);   // map tiles and the route's framing animation
-        await ShootAsync("working-a-case", "research-page.png", proves: "Who lived here before");
-        await ShootAsync("working-a-case", "research-map.png", selector: "section[data-kind=map]", proves: "Mount Olivet Cemetery");
-        await Page.EvaluateAsync("() => window.scrollTo(0, 0)");   // the map shot scrolled down to it; the phone shot is the page's top
-        await ShootAsync("working-a-case", "research-page-phone.png", proves: "Who lived here before", width: 390);
+        await Page.GoBackAsync();
+        var boards = Main.Locator("[data-testid=case-research-boards]");
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
+        await ShootAsync("working-a-case", "research-boards.png", proves: "Previous owners and where they are buried");
+
+        // The choice New board opens (M9-12). The help section that describes the five templates is
+        // the one place a reader has to recognise this dialog, and a table of names is not a picture
+        // of it.
+        await Page.Locator("#research-new-board").ClickAsync();
+        await Expect(Page.Locator("[data-testid=board-template-list]")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-templates.png", proves: "Presentation deck");
+
+        // And what one of them actually opens. The family tree, because it is the template whose
+        // shape is least guessable from its name and the one carrying Ben's photo frames.
+        await Page.Locator("#board-template-family-tree").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // The storage warning is a toast, not part of the board: a help picture of the family tree
+        // should not carry one, and it appears on a first load in a fresh browser every time.
+        var toasts = Page.Locator(".bc-toasts .toast .btn-close");
+        for (var open = await toasts.CountAsync(); open > 0; open--)
+            await toasts.First.ClickAsync();
+        await Page.WaitForTimeoutAsync(400);
+
+        await ShootAsync("working-a-case", "board-family-tree.png", proves: "No picture yet");
+
+        await Page.GotoAsync(caseUrl, new() { Timeout = 30_000 });
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
+
+        // Into the canvas itself. A separate application on its own host, so the wait is for the editor's own
+        // ready flag rather than for anything the site renders.
+        await boards.GetByText("Previous owners and where they are buried").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // A selected card wears the four side handles; that is the picture the help text describes.
+        await Page.Locator(".bc-node").First.ClickAsync();
+        await Expect(Page.Locator(".bc-port").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-grow.png", proves: "Built 1924");
+
+        await Page.Locator("[data-bc-action=present]").ClickAsync();
+        await Expect(Page.Locator(".bc-present")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.Keyboard.PressAsync("ArrowRight");
+        await Page.WaitForTimeoutAsync(1_500);   // the walk's move to the next card
+        await ShootAsync("working-a-case", "board-presenting.png", proves: "Sold 1951");
+        await Page.Keyboard.PressAsync("Escape");
     }
 
     [Test]
@@ -1645,6 +1998,34 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync(new Uri(orgUrl).AbsolutePath + "/cms");
         await ShootAsync("organization-administration", "cms.png", gated: true);
+    }
+
+    /// <summary>
+    /// The photo editor, full screen, with a photo in it and one mark drawn - the Edit image button
+    /// on a Files tab. Until 09/25/2026 it opened in the smallest dialog size with no picture at all.
+    /// </summary>
+    [Test]
+    [Description("organization-administration: the photo editor.")]
+    public async Task Capture_PhotoEditor()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await OpenPhotoEditorOnAFreshUploadAsync("hallway-light.jpg");
+
+        var dialog = Page.Locator(".modal-dialog.modal-fullscreen");
+        await Expect(dialog.GetByText("1600 × 1000 pixels")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // One rectangle, so the shot shows a mark, the layer it made and the save buttons.
+        await dialog.Locator("[data-tool='rect']").ClickAsync();
+        await Expect(dialog.GetByTestId("image-editor-hint")).ToContainTextAsync("rectangle");
+        var box = (await dialog.Locator("canvas.upper-canvas").BoundingBoxAsync())!;
+        await Page.Mouse.MoveAsync(box.X + box.Width * 0.42f, box.Y + box.Height * 0.30f);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync(box.X + box.Width * 0.58f, box.Y + box.Height * 0.55f, new() { Steps = 8 });
+        await Page.Mouse.UpAsync();
+        await Expect(dialog.GetByText("Layers (1)")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await ShootAsync("organization-administration", "photo-editor.png", gated: true,
+            proves: "saved at this size");
     }
 
     /// <summary>
@@ -1870,6 +2251,19 @@ public sealed class HelpMediaCapture : BenTestBase
         await GoAsync("/admin/site-settings");
         await ShootAsync("site-administration", "site-settings.png", gated: true);
 
+        // The storage ceiling (C1, 2026-09-22). The one number to change when there is more disk,
+        // so the shot is that setting's own card rather than the whole page — where it is one box
+        // of forty and the picture says nothing.
+        //
+        // Reached by ?setting=, because only the chosen tab is RENDERED: without it the page opens
+        // on the first section and this box is not below the fold, it is absent. That deep link
+        // exists precisely because two other links had already been caught promising a switch on a
+        // page that did not contain it.
+        await GoAsync("/admin/site-settings?setting=storage.free-account-megabytes");
+        await ShootAsync("site-administration", "storage-ceiling.png", gated: true,
+                         selector: ".card:has(.font-monospace:text-is('storage.free-account-megabytes'))",
+                         proves: "Free account storage");
+
         await GoAsync("/admin/support-tickets");
         await ShootAsync("site-administration", "support-tickets.png", gated: true);
 
@@ -1885,6 +2279,261 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/admin/equipment-taxonomy");
         await ShootAsync("site-administration", "equipment-taxonomy.png", gated: true);
+    }
+
+    // ── The store ─────────────────────────────────────────────────────────────
+
+    /// <summary>A demo product's fixed id (StoreDemoSeeder): 21 is the K-II.</summary>
+    private static string StoreSeeded(int n) => $"a1000000-0000-0000-0000-{n:D12}";
+
+    /// <summary>
+    /// shopping-at-the-store: the front, a list, a product and its reviews, the three cart surfaces,
+    /// checkout, and a buyer's orders and favourites.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Run it on a fresh side database</b> (<c>BEN_E2E_DB=IsHauntedDb_capture</c>): the e2e
+    /// database collects a shelf for every test that ever ran, and the store's front would show
+    /// "Sold Out Shelf 2a3ce6" beside the EMF meters. A fresh one holds only StoreDemoSeeder's
+    /// seven products, its orders and its reviews.</para>
+    ///
+    /// <para><b>The cart and checkout are a guest's</b>, at phone width — the document says a guest
+    /// can buy, and most will be holding a phone. The Payment step is not captured in the harness's
+    /// test checkout: it shows a "Test checkout" note where the card form goes, which would teach a
+    /// reader the opposite of what the text says. It is taken when Stripe test keys are present.</para>
+    /// </remarks>
+    [Test]
+    [Description("shopping-at-the-store: the store, a product, the cart, checkout, orders and favourites.")]
+    public async Task Capture_Shopping()
+    {
+        const string slug = "shopping-at-the-store";
+        await LogoutAsync();
+
+        // The harness has only just switched the store on, and the site holds a switch's answer
+        // for up to 30 seconds: on a fresh database the first look is "page not found".
+        await GoAsync("/store");
+        for (var tries = 0; tries < 8 && !await Page.GetByText("Shop by category").IsVisibleAsync(); tries++)
+        {
+            await Page.WaitForTimeoutAsync(5_000);
+            await GoAsync("/store");
+        }
+        await ShootAsync(slug, "store-home.png", proves: "Shop by category");
+
+        await GoAsync("/store/products");
+        await ShootAsync(slug, "listing.png", proves: "K-II EMF Meter");
+
+        await GoAsync("/store/p/k-ii-emf-meter");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "product.png", proves: "Add to cart");
+        await ShootAsync(slug, "reviews.png", selector: "#reviews", proves: "The store replied");
+
+        // Two things in the cart, the second added last so the drawer is open on the phone shot.
+        await ClickUntilAsync(Page.Locator("[data-testid=add-to-cart]"), Page.Locator("[data-testid=cart-drawer]"));
+        await Page.Keyboard.PressAsync("Escape");
+        await GoAsync("/store/p/investigators-field-bag");
+        await WaitForTheCircuitAsync();
+        await Page.SetViewportSizeAsync(390, PhoneHeight);
+        await ClickUntilAsync(Page.Locator("[data-testid=add-to-cart]"), Page.Locator("[data-testid=cart-drawer]"));
+        await ShootAsync(slug, "cart-drawer.png", width: 390, proves: "To checkout");
+        await Page.Keyboard.PressAsync("Escape");
+
+        await GoAsync("/store");
+        await WaitForTheCircuitAsync();
+        await ClickUntilAsync(Page.Locator("#nav-cart"), Page.Locator(".ben-cart-dd.show"));
+        await ShootAsync(slug, "cart-menu.png", selector: ".ben-cart-dd.show", proves: "Go to Cart");
+
+        await GoAsync("/store/cart");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "cart.png", proves: "Do you have a discount code?");
+
+        await ClickUntilAsync(Page.Locator("#cart-to-checkout"), Page.Locator("#checkout-email"));
+        await FillAndConfirmAsync("#checkout-email", "ada.buyer@example.com");
+        await FillAndConfirmAsync("#shipping-full-name", "Ada Buyer");
+        await FillAndConfirmAsync("#shipping-phone", "615-555-0100");
+        await FillAndConfirmAsync("#shipping-street1", "1 Elm St");
+        await FillAndConfirmAsync("#shipping-city", "Nashville");
+        await Page.SelectOptionAsync("#shipping-state", "TN");
+        await FillAndConfirmAsync("#shipping-zip", "37203");
+        await ShootAsync(slug, "checkout.png", width: 390, proves: "Shipping address");
+
+        await Page.Locator("#checkout-terms").CheckAsync();
+        await Page.Locator("#store-continue-payment").ClickAsync();
+        await Expect(Page.Locator("[data-testid=checkout-payment]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        if (await Page.Locator("[data-testid=checkout-fake]").CountAsync() > 0)
+            TestContext.Out.WriteLine("NOT captured: checkout-payment.png — the harness's test checkout has no card form (needs Stripe test keys).");
+        else
+        {
+            // Stripe's own card form, in its frame: shot once it has drawn its fields, not its spinner.
+            await Expect(Page.FrameLocator("#ben-payment-element iframe").First.Locator("[name=number]"))
+                .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            // The payment card itself: at phone width the page would otherwise be photographed wherever
+            // it happened to be scrolled, which on 09/24 was the middle of the form.
+            await ShootAsync(slug, "checkout-payment.png", width: 390, selector: "[data-testid=checkout-payment]", proves: "Step 3 of 4");
+        }
+
+        // A buyer with history: Sarah has five seeded orders and two favourites.
+        await LoginAsync(UserEmail, UserPassword);
+        await GoAsync("/store/orders");
+        await WaitForTheCircuitAsync();
+        await DismissActionNeededBannersAsync();   // Sarah's groups' "work waiting" is not the subject
+        await ShootAsync(slug, "my-orders.png", proves: "Order no.");
+
+        await GoAsync($"/store/orders/{StoreSeeded(102)}");
+        await ShootAsync(slug, "order.png", proves: "H1n Handy Recorder");
+
+        await GoAsync("/store/favourites");
+        await ShootAsync(slug, "favourites.png", proves: "REM Pod");
+
+        // Store sellers: an order in two packages with its downloads, the questions a shopper asked,
+        // the questions and answers on an item's page, and a version that's no longer made.
+        await GoAsync($"/store/orders/{StoreSeeded(110)}");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "order-packages.png", proves: "Ships from Hazel Marsh");
+        await ShootAsync(slug, "downloads.png", selector: "[data-testid=order-downloads]", proves: "REM Pod quick start",
+            around: new Around(Left: 16, Top: 40, Right: 16, Bottom: 16));
+
+        await GoAsync("/store/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "my-questions.png", proves: "Does it come with a carrying case?");
+
+        await GoAsync("/store/p/hand-built-rem-pod");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "product-questions.png", selector: "#faq", proves: "Questions and answers");
+
+        await LogoutAsync();
+        await GoAsync("/store/p/field-thermometer");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "no-longer-made.png", proves: "No longer made");
+    }
+
+    /// <summary>
+    /// selling-in-the-store: the demo seller's workspace — her items, one item's tabs, her packages,
+    /// her earnings and her questions (store sellers, backlog 251). Public shots: the document is for
+    /// any signed-in seller. Run on a fresh side database, like <see cref="Capture_Shopping"/>.
+    /// </summary>
+    [Test]
+    [Description("selling-in-the-store: items, an item's editor tabs, packages, earnings and questions.")]
+    public async Task Capture_Selling()
+    {
+        const string slug = "selling-in-the-store";
+        var remPod = $"/store/selling/items/{StoreSeeded(28)}";
+        await LoginAsync(SellerEmail, SellerPassword);
+
+        await GoAsync("/store/selling");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "my-items.png", proves: "Hand-Built REM Pod");
+
+        await GoAsync(remPod);
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "item-edit.png", proves: "Hand-Built REM Pod");
+
+        foreach (var (tab, name, proves) in new[]
+                 {
+                     ("parts", "parts.png", "A unit costs to make"),
+                     ("files", "files.png", "REM Pod quick start"),
+                     ("faq", "faq.png", "Frequently asked questions"),
+                     ("versions", "versions.png", "Start a new version"),
+                     ("page", "page.png", "Up to three — mp4, webm or mov"),
+                 })
+        {
+            await GoAsync($"{remPod}?tab={tab}");
+            await WaitForTheCircuitAsync();
+            await ShootAsync(slug, name, proves: proves);
+        }
+
+        await GoAsync("/store/selling/packages");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "packages.png", proves: "Ship to");
+
+        await GoAsync("/store/selling/earnings");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "earnings.png", proves: "Owed to you");
+
+        await GoAsync("/store/selling/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "questions.png", proves: "Does it come with a carrying case?");
+    }
+
+    /// <summary>
+    /// Closes the "has work waiting" banners the way a person would. They are about the signed-in
+    /// person's groups, not the page being photographed, and stay closed for the rest of the tab's
+    /// session (ActionNeededBanners), so once is enough for every shot that follows.
+    /// </summary>
+    private async Task DismissActionNeededBannersAsync()
+    {
+        var close = Page.Locator(".action-needed-banner .btn-close");
+        await Page.WaitForTimeoutAsync(1_000);   // they arrive a moment after the page does
+        for (var i = 0; i < 10 && await close.CountAsync() > 0; i++)
+        {
+            await close.First.ClickAsync();
+            await Page.WaitForTimeoutAsync(300);
+        }
+    }
+
+    /// <summary>
+    /// site-administration's store sections: the dashboard, products and one being edited, stock,
+    /// the order desk and one order, the review queue and the settings.
+    /// </summary>
+    /// <remarks>Run on a fresh side database, like <see cref="Capture_Shopping"/>, or the grids are
+    /// hundreds of rows of test products.</remarks>
+    [Test]
+    [Description("site-administration: the store's back office.")]
+    public async Task Capture_StoreAdministration()
+    {
+        const string slug = "site-administration";
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        await GoAsync("/admin/store");
+        await WaitForTheCircuitAsync();
+        await DismissActionNeededBannersAsync();
+        await ShootAsync(slug, "store-dashboard.png", gated: true, proves: "To pack");
+
+        await GoAsync("/admin/store/products");
+        await ShootAsync(slug, "store-products.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync($"/admin/store/products/{StoreSeeded(21)}/edit");
+        await ShootAsync(slug, "store-product-edit.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync("/admin/store/stock");
+        await ShootAsync(slug, "store-stock.png", gated: true, proves: "KII-EMF");
+
+        await GoAsync("/admin/store/orders");
+        await ShootAsync(slug, "store-orders.png", gated: true, proves: "Sarah");
+
+        await GoAsync($"/admin/store/orders/{StoreSeeded(101)}");
+        await ShootAsync(slug, "store-order.png", gated: true, proves: "K-II EMF Meter");
+
+        await GoAsync("/admin/store/reviews");
+        await ShootAsync(slug, "store-reviews.png", gated: true, proves: "Our go-to first sweep");
+
+        await GoAsync("/admin/store/settings");
+        await ShootAsync(slug, "store-settings.png", gated: true, proves: "Flat rate");
+
+        // Store sellers: the sale requests, the sellers' books, one seller, the questions, an order
+        // in two packages, and a product's history.
+        await GoAsync("/admin/store/sale-requests");
+        await WaitForTheCircuitAsync();
+        await ClickUntilAsync(Page.Locator("[data-testid=sale-request-filter]").Nth(1), Page.Locator("[data-testid=sale-request]").First);
+        await ShootAsync(slug, "store-sale-requests.png", gated: true, proves: "Hand-Built REM Pod");
+
+        await GoAsync("/admin/store/sellers");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-sellers.png", gated: true, proves: "Hazel Marsh");
+        var seller = await Page.Locator("a[href^='/admin/store/sellers/']").First.GetAttributeAsync("href");
+        await GoAsync(seller!);
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-seller.png", gated: true, proves: "Record payment");
+
+        await GoAsync("/admin/store/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-questions.png", gated: true, proves: "Can this be used outdoors in the rain?");
+
+        await GoAsync($"/admin/store/orders/{StoreSeeded(110)}");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-order-packages.png", gated: true, proves: "Hazel Marsh");
+
+        await GoAsync($"/admin/store/products/{StoreSeeded(28)}/edit?tab=history");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-product-history.png", gated: true, proves: "Gave it to Hazel Marsh to sell.");
     }
 
     // ── Publications ──────────────────────────────────────────────────────────
@@ -2087,9 +2736,9 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await Page.Locator("#picker-hold").ClickAsync();
         await Expect(Page.Locator("#picker-emailed")).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        if (PickTokenFromTheApiLog(stranger) is { } pickToken)
+        if (await TryLinkFromTheOutboxAsync(stranger, "/event-picks/") is { } pickLink)
         {
-            await GoAsync($"/event-picks/{pickToken}");
+            await GoAsync(pickLink);
             await Expect(Page.Locator("#pick-confirm")).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await ShootAsync("going-to-an-event", "hold-your-places-link.png",
                 gated: false, selector: "#pick-card", proves: "Hold my places");
@@ -2286,26 +2935,6 @@ public sealed class HelpMediaCapture : BenTestBase
                     new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
             await api.DisposeAsync();
         }
-    }
-
-    /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
-    private static string? PickTokenFromTheApiLog(string email)
-    {
-        var log = Environment.GetEnvironmentVariable("BEN_E2E_API_LOG");
-        if (string.IsNullOrWhiteSpace(log) || !File.Exists(log)) return null;
-
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            var match = System.Text.RegularExpressions.Regex.Matches(reader.ReadToEnd(),
-                    $@"pick link for ""?{System.Text.RegularExpressions.Regex.Escape(email)}""? was not sent\. Pick token: ""?([A-Za-z0-9_\-]+)")
-                .LastOrDefault();
-            if (match is not null) return match.Groups[1].Value;
-            Thread.Sleep(500);
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -3107,5 +3736,95 @@ public sealed class HelpMediaCapture : BenTestBase
         }
 
         return (orgId, publicationId!, urlName!, postId!);
+    }
+
+    /// <summary>
+    /// The letters screen: writing one, and reading one that went.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both are SuperAdmin screens, so both are gated — embedded in the services assembly
+    /// rather than served from wwwroot, for the same reason the text is.</para>
+    ///
+    /// <para><b>The editor is photographed with a starter loaded and the dropdowns open on a real
+    /// table</b>, because a picture of an empty editor shows nothing about what the feature is.
+    /// The whole point a reader needs to see is that picking a table fills the column list.</para>
+    ///
+    /// <para><b>No letter is published</b>, and the draft is reverted at the end. A capture run
+    /// that left a template behind would change what every person on this database receives, and
+    /// screenshots are taken on the testing copy that the walk-throughs also use.</para>
+    /// </remarks>
+    [Test]
+    [Description("site-administration: writing a letter, and reading one that was sent.")]
+    public async Task Capture_EmailTemplates()
+    {
+        await LogoutAsync();
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        try
+        {
+            await GoAsync("/admin/email-templates");
+
+            // The reset letter: it has a starter, a required token and a real table behind it, so
+            // one screen shows every part of the feature at once.
+            // ClickUntil, not a plain click: this page is Blazor Server, and a click that lands
+            // before the circuit is live does nothing at all. A capture then waits out its whole
+            // timeout on a page that looks perfectly fine.
+            await ClickUntilAsync(
+                Page.GetByText("Reset your password", new() { Exact = true }).First,
+                Page.Locator("[data-testid=template-body]"));
+
+            await ClickUntilAsync(
+                Page.GetByRole(AriaRole.Button, new() { Name = "Reset a password" }),
+                Page.Locator("[data-testid=insert-supplied]").First);
+
+            await Page.SelectOptionAsync("#token-table", "AppUsers");
+            await Expect(Page.Locator("#token-column option")).Not.ToHaveCountAsync(1);
+            await Page.SelectOptionAsync("#token-column", "DisplayName");
+
+            await ShootAsync("site-administration", "email-template-editor.png",
+                gated: true, proves: "Add token");
+
+            // And what it looks like filled in, which is the answer to "will this work".
+            await ClickUntilAsync(
+                Page.Locator("[data-testid=template-preview]"),
+                Page.Locator("[data-testid=preview-subject]"));
+
+            // Proves on the panel's own caption, NOT on the made-up name: the letter is drawn in a
+            // sandboxed iframe, and GetByText cannot see inside one. Naming a word from the letter
+            // would fail for ever while the picture was perfectly fine.
+            await ShootAsync("site-administration", "email-template-preview.png",
+                gated: true, proves: "Made-up details");
+        }
+        finally
+        {
+            // Never leave a draft behind on a shared database.
+            if (await SuperAdminTokenAsync() is { } token)
+            {
+                using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+                http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+                await http.DeleteAsync("/api/admin/email-templates/reset-your-password");
+            }
+        }
+
+        // Reading a letter that actually went — the other half of the same screen's job.
+        await GoAsync("/admin/mail");
+        var all = Page.GetByRole(AriaRole.Button, new() { Name = "All", Exact = true });
+        if (await all.CountAsync() > 0) await all.First.ClickAsync();
+
+        var read = Page.Locator("[data-testid=outbox-view]");
+        if (await read.CountAsync() > 0)
+        {
+            await ClickUntilAsync(
+                read.First,
+                Page.Locator("[data-testid=letter-body], [data-testid=letter-scrubbed]").First);
+
+            await ShootAsync("site-administration", "reading-a-letter.png",
+                gated: true, proves: "recorded");
+        }
+        else
+        {
+            TestContext.Out.WriteLine(
+                "No letter with a body on this database, so reading-a-letter.png was not taken.");
+        }
     }
 }

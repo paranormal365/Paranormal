@@ -388,4 +388,35 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> RejectEquipmentModelAsync(Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"{AdminTaxonomyBase}/models/{id}", token);
+
+    // ── Renaming and merging (2026-09-17 audit) ──────────────────────────────
+    // Four routes that existed with no caller. A rename answers 409 with a TaxonomyMergeOffer —
+    // a SHAPE, so SendExpectingConflictAsync — and a merge refuses with a SENTENCE, so
+    // SendExpectingReasonAsync. Mixing the two up loses the message either way.
+
+    public Task<(EquipmentBrandRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> RenameEquipmentBrandAsync(
+        Guid id, UpsertEquipmentBrandRequest request, CancellationToken token = default)
+        => _api.SendExpectingConflictAsync<UpsertEquipmentBrandRequest, EquipmentBrandRecord, TaxonomyMergeOffer>(
+               HttpMethod.Put, $"{AdminTaxonomyBase}/brands/{id}", request, token);
+
+    public async Task<(bool Ok, string? Error)> MergeEquipmentBrandAsync(
+        Guid id, Guid targetId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"{AdminTaxonomyBase}/brands/{id}/merge-into/{targetId}", new { }, token);
+        return (error is null, error);
+    }
+
+    public Task<(EquipmentModelRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> RenameEquipmentModelAsync(
+        Guid id, RenameEquipmentModelRequest request, CancellationToken token = default)
+        => _api.SendExpectingConflictAsync<RenameEquipmentModelRequest, EquipmentModelRecord, TaxonomyMergeOffer>(
+               HttpMethod.Put, $"{AdminTaxonomyBase}/models/{id}", request, token);
+
+    public async Task<(bool Ok, string? Error)> MergeEquipmentModelAsync(
+        Guid id, Guid targetId, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post, $"{AdminTaxonomyBase}/models/{id}/merge-into/{targetId}", new { }, token);
+        return (error is null, error);
+    }
 }

@@ -1,0 +1,96 @@
+@*
+    The rail of things to add, one button per enabled block. Files arrive by paste and drop, so File has no
+    button. Paste sits at the end. Every icon-only button has a spoken name and a tooltip.
+*@
+@inject IOptions<CanvasEditorOptions> Options
+
+<nav class="bc-rail" aria-label="Add to the board">
+    @* A view-only board (R33) offers nothing to add or paste. *@
+    @foreach (var d in ReadOnly ? [] : Blocks)
+    {
+        var kind = d.Type.ToString().ToLowerInvariant();
+        var name = $"Add {(d.Type == CanvasNodeType.Text ? "note" : d.DisplayName.ToLowerInvariant())}";
+        <button type="button" class="bc-rail__button" data-bc-action="add-@kind" aria-label="@name" title="@name"
+                @onclick="@(() => OnAction.InvokeAsync("add-" + kind))">
+            <BcIcon Name="@d.IconName" />
+        </button>
+    }
+    @if (!ReadOnly)
+    {
+    <span class="bc-rail__divider" aria-hidden="true"></span>
+    @* Ben, 2026-09-16: "files can be picked from the case files". Dropping one uploads it; this
+       reaches for one the case already has, so a photograph taken last week is not sent twice. *@
+    @if (CanPickCaseFiles)
+    {
+        <button type="button" class="bc-rail__button" data-bc-action="case-files"
+                aria-label="Add from the case's files" title="Add from the case's files"
+                @onclick="@(() => OnAction.InvokeAsync("case-files"))">
+            <BcIcon Name="folder" />
+        </button>
+    @* Ben, 2026-09-18: "like the add file from case, we have add research note from case". Only
+       published boards can be linked, and the picker says so. *@
+    <button type="button" class="bc-rail__button" data-bc-action="case-boards"
+            aria-label="Link to one of the case's boards" title="Link to one of the case's boards"
+            @onclick="@(() => OnAction.InvokeAsync("case-boards"))">
+        <BcIcon Name="book-open" />
+    </button>
+    }
+    @* No Blazor click: pasteInterop.js reads the clipboard inside this button's own click, which iOS requires. *@
+    <button type="button" class="bc-rail__button" data-bc-action="paste" aria-label="Paste" title="Paste">
+        <BcIcon Name="clipboard" />
+    </button>
+    }
+</nav>
+
+@* The phone's tools. CSS shows exactly one of the rail and the bar, so the first paint is right before any script runs. *@
+<nav class="@(ReadOnly ? "bc-bar bc-bar--readonly" : "bc-bar")" aria-label="Tools">
+    @if (!ReadOnly)
+    {
+    <button type="button" class="bc-bar__button" data-bc-action="add-menu" aria-label="Add" title="Add" @onclick="@(() => OnAction.InvokeAsync("add-menu"))">
+        <BcIcon Name="plus" /><span class="bc-bar__label">Add</span>
+    </button>
+    <button type="button" class="bc-bar__button" data-bc-action="paste" aria-label="Paste" title="Paste">
+        <BcIcon Name="clipboard" /><span class="bc-bar__label">Paste</span>
+    </button>
+    }
+    <button type="button" class="bc-bar__button" data-bc-action="undo" aria-label="@UndoName" title="@UndoName" disabled="@(!CanUndo)" @onclick="@(() => OnAction.InvokeAsync("undo"))">
+        <BcIcon Name="rotate-ccw" /><span class="bc-bar__label">Undo</span>
+    </button>
+    <button type="button" class="bc-bar__button" data-bc-action="redo" aria-label="@RedoName" title="@RedoName" disabled="@(!CanRedo)" @onclick="@(() => OnAction.InvokeAsync("redo"))">
+        <BcIcon Name="rotate-cw" /><span class="bc-bar__label">Redo</span>
+    </button>
+    <button type="button" class="bc-bar__button" data-bc-action="more" aria-label="More" title="More" @onclick="@(() => OnAction.InvokeAsync("more"))">
+        <BcIcon Name="more-horizontal" /><span class="bc-bar__label">More</span>
+    </button>
+</nav>
+
+@code {
+    private static readonly CanvasNodeType[] RailOrder =
+        [CanvasNodeType.Card, CanvasNodeType.Text, CanvasNodeType.Table, CanvasNodeType.Shape, CanvasNodeType.Message, CanvasNodeType.Map, CanvasNodeType.Image, CanvasNodeType.Link];
+
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+    [Parameter] public bool CanUndo { get; set; }
+
+    /// <summary>A view-only board: no add or paste buttons.</summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>
+    /// Whether this board belongs to a case whose files can be reached — the API is there, somebody
+    /// is signed in, and the board knows which case it is on.
+    /// </summary>
+    /// <remarks>
+    /// Hidden rather than shown-and-refused: a board opened from a file on somebody's machine has no
+    /// case behind it, and a button that always answers "there is nothing here" teaches people to
+    /// stop pressing buttons.
+    /// </remarks>
+    [Parameter] public bool CanPickCaseFiles { get; set; }
+    [Parameter] public bool CanRedo { get; set; }
+    [Parameter] public string? UndoDescription { get; set; }
+    [Parameter] public string? RedoDescription { get; set; }
+
+    private string UndoName => UndoDescription is null ? "Undo" : $"Undo {UndoDescription.ToLowerInvariant()}";
+    private string RedoName => RedoDescription is null ? "Redo" : $"Redo {RedoDescription.ToLowerInvariant()}";
+
+    private IEnumerable<BlockDescriptor> Blocks =>
+        RailOrder.Where(Options.Value.EnabledBlocks.Contains).Select(BlockRegistry.Get);
+}

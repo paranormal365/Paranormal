@@ -66,15 +66,30 @@ if (-not (Test-Path (Join-Path $payload 'ffmpeg\win-x64\ffmpeg.exe'))) {
 
 # ---- Inno Setup ------------------------------------------------------------
 if (-not $IsccPath) {
-    # The per-user path is first because that is where `winget install` puts it when it runs
-    # unelevated, which is the normal case - and looking only in Program Files reports Inno Setup as
-    # missing on a machine that has it.
-    $candidates = @(
-        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-    )
-    $IsccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    # Newest version first, and NOT hard-coded to one of them. This listed only "Inno Setup 6",
+    # so a server with Inno Setup 7 installed was told Inno Setup was not installed and sent to
+    # winget to install it again (2026-09-19). Each root is searched for any "Inno Setup *" folder
+    # and the highest version wins, so 8 needs no edit here either.
+    $roots = @(
+        "$env:LOCALAPPDATA\Programs",   # where winget puts it unelevated, which is the normal case
+        "$env:ProgramFiles",
+        "${env:ProgramFiles(x86)}"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    $candidates = foreach ($root in $roots) {
+        Get-ChildItem -Path $root -Directory -Filter 'Inno Setup *' -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $exe = Join-Path $_.FullName 'ISCC.exe'
+                if (Test-Path $exe) {
+                    $n = 0
+                    [void][int]::TryParse(($_.Name -replace '^Inno Setup\s*', ''), [ref]$n)
+                    [pscustomobject]@{ Version = $n; Path = $exe }
+                }
+            }
+    }
+
+    $IsccPath = $candidates | Sort-Object Version -Descending |
+                Select-Object -First 1 -ExpandProperty Path -ErrorAction SilentlyContinue
     if (-not $IsccPath) {
         $onPath = Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue
         if ($onPath) { $IsccPath = $onPath.Source }
@@ -82,9 +97,11 @@ if (-not $IsccPath) {
 }
 if (-not $IsccPath) {
     throw @"
-Inno Setup is not installed. Install it, then run this again:
+No ISCC.exe found. Looked for any 'Inno Setup *' folder under LOCALAPPDATA\Programs, Program Files
+and Program Files (x86), and on PATH. If it is installed somewhere else, point at it:
+    .\build-installer.ps1 -IsccPath 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
+To install it:
     winget install --id JRSoftware.InnoSetup --accept-package-agreements --accept-source-agreements
-Or pass -IsccPath to point at an existing ISCC.exe.
 "@
 }
 Write-Detail "ISCC: $IsccPath"

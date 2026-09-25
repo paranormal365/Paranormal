@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the canvas editor: the pure model, the host's sign-in and handoff services, component
+    markup through Blazor's HtmlRenderer, and source-scanning guards for the rules nothing else
+    enforces (no eval, no root-absolute asset paths, theme tokens, deployment headers).
+
+    Package versions follow Ben.Wasm.Video.Tests, which this project replaces for the canvas.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Canvas.Core\Ben.Canvas.Core.csproj" />
+    <ProjectReference Include="..\Ben.Canvas.Editor\Ben.Canvas.Editor.csproj" />
+    <ProjectReference Include="..\Ben.Wasm.Canvas\Ben.Wasm.Canvas.csproj" />
+  </ItemGroup>
+
+</Project>

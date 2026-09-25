@@ -57,7 +57,13 @@ public sealed class AccountStorageGuardTests
         db.UploadFiles.Add(new UploadFile
         {
             Id = fileId, FileName = "clip.m4a", ContentType = "audio/mp4",
-            StoragePath = $"u/{fileId}.m4a", FileSize = bytes,
+            // The real shape LocalFileStorageService.UserFilePath produces. It used to be
+            // "u/{fileId}.m4a", which nothing in the product ever writes — and the moment the
+            // guard started counting by path (C1) every one of these tests began measuring an
+            // empty account. Invented fixtures pass until the code looks at the thing they
+            // invented.
+            StoragePath = $"users/{userId}/{fileId}.m4a", FileSize = bytes,
+            AppUserId = userId,
             DateCreated = now, CreatedByAppUserId = userId,
         });
         db.FieldSessionUploads.Add(new FieldSessionUpload
@@ -112,6 +118,141 @@ public sealed class AccountStorageGuardTests
     {
         await using var db = await f.CreateDbContextAsync();
         return await AccountStorageGuard.WhyCannotStoreAsync(db, userId, incoming, default);
+    }
+
+    /// <summary>A bare personal file, with no session behind it.</summary>
+    /// <remarks>
+    /// Most personal uploads are not field sessions — equipment photos, feed media, audio clips,
+    /// video projects. This seeds the shape they all share: bytes under users/{id}/.
+    /// </remarks>
+    private static async Task<Guid> StorePlainAsync(
+        IDbContextFactory<BenDataContext> f, Guid userId, long bytes,
+        Guid? archivedFrom = null, Guid? parentFileId = null, string? path = null)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var id = Guid.NewGuid();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = id, FileName = "video.mp4", ContentType = "video/mp4",
+            StoragePath = path ?? $"users/{userId}/{id}.mp4", FileSize = bytes,
+            AppUserId = userId,
+            ArchivedFromUploadFileId = archivedFrom,
+            ParentFileId = parentFileId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    // ── what is counted, and what is not (C1, 2026-09-22) ────────────────────
+
+    /// <summary>
+    /// A group's file is not charged to the person who uploaded it.
+    /// </summary>
+    /// <remarks>
+    /// The reason the guard counts by path rather than by <c>AppUserId</c>. Case evidence sets
+    /// <c>AppUserId</c> to the uploader — the entity comment claiming otherwise describes handover
+    /// only — so counting by ownership would bill a member for their group's case files.
+    /// </remarks>
+    [Fact]
+    public async Task A_groups_case_file_is_not_charged_to_whoever_uploaded_it()
+    {
+        var factory = CreateFactory();
+        var userId = await AddUserAsync(factory);
+
+        // Exactly what CaseFileController writes: owned by the uploader, stored under the case.
+        await StorePlainAsync(factory, userId, 4L * 1024 * 1024 * 1024,
+                              path: $"cases/{Guid.NewGuid()}/files/big.mp4");
+
+        Assert.Null(await AskAsync(factory, userId, 1024));
+    }
+
+    /// <summary>
+    /// Clipping a video and keeping the original charges for both.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-22: "sometimes videos are clipped or audio creates clips and they don't want
+    /// to delete the original version". Both files are in the person's listing and either can be
+    /// deleted, so holding both is a choice they can undo — and it is charged. This is the case
+    /// that must NOT be confused with a replace archive below.
+    /// </remarks>
+    [Fact]
+    public async Task A_clip_and_its_original_are_both_counted()
+    {
+        var factory = CreateFactory();
+        var userId = await AddUserAsync(factory);
+
+        var original = await StorePlainAsync(factory, userId, 1200L * 1024 * 1024);
+        await StorePlainAsync(factory, userId, 100L * 1024 * 1024, parentFileId: original);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1300L * 1024 * 1024,
+            await AccountStorageGuard.UsedBytesAsync(db, userId, default));
+    }
+
+    /// <summary>
+    /// Cutting a file down lowers the usage; the superseded bytes are not charged.
+    /// </summary>
+    /// <remarks>
+    /// Ben asked what happens when a 1 GB file is replaced by a 100 MB one. Replacing archives the
+    /// old bytes under <c>ArchivedFromUploadFileId</c>, and that row is filtered out of every
+    /// listing and pruned by nothing. Charging for it would mean somebody's usage ROSE because
+    /// they made a file smaller, with no screen showing the difference and no way to remove it.
+    /// The archives want a retention job; they do not want a surcharge.
+    /// </remarks>
+    [Fact]
+    public async Task Replacing_a_big_file_with_a_small_one_lowers_what_is_counted()
+    {
+        var factory = CreateFactory();
+        var userId = await AddUserAsync(factory);
+
+        // The live row now holds the small version; the old bytes live on in an archive row.
+        var live = await StorePlainAsync(factory, userId, 100L * 1024 * 1024);
+        await StorePlainAsync(factory, userId, 1024L * 1024 * 1024, archivedFrom: live);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(100L * 1024 * 1024,
+            await AccountStorageGuard.UsedBytesAsync(db, userId, default));
+    }
+
+    /// <summary>Deleting a personal file gives the room straight back.</summary>
+    /// <remarks>
+    /// Usage is summed from the rows that exist rather than kept as a running total, so there is
+    /// no counter that can drift away from the files. Worth a test because the cheap alternative —
+    /// a stored figure updated on write — is the version that goes wrong.
+    /// </remarks>
+    [Fact]
+    public async Task Deleting_a_file_frees_the_room_immediately()
+    {
+        var factory = CreateFactory();
+        var userId = await AddUserAsync(factory);
+        var id = await StorePlainAsync(factory, userId, 500L * 1024 * 1024);
+
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.Equal(500L * 1024 * 1024, await AccountStorageGuard.UsedBytesAsync(db, userId, default));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Remove(db.UploadFiles.Single(f => f.Id == id));
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.Equal(0L, await AccountStorageGuard.UsedBytesAsync(db, userId, default));
+    }
+
+    /// <summary>Another person's files are not this person's problem.</summary>
+    [Fact]
+    public async Task Somebody_elses_files_are_not_counted()
+    {
+        var factory = CreateFactory();
+        var mine = await AddUserAsync(factory);
+        var theirs = await AddUserAsync(factory);
+
+        await StorePlainAsync(factory, theirs, 3L * 1024 * 1024 * 1024);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(0L, await AccountStorageGuard.UsedBytesAsync(db, mine, default));
     }
 
     // ── the cap itself ───────────────────────────────────────────────────────

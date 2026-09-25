@@ -24,13 +24,21 @@ public sealed class StripeWebhookController : ControllerBase
     private readonly IStripeGateway _stripe;
     private readonly StripeFulfillmentService _fulfillment;
     private readonly ILogger<StripeWebhookController> _log;
+    private readonly IStoreStripeGateway? _store;
+    private readonly Ben.Data.WebApi.Services.Store.StoreOrderPayments? _storePayments;
+    private readonly Ben.Data.WebApi.Services.Store.StoreRefundService? _storeRefunds;
 
     public StripeWebhookController(
-        IStripeGateway stripe, StripeFulfillmentService fulfillment, ILogger<StripeWebhookController> log)
+        IStripeGateway stripe, StripeFulfillmentService fulfillment, ILogger<StripeWebhookController> log,
+        IStoreStripeGateway? store = null, Ben.Data.WebApi.Services.Store.StoreOrderPayments? storePayments = null,
+        Ben.Data.WebApi.Services.Store.StoreRefundService? storeRefunds = null)
     {
         _stripe = stripe;
         _fulfillment = fulfillment;
         _log = log;
+        _store = store;
+        _storePayments = storePayments;
+        _storeRefunds = storeRefunds;
     }
 
     [HttpPost]
@@ -56,6 +64,27 @@ public sealed class StripeWebhookController : ControllerBase
 
         if (checkout is not null)
             await _fulfillment.FulfillAsync(checkout, ct);
+
+        // The store's other payment events (storefront S4.9): a payment going through slowly, a
+        // declined card, a cancelled intent. A paid one arrived above, through fulfilment. The
+        // signature was verified above; this parse maps the same verified body.
+        if (_store?.ParseEvent(payload, Request.Headers["Stripe-Signature"].ToString()) is { } storeEvent)
+        {
+            var pi = storeEvent.PaymentIntentId;
+            switch (storeEvent.Type)
+            {
+                case "payment_intent.processing" when pi is not null && _storePayments is not null:
+                    await _storePayments.RecordProcessingAsync(pi, ct); break;
+                case "payment_intent.payment_failed" when pi is not null && _storePayments is not null:
+                    await _storePayments.RecordFailureAsync(pi, storeEvent.FailureCode, ct); break;
+                case "payment_intent.canceled" when pi is not null && _storePayments is not null:
+                    await _storePayments.RecordCancelledAtStripeAsync(pi, ct); break;
+                // Refunds (S5.3): ours finish or fail by the id in their metadata; one made in Stripe's
+                // dashboard is recorded on the order its payment belongs to.
+                case "refund.created" or "refund.updated" or "refund.failed" when _storeRefunds is not null:
+                    await _storeRefunds.RecordDashboardRefundAsync(storeEvent, ct); break;
+            }
+        }
 
         return Ok();
     }

@@ -576,6 +576,8 @@ public sealed class MyContactInfoController : BenControllerBase
     ///
     /// <para><b>The link comes back whether or not it was emailed.</b> On a machine with no SMTP —
     /// which is every development machine — the caller shows it instead, so the flow is walkable.
+    /// The letter is queued there all the same and waits in the outbox; EmailSent is true only
+    /// when it will actually leave.
     /// A send that throws is swallowed for the same reason: the address is saved and the link
     /// works, and failing the whole request over a mail server would lose both.</para>
     /// </remarks>
@@ -597,19 +599,16 @@ public sealed class MyContactInfoController : BenControllerBase
         var link = $"{appBaseUrl}/validate-email/{entity.ValidationToken}";
 
         var emailSent = false;
-        if (emailService.IsConfigured)
+        try
         {
-            try
-            {
-                var maskedForSubject = System.Net.WebUtility.HtmlEncode(entity.EmailAddress);
-                var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your {_site.Name} account.</p>" +
-                           $"<p><a href=\"{link}\">Confirm this email address</a></p>" +
-                           $"<p>This link expires in {ValidationLifetime.TotalDays:0} days.</p>";
-                await emailService.SendAsync(entity.EmailAddress, "Confirm your email address", body, ct);
-                emailSent = true;
-            }
-            catch { /* best-effort — the link still works */ }
+            var maskedForSubject = System.Net.WebUtility.HtmlEncode(entity.EmailAddress);
+            var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your {_site.Name} account.</p>" +
+                       $"<p><a href=\"{link}\">Confirm this email address</a></p>" +
+                       $"<p>This link expires in {ValidationLifetime.TotalDays:0} days.</p>";
+            await emailService.SendAsync(entity.EmailAddress, "Confirm your email address", body, ct);
+            emailSent = emailService.IsConfigured;
         }
+        catch { /* best-effort — the link still works */ }
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi));
 

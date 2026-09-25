@@ -41,7 +41,11 @@ public sealed class AccountClosureTests
     }
 
     private static AccountClosureService Service(IDbContextFactory<BenDataContext> db, Moq.Mock<Ben.Data.WebApi.Services.Apple.IAppleTokenClient>? apple = null) =>
-        new(db, Support.AppleTestSupport.Credentials(db, apple), NullLogger<AccountClosureService>.Instance);
+        // The media service deletes the avatar's bytes at closure (2026-09-17 audit) — the promise
+        // in your-profile.md that "photos … are destroyed", which used to be left to a sweeper
+        // that does not exist. TestMedia.Ingest() is the in-memory double.
+        new(db, Support.AppleTestSupport.Credentials(db, apple), TestMedia.Ingest(),
+            NullLogger<AccountClosureService>.Instance);
 
     /// <summary>A person, with everything personal about them filled in.</summary>
     private static async Task<Guid> SeedPersonAsync(IDbContextFactory<BenDataContext> factory)

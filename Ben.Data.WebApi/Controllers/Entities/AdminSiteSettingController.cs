@@ -56,6 +56,13 @@ public sealed class AdminSiteSettingController : BenControllerBase
         if (!SiteSettingsService.IsKnownKey(key))
             return BadRequest($"'{key}' is not a known site setting.");
 
+        // Storefront S1.1: store values reach money — the shipping charge, the address Stripe Tax
+        // works tax out from — so they have one door, the store settings page, where
+        // StoreSettingsValidation checks each. This page shows them read-only; refusing here too
+        // means a hand-made request cannot store a ship-from state of "Tennessee" around it.
+        if (key.StartsWith(SiteSettingKeys.StorePrefix, StringComparison.Ordinal))
+            return BadRequest(StoreSettingsElsewhere);
+
         var before = (await _settings.GetAllAsync(ct)).First(s => s.Key == key);
         var beforeSnapshot = new SiteSetting { Id = before.Id, Key = before.Key, Value = before.Value };
 
@@ -68,6 +75,9 @@ public sealed class AdminSiteSettingController : BenControllerBase
 
         return Ok(ToRecord(row));
     }
+
+    /// <summary>The refusal for a store key sent to this door.</summary>
+    public const string StoreSettingsElsewhere = "Store settings are edited on the store settings page.";
 
     private static SiteSettingRecord ToRecord(SiteSetting s)
     {
@@ -95,5 +105,7 @@ public sealed class AdminSiteSettingController : BenControllerBase
         || key == SiteSettingKeys.EventCreditsEnabled
         // Beta feedback 2026-09-14: plans have been on sale since 2026-08-30; the switch must not stop that.
         || key == SiteSettingKeys.PlanPurchasesEnabled
+        // Storefront: the store takes orders unless paused; the reader's default says the same.
+        || key == SiteSettingKeys.StoreCheckoutEnabled
         || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }

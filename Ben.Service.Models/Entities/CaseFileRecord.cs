@@ -23,6 +23,17 @@ public record CaseFileRecord
     /// Null is meaningful and is drawn as "length unknown" rather than guessed at.
     /// </remarks>
     public double? DurationSeconds { get; init; }
+
+    /// <summary>
+    /// What kind of upload this is, in the words the site's own file types use — "Case Evidence",
+    /// "Research", "Board Snapshot". Null when the type has been deleted out from under the file.
+    /// </summary>
+    /// <remarks>
+    /// The Files tab shows it when it is not ordinary case evidence, so a researcher can tell which
+    /// of these files a board is built from and rename the ones a camera named (Ben, 2026-09-17).
+    /// Additive and last: the phone decodes this record and ignores keys it does not know.
+    /// </remarks>
+    public string? TypeName { get; init; }
 }
 
 public record LinkCaseFileRequest(string? Description);

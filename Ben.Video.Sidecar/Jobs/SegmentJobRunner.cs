@@ -20,6 +20,7 @@ public sealed class SegmentJobRunner(
     SegmentJobStore store,
     JobConcurrencyLimiter concurrency,
     Storage.RenderedSegmentStore retainedSegments,
+    FfmpegEncoders encoders,
     IOptions<SidecarOptions> options,
     ILogger<SegmentJobRunner> logger)
 {
@@ -72,7 +73,7 @@ public sealed class SegmentJobRunner(
             // (what ProgressParser expects) and suppresses the noisy human stats line — prepended
             // here rather than baked into ArgvFactory/ExportArgBuilders, which stay the exact same
             // pure builders RenderWorkerBackend calls and shouldn't grow a sidecar-only concern.
-            var builtArgs = ArgvFactory.Build(spec, inputPath, outputName, effectRegistry);
+            var builtArgs = ArgvFactory.Build(spec, inputPath, outputName, effectRegistry, encoders.Names);
             var args = new List<string>(builtArgs.Length + 3) { "-progress", "pipe:1", "-nostats" };
             args.AddRange(builtArgs);
 

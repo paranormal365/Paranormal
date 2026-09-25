@@ -4,12 +4,13 @@
     and stages the sidecar downloads.
 
 .DESCRIPTION
-    One site, four IIS applications:
+    One site, five IIS applications:
 
-        /               C:\ishaunted                Blazor Server   pool IsHaunted.com
-        /webapi         C:\ishaunted\webapi         ASP.NET Core    pool IsHaunted.com-webapi
-        /editors/video  C:\ishaunted\editors\video  static (WASM)   pool IsHaunted.com-static
-        /files          C:\ishaunted-files          static          pool IsHaunted.com-static
+        /               C:\ishaunted                 Blazor Server   pool IsHaunted.com
+        /webapi         C:\ishaunted\webapi          ASP.NET Core    pool IsHaunted.com-webapi
+        /editors/video  C:\ishaunted\editors\video   static (WASM)   pool IsHaunted.com-static
+        /editors/canvas C:\ishaunted\editors\canvas  static (WASM)   pool IsHaunted.com-static
+        /files          C:\ishaunted-files           static          pool IsHaunted.com-static
 
     The website and the WebApi are both in-process ASP.NET Core applications, so they cannot share
     an application pool - IIS answers 500.35 if they do. Run scripts\setup-iis-ishaunted.ps1 once
@@ -32,8 +33,12 @@
     mark as ANSI, so a stray em-dash in a comment becomes a parse error rather than a typo.
 
 .PARAMETER Apps
-    Which of website, webapi, editor, files to deploy. The order given is ignored; they always run
-    webapi -> editor -> files -> website, so the visible cut-over happens last.
+    Which of website, webapi, editor, canvas, files to deploy. The order given is ignored; they
+    always run webapi -> editor -> canvas -> files -> website, so the visible cut-over happens last.
+
+.PARAMETER CanvasProjectPath
+    The Ben.Wasm.Canvas project folder. Empty means Repo\Ben.Wasm.Canvas, where it lives.
+    joins Ben.slnx (plan M8); until then pass the Messenger path, see docs\deploy-canvas.md.
 
 .EXAMPLE
     .\scripts\deploy-ishaunted.ps1
@@ -52,13 +57,16 @@
 [CmdletBinding()]
 param(
     [string]   $SecretsPath  = 'C:\ishaunted-deploy\secrets.json',
-    [ValidateSet('website', 'webapi', 'editor', 'files')]
-    [string[]] $Apps         = @('webapi', 'editor', 'files', 'website'),
+    [ValidateSet('website', 'webapi', 'editor', 'canvas', 'files')]
+    [string[]] $Apps         = @('webapi', 'editor', 'canvas', 'files', 'website'),
     [string]   $SiteRoot     = 'C:\ishaunted',
     [string]   $FilesRoot    = 'C:\ishaunted-files',
     [string]   $UploadsRoot  = 'S:\ishaunted-uploads',
     [string]   $SiteUrl      = 'https://ishaunted.com',
     [string]   $EditorPath   = 'editors/video',
+    [string]   $CanvasPath   = 'editors/canvas',
+    # Empty means Repo\Ben.Wasm.Canvas, its home after plan M8; until then pass the Messenger path.
+    [string]   $CanvasProjectPath = '',
     [string]   $WebApiPool   = 'IsHaunted.com-webapi',
     # The website's pool, not the API's. Entra sign-in is done by the website, so its client
     # secret has to land on this pool - see section 5.
@@ -84,12 +92,15 @@ $Artifacts  = Join-Path $Repo 'artifacts'
 $ApiUrl     = "$SiteUrl/webapi"
 $EditorBase = '/' + $EditorPath.Trim('/') + '/'                       # "/editors/video/"
 $EditorDir  = Join-Path $SiteRoot ($EditorPath -replace '/', '\')     # C:\ishaunted\editors\video
+$CanvasBase = '/' + $CanvasPath.Trim('/') + '/'                       # "/editors/canvas/"
+$CanvasDir  = Join-Path $SiteRoot ($CanvasPath -replace '/', '\')     # C:\ishaunted\editors\canvas
+if (-not $CanvasProjectPath) { $CanvasProjectPath = Join-Path $Repo 'Ben.Wasm.Canvas' }
 $WebApiDir  = Join-Path $SiteRoot 'webapi'
 if (-not $SidecarDrop) { $SidecarDrop = Join-Path $Repo 'Ben.Video.Sidecar\installer\dist' }
 
 # Canonical order regardless of what the caller typed: the API first (the Coming Soon page or the
 # previous build is still serving), the static apps next (invisible), the website last.
-$order = @('webapi', 'editor', 'files', 'website')
+$order = @('webapi', 'editor', 'canvas', 'files', 'website')
 $Apps  = @($order | Where-Object { $Apps -contains $_ })
 
 function Write-Step   ([string]$m) { Write-Host ''; Write-Host "== $m" -ForegroundColor Cyan }
@@ -252,6 +263,101 @@ try {
     if ($LASTEXITCODE -ne 0) { $script:DeployCommit = '' }
 } catch { $script:DeployCommit = '' }
 
+# Starts the API that was just staged, on a loopback port of its own, and asks it for three things
+# before a single file is copied over the working one.
+#
+# THIS EXISTS BECAUSE OF A REAL OUTAGE, 2026-09-20. A service was given a constructor parameter the
+# container could not resolve. It compiled. Every one of 6,601 tests passed, because they exercise
+# the class directly and never build the container. Every staging check passed, because they compare
+# FILES - binaries against the stamp, stamp against git - and a file can be perfectly correct and
+# still be an application that cannot start. It was deployed over a working API and every endpoint
+# answered 500, including one that only reads a constant. The post-deploy smoke checks caught it
+# faithfully, four minutes too late: the working version was already gone.
+#
+# The gap was never "we lacked a check". It was that every check ran against the wrong thing, or at
+# the wrong time. This one runs the artifact, before it can replace anything.
+#
+# What it proves: the host builds, the container resolves every dependency the startup path needs,
+# the EF model builds, the database answers, and routing works. What it does NOT prove: anything
+# about IIS, the app pool identity, or the file copy - those are what the smoke checks after the
+# deploy are for. The two are not redundant; they fail at different things.
+function Test-StagedApi ([string]$outDir) {
+    $exe = Join-Path $outDir 'Ben.Data.WebApi.exe'
+    if (-not (Test-Path $exe)) { throw "no Ben.Data.WebApi.exe in $outDir to test" }
+
+    # A port nothing else is on, picked by asking the operating system for a free one and letting
+    # it go again - the same trick the sidecar uses. Loopback only: this is a second copy of the
+    # API and must not be reachable from anywhere.
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = $listener.LocalEndpoint.Port
+    $listener.Stop()
+
+    Write-Detail "starting the staged API on 127.0.0.1:$port to see whether it runs"
+
+    $log = Join-Path ([IO.Path]::GetTempPath()) "staged-api-$port.log"
+    $err = Join-Path ([IO.Path]::GetTempPath()) "staged-api-$port.err"
+    $previousUrls = $env:ASPNETCORE_URLS
+    $previousEnv  = $env:ASPNETCORE_ENVIRONMENT
+    $env:ASPNETCORE_URLS = "http://127.0.0.1:$port"
+    $env:ASPNETCORE_ENVIRONMENT = 'Production'
+
+    $proc = $null
+    try {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $outDir -PassThru -WindowStyle Hidden `
+                              -RedirectStandardOutput $log -RedirectStandardError $err
+
+        # Generous: this API builds its EF model and runs a file-migration service at startup, and a
+        # cold first run on a loaded build machine is slower than the same code under IIS.
+        $deadline = (Get-Date).AddSeconds(90)
+        $up = $false
+        while (-not $up -and (Get-Date) -lt $deadline) {
+            if ($proc.HasExited) {
+                $why = (Get-Content $err -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
+                throw "the staged API exited with $($proc.ExitCode) instead of serving:`n$why"
+            }
+            Start-Sleep -Milliseconds 700
+            try {
+                $r = Invoke-WebRequest "http://127.0.0.1:$port/api/public/build" -UseBasicParsing -TimeoutSec 10
+                if ([int]$r.StatusCode -eq 200) { $up = $true }
+            } catch { }
+        }
+        if (-not $up) {
+            $why = (Get-Content $err -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
+            throw "the staged API never answered /api/public/build:`n$why"
+        }
+
+        # /api/public/build alone only proves the host started. These two prove the parts that
+        # actually broke: a public route that reaches the database, and an authenticated one that
+        # must refuse rather than fault.
+        $probes = @(
+            @{ path = '/api/public/cases?page=1&pageSize=1'; expect = 200; what = 'a public route that reads the database' },
+            @{ path = '/api/canvas-documents';               expect = 401; what = 'an authenticated route' }
+        )
+        foreach ($probe in $probes) {
+            $status = 0
+            try {
+                $status = [int](Invoke-WebRequest "http://127.0.0.1:$port$($probe.path)" -UseBasicParsing -TimeoutSec 20).StatusCode
+            } catch {
+                $status = [int]($_.Exception.Response.StatusCode.value__)
+            }
+            if ($status -ne $probe.expect) {
+                throw "the staged API answered $status where $($probe.expect) was expected for $($probe.path) - $($probe.what)"
+            }
+        }
+
+        Write-Detail 'the staged API starts, resolves its services and answers - safe to copy'
+    }
+    finally {
+        if ($proc -and -not $proc.HasExited) {
+            try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+        }
+        $env:ASPNETCORE_URLS = $previousUrls
+        $env:ASPNETCORE_ENVIRONMENT = $previousEnv
+        Remove-Item $log, $err -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Publish ([string]$project, [string]$outDir, [switch]$RidSpecific) {
     Write-Detail "publishing $project -> $outDir"
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
@@ -260,12 +366,24 @@ function Invoke-Publish ([string]$project, [string]$outDir, [switch]$RidSpecific
     # loads. Without the RID the publish copies every platform's natives - SkiaSharp, the SQL
     # client and friends for linux, macOS and arm - and the package reaches ~488 MB, of which
     # ~444 MB could never execute on the target.
-    $publishArgs = @((Join-Path $Repo $project), '-c', 'Release', '-o', $outDir, '--nologo', '-v', 'q')
+    # A rooted project is published where it is. The canvas lives outside this repository until it
+    # joins Ben.slnx, and on PowerShell 5.1 Join-Path of two rooted paths yields 'Z:\repo\Z:\elsewhere'.
+    $projectDir = if ([IO.Path]::IsPathRooted($project)) { $project } else { Join-Path $Repo $project }
+    $publishArgs = @($projectDir, '-c', 'Release', '-o', $outDir, '--nologo', '-v', 'q')
     if ($RidSpecific) { $publishArgs += @('-r', 'win-x64', '--self-contained', 'false') }
     # Stamp the commit into the binary. .NET appends it to InformationalVersion as "+<sha>", which
     # is how /api/public/build can later say WHICH build is answering - the check that would have
     # caught the 2026-08-26 deploy that reported success and shipped the previous build.
-    if ($script:DeployCommit) { $publishArgs += "-p:SourceRevisionId=$script:DeployCommit" }
+    # A project outside this repository is stamped with ITS OWN repository's commit, not this one's.
+    $repoFull    = [IO.Path]::GetFullPath($Repo).TrimEnd('\') + '\'
+    $projectFull = [IO.Path]::GetFullPath($projectDir).TrimEnd('\') + '\'
+    if (-not $projectFull.StartsWith($repoFull, [StringComparison]::OrdinalIgnoreCase)) {
+        $outsideCommit = ''
+        try { $outsideCommit = (& git -C $projectDir rev-parse HEAD 2>$null) } catch { $outsideCommit = '' }
+        if ($LASTEXITCODE -ne 0) { $outsideCommit = '' }
+        $global:LASTEXITCODE = 0
+        if ($outsideCommit) { $publishArgs += "-p:SourceRevisionId=$($outsideCommit.Trim())" }
+    } elseif ($script:DeployCommit) { $publishArgs += "-p:SourceRevisionId=$script:DeployCommit" }
     & dotnet publish @publishArgs
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project (exit $LASTEXITCODE)" }
 }
@@ -368,6 +486,7 @@ if (-not $sqlConn) { $sqlConn = $SqlConnectionString }
 $smtpPassword = Get-JsonValue $secrets 'SmtpPassword'
 $stripeSecret  = Get-JsonValue $secrets 'StripeSecretKey'
 $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
+$stripePublishable = Get-JsonValue $secrets 'StripePublishableKey'
 
 # The two Stripe values are indistinguishable to everything downstream — both are opaque strings
 # on an app pool — so the wrong one in the wrong slot fails silently, at the worst moment, in a
@@ -377,7 +496,7 @@ $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
 # somebody is watching, rather than in a dashboard delivery log three days later.
 if ($stripeSecret -and -not $stripeSecret.StartsWith('sk_')) {
     if ($stripeSecret.StartsWith('pk_')) {
-        throw "StripeSecretKey holds a PUBLISHABLE key (pk_...). The publishable key is not used by this app at all - it belongs to browser-side checkout, which this site does not use. Put the SECRET key (sk_live_... from Stripe > Developers > API keys) here."
+        throw "StripeSecretKey holds a PUBLISHABLE key (pk_...). The publishable key has its own slot, StripePublishableKey - the store's checkout page uses it in the browser. Put the SECRET key (sk_live_... from Stripe > Developers > API keys) here."
     }
     throw "StripeSecretKey does not look like a Stripe secret key - it should start with sk_ (sk_live_ in production, sk_test_ in a sandbox)."
 }
@@ -386,6 +505,17 @@ if ($stripeWebhook -and -not $stripeWebhook.StartsWith('whsec_')) {
         throw "StripeWebhookSecret holds an API key, not a signing secret. The signing secret starts with whsec_ and is shown on the webhook endpoint's own page in Stripe > Developers > Webhooks - not on the API keys page."
     }
     throw "StripeWebhookSecret does not look like a Stripe signing secret - it should start with whsec_."
+}
+# The store's publishable key (storefront): the one Stripe value a browser sees. A secret key here
+# would be handed to every buyer's browser, so that is refused outright, not warned about.
+if ($stripePublishable -and -not $stripePublishable.StartsWith('pk_')) {
+    if ($stripePublishable.StartsWith('sk_') -or $stripePublishable.StartsWith('rk_')) {
+        throw "StripePublishableKey holds a SECRET key. It would be sent to every buyer's browser. Put the publishable key (pk_live_...) here and the secret key in StripeSecretKey."
+    }
+    throw "StripePublishableKey does not look like a Stripe publishable key - it should start with pk_ (pk_live_ in production)."
+}
+if ($stripeSecret -and $stripePublishable -and ($stripeSecret.StartsWith('sk_live_') -ne $stripePublishable.StartsWith('pk_live_'))) {
+    throw "StripeSecretKey and StripePublishableKey are from different modes (one live, one test). Stripe keeps live and test apart, so the card form could never confirm the payment - use both live keys."
 }
 if ($stripeSecret -and $stripeSecret.StartsWith('sk_test_')) {
     Write-Warn 'StripeSecretKey is a TEST key. Real cards will be refused and no money will move. Use sk_live_ for production.'
@@ -408,6 +538,7 @@ Write-Detail "apps    : $($Apps -join ', ')"
 Write-Detail "site    : $SiteUrl  ($SiteRoot)"
 Write-Detail "api     : $ApiUrl"
 Write-Detail "editor  : $SiteUrl$EditorBase  ($EditorDir)"
+Write-Detail "canvas  : $SiteUrl$CanvasBase  ($CanvasDir)  from $CanvasProjectPath"
 Write-Detail "uploads : $UploadsRoot"
 $sqlAuth = if ($sqlConn -match 'integrated security\s*=\s*true') { 'Integrated Security (no stored credential)' } else { 'SQL authentication' }
 Write-Detail "sql     : $($sqlConn.Substring(0, [Math]::Min(42, $sqlConn.Length)))...  [$sqlAuth]"
@@ -446,6 +577,7 @@ if (-not $StageOnly) {
 $webapiOut  = Join-Path $Artifacts 'webapi'
 $websiteOut = Join-Path $Artifacts 'website'
 $editorOut  = Join-Path $Artifacts 'editor'
+$canvasOut  = Join-Path $Artifacts 'canvas'
 
 # ---- WebApi -----------------------------------------------------------------
 if ($Apps -contains 'webapi') {
@@ -470,6 +602,11 @@ if ($Apps -contains 'webapi') {
     Set-JsonValue $cfg 'ConnectionStrings:BenDbConnectionString' $sqlConn
     Set-JsonValue $cfg 'FileStorage:RootPath' $UploadsRoot     # blank here is a hard startup failure
     Set-JsonValue $cfg 'AppBaseUrl' $SiteUrl                   # the links in outgoing email
+    # The origin every emailed link is built on, and the API's own for the links it answers itself
+    # (an entry pass drawn as a PNG). Neither was written before 2026-09-23: letter links were
+    # relative, and the pass link pointed at the site, which does not serve /api.
+    Set-JsonValue $cfg 'SiteIdentity:BaseUrl' $SiteUrl
+    Set-JsonValue $cfg 'SiteIdentity:ApiBaseUrl' $ApiUrl
     Set-SerilogConnectionString $cfg $sqlConn
 
     # Carried from the secrets file. Each of these turns a feature off SILENTLY when absent, which
@@ -525,6 +662,8 @@ if ($Apps -contains 'webapi') {
     Set-WebConfigEnvironment $webConfig 'ASPNETCORE_ENVIRONMENT' 'Production'
     Set-WebConfigRequestLimit $webConfig 4294967295
     if ($StdoutLog) { Enable-WebConfigStdoutLog $webConfig $webapiOut }
+
+    Test-StagedApi $webapiOut
 }
 
 # ---- Website ----------------------------------------------------------------
@@ -719,6 +858,88 @@ if ($Apps -contains 'editor') {
     Write-Detail ("editor build stamp {0}" -f $script:EditorStamp)
 }
 
+# ---- Canvas editor (Blazor WebAssembly) ----
+# The case canvas at /editors/canvas/, cloned from the video editor's block above: each step exists
+# for the same reason it does there, and CanvasDeployScriptGuardTests holds every one of them.
+if ($Apps -contains 'canvas') {
+    Write-Step 'Canvas editor: publish and configure'
+
+    # The canvas project lives outside this repository until it joins Ben.slnx (plan M8). Refuse a
+    # wrong path here, with the fix in the sentence, rather than publishing nothing or the wrong app.
+    if (-not (Test-Path (Join-Path $CanvasProjectPath 'Ben.Wasm.Canvas.csproj'))) {
+        throw "no Ben.Wasm.Canvas.csproj at $CanvasProjectPath - the canvas lives in this repository now; pass -CanvasProjectPath only to publish one from elsewhere, e.g. 'Ben.Wasm.Canvas'"
+    }
+    if (-not $SkipBuild) { Invoke-Publish $CanvasProjectPath $canvasOut }
+
+    $www = Join-Path $canvasOut 'wwwroot'
+    if (-not (Test-Path $www)) { throw "publish produced no wwwroot at $www" }
+
+    # <base href> is the sub-path, or the app loads its runtime from the site root and hangs.
+    $indexPath = Join-Path $www 'index.html'
+    $html  = [IO.File]::ReadAllText($indexPath)
+    $rx    = New-Object System.Text.RegularExpressions.Regex('<base\s+href="[^"]*"\s*/?>')
+    $count = $rx.Matches($html).Count
+    if ($count -ne 1) { throw "expected exactly one <base href> in the canvas index.html, found $count" }
+    $patched = $rx.Replace($html, "<base href=""$CanvasBase"" />", 1)
+    [IO.File]::WriteAllText($indexPath, $patched, (New-Object Text.UTF8Encoding($false)))
+    Write-Detail "base href set to $CanvasBase"
+
+    # The three values the canvas reads at startup. The map token URL is same-origin on purpose:
+    # a MapKit token names one origin, and Apple refuses it on any other.
+    $canvasCfgPath = Join-Path $www 'appsettings.json'
+    $canvasCfg = Read-JsonFile $canvasCfgPath
+    Set-JsonValue $canvasCfg 'Canvas:WebApiBaseUrl' $ApiUrl
+    Set-JsonValue $canvasCfg 'Canvas:SiteBaseUrl' $SiteUrl
+    Set-JsonValue $canvasCfg 'Canvas:MapTokenUrl' "$SiteUrl/auth/mapkit-token"
+    Write-JsonFile $canvasCfgPath $canvasCfg
+    Write-Detail "Canvas:WebApiBaseUrl $ApiUrl, Canvas:SiteBaseUrl $SiteUrl, Canvas:MapTokenUrl $SiteUrl/auth/mapkit-token"
+
+    # The development override points at localhost and wins wherever the environment says Development.
+    $devCfg = Join-Path $www 'appsettings.Development.json'
+    if (Test-Path $devCfg) { Remove-Item -Force $devCfg }
+
+    # Pre-compressed twins of every patched or removed file still hold the ORIGINAL bytes.
+    $stale = @('index.html', 'appsettings.json', 'appsettings.Development.json')
+    foreach ($s in $stale) {
+        foreach ($ext in @('br', 'gz')) {
+            $p = Join-Path $www "$s.$ext"
+            if (Test-Path $p) { Remove-Item -Force $p }
+        }
+    }
+    foreach ($s in $stale) {
+        foreach ($ext in @('br', 'gz')) {
+            if (Test-Path (Join-Path $www "$s.$ext")) {
+                throw "canvas $s.$ext survived - it holds the pre-patch bytes"
+            }
+        }
+    }
+    Write-Detail 'no stale pre-compressed copies of the patched canvas files'
+
+    # IIS serves no .wasm or .dat without the web.config's MIME map. And the canvas must NOT ask for
+    # cross-origin isolation: nothing in it needs SharedArrayBuffer, and require-corp blocks the
+    # Apple map tiles, which do not opt in.
+    $canvasWebConfig = Join-Path $www 'web.config'
+    if (-not (Test-Path $canvasWebConfig)) {
+        throw 'no web.config in the canvas publish - IIS will refuse .wasm and .dat files'
+    }
+    if ((Get-Content $canvasWebConfig -Raw) -match 'Cross-Origin-(Embedder|Opener)-Policy') {
+        throw 'the canvas web.config must not ask for cross-origin isolation - MapKit tiles would fail'
+    }
+    Write-Detail 'web.config present, no cross-origin isolation'
+
+    # Build identity, asserted by the smoke checks, so a deploy that copied nothing cannot pass on
+    # the previous build's files. The commit is the canvas repository's, not this one's.
+    $script:CanvasStamp = [Guid]::NewGuid().ToString('N')
+    $canvasCommit = ''
+    try { $canvasCommit = (& git -C $CanvasProjectPath rev-parse HEAD 2>$null) } catch { $canvasCommit = '' }
+    if ($LASTEXITCODE -ne 0) { $canvasCommit = '' }
+    $global:LASTEXITCODE = 0
+    if ($canvasCommit) { $canvasCommit = $canvasCommit.Trim() }
+    $canvasStampJson = '{"stamp":"' + $script:CanvasStamp + '","commit":"' + $canvasCommit + '","stampedUtc":"' + [DateTime]::UtcNow.ToString('o') + '"}'
+    [IO.File]::WriteAllText((Join-Path $www 'build-info.json'), $canvasStampJson)
+    Write-Detail ("canvas build stamp {0}" -f $script:CanvasStamp)
+}
+
 # =============================================================================
 # 3. Stage the sidecar downloads
 # =============================================================================
@@ -833,6 +1054,12 @@ if ($Apps -contains 'editor') {
     Invoke-Mirror (Join-Path $editorOut 'wwwroot') $EditorDir
 }
 
+if ($Apps -contains 'canvas') {
+    Write-Step 'Deploy canvas editor'
+    New-Item -ItemType Directory -Force $CanvasDir | Out-Null
+    Invoke-Mirror (Join-Path $canvasOut 'wwwroot') $CanvasDir
+}
+
 if ($Apps -contains 'website') {
     Write-Step 'Deploy website'
 
@@ -899,6 +1126,10 @@ if (($Apps -contains 'webapi') -or ($Apps -contains 'website')) {
         else { Write-Warn 'StripeSecretKey is not in the secrets file. Online payment will report itself unavailable; manual subscription entry still works.' }
         if ($stripeWebhook) { Set-PoolEnv $WebApiPool 'Stripe__WebhookSecret' $stripeWebhook }
         elseif ($stripeSecret) { Write-Warn 'StripeSecretKey is set but StripeWebhookSecret is not. Checkouts and renewals still fulfill synchronously, but Stripe''s webhook deliveries will all be refused - register the endpoint in the dashboard and put its whsec here.' }
+        # The store confirms payments in the browser and learns of them ONLY by webhook, so without
+        # the publishable key its checkout says payment is not set up (no order is ever placed).
+        if ($stripePublishable) { Set-PoolEnv $WebApiPool 'Stripe__PublishableKey' $stripePublishable }
+        elseif ($stripeSecret) { Write-Warn 'StripePublishableKey is not in the secrets file. Subscriptions work; the store''s checkout will say online payment is not set up.' }
     }
 
     # On the root pool, not the API's: Ben.Web.Website is the confidential client that redeems the
@@ -972,6 +1203,24 @@ if (-not $SkipSmoke) {
         $checks += @{ url = "$SiteUrl${EditorBase}_content/Ben.Video.Editor/js/ffmpeg-core/st/ffmpeg-core.wasm"
                       what = 'vendored ffmpeg core'
                       why = 'the editor cannot start its engine without it' }
+    }
+    if ($Apps -contains 'canvas') {
+        # Each with its own why: the default sentence names the video editor's path.
+        $checks += @{ url = "$SiteUrl$CanvasBase"; what = 'canvas editor'; expect = "<base href=""$CanvasBase"""
+                      why = "200, but the body is not the canvas - is $CanvasBase an IIS Application?" }
+        if ($script:CanvasStamp) {
+            $checks += @{ url = "$SiteUrl${CanvasBase}build-info.json?cb=$([Guid]::NewGuid().ToString('N'))"
+                          what = 'canvas build identity'; expect = $script:CanvasStamp
+                          why = 'the canvas is serving a build-info.json OLDER than the one just copied - the deploy did not land' }
+        }
+        $checks += @{ url = "$SiteUrl${CanvasBase}_content/Ben.Canvas.Editor/js/moduleLoader.js"
+                      what = 'canvas module loader'; why = 'the RCL assets did not land' }
+        # Anonymous, so 401 whether or not Feature - Canvas editor is on: sign-in is checked before
+        # the feature gate. It proves the route exists in the running API; the signed-in 404-while-off
+        # probe is a separate, manual step (docs\deploy-canvas.md).
+        if ($Apps -contains 'webapi') {
+            $checks += @{ url = "$ApiUrl/api/canvas-documents"; what = 'canvas API'; expectStatus = 401 }
+        }
     }
     if ($Apps -contains 'files') {
         foreach ($rid in $SidecarRids) {
@@ -1083,4 +1332,6 @@ Write-Host @"
      2. Sign in inside the editor at $SiteUrl$EditorBase and open the Server tab. That is
         what proves the editor's own API URL.
      3. Register a test account. It needs a confirmation email, so this is the SMTP check.
+     4. Open $SiteUrl$CanvasBase, sign in, open a case board and Save to case - that proves the
+        canvas API URL. Canvas answers 404 until Feature - Canvas editor is on in Site settings.
 "@

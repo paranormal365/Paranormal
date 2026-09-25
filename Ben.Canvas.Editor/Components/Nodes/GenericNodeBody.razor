@@ -1,0 +1,6 @@
+@*
+    The body a block shows until its own renderer exists: its kind, in words.
+*@
+@inherits BlockRendererBase
+
+<p class="bc-generic text-muted small mb-0">@BlockRegistry.Get(Node.Type).DisplayName</p>

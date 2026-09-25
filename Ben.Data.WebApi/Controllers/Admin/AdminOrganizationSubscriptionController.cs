@@ -205,7 +205,19 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         var snapshot = PeriodOpener.Open(
             sub, tier, request.Status, request.Interval,
             request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId, tours);
-        sub.ProviderName = "Manual";
+        // ONLY when nothing else is managing this subscription (2026-09-17 audit).
+        //
+        // This used to be unconditional, and the renewal job selects ProviderName == "Stripe" —
+        // so a SuperAdmin nudging a Stripe customer's period end by one day, which is exactly the
+        // "cases every provider produces" this endpoint exists for, silently stopped that card
+        // ever being charged again. ProviderCustomerRef and ProviderPaymentMethodRef were left in
+        // place, so nothing looked wrong on any screen; the group simply kept working until the
+        // period ended and then lapsed as if they had cancelled.
+        //
+        // Stopping the billing is what CancelAtPeriodEnd is for, and it is on this same request.
+        // Editing a period is not a statement about who collects the money.
+        if (string.IsNullOrWhiteSpace(sub.ProviderName))
+            sub.ProviderName = "Manual";
 
         if (snapshot is not null)
         {

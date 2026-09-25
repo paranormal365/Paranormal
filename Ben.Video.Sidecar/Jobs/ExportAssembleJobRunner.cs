@@ -26,6 +26,7 @@ public sealed class ExportAssembleJobRunner(
     JobRegistry jobRegistry,
     SegmentJobStore store,
     JobConcurrencyLimiter concurrency,
+    FfmpegEncoders encoders,
     IOptions<SidecarOptions> options,
     ILogger<ExportAssembleJobRunner> logger)
 {
@@ -73,7 +74,7 @@ public sealed class ExportAssembleJobRunner(
         try
         {
             Directory.CreateDirectory(workDir);
-            var settings = ArgvFactory.ToExportSettings(request.Quality);
+            var settings = ArgvFactory.ToExportSettings(request.Quality, encoders.Names);
 
             // ── Step 1: concat the retained segments ────────────────────────
             var inputPaths = new List<string>(request.SegmentIds.Count);

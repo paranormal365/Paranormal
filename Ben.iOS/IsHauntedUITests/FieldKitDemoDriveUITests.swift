@@ -67,8 +67,28 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         app.swipeDown()
 
-        // Two full scripted cycles against the base. The test asserts almost nothing on
-        // purpose: its judgement criteria are visual, applied by a person reviewing footage.
-        Thread.sleep(forTimeInterval: 26)
+        // Two full scripted cycles against the base, so the needle swings twice on camera.
+        // The test asserts almost nothing on purpose: its judgement criteria are visual, applied
+        // by a person reviewing footage.
+        Thread.sleep(forTimeInterval: 16)
+
+        // Then the camera (1.0.3): a photograph is taken without leaving the session, and the
+        // recording carries straight on. In 1.0.2 this handed the microphone to Apple's camera and
+        // put a hole in the sound, so the preview had nothing to show here. Guarded at every step —
+        // a drive that stops early is 28 seconds of a frozen screen.
+        let camera = app.buttons["capture-camera"].firstMatch
+        if !camera.isHittable { app.swipeUp() }
+        if camera.waitForExistence(timeout: 5) {
+            camera.tap()
+            if app.buttons["camera-shutter"].waitForExistence(timeout: 8) {
+                Thread.sleep(forTimeInterval: 3)
+                app.buttons["camera-shutter"].tap()
+                Thread.sleep(forTimeInterval: 2)
+            }
+            if app.buttons["camera-close"].firstMatch.exists { app.buttons["camera-close"].firstMatch.tap() }
+        }
+
+        app.swipeDown()
+        Thread.sleep(forTimeInterval: 8)
     }
 }

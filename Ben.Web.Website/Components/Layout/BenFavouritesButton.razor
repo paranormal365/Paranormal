@@ -1,0 +1,44 @@
+@using Ben.Service.Models.Store
+@implements IDisposable
+
+@inject StoreFavouriteState Favourites
+@inject SiteFeaturesProvider Features
+
+@*
+    The header's heart (storefront S6.3), after Smarty's header: a link to Favourites with its
+    count, beside the cart. Only a signed-in person keeps favourites, so BenHeader draws it inside
+    its signed-in block; it decides for itself whether the store is open.
+*@
+
+@if (Features.IsOn(SiteFeatures.Store))
+{
+    <a class="btn btn-system no-arrow position-relative" href="/store/favourites" id="nav-favourites"
+       aria-label="@Tooltip" title="@Tooltip">
+        @if (Favourites.Count > 0)
+        {
+            <span class="badge badge-icon pos-top pos-end bg-danger" data-testid="favourites-badge">@(Favourites.Count > 99 ? "99+" : Favourites.Count)</span>
+        }
+        <BenIcon Name="heart" Class="sa-icon-2x" />
+    </a>
+}
+
+@code {
+    private string Tooltip => Favourites.Count switch
+    {
+        0 => "Favourites",
+        1 => "Favourites: 1 product",
+        var n => $"Favourites: {n} products",
+    };
+
+    protected override void OnInitialized() => Favourites.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !Features.IsOn(SiteFeatures.Store)) return;
+        await Favourites.EnsureStartedAsync(RendererInfo.IsInteractive);
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Favourites.Changed -= OnChanged;
+}

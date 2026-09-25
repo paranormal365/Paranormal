@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      IsTestProject=false keeps this project in the solution (for IDE and build) but stops
+      `dotnet test` on the solution from discovering it - browser tests need a running host.
+      Run them explicitly:
+        dotnet vstest Messenger/Ben.Canvas.Playwright/bin/Debug/net10.0/Ben.Canvas.Playwright.dll
+      (`dotnet test` on this project prints nothing and exits 0 because of the flag above, which
+      reads as a pass. That trap is copied from Ben.Web.Playwright on purpose, with the warning.)
+    -->
+    <IsTestProject>false</IsTestProject>
+    <PlaywrightCliInstallBrowsers>false</PlaywrightCliInstallBrowsers>
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)/playwright.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+    <PackageReference Include="Microsoft.Playwright.NUnit" Version="1.62.0" />
+    <PackageReference Include="NUnit" Version="4.6.1" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The reference format, so a browser test can prove each side reads what the other writes. -->
+    <ProjectReference Include="..\Ben.Canvas.Core\Ben.Canvas.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

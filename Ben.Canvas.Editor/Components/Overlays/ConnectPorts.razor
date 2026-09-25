@@ -1,0 +1,39 @@
+@*
+    Four handles at a block's side midpoints, each of which does two things: dragged, it aims a connector
+    at something; clicked, it makes the next block there, already joined to this one.
+
+    The pointer half is the gesture module's — a press becomes a drag or a tap, and only it can tell which.
+    Keyboard activation never reaches that code (a button pressed with Enter fires a click, not a pointer
+    event), so Enter and Space are handled here. Nothing is prevented: the click the browser then raises
+    has no listener, and blanket preventDefault on keydown would take Tab away from the focus order.
+*@
+@inject BoardGestureBridge Bridge
+
+@foreach (var side in Sides)
+{
+    var name = $"Add a block to the {Spoken(side)}, or drag to connect";
+    <button type="button" class="bc-port bc-port--@side.ToLowerInvariant()" data-bc-port="@side" data-bc-node="@NodeId"
+            aria-label="@name" title="@name"
+            @onkeydown="@(e => OnKeyAsync(e, side))"></button>
+}
+
+@code {
+    private static readonly string[] Sides = ["Top", "Right", "Bottom", "Left"];
+
+    [Parameter, EditorRequired] public Guid NodeId { get; set; }
+
+    private static string Spoken(string side) => side switch
+    {
+        "Top" => "top",
+        "Right" => "right",
+        "Bottom" => "bottom",
+        _ => "left",
+    };
+
+    private Task OnKeyAsync(KeyboardEventArgs e, string side)
+    {
+        if (e.Key is not ("Enter" or " " or "Spacebar")) return Task.CompletedTask;
+        if (BoardGestureBridge.ParseSide(side) is { } parsed) Bridge.GrowFrom(NodeId, parsed);
+        return Task.CompletedTask;
+    }
+}

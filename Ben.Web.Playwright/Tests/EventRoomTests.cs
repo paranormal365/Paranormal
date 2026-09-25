@@ -29,6 +29,11 @@ public class EventRoomTests : BenTestBase
         _api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
         _orgId = await OrgIdBySlugAsync("paranormal365");
 
+        // The seed leaves this event in Draft on purpose, and the public endpoints below
+        // answer only for a published one. This fixture used to inherit a publish from
+        // whichever earlier run happened to do it (item 243); it does its own now.
+        await PublishSeededEventAsync(_orgId, RoomsEventId);
+
         var guest = await HeadersAsync(ClientEmail, ClientPassword);
         var admin = await HeadersAsync(SuperAdminEmail, SuperAdminPassword);
         if (guest is null || admin is null) Assert.Ignore("The seeded guest or admin cannot sign in on this deployment.");

@@ -16,10 +16,12 @@
         <div class="container-fluid py-3">
             <h3 class="mb-3">Media Library</h3>
             <p class="text-secondary small mb-3">
-                Everything you own, everything shared with you (by a person, an investigation team, or an organization),
-                and everything public.
+                Everything you have uploaded. Files other people shared with you live on the case,
+                the group or the investigation they belong to.
             </p>
-            <MediaLibraryGrid ShowVoting="true" />
+            @* "Mine", not public and not everything (Ben, 2026-09-21). Asked of the server, so the
+               page no longer receives the whole site's media in order to hide it. *@
+            <MediaLibraryGrid ShowVoting="true" Scope="personal" />
         </div>
     }
 </FeatureGate>

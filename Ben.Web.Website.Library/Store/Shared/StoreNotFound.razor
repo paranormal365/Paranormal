@@ -1,0 +1,22 @@
+@*
+    A shelf or product the store does not have (storefront S2.8): the site's ordinary "Page not
+    found", the same words FeatureGate uses, so a hidden product, a retired one and a mistyped
+    address all look the same — a shopper cannot tell "not yet" from "never".
+*@
+
+<PageTitle>Page not found</PageTitle>
+<div class="text-center py-5" data-testid="store-not-found">
+    <h1 class="display-6">Page not found</h1>
+    <p class="text-muted mb-4">There is nothing at this address.</p>
+    <a class="btn btn-primary" href="/store">Back to the store</a>
+</div>
+
+@code {
+    /// <summary>The API's own words for "no such shelf / product" (PublicStoreController).</summary>
+    internal static readonly string[] Sentences = ["There's no such category.", "That product isn't in the store."];
+
+    /// <summary>Whether a failed load was the store saying it has no such thing.</summary>
+    internal static bool Answers<T>(ItemResult<T> result)
+        => result.Failed && !result.SessionExpired && result.Reason is { } reason
+           && (Sentences.Contains(reason.Trim().Trim('"')) || reason.Contains("404"));
+}

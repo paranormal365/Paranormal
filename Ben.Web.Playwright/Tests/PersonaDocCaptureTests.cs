@@ -23,6 +23,14 @@ namespace Ben.Web.Playwright.Tests;
 [Category("PersonaDocs")]
 public class PersonaDocCaptureTests : BenTestBase
 {
+    /// <summary>The seeded public location every seat is photographed at.</summary>
+    /// <remarks>
+    /// One place across the documents on purpose: the point of a per-seat set is that the reader
+    /// can compare the same screen between seats, which a different place per persona would
+    /// destroy.
+    /// </remarks>
+    private const string PlaceId = "40000001-0000-0000-0000-000000000001";
+
     private static string Persona =>
         Environment.GetEnvironmentVariable("BEN_PERSONA")?.Trim().ToLowerInvariant() ?? "";
 
@@ -66,6 +74,13 @@ public class PersonaDocCaptureTests : BenTestBase
         if (Persona.Length == 0)
             Assert.Ignore("No BEN_PERSONA set — this fixture only runs for a documentation capture.");
 
+        // NOTHING is cleared here, and that is deliberate. The folder is shared:
+        // HostedEventPersonaWalk writes its own screens into the same per-seat directories, and a
+        // fixture that emptied it would silently delete another's work — which is precisely what
+        // happened when this tried to (2026-09-17), taking five screens out of the documents.
+        // The consequence is that a screen must never be RENUMBERED: the old file would be left
+        // behind and the document would show the page twice. Append new numbers instead.
+
         // Wide enough that the sidebar is open and tables are not stacked into their mobile form,
         // which is what a developer reading the document needs to see.
         await Page.SetViewportSizeAsync(1440, 900);
@@ -84,6 +99,7 @@ public class PersonaDocCaptureTests : BenTestBase
             case "viewer": await ViewerAsync(); break;
             case "owner": await OwnerAsync(); break;
             case "superadmin": await SuperAdminAsync(); break;
+            case "seller": await SellerAsync(); break;
             default: Assert.Fail($"Unknown persona '{Persona}'."); break;
         }
     }
@@ -99,9 +115,20 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("14-sign-in", "/login");
         await VisitAsync("15-sign-up", "/signup");
         await VisitAsync("16-help", "/help");
+        // A public location, as somebody with no account: published investigations, the field
+        // archive and the posts, and no box to add anything (2026-09-17). Worth a picture in this
+        // document because the same page looks different from every seat below, which is the
+        // whole reason these documents are per-seat.
         // A seat with no account meeting a page that needs one: the refusal itself is worth
         // showing, because "a refusal must never render as nothing here" is a rule of this site.
         await VisitAsync("17-refused-my-cases", "/my-cases");
+        // Appended, not inserted: 18 and 19 belong to HostedEventPersonaWalk, and renumbering
+        // anything here would orphan the old file into the document.
+        await VisitAsync("1a-a-public-place", $"/places/{PlaceId}");
+        // The store (storefront and store sellers, 09/25): its front, and a member seller's item with
+        // its questions and answers. Photographed with the store switched on, as it will be when open.
+        await VisitAsync("1b-the-store", "/store");
+        await VisitAsync("1c-a-sellers-item", "/store/p/hand-built-rem-pod");
     }
 
     // ── Client ───────────────────────────────────────────────────────────────
@@ -132,6 +159,12 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("36-feed", "/feed");
         await VisitAsync("37-profile", "/profile");
         await VisitAsync("38-refused-admin", "/admin/users");
+        // The same place, signed in as a member: their groups' visits and cases beside what other
+        // groups shared, and the buttons that start work here. 39 and 3a are the event walk's.
+        await VisitAsync("3b-a-public-place", $"/places/{PlaceId}");
+        // The store from a buyer's seat: their orders (one of them in two packages) and their questions.
+        await VisitAsync("3c-my-orders", "/store/orders");
+        await VisitAsync("3d-my-questions", "/store/questions");
     }
 
     // ── Viewer ───────────────────────────────────────────────────────────────
@@ -165,6 +198,12 @@ public class PersonaDocCaptureTests : BenTestBase
         // photographs the door rather than pretending otherwise — an owner of a walking-tour
         // business sees the list here, and one who does not run tours sees the page say so.
         await VisitAsync("58-tours", $"/organizations/{await OrgIdBySlugAsync("benco")}/tours");
+        // The place, and a new case naming it (2026-09-17) — the offer, and the kind choice that
+        // has no default, arrived at with the place already settled as it is from a place's own
+        // page. 5a to 5c are the event walk's, so these follow them.
+        await VisitAsync("5d-a-public-place", $"/places/{PlaceId}");
+        await VisitAsync("5e-new-case-at-a-place",
+            $"/organizations/{await OrgIdBySlugAsync("benco")}/cases/new?place={PlaceId}");
     }
 
     // ── SuperAdmin ───────────────────────────────────────────────────────────
@@ -182,5 +221,31 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("67-billing-ledger", "/admin/billing-ledger");
         await VisitAsync("68-referrals", "/admin/referrals");
         await VisitAsync("69-support-tickets", "/admin/support-tickets");
+        // The store's back office (storefront and store sellers). 6a to 6c are the event walk's.
+        await VisitAsync("6d-store-dashboard", "/admin/store");
+        await VisitAsync("6e-store-orders", "/admin/store/orders");
+        await VisitAsync("6f-sale-requests", "/admin/store/sale-requests");
+        await VisitAsync("6g-sellers", "/admin/store/sellers");
+        await VisitAsync("6h-store-settings", "/admin/store/settings");
+    }
+
+    // ── Seller (store sellers, backlog 251) ──────────────────────────────────
+
+    /// <summary>
+    /// A member who sells their own gear through the store — the demo seller, Hazel Marsh. An additive
+    /// site role: she is an ordinary member everywhere else, and the store's admin refuses her.
+    /// </summary>
+    private async Task SellerAsync()
+    {
+        await LoginAsync(SellerEmail, SellerPassword);
+        const string remPod = "/store/selling/items/a1000000-0000-0000-0000-000000000028";
+        await VisitAsync("70-my-items", "/store/selling");
+        await VisitAsync("71-an-item", remPod);
+        await VisitAsync("72-parts-and-cost", $"{remPod}?tab=parts");
+        await VisitAsync("73-files", $"{remPod}?tab=files");
+        await VisitAsync("74-my-packages", "/store/selling/packages");
+        await VisitAsync("75-my-earnings", "/store/selling/earnings");
+        await VisitAsync("76-questions", "/store/selling/questions");
+        await VisitAsync("77-refused-store-admin", "/admin/store/products");
     }
 }

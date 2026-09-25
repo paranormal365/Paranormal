@@ -11,6 +11,14 @@ public enum ResponseMapping {
         guard body.count < 400 else { return nil }
         let trimmedStart = body.drop(while: \.isWhitespace)
         guard !trimmedStart.hasPrefix("{"), !trimmedStart.hasPrefix("<") else { return nil }
+        // A refusal written as a JSON string literal carries its quotes escaped — `\"json\"` —
+        // and stripping only the outer pair showed the backslashes to people. Read it as the
+        // JSON it is; anything that is not one is plain text and is kept as it came.
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\""), trimmed.hasSuffix("\""),
+           let decoded = try? JSONDecoder().decode(String.self, from: Data(trimmed.utf8)) {
+            return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return body.trimmingCharacters(in: CharacterSet(charactersIn: "\" \n"))
     }
 

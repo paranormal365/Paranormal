@@ -330,7 +330,12 @@ public sealed record PlaceRecord(
     decimal? Latitude,
     decimal? Longitude,
     string? GeocodeNote,
-    Ben.Data.Common.Enums.PlaceKind Kind);
+    Ben.Data.Common.Enums.PlaceKind Kind,
+    /// <summary>
+    /// What this place is, for somebody who has never been (item 250). Null on a private
+    /// residence — somebody's home has no public page to describe.
+    /// </summary>
+    string? Description = null);
 
 /// <summary><c>IsMine</c> lets the page separate our own visits from what others have shared.</summary>
 public sealed record PlaceInvestigationRow(
@@ -379,7 +384,58 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
-    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
+    /// <summary>Cases any group has published at this place (2026-09-17).</summary>
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null,
+    /// <summary>The latest posts about this place, newest first.</summary>
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord>? Posts = null,
+    /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
+    bool CanPost = false,
+    /// <summary>Files added straight to this place, no investigation behind them (item 250).</summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
+    /// <summary>Whether this reader may add a file here.</summary>
+    bool CanAddEvidence = false,
+    /// <summary>What the evidence here adds up to across every route (item 250).</summary>
+    Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null,
+    /// <summary>
+    /// Pictures OF the building (item 250). Never evidence, never voted on, never counted.
+    /// </summary>
+    IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? Pictures = null);
+
+/// <summary>
+/// The personal organization behind one account's own investigating (2026-09-17).
+/// </summary>
+/// <remarks>
+/// Named for the person, because the only screens that ever show this name are their own. It is
+/// not a brand and nobody else reads it.
+/// </remarks>
+public sealed record SoloPlanItem(Guid OrganizationId, string Name);
+
+/// <summary>A place's posts for a signed-in reader, and whether they may add one (2026-09-17).</summary>
+public sealed record PlacePostsRecord(
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord> Posts,
+    bool CanPost);
+
+/// <summary>One of the caller's own groups' cases at a place (2026-09-17).</summary>
+public sealed record PlaceCaseRow(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    string CaseReference,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    DateTime DateCaseOpened,
+    bool IsPublished);
+
+/// <summary>One published case at a place. The title is already redacted by the server.</summary>
+public sealed record PublicPlaceCaseRow(
+    string CaseReference,
+    string UrlName,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    int OpenedYear,
+    string OrganizationName,
+    string OrganizationUrlName);
 
 /// <summary>
 /// One piece of guest evidence photographed at a public event here and contributed by its owner.
@@ -642,8 +698,31 @@ public sealed record MyOrgPermissionsItem(
     bool CanReadInvestigations,
     IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
     IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null,
-    bool IsViewer = false)
+    bool IsViewer = false,
+    /// <summary>
+    /// True when this group pays nothing, so what it records at a public place is public and
+    /// cannot be narrowed (Ben, 2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Read by the publish box and the sharing dropdown to render themselves locked WITH the
+    /// sentence, rather than live and then refused. False when an older server says nothing, which
+    /// leaves every control exactly as it was.
+    /// </remarks>
+    bool PublicByDefault = false,
+    /// <summary>
+    /// Why this group can write nothing at the moment, in the server's own words, or null.
+    /// </summary>
+    /// <remarks>
+    /// A lapsed subscription makes a group read-only, and until the 2026-09-17 audit no page on
+    /// the website said so: the sentence was rendered only on the CLIENT's own case page, so a
+    /// group's own members were offered every control and found out by clicking. Null when an
+    /// older server says nothing, which leaves every control exactly as it was.
+    /// </remarks>
+    string? ReadOnlyReason = null)
 {
+    /// <summary>True when the group is read-only, whatever the reason says.</summary>
+    public bool IsReadOnly => ReadOnlyReason is not null;
+
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>
     /// <remarks>
@@ -919,7 +998,13 @@ public sealed record PublicCaseDetail(
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
     string OrgUrlName,
-    PublicCaseReport? Report = null);
+    PublicCaseReport? Report = null,
+    /// <summary>
+    /// The place this case is about, when it is a public location. Null for a residence, so no
+    /// public page ever points at somebody's home (2026-09-17 audit).
+    /// </summary>
+    Guid? PlaceId = null,
+    string? PlaceName = null);
 
 /// <summary>
 /// What a case's investigation report says to the public — the group's own finding, as opposed to
@@ -1086,7 +1171,19 @@ public sealed record CreateCaseRequest(
     string ZipCode,
     string? Country,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    // True when the person opening the case wants the group to decide whether to take it on.
+    // False — the default, and what every older caller sends — accepts it there and then, for
+    // anybody who may change a case's status (Ben, 2026-09-17).
+    bool PutToTheGroup = false,
+    /// <summary>A shared place already on file that this case is about.</summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// A place to create with the case, when none on file is the right one. Its <c>Kind</c> is the
+    /// "public location or private residence" answer, which decides whether the case is private-lane
+    /// work and, on an unpaid account, whether it is public.
+    /// </summary>
+    NewPlaceRequest? NewPlace = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
@@ -1177,7 +1274,12 @@ public sealed record ClientCaseDetail(
     IReadOnlyList<ClientCaseInvestigation> Investigations,
     int       UnreadMessageCount = 0,
     bool      IsPrimaryClient = false,
-    IReadOnlyList<CaseContactItem>? Contacts = null);
+    IReadOnlyList<CaseContactItem>? Contacts = null,
+    /// <param name="DescriptionHtml">
+    /// The description with its formatting. <c>Description</c> beside it is the plain rendering the
+    /// shipped iPhone app draws, and must stay that way until its next build (2026-09-20).
+    /// </param>
+    string?   DescriptionHtml = null);
 
 /// <summary>Someone the client can talk to about their case. <c>IsFallback</c> marks the case
 /// manager standing in because the group set no explicit contact.</summary>
@@ -1220,7 +1322,11 @@ public sealed record ClientCaseOccurrence(
     IReadOnlyList<OccurrenceFileItem> Files,
     // Returned as well as accepted: a tag the client sets but can never see back would be a
     // write-only control, and they'd have no way to tell whether it took.
-    IReadOnlyList<Guid> ExperienceTypeIds);
+    IReadOnlyList<Guid> ExperienceTypeIds,
+    /// <param name="BodyHtml">
+    /// The formatting. <c>Body</c> beside it is plain for the iPhone app (2026-09-20).
+    /// </param>
+    string?   BodyHtml = null);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,
@@ -1403,78 +1509,6 @@ public sealed record MyInvestigationItem(
     Ben.Data.Common.Enums.RsvpStatus   Rsvp,
     bool?                              DidAttend,
     DateTime?                          EvidenceDueDate);
-
-// ── Case Research records ─────────────────────────────────────────────────────
-public sealed record UpsertResearchRequest(
-    Ben.Data.Common.Enums.CaseResearchType ResearchType,
-    string  Title,
-    string? Body,
-    string? Url,
-    DateTime? EventDateTime = null);
-
-public sealed record CaseResearchEntryDto(
-    Guid                                   Id,
-    Guid                                   CaseId,
-    Ben.Data.Common.Enums.CaseResearchType ResearchType,
-    string                                 Title,
-    string?                                Body,
-    string?                                Url,
-    ResearchFileInfo?                      File,
-    int                                    SortOrder,
-    DateTime                               DateCreated,
-    // Research pages (2026-09-14)
-    DateTime?                              EventDateTime = null,
-    DateTime?                              PublishedUtc = null,
-    DateTime?                              DraftSavedUtc = null,
-    bool                                   HasUnpublishedDraft = false,
-    bool                                   DraftIsMine = false,
-    string?                                Excerpt = null);
-
-/// <summary>A research page as one reader sees it (2026-09-14) — mirrors the API's record.</summary>
-public sealed record CaseResearchPageDto(
-    Guid Id,
-    Guid CaseId,
-    string Title,
-    DateTime? EventDateTime,
-    Ben.Data.Common.Blocks.BlockDocument Document,
-    bool IsDraft,
-    int Revision,
-    DateTime? PublishedUtc,
-    string? PublishedByName,
-    DateTime? DraftSavedUtc,
-    bool HasUnpublishedDraft,
-    string? DraftHeldByName,
-    bool DraftHeldByMe,
-    IReadOnlyList<CaseResearchAttachmentDto> Attachments);
-
-public sealed record CaseResearchAttachmentDto(
-    Guid Id,
-    Ben.Data.Common.Enums.CaseResearchAttachmentKind Kind,
-    string Title,
-    Guid? FileId,
-    string? FileName,
-    string? ContentType,
-    long? FileSize,
-    string? Url,
-    int SortOrder,
-    DateTime DateCreated,
-    Ben.Service.Models.Entities.LinkPreview? Preview = null);
-
-public sealed record SaveResearchDraftRequest(
-    Ben.Data.Common.Blocks.BlockDocument Document,
-    int BaseRevision,
-    Guid ClientSaveId,
-    string Title,
-    DateTime? EventDateTime);
-
-public sealed record ResearchDraftSavedDto(int Revision, DateTime SavedUtc);
-
-/// <summary>What a draft save came to: saved, refused with a sentence, or refused because newer work would be lost.</summary>
-public sealed record ResearchDraftSaveOutcome(ResearchDraftSavedDto? Saved, string? Refusal, bool IsConflict);
-
-public sealed record AddResearchLinkRequest(string Url, string? Title = null, bool RefreshPreview = false);
-
-public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
 
 // ── Investigation Scheduling records ─────────────────────────────────────────
 public sealed record CreateProposalRequest(string? Notes, IReadOnlyList<SlotInput> Slots);
@@ -1685,6 +1719,43 @@ public sealed record CreateFieldSessionShareRequest(
 /// <summary>Places close enough to each other to be one place typed twice.</summary>
 public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places);
 
+/// <summary>One page of the place catalogue (C8).</summary>
+public sealed record AdminPlacePage(
+    IReadOnlyList<AdminPlaceRow> Places, int Total, int Page, int PageSize);
+
+/// <summary>A place as the catalogue lists it.</summary>
+/// <param name="Cases">How many cases are sited here.</param>
+/// <param name="Investigations">How many visits are sited here.</param>
+/// <param name="Evidence">How many files people have added to the place itself.</param>
+public sealed record AdminPlaceRow(
+    Guid Id, string? Name, string? City, string? State, PlaceKind Kind,
+    decimal? Latitude, decimal? Longitude,
+    /// <summary>Why it is not on the map, when it is not. The geocoder's own words.</summary>
+    string? GeocodeNote,
+    DateTime DateCreated, string? AddedBy,
+    int Cases, int Investigations, int Evidence);
+
+/// <summary>One place, in full, for the edit form.</summary>
+public sealed record AdminPlaceDetail(
+    Guid Id, string? Name, string? StreetAddress1, string? StreetAddress2, string? City,
+    string? State, string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude,
+    string? GeocodeNote, DateTime? DateGeocoded, PlaceKind Kind);
+
+/// <summary>A correction to a place.</summary>
+/// <param name="Relocate">
+/// Look the address up again even when nothing about it changed — for a record whose coordinates
+/// were never found.
+/// </param>
+public sealed record AdminEditPlaceRequest(
+    string? Name, string? StreetAddress1, string? StreetAddress2, string? City, string? State,
+    string? ZipCode, string? Country, decimal? Latitude, decimal? Longitude, bool Relocate = false);
+
+/// <summary>What is holding a place, and whether that leaves it deletable.</summary>
+public sealed record AdminPlaceUsage(int Total, bool CanDelete, string? WhatHoldsIt);
+
+/// <summary>Which kind a place should be.</summary>
+public sealed record SetPlaceKindRequest(PlaceKind Kind);
+
 /// <summary>
 /// A field session whose readings are not on this server — the row exists, the bytes do not.
 /// </summary>
@@ -1693,6 +1764,92 @@ public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places
 /// that holds its document belongs to whichever machine ran the suite. Nothing in the product can
 /// open one, which is what makes them safe to delete.
 /// </remarks>
+/// <summary>
+/// How much of this account's personal storage allowance is used, and the cap if there is one.
+/// </summary>
+/// <remarks>
+/// <c>CapBytes</c> is null when a group's paid plan covers this person, and the page says
+/// "uncapped" rather than inventing a number. The endpoint behind this existed with no caller at
+/// all until the 2026-09-17 audit, so nobody was warned before an upload was refused.
+/// </remarks>
+public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
+
+// ── The outbox (item 239; wired 2026-09-17) ─────────────────────────────────
+// Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+// question — I signed up and got nothing — in five seconds instead of not at all" still answered
+// it in zero, because no page read it.
+
+/// <summary>One letter in the outbox, without its words.</summary>
+/// <remarks>
+/// Bodies are never returned: a body carries somebody's name, what they booked and, for a hosted
+/// event, a working door code. <c>AcceptedBySmtpUtc</c> is when the mail server TOOK it, not when
+/// anybody received it — that is only knowable from bounce reports this site does not collect.
+/// </remarks>
+// ── Email templates (item 246) ───────────────────────────────────────────────
+
+/// <summary>One letter the site sends, and whether somebody has written one for it.</summary>
+public sealed record EmailTemplateSummaryRecord(
+    string Kind, string Title, string Description,
+    bool IsLive, bool HasUnpublishedDraft, DateTime? PublishedUtc, DateTime? DraftSavedUtc);
+
+public sealed record EmailTemplateColumnRecord(string Name, string Type);
+public sealed record EmailTemplateTableRecord(string Name, IReadOnlyList<EmailTemplateColumnRecord> Columns);
+public sealed record EmailTemplateTokenRecord(string Name, string Looks, string What);
+
+/// <summary>A piece of a letter an author can drop in and then edit.</summary>
+public sealed record EmailTemplateBlockRecord(string Key, string Title, string What, string Html);
+
+/// <summary>A value only this letter's mailer can work out.</summary>
+public sealed record EmailTemplateSuppliedRecord(string Name, string What, bool Required);
+
+/// <summary>A whole letter to start from, rather than a blank box.</summary>
+public sealed record EmailTemplateStarterRecord(
+    string Key, string Title, string What, string Subject, string BodyHtml);
+
+/// <summary>One letter, with everything its author may put in it.</summary>
+public sealed record EmailTemplateDetailRecord(
+    string Kind, string Title, string Description,
+    string? Subject, string? BodyHtml,
+    string? DraftSubject, string? DraftBodyHtml,
+    DateTime? PublishedUtc, DateTime? DraftSavedUtc,
+    IReadOnlyList<EmailTemplateTableRecord> Tables,
+    IReadOnlyList<EmailTemplateTokenRecord> Common,
+    IReadOnlyList<EmailTemplateBlockRecord> Blocks,
+    IReadOnlyList<EmailTemplateSuppliedRecord> Supplied,
+    IReadOnlyList<EmailTemplateStarterRecord> Starters);
+
+public sealed record SaveEmailTemplateBody(string? Subject, string? BodyHtml, string? TimeZoneId = null);
+public sealed record EmailTemplateSavedRecord(bool Ok, string Message, DateTime? At);
+public sealed record EmailTemplatePreviewRecord(string Subject, string Html, string ZoneId);
+
+/// <summary>One letter's words, fetched one at a time because every fetch is recorded.</summary>
+public sealed record OutboxLetterBodyRecord(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    string? Html,
+    DateTime? BodyScrubbedUtc);
+
+public sealed record OutboxLetterItem(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    int Attempts,
+    DateTime NextAttemptUtc,
+    DateTime? AcceptedBySmtpUtc,
+    DateTime? FailedUtc,
+    string? LastError,
+    bool HasBody,
+    DateTime? BodyScrubbedUtc,
+    int AttachmentCount);
+
+/// <summary>What came of putting letters back in the queue.</summary>
+public sealed record OutboxRetryOutcome(int Requeued, int Skipped, string Message);
+
 public sealed record OrphanedFieldSessionRecord(
     Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
     int ReadingCount, int MarkerCount, string? RecordedByName,
@@ -1728,7 +1885,12 @@ public sealed record DuplicatePlaceRow(
 /// <summary>What a merge moved, so the screen can say so rather than just going quiet.</summary>
 public sealed record PlaceMergeResult(
     Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-    int FieldSessions, int Rooms);
+    int FieldSessions, int Rooms,
+    /// <summary>Hosted events and posts moved with the place. Trailing and defaulted.</summary>
+    int HostedEvents = 0,
+    int Posts = 0,
+    /// <summary>Evidence and pictures added straight to the place, moved with it (item 250).</summary>
+    int Contributions = 0);
 
 
 /// <summary>
@@ -1771,3 +1933,33 @@ public sealed record MailSettingsRecord(
 /// call for completely different fixes, and a tidied-up "could not send" tells you neither.
 /// </param>
 public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid);
+
+/// <summary>
+/// One session file on the server, as listed on /admin/session-files.
+/// </summary>
+/// <remarks>
+/// <b>Two names, because they are two different facts.</b> A device can be handed to a colleague
+/// to upload, and a session recorded while signed out has nobody's name on it at all — so
+/// <paramref name="RecordedByName"/> being null is an ordinary answer and is shown as one, never
+/// filled in from the uploader.
+/// </remarks>
+/// <param name="IsBundle">
+/// Whether it arrived as one <c>.ben</c>. False for anything the approved 1.0.2 build sent, which
+/// uploads a document and a file per recording.
+/// </param>
+public sealed record SessionFileRecord(
+    Guid SessionId,
+    bool IsBundle,
+    string FileName,
+    long FileSize,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime? EndedAt,
+    int ReadingCount,
+    int MarkerCount,
+    int FileCount,
+    string? RecordedByName,
+    string? UploadedByName,
+    Guid? InvestigationId,
+    string? InvestigationTitle,
+    DateTime? PublishedAtUtc);

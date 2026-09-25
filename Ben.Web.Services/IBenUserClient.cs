@@ -104,6 +104,17 @@ public interface IBenUserClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// When each account last signed in and how many times, for the users grid. SuperAdmin only.
+    /// </summary>
+    /// <remarks>
+    /// Its own call rather than two more fields on <see cref="AppUserRecord"/>: that record is
+    /// read across the site and by the phone, and carrying these would put a subquery on every
+    /// one of those reads for a question one admin screen asks. Accounts that have never signed
+    /// in are absent rather than returned as zeroes.
+    /// </remarks>
+    Task<LoadResult<Ben.Service.Models.Admin.UserSignInSummary>> GetUserSignInSummaryAsync(CancellationToken token = default);
+
     /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
     /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
     /// resolve names, not the full <see cref="AppUserRecord"/>. Caller must be an active member
@@ -122,7 +133,8 @@ public interface IBenUserClient
     /// <param name="request">The new user fields including email, password, display name and role flags.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The created <see cref="AppUserAdminRecord"/>, or <c>null</c> if creation failed.</returns>
-    Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
+    /// <summary>Creates an account, or returns the server's reason for refusing (a taken email, a username with a space, a weak password).</summary>
+    Task<(AppUserAdminRecord? Result, string? Error)> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
 
     /// <summary>Updates editable profile fields for a user including audit timestamps.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user to update.</param>
@@ -139,7 +151,8 @@ public interface IBenUserClient
     /// <param name="roles">Every role they should hold afterwards; anything not listed is removed.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The roles now held, or <c>null</c> when the server refused.</returns>
-    Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
+    /// <summary>Sets the whole set of site roles, or returns the server's reason for refusing.</summary>
+    Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
 
     // ── Impersonation ─────────────────────────────────────────────────────────
 
@@ -160,7 +173,11 @@ public interface IBenUserClient
     /// Calls <c>/api/me</c> to re-establish IsSuperAdmin on the restored token — the Identity
     /// API's opaque tokens can't have that claim read back out of them locally.
     /// </remarks>
-    Task StopImpersonatingAsync(CancellationToken token = default);
+    /// <summary>
+    /// Returns to the caller's own identity. False means their roles could not be confirmed —
+    /// see <c>WebApiAuthService.StopImpersonatingAsync</c> (2026-09-17 audit).
+    /// </summary>
+    Task<bool> StopImpersonatingAsync(CancellationToken token = default);
 
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
@@ -171,6 +188,15 @@ public interface IBenUserClient
     Task<LoadResult<UserNoteTypeRecord>> GetUserNoteTypesAsync(CancellationToken token = default);
 
     // Type management (SuperAdmin creates new types)
+    // ── Which letters somebody wants ──────────────────────────────────────────
+
+    /// <summary>Every letter this person may turn off, and whether they have.</summary>
+    Task<LoadResult<EmailPreferenceRecord>> GetMyEmailPreferencesAsync(CancellationToken token = default);
+
+    /// <summary>Says whether one letter is wanted; returns the server's sentence when it refuses.</summary>
+    Task<(EmailPreferenceRecord? Result, string? Error)> SetMyEmailPreferenceAsync(
+        string kind, bool wanted, CancellationToken token = default);
+
     Task<bool> CreateUserAddressTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
     Task<bool> CreateUserEmailTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);
     Task<bool> CreateUserPhoneTypeAsync(string name, string? description = null, bool isActive = true, bool isPublic = false, int sortOrder = 0, string? iconClass = null, string? colorClass = null, CancellationToken token = default);

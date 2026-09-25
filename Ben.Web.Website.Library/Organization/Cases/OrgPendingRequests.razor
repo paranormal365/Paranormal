@@ -256,7 +256,7 @@
     private static string StatusBadge(ClientOrgRequestStatus s) => s switch
     {
         ClientOrgRequestStatus.Pending     => "bg-secondary",
-        ClientOrgRequestStatus.Viewed      => "bg-info text-dark",
+        ClientOrgRequestStatus.Viewed      => "bg-info",
         ClientOrgRequestStatus.UnderReview => "bg-warning text-dark",
         _                                  => "bg-secondary",
     };

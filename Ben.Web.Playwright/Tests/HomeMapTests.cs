@@ -215,10 +215,15 @@ public class HomeMapTests : BenTestBase
         // until somebody asks for it — so it presses the button and then looks.
         var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
         await Expect(vote).ToBeVisibleAsync(new() { Timeout = 12_000 });
-        await vote.ClickAsync();
 
+        // ClickUntilAsync, not a single click. Opening the choices is a round trip over the
+        // circuit, and the home page renders long before the circuit is live — a press that
+        // lands in that window is simply lost. It showed up on a fresh database, where nothing
+        // is warm (item 243, 2026-09-19); on the old one the page had usually been reached
+        // already by an earlier test.
         var confirms = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First;
-        await Expect(confirms).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await ClickUntilAsync(vote, confirms);
+        await Expect(confirms).ToBeVisibleAsync(new() { Timeout = 12_000 });
     }
 
     [Test]

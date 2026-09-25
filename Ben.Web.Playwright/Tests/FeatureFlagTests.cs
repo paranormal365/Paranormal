@@ -34,7 +34,8 @@ public class FeatureFlagTests : BenTestBase
     private async Task SetEquipmentAsync(bool on)
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        await Page.GotoAsync($"{BaseUrl}/admin/site-settings");
+        // Linked to by key — one section renders at a time, so the switch has to be asked for.
+        await Page.GotoAsync($"{BaseUrl}/admin/site-settings?setting=features.equipment");
 
         var toggle = Page.Locator(EquipmentSwitchId);
         await Expect(toggle).ToBeVisibleAsync(new() { Timeout = 20_000 });

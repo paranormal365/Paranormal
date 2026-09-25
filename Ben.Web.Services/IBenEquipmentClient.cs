@@ -217,4 +217,25 @@ public interface IBenEquipmentClient
     Task<LoadResult<EquipmentModelRecord>> GetAdminEquipmentModelsAsync(Guid? brandId = null, CancellationToken token = default);
     Task<EquipmentModelRecord?> ApproveEquipmentModelAsync(Guid id, CancellationToken token = default);
     Task<bool> RejectEquipmentModelAsync(Guid id, CancellationToken token = default);
+
+    // ── Renaming and merging (2026-09-17 audit) ──────────────────────────────
+    //
+    // Ben's question was "what happens when I try to change Samsung to Sansung?" The server half
+    // shipped — rename with a 409 that offers a merge, and the merge itself — and no client method
+    // or button ever did, so a typo in a make or model was permanently unfixable: delete is
+    // refused while anything references the row, and nothing could rename.
+
+    /// <summary>Renames a brand, or comes back with the merge that name would take.</summary>
+    Task<(EquipmentBrandRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> RenameEquipmentBrandAsync(
+        Guid id, UpsertEquipmentBrandRequest request, CancellationToken token = default);
+
+    /// <summary>Folds one brand into another: its models move across and it goes. Not undoable.</summary>
+    Task<(bool Ok, string? Error)> MergeEquipmentBrandAsync(Guid id, Guid targetId, CancellationToken token = default);
+
+    /// <summary>Renames a model, or comes back with the merge that name would take.</summary>
+    Task<(EquipmentModelRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> RenameEquipmentModelAsync(
+        Guid id, RenameEquipmentModelRequest request, CancellationToken token = default);
+
+    /// <summary>Folds one model into another: its items move across and it goes. Not undoable.</summary>
+    Task<(bool Ok, string? Error)> MergeEquipmentModelAsync(Guid id, Guid targetId, CancellationToken token = default);
 }

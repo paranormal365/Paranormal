@@ -222,6 +222,29 @@ else
     /// <summary>Initial zoom level. If null, automatically derived from region radius.</summary>
     [Parameter] public double? Zoom { get; set; }
 
+    /// <summary>
+    /// Which way the marker points, clockwise from north — and a request to draw it as a
+    /// direction rather than as a pin.
+    /// </summary>
+    /// <remarks>
+    /// For a replay, where WHERE somebody was and WHICH WAY they were facing are both part of the
+    /// answer. Null everywhere else, and everywhere else keeps the pin it has always had.
+    /// </remarks>
+    [Parameter] public double? MarkerBearing { get; set; }
+
+    /// <summary>
+    /// Where the marker goes, when that is not where the map is centred.
+    /// </summary>
+    /// <remarks>
+    /// A replay moves the marker several times a second and the VIEW hardly at all: re-centring
+    /// on every tick makes the map itself twitch under somebody trying to read it, while a marker
+    /// that only moves when the view does is the stepping Ben reported. Two coordinates, because
+    /// they answer two questions. Null means the marker is where the map is looking, which is what
+    /// every other caller wants.
+    /// </remarks>
+    [Parameter] public double? MarkerLatitude { get; set; }
+    [Parameter] public double? MarkerLongitude { get; set; }
+
     // ── Internal state ────────────────────────────────────────────────────────
 
     private bool _invalidCoords;
@@ -273,9 +296,10 @@ else
     private void RebuildMapData()
     {
         _pins = _form.ShowMarker
-            ? [new BenMapPin(Latitude, Longitude, Title,
+            ? [new BenMapPin(MarkerLatitude ?? Latitude, MarkerLongitude ?? Longitude, Title,
                 Color: _form.MarkerColor,
-                IconSvgPath: AddressMapIconRegistry.GetPath(_form.MarkerIconKey))]
+                IconSvgPath: AddressMapIconRegistry.GetPath(_form.MarkerIconKey),
+                RotationDegrees: MarkerBearing)]
             : [];
 
         _circle = _form.ShowRegion && _form.RegionRadiusMiles > 0

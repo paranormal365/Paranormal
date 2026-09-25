@@ -211,4 +211,81 @@ public sealed class PublicLinkPreviewControllerTests
         public Task<Ben.Data.Source.Entities.StoredLinkPreview?> GetOrFetchAsync(string url, Guid userId, bool refresh, CancellationToken ct) =>
             throw new InvalidOperationException("an anonymous preview must never fetch");
     }
+
+    // ── The card is a prose surface too (2026-09-17 audit) ───────────────────────────────────
+    //
+    // A published private-engagement case substitutes the client's real names everywhere else it
+    // appears anonymously — the case page, discovery, the place page, the CMS embed. This card
+    // did not, so the one word the case page would have replaced travelled in the preview instead.
+    // The reason nothing caught it: PublicProseRedactionTests has a section per anonymous
+    // controller and had none for this one.
+
+    /// <summary>A published private-engagement case whose title names the client.</summary>
+    private static async Task<IDbContextFactory<BenDataContext>> SeedPrivateEngagementAsync()
+    {
+        var factory = new SimpleFactory(new DbContextOptionsBuilder<BenDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+        await using var db = factory.CreateDbContext();
+        var actor = Guid.NewGuid();
+        var orgId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        db.Organizations.Add(new Organization
+        {
+            Id = orgId, Name = "Nashville Paranormal", UrlName = "nashville-paranormal",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.Users.Add(new AppUser
+        {
+            Id = clientId, UserName = "vexley@t", Email = "vexley@t",
+            FirstName = "Daniel", LastName = "Vexley", DisplayName = "Daniel Vexley",
+            DateCreated = DateTime.UtcNow,
+        });
+        db.ClientRequests.Add(new ClientRequest
+        {
+            Id = requestId, AppUserId = clientId, Status = ClientRequestStatus.Assigned,
+            StreetAddress1 = "1 Elm", City = "Nashville", State = "TN", ZipCode = "37201",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId,
+        });
+        db.Cases.Add(new Case
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId,
+            Title = "The Vexley house", UrlName = "the-vexley-house",
+            CaseYear = 2026, OrgCaseNumber = 43,
+            City = "Nashville", State = "TN",
+            IsPublic = true, Status = CaseStatus.Public,
+            IsPrivateEngagement = true,
+            ClientRequestId = requestId,
+            PublicPseudonym = "The Hargrove Family",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    [Fact]
+    public async Task A_private_engagement_cases_card_does_not_carry_the_clients_name()
+    {
+        var factory = await SeedPrivateEngagementAsync();
+
+        var preview = await PreviewAsync(
+            factory, "/o/nashville-paranormal/cases/the-vexley-house");
+
+        Assert.NotNull(preview);
+        Assert.DoesNotContain("Vexley", preview!.Title);
+        // Substituted, not blanked — the card still has to say what it is pointing at.
+        Assert.Contains("Hargrove", preview.Title);
+    }
+
+    [Fact]
+    public async Task An_ordinary_cases_card_keeps_its_real_title()
+    {
+        var preview = await PreviewAsync(
+            await SeedAsync(), "/o/nashville-paranormal/cases/printers-alley-knocking");
+
+        Assert.Equal("The Printers Alley Knocking", preview!.Title);
+    }
 }

@@ -1,0 +1,72 @@
+@page "/store/questions"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+@inject IBenUserState User
+@inject NavigationManager Nav
+
+<PageTitle>My questions — Store</PageTitle>
+
+@*
+    The questions a shopper has asked about the store's items (store sellers, backlog 251, P12), newest
+    first, each with its answer once one comes. Private to them: an answer only reaches the product's
+    page if whoever answered adds it to the item's questions and answers, without the asker's name.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:64rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/store">Store</a></li>
+            <li class="breadcrumb-item active" aria-current="page">My questions</li>
+        </ol>
+    </nav>
+    <h1 class="h3 mb-3">My questions<HelpLink Slug="shopping-at-the-store" Anchor="asking-a-question" /></h1>
+
+    <BenListState TItem="StoreAskedQuestionRecord" Result="_result" Loading="_loading" OnRetry="LoadAsync"
+                  EmptyText="You haven't asked anything yet — use “Ask a question” on an item's page">
+        @foreach (var q in _result.Items)
+        {
+            <div class="card mb-3" data-testid="my-question" data-status="@q.Status">
+                <div class="card-body small">
+                    <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
+                        <a class="fw-semibold" href="@($"/store/p/{q.ProductSlug}")">@q.ProductName</a>
+                        <span class="text-secondary">@q.AskedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy")</span>
+                    </div>
+                    <p class="mb-2" style="white-space:pre-line;">“@q.Question”</p>
+                    @switch (q.Status)
+                    {
+                        case StoreQuestionStatus.Open:
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">Waiting for an answer</span>
+                            break;
+                        case StoreQuestionStatus.Answered:
+                            <div class="border-start border-3 ps-2" style="white-space:pre-line;" data-testid="my-question-answer">@q.Answer</div>
+                            break;
+                        default:
+                            <div class="text-secondary">They couldn't answer this one@(q.Answer is { } note ? $": {note}" : ".")</div>
+                            break;
+                    }
+                </div>
+            </div>
+        }
+    </BenListState>
+</div>
+
+@code {
+    private LoadResult<StoreAskedQuestionRecord> _result;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        await User.AuthReady;
+        if (!User.IsAuthenticated) { Nav.NavigateTo(SignInLink.For(Nav)); return; }
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await Store.GetMyStoreQuestionsAsync();
+        _loading = false;
+    }
+}

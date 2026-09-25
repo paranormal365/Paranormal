@@ -400,7 +400,7 @@ else if (_role is not null)
         _successMessage = null;
         StateHasChanged();
 
-        var result = await AdminClient.UpdateOrgRoleAsync(OrgId, RoleId,
+        var (result, saveError) = await AdminClient.UpdateOrgRoleExpectingReasonAsync(OrgId, RoleId,
             new UpdateOrgRoleRequest(_editName.Trim(), _editDescription?.Trim(), _editIsActive, _editSortOrder));
 
         _isSaving = false;
@@ -412,7 +412,10 @@ else if (_role is not null)
         }
         else
         {
-            _errorMessage = "Failed to save role.";
+            // The server's own sentence when it gave one. It refuses in words worth reading —
+            // "That role does not belong to this group." — and a blanket "Failed to save role."
+            // told the person none of it (2026-09-04 finding 4).
+            _errorMessage = saveError ?? "Failed to save role.";
         }
     }
 
@@ -442,7 +445,7 @@ else if (_role is not null)
         _errorMessage   = null;
         StateHasChanged();
 
-        var result = await AdminClient.AddOrgRoleMemberAsync(OrgId, RoleId, _selectedMembershipId);
+        var (result, addError) = await AdminClient.AddOrgRoleMemberExpectingReasonAsync(OrgId, RoleId, _selectedMembershipId);
         _isSavingMember = false;
 
         if (result is not null)
@@ -453,7 +456,7 @@ else if (_role is not null)
         }
         else
         {
-            _errorMessage = "Failed to add member.";
+            _errorMessage = addError ?? "Failed to add member.";
         }
     }
 
@@ -462,7 +465,7 @@ else if (_role is not null)
         _errorMessage = null;
         StateHasChanged();
 
-        var ok = await AdminClient.RemoveOrgRoleMemberAsync(OrgId, RoleId, rm.Id);
+        var (ok, removeError) = await AdminClient.RemoveOrgRoleMemberExpectingReasonAsync(OrgId, RoleId, rm.Id);
         if (ok)
         {
             _members = (await AdminClient.GetOrgRoleMembersAsync(OrgId, RoleId)).Items;
@@ -470,7 +473,7 @@ else if (_role is not null)
         }
         else
         {
-            _errorMessage = "Failed to remove member.";
+            _errorMessage = removeError ?? "Failed to remove member.";
         }
     }
 }

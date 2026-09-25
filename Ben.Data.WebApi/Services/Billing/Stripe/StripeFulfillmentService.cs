@@ -26,13 +26,30 @@ namespace Ben.Data.WebApi.Services.Billing.StripeIntegration;
 public sealed class StripeFulfillmentService
 {
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
+    private readonly Ben.Data.Common.Interfaces.IEmailService? _email;
+    private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<StripeFulfillmentService> _log;
 
+    /// <param name="email">
+    /// How the receipt is posted.
+    /// <para>Optional and trailing, like every other dependency added to this area: the fixtures
+    /// here are about money landing on the ledger correctly, not about mail, and none of them
+    /// should have to learn what a mailer is to keep testing that.</para>
+    /// </param>
+    private readonly Ben.Data.WebApi.Services.Store.StoreOrderPayments? _store;
+
     public StripeFulfillmentService(
-        IDbContextFactory<BenDataContext> dbFactory, ILogger<StripeFulfillmentService> log)
+        IDbContextFactory<BenDataContext> dbFactory,
+        ILogger<StripeFulfillmentService> log,
+        Ben.Data.Common.Interfaces.IEmailService? email = null,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity>? site = null,
+        Ben.Data.WebApi.Services.Store.StoreOrderPayments? store = null)
     {
         _dbFactory = dbFactory;
+        _email = email;
+        _site = site?.Value ?? new Ben.Data.Common.SiteIdentity();
         _log = log;
+        _store = store;
     }
 
     /// <summary>The frozen facts a checkout was created with, read back from metadata.</summary>
@@ -132,6 +149,25 @@ public sealed class StripeFulfillmentService
     /// </summary>
     public async Task FulfillAsync(StripeCompletedCheckout checkout, CancellationToken ct = default)
     {
+        // A store order's payment (storefront S4.6) — first, and never allowed to fall through to
+        // the subscription path below, whose "no usable metadata" branch ignores and answers 200.
+        // With the store's service missing that would drop a real payment on the floor, so it
+        // throws instead: the webhook answers 500 and Stripe delivers it again.
+        if (checkout.Metadata.TryGetValue(StoreStripeKeys.Order, out var storeOrderRaw))
+        {
+            if (_store is null)
+                throw new InvalidOperationException("A store order was paid but the store's payment service is not registered.");
+            if (!Guid.TryParse(storeOrderRaw, out var storeOrderId))
+            {
+                _log.LogError("Stripe payment {Reference} carries an unreadable store order id.", checkout.PaymentIntentRef ?? checkout.SessionId);
+                return;
+            }
+            checkout.Metadata.TryGetValue(StoreStripeKeys.TaxCalculation, out var taxCalc);
+            await _store.MarkPaidAsync(storeOrderId, checkout.PaymentIntentRef, checkout.ChargeRef,
+                checkout.PaymentIntentRef ?? checkout.SessionId, checkout.AmountReceivedCents, taxCalc, ct);
+            return;
+        }
+
         if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Seat, out var seatRaw)
             && Guid.TryParse(seatRaw, out var seatId))
         {
@@ -307,6 +343,93 @@ public sealed class StripeFulfillmentService
         _log.LogInformation(
             "Stripe fulfilled: org {OrganizationId} on \"{Tier}\" {Interval} for ${Payable} (+${Tax} tax), receipt R-{Receipt:00000}.",
             facts.OrganizationId, tier?.Name, facts.Interval, facts.Payable, facts.TaxAmount, payment.ReceiptNumber);
+
+        if (_email is not null)
+            await PostReceiptAsync(db, facts.OrganizationId, payment, tier?.Name, ct);
+    }
+
+    /// <summary>
+    /// Posts the receipt for a payment that has just been recorded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A receipt existed and was never sent.</b> The ledger has carried receipt numbers
+    /// since item 168, the billing page shows them, and nothing ever put one in front of the
+    /// person who paid — they had to know to go and look. A receipt is the one letter somebody
+    /// actively wants and may need for their own books (item 246).</para>
+    ///
+    /// <para><b>After the money is recorded, and never able to undo it.</b> This runs once the
+    /// ledger row is saved and swallows anything it cannot do: a payment that went through and a
+    /// letter that did not is a nuisance, and a letter failure that rolled back a payment would be
+    /// very much worse.</para>
+    ///
+    /// <para>It goes to the group's billing people — the same audience the lapse and plan notices
+    /// use — because the payer may be a card on file rather than a person reading mail.</para>
+    /// </remarks>
+    private async Task PostReceiptAsync(
+        BenDataContext db, Guid organizationId, BillingLedgerEntry payment, string? tierName,
+        CancellationToken ct)
+    {
+        try
+        {
+            var org = await db.Organizations.AsNoTracking()
+                .Where(o => o.Id == organizationId)
+                .Select(o => new { o.Name, o.CreatedByAppUserId })
+                .FirstOrDefaultAsync(ct);
+            if (org is null) return;
+
+            var to = await db.AppUsers.AsNoTracking()
+                .Where(u => u.Id == org.CreatedByAppUserId && u.Email != null && u.Email != "")
+                .Select(u => new { u.Email, u.DisplayName })
+                .FirstOrDefaultAsync(ct);
+            if (to is null) return;
+
+            var reference = $"R-{payment.ReceiptNumber:00000}";
+            var what = tierName is { Length: > 0 } t ? $"{t} plan" : "your plan";
+
+            var subject = $"{_site.Name} receipt {reference}";
+            var body =
+                $"<p>Thank you — your payment for <strong>{System.Net.WebUtility.HtmlEncode(org.Name)}</strong> "
+              + "has gone through.</p>"
+              + "<table role=\"presentation\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse;\">"
+              + $"<tr><td><strong>Receipt</strong></td><td>{reference}</td></tr>"
+              + $"<tr><td><strong>For</strong></td><td>{System.Net.WebUtility.HtmlEncode(what)}</td></tr>"
+              + $"<tr><td><strong>Paid</strong></td><td>{payment.Amount:C}</td></tr>"
+              + $"<tr><td><strong>Date</strong></td><td>{payment.DateCreated:MM/dd/yyyy}</td></tr>"
+              + "</table>"
+              + "<p>Your group's billing page keeps every receipt, so this one is there whenever "
+              + "you need it again.</p>";
+
+            await _email!.SendAsync(
+                new Ben.Data.Common.Interfaces.EmailMessage(
+                    to.Email!, subject, body,
+                    Kind: Ben.Data.Common.Mail.MailKinds.PaymentReceipt.Key,
+                    Payload: new Ben.Data.Common.Interfaces.MailPayload(
+                        new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["Organizations"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["Name"] = org.Name,
+                            },
+                            ["AppUsers"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["Email"] = to.Email,
+                                ["DisplayName"] = to.DisplayName,
+                            },
+                            ["BillingLedgerEntries"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["ReceiptNumber"] = reference,
+                                ["Amount"] = payment.Amount,
+                                ["DateCreated"] = payment.DateCreated,
+                            },
+                        })),
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "The payment for org {OrganizationId} was recorded but its receipt could not be "
+              + "posted.", organizationId);
+        }
     }
 
     /// <summary>
@@ -450,8 +573,40 @@ public sealed class StripeFulfillmentService
         var now = DateTime.UtcNow;
         var total = unit * count;
 
-        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
-        var tax = TaxResolver.TaxOn(total, taxRate);
+        // The tax the buyer was CHARGED, read back from the metadata (2026-09-17 audit).
+        //
+        // The credit checkout resolves the rate, works out the tax, writes both into the metadata
+        // AND adds the tax to what Stripe collects. This then threw those away and resolved the
+        // rate again from the live rules, filing that second answer in the ledger. The two differ
+        // whenever anything moved in between — a TaxRateRule edited, the group's first address
+        // added or changed — and the window is however long the webhook takes, which on a retry is
+        // hours. The card statement then says one number and the receipt says another, and the
+        // receipt is the document we hand over.
+        //
+        // TaxResolver's own summary states the rule this restores: "the rate is resolved at write
+        // time and frozen onto whatever document asked — a later rule edit never rewrites a bill
+        // already sent." The subscription path beside this one has always done it through
+        // CheckoutFacts; only the credit path read live.
+        //
+        // The live resolve stays as the fallback, for a session created before this shipped whose
+        // webhook arrives after it. It is the old behaviour, so such a session is no worse off.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        decimal taxRate, tax;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw)
+            && decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out taxRate)
+            && checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw)
+            && decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out tax))
+        {
+            // Nothing to do: both figures came from the session the buyer actually paid.
+        }
+        else
+        {
+            _log.LogWarning(
+                "Event-credit payment {Reference} carries no frozen tax; resolving it live.", reference);
+            (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+            tax = TaxResolver.TaxOn(total, taxRate);
+        }
+
         var description = count == 1 ? "1 event credit" : $"{count} event credits";
 
         for (var i = 0; i < count; i++)

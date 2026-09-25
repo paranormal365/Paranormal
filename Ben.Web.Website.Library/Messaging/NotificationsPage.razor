@@ -11,6 +11,10 @@
 @inject IJSRuntime JS
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@* For IconPickerDialog.ResolveTelerikIcon — a stored "t:" icon names a Telerik icon, the same
+   convention the admin grid that chose it reads. Without this using, Razor emits the component
+   reference as literal markup with no error. *@
+@using Ben.Web.Website.Library.Manage.Icon
 
 <PageTitle>Notifications</PageTitle>
 
@@ -135,7 +139,36 @@
                                  Selected="@(_openMessage?.Id == msg.Id)"
                                  OnOpen="@(() => OpenMessageAsync(msg))">
                             <Badge>
-                                <span class="badge bg-secondary-subtle text-secondary-emphasis">@msg.TypeName</span>
+                                @* The icon and colour a SuperAdmin assigned to this message type.
+                                   Both have always been computed and sent and never rendered
+                                   (2026-09-17 audit) — they showed only back in the admin grid
+                                   where they were chosen, so the recipient saw the plain grey
+                                   badge whatever anybody picked.
+
+                                   The colour is a stored Bootstrap class, so it replaces the
+                                   default pair rather than joining it; a blank one keeps the
+                                   default. A "t:" icon names a Telerik icon, the same convention
+                                   the admin grid reads. *@
+                                <span class="badge @(string.IsNullOrWhiteSpace(msg.TypeColorClass)
+                                                        ? "bg-secondary-subtle text-secondary-emphasis"
+                                                        : msg.TypeColorClass)">
+                                    @if (!string.IsNullOrWhiteSpace(msg.TypeIconClass))
+                                    {
+                                        @if (msg.TypeIconClass.StartsWith("t:"))
+                                        {
+                                            var ico = IconPickerDialog.ResolveTelerikIcon(msg.TypeIconClass);
+                                            @if (ico is not null)
+                                            {
+                                                <TelerikSvgIcon Icon="@ico" />
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <i class="@msg.TypeIconClass me-1"></i>
+                                        }
+                                    }
+                                    @msg.TypeName
+                                </span>
                             </Badge>
                         </MailRow>
                     }

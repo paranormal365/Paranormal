@@ -1,0 +1,97 @@
+@*
+    An item's FAQ (store sellers, backlog 251, P12): the questions shoppers ask most, answered once
+    for everybody, shown on the product page after the reviews. Shared by the seller's editor and the
+    store's. Saved whole; a shopper's answered question can be added here from the questions inbox.
+*@
+
+<h5>Frequently asked questions @Help</h5>
+<p class="text-secondary small">
+    Shown on the item's page, after the reviews, in this order. Answer what people keep asking — and when a shopper's
+    question deserves a place here, add it from <strong>Questions</strong>.
+</p>
+
+@if (Saved is null)
+{
+    <div class="text-secondary small">Loading the FAQ…</div>
+}
+else
+{
+    <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" role="switch" id="faq-enabled" @bind="_enabled" />
+        <label class="form-check-label" for="faq-enabled">Show the FAQ on the item's page</label>
+    </div>
+
+    @if (_drafts.Count == 0)
+    {
+        <p class="text-secondary small" data-testid="faq-none">No entries yet.</p>
+    }
+    @foreach (var (draft, i) in _drafts.Select((d, i) => (d, i)))
+    {
+        var d = draft;
+        var index = i;
+        <div class="card mb-2" data-testid="faq-row">
+            <div class="card-body py-2">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="@($"faq-q-{i}")">Question</label>
+                    <input id="@($"faq-q-{i}")" class="form-control form-control-sm" maxlength="300" @bind="d.Question" @bind:event="oninput" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="@($"faq-a-{i}")">Answer</label>
+                    <textarea id="@($"faq-a-{i}")" class="form-control form-control-sm" rows="3" maxlength="4000" @bind="d.Answer" @bind:event="oninput"></textarea>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(index == 0)" @onclick="@(() => Move(index, -1))" aria-label="Move up">Up</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(index == _drafts.Count - 1)" @onclick="@(() => Move(index, 1))" aria-label="Move down">Down</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-testid="faq-remove" @onclick="@(() => _drafts.RemoveAt(index))">Remove</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Error is not null) { <div class="alert alert-danger py-2" id="faq-refusal">@Error</div> }
+
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" id="faq-add" @onclick="@(() => _drafts.Add(new FaqDraft()))">Add a question</button>
+        <button type="button" class="btn btn-sm btn-primary" id="faq-save" disabled="@Busy" @onclick="SaveAsync">Save the FAQ</button>
+    </div>
+}
+
+@code {
+    /// <summary>The FAQ as last saved; a new one replaces the drafts.</summary>
+    [Parameter] public StoreFaqsRecord? Saved { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<SaveStoreFaqsRequest> OnSave { get; set; }
+
+    /// <summary>The page's own help link — a literal there, so the help guards can check it.</summary>
+    [Parameter] public RenderFragment? Help { get; set; }
+
+    private sealed class FaqDraft
+    {
+        public Guid? Id { get; set; }
+        public string Question { get; set; } = "";
+        public string Answer { get; set; } = "";
+    }
+
+    private List<FaqDraft> _drafts = [];
+    private bool _enabled = true;
+    private StoreFaqsRecord? _adopted;
+
+    protected override void OnParametersSet()
+    {
+        if (Saved is null || ReferenceEquals(Saved, _adopted)) return;
+        _adopted = Saved;
+        _enabled = Saved.Enabled;
+        _drafts = Saved.Faqs.Select(f => new FaqDraft { Id = f.Id, Question = f.Question, Answer = f.Answer }).ToList();
+    }
+
+    private void Move(int index, int by)
+    {
+        var to = index + by;
+        if (to < 0 || to >= _drafts.Count) return;
+        (_drafts[index], _drafts[to]) = (_drafts[to], _drafts[index]);
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync(new SaveStoreFaqsRequest(
+        _enabled, _drafts.Select(d => new StoreFaqLine(d.Id, d.Question, d.Answer)).ToList()));
+}

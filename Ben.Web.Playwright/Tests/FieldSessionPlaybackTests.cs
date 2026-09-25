@@ -70,7 +70,17 @@ public class FieldSessionPlaybackTests : BenTestBase
             "measurements":{"marker":{"value":"sentry_emf"},
                             "room":{"value":"Cellar"},
                             "emf":{"value":53.0,"unit":"uT","baseline":48.0}},
-            "note":"field moved 50 mG from base"}]}
+            "note":"field moved 50 mG from base"},
+           {"at":"2026-08-25T02:07:00.000Z","triggered_by":"event",
+            "measurements":{"marker":{"value":"app_backgrounded"},
+                            "emf":{"value":48.5,"unit":"uT","baseline":48.0}},
+            "note":"The app was put away here. Sound and readings carried on."},
+           {"at":"2026-08-25T02:07:30.000Z","triggered_by":"interval",
+            "measurements":{"emf":{"value":48.2,"unit":"uT","baseline":48.0}}},
+           {"at":"2026-08-25T02:08:00.000Z","triggered_by":"event",
+            "measurements":{"marker":{"value":"app_returned"},
+                            "emf":{"value":48.1,"unit":"uT","baseline":48.0}},
+            "note":"Away for 1 min."}]}
         """;
 
         var form = Context.APIRequest.CreateFormData();
@@ -107,6 +117,16 @@ public class FieldSessionPlaybackTests : BenTestBase
         await Expect(Page.Locator("[data-testid='marker-room']").First).ToBeVisibleAsync();
         Assert.That(await Page.Locator("[data-testid='marker-room']").First.InnerTextAsync(),
                     Is.EqualTo("Cellar"));
+
+        // The phone's two marks for the app being put away come out as words, not labels, and the
+        // stretch between them is shaded on the trace with the phone's own sentence under it —
+        // so a reader does not take a dark camera for a dead one (2026-09-17).
+        await Expect(Page.GetByText("App put away").First).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Back in the app").First).ToBeVisibleAsync();
+        var shaded = Page.Locator("[data-testid='away-stretch']");
+        await Expect(shaded).ToBeVisibleAsync();
+        Assert.That(await shaded.InnerTextAsync(), Does.Contain("Sound and readings carried on")
+                                                     .And.Contain("Away for 1 min 0 sec"));
 
         // The trace is drawn, not written, so its presence has to be checked as a drawn path.
         // A chart that renders its axes and no line looks like a quiet night rather than a

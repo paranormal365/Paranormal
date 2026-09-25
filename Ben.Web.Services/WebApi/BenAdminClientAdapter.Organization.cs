@@ -525,6 +525,16 @@ public sealed partial class BenAdminClientAdapter
     public Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetAsync<MyOrgPermissionsItem>($"/api/security/organizations/{orgId}/my-permissions", token);
 
+    public Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default)
+        => _api.GetAsync<SoloPlanItem>("/api/solo-plan", token);
+
+    public Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default)
+        // No body: the endpoint takes the caller's identity and nothing else. An empty object
+        // rather than null because the helper posts a request shape, and "{}" is what a POST with
+        // no arguments looks like on the wire.
+        => _api.SendExpectingReasonAsync<object, SoloPlanItem>(
+               HttpMethod.Post, "/api/solo-plan", new { }, token);
+
     /// <summary>The caller's own groups, membership rows only — the sidebar's list (item 159).
     /// Never the SuperAdmin sees-all expansion; the token decides, which keeps impersonation
     /// faithful for free.</summary>
@@ -709,6 +719,22 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> RemoveOrgRoleMemberAsync(Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
+
+    public Task<(OrganizationRoleRecord? Result, string? Error)> UpdateOrgRoleExpectingReasonAsync(
+        Guid orgId, Guid roleId, UpdateOrgRoleRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpdateOrgRoleRequest, OrganizationRoleRecord>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/roles/{roleId}", request, token);
+
+    public Task<(OrganizationRoleMembershipRecord? Result, string? Error)> AddOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid orgUserMembershipId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrganizationRoleMembershipRecord>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/roles/{roleId}/members",
+            new { OrganizationUserMembershipId = orgUserMembershipId }, token);
+
+    public Task<(bool Removed, string? Error)> RemoveOrgRoleMemberExpectingReasonAsync(
+        Guid orgId, Guid roleId, Guid membershipId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync(
+            $"/api/organizations/{orgId}/roles/{roleId}/members/{membershipId}", token);
 
     // ── Org address member access ──────────────────────────────────────────────
     public async Task<LoadResult<OrganizationAddressMemberAccessRecord>> GetAddressMemberAccessAsync(Guid orgId, Guid addressId, CancellationToken token = default)

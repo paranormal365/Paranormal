@@ -3,6 +3,8 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Admin;
+using Ben.Data.WebApi.Services.Store;
+using Ben.Web.Tests.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -225,6 +227,67 @@ public sealed class AppUserPurgeBehaviourTests
         Assert.DoesNotContain("Sam", user.DisplayName);
     }
 
+    /// <summary>
+    /// A person who made, saved and published a case board: the board is the group's and stays,
+    /// still naming the (now anonymised) account in all three places, and the row survives.
+    /// </summary>
+    /// <remarks>
+    /// <para>Canvas plan review R3, 2026-09-14, following the VideoProjects precedent: authorship
+    /// columns are NoAction references, the purge does not delete from the table, and the
+    /// model-driven census counts every one of them — so the promise "the row will survive" and
+    /// the database's refusal to delete it agree. Were the census to miss the three new foreign
+    /// keys, the row delete would be attempted after the anonymise had committed and the database
+    /// would refuse it; this test is where that would show.</para>
+    ///
+    /// <para>It passed on its first run, and that is the finding rather than a gap: nothing in
+    /// <c>AppUserPurge</c> names tables it leaves alone, so a new authored table is handled by
+    /// construction. The red half of R3 is <c>CasePurgeCoverageTests</c> and the case purge
+    /// behaviour test, which did fail.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_board_they_made_saved_and_published_stays_with_the_group_and_the_row_survives()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+
+        var caseId  = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = h.OrgId, Title = "A case", CaseYear = 2026, OrgCaseNumber = 2,
+                Status = CaseStatus.Active,
+                StreetAddress1 = "1 Elm", City = "Franklin", State = "TN", ZipCode = "37064",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = h.AdminId,
+            });
+            db.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = boardId, CaseId = caseId, Name = "Board", DocumentJson = "{\"title\":\"Board\"}",
+                Revision = 4, PublishedAtUtc = DateTime.UtcNow, PublishedByAppUserId = h.TargetId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = h.TargetId,
+                DateUpdated = DateTime.UtcNow, UpdatedByAppUserId = h.TargetId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var (purge, _s) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.True(preview!.RowWillSurvive, "three columns of a case board name this account; the preview must say the row stays");
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.False(result!.RowRemoved);
+
+        await using var verify = await h.Sqlite.NewContextAsync();
+        var board = await verify.CanvasDocuments.FindAsync(boardId);
+        Assert.NotNull(board);
+        Assert.Equal(h.TargetId, board!.CreatedByAppUserId);
+        Assert.Equal(h.TargetId, board.UpdatedByAppUserId);
+        Assert.Equal(h.TargetId, board.PublishedByAppUserId);
+        Assert.Equal(AccountClosure.FormerMemberName, (await verify.Users.FindAsync(h.TargetId))!.DisplayName);
+    }
+
     // ── what is destroyed, and what is not ───────────────────────────────────
 
     [Fact]
@@ -402,5 +465,108 @@ public sealed class AppUserPurgeBehaviourTests
             Assert.Equal(preview!.RowWillSurvive, !result!.RowRemoved);
             Assert.Equal(writesForTheGroup, result.RowRemoved is false);
         }
+    }
+
+    /// <summary>
+    /// A person who bought from the store: their orders stay (a sale is a tax record) without
+    /// their name, the parcel still on its way keeps its street, their cart, favourites and votes
+    /// go — and nothing left points at them, so the row goes too, as the preview promised
+    /// (storefront S0.12).
+    /// </summary>
+    [Fact]
+    public async Task A_buyer_leaves_their_orders_without_their_name_and_the_row_still_goes()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+        Guid delivered, shipped, reviewId;
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            var admin = await db.AppUsers.SingleAsync(u => u.Id == h.AdminId);
+            var buyer = await db.AppUsers.SingleAsync(u => u.Id == h.TargetId);
+            var variant = StoreTestData.Variant(db, admin);
+            var coupon = StoreTestData.Coupon(db, admin, perBuyer: null);
+
+            var deliveredOrder = StoreTestData.Order(db, StoreOrderStatus.Delivered, buyer, "sam@example.com");
+            var shippedOrder = StoreTestData.Order(db, StoreOrderStatus.Shipped, buyer, "sam@example.com");
+            db.StoreCouponRedemptions.Add(new StoreCouponRedemption
+            {
+                Id = Guid.NewGuid(), CouponId = coupon.Id, OrderId = deliveredOrder.Id, BuyerAppUserId = buyer.Id,
+                BuyerEmailNormalized = deliveredOrder.BuyerEmailNormalized, DiscountAmount = 5m, RedeemedUtc = StoreTestData.Now,
+            });
+
+            var cart = new StoreCart { Id = Guid.NewGuid(), AppUserId = buyer.Id, LastActivityUtc = StoreTestData.Now, DateCreated = StoreTestData.Now };
+            db.StoreCarts.Add(cart);
+            db.StoreCartItems.Add(new StoreCartItem { Id = Guid.NewGuid(), CartId = cart.Id, VariantId = variant.Id, Quantity = 2, DateCreated = StoreTestData.Now });
+            db.StoreFavourites.Add(new StoreFavourite { Id = Guid.NewGuid(), AppUserId = buyer.Id, ProductId = variant.ProductId, DateCreated = StoreTestData.Now });
+
+            // Somebody else's review, which the buyer found helpful.
+            var adminOrder = StoreTestData.Order(db, StoreOrderStatus.Delivered, admin, "admin@example.com");
+            var review = new StoreReview
+            {
+                Id = Guid.NewGuid(), ProductId = variant.ProductId, AuthorAppUserId = admin.Id, OrderId = adminOrder.Id,
+                Rating = 5, Title = "Works", Body = "Spiked in the cellar.", Status = StoreReviewStatus.Approved,
+                HelpfulCount = 1, DateCreated = StoreTestData.Now, CreatedByAppUserId = admin.Id,
+            };
+            db.StoreReviews.Add(review);
+            db.StoreReviewVotes.Add(new StoreReviewVote { Id = Guid.NewGuid(), ReviewId = review.Id, AppUserId = buyer.Id, DateCreated = StoreTestData.Now });
+            await db.SaveChangesAsync();
+            (delivered, shipped, reviewId) = (deliveredOrder.Id, shippedOrder.Id, review.Id);
+        }
+
+        var (purge, _) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.Equal((2, 1, false), (preview!.StoreOrdersKept, preview.StoreOrdersStillShipping, preview.RowWillSurvive));
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.True(result!.RowRemoved, "the preview promised the row would go; something store-shaped still points at it");
+
+        await using var check = await h.Sqlite.NewContextAsync();
+        var finished = await check.StoreOrders.AsNoTracking().SingleAsync(o => o.Id == delivered);
+        var onItsWay = await check.StoreOrders.AsNoTracking().SingleAsync(o => o.Id == shipped);
+        Assert.Equal((StoreOrderScrub.RemovedStreet, AccountClosure.FormerMemberName, (Guid?)null),
+            (finished.ShipStreet1, finished.ShipName, finished.BuyerAppUserId));
+        Assert.Equal(("13 Crossroads Lane", (Guid?)null), (onItsWay.ShipStreet1, onItsWay.BuyerAppUserId));
+        Assert.NotNull(onItsWay.PendingAnonymisationSinceUtc);
+
+        Assert.False(await check.StoreCarts.AnyAsync());
+        Assert.False(await check.StoreCartItems.AnyAsync());
+        Assert.False(await check.StoreFavourites.AnyAsync());
+        Assert.False(await check.StoreReviewVotes.AnyAsync());
+        Assert.Equal(0, (await check.StoreReviews.AsNoTracking().SingleAsync(r => r.Id == reviewId)).HelpfulCount);
+        Assert.Null((await check.StoreCouponRedemptions.AsNoTracking().SingleAsync()).BuyerAppUserId);
+    }
+
+    /// <summary>
+    /// A seller (the Seller role, Ben 09/24/2026): the items they sold stay in the store as the
+    /// site's own, the preview does not count them as keeping the person, and the row goes.
+    /// </summary>
+    [Fact]
+    public async Task A_sellers_items_stay_as_the_sites_own_and_the_row_still_goes()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+        Guid productId;
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            var admin = await db.AppUsers.SingleAsync(u => u.Id == h.AdminId);
+            var variant = StoreTestData.Variant(db, admin);
+            await db.SaveChangesAsync();
+            productId = variant.ProductId;
+            await db.StoreProducts.Where(p => p.Id == productId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SellerAppUserId, h.TargetId));
+        }
+
+        var (purge, _) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.False(preview!.RowWillSurvive, "the preview counted the item's seller as keeping the person");
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.True(result!.RowRemoved);
+
+        await using var check = await h.Sqlite.NewContextAsync();
+        var product = await check.StoreProducts.AsNoTracking().SingleAsync(p => p.Id == productId);
+        Assert.Null(product.SellerAppUserId);
     }
 }

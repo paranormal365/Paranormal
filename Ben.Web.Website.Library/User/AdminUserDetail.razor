@@ -82,15 +82,15 @@ else
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateCreated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateUpdated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.LockoutEnd" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>
@@ -799,14 +799,15 @@ else
         _isSavingRoles = true; _rolesError = null; _successMessage = null;
 
         var wanted = _roleSelection.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
-        var saved = await AdminClient.SetUserRolesAsync(UserId, wanted);
+        var (saved, error) = await AdminClient.SetUserRolesAsync(UserId, wanted);
 
         _isSavingRoles = false;
         if (saved is null)
         {
-            // The server's two refusals are both about SuperAdmin — your own, or the last one.
-            _rolesError = "The roles were not saved. You cannot remove your own SuperAdmin role, "
-                        + "or the last SuperAdmin on the site.";
+            // The server's own words. This used to name the two SuperAdmin rules whatever had actually gone wrong, so
+            // a save refused for any other reason — a role the site does not define, a session that had ended — read as
+            // a rule about SuperAdmin that had nothing to do with it (Ben, 2026-09-15).
+            _rolesError = error ?? "The roles were not saved, and the server did not say why. Try again in a moment.";
             return;
         }
 
@@ -826,6 +827,7 @@ else
         "superadmin" => "everything: every administration page, impersonation, billing, and this screen.",
         "admin"      => "sees the administration help documents. Grants nothing else yet.",
         "moderator"  => "reviews what people post: the feed's report queue and media awaiting review. Nothing else.",
+        "seller"     => "sells their own items in the store: they can be named as an item's seller. No store administration and no pricing.",
         _            => "a custom role. It grants nothing unless the site's code checks for it by name.",
     };
 
@@ -834,7 +836,8 @@ else
         "superadmin" => 0,
         "admin"      => 1,
         "moderator"  => 2,
-        _            => 3,
+        "seller"     => 3,
+        _            => 4,
     };
 
     private async Task ImpersonateUser()

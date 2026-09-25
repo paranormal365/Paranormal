@@ -1,3 +1,4 @@
+using Ben.Data.Common.Text;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
@@ -37,6 +38,11 @@ public sealed class MyCaseController : BenControllerBase
     /// <summary>Makes the cards for links in a client's message once it is saved (2026-09-14).</summary>
     private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
 
+    /// <summary>
+    /// Where an invitation's letter goes: into the same save as the invite it carries (item 239b).
+    /// </summary>
+    private readonly Services.IOutboxEmailQueue _outbox;
+
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
@@ -47,10 +53,12 @@ public sealed class MyCaseController : BenControllerBase
         Services.PlatformMessageService messages,
         Services.IMediaIngestService mediaIngest,
         Services.ICmsMarkupSanitizer sanitizer,
-        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews,
+        Services.IOutboxEmailQueue outbox)
     {
         _sanitizer = sanitizer;
         _previews = previews;
+        _outbox = outbox;
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
@@ -173,7 +181,11 @@ public sealed class MyCaseController : BenControllerBase
             EntryType:     e.EntryType,
             EventDateTime: e.EventDateTime,
             Title:         e.Title,
-            Body:          e.Body,
+            // Plain, for the same reason Description above is: the app draws this with Text.
+            // GroupCaseView already strips tags here with PlainText.from; CaseDetailView did not,
+            // so a client saw what a member did not (2026-09-20).
+            Body:          PlainTextHtml.ToText(e.Body),
+            BodyHtml:      e.Body,
             // Now that org-authored entries can reach this list, the client needs to know which
             // ones are theirs. Without it an investigator's note reads as something they wrote.
             FromInvestigators: e.AuthorAppUserId != userId,
@@ -211,7 +223,8 @@ public sealed class MyCaseController : BenControllerBase
             City:                    c.City,
             State:                   c.State,
             Status:                  c.Status,
-            Description:             c.Description,
+            Description:             PlainTextHtml.ToText(c.Description),
+            DescriptionHtml:         c.Description,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
             DateCaseOpened:          c.DateCaseOpened,
             DateCaseClosed:          c.DateCaseClosed,
@@ -244,7 +257,11 @@ public sealed class MyCaseController : BenControllerBase
             EntryType          = CaseTimelineEntryType.ClientReport,
             EventDateTime      = request.EventDateTime,
             Title              = request.Title?.Trim(),
-            Body               = request.Body?.Trim(),
+            // SANITIZED, because a timeline entry's body is rendered as markup on the group's own
+            // case screen (CaseTimeline.razor). Stored with only a Trim, this was a path from a
+            // client's form straight to a MarkupString in front of an investigator — the same gap
+            // the case description had before beta feedback closed it (2026-09-20).
+            Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer),
             // The client always sees their own reports via the EntryType clause, so OrgOnly here
             // means "not shared onward", not "hidden from its author".
             Visibility         = CaseTimelineVisibility.OrgOnly,
@@ -290,7 +307,7 @@ public sealed class MyCaseController : BenControllerBase
 
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
-        entry.Body               = request.Body?.Trim();
+        entry.Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer);
         entry.DateUpdated        = DateTime.UtcNow;
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
@@ -599,7 +616,7 @@ public sealed class MyCaseController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = EvidenceFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             ContentType        = ingested.ServedContentType,
             FileSize           = ingested.ServedFileSize,
@@ -1056,29 +1073,45 @@ public sealed class MyCaseController : BenControllerBase
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.CaseClientInvites.Add(invite);
+
+        // The letter is queued into THIS context before the save, so the invite, the revocation of
+        // any earlier one and the letter carrying the new link are one write (item 239b). Before,
+        // the invite was saved first and the letter sent after — so a letter that never got
+        // written left a live invite nobody was told about, and because the outbox swallowed its
+        // own failure, EmailSent still came back true and the screen never offered the link to
+        // copy. EmailSent now means the letter is in the same row set as the invite.
+        //
+        // Still best effort: the invite succeeds without it and the screen falls back to the
+        // copy-link, which is the right rule while there is that fallback.
+        //
+        // Queued whether or not mail is set up, so it waits in the outbox until it is (readable at
+        // /admin/mail meanwhile); but EmailSent says true only when it will actually leave, so a
+        // site with no mail still shows the link to copy.
+        var emailSent = false;
+        try
+        {
+            var inviter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+            var appBaseUrl = _configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
+            var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
+            var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
+            var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
+            var body = $"<p>{inviterName} has invited you to collaborate on the case " +
+                       $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
+                       $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
+                       $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
+            await _outbox.EnqueueAsync(db, new EmailMessage(email, subject, body), ct);
+            emailSent = _emailService.IsConfigured;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Was a bare catch with nothing logged. Error, because the database log keeps
+            // Error and above and a letter that never went must be findable.
+            _logger.LogError(ex, "Could not queue the invitation to case {CaseId}; the link is shown to copy instead.", caseId);
+        }
+
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(Ben.Data.Source.Entities.CaseClientInvite), invite.Id, invite, userId, AppSources.WebApi));
-
-        var emailSent = false;
-        if (_emailService.IsConfigured)
-        {
-            try
-            {
-                var inviter = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
-                var appBaseUrl = _configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
-                var inviteLink = $"{appBaseUrl}/invite/{invite.Token}";
-                var inviterName = System.Net.WebUtility.HtmlEncode(inviter?.DisplayName ?? "Someone");
-                var caseTitle = System.Net.WebUtility.HtmlEncode(primaryClient.Title);
-                var subject = $"{inviter?.DisplayName ?? "Someone"} invited you to a case on {_site.Name}";
-                var body = $"<p>{inviterName} has invited you to collaborate on the case " +
-                           $"\"<strong>{caseTitle}</strong>\" on {_site.Name}.</p>" +
-                           $"<p><a href=\"{inviteLink}\">Accept invitation</a></p>" +
-                           $"<p>This link expires {invite.DateExpires:MMMM d, yyyy}.</p>";
-                await _emailService.SendAsync(email, subject, body, ct);
-                emailSent = true;
-            }
-            catch { /* best-effort — the invite still succeeds; the UI falls back to copy-link */ }
-        }
 
         return Ok(new InviteCoClientResult(
             LinkedExistingAccount: false, CoClient: null, Invite: ToInviteRecord(invite), EmailSent: emailSent));
@@ -1420,6 +1453,13 @@ public sealed record ClientCaseDetail(
     string    City,
     string    State,
     Ben.Data.Common.Enums.CaseStatus Status,
+    /// <param name="Description">
+    /// PLAIN TEXT, always. The iPhone app draws this with SwiftUI's Text, which renders a string
+    /// exactly as given — so when case descriptions became a formatting editor, every client on
+    /// the shipped app started reading "&lt;p&gt;Things going bump in the night&lt;/p&gt;". The app
+    /// cannot be changed until its next build, which is the same reason CaseMessage.Body stays
+    /// plain and CaseMessageBodies exists. Reported by Ben, 2026-09-20.
+    /// </param>
     string?   Description,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
@@ -1436,7 +1476,12 @@ public sealed record ClientCaseDetail(
     bool      IsPrimaryClient = false,
     // Item 158: who the client actually talks to. Explicit contacts when the group set them,
     // otherwise the case manager stands in — never empty while a manager exists.
-    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null);
+    IReadOnlyList<Entities.CaseContactRecord>? Contacts = null,
+    /// <param name="DescriptionHtml">
+    /// The same words with their formatting, for the website. Trailing and optional so the shipped
+    /// app — which has never heard of it — decodes this response exactly as before.
+    /// </param>
+    string?   DescriptionHtml = null);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1449,7 +1494,12 @@ public sealed record ClientCaseOccurrence(
     IReadOnlyList<OccurrenceFileItem> Files,
     // Returned as well as accepted: a tag the client sets but can never see back would be a
     // write-only control, and they'd have no way to tell whether it took.
-    IReadOnlyList<Guid> ExperienceTypeIds);
+    IReadOnlyList<Guid> ExperienceTypeIds,
+    /// <param name="BodyHtml">
+    /// The same words with their formatting, for the website. Trailing and optional, so the
+    /// shipped app decodes this exactly as before.
+    /// </param>
+    string?   BodyHtml = null);
 
 public sealed record OccurrenceFileItem(
     Guid   FileId,

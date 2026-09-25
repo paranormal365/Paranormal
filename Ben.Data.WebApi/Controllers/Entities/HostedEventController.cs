@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Constants;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Cms;
@@ -139,7 +140,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
             Description = Clean(request.Description),
             PlaceId = venue!.Id,
             HideExactLocation = request.HideExactLocation,
-            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : "America/Chicago",
+            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : HouseClock.ZoneId,
             StartsOn = request.StartsOn.Date,
             EndsOn = request.EndsOn.Date,
             DatesAreSeparate = request.DatesAreSeparate,

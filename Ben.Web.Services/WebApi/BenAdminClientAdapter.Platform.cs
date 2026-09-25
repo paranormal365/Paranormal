@@ -114,6 +114,9 @@ public sealed partial class BenAdminClientAdapter
         return (error is null, error);
     }
 
+    public Task<AccountStorageItem?> GetMyStorageAsync(CancellationToken token = default)
+        => _api.GetAsync<AccountStorageItem>("/api/field-sessions/my-storage", token);
+
     public string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/public/field-sessions/{fieldSessionId}/media/{uploadFileId}";
 
@@ -364,8 +367,21 @@ public sealed partial class BenAdminClientAdapter
     public Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", request, token);
 
-    public Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+    public Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
+        => _api.SendExpectingConflictAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord, TaxonomyMergeOffer>(
+               HttpMethod.Put, $"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+
+    public async Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default)
+    {
+        // Merge answers 204, and refuses with a 409 carrying a SENTENCE (not a shape) when the
+        // direction would lose a reviewed name. SendExpectingReasonAsync recovers exactly that.
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post,
+            $"/api/admin/experience-categories/{categoryId}/types/{id}/merge-into/{targetId}",
+            new { }, token);
+
+        return (error is null, error);
+    }
 
     public Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/experience-categories/{categoryId}/types/{id}", token);
@@ -410,6 +426,63 @@ public sealed partial class BenAdminClientAdapter
                new object(), token);
 
     // ── Mail diagnostics ──────────────────────────────────────────────────────
+
+    public Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(state)) query.Add($"state={Uri.EscapeDataString(state)}");
+        if (!string.IsNullOrWhiteSpace(kind)) query.Add($"kind={Uri.EscapeDataString(kind)}");
+        query.Add($"take={take}");
+
+        return _api.GetListAsync<OutboxLetterItem>(
+            $"/api/admin/mail/outbox?{string.Join("&", query)}", token);
+    }
+
+    public Task<OutboxLetterBodyRecord?> GetOutboxLetterBodyAsync(
+        Guid id, CancellationToken token = default)
+        => _api.GetAsync<OutboxLetterBodyRecord>($"/api/admin/mail/outbox/{id}/body", token);
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, $"/api/admin/mail/outbox/{id}/retry", new { }, token);
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, "/api/admin/mail/outbox/retry-failed", new { }, token);
+
+    // ── Email templates (item 246) ───────────────────────────────────────────
+
+    public Task<LoadResult<EmailTemplateSummaryRecord>> GetEmailTemplatesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<EmailTemplateSummaryRecord>("/api/admin/email-templates", token);
+
+    public Task<EmailTemplateDetailRecord?> GetEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.GetAsync<EmailTemplateDetailRecord>(
+               $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}", token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> SaveEmailTemplateDraftAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveEmailTemplateBody, EmailTemplateSavedRecord>(
+               HttpMethod.Put, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/draft", body, token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> PublishEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EmailTemplateSavedRecord>(
+               HttpMethod.Post, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/publish", new { }, token);
+
+    public Task<(EmailTemplateSavedRecord? Result, string? Error)> RevertEmailTemplateAsync(
+        string kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EmailTemplateSavedRecord>(
+               HttpMethod.Delete, $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}", new { }, token);
+
+    public Task<EmailTemplatePreviewRecord?> PreviewEmailTemplateAsync(
+        string kind, SaveEmailTemplateBody body, CancellationToken token = default)
+        => _api.PostAsync<SaveEmailTemplateBody, EmailTemplatePreviewRecord>(
+               $"/api/admin/email-templates/{Uri.EscapeDataString(kind)}/preview", body, token);
 
     public Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default)
         => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);

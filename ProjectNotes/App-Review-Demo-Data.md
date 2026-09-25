@@ -31,7 +31,7 @@ Live database, on the SQL server the site reads.
 | Ben | `3df91e73-938c-449c-b5a3-08df04382bda` | `haveben@msn.com` |
 | Admin | `6f82795e-1088-4470-3238-08df043e562f` | `admin@ishaunted.com` |
 | Case | `b58ff06e-fe1a-4011-af63-76a42844a2af` | Titled *Test Case in Franklin*. 495 Forrest Park Cir, Franklin TN, private. |
-| Investigation | `6260a86d-b0c3-47c4-8912-5c7be2b426c6` | Titled *Investigation*. 2026-09-09 05:00 → 2026-09-19 13:01, so it is running throughout review. |
+| Investigation | `6260a86d-b0c3-47c4-8912-5c7be2b426c6` | Titled *Investigation*. 2026-09-09 05:00 → 2026-09-26 13:01 (extended a week on 2026-09-19, see below), so it is running throughout review. |
 | Roster | `a3543c78…` (Ben), `5c66fdf3…` (Apple Test) | Both on the investigation above. |
 
 ### Changed on 2026-09-09, at Ben's ask
@@ -89,6 +89,25 @@ Witch Cave night has one and does.
 These are all **disposable**. Delete them once the app is approved, or keep them and move the dates
 forward — a group with nothing coming up looks abandoned, and moving a date is cheaper than
 inventing content again before the next review.
+
+### Changed on 2026-09-19, at Ben's ask — the investigation runs a week longer
+
+The window chosen on 2026-09-09 ended at 2026-09-19 13:01 UTC, while 1.0.3 was still waiting on App
+Review. A reviewer arriving after that would have found the demo account rostered on an
+investigation that had already finished.
+
+| | Was | Now |
+|---|---|---|
+| Investigation `EndDateTime` | 2026-09-19 13:01 | **2026-09-26 13:01** |
+
+Only that column and `DateUpdated` changed. The investigation has no `OrgCalendarEventId`, so no
+calendar event needed moving, and its `Status` was still 0 — nothing had marked it finished when the
+old time passed. It was one guarded transaction that rolled itself back unless exactly one row, still
+holding the old end time, changed. **To undo:** set `EndDateTime` back to `2026-09-19T13:01:00`.
+
+**Now out of step with the window:** the investigation's own description, which the reviewer can
+read, still opens *"Ten-day window so the team can cover several nights"*. The window is seventeen
+days. Left as it is; nobody asked to change reviewer-facing text.
 
 ## Also on the live site, unrelated to review
 

@@ -78,16 +78,25 @@ public struct PositionSample: Sendable, Equatable {
     /// travels with every reading rather than being assumed away.
     public var accuracyMeters: Double?
     public var speedMps: Double?
+    /// Which way the fix says you were MOVING, in degrees from true north.
+    ///
+    /// Not the same thing as heading, and kept apart from it on purpose: heading is which way the
+    /// phone is pointed (the compass), course is which way it travelled between fixes. A phone
+    /// walking backwards down a hall has both, and they disagree. Course is here because it
+    /// arrives with every fix, needs no compass, and is what draws the walk on the map when the
+    /// compass has nothing — which is most of the time indoors.
+    public var courseDegrees: Double?
 
     public init(at: Date, latitude: Double, longitude: Double,
                 altitudeMeters: Double? = nil, accuracyMeters: Double? = nil,
-                speedMps: Double? = nil) {
+                speedMps: Double? = nil, courseDegrees: Double? = nil) {
         self.at = at
         self.latitude = latitude
         self.longitude = longitude
         self.altitudeMeters = altitudeMeters
         self.accuracyMeters = accuracyMeters
         self.speedMps = speedMps
+        self.courseDegrees = courseDegrees
     }
 }
 

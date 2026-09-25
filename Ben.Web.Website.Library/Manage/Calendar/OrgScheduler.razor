@@ -123,11 +123,11 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Start</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.Start" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.Start" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">End</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.End" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.End" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Type</label>
@@ -437,7 +437,7 @@
 
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Sign-ups close (optional)</label>
-                                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
+                                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
                                 <div class="form-text">Leave empty to allow sign-ups until it starts.</div>
                             </div>
                         </div>

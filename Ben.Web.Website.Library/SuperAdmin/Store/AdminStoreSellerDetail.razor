@@ -1,0 +1,182 @@
+@page "/admin/store/sellers/{SellerId:guid}"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>SuperAdmin — @(_result.Item?.Name ?? "Seller")</PageTitle>
+
+@*
+    One seller's books (store sellers, backlog 251, P10): their earnings, recording a payment made
+    outside the site, voiding one recorded in error, adjustments, and a CSV. A payment covers what
+    this page showed; if earnings changed meanwhile, recording is refused with the new figure.
+*@
+
+<div class="container-fluid px-3" style="max-width:72rem;">
+    <div class="mb-2"><a href="/admin/store/sellers" class="small">← Sellers</a></div>
+    <BenItemState TItem="StoreSellerDetailRecord" Result="_result" Loading="_loading" LoadingText="Loading the seller…" OnRetry="LoadAsync">
+        <ChildContent Context="d">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                <div>
+                    <h3 class="mb-0">@d.Name<HelpLink Slug="site-administration" Anchor="paying-sellers" /></h3>
+                    <div class="small text-secondary">@d.Email</div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary" id="seller-record-payment" disabled="@_busy" @onclick="OpenPayment">Record payment…</button>
+                    <button type="button" class="btn btn-outline-secondary" id="seller-adjust" disabled="@_busy" @onclick="OpenAdjust">Adjustment…</button>
+                    <button type="button" class="btn btn-outline-secondary" id="seller-export" disabled="@_busy" @onclick="ExportAsync">Export CSV</button>
+                </div>
+            </div>
+            @if (_error is not null) { <div class="alert alert-danger" id="seller-refusal">@_error</div> }
+            <SellerEarningsView Earnings="d.Earnings">
+                <Actions Context="p">
+                    @if (p.VoidedUtc is null)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-testid="payout-void" disabled="@_busy" @onclick="@(() => OpenVoid(p))">Void…</button>
+                    }
+                </Actions>
+            </SellerEarningsView>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+<BenModal @bind-Visible="_paying" Title="Record a payment">
+    <ChildContent>
+        @if (_result.Item is { } d)
+        {
+            <p class="small">Pay the seller outside the site — a bank transfer, a check — then record it here. It marks the earnings it covers paid.</p>
+            <div class="form-check mb-1">
+                <input class="form-check-input" type="radio" name="pay-what" id="pay-ready" checked="@(!_payAll)" @onchange="@(() => _payAll = false)" />
+                <label class="form-check-label" for="pay-ready">What's ready: <strong>@StoreMoney.Format(d.Earnings.PayableNow)</strong> — earned up to @d.Earnings.Cutoff.ToString("MM/dd/yyyy"), past the @d.ReturnsWindowDays-day returns window</label>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="radio" name="pay-what" id="pay-all" checked="@_payAll" @onchange="@(() => _payAll = true)" />
+                <label class="form-check-label" for="pay-all">Everything owed: <strong>@StoreMoney.Format(d.Earnings.Owed)</strong> — including what's still inside the returns window</label>
+            </div>
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label small" for="pay-date">Paid on</label>
+                    <BenDateField Id="pay-date" Mode="DateEntryMode.Date" @bind-Value="_paidOn" Width="100%" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small" for="pay-reference">Reference</label>
+                    <input id="pay-reference" class="form-control" maxlength="300" placeholder="Bank transfer 4471" @bind="_reference" @bind:event="oninput" />
+                </div>
+            </div>
+        }
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="pay-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _paying = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="pay-save" disabled="@_busy" @onclick="RecordAsync">Record it</button>
+    </FooterContent>
+</BenModal>
+
+<BenModal @bind-Visible="_adjusting" Title="An adjustment">
+    <ChildContent>
+        <p class="small">A correction the seller will see, with your note. Negative to take money back — charging them for a refund the store gave, say.</p>
+        <label class="form-label small" for="adjust-amount">Amount ($)</label>
+        <input id="adjust-amount" type="number" step="0.01" class="form-control mb-2" style="max-width:10rem;" @bind="_adjustAmount" />
+        <label class="form-label small" for="adjust-note">What it's for</label>
+        <input id="adjust-note" class="form-control" maxlength="300" @bind="_adjustNote" @bind:event="oninput" />
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="adjust-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _adjusting = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="adjust-save" disabled="@_busy" @onclick="AdjustAsync">Add it</button>
+    </FooterContent>
+</BenModal>
+
+<BenModal @bind-Visible="_voiding" Title="Void this payment">
+    <ChildContent>
+        <p class="small">The earnings it covered are owed again. Say why — it stays in the record.</p>
+        <label class="form-label small" for="void-reason">Why</label>
+        <input id="void-reason" class="form-control" maxlength="300" @bind="_voidReason" @bind:event="oninput" />
+        @if (_dialogError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="void-refusal">@_dialogError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _voiding = false)">Keep it</button>
+        <button type="button" class="btn btn-danger" id="void-save" disabled="@_busy" @onclick="VoidAsync">Void it</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid SellerId { get; set; }
+
+    private ItemResult<StoreSellerDetailRecord> _result;
+    private bool _loading = true, _busy, _paying, _adjusting, _voiding, _payAll;
+    private string? _error, _dialogError, _reference, _adjustNote, _voidReason;
+    private DateTime? _paidOn;
+    private decimal? _adjustAmount;
+    private Guid _voidId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreSellerAsync(SellerId);
+        _loading = false;
+    }
+
+    private async Task<bool> RunAsync(Task<(StoreSellerDetailRecord? Result, string? Error)> call, string done)
+    {
+        _busy = true; _dialogError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _dialogError = error ?? "That didn't work."; return false; }
+            _result = ItemResult<StoreSellerDetailRecord>.Ok(saved);
+            Toasts.Success(done);
+            return true;
+        }
+        finally { _busy = false; }
+    }
+
+    private void OpenPayment() { _payAll = false; _paidOn = DateTime.Today; _reference = null; _dialogError = null; _paying = true; }
+
+    private async Task RecordAsync()
+    {
+        if (_result.Item is not { } d) return;
+        var (cutoff, expected) = _payAll ? (DateTime.UtcNow, d.Earnings.Owed) : (d.Earnings.Cutoff, d.Earnings.PayableNow);
+        var paidOn = DateTime.SpecifyKind((_paidOn ?? DateTime.Today).Date, DateTimeKind.Utc);
+        if (await RunAsync(AdminClient.RecordStoreSellerPaymentAsync(SellerId, new RecordSellerPaymentRequest(cutoff, expected, paidOn, _reference)),
+                $"Recorded — {StoreMoney.Format(expected)} to {d.Name}."))
+            _paying = false;
+    }
+
+    private void OpenAdjust() { _adjustAmount = null; _adjustNote = null; _dialogError = null; _adjusting = true; }
+
+    private async Task AdjustAsync()
+    {
+        if (await RunAsync(AdminClient.AdjustStoreSellerAsync(SellerId, new SellerAdjustmentRequest(_adjustAmount ?? 0m, _adjustNote ?? "")), "Adjustment added."))
+            _adjusting = false;
+    }
+
+    private void OpenVoid(SellerPayoutRecord p) { _voidId = p.Id; _voidReason = null; _dialogError = null; _voiding = true; }
+
+    private async Task VoidAsync()
+    {
+        if (await RunAsync(AdminClient.VoidStoreSellerPaymentAsync(SellerId, _voidId, new VoidSellerPaymentRequest(_voidReason ?? "")), "Voided — those earnings are owed again."))
+            _voiding = false;
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var file = await AdminClient.DownloadStoreSellerCsvAsync(SellerId);
+            if (file is null) { _error = "The earnings could not be downloaded."; return; }
+            await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Value.Data), "text/csv", file.Value.FileName);
+        }
+        finally { _busy = false; }
+    }
+}

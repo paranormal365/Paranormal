@@ -1,0 +1,34 @@
+.bc-empty-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+}
+
+.bc-empty {
+    max-width: 22rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius);
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    text-align: center;
+    box-shadow: var(--bc-node-shadow);
+    pointer-events: auto;
+}
+
+.bc-empty__title {
+    margin: 0 0 .5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.bc-empty__hint {
+    margin: 0 0 1rem;
+    color: var(--bc-text-muted);
+    font-size: .875rem;
+}
+
+.bc-empty__actions .btn { min-height: var(--bc-tap); }

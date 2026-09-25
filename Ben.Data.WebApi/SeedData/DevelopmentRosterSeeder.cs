@@ -75,6 +75,16 @@ internal static class DevelopmentRosterSeeder
         // remember to put them back. The seat nobody can sit in is the seat nobody tests.
         var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes", seedPassword);
 
+        // Wren exists for the same reason as Victor, one tier further out: somebody in NO GROUP AT
+        // ALL, which every other seeded person fails to be. She is who the free lane is for — a
+        // person who visits public places, records, and publishes — and until she existed nothing
+        // could drive the door she comes through. Note what is NOT below: no MemberAsync call for
+        // her, anywhere, ever. That absence is the fixture.
+        //
+        // She is deliberately not given a personal organization either. Minting one is the thing
+        // being tested, and a seat that arrives already through the door cannot test the door.
+        _ = await UserAsync(userManager, "wren.ashby@benco.dev", "Wren Ashby", seedPassword);
+
         // IH-08, Ben's 2026-08-26 sweep: Site Roles reported Admin 0 users and Moderator 0, so
         // neither role's behaviour had ever run — including whatever gates the 26 /admin/* routes
         // and the /moderation/media screen. Same reasoning as Victor's Viewer seat above: the
@@ -87,6 +97,12 @@ internal static class DevelopmentRosterSeeder
         var miguel = await UserAsync(userManager, "miguel.santos@benco.dev",   "Miguel Santos", seedPassword);
         await EnsureSiteRoleAsync(userManager, alice,  Ben.Data.Common.Constants.RoleNames.Admin);
         await EnsureSiteRoleAsync(userManager, miguel, Ben.Data.Common.Constants.RoleNames.Moderator);
+
+        // Store sellers (backlog 251): a member who makes and sells her own gear. Her own seat for
+        // the same reason as Alice's and Miguel's — a seller is somebody who sees ONLY their own
+        // items, and an existing seat given the role would carry everything else it already sees.
+        var hazel = await UserAsync(userManager, "hazel.marsh@benco.dev", "Hazel Marsh", seedPassword);
+        await EnsureSiteRoleAsync(userManager, hazel, Ben.Data.Common.Constants.RoleNames.Seller);
 
         var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell", seedPassword);
         var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes", seedPassword);

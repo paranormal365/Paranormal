@@ -1,0 +1,94 @@
+{
+  "id": "evt_3UJLCjL5hGFM4xkH0aRaV6IP",
+  "object": "event",
+  "api_version": "2026-08-26.dahlia",
+  "context": "acct_1UACuLL5hGFM4xkH",
+  "created": 1790289570,
+  "data": {
+    "object": {
+      "id": "pi_3UJLCjL5hGFM4xkH0NIP2hhJ",
+      "object": "payment_intent",
+      "allowed_payment_method_types": null,
+      "amount": 3293,
+      "amount_capturable": 0,
+      "amount_details": {
+        "tip": {}
+      },
+      "amount_received": 0,
+      "application": null,
+      "application_fee_amount": null,
+      "automatic_payment_methods": null,
+      "canceled_at": 1790289570,
+      "cancellation_reason": null,
+      "capture_method": "automatic_async",
+      "client_secret": "pi_redacted_secret_redacted",
+      "confirmation_method": "automatic",
+      "created": 1790289205,
+      "currency": "usd",
+      "customer": null,
+      "customer_account": null,
+      "description": "IsHaunted store order 100195",
+      "excluded_payment_method_types": null,
+      "last_payment_error": null,
+      "latest_charge": null,
+      "livemode": false,
+      "managed_payments": {
+        "enabled": false
+      },
+      "metadata": {
+        "ih_cart": "7944981f-073f-4064-9fc2-5076d3f40387",
+        "ih_order_number": "100195",
+        "ih_store_order": "15cb8fda-22cb-40fb-8d2f-bd5ede2cc409",
+        "ih_tax_calc": "taxcalc_1UJLCiL5hGFM4xkHMLyqq3dG"
+      },
+      "next_action": null,
+      "on_behalf_of": null,
+      "payment_method": null,
+      "payment_method_configuration_details": null,
+      "payment_method_options": {
+        "card": {
+          "installments": null,
+          "mandate_options": null,
+          "network": null,
+          "request_three_d_secure": "automatic"
+        }
+      },
+      "payment_method_types": [
+        "card"
+      ],
+      "payment_record": null,
+      "processing": null,
+      "receipt_email": null,
+      "review": null,
+      "setup_future_usage": null,
+      "shared_payment_granted_token": null,
+      "shipping": {
+        "address": {
+          "city": "Nashville",
+          "country": "US",
+          "line1": "3 Birch Rd",
+          "line2": null,
+          "postal_code": "37203",
+          "state": "TN"
+        },
+        "carrier": null,
+        "name": "Desk Buyer",
+        "phone": "615-555-0177",
+        "tracking_number": null
+      },
+      "source": null,
+      "statement_descriptor": null,
+      "statement_descriptor_suffix": "ORD 100195",
+      "status": "canceled",
+      "transfer_data": null,
+      "transfer_group": null
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 0,
+  "request": {
+    "id": "req_8sWDKh9zm3vWZb",
+    "idempotency_key": "c1215b70-4a65-4951-b45b-15682459ce96"
+  },
+  "type": "payment_intent.canceled"
+}

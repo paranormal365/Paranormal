@@ -71,4 +71,95 @@ public class OrgPublicDefaultPageTests
         Assert.NotNull(home.HomePage);
         Assert.Null(home.Facts);
     }
+
+    // ── The address switches an owner actually set (2026-09-17 audit) ────────────────────────
+    //
+    // "Based in {city}" took the first address by Id with no filter, so an owner could mark an
+    // address Private — and see a grey "Private" badge confirming it — while the group's public
+    // page named that address's city and state anyway.
+
+    private static async Task<(IDbContextFactory<BenDataContext> F, Organization Org)> SeedGroupAsync()
+    {
+        var f = Factory();
+        var me = Guid.NewGuid();
+        var org = new Organization
+        {
+            Id = Guid.NewGuid(), Name = "Address Test Group", UrlName = "address-test",
+            DateCreated = new DateTime(2026, 8, 1),
+        };
+        await using var db = await f.CreateDbContextAsync();
+        db.AppUsers.Add(new AppUser { Id = me, UserName = "a@benco.dev", Email = "a@benco.dev" });
+        db.Organizations.Add(org);
+        await db.SaveChangesAsync();
+        return (f, org);
+    }
+
+    private static async Task AddAddressAsync(
+        IDbContextFactory<BenDataContext> f, Guid orgId,
+        OrganizationAddressVisibility visibility,
+        OrganizationAddressDisplayMode publicMode = OrganizationAddressDisplayMode.FullAddressAndMap)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        db.OrganizationAddresses.Add(new OrganizationAddress
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId,
+            StreetAddress1 = "1 Main St", City = "Franklin", State = "TN", ZipCode = "37064",
+            Visibility = visibility, PublicDisplayMode = publicMode,
+            CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<OrgPublicFacts> FactsAsync(IDbContextFactory<BenDataContext> f, string slug)
+    {
+        var result = await new OrgPublicController(f).GetHome(slug, default);
+        var home = Assert.IsType<OrgPublicHomeResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        return Assert.IsType<OrgPublicFacts>(home.Facts);
+    }
+
+    [Theory]
+    [InlineData(OrganizationAddressVisibility.Private)]
+    [InlineData(OrganizationAddressVisibility.MembersOnly)]
+    [InlineData(OrganizationAddressVisibility.SpecificMembers)]
+    public async Task An_address_that_is_not_public_does_not_name_the_city(
+        OrganizationAddressVisibility visibility)
+    {
+        var (f, org) = await SeedGroupAsync();
+        await AddAddressAsync(f, org.Id, visibility);
+
+        Assert.Null((await FactsAsync(f, "address-test")).AreaServed);
+    }
+
+    [Fact]
+    public async Task A_public_address_hidden_from_the_public_page_does_not_name_the_city()
+    {
+        var (f, org) = await SeedGroupAsync();
+        await AddAddressAsync(f, org.Id, OrganizationAddressVisibility.Public,
+                              OrganizationAddressDisplayMode.Hidden);
+
+        Assert.Null((await FactsAsync(f, "address-test")).AreaServed);
+    }
+
+    [Fact]
+    public async Task A_public_address_still_names_the_city()
+    {
+        var (f, org) = await SeedGroupAsync();
+        await AddAddressAsync(f, org.Id, OrganizationAddressVisibility.Public);
+
+        Assert.Equal("Franklin, TN", (await FactsAsync(f, "address-test")).AreaServed);
+    }
+
+    /// <summary>
+    /// RegionOnly withholds the street and the exact pin, not the region — and a city and state
+    /// are the region. So it still answers, which is what the owner asked for.
+    /// </summary>
+    [Fact]
+    public async Task A_region_only_address_still_names_the_city()
+    {
+        var (f, org) = await SeedGroupAsync();
+        await AddAddressAsync(f, org.Id, OrganizationAddressVisibility.Public,
+                              OrganizationAddressDisplayMode.RegionOnly);
+
+        Assert.Equal("Franklin, TN", (await FactsAsync(f, "address-test")).AreaServed);
+    }
 }

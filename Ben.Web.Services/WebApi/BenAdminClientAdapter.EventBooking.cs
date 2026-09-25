@@ -185,6 +185,13 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/pass/email",
                new { }, token);
 
+    public Task<(TourScanResult? Result, string? Error)> ScanTourPassAsync(
+        Guid orgId, Guid eventId, string code, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TourScanResult>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/tour-door/scan",
+               new { Token = code }, token);
+
     public Task<(HostedEventScanResult? Result, string? Error)> ScanEventPassAsync(
         Guid orgId, Guid eventId, string code, bool checkIn, Guid? nightId = null,
         CancellationToken token = default)

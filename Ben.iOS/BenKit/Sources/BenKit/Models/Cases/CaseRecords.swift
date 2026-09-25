@@ -6,11 +6,34 @@ import Foundation
 
 /// Where a case is in its life. Append-only on the server; `unknown` absorbs anything added
 /// later so a new status never breaks decoding.
+/// Where a case is in its life, as the server counts it.
+///
+/// **These are the server's numbers** — `Ben.Data.Common.Enums.CaseStatus`, the same nine values
+/// `GroupCaseStatus` carries. `MyCaseController` returns that type unchanged (its records declare
+/// `Ben.Data.Common.Enums.CaseStatus` outright), so there is no separate client enum and never was.
+///
+/// This used to declare a four-value "client's view" with different numbers, and the belief was
+/// written down in `GroupCaseRecords.swift` — "the group's 2 is Active; the client's 2 is Closed"
+/// — which is why nobody rechecked it. The result was not a mislabel but an inversion (found in
+/// the 2026-09-17 audit):
+///
+/// - a case the server called **Active** (2) was shown to its client as **Closed**
+/// - one being written up, **Summarized** (3), was shown as **Declined**
+/// - every genuinely finished state — Closed, Public, Haunted, Transferred — fell through to "—"
+///
+/// And it gated a control: the detail view hid "Log what happened" while `status != .closed` was
+/// false, so the button disappeared on exactly the actively-investigated cases where a client most
+/// needs it, and appeared on closed ones.
 public enum CaseStatus: Int, Codable, Sendable, Equatable {
-    case pending = 0
-    case active = 1
-    case closed = 2
-    case declined = 3
+    case proposed = 0
+    case accepted = 1
+    case active = 2
+    case summarized = 3
+    case closed = 4
+    case publicCase = 5
+    case haunted = 6
+    case transferred = 7
+    case paused = 8
     case unknown = -1
 
     public init(from decoder: Decoder) throws {
@@ -18,13 +41,36 @@ public enum CaseStatus: Int, Codable, Sendable, Equatable {
         self = CaseStatus(rawValue: raw) ?? .unknown
     }
 
+    /// What a CLIENT is told, which is not always the group's word for it.
+    ///
+    /// "Summarised" is the group's process; the client is waiting to hear, so they are told that
+    /// instead. "Public" and "Haunted" are outcomes rather than states, and to the person whose
+    /// house it was the useful fact is that the work is finished.
     public var label: String {
         switch self {
-        case .pending: "Pending"
-        case .active: "Active"
+        case .proposed: "Waiting to be accepted"
+        case .accepted: "Accepted"
+        case .active: "Being investigated"
+        case .summarized: "Being written up"
         case .closed: "Closed"
-        case .declined: "Declined"
+        case .publicCase: "Closed · published"
+        case .haunted: "Closed · called haunted"
+        case .transferred: "Moved to another group"
+        case .paused: "Paused"
         case .unknown: "—"
+        }
+    }
+
+    /// Whether this case is finished, so nothing more is expected from either side.
+    ///
+    /// Paused is deliberately NOT finished: a pause is the group's billing problem, and a client's
+    /// own account of what is happening in their house should not stop being recordable because
+    /// somebody else did not renew. The server agrees — it gates logging on being the case's
+    /// client and on nothing else.
+    public var isFinished: Bool {
+        switch self {
+        case .closed, .publicCase, .haunted, .transferred: true
+        default: false
         }
     }
 }
@@ -134,14 +180,24 @@ public struct MyCaseInvestigation: Sendable, Codable, Equatable, Identifiable {
 }
 
 /// Somebody the client can contact about this case.
+///
+/// **Matches `CaseContactRecord(Guid AppUserId, string DisplayName, bool IsFallback)`.** It used to
+/// declare `id`, `roleName`, `email` and `phone` — four names the server has never sent — so only
+/// `displayName` ever decoded, and the "Who to contact" section rendered names with nothing to
+/// contact them by: the `mailto:` and `tel:` links could not appear, because both values were
+/// always nil (2026-09-17 audit).
+///
+/// `identity` was `id ?? UUID()`, and `id` was always nil — so it minted a fresh UUID on every
+/// access and `ForEach(id: \.identity)` rebuilt the whole section on every diff.
 public struct MyCaseContact: Sendable, Codable, Equatable, Identifiable {
-    public var id: UUID?
-    public var displayName: String?
-    public var roleName: String?
-    public var email: String?
-    public var phone: String?
+    public var appUserId: UUID
+    public var displayName: String
 
-    public var identity: UUID { id ?? UUID() }
+    /// The case manager standing in because no explicit contact is set. Worth saying out loud:
+    /// "the person looking after your case" is a different promise from a named contact.
+    public var isFallback: Bool
+
+    public var id: UUID { appUserId }
 }
 
 /// The client's full view of one case.
@@ -162,7 +218,13 @@ public struct MyCaseDetail: Sendable, Codable, Equatable, Identifiable {
     /// False for a co-client the case was shared with — they may read and log, but the
     /// primary client is the one the group answers to.
     public var isPrimaryClient: Bool
-    public var contacts: [MyCaseContact]
+    /// Optional, because the C# parameter is `IReadOnlyList<CaseContactRecord>? Contacts = null`.
+    ///
+    /// It was declared non-optional, and `FixtureNullDriftTests` asserted the key was required
+    /// with the note "C# writes an empty collection as []" — a recorded claim the declaration
+    /// contradicts. Today the server always fills it, so nothing failed; but a null would have
+    /// thrown and taken the whole case-detail screen with it, not one section (2026-09-17 audit).
+    public var contacts: [MyCaseContact]?
 
     public var id: UUID { caseId }
 

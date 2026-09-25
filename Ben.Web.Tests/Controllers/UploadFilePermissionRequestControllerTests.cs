@@ -374,7 +374,12 @@ public class UploadFilePermissionRequestControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
-    // ── Cancel (unchanged reference pattern) ─────────────────────────────────
+    // ── Cancel ───────────────────────────────────────────────────────────────
+    //
+    // The canceller is the TOKEN now, not a query parameter (2026-09-17 audit). It used to read
+    // cancelledByAppUserId off the query string and compare it against the request's own
+    // requester, so the check passed for anybody who could name that id and the audit row
+    // recorded whatever the caller claimed.
 
     [Fact]
     public async Task Cancel_NonRequester_ReturnsForbid()
@@ -386,8 +391,49 @@ public class UploadFilePermissionRequestControllerTests
         var reqId        = await SeedRequestAsync(factory, fileId, requesterId);
         var ctrl         = Build(factory, Guid.NewGuid());
 
-        var result = await ctrl.Cancel(reqId, Guid.NewGuid(), default);
+        var result = await ctrl.Cancel(reqId, default);
 
         Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// And naming the requester no longer helps: the identity comes from the bearer, so the id a
+    /// caller supplies is not consulted at all.
+    /// </summary>
+    [Fact]
+    public async Task Cancel_SomebodyElseClaimingToBeTheRequester_IsStillForbidden()
+    {
+        var factory     = CreateFactory();
+        var fileId      = await SeedFileAsync(factory, Guid.NewGuid());
+        var requesterId = Guid.NewGuid();
+        var reqId       = await SeedRequestAsync(factory, fileId, requesterId);
+
+        // Signed in as somebody else entirely, and the requester's id is known to them.
+        var result = await Build(factory, Guid.NewGuid()).Cancel(reqId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(
+            FilePermissionRequestStatus.Pending,
+            (await db.UploadFilePermissionRequests.FirstAsync(r => r.Id == reqId)).RequestStatus);
+    }
+
+    [Fact]
+    public async Task Cancel_Requester_WithdrawsTheirOwnRequest()
+    {
+        var factory     = CreateFactory();
+        var fileId      = await SeedFileAsync(factory, Guid.NewGuid());
+        var requesterId = Guid.NewGuid();
+        var reqId       = await SeedRequestAsync(factory, fileId, requesterId);
+
+        var result = await Build(factory, requesterId).Cancel(reqId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(
+            FilePermissionRequestStatus.Cancelled,
+            (await db.UploadFilePermissionRequests.FirstAsync(r => r.Id == reqId)).RequestStatus);
     }
 }

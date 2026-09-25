@@ -31,7 +31,7 @@ public class CaseReportControllerTests
     private static CaseReportController Build(IDbContextFactory<BenDataContext> factory, Guid userId,
         bool isSuperAdmin = false)
     {
-        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
+        var ctrl = new CaseReportController(factory, new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, userId.ToString())];
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, Ben.Data.Common.Constants.RoleNames.SuperAdmin));
         ctrl.ControllerContext = new ControllerContext

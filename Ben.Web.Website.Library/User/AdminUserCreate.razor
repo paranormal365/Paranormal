@@ -39,6 +39,7 @@
         <div class="col-md-6">
             <label class="form-label fw-semibold" for="adminusercreate-username-defaults-to-email-0b90">Username <span class="text-secondary fw-normal">(defaults to email)</span></label>
             <input id="adminusercreate-username-defaults-to-email-0b90" type="text" class="form-control" placeholder="Leave blank to use email" @bind="@_form.UserName" @bind:event="oninput" />
+            <div class="form-text">Letters, digits and - . _ @@ + only — no spaces. This is the sign-in name, not the name people see.</div>
         </div>
 
         <div class="col-12">
@@ -106,14 +107,20 @@
             IsEmailConfirmed: _form.IsEmailConfirmed,
             IsSuperAdmin:     _form.IsSuperAdmin);
 
-        var created = await AdminClient.CreateUserAsync(request);
+        try
+        {
+            var (created, error) = await AdminClient.CreateUserAsync(request);
+            if (created is not null)
+            {
+                NavManager.NavigateTo($"/admin/users/{created.Id}");
+                return;
+            }
 
-        _isSaving = false;
-
-        if (created is not null)
-            NavManager.NavigateTo($"/admin/users/{created.Id}");
-        else
-            _errorMessages = ["The server rejected the request. Check that the email is not already in use and the password meets the complexity requirements."];
+            // The server's own reason when it gave one — it names the actual problem, where a guess at the likely ones
+            // sent a SuperAdmin checking the email and the password while the username held a space.
+            _errorMessages = [error ?? "The account could not be created, and the server did not say why. Try again in a moment."];
+        }
+        finally { _isSaving = false; }
     }
 
     private List<string> Validate()

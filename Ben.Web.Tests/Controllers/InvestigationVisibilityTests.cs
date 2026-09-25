@@ -251,4 +251,91 @@ public class InvestigationVisibilityTests
         Assert.Null(InvestigationVisibilityFilter.Reject(
             InvestigationVisibility.GroupOnly, new Place { Kind = PlaceKind.PrivateResidence }));
     }
+
+    // ── What the plan decides, on top of what the place decides (2026-09-17) ──
+
+    private const string Why = "the sentence the plan refuses with";
+
+    /// <summary>
+    /// Ben, 2026-09-17: an account that pays nothing shares what it finds at a public location with
+    /// everyone. So the free lane starts one notch wider than the place alone would put it.
+    /// </summary>
+    [Fact]
+    public void An_unpaid_accounts_landmark_visit_starts_public()
+    {
+        var landmark = new Place { Kind = PlaceKind.PublicLocation };
+
+        Assert.Equal(InvestigationVisibility.Public,
+            InvestigationVisibilityFilter.DefaultFor(landmark, publicByDefault: true));
+
+        // And a paying one is unchanged — the place decides, as it always did.
+        Assert.Equal(InvestigationVisibility.PlaceInvestigators,
+            InvestigationVisibilityFilter.DefaultFor(landmark, publicByDefault: false));
+    }
+
+    /// <summary>
+    /// A home is untouched by the plan rule, in both halves. Nobody's house is published because a
+    /// subscription lapsed, and a missing payment is not a client's consent.
+    /// </summary>
+    [Fact]
+    public void An_unpaid_accounts_home_visit_still_stays_with_the_group()
+    {
+        var home = new Place { Kind = PlaceKind.PrivateResidence };
+
+        Assert.Equal(InvestigationVisibility.GroupOnly,
+            InvestigationVisibilityFilter.DefaultFor(home, publicByDefault: true));
+
+        Assert.Null(InvestigationVisibilityFilter.Reject(
+            InvestigationVisibility.GroupOnly, home, publicByDefault: true, whyNotNarrower: Why));
+
+        // With no place recorded at all, likewise: there is nothing to say it is public.
+        Assert.Equal(InvestigationVisibility.GroupOnly,
+            InvestigationVisibilityFilter.DefaultFor(null, publicByDefault: true));
+        Assert.Null(InvestigationVisibilityFilter.Reject(
+            InvestigationVisibility.GroupOnly, null, publicByDefault: true, whyNotNarrower: Why));
+    }
+
+    [Theory]
+    [InlineData(InvestigationVisibility.GroupOnly)]
+    [InlineData(InvestigationVisibility.PlaceInvestigators)]
+    public void An_unpaid_account_may_not_narrow_a_landmarks_visit(InvestigationVisibility narrower)
+    {
+        var landmark = new Place { Kind = PlaceKind.PublicLocation };
+
+        Assert.Equal(Why, InvestigationVisibilityFilter.Reject(
+            narrower, landmark, publicByDefault: true, whyNotNarrower: Why));
+
+        // The same choice is fine for somebody paying for it.
+        Assert.Null(InvestigationVisibilityFilter.Reject(
+            narrower, landmark, publicByDefault: false, whyNotNarrower: Why));
+    }
+
+    /// <summary>
+    /// The place's own refusals still come first, and still win. A home may not be published
+    /// whatever the plan says, and the sentence the reader gets is the one about the home.
+    /// </summary>
+    [Fact]
+    public void The_places_refusal_outranks_the_plans()
+    {
+        var home = new Place { Kind = PlaceKind.PrivateResidence };
+
+        var said = InvestigationVisibilityFilter.Reject(
+            InvestigationVisibility.Public, home, publicByDefault: true, whyNotNarrower: Why);
+
+        Assert.NotNull(said);
+        Assert.NotEqual(Why, said);
+        Assert.Contains("private residence", said!);
+    }
+
+    [Fact]
+    public void Public_is_always_allowed_at_a_landmark_however_the_plan_stands()
+    {
+        var landmark = new Place { Kind = PlaceKind.PublicLocation };
+
+        foreach (var unpaid in new[] { true, false })
+        {
+            Assert.Null(InvestigationVisibilityFilter.Reject(
+                InvestigationVisibility.Public, landmark, unpaid, Why));
+        }
+    }
 }

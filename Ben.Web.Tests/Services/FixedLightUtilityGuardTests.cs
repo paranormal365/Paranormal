@@ -26,9 +26,18 @@ namespace Ben.Web.Tests.Services;
 /// <c>--bs-light-border-subtle</c>, and this theme <i>does</i> redefine all three (to #343a40,
 /// #f8f9fa and #495057) — so the fifteen <c>alert alert-light</c> empty states were always
 /// theme-aware and were left alone. <c>text-dark</c> on <c>bg-warning</c> or <c>bg-info</c> is
-/// also fine: neither of those backgrounds changes between themes, so dark text on them is
-/// correct in both, which is why 65 of the 76 <c>text-dark</c> uses needed no change. Guessing
-/// from the class name rather than reading the compiled CSS would have "fixed" 80 working things.
+/// outside what THIS guard polices: neither background changes between themes, so neither is a
+/// light-only utility. Guessing from the class name rather than reading the compiled CSS would
+/// have "fixed" 80 working things.</para>
+///
+/// <para><b>Theme-independent is not the same as readable, and this file used to say it was.</b>
+/// The sentence above once ended "so dark text on them is correct in both". That was true for
+/// <c>bg-warning</c> (#aaa256, an olive — dark text reads 8.01:1) and false for <c>bg-info</c>:
+/// this template remaps <c>--bs-info</c> to #66366c, a deep purple, where dark text is 2.31:1 and
+/// white is 9.09:1. Thirty-four call sites carried the pair. They were corrected on 2026-09-22 and
+/// <see cref="DarkTextIsNeverPairedWithTheInfoBackground"/> keeps them corrected. Recorded at
+/// length because an exemption whose stated reason has quietly stopped being true is worse than
+/// no exemption — this file says so itself, two paragraphs down.
 /// </para>
 /// </remarks>
 public sealed class FixedLightUtilityGuardTests
@@ -42,7 +51,8 @@ public sealed class FixedLightUtilityGuardTests
     };
 
     /// <summary>
-    /// Backgrounds that are the same colour in both themes, so dark text on them is deliberate.
+    /// Backgrounds that are the same colour in both themes, so a fixed text colour on them is not
+    /// a THEME fault. Whether it is a readable one is a separate question — see the remarks.
     /// </summary>
     private static readonly string[] ThemeIndependentBackgrounds = ["bg-warning", "bg-info"];
 
@@ -96,6 +106,24 @@ public sealed class FixedLightUtilityGuardTests
             .Select(p => Path.Combine(RepoRoot().FullName, p))
             .Where(Directory.Exists)
             .SelectMany(d => Directory.EnumerateFiles(d, "*.razor", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
+
+    /// <summary>
+    /// Razor AND C#, across the three projects that write markup classes.
+    /// </summary>
+    /// <remarks>
+    /// Wider than <see cref="RazorFiles"/> because class strings are not only in markup: the
+    /// status-to-badge mapping that carried a third of the text-dark/bg-info pairs lives in
+    /// Ben.Web.Services as a C# switch, and a scan of .razor alone would have reported it clean.
+    /// </remarks>
+    private static IEnumerable<string> SourceFiles() =>
+        new[] { "Ben.Web.Website.Library", "Ben.Web.Website", "Ben.Web.Services" }
+            .Select(p => Path.Combine(RepoRoot().FullName, p))
+            .Where(Directory.Exists)
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+            .Where(f => f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+                     || f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
                      && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
 
@@ -183,5 +211,37 @@ public sealed class FixedLightUtilityGuardTests
                 Banned.Keys.Any(cls => source.Split('\n').Any(l => UsesClass(l, cls))),
                 $"'{name}' no longer uses a fixed-light utility — remove it from Allowed.");
         }
+    }
+
+    /// <summary>
+    /// Nothing pairs <c>text-dark</c> with <c>bg-info</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Bootstrap's own <c>--bs-info</c> is a bright cyan and dark text on it is right, which
+    /// is why the pairing looks idiomatic and spread to thirty-four call sites. This template
+    /// remaps <c>--bs-info</c> to #66366c, a deep purple: dark text on it measures 2.31:1 where
+    /// small text needs 4.5:1, and white measures 9.09:1. Dropping <c>text-dark</c> is the whole
+    /// fix, because a badge with no text colour inherits the white the background expects.</para>
+    ///
+    /// <para>Scanned as source rather than measured in a browser on purpose: the pairing is
+    /// written in C# helpers and in ternaries inside markup, so it reaches the screen from places
+    /// no walk reliably opens. Six of the thirty-four were on administration pages alone.</para>
+    /// </remarks>
+    [Fact]
+    public void DarkTextIsNeverPairedWithTheInfoBackground()
+    {
+        var offenders = new List<string>();
+
+        foreach (var file in SourceFiles())
+        {
+            var text = File.ReadAllText(file);
+            foreach (var pair in new[] { "bg-info text-dark", "text-dark bg-info" })
+                if (text.Contains(pair, StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)} — \"{pair}\"");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "text-dark on bg-info is 2.31:1 against this template's purple. Drop text-dark; the "
+          + "background already expects white:\n  " + string.Join("\n  ", offenders));
     }
 }

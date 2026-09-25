@@ -1,0 +1,81 @@
+@*
+    A link to another board on the case, and optionally to one card on it.
+
+    Open is a BUTTON, not an anchor: boardGestures.js already lets a button inside a block escape the
+    drag and the selection (it is how a link card's Open works), where a bare anchor would fight the
+    board for the pointer.
+
+    Only a published board can be linked, so a card whose target has gone says so where it stands and
+    refuses to go anywhere. Ben, 2026-09-18: "when clicked, it should pop a message up saying the
+    published page or board has been deleted or no longer exists."
+*@
+@inherits BlockRendererBase
+@if (Editing)
+{
+    <div class="bc-boardlink__edit">
+        <p class="bc-boardlink__hint">@(Named ? Link.Title : "Pick a board from the case.")</p>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Pick">
+            <BcIcon Name="book-open" /> @(Named ? "Change board" : "Choose a board")
+        </button>
+    </div>
+}
+else if (!Named)
+{
+    <p class="bc-boardlink bc-boardlink--empty">Double-click to choose a board.</p>
+}
+else
+{
+    <div class="bc-boardlink @(Missing ? "bc-boardlink--gone" : null)">
+        <span class="bc-boardlink__icon" aria-hidden="true"><BcIcon Name="book-open" /></span>
+        <span class="bc-boardlink__text">
+            <span class="bc-boardlink__title">@Link.Title</span>
+            @if (!string.IsNullOrWhiteSpace(Link.NodeTitle))
+            {
+                <span class="bc-boardlink__card">→ @Link.NodeTitle</span>
+            }
+            @if (Missing)
+            {
+                <span class="bc-boardlink__gone">This board no longer exists</span>
+            }
+        </span>
+        @if (!Missing)
+        {
+            <button type="button" class="bc-boardlink__open btn btn-sm btn-outline-primary"
+                    aria-label="@($"Open {Link.Title}")" title="@($"Open {Link.Title}")" @onclick="Open">
+                Open
+            </button>
+        }
+        else
+        {
+            @* Still a button, and it still says the sentence: a dead link that did nothing at all
+               would read as the board being broken rather than the target being gone. *@
+            <button type="button" class="bc-boardlink__open btn btn-sm btn-outline-secondary"
+                    aria-label="@($"{Link.Title} no longer exists")" @onclick="SayItIsGone">
+                Gone
+            </button>
+        }
+    </div>
+}
+@code {
+    [Inject] private BoardLinks Boards { get; set; } = default!;
+
+    private BoardData Link => Data as BoardData ?? new BoardData();
+
+    private bool Named => Link.DocumentId != Guid.Empty;
+
+    /// <summary>
+    /// Whether the board this card names is no longer among the case's published boards.
+    /// </summary>
+    /// <remarks>
+    /// Answered from a list the session already fetched, so a board of twenty links does not make
+    /// twenty requests. Unknown reads as present: a card greyed out because a request had not come
+    /// back yet would be worse than one that says "gone" a moment late.
+    /// </remarks>
+    private bool Missing => Named && Boards.IsKnownMissing(Link.DocumentId);
+
+    private Task Open() => Boards.FollowAsync(Link);
+
+    private void SayItIsGone() => Boards.SayMissing(Link);
+
+    private Task Pick() => Boards.PickAsync(Node.Id);
+}

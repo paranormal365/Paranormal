@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>IsHaunted.com SideCar - tile icons</title>
+<!--
+  The square tile icons. make-poster.ps1 renders this ONCE at 1200x1200 and downscales to
+  300x300, 150x150 and 71x71 - Chrome will not honour a window as small as a tile (it returned
+  a blank 150x150 and an off-centre 300x300), and downsampling a large render beats rasterising
+  at 71px anyway.
+
+  THESE ARE NOT TRANSPARENT, AND MUST NOT BE. The haunted house in the logo is drawn in NEGATIVE
+  SPACE - it is not a filled shape, it is the dark ground showing through between the ghost and
+  the green ring. Composite this logo onto anything light and the house disappears entirely while
+  the white ghost dissolves into the background; only the ring and two eyes survive. Proven by
+  rendering the SVG side by side on white and on #212529 before choosing.
+
+  So the ground is baked in at #212529 - the site's own theme colour, the same one
+  Ben.Web.Website/Services/WebAppManifest.cs hands to the browser chrome. If the logo is ever
+  redrawn with an opaque disc behind the ghost, this decision is worth revisiting; until then it
+  is load-bearing.
+
+  The artwork carries its own margin: the ring occupies about 76% of the 627x627 viewBox, so the
+  image is set near full-bleed here and the mark still lands inside a tile's safe area.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  body {
+    background: #212529;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  img {
+    width: 94%;
+    height: 94%;
+  }
+
+</style>
+</head>
+<body>
+  <img src="logo.svg" alt="" />
+</body>
+</html>

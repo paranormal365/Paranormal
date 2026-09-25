@@ -112,6 +112,17 @@ with the distance dropdown.
 *Each tab carries its count, so you can see the shape of what was found before opening anything.
 A tab only appears when there is something behind it.*
 
+**Places** is the fourth tab, and it is a different kind of answer from the other three. A place is a
+location rather than an organisation or a date — a cave, a mill, a hotel — and the tab lists the
+ones near you that groups have actually published work at. Opening one shows everything anybody has
+shared about that location: which groups have investigated there, what they concluded, recorded
+sessions, photographs from events held there, and what visitors have posted.
+
+A place only appears once there is something to read at it. A location gets a record the moment the
+first group types its address, so listing every one of them would be a directory of addresses
+rather than somewhere worth going. **Private residences never appear**, whatever has happened at
+them.
+
 Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
 Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
 own name, so it is the same colour here, on the group's page, and on the tour's own page.
@@ -309,6 +320,82 @@ Already signed in? **Profile → Security → Password** does the same job witho
 trip: it offers *Add password* if your account has none, and an ordinary change-password form if
 it does.
 
+## An account somebody else made for you
+
+Sometimes an account exists before you ever asked for one — somebody at IsHaunted.com sets one up
+so you can be added to something. When that happens you get an email saying so, naming who made it.
+
+**Read it even if you were expecting it.** The account was created with a password somebody else
+typed, which means for as long as that password stands, the only person who knows how to get in is
+not you. The email carries a button that lets you choose your own. Doing that replaces theirs, and
+from that moment the account is only yours.
+
+If you were **not** expecting it, choosing a password is still the right first move — it takes the
+account out of anybody else's hands while you work out what happened. Reply to the email if you
+would rather it was removed altogether.
+
+This is one of the few emails you cannot turn off. "An account exists in your name" is not a
+preference, and somebody who had switched everything off would never find out.
+
+## Public locations
+
+Some places are not anybody's house — a landmark, a cemetery, a bridge, a business that lets
+people in. Anyone signed in can put one on the map: **Add a public location**, on the Places tab
+of what's near you.
+
+Give it a name and a town. A street helps, and is what stops two people naming the same building
+from ending up with two pages for it — if the address is already here you are taken to the page
+that exists rather than making a second one.
+
+**Homes are not added this way.** A private residence gets its page through the group a client
+invited, because somebody has to have asked. There is no way to type a home address here and
+publish a page about it, and that is on purpose.
+
+![A public location's page](/help/media/getting-started/public-location.png)
+
+### Adding what you recorded
+
+On a public location's page, anybody signed in can add a photograph, a recording or a video, with
+a line saying what it is — where in the building, what time, what to listen for. It joins the
+evidence for that place alongside what groups have published from their own investigations.
+
+Everything added is looked at before it appears. Most things go straight on; if yours is held, the
+page tells you so rather than pretending it is showing. You can take back anything you added.
+
+### The place itself
+
+A public location's page has room for what the place **is** — when it was built, who lived there,
+what it is now. Anybody signed in can write it, and anybody after them can improve it. It is plain
+text on purpose: a page any stranger reads is not somewhere a stray link or a pasted layout should
+be able to land.
+
+You can also add **photographs of the building** — the frontage, the grounds, the rooms in
+daylight. Choose "a photograph of the place itself" when you add it.
+
+**These are kept apart from evidence, and that is the whole point.** A daylight photograph of a
+staircase showing a reader what the house looks like, and a photograph of the same staircase
+somebody thinks has a figure on it, are two different claims. Pictures of the place are never
+voted on and never counted — mixed in with evidence, every number on the page would be wrong and
+nobody could tell what was being asserted.
+
+### What the evidence says
+
+Anybody signed in can vote on a piece of evidence — **something here**, **can't tell**, or **not
+convinced**. The place's page adds those up above the list: how many pieces of evidence it holds,
+how many votes have been cast, and what share of opinion falls each way.
+
+A file counts **once**, however it got there. The same photograph published in an investigation and
+added to the place directly is one piece of evidence, not two — otherwise a place would look like
+it held more than it does.
+
+**There is no league table.** A place shows its own figures and the site does not rank one property
+against another. These are real buildings with real owners, and "the third most haunted house in
+Tennessee" is a claim about them that a pile of votes is not entitled to make.
+
+The overall number is a simple sum — **+1** for something here, **0** for can't tell, **−1** for not
+convinced — and it is always shown beside the number of votes, because a score with no weight
+behind it says nothing.
+
 ## Empty, or broken?
 
 A list that shows nothing is telling you one of two different things, and the page says which.
@@ -421,6 +508,69 @@ baseline** — those tabs appear when the group hands you a role that opens them
 an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior Investigator*
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.
+
+## Investigating on your own
+
+You do not need a group. Open any **public location's** page — a landmark, a cemetery, a museum —
+and, signed in with no group of your own, it offers **Start investigating on your own**.
+
+Pressing it explains the bargain before anything happens, and then does two things at once: it
+creates a private space of your own to keep investigations in, and it opens the form to schedule
+your first visit to the place you were already looking at. The space is free, it is yours, nobody
+else joins it, and it never appears in any list of groups — it exists so the rest of the site has
+somewhere to hang your work, because investigations, evidence and reports all belong to something.
+
+![Starting on your own](/help/media/getting-started/investigate-alone.png)
+*What the button explains before it does anything: a space of your own, free, and what you record at
+a public place is public.*
+
+**What you record at a public location is public.** That is the bargain and it is worth
+understanding before you start: your visit joins that place's own page, where anybody can read it.
+One person's night somewhere is an anecdote; the same place recorded by eleven people is a record
+worth having, and free accounts are what fill it. A plan is what makes your work yours instead —
+see [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+Somebody's home is never part of this. Private-residence work is client work, it belongs to the
+paid lane, and a home's page offers none of these buttons.
+
+You can also simply **post** about a public place, with no space and no visit: see
+[Posting about a place](the-feed#posting-about-a-place). And what you record on the phone can be
+published to a place's archive the same way — see [the mobile apps](the-mobile-apps).
+
+## How much you can store
+
+A free account has a **storage allowance**, and everything you keep to yourself counts towards it:
+recordings, photographs, video projects, equipment pictures, anything you add to a public
+location, anything you post. The figure is the same for everybody and a site administrator can
+change it.
+
+**Contributing gives the space back.** A recording published to a public location's archive stops
+counting against you, because it has earned its place — it is what makes the archive worth reading
+to somebody who has never been there. A recording nobody but you will ever see does not. So the
+allowance is a nudge rather than a bill: contribute and your room comes back.
+
+**What does not count.** Work that belongs to a group — a case's files, a group's equipment — is
+the group's, not yours, and never counts against you. Nor does the old version of a file you have
+replaced: cutting a long recording down to a short one lowers what you are using, as you would
+expect. And if you belong to a group on a paid plan, none of this applies to you at all.
+
+**What does count, and is worth knowing:** a clip you cut from a recording is a second file. If
+you keep the original as well — which most people want to — you are keeping both, and both count.
+Deleting either gives its space straight back.
+
+### Being told before you run out
+
+You do not have to watch a number. When you have used about 90% of your allowance the site sends
+you a message saying so, with nothing to do yet. If you get to 95% it sends a stronger one,
+because the next upload may be refused.
+
+Each of those arrives **once**. If you clear some space and drop back under 90%, the site forgets
+it warned you — so if you fill up again later, you will be told again rather than meeting the
+limit in silence.
+
+Three things make room, and the messages say so: publish a recording to a public location, delete
+files you no longer need, or join a group on a paid plan, which lifts the limit entirely. Nothing
+is ever deleted to make room — the limit is on what you can add, not on what you already have.
 
 ## A group's own pages
 

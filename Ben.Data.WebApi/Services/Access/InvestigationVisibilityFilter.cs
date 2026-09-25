@@ -80,6 +80,27 @@ public static class InvestigationVisibilityFilter
     };
 
     /// <summary>
+    /// The scope a new investigation starts at, given where it happened and whether the group pays.
+    /// </summary>
+    /// <param name="place">Where the visit happened, or null when nothing is recorded yet.</param>
+    /// <param name="publicByDefault">
+    /// True when the group pays nothing, from <c>PaidPlan.PublicByDefaultAsync</c>.
+    /// </param>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: an account that pays nothing shares what it finds at a public place
+    /// with everyone. So at a landmark the free lane starts at <see cref="InvestigationVisibility.Public"/>
+    /// rather than at fellow investigators, and <see cref="Reject"/> refuses to narrow it.</para>
+    ///
+    /// <para><b>A private residence is untouched.</b> It stays with the group whatever the plan says.
+    /// Publishing somebody's home is theirs to agree to, and a missing subscription is not their
+    /// consent.</para>
+    /// </remarks>
+    public static InvestigationVisibility DefaultFor(Place? place, bool publicByDefault)
+        => publicByDefault && place?.Kind == PlaceKind.PublicLocation
+            ? InvestigationVisibility.Public
+            : DefaultFor(place);
+
+    /// <summary>
     /// Whether a scope may be applied to an investigation at this place, and why not if it may not.
     /// </summary>
     /// <returns>An error message for a 400, or null when the choice is allowed.</returns>
@@ -101,6 +122,40 @@ public static class InvestigationVisibilityFilter
             // setting would silently behave as group-only.
             return "This investigation has no location yet, so it cannot be shared with others who "
                  + "have investigated the same place. Set where it happened first.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a scope may be applied here, taking the group's plan into account as well as the place.
+    /// </summary>
+    /// <param name="visibility">The scope being asked for.</param>
+    /// <param name="place">Where the visit happened, or null.</param>
+    /// <param name="publicByDefault">True when the group pays nothing.</param>
+    /// <param name="whyNotNarrower">
+    /// The sentence to refuse with when an unpaid account tries to narrow a public place's visit,
+    /// from <c>PaidPlan.WhyCannotNarrowInvestigationAsync</c>. Passed in rather than looked up here
+    /// because this class knows nothing about subscriptions and should not learn.
+    /// </param>
+    /// <returns>An error message for a 400, or null when the choice is allowed.</returns>
+    /// <remarks>
+    /// Both create doors and both update paths call THIS overload. The plan rule lived nowhere
+    /// before, and the solo rule it replaces was asked by the case-nested door and not by the flat
+    /// one — so the same visit was refused or allowed depending on which screen scheduled it. One
+    /// function, asked by everybody, is the only shape that cannot drift again.
+    /// </remarks>
+    public static string? Reject(
+        InvestigationVisibility visibility, Place? place,
+        bool publicByDefault, string? whyNotNarrower)
+    {
+        if (Reject(visibility, place) is { } placeRefusal) return placeRefusal;
+
+        if (publicByDefault
+            && place?.Kind == PlaceKind.PublicLocation
+            && visibility != InvestigationVisibility.Public)
+        {
+            return whyNotNarrower;
         }
 
         return null;

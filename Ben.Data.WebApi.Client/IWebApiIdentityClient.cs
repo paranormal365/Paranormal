@@ -33,6 +33,19 @@ public interface IWebApiIdentityClient
     /// password-policy complaint).</returns>
     Task<string?> ResetPasswordAsync(
         string email, string resetCode, string newPassword, CancellationToken token = default);
+
+    /// <summary>
+    /// Takes over an account somebody else made, using the code from the letter that announced it.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ResetPasswordAsync"/> because Identity's reset endpoint refuses an
+    /// UNCONFIRMED address — right for a forgotten password, fatal here, since an account made for
+    /// somebody who has never been here is unconfirmed by definition. Holding a code that went to
+    /// that address is what proves it, so this one confirms the address as it succeeds.
+    /// </remarks>
+    /// <returns>Null on success, or a sentence to show.</returns>
+    Task<string?> TakeOverAccountAsync(
+        string email, string code, string newPassword, CancellationToken token = default);
 }
 
 /// <summary>The outcome of one sign-in request: the token when it worked, and the status either way.</summary>

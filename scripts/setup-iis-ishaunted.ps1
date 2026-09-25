@@ -16,7 +16,10 @@
     EVERY POOL IS "NO MANAGED CODE". Counter-intuitive and correct: .NET (Core) brings its own
     runtime, so the pool must not load the old CLR. The static apps need no runtime at all.
 
-    FOUR APPLICATIONS, NOT FOLDERS. The root web.config registers the ASP.NET Core handler at
+    FIVE APPLICATIONS, NOT FOLDERS: /, /webapi, /editors/video, /editors/canvas and /files. The
+    two editors and /files share the IsHaunted.com-static pool; the canvas needs no COOP/COEP
+    headers (its web.config refuses them - MapKit tiles would fail under require-corp).
+    The root web.config registers the ASP.NET Core handler at
     path="*", so EVERY request under the site - including /webapi/... and /editors/video/... - is
     handed to the website process unless that folder is its own IIS Application. The website looks
     in its own wwwroot, finds nothing, and returns its 404. The files are all present and correct;
@@ -44,6 +47,7 @@ param(
     [string] $UploadsRoot = 'S:\ishaunted-uploads',
     [string] $DeployRoot  = 'C:\ishaunted-deploy',
     [string] $EditorPath  = 'editors/video',
+    [string] $CanvasPath  = 'editors/canvas',
     [string] $RootPool    = 'IsHaunted.com',
     [string] $WebApiPool  = 'IsHaunted.com-webapi',
     [string] $StaticPool  = 'IsHaunted.com-static',
@@ -61,6 +65,7 @@ function Write-Change ([string]$m) { Write-Host "   + $m" -ForegroundColor Green
 function Write-Warn   ([string]$m) { Write-Host "   WARNING: $m" -ForegroundColor Yellow }
 
 $EditorDir = Join-Path $SiteRoot ($EditorPath -replace '/', '\')
+$CanvasDir = Join-Path $SiteRoot ($CanvasPath -replace '/', '\')
 $WebApiDir = Join-Path $SiteRoot 'webapi'
 $appcmd    = Join-Path $env:SystemRoot 'System32\inetsrv\appcmd.exe'
 
@@ -156,7 +161,7 @@ if (-not ($bindings | Where-Object { $_ -like 'https*' })) {
 # 2. Folders
 # =============================================================================
 Write-Step 'Folders'
-foreach ($dir in @($SiteRoot, $WebApiDir, $EditorDir, $FilesRoot, (Join-Path $FilesRoot 'sidecar-video'), $UploadsRoot, $DeployRoot)) {
+foreach ($dir in @($SiteRoot, $WebApiDir, $EditorDir, $CanvasDir, $FilesRoot, (Join-Path $FilesRoot 'sidecar-video'), $UploadsRoot, $DeployRoot)) {
     if (-not (Test-Path $dir)) {
         if ($PSCmdlet.ShouldProcess($dir, 'Create directory')) {
             New-Item -ItemType Directory -Force $dir | Out-Null
@@ -315,6 +320,7 @@ function Set-App ([string]$urlPath, [string]$physical, [string]$pool) {
 
 Set-App 'webapi'     $WebApiDir $WebApiPool
 Set-App $EditorPath  $EditorDir $StaticPool
+Set-App $CanvasPath  $CanvasDir $StaticPool
 Set-App 'files'      $FilesRoot $StaticPool
 
 # IIS serves nothing whose extension it does not recognise - no MIME mapping, no response, a bare
@@ -436,6 +442,7 @@ Write-Host @"
    /                $SiteRoot
    /webapi          $WebApiDir
    /$EditorPath   $EditorDir
+   /$CanvasPath  $CanvasDir
    /files           $FilesRoot
 
    Next:

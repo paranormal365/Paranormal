@@ -20,6 +20,21 @@
     transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
 }
 
+/* The card's content, inset from its own border.
+
+   This rule was missing entirely: the markup has always named .nearby-card__body, nothing styled it,
+   and so an event's date, title and host sat flush against the frame while the tour card beside it
+   was properly inset — which is exactly what it looked like. Ben, 2026-09-18: "the events on the
+   main page need some padding in the card. They do not look right with no padding."
+
+   The numbers are BenTourCard's own (.65rem .75rem), because the two shapes are one set of results
+   and have to line up; the bottom is left to .nearby-card__actions below, which already supplies it. */
+.nearby-card__body {
+    display: block;
+    flex: 1 1 auto;
+    padding: .65rem .75rem .5rem;
+}
+
 /* The date leads an event card the way the picture leads a tour's. */
 .nearby-card__date {
     display: block;

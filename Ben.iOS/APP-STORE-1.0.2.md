@@ -1,5 +1,26 @@
 # App Store submission — IsHaunted 1.0.2 (build 5)
 
+> **1.0.3 has its own document: `APP-STORE-1.0.3.md`** — uploaded 2026-09-16 as 1.0.3 (6); the
+> App Store Connect steps that remain are listed there. This file is the record of 1.0.2.
+>
+> **The next submission is 1.0.3, not 1.0.2 (6).** Ben, 2026-09-16: "instead of it becoming
+> 1.0.2(6) bump it up to 1.0.3." 1.0.2 build 5 was approved, and what has landed since is not a
+> bug fix to it — the field kit's camera is the app's own now, sound carries across a video clip
+> with no gap, and the map says which way somebody was walking. That is a version, not a build.
+>
+> The project is already set to **MARKETING_VERSION 1.0.3, CURRENT_PROJECT_VERSION 6**. Build 6
+> rather than restarting at 1: a number that only ever goes up cannot collide with anything
+> uploaded before, whatever train it was on. The procedure in §6–§8 below is unchanged — read
+> "1.0.3" wherever it says 1.0.2, and open a new version in App Store Connect rather than adding
+> a build to the approved one.
+>
+> **The `.ben` bundle is whole as of 2026-09-16:** the phone seals a session into one file and
+> sends it, and it opens one too — handed over by AirDrop, Mail or Files, or pulled back down
+> from the server — and plays it exactly as the phone that recorded it did. The old per-file
+> upload endpoints stay until 1.0.3 is actually live (Ben, 2026-09-16: "keep end points for now
+> until we upload the next version of the app"), because the approved 1.0.2 on people's phones is
+> still using them.
+
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
@@ -254,6 +275,18 @@ A grep of `IsHaunted/` and `BenKit/` finds no "paid plan", no price, no "subscri
 ---
 
 ## 5. Screenshots and previews
+
+> **1.0.3 has its own set: `Ben.iOS/screenshots-1.0.3/`.** One command per device, which does the
+> whole thing — boot, dark, build, the set, the iPhone's resize, the drive, the cut and the silent
+> audio track:
+>
+>     Ben.iOS/scripts/capture-app-store-media.sh iphone 1.0.3
+>     Ben.iOS/scripts/capture-app-store-media.sh ipad   1.0.3
+>
+> It needs the API up at localhost:5252 and refuses to start without it, because the Send screen
+> signs in. New frame: **15-fieldkit-camera** — the app takes photographs and clips itself now,
+> without handing the microphone to Apple's camera and leaving a hole in the recording. The rest of
+> the set is re-captured from the current build rather than carried over.
 
 `Ben.iOS/screenshots-1.0.2/` — see its README. Captured 2026-09-04 (item 214), **dark mode**, at the
 required sizes. Ten screenshots per device: five new Field Kit frames driven through a real

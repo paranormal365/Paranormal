@@ -39,17 +39,46 @@ namespace Ben.Data.WebApi.Services.Access;
 public sealed class HostedEventAccess
 {
     private readonly IOrganizationSecurityService _security;
+    private readonly IDbContextFactory<BenDataContext>? _db;
 
-    public HostedEventAccess(IOrganizationSecurityService security) => _security = security;
+    /// <param name="db">
+    /// Optional, and only ever used to answer "is this person a member" for
+    /// <see cref="CanReadEventAsync"/>. Optional rather than required because a dozen test
+    /// fixtures construct this class directly; without it the membership fallback is skipped and
+    /// the grant decides, which is how this behaved before 2026-09-17.
+    /// </param>
+    public HostedEventAccess(
+        IOrganizationSecurityService security, IDbContextFactory<BenDataContext>? db = null)
+    { _security = security; _db = db; }
 
     /// <summary>See the event and its plan. Any member may.</summary>
     /// <remarks>
-    /// Knowing what an event is offering is not confidential — the public page says most of it.
-    /// What is confidential is who has asked for it, which is a different question below.
+    /// <para>Knowing what an event is offering is not confidential — the public page says most of
+    /// it. What is confidential is who has asked for it, which is a different question below.</para>
+    ///
+    /// <para><b>"Any member may" now means it.</b> Until the 2026-09-17 audit this asked only for
+    /// the HostedEvent Read grant, which an ordinary member does not hold — and which no custom
+    /// role can hold either while the Events permission area is off a band. Meanwhile
+    /// <c>HostedEventController</c>'s own list and detail ask plain membership. So the event page
+    /// loaded and every sub-surface behind it — the venue, the gallery, the sessions, the
+    /// afterwards — refused the same person. The doc comment and the code disagreed, and the doc
+    /// was the one describing what anybody would expect.</para>
+    ///
+    /// <para>The grant is still asked first, so this only ever ADDS: nothing that passed before
+    /// stops passing, and a non-member is still refused.</para>
     /// </remarks>
-    public Task<bool> CanReadEventAsync(Guid userId, Guid orgId, CancellationToken ct)
-        => AllowedAsync(userId, orgId, OrganizationSecurityTable.HostedEvent,
-                        OrganizationSecurityAction.Read, ct);
+    public async Task<bool> CanReadEventAsync(Guid userId, Guid orgId, CancellationToken ct)
+    {
+        if (await AllowedAsync(userId, orgId, OrganizationSecurityTable.HostedEvent,
+                               OrganizationSecurityAction.Read, ct))
+            return true;
+
+        if (_db is null) return false;
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
+    }
 
     /// <summary>Change the event, its dates, its plan, its blocks and its menus.</summary>
     public Task<bool> CanEditEventAsync(Guid userId, Guid orgId, CancellationToken ct)

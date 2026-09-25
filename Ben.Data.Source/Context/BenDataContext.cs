@@ -86,6 +86,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<ClientRequestOrganization> ClientRequestOrganizations { get; set; }
         public virtual DbSet<ClientRequestFile> ClientRequestFiles { get; set; }
         public virtual DbSet<Place> Places { get; set; }
+
+        /// <summary>Files added straight to a public place, because of what is in them (item 250).</summary>
+        public virtual DbSet<PlaceEvidence> PlaceEvidence { get; set; }
         public virtual DbSet<Case> Cases { get; set; }
         public virtual DbSet<CaseTimelineEntry> CaseTimelineEntries { get; set; }
         public virtual DbSet<CaseTimelineEntryExperienceType> CaseTimelineEntryExperienceTypes { get; set; }
@@ -130,6 +133,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventRemoval> HostedEventRemovals { get; set; }
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
+        public virtual DbSet<EmailTemplate> EmailTemplates { get; set; }
         public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
         public virtual DbSet<OrganizationVenueProfile> OrganizationVenueProfiles { get; set; }
         public virtual DbSet<VenueHostingRequest> VenueHostingRequests { get; set; }
@@ -146,6 +150,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventDiningSeat> HostedEventDiningSeats { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
+
+        /// <summary>Letters people have asked not to receive. Absence means wanted.</summary>
+        public virtual DbSet<UserEmailOptOut> UserEmailOptOuts { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
@@ -160,6 +167,12 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
         public virtual DbSet<InvestigationFinding> InvestigationFindings { get; set; }
+
+        /// <summary>The code a guide holds up so a guest's phone can join tonight (item 248).</summary>
+        public virtual DbSet<InvestigationJoinCode> InvestigationJoinCodes { get; set; }
+
+        /// <summary>One guest's contribute-only credential, minted when they scanned (item 248).</summary>
+        public virtual DbSet<InvestigationGuestPass> InvestigationGuestPasses { get; set; }
         public virtual DbSet<EvidenceVote> EvidenceVotes { get; set; }
         public virtual DbSet<CaseVote> CaseVotes { get; set; }
         public virtual DbSet<CaseTransferLog> CaseTransferLogs { get; set; }
@@ -171,8 +184,6 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSection> CaseReportSections { get; set; }
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseReportSectionFieldSession> CaseReportSectionFieldSessions { get; set; }
-        public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
-        public virtual DbSet<CaseResearchAttachment> CaseResearchAttachments { get; set; }
         public virtual DbSet<StoredLinkPreview> LinkPreviews { get; set; }
         public virtual DbSet<CaseFile> CaseFiles { get; set; }
         public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
@@ -224,6 +235,42 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationCmsTemplate> OrganizationCmsTemplates { get; set; }
         public virtual DbSet<EventAttendanceInvite> EventAttendanceInvites { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
+        public virtual DbSet<CanvasDocument> CanvasDocuments { get; set; }
+        public virtual DbSet<LinkUnfurlCache> LinkUnfurlCache { get; set; }
+
+        // ── The gear store (branch storefront) ─────────────────────────────────────
+        public virtual DbSet<StoreCategory> StoreCategories { get; set; }
+        public virtual DbSet<StoreProduct> StoreProducts { get; set; }
+        public virtual DbSet<StoreProductOption> StoreProductOptions { get; set; }
+        public virtual DbSet<StoreProductOptionValue> StoreProductOptionValues { get; set; }
+        public virtual DbSet<StoreProductVariant> StoreProductVariants { get; set; }
+        public virtual DbSet<StoreProductVariantOptionValue> StoreProductVariantOptionValues { get; set; }
+        public virtual DbSet<StoreProductImage> StoreProductImages { get; set; }
+        public virtual DbSet<StoreProductSpec> StoreProductSpecs { get; set; }
+        public virtual DbSet<StoreCoupon> StoreCoupons { get; set; }
+        public virtual DbSet<StoreCart> StoreCarts { get; set; }
+        public virtual DbSet<StoreCartItem> StoreCartItems { get; set; }
+        public virtual DbSet<StoreOrder> StoreOrders { get; set; }
+        public virtual DbSet<StoreOrderItem> StoreOrderItems { get; set; }
+        public virtual DbSet<StoreOrderEvent> StoreOrderEvents { get; set; }
+        public virtual DbSet<StoreRefund> StoreRefunds { get; set; }
+        public virtual DbSet<StoreRefundItem> StoreRefundItems { get; set; }
+        public virtual DbSet<StoreCouponRedemption> StoreCouponRedemptions { get; set; }
+        public virtual DbSet<StoreStockMovement> StoreStockMovements { get; set; }
+        public virtual DbSet<StoreProductChange> StoreProductChanges { get; set; }
+        public virtual DbSet<StoreProductSaleRequest> StoreProductSaleRequests { get; set; }
+        public virtual DbSet<StoreProductPart> StoreProductParts { get; set; }
+        public virtual DbSet<StoreOrderParcel> StoreOrderParcels { get; set; }
+        public virtual DbSet<StoreRefundShipping> StoreRefundShipping { get; set; }
+        public virtual DbSet<StoreSellerEarning> StoreSellerEarnings { get; set; }
+        public virtual DbSet<StoreProductFile> StoreProductFiles { get; set; }
+        public virtual DbSet<StoreProductFaq> StoreProductFaqs { get; set; }
+        public virtual DbSet<StoreProductQuestion> StoreProductQuestions { get; set; }
+        public virtual DbSet<StoreProductVideo> StoreProductVideos { get; set; }
+        public virtual DbSet<StoreSellerPayout> StoreSellerPayouts { get; set; }
+        public virtual DbSet<StoreFavourite> StoreFavourites { get; set; }
+        public virtual DbSet<StoreReview> StoreReviews { get; set; }
+        public virtual DbSet<StoreReviewVote> StoreReviewVotes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -231,6 +278,14 @@ namespace Ben.Data.Source.Context
 
             // Keep table name consistent with original schema
             modelBuilder.Entity<AppUser>().ToTable("AppUsers");
+
+            // "New people this week" on the admin dashboard, and the same question anywhere else.
+            // Without this the date filter LOOKS bounded and is a full scan of every account the
+            // site has ever had — one of the queries that made Ben say the dashboard "is going to
+            // take longer and longer to load as the number of users grows" (2026-09-19). The cost
+            // is a little on every account created, which is the right way round: accounts are
+            // made rarely and counted often.
+            modelBuilder.Entity<AppUser>().HasIndex(e => e.DateCreated);
 
             // ── UserAddressType ──────────────────────────────────────────────
             modelBuilder.Entity<UserAddressType>()
@@ -521,6 +576,9 @@ namespace Ben.Data.Source.Context
                 .IsUnique()
                 .HasFilter("[UrlName] IS NOT NULL");
 
+            // "New cases this week", for the same reason as AppUser.DateCreated above.
+            modelBuilder.Entity<Case>().HasIndex(e => e.DateCreated);
+
             modelBuilder.Entity<Case>().Property(e => e.UrlName).HasMaxLength(120);
             // One slug per organization. Filtered: a private case has none, and a pile of nulls
             // would collide.
@@ -567,6 +625,31 @@ namespace Ben.Data.Source.Context
             // this is what lets a resend reuse the row rather than litter.
             modelBuilder.Entity<EventAttendanceInvite>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.Email });
+
+            // A tour pass is resolved BY its token, on a table with a row per guest per walk, so
+            // the lookup wants an index. Filtered because the column is null until a pass is
+            // minted and a pile of nulls would collide on a unique one.
+            modelBuilder.Entity<OrgCalendarEventAttendee>().Property(e => e.PassToken).HasMaxLength(128);
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasIndex(e => e.PassToken).IsUnique().HasFilter("[PassToken] IS NOT NULL");
+
+            // One row per person per declined letter, and never two. The unique index is what
+            // makes "switch it off" idempotent — a double click, a retried request and two tabs
+            // all mean the same thing, and none of them should make a second row.
+            modelBuilder.Entity<UserEmailOptOut>().Property(e => e.Kind).HasMaxLength(60);
+            modelBuilder.Entity<UserEmailOptOut>()
+                .HasIndex(e => new { e.AppUserId, e.Kind }).IsUnique();
+            // Cascade: somebody's preferences are theirs, and mean nothing once the account is gone.
+            modelBuilder.Entity<UserEmailOptOut>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+
+            // A group's invitation link. Filtered unique for the same reason the event invitation's
+            // token is: the column is null whenever there is no live link, and a pile of nulls
+            // would collide on an ordinary unique index.
+            modelBuilder.Entity<Organization>().Property(e => e.JoinToken).HasMaxLength(128);
+            modelBuilder.Entity<Organization>()
+                .HasIndex(e => e.JoinToken).IsUnique().HasFilter("[JoinToken] IS NOT NULL");
 
             // NoAction: deleting a place must not delete the record that somebody met there.
             modelBuilder.Entity<OrgCalendarEvent>()
@@ -1010,6 +1093,17 @@ namespace Ben.Data.Source.Context
             // Both hang off a person, NoAction, because deleting a person goes through its own
             // purge and must see these rows. The preference cascades from the group — a preference
             // about a group that no longer exists is about nothing — and the state from the event.
+            // One template per kind, and the kind is what a letter is joined to. Unique rather
+            // than "the newest wins": two rows for one kind would mean the letter somebody
+            // receives depends on which row a query happened to order first.
+            modelBuilder.Entity<EmailTemplate>().ToTable("EmailTemplates");
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.Kind).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.Subject).HasMaxLength(300);
+            modelBuilder.Entity<EmailTemplate>().Property(t => t.DraftSubject).HasMaxLength(300);
+            modelBuilder.Entity<EmailTemplate>().HasIndex(t => t.Kind).IsUnique();
+            modelBuilder.Entity<EmailTemplate>().Ignore(t => t.IsLive);
+            modelBuilder.Entity<EmailTemplate>().Ignore(t => t.HasUnpublishedDraft);
+
             modelBuilder.Entity<EventBookingAlertPreference>()
                 .HasOne(p => p.AppUser).WithMany()
                 .HasForeignKey(p => p.AppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -2200,6 +2294,59 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<VideoProject>()
                 .HasIndex(e => e.CreatedByAppUserId);
 
+            // ── CanvasDocument ────────────────────────────────────────────────
+            // Same shape as VideoProject, for the same reasons: losing the case or the published
+            // snapshot clears the reference (SetNull) rather than taking the board with it. The
+            // THREE references to AppUsers must all be NoAction — SQL Server refuses a table with
+            // more than one cascade path to the same parent, and it refuses at migration time on
+            // production, not in a test.
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.PublishedUploadFile).WithMany()
+                .HasForeignKey(e => e.PublishedUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.PublishedByAppUser).WithMany()
+                .HasForeignKey(e => e.PublishedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.DocumentJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.Name).HasMaxLength(256);
+            // The optimistic-concurrency token (R20): an accepted save's UPDATE carries
+            // WHERE Revision = <the revision the caller loaded>, so two saves racing between the
+            // read and the write cannot both succeed. A compare in C# alone would let them.
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken();
+            modelBuilder.Entity<CanvasDocument>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasIndex(e => e.CreatedByAppUserId);
+
+            // ── LinkUnfurlCache ───────────────────────────────────────────────
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .HasIndex(e => e.UrlHash).IsUnique();
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.UrlHash).HasMaxLength(64);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Url).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Title).HasMaxLength(512);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Description).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.ImageSourceUrl).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.SiteName).HasMaxLength(256);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .HasIndex(e => e.ExpiresAtUtc);
+
             // ── UploadFile self-reference (clip parent/child) ─────────────────
             modelBuilder.Entity<UploadFile>()
                 .HasOne(e => e.ParentFile).WithMany(e => e.ChildClips)
@@ -2764,6 +2911,17 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessage>()
                 .HasOne(e => e.Case).WithMany()
                 .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The place a post is ABOUT (2026-09-17). SetNull rather than NoAction: merging two
+            // records of one place deletes the loser, and a post about it must survive that with
+            // its text intact — the admin merge repoints these first, and this is the backstop for
+            // anything it misses. Indexed with the date because the place page reads the newest
+            // few, and filtered because almost no post has one.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.PlaceId, e.DateCreated })
+                .HasFilter("[PlaceId] IS NOT NULL");
             modelBuilder.Entity<OrgMessage>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -3596,56 +3754,6 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<CaseNote>()
                 .Property(e => e.Body).HasMaxLength(10000);
 
-            // ── CaseResearchEntry ─────────────────────────────────────
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasOne(e => e.Case).WithMany()
-                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasOne(e => e.UploadFile).WithMany()
-                .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasOne(e => e.CreatedByAppUser).WithMany()
-                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasOne(e => e.UpdatedByAppUser).WithMany()
-                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .Property(e => e.Title).HasMaxLength(300);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .Property(e => e.Url).HasMaxLength(2000);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasIndex(e => new { e.CaseId, e.SortOrder });
-            modelBuilder.Entity<CaseResearchEntry>()
-                .Property(e => e.Excerpt).HasMaxLength(300);
-            modelBuilder.Entity<CaseResearchEntry>()
-                .HasIndex(e => new { e.CaseId, e.PublishedUtc });
-
-            // ── CaseResearchAttachment (research pages, 2026-09-14) ────────────
-            // Cascade from the page: the rail belongs to it. NoAction from the upload and the preview, because
-            // UploadFiles already reach CaseResearchEntries by SET NULL, and a second path from UploadFiles to this table
-            // is the multiple-cascade-path SQL Server refuses. Code removes rail rows before their uploads.
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasOne(a => a.ResearchEntry).WithMany(e => e.Attachments)
-                .HasForeignKey(a => a.ResearchEntryId).OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasOne(a => a.UploadFile).WithMany()
-                .HasForeignKey(a => a.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasOne(a => a.LinkPreview).WithMany()
-                .HasForeignKey(a => a.LinkPreviewId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasOne(a => a.CreatedByAppUser).WithMany()
-                .HasForeignKey(a => a.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasOne(a => a.UpdatedByAppUser).WithMany()
-                .HasForeignKey(a => a.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .Property(a => a.Title).HasMaxLength(300);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .Property(a => a.Url).HasMaxLength(2000);
-            modelBuilder.Entity<CaseResearchAttachment>()
-                .HasIndex(a => new { a.ResearchEntryId, a.SortOrder });
-
             // ── StoredLinkPreview (2026-09-14), table LinkPreviews ───────────────────────────────────────
             modelBuilder.Entity<StoredLinkPreview>()
                 .HasIndex(l => l.UrlHash).IsUnique();
@@ -4076,6 +4184,11 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.FieldSessionUploadId, e.RelativePath }).IsUnique();
             modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.RelativePath).HasMaxLength(500);
             modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.Sha256).HasMaxLength(64);
+            // Bounded, like every other string here: a path inside a .ben is a file name and maybe
+            // a folder, and a content type is a content type. nvarchar(max) for either would be a
+            // column that says nothing about what belongs in it.
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.BundleEntryPath).HasMaxLength(512);
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.ContentType).HasMaxLength(128);
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.FieldSessionUpload).WithMany(e => e.Files)
                 .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.Cascade);
@@ -4088,6 +4201,79 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Evidence added straight to a public place (item 250) ───────────────────
+            modelBuilder.Entity<Place>().Property(e => e.Description).HasMaxLength(4000);
+
+            modelBuilder.Entity<PlaceEvidence>().Property(e => e.Caption).HasMaxLength(500);
+            modelBuilder.Entity<PlaceEvidence>().Property(e => e.ReviewNote).HasMaxLength(300);
+            // One row per file per place. Ben's rule is that a file counts ONCE at a place
+            // whatever route it arrived by, and a unique key is the only version of that rule a
+            // race cannot get round.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.PlaceId, e.UploadFileId }).IsUnique();
+            // The place page asks for "what may be shown here, newest first" on every visit.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.PlaceId, e.MediaKind, e.ReviewState, e.DateCreated });
+            // The held pile, across every place at once, is the moderator's question.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasIndex(e => new { e.ReviewState, e.DateCreated });
+            // Cascade from the place: evidence for a place that no longer exists is a row nobody
+            // can reach, moderate or take down.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            // Cascade from the file, for the same reason the media library does: deleting the
+            // bytes must not leave a row pointing at nothing on a public page.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the person: two cascade paths into AppUser is what SQL Server refuses,
+            // and the person purge sweeps these rows itself.
+            modelBuilder.Entity<PlaceEvidence>()
+                .HasOne(e => e.AddedByAppUser).WithMany()
+                .HasForeignKey(e => e.AddedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── The guide's code and the guest's credential (item 248) ─────────────────
+            // The token is the whole lookup for a scan and the typed code for somebody who typed
+            // it; both are unique because two rows answering to one code would make revocation a
+            // coin toss, and because the typed one is short enough that a collision is a thing
+            // that can actually happen rather than a thing to reason about.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => e.Token).IsUnique();
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => e.TypedCode).IsUnique();
+            modelBuilder.Entity<InvestigationJoinCode>().Property(e => e.Token)
+                .HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<InvestigationJoinCode>().Property(e => e.TypedCode)
+                .HasMaxLength(16).IsRequired();
+            // "Is there a live code for tonight" is asked on every staff screen that shows one.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasIndex(e => new { e.InvestigationId, e.ExpiresUtc });
+            // Cascade from the investigation: a code for a night that no longer exists admits
+            // nobody to anything, and a row nobody can reach is a row nobody can revoke.
+            modelBuilder.Entity<InvestigationJoinCode>()
+                .HasOne(e => e.Investigation).WithMany()
+                .HasForeignKey(e => e.InvestigationId).OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InvestigationGuestPass>().Property(e => e.DisplayName)
+                .HasMaxLength(200);
+            // One person holds one pass against one code; the redemption path relies on it.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasIndex(e => new { e.InvestigationJoinCodeId, e.AppUserId }).IsUnique();
+            // The write doors ask "does this person hold a live pass for this investigation",
+            // and ask it on every upload.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasIndex(e => new { e.InvestigationId, e.AppUserId });
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasOne(e => e.InvestigationJoinCode).WithMany()
+                .HasForeignKey(e => e.InvestigationJoinCodeId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the holder: an account deleted out from under a pass must not silently
+            // take the night's rows with it, and AppUser already refuses cascades everywhere else
+            // for the multiple-cascade-paths reason.
+            modelBuilder.Entity<InvestigationGuestPass>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── Sharing a session by link (item 207) ─────────────────────────────────────
             // The token is the whole lookup: every anonymous request arrives with nothing else, so
@@ -4538,6 +4724,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EquipmentCheckoutRenewal>().Property(e => e.ReviewNotes).HasMaxLength(1000);
             modelBuilder.Entity<EquipmentCheckoutRenewal>().HasIndex(e => new { e.EquipmentCheckoutId, e.Status });
 
+            // The gear store lives in its own partial (BenDataContext.Store.cs), called last.
+            ConfigureStore(modelBuilder);
         }
     }
 }

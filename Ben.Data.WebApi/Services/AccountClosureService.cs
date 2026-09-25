@@ -37,6 +37,7 @@ namespace Ben.Data.WebApi.Services;
 public sealed class AccountClosureService
 {
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
+    private readonly IMediaIngestService _media;
     private readonly ILogger<AccountClosureService> _log;
 
     private readonly Apple.AppleCredentialService _apple;
@@ -44,10 +45,12 @@ public sealed class AccountClosureService
     public AccountClosureService(
         IDbContextFactory<BenDataContext> dbContextFactory,
         Apple.AppleCredentialService apple,
+        IMediaIngestService media,
         ILogger<AccountClosureService> log)
     {
         _dbContextFactory = dbContextFactory;
         _apple = apple;
+        _media = media;
         _log = log;
     }
 
@@ -128,7 +131,7 @@ public sealed class AccountClosureService
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        await AnonymiseAsync(db, user, ct);
+        await AnonymiseAsync(db, user, ct, _media, _log);
 
         await transaction.CommitAsync(ct);
 
@@ -136,6 +139,27 @@ public sealed class AccountClosureService
         // log line is that a closure happened and when, for a support question later.
         _log.LogInformation("Account {UserId} was closed by its owner at {ClosedAt:u}.",
             userId, user.DateClosed);
+
+        // A seller who leaves with money on the books (store sellers P10): allowed — the store
+        // still owes it, or is owed it — and the SuperAdmins are told, so it is settled by hand.
+        var unpaid = (await db.StoreSellerEarnings.AsNoTracking().Where(e => e.SellerAppUserId == userId && e.PayoutId == null)
+            .Select(e => e.Amount).ToListAsync(ct)).Sum();
+        if (unpaid != 0m)
+        {
+            try
+            {
+                var admins = await Store.StoreAlerts.SuperAdminIdsAsync(db, ct);
+                if (admins.Count > 0)
+                    await new PlatformMessageService(_dbContextFactory).SendAsync(
+                        "A seller closed their account with earnings unpaid",
+                        $"A seller closed their account while {Ben.Service.Models.Store.StoreMoney.Format(unpaid)} of their earnings was unpaid. "
+                      + $"Settle it on their page: /admin/store/sellers/{userId}", admins, admins[0], ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError(ex, "The admins could not be told that closed account {UserId} had unpaid earnings.", userId);
+            }
+        }
 
         return new ClosureResult(true, null);
     }
@@ -153,7 +177,16 @@ public sealed class AccountClosureService
     /// the same one, and a half-closed account — contact rows gone, credentials intact — is worse
     /// than either outcome.</para>
     /// </remarks>
-    internal static async Task AnonymiseAsync(BenDataContext db, AppUser user, CancellationToken ct)
+    /// <param name="media">
+    /// Used to delete the avatar's bytes and its derivatives. Optional because
+    /// <c>AppUserPurge</c> also calls this and does not hold one; when it is null the photo rows
+    /// still go and the bytes are left, which is the behaviour before 2026-09-17 and is recorded
+    /// as a separate finding against that purge (it uses <c>DeleteAsync</c> where it should use
+    /// <c>DeleteAllAsync</c>, so it leaves thumbnails behind too).
+    /// </param>
+    internal static async Task AnonymiseAsync(
+        BenDataContext db, AppUser user, CancellationToken ct,
+        IMediaIngestService? media = null, ILogger? log = null)
     {
         var userId = user.Id;
 
@@ -201,11 +234,77 @@ public sealed class AccountClosureService
         db.UserPhones.RemoveRange(db.UserPhones.Where(p => p.AppUserId == userId));
         db.UserLinks.RemoveRange(db.UserLinks.Where(l => l.AppUserId == userId));
 
-        // The photo JOIN rows go; the UploadFile bytes are left to the file sweeper rather than
-        // deleted from under anything else that might reference the same file.
-        db.AppUserPhotos.RemoveRange(db.AppUserPhotos.Where(p => p.AppUserId == userId));
+        // ── the photos, and their bytes ───────────────────────────────────────
+        //
+        // This used to remove the join rows and leave the bytes "to the file sweeper"
+        // (2026-09-17 audit). There is no file sweeper. The only job that deletes bytes is
+        // MediaRetentionJob, and it selects rows with an ExpiresAtUtc, which only the tour plan
+        // sets — so an avatar's UploadFile row, its bytes and its thumbnail stayed indefinitely,
+        // still carrying the AppUserId of the account just anonymised.
+        //
+        // your-profile.md promises the opposite in as many words: name, email, password, phone,
+        // addresses, "photos" and sign-in methods "are destroyed". This is also the path built
+        // for Apple Guideline 5.1.1(v), so the promise is one somebody relied on twice.
+        //
+        // Through DeleteAllAsync rather than DeleteAsync, so the EXIF-stripped copy and the
+        // thumbnail go with the original — siblings of the same path, and the thing an earlier
+        // fix to MediaIngestService records having been missed once before.
+        var photoRows = await db.AppUserPhotos
+            .Where(p => p.AppUserId == userId)
+            .ToListAsync(ct);
+
+        var photoFileIds = photoRows.Select(p => p.UploadFileId).Distinct().ToList();
+
+        // Only files nothing else points at. The old comment's caution was the right instinct
+        // about the wrong subject: an avatar is minted per upload, but a shared file must not be
+        // pulled out from under whatever else holds it.
+        var photoFiles = await db.UploadFiles
+            .Where(f => photoFileIds.Contains(f.Id)
+                     && !db.AppUserPhotos.Any(o => o.UploadFileId == f.Id && o.AppUserId != userId))
+            .ToListAsync(ct);
+
+        db.AppUserPhotos.RemoveRange(photoRows);
+        db.UploadFiles.RemoveRange(photoFiles);
 
         await db.SaveChangesAsync(ct);
+
+        // ── their store orders ────────────────────────────────────────────────
+        // Kept — a sale is a tax record — but no longer theirs: finished orders lose the name,
+        // email, phone and street now; an order still on its way keeps its address until it is
+        // delivered (storefront, Ben 09/24/2026). Here rather than in each caller, for the reason
+        // above: closure and the SuperAdmin purge must not disagree about what an order keeps.
+        await Store.StoreOrderScrub.DetachAndScrubAsync(db, userId, DateTime.UtcNow, ct);
+
+        // Items they sold stay in the store as the site's own: the item is not theirs to take
+        // with them, and a seller who has gone cannot be paid or asked a question.
+        // Tracked rather than ExecuteUpdate: closure's own tests run on the InMemory provider.
+        foreach (var sold in await db.StoreProducts.Where(p => p.SellerAppUserId == userId).ToListAsync(ct))
+            sold.SellerAppUserId = null;
+        // Their name on the packages they sent goes too (store sellers P10): the buyer's "Ships
+        // from" reads as a former seller. The packages and the earnings stay — they are money records.
+        foreach (var sent in await db.StoreOrderParcels.Where(x => x.SellerAppUserId == userId && x.SellerName != null).ToListAsync(ct))
+            sent.SellerName = AccountClosure.FormerMemberName;
+        // Their questions about the store's items (store sellers P12) are about them, and go with them.
+        // An answer promoted to an FAQ stays: it was copied, and names nobody.
+        db.StoreProductQuestions.RemoveRange(await db.StoreProductQuestions.Where(q => q.AskerAppUserId == userId).ToListAsync(ct));
+        await db.SaveChangesAsync(ct);
+
+        // Bytes after the rows, and never fatal: a closure that has already anonymised the
+        // account must not fail because one blob would not delete. It is logged instead.
+        if (media is not null)
+        {
+            foreach (var file in photoFiles)
+            {
+                if (string.IsNullOrWhiteSpace(file.StoragePath)) continue;
+                try { await media.DeleteAllAsync(file.StoragePath, ct); }
+                catch (Exception ex)
+                {
+                    log?.LogWarning(ex,
+                        "Closed account {UserId}: could not delete photo bytes at {Path}.",
+                        userId, file.StoragePath);
+                }
+            }
+        }
 
         // ── external sign-ins, roles, claims and tokens ───────────────────────
         // A left-behind login row would let Sign in with Apple walk straight back into the

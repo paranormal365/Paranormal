@@ -157,6 +157,10 @@ struct PositionReadout: View {
     var headingDegrees: Double?
     var relativeAltitudeMeters: Double?
     var isEnabled: Bool
+    /// Offered when location is off only because nobody has been asked yet — so "Record without
+    /// it" is a decision that can be changed, not a door that shuts. Nil when the answer is the
+    /// system's to change (denied in Settings) or the channel itself is switched off.
+    var onUseLocation: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -173,6 +177,13 @@ struct PositionReadout: View {
             if !isEnabled {
                 Text("Location is switched off for this session.")
                     .font(.caption2).foregroundStyle(Theme.fog)
+                if let onUseLocation {
+                    Button("Use location", action: onUseLocation)
+                        .font(.caption)
+                        .buttonStyle(.bordered)
+                        .tint(Theme.ecto)
+                        .accessibilityIdentifier("use-location")
+                }
             } else if let sample {
                 Text(String(format: "%.5f, %.5f", sample.latitude, sample.longitude))
                     .font(.caption.monospacedDigit()).foregroundStyle(Theme.bone)

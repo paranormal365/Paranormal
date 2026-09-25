@@ -53,6 +53,36 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public DateTime? GuestAcknowledgedUtc { get; set; }
 
+        // ── The pass a guide scans at the meeting point (item 247) ───────────
+        //
+        // On the attendee rather than in a table of its own, which is where a hosted event keeps
+        // its passes. A hosted event's pass belongs to a BOOKING — a party of six with rooms, a
+        // status that can be turned down, and a history of reissues somebody may have to explain.
+        // A tour seat is one person. The row it would point at carries exactly one pass for its
+        // whole life, so a second table would hold one row per row and buy nothing but a join.
+
+        /// <summary>The secret in this guest's pass, or null before one is minted.</summary>
+        /// <remarks>
+        /// Unguessable by construction rather than by obscurity: it is the only thing standing
+        /// between a stranger and somebody else's place on a walk. Reissuing replaces it, which is
+        /// also how a pass is taken back — there is never a second live code for one seat.
+        /// </remarks>
+        public string? PassToken { get; set; }
+
+        /// <summary>When the pass was minted. Null when there is none.</summary>
+        public DateTime? PassIssuedUtc { get; set; }
+
+        /// <summary>
+        /// When a guide scanned this guest in, and who scanned them.
+        /// </summary>
+        /// <remarks>
+        /// Kept so a second scan can say "already here, at 7.42" rather than waving somebody
+        /// through twice — a guide on a dark street needs the answer, not a silent success.
+        /// </remarks>
+        public DateTime? CheckedInUtc { get; set; }
+
+        public Guid? CheckedInByAppUserId { get; set; }
+
         public virtual OrgCalendarEvent OrgCalendarEvent { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;

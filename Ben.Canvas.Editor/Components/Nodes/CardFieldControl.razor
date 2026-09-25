@@ -1,0 +1,51 @@
+@*
+    One card field's control, by kind. Dates are stored as yyyy-MM-dd whatever the device's language. A
+    native date input is used: it opens the platform's own picker on an iPhone, and needs no popup root.
+*@
+
+@switch (Field.Kind)
+{
+    case CardFieldKind.Checkbox:
+        <label class="bc-check" for="@InputId">
+            <input id="@InputId" type="checkbox" class="form-check-input" checked="@(Value == "true")"
+                   @onchange="@(e => Set(e.Value is true ? "true" : "false"))" />
+            <span>@Field.Label</span>
+        </label>
+        break;
+    case CardFieldKind.Date:
+        <label class="bc-field" for="@InputId"><span class="bc-field__label">@Field.Label</span>
+            <input id="@InputId" type="date" class="form-control form-control-sm" value="@Value"
+                   @onchange="@(e => Set(BcDateFormat.TryParseCardValue(e.Value?.ToString(), out var d) ? BcDateFormat.ToCardValue(d) : null))" />
+        </label>
+        break;
+    case CardFieldKind.Select:
+        <label class="bc-field" for="@InputId"><span class="bc-field__label">@Field.Label</span>
+            <select id="@InputId" class="form-select form-select-sm" @onchange="@(e => Set(e.Value?.ToString()))">
+                <option value="" selected="@string.IsNullOrEmpty(Value)">Not set</option>
+                @foreach (var option in Field.Options ?? [])
+                {
+                    <option value="@option" selected="@(Value == option)">@option</option>
+                }
+            </select>
+        </label>
+        break;
+    default:
+        <label class="bc-field" for="@InputId"><span class="bc-field__label">@Field.Label</span>
+            <input id="@InputId" class="form-control form-control-sm" value="@Value" @oninput="@(e => Set(e.Value?.ToString()))" />
+        </label>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public CardField Field { get; set; } = default!;
+    [Parameter, EditorRequired] public Dictionary<string, string?> Fields { get; set; } = default!;
+    [Parameter, EditorRequired] public string InputId { get; set; } = "";
+
+    private string? Value => Fields.GetValueOrDefault(Field.Key);
+
+    private void Set(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) Fields.Remove(Field.Key);
+        else Fields[Field.Key] = value;
+    }
+}

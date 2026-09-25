@@ -8,12 +8,42 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Kept identical to Ben.Video.Core SidecarContracts.SidecarRelease.Version, which is what
+         the editor compares an installed sidecar against. A guard test holds the two together. -->
+    <Version>1.1.3</Version>
+    <!--
+      Two builds of the one program. net10.0 is the macOS one, and what the tests run against.
+      net10.0-windows is the Windows one: a windowed program rather than a console one, so starting
+      it never opens a console window that stops the sidecar when somebody closes it (the Store
+      1.1.2 did exactly that, from the Start menu, from Win+R and from the editor's Turn on), and it
+      can show its own small window with the pairing code. Publishing picks one with -f; the
+      installer scripts say which.
+    -->
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <!-- So a Mac can build, and publish, the Windows one too. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>Ben.Video.Sidecar</RootNamespace>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <!-- Windows Forms adds these as implicit usings, and their Timer, Application and friends then
+         collide with names the server code already uses. The window's own files say what they need. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <!-- The pairing window and single-copy handling exist only in the Windows build. -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows'">
+    <Compile Remove="Desktop/**" />
+  </ItemGroup>
 
   <PropertyGroup>
     <!--
@@ -42,6 +72,13 @@
          tooling and build output; none of it belongs in the product. -->
     <Content Remove="installer/**" />
     <None Remove="installer/**" />
+
+    <!-- The Microsoft Store's ffmpeg pin. build-msix.ps1 reads it from the PROJECT directory and
+         copies it into that package as ffmpeg-manifest.json; nothing reads it at runtime. Without
+         this the Web SDK's **/*.json glob swept it into the ordinary installer too, which shipped
+         a second manifest naming a build that installer does not carry. -->
+    <Content Remove="ffmpeg-manifest.store.json" />
+    <None Include="ffmpeg-manifest.store.json" />
 
     <!-- ffmpeg-manifest.json is already auto-included as Content by the SDK's default item globs
          (EnableDefaultContentItems) — Update (not Include) just adds the copy-to-output

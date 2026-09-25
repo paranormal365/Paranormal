@@ -49,7 +49,7 @@ else
                            href="@($"/o/{UrlName}/cases/{c.UrlName}")">
                             <span class="case-card__top">
                                 <span class="case-card__ref">@c.CaseReference</span>
-                                <span class="case-card__status @c.Status.BadgeClass()">@c.Status.Label()</span>
+                                <span class="badge case-card__status @c.Status.BadgeClass()">@c.Status.Label()</span>
                             </span>
                             <span class="case-card__title">@c.Title</span>
                             <span class="case-card__where">@c.City, @c.State</span>

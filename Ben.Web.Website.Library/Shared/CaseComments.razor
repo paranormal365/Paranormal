@@ -182,7 +182,18 @@ else
         _busy = true;
         // The server answers the same whether this is the first report or the fifth, so the button
         // says the same thing either way.
-        await AdminClient.ReportCaseCommentAsync(CaseId, commentId, null);
+        //
+        // But a duplicate and a FAILURE are different answers, and both used to arrive as the
+        // same discarded false (2026-09-17 audit) — the transport maps a refusal to false rather
+        // than throwing. Telling somebody their report went through when it did not is how abuse
+        // stays unreported: they stop looking.
+        if (!await AdminClient.ReportCaseCommentAsync(CaseId, commentId, null))
+        {
+            _error = "That comment could not be reported. Please try again.";
+            _busy = false;
+            return;
+        }
+
         _reported.Add(commentId);
         _busy = false;
     }

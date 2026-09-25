@@ -1,0 +1,172 @@
+@*
+    An item's versions (store sellers, backlog 251, P13). A new version is a hidden draft copying
+    everything but the stock, linked back to this one; the seller chooses what happens to the old one
+    when the new one first goes on sale — keep offering it, sell what's left, or take it off (Ben's
+    list). Shared by the seller's editor and the store's; each brings its own client and its own links.
+*@
+
+<h5>Versions @Help</h5>
+
+@if (Info.Item is not { } v)
+{
+    @if (Info.Failed) { <div class="alert alert-danger py-2">@(Info.Reason ?? "The versions couldn't be loaded just now.")</div> }
+    else { <div class="text-secondary small">Loading…</div> }
+}
+else
+{
+    <dl class="row small mb-3" data-testid="version-facts">
+        <dt class="col-sm-4">This version</dt>
+        <dd class="col-sm-8">@(v.VersionLabel ?? "Not named — the first")</dd>
+        @if (v.Previous is { } previous)
+        {
+            <dt class="col-sm-4">Replaces</dt>
+            <dd class="col-sm-8"><a href="@EditorHref(previous.Id)" data-testid="version-previous">@Name(previous)</a></dd>
+        }
+        @if (v.Next is { } next)
+        {
+            <dt class="col-sm-4">Replaced by</dt>
+            <dd class="col-sm-8"><a href="@EditorHref(next.Id)" data-testid="version-next">@Name(next)</a></dd>
+        }
+        @if (v.DiscontinuedUtc is not null)
+        {
+            <dt class="col-sm-4">Now</dt>
+            <dd class="col-sm-8">Off sale — its page says what replaced it.</dd>
+        }
+        else if (v.SellingOutSinceUtc is not null)
+        {
+            <dt class="col-sm-4">Now</dt>
+            <dd class="col-sm-8">Selling what's left; it comes off sale when it runs out.</dd>
+        }
+    </dl>
+
+    <div class="row g-2 mb-3" style="max-width:40rem;">
+        <div class="col-sm-5">
+            <label class="form-label small" for="version-label">Version name</label>
+            <input id="version-label" class="form-control form-control-sm" maxlength="40" placeholder="v2, 2026 edition" @bind="_label" />
+        </div>
+        @if (v.Previous is not null)
+        {
+            <div class="col-sm-7">
+                <label class="form-label small" for="version-policy">When this goes on sale, the old one…</label>
+                <select id="version-policy" class="form-select form-select-sm" @bind="_policy" disabled="@v.PolicyApplied">
+                    @foreach (var p in Policies) { <option value="@p">@PolicyText(p)</option> }
+                </select>
+                @if (v.PolicyApplied) { <div class="form-text">This version has gone on sale, so that has happened.</div> }
+            </div>
+        }
+        <div class="col-12">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="version-save" disabled="@Busy" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+
+    @if (Error is not null) { <div class="alert alert-danger py-2" id="version-refusal">@Error</div> }
+
+    @if (v.Next is null)
+    {
+        <div class="card">
+            <div class="card-body small">
+                <h6>Start a new version</h6>
+                <p class="text-secondary mb-2">
+                    Made a better one? A new version starts as a hidden draft with everything from this one — words, pictures, options,
+                    parts, FAQ and files — but no stock. It goes on sale the usual way, and each version's page links to the other.
+                </p>
+                @if (CanStart)
+                {
+                    <button type="button" class="btn btn-sm btn-primary" id="version-start" @onclick="Open">Start a new version…</button>
+                }
+                else
+                {
+                    <p class="mb-0 text-secondary">This one hasn't been on sale yet — change it as it is.</p>
+                }
+            </div>
+        </div>
+    }
+}
+
+<BenModal @bind-Visible="_open" Title="Start a new version">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label" for="new-version-label">What's the new version called?</label>
+            <input id="new-version-label" class="form-control" maxlength="40" placeholder="v2" @bind="_newLabel" @bind:event="oninput" />
+        </div>
+        <fieldset>
+            <legend class="form-label fs-6">When it goes on sale, this one…</legend>
+            @foreach (var p in Policies)
+            {
+                var x = p;
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="new-version-policy" id="@($"new-version-policy-{x}")"
+                           checked="@(_newPolicy == x)" @onchange="@(() => _newPolicy = x)" />
+                    <label class="form-check-label" for="@($"new-version-policy-{x}")">@PolicyText(x)</label>
+                </div>
+            }
+        </fieldset>
+        @if (_startError is not null) { <div class="alert alert-danger py-2 mt-3 mb-0" id="new-version-refusal">@_startError</div> }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _open = false)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="new-version-confirm" disabled="@_starting" @onclick="StartAsync">Start it</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public ItemResult<StoreVersionInfo> Info { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>Whether this item has been on sale — only then is a new version the way to change it.</summary>
+    [Parameter] public bool CanStart { get; set; }
+
+    /// <summary>Where another version's editor is, for this editor's reader.</summary>
+    [Parameter, EditorRequired] public Func<Guid, string> EditorHref { get; set; } = null!;
+
+    [Parameter] public EventCallback<SaveStoreVersionRequest> OnSave { get; set; }
+
+    /// <summary>Starts the new version; returns the refusal in words, or null when the page is moving to it.</summary>
+    [Parameter, EditorRequired] public Func<StartStoreVersionRequest, Task<string?>> OnStart { get; set; } = null!;
+
+    [Parameter] public RenderFragment? Help { get; set; }
+
+    private static readonly StoreSupersededPolicy[] Policies =
+        [StoreSupersededPolicy.SellOut, StoreSupersededPolicy.KeepOffering, StoreSupersededPolicy.Discontinue];
+
+    private string? _label, _newLabel, _startError;
+    private StoreSupersededPolicy _policy, _newPolicy = StoreSupersededPolicy.SellOut;
+    private bool _open, _starting;
+    private StoreVersionInfo? _adopted;
+
+    protected override void OnParametersSet()
+    {
+        if (Info.Item is not { } v || ReferenceEquals(v, _adopted)) return;
+        _adopted = v;
+        (_label, _policy) = (v.VersionLabel, v.Policy);
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync(new SaveStoreVersionRequest(_label, _policy));
+
+    private void Open()
+    {
+        (_newLabel, _newPolicy, _startError) = (null, StoreSupersededPolicy.SellOut, null);
+        _open = true;
+    }
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        try
+        {
+            _startError = await OnStart(new StartStoreVersionRequest(_newLabel ?? "", _newPolicy));
+            if (_startError is null) _open = false;
+        }
+        finally { _starting = false; }
+    }
+
+    private static string Name(StoreVersionLink v) => v.VersionLabel is { } l ? $"{v.Name} ({l})" : v.Name;
+
+    public static string PolicyText(StoreSupersededPolicy p) => p switch
+    {
+        StoreSupersededPolicy.SellOut => "sells what's left, then comes off sale",
+        StoreSupersededPolicy.Discontinue => "comes off sale straight away",
+        _ => "stays on sale beside it",
+    };
+}

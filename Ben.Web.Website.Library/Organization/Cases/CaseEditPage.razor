@@ -102,10 +102,24 @@
                             <div class="form-text">Shown on public pages instead of the client's real name.</div>
                         </div>
 
+                        @* An account that pays nothing cannot take a case at a public place private
+                           again (Ben, 2026-09-17). The server refuses it; this says so beside the box
+                           instead of letting somebody untick it and collect a 400. An already-private
+                           case keeps its box — the plan governs new work, not work in hand. *@
+                        @{ var mustStayPublic = _publicByDefault && _editIsPublic && !_editIsPrivate; }
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="case-public"
-                                   @bind="@_editIsPublic" @bind:after="CheckLeaksAsync" />
+                                   @bind="@_editIsPublic" @bind:after="CheckLeaksAsync"
+                                   disabled="@mustStayPublic" />
                             <label for="case-public" class="form-check-label">Make Public</label>
+                            @if (mustStayPublic)
+                            {
+                                <div class="form-text" data-testid="case-public-locked">
+                                    On this account a case at a public location is public. What you
+                                    record there joins the place's own page.
+                                    <a href="/pricing">See what each plan includes.</a>
+                                </div>
+                            }
                         </div>
 
                         @* W-P4: the warning sits with the decision it is about, while it is being made. *@
@@ -285,6 +299,7 @@
 
     /// <summary>Whether the group's plan covers private-residence work (item 193). Fails open, as the server does.</summary>
     private bool _planIncludesPrivate = true;
+    private bool _publicByDefault;
 
     private List<(Guid Id, string Label)> _members = [];
 
@@ -330,6 +345,7 @@
             var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
             _mayEdit = perms?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Update) == true;
             _planIncludesPrivate = perms?.PlanIncludes(TierCapability.PrivateResidenceCases) ?? true;
+            _publicByDefault = perms?.PublicByDefault ?? false;
         }
         catch { _mayEdit = false; }
 

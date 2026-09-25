@@ -13,18 +13,24 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case deviceMoved = "device_moved"
     /// Something in the camera's view moved.
     case sceneMotion = "scene_motion"
+    /// The app was put away — the home screen, another app, the phone locked — while the session
+    /// ran. Sound and readings carry on (the app declares the background-audio mode for exactly
+    /// this); the camera cannot, because iOS takes it from any app that is not on screen.
+    case appBackgrounded = "app_backgrounded"
+    /// The app came back after being put away.
+    case appReturned = "app_returned"
 
     /// Which of the spec's three legal `triggered_by` values this kind reports as.
     public var trigger: FieldReading.Trigger {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: .event
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: .event
         case .manual, .evpQuestion, .evpWaitEnd: .manual
         }
     }
 
     public var isAutomatic: Bool {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: true
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: true
         case .manual, .evpQuestion, .evpWaitEnd: false
         }
     }
@@ -38,6 +44,8 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .evpWaitEnd: "Stopped waiting"
         case .deviceMoved: "Device moved"
         case .sceneMotion: "Movement seen"
+        case .appBackgrounded: "App put away"
+        case .appReturned: "Back in the app"
         }
     }
 }
@@ -105,6 +113,22 @@ public final class FieldSession {
     public var serverSessionId: UUID?
     public var uploadedAt: Date?
     public var timezoneIdentifier: String
+
+    /// When this session arrived on this device as a `.ben`, rather than being recorded here.
+    ///
+    /// Ben, 2026-09-16: "someone else can share their .ben file with another person on the
+    /// iphone and the other person can view it like they had recorded it themselves." It plays
+    /// exactly as if they had; this is only the record that they did not. Optional, like every
+    /// attribute added after the first release — the one shape SwiftData migrates unasked.
+    public var importedAt: Date?
+
+    /// The device that recorded it, as its seal said — `identifierForVendor` of the phone the
+    /// session was made on. Nil for a session recorded here. Compared with this device's own id,
+    /// it is how the list tells "shared with you" from "yours, pulled back from the server".
+    public var sourceDeviceId: String?
+
+    /// The account the seal named as having recorded it, when the bundle said.
+    public var recordedByAccountId: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]

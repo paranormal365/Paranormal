@@ -1,0 +1,73 @@
+@inject StoreCartState CartState
+@inject BenToastService Toasts
+
+@*
+    "Do you have a discount code?" (storefront S3.5), Smarty's pop-up on the cart page
+    (shop-page-cart-1.html). Apply is never greyed out: an empty box says "Enter a code." — a
+    button that does nothing when pressed tells the buyer less than one that answers. A code the
+    server refuses stays in the box with the server's sentence under it.
+*@
+
+<BenModal Visible="Visible" VisibleChanged="VisibleChanged" Title="Do you have a discount code?">
+    <ChildContent>
+        <div class="form-floating">
+            <input type="text" id="discount_code" class="form-control @(_error is null ? null : "is-invalid")" placeholder="Discount code"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64"
+                   @bind="_code" @bind:event="oninput" @onkeydown="OnKeyDown" />
+            <label for="discount_code">Discount code</label>
+        </div>
+        @if (_error is not null)
+        {
+            <div class="invalid-feedback d-block" data-testid="coupon-error">@_error</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-secondary" @onclick="CloseAsync">Cancel</button>
+        <button type="button" class="btn btn-primary" id="store-apply-coupon" @onclick="ApplyAsync">
+            @if (_busy)
+            {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+            }
+            Apply
+        </button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    private string _code = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (!Visible) { _code = ""; _error = null; }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ApplyAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_busy) return;
+        if (string.IsNullOrWhiteSpace(_code))
+        {
+            _error = StoreCartSentences.EnterACode;
+            return;
+        }
+
+        _busy = true;
+        _error = (await CartState.ApplyCouponAsync(_code.Trim())).Message;
+        _busy = false;
+        if (_error is not null) return;
+
+        Toasts.Success($"Code {CartState.Cart?.CouponCode ?? _code.Trim().ToUpperInvariant()} applied.");
+        await CloseAsync();
+    }
+
+    private Task CloseAsync() => VisibleChanged.InvokeAsync(false);
+}

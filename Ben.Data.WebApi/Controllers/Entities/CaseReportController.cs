@@ -23,8 +23,21 @@ public sealed class CaseReportController : BenControllerBase
 
     public CaseReportController(IDbContextFactory<BenDataContext> db,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Ben.Data.Common.Interfaces.IFileStorageService fileStorage)
-    { _db = db; _security = security; _fileStorage = fileStorage; }
+        Ben.Data.Common.Interfaces.IFileStorageService fileStorage,
+        Services.ICmsMarkupSanitizer sanitizer)
+    { _db = db; _security = security; _fileStorage = fileStorage; _sanitizer = sanitizer; }
+
+    /// <summary>
+    /// A report's summary and conclusion are rendered as markup on a PUBLIC page.
+    /// </summary>
+    /// <remarks>
+    /// <c>/o/{UrlName}/cases/{CaseRef}</c> draws both with <c>MarkupString</c> and needs no
+    /// sign-in, and this controller stored them with nothing but a <c>Trim()</c> — so a member's
+    /// form reached anonymous visitors as markup. The same gap the case description and the
+    /// timeline entries each had; found by sweeping every MarkupString field for its write path
+    /// (2026-09-20).
+    /// </remarks>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     private readonly Ben.Data.Common.Interfaces.IFileStorageService _fileStorage;
 
@@ -88,7 +101,8 @@ public sealed class CaseReportController : BenControllerBase
         var report = new CaseReport
         {
             Id = Guid.NewGuid(), CaseId = caseId, Title = request.Title.Trim(),
-            Summary = request.Summary?.Trim(), Conclusion = request.Conclusion?.Trim(),
+            Summary = CaseController.CleanDescription(request.Summary, _sanitizer),
+            Conclusion = CaseController.CleanDescription(request.Conclusion, _sanitizer),
             ExpectedDeliveryDate = request.ExpectedDeliveryDate,
             Status = CaseReportStatus.Draft,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
@@ -122,8 +136,8 @@ public sealed class CaseReportController : BenControllerBase
         if (report is null) return NotFound();
 
         report.Title                = request.Title.Trim();
-        report.Summary              = request.Summary?.Trim();
-        report.Conclusion           = request.Conclusion?.Trim();
+        report.Summary              = CaseController.CleanDescription(request.Summary, _sanitizer);
+        report.Conclusion           = CaseController.CleanDescription(request.Conclusion, _sanitizer);
         report.ExpectedDeliveryDate = request.ExpectedDeliveryDate;
         // W-P3: null leaves the group's choice alone, so a caller predating this field cannot
         // silently take a published summary off the group's public page.
@@ -298,7 +312,10 @@ public sealed class CaseReportController : BenControllerBase
         var section  = new CaseReportSection
         {
             Id = Guid.NewGuid(), CaseReportId = id, SortOrder = maxOrder + 10,
-            Title = request.Title.Trim(), Body = request.Body?.Trim(),
+            Title = request.Title.Trim(),
+            // A section's body is drawn as markup in the report builder, and a report is the thing
+            // a group publishes about a case.
+            Body = CaseController.CleanDescription(request.Body, _sanitizer),
             SectionType = request.SectionType, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.CaseReportSections.Add(section);
@@ -321,7 +338,9 @@ public sealed class CaseReportController : BenControllerBase
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.CaseReportId == id, ct);
         if (section is null) return NotFound();
 
-        section.Title = request.Title.Trim(); section.Body = request.Body?.Trim(); section.SectionType = request.SectionType;
+        section.Title = request.Title.Trim();
+        section.Body = CaseController.CleanDescription(request.Body, _sanitizer);
+        section.SectionType = request.SectionType;
         await db.SaveChangesAsync(ct);
         await TouchReportAsync(db, id, ct);
         return Ok(ToSectionDto(section, await ReadoutsAsync(section.FieldSessions, ct)));

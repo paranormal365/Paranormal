@@ -36,6 +36,16 @@ public sealed class RecordingSignInManager : SignInManager<AppUser>
     public const string AppleMethod = "apple";
 
     /// <summary>
+    /// Value written to <see cref="SignInEvent.Method"/> for a Microsoft Entra visit.
+    /// </summary>
+    /// <remarks>
+    /// One row per visit, not per request and not per token — see <see cref="EntraSignInSessions"/>
+    /// for what a visit is and why. The entity's own comment has named "entra" as a value of this
+    /// column since the table was created; until 2026-09-19 nothing ever wrote one.
+    /// </remarks>
+    public const string EntraMethod = "entra";
+
+    /// <summary>
     /// Value written to <see cref="SignInEvent.Method"/> when the standalone editor exchanges a
     /// handoff code for a session (phase 12).
     /// </summary>

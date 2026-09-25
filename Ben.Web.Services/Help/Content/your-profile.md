@@ -127,6 +127,28 @@ That means it fills up slowly, and starts empty. Attendance is recorded after th
 scheduled investigation appears in your list straight away but on the map only once someone has
 confirmed you were there.
 
+## Your emails
+
+The site writes to you when something happens that you would want to know about while you are not
+here — a session you signed up for is cancelled or moved, a place comes free and is now yours, an
+investigation request your group was reviewing went elsewhere, your plan is about to lapse.
+
+![Choosing which emails you get](/help/media/your-profile/your-emails.png)
+
+**Choose your emails** on your profile, or from the link at the foot of any of those letters, lists
+every one you can turn off. Everything is on to begin with, and switching one off takes effect on
+the next letter — there is no Save button, because one switch is the whole decision.
+
+Some letters are always sent and are not on that list:
+
+- confirming your email address
+- resetting your password
+- a warning that somebody used your address to try to sign up
+- a receipt for something you paid for
+
+Those are how you get back into your account and what you keep for your own records, so they are
+not a choice. Turning off everything else does not affect them.
+
 ## Security — your password and two-step sign-in
 
 The profile's **Security** tab holds how you get into your account.

@@ -40,16 +40,45 @@
            server beside the settings themselves, so adding a setting files it without touching
            this page — and a setting filed nowhere is refused there rather than quietly dropped
            here. *@
-        @foreach (var section in Sections)
+        @* Tabs rather than one long scroll. Twenty-seven settings under six headings meant the
+           last of them was a screen and a half below the first, and somebody changing one at the
+           bottom could not see what they had already changed at the top.
+
+           Driven by Blazor, not by data-bs-toggle: Bootstrap's own tab script fights the renderer
+           over which pane is shown, and the site's other tabbed page (the dashboard) settled this
+           the same way. Only the chosen section is rendered, so the inputs of the other five are
+           not in the DOM at all. *@
+        <ul class="nav nav-tabs mb-3" role="tablist" id="site-settings-tabs">
+            @foreach (var section in Sections)
+            {
+                var key = section.Key;
+                var chosen = key == CurrentTab;
+                <li class="nav-item" role="presentation">
+                    <button type="button" role="tab"
+                            id="@($"settings-tab-{Slug(key)}")"
+                            data-testid="settings-tab"
+                            aria-selected="@chosen"
+                            class="nav-link @(chosen ? "active" : null)"
+                            @onclick="@(() => _tab = key)">@key</button>
+                </li>
+            }
+        </ul>
+
+        @foreach (var section in Sections.Where(g => g.Key == CurrentTab))
         {
             <div class="mb-2">
-                <h5 class="mb-1 pt-2">@section.Key</h5>
                 <p class="text-secondary small mb-3">
                     @(string.IsNullOrWhiteSpace(section.First().GroupBlurb)
                         ? "Settings the site has not filed under a heading."
                         : section.First().GroupBlurb)
                 </p>
             </div>
+        @if (IsEditedElsewhere(section.Key))
+        {
+            @* Storefront S1.1: shown, not edited — see StoreSettingsReadOnly. *@
+            <StoreSettingsReadOnly Settings="@section.ToList()" />
+            continue;
+        }
         @foreach (var setting in section)
         {
             var s = setting;
@@ -169,6 +198,66 @@
     /// vanishing. A setting nobody can find is the same as a setting that does not exist, and a
     /// page that silently drops one is worse than an ugly page.
     /// </remarks>
+    /// <summary>Which section is open. Null until somebody chooses, meaning the first.</summary>
+    private string? _tab;
+
+    /// <summary>
+    /// The open section, defaulting to the first the server sent.
+    /// </summary>
+    /// <remarks>
+    /// Resolved on read rather than set when the settings load: the sections come from the server,
+    /// so there is no first section to point at until they have arrived, and a field set in
+    /// OnInitialized would still be null when the tabs first render.
+    /// </remarks>
+    /// <summary>
+    /// A setting to open the page at, e.g. <c>?setting=features.public-feed</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Because only the chosen tab is rendered, a link to this page lands on the FIRST
+    /// section and anything filed elsewhere is not on the screen at all — not below the fold,
+    /// absent. The site already had two links that depended on it being there: the feed
+    /// dark-launch reminder says "The switch is at Site Settings", and the announcement banner
+    /// does the same. Both sent somebody to a page that did not contain what the sentence had
+    /// just promised (found 2026-09-21, four browser tests looking for switches in other
+    /// sections).</para>
+    ///
+    /// <para>So a setting can be linked to by key, and the tab holding it opens.</para>
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "setting")]
+    public string? SettingKey { get; set; }
+
+    /// <summary>
+    /// Which section is showing: what somebody clicked, else the one holding the setting they
+    /// were sent to, else the first.
+    /// </summary>
+    private string? CurrentTab
+    {
+        get
+        {
+            if (_tab is { } chosen && Sections.Any(g => g.Key == chosen)) return chosen;
+
+            if (!string.IsNullOrWhiteSpace(SettingKey))
+            {
+                var holding = Sections.FirstOrDefault(
+                    g => g.Any(s => string.Equals(s.Key, SettingKey, StringComparison.OrdinalIgnoreCase)));
+                if (holding is not null) return holding.Key;
+            }
+
+            return Sections.Select(g => g.Key).FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// Sections this page lists without editing, because another page owns their rules
+    /// (storefront S1.1: the store's settings are edited on /admin/store/settings).
+    /// </summary>
+    internal static bool IsEditedElsewhere(string section) => section == StoreSettingsReadOnly.GroupName;
+
+    /// <summary>A section's name as an element id.</summary>
+    private static string Slug(string name)
+        => new string(name.ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+
     private IEnumerable<IGrouping<string, SiteSettingRecord>> Sections
         => (_settings ?? [])
             .GroupBy(s => string.IsNullOrWhiteSpace(s.Group) ? "Other" : s.Group)

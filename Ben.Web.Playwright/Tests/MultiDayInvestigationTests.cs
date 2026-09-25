@@ -39,21 +39,21 @@ public class MultiDayInvestigationTests : BenTestBase
 
         // Single day is the norm: a date and a time for the start, a clock time for the end.
         await Expect(MultiDayBox).Not.ToBeCheckedAsync();
-        await Expect(Dialog.Locator(".k-datepicker")).ToHaveCountAsync(1);
-        await Expect(Dialog.Locator(".k-timepicker")).ToHaveCountAsync(2);
-        await Expect(Dialog.Locator(".k-datetimepicker")).ToHaveCountAsync(0);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='date']")).ToHaveCountAsync(1);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='time']")).ToHaveCountAsync(2);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='datetime']")).ToHaveCountAsync(0);
 
         await MultiDayBox.CheckAsync();
 
         // Ticked, the end gains a date of its own and the start is untouched.
-        await Expect(Dialog.Locator(".k-datetimepicker")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
-        await Expect(Dialog.Locator(".k-datepicker")).ToHaveCountAsync(1);
-        await Expect(Dialog.Locator(".k-timepicker")).ToHaveCountAsync(1);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='datetime']")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='date']")).ToHaveCountAsync(1);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='time']")).ToHaveCountAsync(1);
 
         await MultiDayBox.UncheckAsync();
 
-        await Expect(Dialog.Locator(".k-datetimepicker")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
-        await Expect(Dialog.Locator(".k-timepicker")).ToHaveCountAsync(2);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='datetime']")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='time']")).ToHaveCountAsync(2);
     }
 
     [Test]
@@ -87,11 +87,11 @@ public class MultiDayInvestigationTests : BenTestBase
 
         var box = Page.Locator("#schedulingproposalpanel-multi-day");
         await Expect(box).Not.ToBeCheckedAsync();
-        await Expect(Dialog.Locator(".k-datepicker")).ToHaveCountAsync(1);
-        await Expect(Dialog.Locator(".k-timepicker")).ToHaveCountAsync(2);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='date']")).ToHaveCountAsync(1);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='time']")).ToHaveCountAsync(2);
 
         await box.CheckAsync();
-        await Expect(Dialog.Locator(".k-datetimepicker")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
-        await Expect(Dialog.Locator(".k-timepicker")).ToHaveCountAsync(1);
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='datetime']")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+        await Expect(Dialog.Locator(".ben-date-field[data-mode='time']")).ToHaveCountAsync(1);
     }
 }

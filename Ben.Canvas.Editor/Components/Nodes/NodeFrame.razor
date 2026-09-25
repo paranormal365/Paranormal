@@ -1,0 +1,89 @@
+@*
+    The outside of every block: its box, its head row and its body.
+
+    State is shown three ways at once - colour, a glyph and words in the accessible name - because colour
+    alone does not reach everyone. The element carries no id and no z-index; the data-bc-* attributes are
+    the gesture script's whole contract with it.
+*@
+@inject CanvasStore Store
+@inject SelectionState Selection
+@inject BoardAccess Access
+@inject Microsoft.Extensions.Options.IOptions<Ben.Canvas.Core.Options.CanvasEditorOptions> Options
+
+@* data-bc-locked also carries "somebody else's piece, and this person may only add to the board" (Ben,
+   2026-09-16): the pointer script already refuses to drag a locked block, and the document is untouched — this is
+   what the screen allows, not what the board records. *@
+<div class="@CssClass" role="group" tabindex="@(Focused ? "0" : "-1")"
+     aria-label="@NodeWords.Aria(Node, Selected, GroupLabel, Options.Value.CardTemplates)"
+     data-bc-node="@Node.Id"
+     data-bc-locked="@((Node.Locked || !Access.MayChange(Node.Id)) ? "true" : null)"
+     data-bc-selected="@(Selected ? "true" : null)"
+     style="@Style" @ref="_element">
+    <div class="bc-node__head">
+        <BcIcon Name="@Descriptor.IconName" Class="bc-node__icon" />
+        <span class="bc-node__title">@NodeWords.Title(Node, Options.Value.CardTemplates)</span>
+        @if (Node.Locked)
+        {
+            <BcIcon Name="lock" Class="bc-node__lock" />
+            <span class="visually-hidden">Locked</span>
+        }
+    </div>
+    <div class="bc-node__body" @onkeydown="OnBodyKeyDown">
+        <DynamicComponent Type="@BlockRendererMap.RendererFor(Node.Type)" Parameters="@RendererParameters" />
+    </div>
+</div>
+
+@code {
+    private ElementReference _element;
+
+    /// <summary>Escape anywhere inside a block being edited finishes the edit.</summary>
+    private void OnBodyKeyDown(KeyboardEventArgs e)
+    {
+        if (Editing && e.Key == "Escape") Selection.EndEdit();
+    }
+
+    [Parameter, EditorRequired] public CanvasNode Node { get; set; } = default!;
+
+    /// <summary>The copy an edit session works on; the live data when null.</summary>
+    [Parameter] public NodeData? EditData { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Focused { get; set; }
+    [Parameter] public bool Editing { get; set; }
+    [Parameter] public bool Candidate { get; set; }
+    [Parameter] public string? GroupLabel { get; set; }
+
+    /// <summary>While the board is presented, whether this is the block being talked about.</summary>
+    [Parameter] public bool OnStage { get; set; } = true;
+
+    public ElementReference Element => _element;
+
+    private BlockDescriptor Descriptor => BlockRegistry.Get(Node.Type);
+
+    private string CssClass =>
+        "bc-node bc-node--" + Node.Type.ToString().ToLowerInvariant()
+        + (Editing ? " bc-node--editing" : "")
+        + (Candidate ? " bc-node--candidate" : "")
+        // While a board is being presented this marks the card being talked about; the CSS dims the
+        // rest. Always true when nobody is presenting, so the class costs nothing the rest of the time.
+        + (OnStage ? " bc-node--onstage" : "")
+        // Solid turns the block's palette colour into its background instead of an edge bar: the
+        // sticky, and what the moodboard's panels and the deck's slides are built from.
+        + (Node.Fill == NodeFill.Solid ? " bc-node--filled" : "");
+
+    private string Style
+    {
+        get
+        {
+            var style = FormattableString.Invariant(
+                $"left:{CssNumber.F(Node.X)}px;top:{CssNumber.F(Node.Y)}px;width:{CssNumber.F(Node.Width)}px;height:{CssNumber.F(Node.Height)}px");
+            return CanvasPalette.IsValid(Node.ColorKey) ? style + $";--bc-node-color:var(--bc-color-{Node.ColorKey})" : style;
+        }
+    }
+
+    private Dictionary<string, object?> RendererParameters => new()
+    {
+        [nameof(BlockRendererBase.Node)] = Node,
+        [nameof(BlockRendererBase.Data)] = EditData ?? Node.Data,
+        [nameof(BlockRendererBase.Editing)] = Editing,
+    };
+}

@@ -1,0 +1,66 @@
+@*
+    The four promises under the hero (storefront S2.6), after Smarty's INFO BOX — but each one is
+    true of this store, read from its settings: what shipping costs, how long returns run, how a
+    card is taken, and how to reach a person.
+*@
+
+<div class="ben-promise mb-4">
+    <div class="row g-0">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="ben-promise__item">
+                <span class="ben-promise__icon" aria-hidden="true"><BenIcon Name="truck" /></span>
+                <div>
+                    <p class="ben-promise__title">@ShippingTitle</p>
+                    <p class="ben-promise__text">@ShippingText</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="ben-promise__item">
+                <span class="ben-promise__icon" aria-hidden="true"><BenIcon Name="rotate-ccw" /></span>
+                <div>
+                    <p class="ben-promise__title">@(Info.ReturnsWindowDays > 0 ? $"{Info.ReturnsWindowDays}-day returns" : "Returns")</p>
+                    <p class="ben-promise__text">@(Info.ReturnsWindowDays > 0 ? "Changed your mind? Send it back." : "Ask us about a return.")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="ben-promise__item">
+                <span class="ben-promise__icon" aria-hidden="true"><BenIcon Name="lock" /></span>
+                <div>
+                    <p class="ben-promise__title">Secure payment</p>
+                    <p class="ben-promise__text">Your card goes straight to Stripe — we never see it.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="ben-promise__item">
+                <span class="ben-promise__icon" aria-hidden="true"><BenIcon Name="life-buoy" /></span>
+                <div>
+                    <p class="ben-promise__title">Need help?</p>
+                    <p class="ben-promise__text">
+                        @if (!string.IsNullOrWhiteSpace(Info.SupportEmail))
+                        {
+                            <a class="ben-link-normal" href="@($"mailto:{Info.SupportEmail}")">@Info.SupportEmail</a>
+                        }
+                        else
+                        {
+                            <a class="ben-link-normal" href="/contact">Get in touch</a>
+                        }
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StorePublicInfo Info { get; set; } = default!;
+
+    private string ShippingTitle => Info.FreeShippingOver is not null ? "Free shipping"
+        : Info.ShippingFlatRate == 0 ? "Free shipping" : "Flat-rate shipping";
+
+    private string ShippingText => Info.FreeShippingOver is { } over
+        ? $"On orders over {StoreMoney.Format(over)} in the US."
+        : Info.ShippingFlatRate == 0 ? "On every order in the US." : $"{StoreMoney.Format(Info.ShippingFlatRate)} an order, anywhere in the US.";
+}

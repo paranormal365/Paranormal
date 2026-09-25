@@ -1,0 +1,28 @@
+.bc-minimap {
+    position: absolute;
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    z-index: 8;
+    width: 160px;
+    height: 100px;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    background: var(--bc-surface-2);
+    box-shadow: var(--bc-node-shadow);
+    cursor: pointer;
+    touch-action: none;
+}
+
+.bc-minimap svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.bc-minimap__node { fill: var(--bc-accent-muted); stroke: var(--bc-border); stroke-width: 4px; }
+
+.bc-minimap__view { fill: none; stroke: var(--bc-accent); stroke-width: 12px; }
+
+@media (max-width: 767.98px) {
+    .bc-minimap { display: none; }
+}

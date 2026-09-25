@@ -1,0 +1,175 @@
+@using System.Timers
+@using Ben.Web.Services
+@using Ben.Data.Common.Enums
+@implements IDisposable
+@inject IBenAdminClient AdminClient
+
+@* ── "This place may already be on file" ──────────────────────────────────────
+   Offered, never applied. Two flats at one address are two places, and the only person who knows
+   which this is, is the one typing it. Lifted out of NewInvestigationWindow on 2026-09-17 when the
+   New Case page needed the same offer: a second copy of this wording and this "never applied"
+   rule would be a second copy of the thing that stops duplicate places being created. *@
+
+@if (_error is not null)
+{
+    <div class="alert alert-warning py-2 small mb-2" data-testid="place-candidates-error">@_error</div>
+}
+
+@if (_candidates.Count > 0)
+{
+    <div class="alert alert-info py-2 small mt-3 mb-0" data-testid="place-candidates">
+        <div class="fw-semibold mb-2">
+            @(_candidates.Count == 1
+                ? "This place may already be on file."
+                : $"{_candidates.Count} places on file look like this one.")
+        </div>
+
+        @foreach (var candidate in _candidates)
+        {
+            var c = candidate;
+            <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                <div>
+                    <div class="fw-semibold">@Describe(c)</div>
+                    <div class="text-secondary">
+                        @if (c.InvestigationCount > 0)
+                        {
+                            @($"{c.InvestigationCount} investigation{(c.InvestigationCount == 1 ? "" : "s")} recorded")
+                        }
+                        else
+                        {
+                            @("Nothing recorded there yet")
+                        }
+                        @if (c.DistanceMiles is { } miles && miles >= 0.005)
+                        {
+                            @($" · about {miles:0.00} miles away")
+                        }
+                        @if (c.Kind == PlaceKind.PublicLocation)
+                        {
+                            @(" · public location")
+                        }
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm"
+                        @onclick="@(() => OnChosen.InvokeAsync(c))">Use this place</button>
+            </div>
+        }
+
+        <div class="text-secondary mt-2">
+            None of these? Carry on typing — a new place will be created.
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The address being typed. Any change restarts the debounce.</summary>
+    [Parameter] public string? Street { get; set; }
+    [Parameter] public string? City { get; set; }
+    [Parameter] public string? State { get; set; }
+    [Parameter] public string? Zip { get; set; }
+
+    /// <summary>A landmark's name, which is the only text a place with no street address has.</summary>
+    [Parameter] public string? Name { get; set; }
+
+    /// <summary>Raised when somebody picks one. The caller decides what that means.</summary>
+    [Parameter] public EventCallback<PlaceCandidate> OnChosen { get; set; }
+
+    private List<PlaceCandidate> _candidates = [];
+    private string? _error;
+    private Timer? _timer;
+    private string _lastAsked = "";
+
+    /// <summary>
+    /// Watches the address the parent is holding, rather than taking its own input events.
+    /// </summary>
+    /// <remarks>
+    /// The parent re-renders on every keystroke it binds, so this runs on every keystroke and the
+    /// debounce lives here. Keyed on the composed address so an unrelated re-render — a date
+    /// picker, a dropdown — does not restart the clock and does not re-ask a question already
+    /// answered.
+    /// </remarks>
+    protected override void OnParametersSet()
+    {
+        var asked = Key();
+        if (asked == _lastAsked) return;
+        _lastAsked = asked;
+
+        _timer?.Stop();
+        _timer ??= Build();
+        _timer.Start();
+    }
+
+    private string Key() => $"{Street}|{City}|{State}|{Zip}|{Name}";
+
+    private Timer Build()
+    {
+        var timer = new Timer(600) { AutoReset = false };
+        timer.Elapsed += async (_, _) => await InvokeAsync(LookupAsync);
+        return timer;
+    }
+
+    private async Task LookupAsync()
+    {
+        // Nothing worth matching on yet. The rule needs an address or a name; a city alone would
+        // return half the county.
+        if (string.IsNullOrWhiteSpace(Street) && string.IsNullOrWhiteSpace(Name))
+        {
+            _candidates = [];
+            _error = null;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            // No coordinates: nothing has geocoded what is being typed. The server treats unknown
+            // distance as "no opinion" and matches on the text, which is why the rule tolerates a
+            // missing position.
+            var found = await AdminClient.FindPlaceCandidatesAsync(
+                Street, City, State, Zip, Name, latitude: null, longitude: null);
+
+            // A refusal read as "no match exists" invites exactly the duplicate this prevents, so
+            // it says so instead of quietly returning nothing.
+            _error = found.Failed
+                ? (found.SessionExpired
+                    ? "You've been signed out, so existing places could not be checked."
+                    : "Existing places could not be checked just now — saving may create a duplicate.")
+                : null;
+
+            _candidates = found.Items.ToList();
+        }
+        catch
+        {
+            // A suggestion that cannot be fetched is not worth interrupting anybody for. They are
+            // creating a place either way; the worst case is a duplicate, which is where this stood
+            // before the offer existed.
+            _candidates = [];
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Clears the list — for a caller that has just applied a choice of its own.</summary>
+    public void Clear()
+    {
+        _timer?.Stop();
+        _candidates = [];
+        _error = null;
+        StateHasChanged();
+    }
+
+    private static string Describe(PlaceCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Name)) return candidate.Name!;
+
+        var parts = new[] { candidate.StreetAddress1, candidate.City, candidate.State }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var described = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(described) ? "A place with no address on file" : described;
+    }
+
+    public void Dispose()
+    {
+        _timer?.Stop();
+        _timer?.Dispose();
+    }
+}

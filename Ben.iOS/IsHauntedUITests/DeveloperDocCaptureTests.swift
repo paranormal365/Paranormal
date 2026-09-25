@@ -285,7 +285,9 @@ final class DeveloperDocCaptureTests: XCTestCase {
         if AppNavigator.openSection("Profile", in: app) {
             settle(2); snap("70-profile")
             if tapLabel("My evidence") { settle(); snap("71-my-evidence"); tapLabel("Profile") }
-            if tapLabel("Security")    { settle(); snap("72-security");    tapLabel("Profile") }
+            // The row, not the "Security" section header above it — tapping the header does nothing and
+            // the "security" picture came out as a second copy of Profile (2026-09-16).
+            if tapLabel("Password & two-step sign-in") { settle(); snap("72-security"); tapLabel("Profile") }
             if tapLabel("About")       { settle(); snap("73-about") }
         }
     }

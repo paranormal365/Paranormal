@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using NUnit.Framework;
 
@@ -11,10 +10,10 @@ namespace Ben.Web.Playwright.Tests;
 /// <para>Ben, 2026-09-13: guests may hold seats without signing up, as long as the organizer can
 /// reach them and nobody can block an event with holds nobody stands behind.</para>
 ///
-/// <para><b>The link is read from the API's log.</b> The harness has no mail server, and the pick door
-/// writes the token to the log instead, as the public sign-up link always has. With no log to read
-/// (a run outside <c>scripts/run-e2e.sh</c>) the tests that need the link are ignored rather than
-/// passed.</para>
+/// <para><b>The link is read from the outbox.</b> The harness has no mail server; the pick letter is
+/// queued all the same, and the tests read its link there as the SuperAdmin
+/// (<see cref="BenTestBase.LinkFromTheOutboxAsync"/>). It used to be read from the API's log, which
+/// meant the API wrote a link that holds somebody's places into a text file.</para>
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
@@ -150,33 +149,13 @@ public class HostedEventEmailPickTests : BenTestBase
         await ClickUntilAsync(seat, Page.Locator("#picker-contact"));
     }
 
-    /// <summary>The link the letter would have carried, from the API's log.</summary>
+    /// <summary>The token in the link the pick letter carried, from the outbox.</summary>
     private async Task<string> TokenForAsync(string email)
     {
-        var log = Environment.GetEnvironmentVariable("BEN_E2E_API_LOG");
-        if (string.IsNullOrWhiteSpace(log) || !File.Exists(log))
-            Assert.Ignore("BEN_E2E_API_LOG is not set; run through scripts/run-e2e.sh to follow the emailed link.");
-
-        var pattern = new Regex($@"pick link for ""?{Regex.Escape(email)}""? was not sent\. Pick token: ""?([A-Za-z0-9_\-]+)");
-
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            await using var stream = new FileStream(log!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            var text = await reader.ReadToEndAsync();
-
-            var match = pattern.Matches(text).LastOrDefault();
-            if (match is not null)
-            {
-                _tokens.Add(match.Groups[1].Value);
-                return match.Groups[1].Value;
-            }
-
-            await Task.Delay(500);
-        }
-
-        Assert.Ignore("The API sent a real letter rather than logging the link, so there is nothing to follow.");
-        return "";
+        const string path = "/event-picks/";
+        var token = (await LinkFromTheOutboxAsync(email, path))[path.Length..];
+        _tokens.Add(token);
+        return token;
     }
 
     private async Task<IAPIRequestContext> SignedInAsync(string email, string password)

@@ -44,4 +44,25 @@ public enum OrgMessageChannel
     /// the staff. Every public feed query must exclude it, and a guard test says so.</para>
     /// </remarks>
     EventRoom = 5,
+
+    /// <summary>
+    /// The staff room for one hosted event: what the people running it say to each other about it
+    /// (item 238C).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Not the attendee room.</b> <see cref="EventRoom"/> is the guests; this is the venue.
+    /// The two must never be one channel with a flag, because the flag is what somebody forgets in
+    /// a query and the cost of forgetting is showing a guest what the staff said about them.</para>
+    ///
+    /// <para><b>One thread per event, not one per booking.</b> A weekend that sells out would
+    /// otherwise bury every other conversation the group is having. The root message carries the
+    /// event and holds the recipients; each alert is a reply to it, and a new reply marks the root
+    /// unread again — so the thread returns to the bell without becoming a second row in the
+    /// inbox.</para>
+    ///
+    /// <para><b>Why it exists at all, when the same news is already emailed.</b> A member with no
+    /// address, or one who has turned the letters off, hears nothing otherwise; and a venue that
+    /// wants to discuss a request has nowhere to do it that is attached to the request.</para>
+    /// </remarks>
+    EventStaffRoom = 6,
 }

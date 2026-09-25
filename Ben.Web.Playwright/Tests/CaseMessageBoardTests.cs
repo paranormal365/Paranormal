@@ -47,6 +47,115 @@ public class CaseMessageBoardTests : BenTestBase
         await WaitUntilLoadedAsync();
     }
 
+    /// <summary>
+    /// A case nobody has written to yet opens, and stays open.
+    /// </summary>
+    /// <remarks>
+    /// <para>The thread scrolls itself to its newest message after every load, through an element
+    /// reference on the scrolling list. That list is only rendered when there ARE messages — an
+    /// empty thread draws "No messages yet" instead — so on an empty one the reference was still
+    /// default and the call handed JavaScript an element that had never existed. The resulting
+    /// JSException was not among the exceptions the handler caught, so it ended the circuit:
+    /// opening the Messages tab of an unwritten case replaced the page with "An unhandled error
+    /// has occurred" (Ben, 2026-09-19, with the console open).</para>
+    ///
+    /// <para><b>It opens a case of its own, and that is the point.</b> Two earlier versions hunted
+    /// the seed for an unwritten thread — first among the client's cases, then among the whole
+    /// group's — and every single case already carries a conversation, so both ignored themselves
+    /// against the unfixed component instead of failing. A regression test that cannot reach the
+    /// state it is about is worse than none, so this one makes the state.</para>
+    ///
+    /// <para>Asserted on the error banner rather than on how the page looks, because the page keeps
+    /// showing whatever it had drawn before the circuit died — the tab looked fine, and only the
+    /// banner and a page that no longer answered said otherwise.</para>
+    /// </remarks>
+    [Test]
+    public async Task AThreadWithNoMessagesOpensWithoutKillingThePage()
+    {
+        await LoginAsync(UserEmail, UserPassword);   // Sarah, who may open a case
+        if (!await OpenOrganizationAsync("Paranormal365"))
+        { Assert.Ignore("That group is not in the seed data."); return; }
+
+        var orgId = System.Text.RegularExpressions.Regex.Match(Page.Url, @"/organizations/([0-9a-f\-]+)").Groups[1].Value;
+        if (string.IsNullOrEmpty(orgId)) { Assert.Ignore("Could not read the group from the URL."); return; }
+
+        // Every run opens a case, and the group's plan allows ten open at once: the ones earlier
+        // runs left had filled it by 09/24, and the page — rightly — refused an eleventh ("you are
+        // using all of it"). So the cases this test made go first, and this run's goes at the end.
+        await DeleteUnwrittenThreadCasesAsync(orgId);
+
+        await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/new");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        var title = $"Unwritten thread {Guid.NewGuid():N}";
+        await FillAndConfirmAsync("#casecreatepage-case-title-b1b1", title);
+        await FillAndConfirmAsync("#casecreatepage-street-address-5b76", "200 Cragfont Rd");
+        await FillAndConfirmAsync("#casecreatepage-city-4662", "Castalian Springs");
+        await FillAndConfirmAsync("#casecreatepage-state-7b45", "TN");
+        await FillAndConfirmAsync("#casecreatepage-zip-code-ba79", "37031");
+        // A public location, so nothing here depends on the private-engagement plan gate.
+        await Page.CheckAsync("#case-place-kind-public");
+
+        // The title again, LAST.
+        //
+        // It is the first field on a freshly navigated page, and this page renders long before
+        // the circuit connects: a value typed in that window is in the DOM and is then overwritten
+        // by the first interactive render with the server's empty one. The keystroke is not
+        // ignored, it is erased — the documented Blazor Server race — and Open Case then stays
+        // disabled for want of a title, which is what made this test fail in a full run and pass
+        // on its own.
+        await FillAndConfirmAsync("#casecreatepage-case-title-b1b1", title);
+
+        var open = Main.GetByRole(AriaRole.Button, new() { Name = "Open Case" })
+                       .Or(Main.Locator("button.btn-primary")).First;
+
+        // Enabled before pressed, so a form the page has not accepted says so here rather than as
+        // a navigation that never happens.
+        await Expect(open).ToBeEnabledAsync(new() { Timeout = 20_000 });
+
+        await ClickUntilUrlAsync(open, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
+        await WaitUntilLoadedAsync();
+
+        await OpenTabAsync("Messages", Compose);
+
+        // Wait for the thread to SETTLE. It loads after the page does, so "No messages yet" is
+        // absent for a moment even on a case that has none.
+        var empty  = Page.GetByText("No messages yet.", new() { Exact = false });
+        var bubble = Page.Locator("[data-testid=case-message-bubble]");
+        for (var wait = 0; wait < 40; wait++)
+        {
+            if (await empty.CountAsync() > 0 || await bubble.CountAsync() > 0) break;
+            await Page.WaitForTimeoutAsync(250);
+        }
+
+        await Expect(empty.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The whole point: an empty thread, and a circuit that is still alive.
+        await Expect(Page.Locator("#blazor-error-ui")).ToBeHiddenAsync(new() { Timeout = 5_000 });
+
+        // And still answering, which a terminated circuit cannot do.
+        await Expect(Compose).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await DeleteUnwrittenThreadCasesAsync(orgId);
+    }
+
+    /// <summary>
+    /// Deletes the cases this test opens (titled "Unwritten thread …"), as a SuperAdmin through the
+    /// case delete's own confirmation — the title typed back.
+    /// </summary>
+    private static async Task DeleteUnwrittenThreadCasesAsync(string orgId)
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var cases = await api.SendAsync(HttpMethod.Get, $"/api/organizations/{orgId}/cases");
+        foreach (var item in cases.EnumerateArray())
+        {
+            var title = item.GetProperty("title").GetString() ?? "";
+            if (!title.StartsWith("Unwritten thread ", StringComparison.Ordinal)) continue;
+            await api.SendAsync(HttpMethod.Delete, $"/api/admin/cases/{item.GetProperty("id").GetString()}/purge", new { confirmTitle = title });
+        }
+    }
+
     // ── Client-side: panel rendering ─────────────────────────────────────────
 
     [Test]

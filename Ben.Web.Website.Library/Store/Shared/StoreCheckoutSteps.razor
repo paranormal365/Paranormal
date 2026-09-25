@@ -1,0 +1,56 @@
+@*
+    Cart → Place order → Payment → Complete (storefront S2.5), Smarty's step indicator. All four
+    labels always, so a buyer can see how far there is to go; a phone shows the numbered dots and
+    one line saying which step this is.
+
+    From the cart, "Place order" is a link to the checkout; from the checkout, "Cart" goes back.
+    Later steps are never links — Payment and Complete cannot be reached by skipping ahead.
+*@
+
+<div class="mb-3">
+    <ol class="ben-steps" aria-label="Checkout steps">
+        @foreach (var (step, label) in Labels)
+        {
+            <li class="ben-steps__item @Css(step)" aria-current="@(step == Current ? "step" : null)">
+                @if (LinkFor(step) is { } href)
+                {
+                    <a class="ben-steps__label ben-link-normal" href="@href">@label</a>
+                }
+                else
+                {
+                    <span class="ben-steps__label">@label</span>
+                }
+            </li>
+        }
+    </ol>
+    <div class="ben-steps__caption">Step @((int)Current + 1) of 4 · @Labels.First(l => l.Step == Current).Label</div>
+    @if (Secure)
+    {
+        <div class="text-center mt-2">
+            <span class="ben-steps__secure"><BenIcon Name="lock" /> Secured checkout</span>
+        </div>
+    }
+</div>
+
+@code {
+    internal static readonly (StoreCheckoutStep Step, string Label)[] Labels =
+    [
+        (StoreCheckoutStep.Cart, "Cart"), (StoreCheckoutStep.PlaceOrder, "Place order"),
+        (StoreCheckoutStep.Payment, "Payment"), (StoreCheckoutStep.Complete, "Complete"),
+    ];
+
+    [Parameter] public StoreCheckoutStep Current { get; set; }
+
+    /// <summary>Shows "Secured checkout" with a lock under the steps.</summary>
+    [Parameter] public bool Secure { get; set; }
+
+    private string? LinkFor(StoreCheckoutStep step) => (Current, step) switch
+    {
+        (StoreCheckoutStep.Cart, StoreCheckoutStep.PlaceOrder) => "/store/checkout",
+        (StoreCheckoutStep.PlaceOrder, StoreCheckoutStep.Cart) => "/store/cart",
+        _ => null,
+    };
+
+    private string? Css(StoreCheckoutStep step)
+        => step < Current ? "ben-steps__item--done" : step == Current ? "ben-steps__item--current" : null;
+}

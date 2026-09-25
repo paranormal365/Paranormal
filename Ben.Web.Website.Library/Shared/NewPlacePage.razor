@@ -1,0 +1,127 @@
+@page "/places/new"
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Putting a public location on the map (item 250).
+
+    THIS DOOR DID NOT EXIST. Until now a place could only appear sideways — a case bound one, an
+    investigation bound one, publishing a session made one — so a landmark nobody had yet
+    investigated could not be named at all, and the page that gathers what has been found there
+    could not be brought into existence on purpose. Ben's first sentence about this feature was
+    "I would like to be able to create public locations like Cragfont".
+
+    PUBLIC LOCATIONS ONLY, and the form does not offer the choice. A private residence is
+    somebody's home; every route that makes one runs through a client relationship, and this has
+    none. The sentence under the heading says so rather than leaving it to be discovered.
+*@
+
+<PageTitle>Add a public location</PageTitle>
+
+<div class="container py-4" style="max-width:640px;">
+
+    <h1 class="h4 mb-1">Add a public location<HelpLink Slug="getting-started" Anchor="public-locations" /></h1>
+    <p class="text-secondary small mb-4">
+        A landmark, a business, a cemetery, a bridge — somewhere anybody can go. Not somebody's
+        home: those are added by the group a client invites.
+    </p>
+
+    @if (!UserState.IsAuthenticated)
+    {
+        <div class="alert alert-info" id="newplace-signin">
+            <a href="@Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)">Sign in</a>
+            to add a place.
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="newplace-name">What is it called?</label>
+                    <input id="newplace-name" class="form-control" @bind="_name" maxlength="200"
+                           placeholder="Cragfont" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="newplace-street">Street</label>
+                    <input id="newplace-street" class="form-control" @bind="_street" maxlength="200"
+                           placeholder="200 Cragfont Road" />
+                    <div class="form-text">Optional, but it is how two people naming the same
+                        building end up on one page rather than two.</div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label" for="newplace-city">Town or city</label>
+                        <input id="newplace-city" class="form-control" @bind="_city" maxlength="100"
+                               placeholder="Castalian Springs" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label" for="newplace-state">State</label>
+                        <input id="newplace-state" class="form-control" @bind="_state" maxlength="50"
+                               placeholder="TN" />
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label" for="newplace-zip">Postcode</label>
+                        <input id="newplace-zip" class="form-control" @bind="_zip" maxlength="20" />
+                    </div>
+                </div>
+
+                @if (_says is { Length: > 0 })
+                {
+                    <div class="alert alert-warning" id="newplace-says">@_says</div>
+                }
+
+                <button type="button" class="btn btn-primary" id="newplace-add"
+                        @onclick="AddAsync" disabled="@_busy">
+                    <BenIcon Name="map-pin" Class="me-1" />@(_busy ? "Adding…" : "Add it")
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _name = string.Empty;
+    private string _street = string.Empty;
+    private string _city = string.Empty;
+    private string _state = string.Empty;
+    private string _zip = string.Empty;
+    private bool _busy;
+    private string? _says;
+
+    protected override async Task OnInitializedAsync()
+        => await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+
+    /// <summary>
+    /// Creates it, or goes to the one that was already there.
+    /// </summary>
+    /// <remarks>
+    /// An address that already exists is not a refusal. Somebody wanting a page for Cragfont gets
+    /// Cragfont — two rows for one building would split its evidence in half and make the merge
+    /// screen somebody's afternoon.
+    /// </remarks>
+    private async Task AddAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _says = null;
+        try
+        {
+            var (created, error) = await AdminClient.CreatePublicPlaceAsync(
+                new NewPublicPlaceRequest(
+                    _name, _street, null, _city, _state, _zip, "US"));
+
+            if (created is null)
+            {
+                _says = error ?? "That could not be added just now. Try again.";
+                return;
+            }
+
+            NavManager.NavigateTo($"/places/{created.Id}");
+        }
+        finally { _busy = false; }
+    }
+}

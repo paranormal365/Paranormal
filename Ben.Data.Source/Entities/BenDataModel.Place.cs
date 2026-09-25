@@ -30,6 +30,23 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public string? Name { get; set; }
 
+        /// <summary>
+        /// What this place is, for somebody who has never been (item 250).
+        /// </summary>
+        /// <remarks>
+        /// <para>Ben, 2026-09-21: <i>"we can create a page with information about it."</i> A public
+        /// location's page is a page about a building, and a list of evidence with no account of
+        /// what the building IS tells a reader nothing they can weigh it against.</para>
+        ///
+        /// <para>Plain text, not markup. It is written by whoever gets there first and edited by
+        /// anybody after them, which is the shape of a thing that must not be able to carry a
+        /// link, a script or a layout onto a public page.</para>
+        ///
+        /// <para>Null on a private residence and on every place that predates this: somebody's
+        /// home has no public page to describe.</para>
+        /// </remarks>
+        public string? Description { get; set; }
+
         public string? StreetAddress1 { get; set; }
         public string? StreetAddress2 { get; set; }
         public string? City { get; set; }

@@ -1,0 +1,51 @@
+/* A recording: a play button, its name, and the waveform under them. */
+
+.bc-audio-wrap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: -.5rem;
+    padding: .375rem .5rem;
+    gap: .25rem;
+}
+
+.bc-audio__head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+}
+
+.bc-audio__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .8125rem;
+}
+
+/* The player takes what is left. min-height:0 so it can shrink inside the flex column rather
+   than pushing the block taller than the person sized it. */
+.bc-audio__player {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+}
+
+.bc-audio__problem {
+    flex: 0 0 auto;
+    color: var(--bc-danger-text);
+    font-size: .75rem;
+}
+
+.bc-audio__caption {
+    flex: 0 0 auto;
+    margin: 0;
+    color: var(--bc-text-muted);
+    font-size: .75rem;
+}
+
+.bc-audio__edit {
+    flex: 0 0 auto;
+}

@@ -44,15 +44,21 @@ public sealed class SqliteTestDb : IAsyncDisposable, IDisposable
     }
 
     /// <summary>Opens a fresh database with the whole schema created.</summary>
-    public static async Task<SqliteTestDb> CreateAsync()
+    /// <param name="interceptors">
+    /// Optional EF interceptors for every context the factory hands out — how a test makes
+    /// something happen at an exact moment, such as a second save landing between another save's
+    /// read and its write (the canvas board race test).
+    /// </param>
+    public static async Task<SqliteTestDb> CreateAsync(params Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor[] interceptors)
     {
         var connection = new SqliteConnection("Filename=:memory:");
         await connection.OpenAsync();
 
-        var options = new DbContextOptionsBuilder<BenDataContext>()
+        var builder = new DbContextOptionsBuilder<BenDataContext>()
             .UseSqlite(connection)
-            .ReplaceService<IModelCustomizer, SqliteFriendlyModelCustomizer>()
-            .Options;
+            .ReplaceService<IModelCustomizer, SqliteFriendlyModelCustomizer>();
+        if (interceptors.Length > 0) builder.AddInterceptors(interceptors);
+        var options = builder.Options;
 
         await using (var db = new BenDataContext(options))
             await db.Database.EnsureCreatedAsync();

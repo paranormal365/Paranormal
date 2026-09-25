@@ -1,0 +1,101 @@
+@page "/store/orders/lookup"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+
+<PageTitle>Find my order — Store</PageTitle>
+
+@*
+    "Find my order" (storefront S4.13): an order number and an email, and — if they match — the
+    order's link by email. The page says the same thing whether or not anything matched, because
+    the server does: an answer that differed would tell a stranger which email bought what.
+
+    NOT behind the store switch: a guest who bought before the shop went dark can still get back.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:40rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/store">Store</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Find my order</li>
+        </ol>
+    </nav>
+    <h1 class="h3">Find my order<HelpLink Slug="shopping-at-the-store" Anchor="your-orders" /></h1>
+    <p class="text-secondary">
+        Guests get a private link by email — keep that email, it is the only way back; this page re-sends it.
+        Ordered while signed in? Your orders are under <a href="/store/orders">My Orders</a> — this page emails you a sign-in link to it.
+    </p>
+
+    <BenInteractiveOnly>
+        @if (_sent)
+        {
+            <div class="alert alert-success" role="status" data-testid="lookup-sent">
+                If those match an order, we've just emailed you a link to it.
+            </div>
+            <button type="button" class="btn btn-link px-0" @onclick="@(() => _sent = false)">Look up another order</button>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body">
+                    <div class="form-floating mb-3">
+                        <input type="text" class="form-control" id="lookup-number" placeholder="Order number" inputmode="numeric" autocomplete="off"
+                               @bind="_number" @bind:event="oninput" />
+                        <label for="lookup-number">Order number</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <input type="email" class="form-control" id="lookup-email" placeholder="Email address" autocomplete="email"
+                               @bind="_email" @bind:event="oninput" />
+                        <label for="lookup-email">Email address used for the order</label>
+                    </div>
+                    @if (_refusal is not null)
+                    {
+                        <div class="alert alert-danger py-2" role="alert" id="lookup-refusal">@_refusal</div>
+                    }
+                    <button type="button" class="btn btn-primary" id="lookup-send" @onclick="SendAsync" disabled="@_busy">Email me the link</button>
+                </div>
+            </div>
+        }
+    </BenInteractiveOnly>
+</div>
+
+@code {
+    private string _number = "", _email = "";
+    private string? _refusal;
+    private bool _busy, _sent;
+
+    private async Task SendAsync()
+    {
+        if (_busy) return;
+        if (!_number.Any(char.IsAsciiDigit))
+        {
+            var error = "Enter the order number from your receipt.";
+            _refusal = error;
+            return;
+        }
+        if (StoreCheckoutRules.EmailProblem(_email) is { } emailProblem)
+        {
+            var error = emailProblem;
+            _refusal = error;
+            return;
+        }
+        _busy = true;
+        _refusal = null;
+        try
+        {
+            if (await Store.LookupStoreOrderAsync(new GuestOrderLookupRequest(_number.Trim(), _email.Trim())))
+            {
+                _sent = true;
+                _number = _email = "";
+            }
+            else
+            {
+                var error = "That couldn't be sent just now. Wait a minute and try again.";
+                _refusal = error;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -80,7 +80,7 @@ public class UploadFileRegionNoteControllerTests
         IDbContextFactory<BenDataContext> factory,
         Guid? userId = null)
     {
-        var ctrl = new UploadFileRegionNoteController(factory, CreateMapper(), new Mock<IAuditLogService>().Object);
+        var ctrl = new UploadFileRegionNoteController(factory, CreateMapper(), new Mock<IAuditLogService>().Object, new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())

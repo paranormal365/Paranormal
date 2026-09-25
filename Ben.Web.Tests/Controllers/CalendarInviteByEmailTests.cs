@@ -55,7 +55,7 @@ public class CalendarInviteByEmailTests
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
             new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
-            Support.SilentTourMail.Instance)
+            Support.SilentTourMail.Instance, new ForwardingOutboxQueue(UnconfiguredEmail()))
         {
             ControllerContext = new ControllerContext
             {
@@ -206,7 +206,7 @@ public class CalendarInviteByEmailTests
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
             new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
-            Support.SilentTourMail.Instance)
+            Support.SilentTourMail.Instance, new ForwardingOutboxQueue(UnconfiguredEmail()))
         {
             ControllerContext = new ControllerContext
             {
@@ -269,7 +269,7 @@ public class CalendarInviteByEmailTests
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
             new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
-            Support.SilentTourMail.Instance)
+            Support.SilentTourMail.Instance, new ForwardingOutboxQueue(UnconfiguredEmail()))
         {
             ControllerContext = new ControllerContext
             {

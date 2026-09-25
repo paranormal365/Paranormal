@@ -1,0 +1,26 @@
+@*
+    Zoom out, the zoom percentage (which resets to 100%), zoom in, and fit. Outside the board element, so
+    the gesture script never sees these pointers.
+*@
+
+<div class="bc-zoom" role="group" aria-label="Zoom">
+    <button type="button" class="bc-zoom__button" data-bc-action="zoom-out" aria-label="Zoom out" title="Zoom out" @onclick="@(() => OnAction.InvokeAsync("zoom-out"))">
+        <BcIcon Name="zoom-out" />
+    </button>
+    <button type="button" class="bc-zoom__button bc-zoom__percent" data-bc-action="zoom-reset" aria-label="Reset zoom to 100%" title="Reset zoom to 100%" @onclick="@(() => OnAction.InvokeAsync("zoom-reset"))">
+        @Percent
+    </button>
+    <button type="button" class="bc-zoom__button" data-bc-action="zoom-in" aria-label="Zoom in" title="Zoom in" @onclick="@(() => OnAction.InvokeAsync("zoom-in"))">
+        <BcIcon Name="zoom-in" />
+    </button>
+    <button type="button" class="bc-zoom__button" data-bc-action="fit" aria-label="Fit" title="Fit" @onclick="@(() => OnAction.InvokeAsync("fit"))">
+        <BcIcon Name="maximize" />
+    </button>
+</div>
+
+@code {
+    [Parameter] public double Zoom { get; set; } = 1;
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+
+    private string Percent => Math.Round(Zoom * 100).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

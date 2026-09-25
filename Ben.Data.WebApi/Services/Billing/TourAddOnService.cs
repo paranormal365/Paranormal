@@ -99,7 +99,7 @@ public sealed class TourAddOnService
         var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
         var tier = tiers.FirstOrDefault(t => t.Id == sub.SubscriptionTierId);
         if (tier is null || tier.IsBandedByMembers
-            || SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } unitPrice)
+            || SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } liveUnitPrice)
             return new Outcome(0m, "This plan is not priced per tour, so nothing changed.");
 
         if (units <= sub.TourCountAtPeriodStart)
@@ -108,9 +108,38 @@ public sealed class TourAddOnService
         if (sub.CurrentPeriodStart is not { } periodStart || sub.CurrentPeriodEnd is not { } periodEnd)
             return new Outcome(0m, "This tour is counted at your next renewal.");
 
+        // The CONTRACTED unit price, unless the live one is cheaper (2026-09-17 audit).
+        //
+        // This priced the new tour from the live tier alone, so a price rise reached a group in
+        // the middle of a period they had already bought — the one thing the contract exists to
+        // prevent. EffectiveTermsResolver.EffectivePrice states the rule for the same question:
+        // "the contract's for the rest of the period, unless the live price for the same band and
+        // cadence has dropped below it — a price cut is an improvement too." That method compares
+        // whole-period prices and a tour add-on needs the price of ONE unit, so the same rule is
+        // applied per unit here rather than re-derived differently.
+        //
+        // The contracted unit comes back out of the period price by the count it was sold for,
+        // which is exactly how PeriodOpener put it in: ListPrice(unitPrice, tourCount). That
+        // division is only sound because the add-on no longer adds itself back into
+        // PriceAtPeriodStart — it used to, and dividing a price with add-ons baked into it would
+        // have invented a unit price nobody was ever quoted.
+        var contract = await db.SubscriptionContractTerms.AsNoTracking()
+            .Where(t => t.OrganizationSubscriptionId == sub.Id && t.PeriodStartUtc == sub.CurrentPeriodStart)
+            .FirstOrDefaultAsync(ct);
+
+        var soldPeriodPrice = contract?.Price ?? sub.PriceAtPeriodStart;
+        var soldForTours    = Math.Max(1, sub.TourCountAtPeriodStart);
+        var contractedUnit  = soldPeriodPrice > 0m
+            ? Math.Round(soldPeriodPrice / soldForTours, 2, MidpointRounding.AwayFromZero)
+            : liveUnitPrice;
+
+        // Never more than either: the contract holds a rise off, and a cut is passed on.
+        var unitPrice = Math.Min(contractedUnit, liveUnitPrice);
+
         var extra = units - sub.TourCountAtPeriodStart;
         var now = DateTime.UtcNow;
-        var payable = TourBilling.Remainder(unitPrice, periodStart, periodEnd, now) * extra;
+        // All the extra units priced together, so the cent is rounded once rather than per tour.
+        var payable = TourBilling.Remainder(unitPrice, periodStart, periodEnd, now, extra);
 
         // A coupon that is still running applies here too. Without this, a business three days
         // into "your first three months are free" was charged real money for its second tour —
@@ -120,9 +149,28 @@ public sealed class TourAddOnService
             .Where(r => r.OrganizationId == org.Id)
             .OrderByDescending(r => r.RedeemedAtUtc)
             .FirstOrDefaultAsync(ct);
-        if (redemption is not null && CouponMath.IsStillApplying(redemption))
-            payable = CouponMath.PriceFor(payable, redemption.Coupon).Payable;
 
+        // ...but only a PERCENTAGE one (2026-09-17 audit). A percentage is a statement about any
+        // amount, so taking it off an add-on is the same promise as taking it off the period. A
+        // FIXED amount is a statement about the period's own invoice, and it has already been spent
+        // there — the checkout and the renewal job both subtract it from the list price. Taking it
+        // off again here charged it twice, and then once more for every further tour, because
+        // nothing about an add-on decrements PeriodsRemaining. A $50-off coupon against tours
+        // prorating to $20 made every tour free, one at a time, for the whole period and every
+        // period the redemption still covered. That is unbounded, it is silent, and it reads as a
+        // working discount from every screen.
+        //
+        // The period's own price keeps the fixed amount in full; this only declines to spend it a
+        // second time. IsStillApplying still gates both, so an exhausted coupon discounts nothing.
+        if (redemption is not null
+            && CouponMath.IsStillApplying(redemption)
+            && redemption.Coupon?.PercentOff is > 0)
+        {
+            payable = CouponMath.PriceFor(payable, redemption.Coupon).Payable;
+        }
+
+        // Both inputs are already whole cents, so this changes nothing today. Kept as the last
+        // word on what is charged, so nothing upstream can ever hand the gateway a fraction.
         payable = Math.Round(payable, 2, MidpointRounding.AwayFromZero);
 
         // The period is all but over. Nothing meaningful is owed for the hours left, and the
@@ -135,6 +183,7 @@ public sealed class TourAddOnService
             await db.SaveChangesAsync(ct);
             return new Outcome(0m,
                 redemption is not null && CouponMath.IsStillApplying(redemption)
+                                       && redemption.Coupon?.PercentOff is > 0
                     ? $"Nothing to pay — your coupon covers this period. Your renewal on "
                       + $"{periodEnd:MM/dd/yyyy} will be for {units} tours."
                     : $"Nothing more this period — your renewal on {periodEnd:MM/dd/yyyy} covers {units} tours.");
@@ -196,8 +245,22 @@ public sealed class TourAddOnService
             DateCreated = now, CreatedByAppUserId = byUserId,
         };
 
+        // The COUNT moves, because it is the coverage marker this method exists to advance: it
+        // is what decides whether the next tour owes anything for this period.
         sub.TourCountAtPeriodStart = units;
-        sub.PriceAtPeriodStart += payable;
+
+        // The PRICE does not (2026-09-17 audit). This did `PriceAtPeriodStart += payable`, and
+        // that field's own summary says what it is for: "Price agreed for this period, copied from
+        // the tier so a later price change does not silently rewrite what was charged." A prorated
+        // mid-period add-on rewrote it — to a figure that was never the price of anything. A $30
+        // month with a tour added half way through read $44.50, which is neither what the period
+        // was sold for nor what the next one costs ($60, for two tours). It is shown to the group
+        // as their period price and to SuperAdmin on the subscriptions grid, and it is the value
+        // snapshotted into the contract if a period is ever re-opened from it.
+        //
+        // The add-on is already recorded where a charge belongs: its own Charge and Payment rows
+        // above, with the amount, the tax, the provider reference and a receipt number. Adding it
+        // here as well recorded the same money twice, in the one place designed not to move.
         sub.DateUpdated = now;
         sub.UpdatedByAppUserId = byUserId;
 

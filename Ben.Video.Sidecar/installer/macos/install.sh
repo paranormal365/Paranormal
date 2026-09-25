@@ -25,6 +25,9 @@ LABEL="video.ben.sidecar"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG_DIR="$HOME/Library/Logs/BenVideo"
 EXE="$DEST_APP/Contents/MacOS/Ben.Video.Sidecar"
+# Must match Ben.Video.Core SidecarProtocol.DefaultPort — launchd binds this, and the editor scans
+# from it. A guard test compares the two so they cannot drift apart silently.
+SIDECAR_PORT=43117
 
 if [[ ! -d "$SRC_APP" ]]; then
   echo "error: $SRC_APP not found — run installer/macos/build.sh first." >&2
@@ -32,7 +35,9 @@ if [[ ! -d "$SRC_APP" ]]; then
 fi
 
 # Unload before overwriting: replacing the binary under a running service leaves launchd supervising
-# a process whose executable no longer exists, and KeepAlive then respawns from the old inode.
+# a process whose executable no longer exists. It matters more now the job is socket-activated, not
+# less — launchd holds the port across the swap, so the next connection would otherwise start the
+# OLD inode with the new app installed around it.
 if launchctl list "$LABEL" >/dev/null 2>&1; then
   echo "==> Stopping the running sidecar"
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null || true
@@ -68,10 +73,35 @@ cat > "$PLIST" <<PLIST
 <dict>
     <key>Label</key>              <string>$LABEL</string>
     <key>ProgramArguments</key>   <array><string>$EXE</string></array>
-    <key>RunAtLoad</key>          <true/>
-    <!-- Restart if it dies, but not if it exits cleanly (a deliberate shutdown should stay down). -->
-    <key>KeepAlive</key>          <dict><key>SuccessfulExit</key><false/></dict>
     <key>ProcessType</key>        <string>Adaptive</string>
+    <!-- Started ON DEMAND, and not before. Ben, 2026-09-19: "I only want it to run when the video
+         editor is running. I want it to end if the end user is not using the video editor."
+
+         So there is no RunAtLoad and no KeepAlive. launchd binds the port below itself and holds
+         it whether or not the process exists; the first connection starts the process and hands it
+         the already-bound socket (Program.cs / LaunchdSockets). The editor's ordinary health probe
+         IS that first connection, so nothing in the editor had to learn about any of this.
+
+         The process ends itself after a quiet spell with no job running (IdleShutdownService), and
+         with no KeepAlive launchd simply leaves it ended until somebody looks again. A crash is the
+         same: nothing restarts it now, the next connection does. -->
+    <key>Sockets</key>
+    <dict>
+      <key>Listener</key>
+      <dict>
+        <key>SockNodeName</key>    <string>127.0.0.1</string>
+        <key>SockServiceName</key> <string>$SIDECAR_PORT</string>
+        <key>SockType</key>        <string>stream</string>
+        <key>SockFamily</key>      <string>IPv4</string>
+      </dict>
+    </dict>
+    <!-- launchd starts a process with its working directory at "/" unless told otherwise, and an
+         ASP.NET Core app that is not told where its content root is takes it from there — which
+         put a recursive file watch over the whole filesystem and pinned a core for as long as the
+         service was up (2026-09-19). Program.cs states the content root itself now, so this is
+         belt and braces; it also stops anything else the app does with relative paths resolving
+         against the root of the disk. -->
+    <key>WorkingDirectory</key>   <string>$DEST_APP/Contents/MacOS</string>
     <key>StandardOutPath</key>    <string>$LOG_DIR/sidecar.log</string>
     <key>StandardErrorPath</key>  <string>$LOG_DIR/sidecar.log</string>
 </dict>
@@ -162,6 +192,7 @@ Installed:
   agent    $PLIST
   logs     $LOG_DIR/sidecar.log
 
-It starts automatically at login.
+It is not running now, and it will not start at login. It starts by itself the moment the
+video editor looks for it, and stops again after fifteen quiet minutes.
 To remove it: ~/Applications/Uninstall BenVideo Sidecar.command  (right-click -> Open)
 EOF

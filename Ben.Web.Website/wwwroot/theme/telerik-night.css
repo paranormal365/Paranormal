@@ -19,7 +19,14 @@
     --kendo-color-primary:            var(--bs-primary, #37508a);
     --kendo-color-primary-contrast:   #fff;
     --kendo-color-secondary:          var(--bs-secondary, #6c757d);
-    --kendo-color-success:            var(--bs-success, #489e48);
+    /* The one colour that is NOT --bs-success. Kendo uses this as a FILL with -contrast on top
+       (that is what the -contrast variables below are for), and white on #489e48 is 3.35:1 —
+       the editor's Export button, found in the 2026-09-22 audit. --ben-success-behind-white is
+       the same green darkened just far enough to carry white, defined in app.css beside the
+       .bg-success badges that had the identical fault. --bs-success itself is untouched, so green
+       TEXT and green borders keep the template's colour. */
+    --kendo-color-success:            var(--ben-success-behind-white, #3c833c);
+    --kendo-color-success-contrast:   #fff;
     --kendo-color-info:               var(--bs-info, #66366c);
     --kendo-color-warning:            var(--bs-warning, #aaa256);
     --kendo-color-error:              var(--bs-danger, #a85593);

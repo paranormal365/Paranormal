@@ -62,6 +62,11 @@ public sealed class AuthReadyOnRoutablePagesTests
         ["InviteAccept.razor"]          = "Reached from an invitation link, possibly signed out.",
         ["Home.razor"]                  = "Renders for everyone; its signed-in extras do their own waiting.",
 
+        // Storefront: the store is for anybody, account or not.
+        ["StoreHome.razor"]             = "Works signed out; the store is for anybody.",
+        ["StoreListing.razor"]          = "Works signed out; a shared listing link is its main entry point.",
+        ["StoreProduct.razor"]          = "Works signed out; awaits auth only for a SuperAdmin's ?preview=1, which needs the token.",
+
         // Both found by this test on its first run, and both checked rather than assumed:
         ["EquipmentModelPage.razor"]    = "The public equipment catalogue — /api/equipment-catalog/models answers "
                                         + "200 with no token, and the help states anyone may browse it signed out.",

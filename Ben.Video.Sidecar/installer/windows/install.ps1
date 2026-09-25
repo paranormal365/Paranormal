@@ -48,7 +48,9 @@ New-ItemProperty -Path $RunKey -Name $RunName -Value "`"$Exe`"" -PropertyType St
 Write-Host '==> Starting the sidecar'
 $stdout = Join-Path $LogDir 'sidecar.log'
 $stderr = Join-Path $LogDir 'sidecar.err.log'
-Start-Process -FilePath $Exe -WorkingDirectory $Dest -WindowStyle Hidden `
+# No -WindowStyle Hidden: it is a windowed program with no console now, and Windows applies a
+# hidden style to a program's first window - which would be the pairing window.
+Start-Process -FilePath $Exe -WorkingDirectory $Dest `
               -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
 # Ask the running process what it is, rather than reading the log. The log is append-only, so an
@@ -79,6 +81,7 @@ Write-Host "Installed and running on port $port."
 Write-Host "  app   $Dest"
 Write-Host "  logs  $LogDir"
 Write-Host ''
-Write-Host 'Opening the pairing page. Type the 6-digit code into the editor, under the'
+Write-Host 'A new install shows a window with its pairing code: copy it into the editor, under the'
 Write-Host 'sidecar chip in the toolbar. It starts by itself when you sign in from now on.'
-Start-Process "http://127.0.0.1:$port/pair"
+# No pairing page opened here any more: the sidecar's own window shows the code, and loading /pair
+# would mint a newer code and quietly retire the one in that window.

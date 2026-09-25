@@ -1,0 +1,109 @@
+@inject IBenAdminClient Client
+
+@*
+    Writing or editing a review (storefront S6.3), after Smarty's review form: the stars, a title,
+    a few words. Submit is never greyed out — a review with no stars or no words answers in the
+    rule's own sentence (StoreReviewSentences), the same one the server would give. A review the
+    server refuses stays in the boxes with the refusal under them. An edit goes back to the
+    moderators, and the dialog says so before it is sent.
+*@
+
+<BenModal Visible="Visible" VisibleChanged="VisibleChanged" Title="@(Existing is null ? $"Review {ProductName}" : "Edit your review")">
+    <ChildContent>
+        <fieldset class="mb-3">
+            <legend class="form-label fs-6 mb-1">Your rating</legend>
+            <div class="ben-star-pick" role="radiogroup" aria-label="Your rating">
+                @for (var i = 1; i <= 5; i++)
+                {
+                    var stars = i;
+                    <button type="button" role="radio" aria-checked="@(_rating == stars ? "true" : "false")"
+                            aria-label="@($"{stars} {(stars == 1 ? "star" : "stars")}")" data-testid="@($"review-star-{stars}")"
+                            class="ben-star-pick__star @(stars <= _rating ? "ben-star-pick__star--on" : null)"
+                            @onclick="@(() => _rating = stars)">★</button>
+                }
+            </div>
+        </fieldset>
+        <div class="form-floating mb-3">
+            <input type="text" id="review-title" class="form-control" placeholder="Title" maxlength="@StoreReviewSentences.MaxTitle"
+                   @bind="_title" @bind:event="oninput" />
+            <label for="review-title">Title</label>
+        </div>
+        <div class="form-floating">
+            <textarea id="review-body" class="form-control ben-review-body" placeholder="Your review" maxlength="@StoreReviewSentences.MaxBody"
+                      @bind="_body" @bind:event="oninput"></textarea>
+            <label for="review-body">Your review</label>
+        </div>
+        <div class="form-text">What did you use it for, and how did it do? Reviews are read by a moderator before they appear.</div>
+        @if (Existing is not null)
+        {
+            <div class="form-text">Saving an edit sends it back for approval.</div>
+        }
+        <div id="review-refusal" class="invalid-feedback d-block" role="alert">@_refusal</div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-secondary" @onclick="CloseAsync">Cancel</button>
+        <button type="button" class="btn btn-primary" id="store-submit-review" disabled="@_busy" @onclick="SubmitAsync">
+            @if (_busy)
+            {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+            }
+            @(Existing is null ? "Submit review" : "Save and resubmit")
+        </button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    [Parameter, EditorRequired] public Guid ProductId { get; set; }
+    [Parameter, EditorRequired] public string ProductName { get; set; } = "";
+
+    /// <summary>The person's review when they are editing it; null for a first one.</summary>
+    [Parameter] public MyStoreReviewRecord? Existing { get; set; }
+
+    /// <summary>The review as the server now holds it.</summary>
+    [Parameter] public EventCallback<MyStoreReviewRecord> OnSaved { get; set; }
+
+    private int _rating;
+    private string _title = "";
+    private string _body = "";
+    private string? _refusal;
+    private bool _busy;
+    private bool _wasVisible;
+
+    protected override void OnParametersSet()
+    {
+        // Filled once as it opens, not on every redraw — a redraw mid-typing must not undo the typing.
+        if (Visible && !_wasVisible)
+        {
+            _rating = Existing?.Rating ?? 0;
+            _title = Existing?.Title ?? "";
+            _body = Existing?.Body ?? "";
+            _refusal = null;
+        }
+        _wasVisible = Visible;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy) return;
+        var request = new SubmitStoreReviewRequest(_rating, _title.Trim(), _body.Trim());
+        var error = StoreReviewSentences.Problem(request);
+        if (error is null)
+        {
+            _busy = true;
+            (var saved, error) = await Client.SaveStoreReviewAsync(ProductId, request);
+            _busy = false;
+            if (saved is not null)
+            {
+                await OnSaved.InvokeAsync(saved);
+                await CloseAsync();
+                return;
+            }
+        }
+        _refusal = error ?? "Your review couldn't be saved — try again.";
+    }
+
+    private Task CloseAsync() => VisibleChanged.InvokeAsync(false);
+}

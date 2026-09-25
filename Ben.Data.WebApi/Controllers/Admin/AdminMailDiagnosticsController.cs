@@ -1,6 +1,7 @@
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.WebApi.Services;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,15 +43,18 @@ public sealed class AdminMailDiagnosticsController : ControllerBase
     private readonly SmtpOptions _options;
     private readonly IDbContextFactory<Ben.Data.Source.Context.BenDataContext> _db;
     private readonly ILogger<AdminMailDiagnosticsController> _logger;
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService _audit;
 
     public AdminMailDiagnosticsController(SmtpEmailService email,
                                           IOptions<SmtpOptions> options,
                                           IDbContextFactory<Ben.Data.Source.Context.BenDataContext> db,
+                                          Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService audit,
                                           ILogger<AdminMailDiagnosticsController> logger)
     {
         _email = email;
         _options = options.Value;
         _db = db;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -158,6 +162,65 @@ public sealed class AdminMailDiagnosticsController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// The words of one letter, for somebody answering "what did we actually send them?"
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Deliberately not on the list.</b> <see cref="Outbox"/> returns whether a body
+    /// exists, never the body: a screen showing a hundred rows would otherwise be a hundred copies
+    /// of other people's business on the wire, most of which nobody asked to read. Fetching one at
+    /// a time is what makes the audit row below meaningful — it records a decision somebody made,
+    /// not a page they happened to open.</para>
+    ///
+    /// <para><b>Every read is recorded.</b> A queued letter carries a guest's name, a working
+    /// password-reset link, or a pass that opens a door. SuperAdmin may look — somebody has to be
+    /// able to answer "did that letter go, and what did it say" — but who looked at whose letter
+    /// is a fact the site keeps.</para>
+    ///
+    /// <para><b>A scrubbed letter says so, with its date.</b> Its words were cleared a month after
+    /// it went, which is the trade the scrub makes; answering with an empty body would read as a
+    /// letter that was sent blank.</para>
+    /// </remarks>
+    [HttpGet("outbox/{id:guid}/body")]
+    public async Task<ActionResult<OutboxLetterBody>> Body(Guid id, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var row = await db.OutboxEmails.AsNoTracking()
+            .Where(e => e.Id == id)
+            .Select(e => new
+            {
+                e.Id, e.To, e.Subject, e.Kind, e.CreatedUtc,
+                e.HtmlBody, e.BodyScrubbedUtc,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null) return NotFound();
+
+        var reader = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? User.FindFirstValue("sub");
+        _ = Guid.TryParse(reader, out var readerId);
+
+        // Before answering, not after: a row that records the read only when the read succeeded
+        // would miss exactly the attempts somebody would most want to find. Never fatal — an audit
+        // sink that is down must not stop an administrator diagnosing the mail queue.
+        try
+        {
+            await _audit.LogReadAsync(
+                nameof(Ben.Data.Source.Entities.OutboxEmail), row.Id,
+                new { row.To, row.Subject, row.Kind, row.CreatedUtc, Scrubbed = row.BodyScrubbedUtc != null },
+                readerId, AppSources.WebApi);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Could not record who read outbox letter {Id}.", row.Id);
+        }
+
+        return Ok(new OutboxLetterBody(
+            row.Id, row.To, row.Subject, row.Kind, row.CreatedUtc,
+            row.HtmlBody, row.BodyScrubbedUtc));
+    }
+
     /// <summary>Puts one given-up letter back in the queue.</summary>
     /// <remarks>
     /// <para>The attempt count goes back to zero, so the backoff starts again rather than the row
@@ -254,6 +317,20 @@ public sealed record OutboxLetterView(
     bool HasBody,
     DateTime? BodyScrubbedUtc,
     int AttachmentCount);
+
+/// <summary>One letter's words, with enough of its identity to be sure it is the right one.</summary>
+/// <remarks>
+/// <c>Html</c> is null when <c>BodyScrubbedUtc</c> is set, and a reader is expected to say so
+/// rather than draw an empty frame.
+/// </remarks>
+public sealed record OutboxLetterBody(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    string? Html,
+    DateTime? BodyScrubbedUtc);
 
 public sealed record MailTestRequest(string To);
 

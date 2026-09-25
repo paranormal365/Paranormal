@@ -1,0 +1,39 @@
+.bc-zoom {
+    position: absolute;
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    z-index: 10;
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius);
+    background: var(--bc-surface-2);
+    box-shadow: var(--bc-node-shadow);
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+.bc-zoom__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--bc-tap);
+    min-height: var(--bc-tap);
+    padding: 0 .5rem;
+    border: 0;
+    background: transparent;
+    color: var(--bc-text);
+}
+
+.bc-zoom__button:hover { background: var(--bc-surface-3); }
+
+.bc-zoom__button:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: -2px;
+}
+
+.bc-zoom__percent {
+    min-width: 4rem;
+    font-size: .8125rem;
+    font-variant-numeric: tabular-nums;
+}

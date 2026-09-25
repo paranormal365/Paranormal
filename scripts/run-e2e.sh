@@ -117,10 +117,12 @@ UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
 API_BIND="http://127.0.0.1:5252"
 WEB_BIND="http://127.0.0.1:5078"
 WASM_BIND="http://127.0.0.1:5180"
+CANVAS_BIND="http://127.0.0.1:5125"
 
 API_URL="http://localhost:5252"
 WEB_URL="http://localhost:5078"
 WASM_URL="http://localhost:5180"
+CANVAS_URL="http://localhost:5125"
 
 KEEP=0
 PASSTHROUGH=()
@@ -134,11 +136,16 @@ done
 STARTED_PIDS=()
 LOG_DIR="$(mktemp -d)"
 
+# A fixed path pointing at this run's throwaway directory, so scripts/e2e-progress.sh can answer
+# "where are we?" without being told where to look. Overwritten by each run; nothing depends on it
+# surviving (2026-09-19).
+echo "$LOG_DIR" > "${TMPDIR:-/tmp}/ben-e2e-current"
+
 cleanup() {
   if [[ $KEEP -eq 1 ]]; then
     echo ""
     echo "Hosts left running (--keep). Logs: $LOG_DIR"
-    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL"
+    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL   canvas $CANVAS_URL"
     echo "  database: $DB_NAME"
     return
   fi
@@ -150,18 +157,19 @@ cleanup() {
   pkill -f "Ben.Data.WebApi" 2>/dev/null || true
   pkill -f "Ben.Web.Website" 2>/dev/null || true
   pkill -f "Ben.Wasm.Video"  2>/dev/null || true
+  pkill -f "Ben.Wasm.Canvas" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 port_busy() { curl -fsS -o /dev/null --max-time 2 "$1" 2>/dev/null; }
 
 echo "── Checking the ports are free ─────────────────────────────────────────"
-for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/"; do
+for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/" "$CANVAS_URL/"; do
   if port_busy "$url"; then
     echo "REFUSING: something is already serving ${url%%/api*}."
     echo "That host is pointed at whatever database it was started with — probably the shared one."
     echo "Running against it would defeat the isolation this script exists for. Stop it first:"
-    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'"
+    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'; pkill -f 'Ben.Wasm.Canvas'"
     exit 1
   fi
 done
@@ -203,12 +211,61 @@ start_host() {
 }
 
 # Bound on the IPv4 address, probed on the localhost name — see the note by the URLs.
+# The store's test checkout (storefront S4.9): the pretend Stripe gateway and tax service, which
+# only exist in Development with NO secret key and the flag on — so the key is blanked here even
+# if the developer's own settings carry a test one. Nothing in a normal run ever talks to Stripe.
+#
+# BEN_STRIPE_E2E=1 is the one exception (storefront S4 exit): the API keeps the Stripe keys and webhook
+# secret from the developer's own gitignored appsettings.Development.json — none of them pass through
+# this script — and the checkout tests pay with Stripe's 4242 test card. Test keys only: a live key there
+# would take real money, so the run refuses before anything starts. Stripe's events reach this machine
+# through `stripe listen --forward-to` (see docs/stripe-go-live.md, "Proving the store in test mode").
+API_STRIPE_ENV="Stripe__AllowFakeCheckout=true Stripe__SecretKey= Stripe__PublishableKey="
+if [[ "${BEN_STRIPE_E2E:-}" == "1" ]]; then
+  DEV_SETTINGS="$ROOT_DIR/Ben.Data.WebApi/appsettings.Development.json"
+  if grep -q '_live_' "$DEV_SETTINGS" 2>/dev/null; then
+    echo "REFUSING: $DEV_SETTINGS holds a live Stripe key. BEN_STRIPE_E2E takes test keys (sk_test_/pk_test_) only."
+    exit 1
+  fi
+  if ! grep -q '"sk_test_' "$DEV_SETTINGS" 2>/dev/null || ! grep -q '"pk_test_' "$DEV_SETTINGS" 2>/dev/null; then
+    echo "BEN_STRIPE_E2E=1 needs Stripe:SecretKey (sk_test_…) and Stripe:PublishableKey (pk_test_…) in $DEV_SETTINGS."
+    exit 1
+  fi
+  echo "   Stripe: TEST MODE — real Stripe, test keys from the developer's settings"
+  API_STRIPE_ENV="Stripe__AllowFakeCheckout=false"
+  # A real payment is only marked paid when Stripe's event reaches the webhook, and Stripe cannot
+  # reach localhost: the Stripe CLI forwards test-mode events here for the length of the run. Its
+  # whsec_ must be the Stripe:WebhookSecret in the same settings file (`stripe listen --print-secret`).
+  if ! command -v stripe >/dev/null; then
+    echo "BEN_STRIPE_E2E=1 needs the Stripe CLI (brew install stripe/stripe-cli/stripe, then stripe login)."
+    exit 1
+  fi
+  if ! grep -q '"WebhookSecret": *"whsec_' "$DEV_SETTINGS"; then
+    echo "BEN_STRIPE_E2E=1 needs Stripe:WebhookSecret in $DEV_SETTINGS — the whsec_ from: stripe listen --print-secret"
+    exit 1
+  fi
+  STRIPE_FORWARD=1
+fi
 start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
-  "FileStorage__RootPath=$UPLOADS_DIR"
+  "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV"
+if [[ "${STRIPE_FORWARD:-}" == "1" ]]; then
+  echo "── Forwarding Stripe's test events to the API ──────────────────────────"
+  # The events the webhook handles — the same list the live endpoint is given (stripe-go-live.md).
+  STRIPE_EVENTS="checkout.session.completed,payment_intent.succeeded,payment_intent.processing,payment_intent.payment_failed,payment_intent.canceled,refund.created,refund.updated,refund.failed"
+  nohup stripe listen --events "$STRIPE_EVENTS" --forward-to "$API_URL/api/stripe/webhook" >"$LOG_DIR/stripe-listen.log" 2>&1 &
+  echo $! >"$LOG_DIR/stripe-listen.pid"
+  STARTED_PIDS+=("$(cat "$LOG_DIR/stripe-listen.pid")")
+  for _ in $(seq 1 30); do grep -q "Ready!" "$LOG_DIR/stripe-listen.log" 2>/dev/null && break; sleep 1; done
+  grep -q "Ready!" "$LOG_DIR/stripe-listen.log" || { echo "stripe listen never became ready:"; tail -10 "$LOG_DIR/stripe-listen.log"; exit 1; }
+  echo "   stripe listen ready"
+fi
 start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
 start_host wasm "$ROOT_DIR/Ben.Wasm.Video"   "$WASM_BIND" "$WASM_URL/_framework/dotnet.js" ""
+# The canvas is a fourth host, and research lives on it since 2026-09-16: without this the Research
+# tab's tests skip, which is the failure mode that hides a broken handover behind a green run.
+start_host canvas "$ROOT_DIR/Ben.Wasm.Canvas" "$CANVAS_BIND" "$CANVAS_URL/_framework/dotnet.js" ""
 
 if grep -q "DATABASE IS BEHIND" "$LOG_DIR/api.log" 2>/dev/null; then
   echo "WARNING: the API says the schema is behind — see $LOG_DIR/api.log"
@@ -249,7 +306,16 @@ if [[ -z "${SA_TOKEN:-}" ]]; then
   echo "   could not sign in as $SA_EMAIL — leaving features at their defaults."
   echo "   (walks that visit a gated section will report it as 'not routed')"
 else
-  for feature in features.publications; do
+  # features.public-feed is here for a reason that is easy to undo by accident. FeedTests and
+  # FeedArcTests each turn the feed on and then put it back TO WHAT THEY FOUND. Starting a run with
+  # it off means they turn it on, run, and turn it off again — and every later fixture that visits
+  # /feed walks "There is nothing at this address" instead. That is four phantom failures in a
+  # crawl, and worse in the walks, which report the refusal page as a clean screen. Turning it on
+  # HERE, once, makes every one of those restores a no-op.
+  # features.store (storefront S2.10): the shop ships dark, so every store browser test and the
+  # crawls need it on; StoreFeatureFlagTests and the admin dashboard test turn it off and put it
+  # back themselves.
+  for feature in features.publications features.public-feed features.store; do
     code=$(curl -fsS -o /dev/null -w "%{http_code}" -X PUT \
       "$API_URL/api/admin/site-settings/$feature" \
       -H "Authorization: Bearer $SA_TOKEN" -H "Content-Type: application/json" \
@@ -258,6 +324,83 @@ else
   done
   # The website caches the feature snapshot, so give it a moment to notice.
   sleep 3
+
+  # ── The store can take a (test) order ────────────────────────────────────
+  # Sales tax needs a ship-from address, the pretend tax service exactly as the real one, so the
+  # checkout tests would all stop at "Sales tax couldn't be calculated". Filled in only where the
+  # settings are blank, through the admin page's own endpoint; everything already set is kept.
+  echo "── Letting the store take test orders ─────────────────────────────────"
+  API_URL="$API_URL" SA_TOKEN="$SA_TOKEN" python3 - <<'PYEOF' || echo "   could not set the store's ship-from address — checkout tests will fail on tax"
+import json, os, urllib.request
+api, token = os.environ["API_URL"], os.environ["SA_TOKEN"]
+def call(method, body=None):
+    req = urllib.request.Request(api + "/api/admin/store/settings", method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+s = call("GET")
+save = {k: s.get(k) for k in ("checkoutEnabled", "shippingFlatRate", "freeShippingThreshold", "lowStockThreshold",
+        "shipFromStreet", "shipFromCity", "shipFromState", "shipFromZip", "supportEmail",
+        "returnsWindowDays", "reservationMinutes", "linkEnabled")}
+save["checkoutEnabled"] = True
+for key, value in (("shipFromStreet", "401 Church St"), ("shipFromCity", "Nashville"),
+                   ("shipFromState", "TN"), ("shipFromZip", "37219")):
+    save[key] = save.get(key) or value
+after = call("PUT", save)
+print("   ship-from", after.get("shipFromCity"), after.get("shipFromState"), "| ready to sell:", after.get("readyToSell"))
+PYEOF
+
+  # ── The seeded groups' paid plans are kept current ────────────────────────
+  # BillingDemoSeeder puts paranormal365 ten days from renewal ON PURPOSE (so the renewal notice
+  # can be seen), and seeds only a group with no subscription row — so on a database that lives
+  # for weeks, the period simply runs out. The lapse job then does exactly its job: read-only
+  # group, every open case paused. On 2026-09-22 that took twelve unrelated tests down at once
+  # (case messages, uploads, file deletion, the tier journey), none of them about billing.
+  #
+  # Renewed through the admin endpoint rather than SQL, because that is the path that also
+  # un-pauses what the lapse paused. Only the two seeded groups, only when lapsed or within two
+  # days of ending, and back to the seeder's own shape: paranormal365 ten days out, nps 200.
+  echo "── Keeping the seeded groups' paid plans current ──────────────────────"
+  API_URL="$API_URL" SA_TOKEN="$SA_TOKEN" python3 - <<'PYEOF' || echo "   could not check the seeded subscriptions — see above"
+import json, os, urllib.request
+from datetime import datetime, timedelta, timezone
+
+api, token = os.environ["API_URL"], os.environ["SA_TOKEN"]
+def call(method, path, body=None):
+    req = urllib.request.Request(api + path, method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status, (json.loads(r.read() or b"null"))
+
+ACTIVE, LAPSED = 1, 2
+DAYS_LEFT = {"paranormal365": 10, "nps": 200}      # BillingDemoSeeder's plans
+now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+_, orgs = call("GET", "/api/organizations")
+slug_of = {o["id"]: o.get("urlName") for o in orgs}
+_, subs = call("GET", "/api/admin/organization-subscriptions")
+
+for s in subs:
+    slug = slug_of.get(s["organizationId"])
+    if slug not in DAYS_LEFT or s.get("subscriptionTierId") is None:
+        continue
+    end = s.get("currentPeriodEnd")
+    end = datetime.fromisoformat(end.rstrip("Z")[:26]) if end else None
+    if s["status"] == ACTIVE and end and end > now + timedelta(days=2):
+        print(f"   {slug:14} current to {end:%Y-%m-%d}")
+        continue
+    new_end = now + timedelta(days=DAYS_LEFT[slug])
+    months = s["interval"]                         # BillingInterval is a count of months
+    start = new_end - timedelta(days=round(months * 30.44))
+    code, _ = call("PUT", f"/api/admin/organization-subscriptions/{s['organizationId']}", {
+        "status": ACTIVE, "subscriptionTierId": s["subscriptionTierId"], "interval": s["interval"],
+        "currentPeriodStart": start.isoformat() + "Z", "currentPeriodEnd": new_end.isoformat() + "Z",
+        "cancelAtPeriodEnd": False, "note": "run-e2e.sh: the seeded plan ran out; renewed for the run",
+    })
+    print(f"   {slug:14} {'lapsed' if s['status'] == LAPSED else 'ending'} -> renewed to {new_end:%Y-%m-%d} ({code})")
+PYEOF
 fi
 
 echo ""
@@ -266,23 +409,72 @@ echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"
 echo ""
 
-# BEN_E2E_API_LOG: with no mail server, a link that would have been emailed (picking seats without
-# signing in) is written to the API's log instead, and the browser test that follows one reads it
-# from there. Nothing but a token for a throwaway address on this throwaway database is ever in it.
+# Emailed links: with no mail server, a letter is still queued in the outbox, and a test that has
+# to follow one — confirming a sign-up, holding picked seats — reads its link there as the
+# SuperAdmin (BenTestBase.LinkFromTheOutboxAsync). They used to be read from the API's log, which
+# meant the API wrote working credentials into a file; NoCredentialsInLogsTests now forbids that.
 #
 # -p:IsTestProject=true is NOT optional: the csproj sets it false to stay out of the solution's
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
+# What this run intends to do, before it starts doing it — so progress can be reported as "N of M"
+# rather than "no failures yet", which reads the same at one minute and at thirty.
+{
+  echo "E2E_STARTED=$(date +%s)"
+  echo "E2E_DB=$DB_NAME"
+  echo "E2E_FILTER=${PASSTHROUGH[*]:-}"
+} > "$LOG_DIR/meta"
+
+# Built once, here, so neither pass below repeats it.
+echo "   building…"
+dotnet build Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo -v q > "$LOG_DIR/build.log" 2>&1
+
+# --list-tests DOES NOT HONOUR --filter: it lists everything the assembly contains. Writing that as
+# "what will run" for a filtered slice made the progress script report 47 of 789 and call the other
+# 742 "not reached" (measured 2026-09-19, the first real use of this). So the planned list is only
+# written for a whole-suite run; with a filter there is no honest M, and e2e-progress.sh already
+# degrades to counts when the file is absent.
+if [[ ${#PASSTHROUGH[@]} -eq 0 ]]; then
+  echo "   listing what will run…"
+  set +e
+  dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+    --list-tests 2>/dev/null \
+    | sed -n '/The following Tests are available/,$p' | tail -n +2 \
+    | sed 's/^[[:space:]]*//' | grep -v '^$' > "$LOG_DIR/planned.txt"
+  set -e
+  echo "   $(wc -l < "$LOG_DIR/planned.txt" | tr -d ' ') tests to run"
+else
+  echo "   filtered run — no planned list (--list-tests ignores --filter)"
+fi
+echo ""
+
+# verbosity=normal so the log carries one line per test as it finishes; the terminal keeps the
+# quiet view it has always had by filtering that stream down to what a person watching cares about.
+# scripts/e2e-progress.sh reads the log, not the terminal.
 set +e
-dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
+dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+  --logger "console;verbosity=normal" \
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_DB="$DB_NAME" "${PASSTHROUGH[@]:-}" 2>&1 \
+  | tee "$LOG_DIR/e2e.log" \
+  | grep -E --line-buffered '^( *(Failed|Error) |Test Run |Total tests:|A total of)' || true
 STATUS=${PIPESTATUS[0]}
 set -e
+touch "$LOG_DIR/.finished"
 
 echo ""
 echo "── Result ──────────────────────────────────────────────────────────────"
-grep -E "Passed!|Failed!" "$LOG_DIR/e2e.log" | tail -1 || echo "no summary line — did anything run?"
-grep -E "^  Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
+# At verbosity=normal the summary is a BLOCK ("Test Run Successful." then the totals), not the
+# one-line "Passed! - Failed: 0, ..." that minimal verbosity prints. Grepping for the old line
+# found nothing and reported "did anything run?" on a run of 47 green tests (2026-09-19).
+if grep -qE "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log"; then
+  verdict=$(grep -E "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log" | tail -1)
+  totals=$(grep -E "^ *(Total tests|Passed|Failed|Skipped): " "$LOG_DIR/e2e.log" \
+           | tail -5 | sed 's/^ *//' | paste -sd" · " -)
+  echo "$verdict  $totals"
+else
+  echo "no summary line — did anything run?"
+fi
+grep -E "^ *Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
 echo ""
 echo "Logs: $LOG_DIR"
 exit "$STATUS"

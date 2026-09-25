@@ -55,7 +55,16 @@ public sealed record VideoClip : TrackItem, IHasVolumeAutomation
         EndTrim > StartTrim ? EndTrim - StartTrim : Duration;
 
     /// <inheritdoc />
-    public override double EffectiveLength => TrimmedDuration;
+    /// <remarks>
+    /// Speed and all: this is the length the clip OCCUPIES, and <see cref="Speed"/> changes that.
+    /// It used to be the bare trimmed duration, while the export planner was handed
+    /// <see cref="EffectiveDuration"/> — so a clip set to 2× kept its full width on the timeline
+    /// and came out half as long, and the planner filled the difference with black. Two seconds of
+    /// nothing in the middle of an exhibit, with no gap drawn anywhere. Everything built on this —
+    /// chip width, overlap detection, ripple, transition junctions, the project's total — was
+    /// measuring a length the render did not produce (2026-09-18 audit).
+    /// </remarks>
+    public override double EffectiveLength => EffectiveDuration;
 
 
     /// <summary>

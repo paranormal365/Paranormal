@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -77,12 +78,27 @@ public sealed class PublicLinkPreviewController : ControllerBase
                              || (year != null && c.CaseYear == year && c.OrgCaseNumber == number))
                          && c.IsPublic
                          && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
-                .Select(c => new LinkPreview(
-                    "Case", c.Title,
-                    $"{c.Organization.Name} · {c.City}, {c.State}",
-                    path))
+                .Select(c => new
+                {
+                    c.Id, c.Title, c.City, c.State,
+                    OrganizationName = c.Organization.Name,
+                })
                 .FirstOrDefaultAsync(ct);
-            return found is null ? NotFound() : Ok(found);
+
+            if (found is null) return NotFound();
+
+            // A private-engagement case may be published, and its title may name the family. Every
+            // other anonymous case surface redacts it through the roster; this one did not until
+            // the 2026-09-17 audit, which is how a card came to carry the one word the case page
+            // itself would have substituted.
+            var roster = await CaseRedactionRoster.ForCaseAsync(db, found.Id, ct)
+                      ?? RedactionRoster.Empty;
+
+            return Ok(new LinkPreview(
+                "Case",
+                CaseProseRedactor.Redact(found.Title, roster)!,
+                $"{found.OrganizationName} · {found.City}, {found.State}",
+                path));
         }
 
         // /o/{org}/tours/{slug}

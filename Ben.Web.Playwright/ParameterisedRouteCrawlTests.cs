@@ -34,6 +34,9 @@ public class ParameterisedRouteCrawlTests : BenTestBase
     private static readonly string[] TokenPlaceholders =
         { "{Token}", "{AccessToken:guid}" };
 
+    /// <summary>Pages under a switched prefix that never depend on the switch.</summary>
+    private static readonly string[] NotBehindAnySwitch = ["/store/orders", "/store/checkout/complete"];
+
     /// <summary>Whether this URL only exists when a feature switch is on, and that switch is off.</summary>
     private static async Task<bool> IsBehindAnOffSwitchAsync(string url)
     {
@@ -43,7 +46,14 @@ public class ParameterisedRouteCrawlTests : BenTestBase
             ("features.video-editor",  "/video-editor"),
             ("features.media-library", "/media"),
             ("features.equipment",     "/equipment-catalog"),
+            ("features.store",         "/store"),
         ];
+
+        // Prefixes swallow everything under them, and /store would swallow the pages that must
+        // stay walked while the store is dark: a buyer's orders and the thank-you page Stripe
+        // returns to. Those are consulted first (storefront plan §5.3).
+        if (NotBehindAnySwitch.Any(p => url.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            return false;
 
         foreach (var (flag, prefix) in switched)
         {
@@ -115,6 +125,18 @@ public class ParameterisedRouteCrawlTests : BenTestBase
 
         if (FirstValue(await ApiAsync("/api/equipment-catalog/models", token), "id", "modelId") is { } modelId)
             _ids["ModelId"] = modelId;
+
+        // Storefront: a shelf and a product from the public store, and a product for the admin
+        // editor. The store is switched on by run-e2e.sh; with it off the public routes are
+        // skipped as "feature switched off" and the admin one still resolves.
+        if (FirstValue(await ApiAsync("/api/public/store/categories", token), "slug") is { } categorySlug)
+            _ids["CategorySlug"] = categorySlug;
+        var listing = await Page.APIRequest.GetAsync($"{ApiUrl}/api/public/store/products");
+        if (listing.Ok && (await listing.JsonAsync())?.GetProperty("products") is { ValueKind: System.Text.Json.JsonValueKind.Array } products
+            && products.GetArrayLength() > 0)
+            _ids["ProductSlug"] = products[0].GetProperty("slug").GetString()!;
+        if (FirstValue(await ApiAsync("/api/admin/store/products", token), "id") is { } productId)
+            _ids["ProductId"] = productId;
 
         // A field session the crawler can actually open. Uploaded rather than assumed: nothing
         // seeds one, and without it the player's route is skipped — which would mean the one
@@ -271,14 +293,21 @@ public class ParameterisedRouteCrawlTests : BenTestBase
                 await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await WaitUntilLoadedAsync(10_000);
 
+                // Read from the CHROME, not the whole body — the same fix the plain crawl took on
+                // 2026-09-19 and this half never got. A page is allowed to talk about an error
+                // without being one: /changes quotes "An unhandled error has occurred" in a line
+                // about the day that phrase stopped appearing, and a whole-body regex reads the
+                // changelog's own words as proof the changelog is broken.
                 var state = await Page.EvaluateAsync<JsonElement>(@"() => {
                     const main = document.querySelector('.app-content, main, .content-wrapper');
                     const body = document.body.innerText || '';
+                    const inner = main ? (main.innerText || '') : '';
+                    const chrome = inner ? body.split(inner).join(' ') : body;
                     const err  = document.querySelector('#blazor-error-ui');
                     return {
-                        content: main ? (main.innerText || '').trim().length : 0,
-                        unhandled: /An unhandled error has occurred/i.test(body),
-                        notFound: /Page not found/i.test(body),
+                        content: main ? inner.trim().length : 0,
+                        unhandled: /An unhandled error has occurred/i.test(chrome),
+                        notFound: /Page not found|There is nothing at this address/i.test(body),
                         circuitDown: !!err && getComputedStyle(err).display !== 'none'
                     };
                 }");

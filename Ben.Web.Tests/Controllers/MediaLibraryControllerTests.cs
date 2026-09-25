@@ -53,9 +53,26 @@ public class MediaLibraryControllerTests
         return m.Object;
     }
 
+    /// <summary>
+    /// Storage that says every file is there.
+    /// </summary>
+    /// <remarks>
+    /// The listing now drops rows whose bytes are missing (Ben, 2026-09-21: "p201.jpg or
+    /// test-photo.jpg can't be loaded so they should not show up"). These fixtures never write a
+    /// byte, so without a stand-in that answers yes, every existing test here would assert against
+    /// an empty list and pass for the wrong reason. A fixture that means to test something else
+    /// says so rather than quietly agreeing.
+    /// </remarks>
+    private static Ben.Data.Common.Interfaces.IFileStorageService EverythingExists()
+    {
+        var m = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        m.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
+        return m.Object;
+    }
+
     private static MediaLibraryController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new MediaLibraryController(factory, CreateMapper());
+        var ctrl = new MediaLibraryController(factory, CreateMapper(), EverythingExists());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -111,19 +128,40 @@ public class MediaLibraryControllerTests
         return (factory, userId, orgId, caseId);
     }
 
-    private static UploadFile MakeFile(Guid userId, string contentType = "video/mp4", bool isPublic = false) => new()
+    /// <summary>
+    /// A file that is really there and is really its own file.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two things here are load-bearing rather than decorative, and both were added when the
+    /// listing learned to drop rows that are not real files (2026-09-21).</para>
+    ///
+    /// <para><b>A storage path</b>, because a row with neither a path nor bytes is precisely what
+    /// the new rule discards — the p201.jpg case. Without one every fixture in this file would
+    /// assert against an empty list and pass for the wrong reason.</para>
+    ///
+    /// <para><b>A distinct name</b>, because the listing now shows a file once. Every fixture used
+    /// to be called clip.mp4 at 1024 bytes, so two of them are the same file by any test a person
+    /// could apply, and a fixture that means to check two files must use two.</para>
+    /// </remarks>
+    private static UploadFile MakeFile(Guid userId, string contentType = "video/mp4", bool isPublic = false)
     {
-        Id                 = Guid.NewGuid(),
-        AppUserId          = userId,
-        FileName           = "clip.mp4",
-        StoredFileName     = $"{Guid.NewGuid()}.mp4",
-        ContentType        = contentType,
-        FileSize           = 1024,
-        UploadFileTypeId   = Guid.NewGuid(),
-        IsPublic           = isPublic,
-        DateCreated        = DateTime.UtcNow,
-        CreatedByAppUserId = userId,
-    };
+        var id = Guid.NewGuid();
+        var stored = $"{id:N}.mp4";
+        return new()
+        {
+            Id                 = id,
+            AppUserId          = userId,
+            FileName           = $"clip-{id:N}.mp4",
+            StoredFileName     = stored,
+            StoragePath        = $"users/{userId}/{stored}",
+            ContentType        = contentType,
+            FileSize           = 1024,
+            UploadFileTypeId   = Guid.NewGuid(),
+            IsPublic           = isPublic,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+    }
 
     // ── Owned + contentTypePrefixes filter ──────────────────────────────────────
 
@@ -374,8 +412,177 @@ public class MediaLibraryControllerTests
         Assert.Single(files);
     }
 
+    // ── What is not library media (Ben, 2026-09-21) ─────────────────────────────
+
+    /// <summary>
+    /// A profile photograph is somebody's face, not library media.
+    /// </summary>
+    /// <remarks>
+    /// Avatars are public so that other people can see them, which is exactly how they arrived in
+    /// everybody's library. The site's own default avatars — so-user-circle.png and its siblings —
+    /// are profile photographs owned by the site, so the same rule removes those too.
+    /// </remarks>
     [Fact]
-    public async Task GetFiles_IncludesPublicFile_ViaIsPublicFlag()
+    public async Task GetFiles_LeavesOutProfilePhotographs()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            var avatar = MakeFile(userId, "image/png");
+            avatar.UploadFileTypeId = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.ProfilePhotoFileTypeId;
+            db.UploadFiles.Add(avatar);
+            db.UploadFiles.Add(MakeFile(userId, "image/png"));   // an ordinary picture of mine
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId));
+        Assert.Single(files);
+        Assert.NotEqual(Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.ProfilePhotoFileTypeId,
+                        files[0].UploadFileTypeId);
+    }
+
+    /// <summary>
+    /// A row whose bytes are not there is worse than absent.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-21: <i>"p201.jpg or test-photo.jpg can't be loaded so they should not show up
+    /// in the media library"</i>. A card that never draws is a thing a person tries twice before
+    /// concluding the site is broken.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_LeavesOutFilesWhoseBytesAreGone()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        var missing = MakeFile(userId, "image/jpeg");
+        var present = MakeFile(userId, "image/jpeg");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.AddRange(missing, present);
+            await db.SaveChangesAsync();
+        }
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns(true);
+        storage.Setup(s => s.Exists(missing.StoragePath!)).Returns(false);
+
+        var controller = new MediaLibraryController(factory, CreateMapper(), storage.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+        var files = await GetFilesAsync(controller);
+        Assert.Single(files);
+        Assert.Equal(present.Id, files[0].Id);
+    }
+
+    /// <summary>
+    /// A storage fault must not empty the library.
+    /// </summary>
+    /// <remarks>
+    /// A provider that cannot answer is not evidence that a file is gone, and a listing that
+    /// vanishes the moment storage hiccups is a worse failure than the one this rule fixes.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_KeepsListingWhenStorageCannotAnswer()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UploadFiles.Add(MakeFile(userId, "image/jpeg"));
+            await db.SaveChangesAsync();
+        }
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Throws(new IOException("storage is away"));
+
+        var controller = new MediaLibraryController(factory, CreateMapper(), storage.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+
+        Assert.Single(await GetFilesAsync(controller));
+    }
+
+    /// <summary>
+    /// The same file, uploaded three times, is one row in the library.
+    /// </summary>
+    /// <remarks>
+    /// Ben found IMG_1997.JPG listed several times. Each listing is a real and separate row — the
+    /// same photograph uploaded to a case, to an event and to a group is three uploads — and the
+    /// oldest survives, because it is the one the others were copied from.
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_ShowsTheSameFileOnce()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        var oldest = DateTime.UtcNow.AddDays(-9);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            foreach (var day in new[] { 0, 3, 6 })
+            {
+                var copy = MakeFile(userId, "image/jpeg");
+                copy.FileName = "IMG_1997.JPG";
+                copy.FileSize = 4096;
+                copy.DateCreated = oldest.AddDays(day);
+                db.UploadFiles.Add(copy);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var files = await GetFilesAsync(Build(factory, userId));
+        Assert.Single(files);
+        Assert.Equal(oldest, files[0].DateCreated);
+    }
+
+    /// <summary>Two different photographs that happen to share a name are still two.</summary>
+    [Fact]
+    public async Task GetFiles_DoesNotCollapseDifferentFilesWithTheSameName()
+    {
+        var (factory, userId, _, _) = await SeedAsync();
+        await using (var db = factory.CreateDbContext())
+        {
+            var a = MakeFile(userId, "image/jpeg");
+            a.FileName = "IMG_1997.JPG"; a.FileSize = 4096;
+            var b = MakeFile(userId, "image/jpeg");
+            b.FileName = "IMG_1997.JPG"; b.FileSize = 91_233;
+            db.UploadFiles.AddRange(a, b);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, (await GetFilesAsync(Build(factory, userId))).Count);
+    }
+
+    /// <summary>
+    /// Being public does not put somebody else's file in your library.
+    /// </summary>
+    /// <remarks>
+    /// <para>This test used to assert the opposite, and the opposite is what turned this listing
+    /// into a dumping ground for the whole site (Ben, 2026-09-21: "when someone uploads media, it
+    /// should not automatically be added to the media library as public").</para>
+    ///
+    /// <para><c>IsPublic</c> is set by a dozen paths that have nothing to do with a media library
+    /// — a venue photograph, an event gallery, a tour gallery, a feed post's picture, an accepted
+    /// piece of event evidence, an avatar — and every one of them landed in every user's library.
+    /// A public SHARE is the deliberate act and still lists, which the next test holds.</para>
+    /// </remarks>
+    [Fact]
+    public async Task GetFiles_DoesNotListSomebodyElsesFileJustBecauseItIsPublic()
     {
         var (factory, userId, _, _) = await SeedAsync();
         await using (var db = factory.CreateDbContext())
@@ -384,8 +591,7 @@ public class MediaLibraryControllerTests
             await db.SaveChangesAsync();
         }
 
-        var files = await GetFilesAsync(Build(factory, userId));
-        Assert.Single(files);
+        Assert.Empty(await GetFilesAsync(Build(factory, userId)));
     }
 
     [Fact]
@@ -787,8 +993,16 @@ public class MediaLibraryControllerTests
                 new AppUser { Id = otherId, DisplayName = "James Thornton", Email = "james@t.com", DateCreated = DateTime.UtcNow });
 
             var mine   = MakeFile(userId);
-            var theirs = MakeFile(otherId, isPublic: true);   // reachable as public
+            // Shared with me deliberately. It used to be reachable by its public FLAG alone, which
+            // is the thing that stopped listing — see the test above.
+            var theirs = MakeFile(otherId);
             db.UploadFiles.AddRange(mine, theirs);
+            db.UploadFileShares.Add(new UploadFileShare
+            {
+                Id = Guid.NewGuid(), UploadFileId = theirs.Id, IsActive = true,
+                TargetType = ShareTargetType.Person, TargetAppUserId = userId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherId,
+            });
             await db.SaveChangesAsync();
         }
 
@@ -810,10 +1024,17 @@ public class MediaLibraryControllerTests
 
         await using (var db = factory.CreateDbContext())
         {
-            var handedOver = MakeFile(userId, isPublic: true);
+            var handedOver = MakeFile(userId);
             handedOver.AppUserId           = null;
             handedOver.OwnerOrganizationId = orgId;
             db.UploadFiles.Add(handedOver);
+            // Shared with the group that now owns it, because a public flag alone no longer lists.
+            db.UploadFileShares.Add(new UploadFileShare
+            {
+                Id = Guid.NewGuid(), UploadFileId = handedOver.Id, IsActive = true,
+                TargetType = ShareTargetType.Organization, TargetOrganizationId = orgId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
             await db.SaveChangesAsync();
         }
 

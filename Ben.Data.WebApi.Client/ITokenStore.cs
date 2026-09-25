@@ -44,6 +44,9 @@ public interface ITokenStore
     /// <summary>Item 186 F5: may review reported posts and media awaiting screening.</summary>
     bool IsModerator { get; set; }
 
+    /// <summary>Store sellers (backlog 251): holds the Seller role, and so has a Selling workspace.</summary>
+    bool IsSeller { get; set; }
+
     bool IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);
 
     /// <summary>Fires after any auth-relevant state change (login, logout, impersonate, refresh).</summary>

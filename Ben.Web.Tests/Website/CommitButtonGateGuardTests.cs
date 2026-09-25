@@ -38,6 +38,18 @@ public sealed class CommitButtonGateGuardTests
         ("report-add-section", "ReportBuilder.razor"),
         ("req-verify-address", "ClientRequestWizard.razor"),
         ("area-look-up",       "AreaOfOperationDialog.razor"),
+        // The store's discount code (S3.5): an empty box answers "Enter a code.", never a dead button.
+        ("store-apply-coupon", "StoreDiscountModal.razor"),
+        ("drawer-discount-apply", "StoreCartDrawer.razor"),
+        // The checkout (S4.11): Continue and Place order refuse in words; they never wait on a field.
+        ("store-continue-payment", "StoreCheckoutPage.razor"),
+        ("store-continue-payment-bar", "StoreCheckoutPage.razor"),
+        ("store-place-order", "StoreCheckoutPage.razor"),
+        ("store-place-order-bar", "StoreCheckoutPage.razor"),
+        ("checkout-discount-apply", "StoreCheckoutPage.razor"),
+        ("lookup-send", "StoreOrderLookup.razor"),
+        // A review (S6.3): no stars or no words answers in the rule's sentence.
+        ("store-submit-review", "StoreReviewModal.razor"),
     ];
 
     private static DirectoryInfo RepoRoot()

@@ -96,7 +96,7 @@ public sealed class PublicEventAttendanceTests
             Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             NullLogger<PublicEventAttendanceController>.Instance,
             new Ben.Data.WebApi.Services.UserHandleService(factory),
-            Support.SilentTourMail.Instance)
+            Support.SilentTourMail.Instance, new ForwardingOutboxQueue(mail))
         {
             ControllerContext = new ControllerContext
             {

@@ -125,6 +125,63 @@ public static class RateLimiting
     /// </summary>
     internal const int DefaultAudioProcessingPerMinute = 12;
 
+    /// <summary>
+    /// Turning a pasted link into a preview card on a case canvas (canvas plan M6-10).
+    /// </summary>
+    /// <remarks>
+    /// Per signed-in person. Thirty a minute is somebody pasting links as fast as they can find
+    /// them; each miss makes this server fetch a stranger's page, and the week-long cache means a
+    /// person re-opening their boards spends almost none of it.
+    /// </remarks>
+    public const string LinkUnfurlPolicy = "link-unfurl";
+
+    /// <summary>
+    /// The link-unfurl image proxy: a preview card's picture, re-encoded by us.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="LinkUnfurlPolicy"/> because opening a board draws every link
+    /// card's picture at once: a board with forty cards would be refused at the unfurl limit on open,
+    /// for work the person never asked to repeat.</para>
+    ///
+    /// <para>Per person, and not the only bound: <c>LinkUnfurlImageCeiling</c> caps the whole server,
+    /// because cheap accounts multiply a per-person limit (canvas plan review R21).</para>
+    /// </remarks>
+    public const string LinkUnfurlImagePolicy = "link-unfurl-image";
+
+    internal const int DefaultLinkUnfurlPerMinute = 30;
+    internal const int DefaultLinkUnfurlImagePerMinute = 120;
+
+    // ── The gear store (storefront plan §5.4, S0.13) ──────────────────────────
+    //
+    // Four ceilings, all per caller per minute, all keyed by ClientKey: the signed-in person, or
+    // else the visitor's address — which the website forwards (X-Forwarded-For over loopback) so a
+    // shop full of visitors is not one caller. NEVER by the cart header or an order link's token:
+    // both are minted by the caller, so a key built from either would hand a script a fresh window
+    // for every value it made up. StoreRateLimitPartitionTests pins that.
+
+    /// <summary>Catalogue, product pages and search — a person browsing, with room for a fast one.</summary>
+    public const string StoreBrowsePolicy = "store-browse";
+
+    /// <summary>Cart changes, coupons at the cart, favourites and reviews.</summary>
+    public const string StoreCartPolicy = "store-cart";
+
+    /// <summary>
+    /// Placing an order: each call reserves stock and may reach Stripe, so a person needs a few and
+    /// a script must not get many (the open-checkout cap is the real bound).
+    /// </summary>
+    public const string StoreCheckoutPolicy = "store-checkout";
+
+    /// <summary>The order pages and the thank-you page's status poll — never under the checkout ceiling.</summary>
+    public const string StoreOrderDoorPolicy = "store-order-door";
+
+    internal static readonly IReadOnlyDictionary<string, int> StorePoliciesPerMinute = new Dictionary<string, int>
+    {
+        [StoreBrowsePolicy]    = 240,
+        [StoreCartPolicy]      = 120,
+        [StoreCheckoutPolicy]  = 10,
+        [StoreOrderDoorPolicy] = 30,
+    };
+
     public static IServiceCollection AddBenRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -177,6 +234,11 @@ public static class RateLimiting
             options.AddPolicy(HostedBookingPolicy,   context => FixedWindowByClient(context, DefaultHostedBookingPerMinute));
             options.AddPolicy(HostedEmailPickPolicy, context => FixedWindowByClient(
                 context, DefaultHostedEmailPicksPerWindow, HostedEmailPickWindow));
+            options.AddPolicy(LinkUnfurlPolicy,      context => FixedWindowByClient(context, DefaultLinkUnfurlPerMinute));
+            options.AddPolicy(LinkUnfurlImagePolicy, context => FixedWindowByClient(context, DefaultLinkUnfurlImagePerMinute));
+
+            foreach (var policy in StorePoliciesPerMinute.Keys)
+                options.AddPolicy(policy, context => StorePartition(context, policy));
         });
 
         return services;
@@ -235,6 +297,10 @@ public static class RateLimiting
     /// land at some unpredictable later point. Including it means a new limit is simply a new
     /// partition, and the stale one is evicted once idle.</para>
     /// </remarks>
+    /// <summary>The window a store request falls in, for <paramref name="policy"/>.</summary>
+    internal static RateLimitPartition<string> StorePartition(HttpContext context, string policy)
+        => FixedWindowByClient(context, StorePoliciesPerMinute[policy]);
+
     private static RateLimitPartition<string> FixedWindowByClient(
         HttpContext context, int permitLimit, TimeSpan? window = null)
         => RateLimitPartition.GetFixedWindowLimiter(
@@ -255,7 +321,7 @@ public static class RateLimiting
     /// office NAT do not consume each other's budget. Anonymous traffic has nothing better to key
     /// on than the address — see the proxy caveat on the class.
     /// </remarks>
-    private static string ClientKey(HttpContext context)
+    internal static string ClientKey(HttpContext context)
     {
         var userId = context.User.FindFirst(EntraClaimsTransformation.AppUserIdClaimType)?.Value
                   ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;

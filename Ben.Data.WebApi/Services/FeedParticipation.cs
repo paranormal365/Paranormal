@@ -60,4 +60,29 @@ public static class FeedParticipation
             + "group, and clients whose case is being worked. Join a group, start your own, or "
             + "request an investigation, and the feed is yours too.";
     }
+
+    /// <summary>
+    /// The reason this person may not post about a PLACE, or null when they may.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Signed in is enough, and that is deliberately wider than the feed's front page</b>
+    /// (Ben confirmed, 2026-09-17). The two doors answer differently because they are for different
+    /// things. The front page is the site's conversation, and having a voice in it is what belonging
+    /// buys — that is what makes the feed a recruitment funnel rather than a second forum. A public
+    /// location's page is the opposite errand: it is the free lane's whole purpose, a shared record
+    /// of somewhere anyone may visit, and the person with no group is exactly who fills it. Telling
+    /// the visitor who went on the evening tour and photographed something that their photograph is
+    /// not welcome would be turning away the contribution the archive exists to collect.</para>
+    ///
+    /// <para>Both rules live here, next to each other, so the difference is stated once and on
+    /// purpose rather than discovered later as an inconsistency.</para>
+    ///
+    /// <para><b>What still refuses:</b> not being signed in — a post needs a name attached to it —
+    /// and the place not being a public location, which the write door checks because only it knows
+    /// which place is meant.</para>
+    /// </remarks>
+    public static string? PlaceRefusal(Guid userId)
+        => userId == Guid.Empty
+            ? "Sign in to post about a place."
+            : null;
 }

@@ -199,11 +199,11 @@
             <div class="row g-3 align-items-start mt-0">
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="new-event-from">First date</label>
-                    <input id="new-event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="new-event-from" @bind-Value="_form.StartsOn" />
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="new-event-to">Last date</label>
-                    <input id="new-event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="new-event-to" @bind-Value="_form.EndsOn" />
                 </div>
                 <div class="col-12 col-md-6 pt-md-4">
                     @* The flag Ben asked for. A stay is nights in a row; a run is a production put

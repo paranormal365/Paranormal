@@ -1,0 +1,81 @@
+@*
+    An item's options — what a buyer chooses, like Colour and Size — and the buttons that save them
+    and make variants from them (store sellers, backlog 251, P3 — lifted from the admin editor).
+    The page owns the drafts and the saves; a refusal is shown here, under the buttons.
+*@
+
+<h5>Options @Help</h5>
+<p class="text-secondary small">What a buyer chooses — up to three, like Colour and Size.</p>
+@foreach (var (option, oi) in Options.Select((o, i) => (o, i)))
+{
+    var opt = option;
+    <div class="card mb-2" data-testid="option-card">
+        <div class="card-body">
+            <div class="row g-2 align-items-end mb-2">
+                <div class="col-7 col-md-5">
+                    <label class="form-label small" for="@($"option-name-{oi}")">Option</label>
+                    <input id="@($"option-name-{oi}")" class="form-control form-control-sm" maxlength="60" placeholder="Colour" @bind="opt.Name" />
+                </div>
+                <div class="col-5 col-md-3">
+                    <label class="form-label small" for="@($"option-kind-{oi}")">Shown as</label>
+                    <select id="@($"option-kind-{oi}")" class="form-select form-select-sm" @bind="opt.Kind">
+                        <option value="@StoreOptionKind.Pill">Buttons</option>
+                        <option value="@StoreOptionKind.Swatch">Colour swatches</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 text-md-end">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => opt.Values.Add(new StoreOptionValueDraft()))">Add a value</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => Options.Remove(opt))">Remove option</button>
+                </div>
+            </div>
+            @foreach (var (value, vi) in opt.Values.Select((v, i) => (v, i)))
+            {
+                var val = value;
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+                    <label class="visually-hidden" for="@($"option-{oi}-value-{vi}")">Value</label>
+                    <input id="@($"option-{oi}-value-{vi}")" class="form-control form-control-sm" style="max-width:14rem;" maxlength="60" placeholder="Black" @bind="val.Value" />
+                    @if (opt.Kind == StoreOptionKind.Swatch)
+                    {
+                        <BenColorPicker @bind-Value="val.SwatchHex" ShowHex="true" AriaLabel="@($"Colour of {val.Value}")" />
+                    }
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="@($"option-{oi}-value-{vi}-on")" @bind="val.IsActive" />
+                        <label class="form-check-label small" for="@($"option-{oi}-value-{vi}-on")">Offered</label>
+                    </div>
+                    <BenGridAction Icon="x" Label="Remove this value" Tone="GridActionTone.Danger" OnClick="@(() => opt.Values.Remove(val))" />
+                </div>
+            }
+        </div>
+    </div>
+}
+<div class="d-flex flex-wrap gap-2 mb-2">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="option-add" disabled="@(Options.Count >= StoreCatalogRules.MaxOptionsPerProduct)"
+            @onclick="@(() => Options.Add(new StoreOptionDraft { Values = [new StoreOptionValueDraft()] }))">Add an option</button>
+    <button type="button" class="btn btn-sm btn-primary" id="options-save" disabled="@Busy" @onclick="OnSave">Save options</button>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="variants-generate" disabled="@(Busy || !CanGenerate)" @onclick="OnGenerate">Generate variants</button>
+</div>
+@if (GenerateNote is not null)
+{
+    <p class="small text-secondary">@GenerateNote</p>
+}
+@if (Error is not null)
+{
+    <div class="alert alert-danger py-2" id="options-refusal">@Error</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<StoreOptionDraft> Options { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The saved item has options to make variants from.</summary>
+    [Parameter] public bool CanGenerate { get; set; }
+
+    /// <summary>What generating does here, when it differs from the store's — a seller's variants start unpriced.</summary>
+    [Parameter] public string? GenerateNote { get; set; }
+
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnGenerate { get; set; }
+    /// <summary>The page's own help link — a literal there, so the help guards can check where it points.</summary>
+    [Parameter] public RenderFragment? Help { get; set; }
+}

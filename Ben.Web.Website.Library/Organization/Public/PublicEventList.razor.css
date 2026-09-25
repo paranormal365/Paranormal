@@ -109,13 +109,24 @@
     line-height: 1.25;
 }
 
+/* A link that looks like a link.
+
+   These were `color: inherit; text-decoration: none`, underlined on hover only, so the public
+   What's On page — the front door of the whole ticket journey — showed four bold black lines and
+   nothing a visitor could tell was clickable. Hover is not an affordance: it is not there on a
+   phone at all, and on a desktop it only rewards somebody who already guessed. */
+
 .ev-row__title a {
-    color: inherit;
-    text-decoration: none;
+    color: var(--bs-link-color);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: .15em;
 }
 
-.ev-row__title a:hover {
-    text-decoration: underline;
+.ev-row__title a:hover,
+.ev-row__title a:focus-visible {
+    color: var(--bs-link-hover-color);
+    text-decoration-thickness: 2px;
 }
 
 .ev-row__by,

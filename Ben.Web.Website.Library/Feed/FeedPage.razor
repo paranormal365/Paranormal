@@ -1,6 +1,8 @@
 @page "/feed"
 @page "/feed/tags/{Tag}"
 @page "/feed/types/{TypeId:guid}"
+@* Everything posted about one place (2026-09-17) — where the place page's "See all" goes. *@
+@page "/feed/places/{PlaceId:guid}"
 @namespace Ben.Web.Website.Library.Feed
 @using Ben.Service.Models.Feed
 @using Ben.Web.Services
@@ -43,6 +45,11 @@
                        heading for the beat before that. *@
                     <text>@(_typeName ?? "Category")</text>
                 }
+                else if (PlaceId is not null)
+                {
+                    @* Same reasoning as the type above: the name rides in on the posts. *@
+                    <text>@(_placeName ?? "A place")</text>
+                }
                 else
                 {
                     <text>Feed</text>
@@ -50,7 +57,7 @@
                 <HelpLink Slug="the-feed" />
             </h3>
 
-            @if (Tag is not null || TypeId is not null)
+            @if (Tag is not null || TypeId is not null || PlaceId is not null)
             {
                 <a class="btn btn-outline-secondary btn-sm" href="/feed">All posts</a>
             }
@@ -155,7 +162,7 @@
                 @* ── The weave (item 186 F8): one promoted slot per eight posts, real cards and
                    house cards alternating, main feed only — a tag or type page stays clean.
                    Positions 8, 16, 24… so nobody meets an ad before they've met the feed. *@
-                @if (Tag is null && TypeId is null && (i + 1) % AdEvery == 0)
+                @if (Tag is null && TypeId is null && PlaceId is null && (i + 1) % AdEvery == 0)
                 {
                     var slot = (i + 1) / AdEvery;
                     if (slot % 2 == 1 && NextPromoted(slot) is { } ad)
@@ -227,6 +234,11 @@
 
     /// <summary>One experience type's posts (item 186 F6) — the chip's landing page.</summary>
     [Parameter] public Guid? TypeId { get; set; }
+
+    /// <summary>One place's posts. The place page's "See all" lands here.</summary>
+    [Parameter] public Guid? PlaceId { get; set; }
+
+    private string? _placeName;
 
     /// <summary>The type's display name, learned from the first post that carries it.</summary>
     private string? _typeName;
@@ -426,7 +438,7 @@
 
         try
         {
-            var page = await Feed.GetFeedAsync(_mode, Tag, experienceType: TypeId);
+            var page = await Feed.GetFeedAsync(_mode, Tag, experienceType: TypeId, place: PlaceId);
             if (page is null)
             {
                 _error = "Couldn't load the feed.";
@@ -438,10 +450,11 @@
             _canPost = page.CanPost;
             _participationKnown = true;
             _typeName ??= page.Posts.FirstOrDefault(p => p.ExperienceTypeId == TypeId)?.ExperienceTypeName;
+            _placeName ??= page.Posts.FirstOrDefault(p => p.PlaceId == PlaceId)?.AboutPlaceName;
 
             // The weave's cards (item 186 F8) — main feed only, and only worth fetching when
             // there are enough posts for the first slot to exist.
-            if (Tag is null && TypeId is null && _posts.Count >= AdEvery && _promoted.Count == 0)
+            if (Tag is null && TypeId is null && PlaceId is null && _posts.Count >= AdEvery && _promoted.Count == 0)
                 await LoadPromotedAsync();
         }
         finally

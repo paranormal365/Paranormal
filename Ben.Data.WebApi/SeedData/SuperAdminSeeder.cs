@@ -27,6 +27,8 @@ internal static class SuperAdminSeeder
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
 
+        await RepairRoleLookupNamesAsync(scope.ServiceProvider);
+
         // Ensure SuperAdmin role exists
         if (!await roleManager.RoleExistsAsync(RoleNames.SuperAdmin))
         {
@@ -53,6 +55,15 @@ internal static class SuperAdminSeeder
             var moderatorRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Moderator));
             if (!moderatorRoleResult.Succeeded)
                 throw new InvalidOperationException($"Failed to create role '{RoleNames.Moderator}': {string.Join(", ", moderatorRoleResult.Errors.Select(e => e.Description))}");
+        }
+
+        // Ensure the Seller role exists (storefront). Nobody is seeded into it: a SuperAdmin gives it
+        // on the person's Site Roles tab, and the product editor's Seller field lists its holders.
+        if (!await roleManager.RoleExistsAsync(RoleNames.Seller))
+        {
+            var sellerRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Seller));
+            if (!sellerRoleResult.Succeeded)
+                throw new InvalidOperationException($"Failed to create role '{RoleNames.Seller}': {string.Join(", ", sellerRoleResult.Errors.Select(e => e.Description))}");
         }
 
         // Ensure SuperAdmin user exists
@@ -113,5 +124,20 @@ internal static class SuperAdminSeeder
             if (!addRoleResult.Succeeded)
                 throw new InvalidOperationException($"Failed to assign role '{RoleNames.SuperAdmin}': {string.Join(", ", addRoleResult.Errors.Select(e => e.Description))}");
         }
+    }
+
+    /// <summary>Repairs role rows whose lookup name is missing — see <see cref="RoleLookupNames"/>.</summary>
+    private static async Task RepairRoleLookupNamesAsync(IServiceProvider services)
+    {
+        var factory = services.GetService<IDbContextFactory<BenDataContext>>();
+        if (factory is null) return;
+
+        await using var db = await factory.CreateDbContextAsync();
+        var repaired = await RoleLookupNames.RepairAsync(db);
+        if (repaired.Count == 0) return;
+
+        services.GetService<ILoggerFactory>()?.CreateLogger("RoleLookupNames")
+            .LogWarning("Repaired the lookup name on {Count} role row(s): {Roles}. Role changes on these would have "
+                      + "thrown rather than saved.", repaired.Count, string.Join(", ", repaired));
     }
 }

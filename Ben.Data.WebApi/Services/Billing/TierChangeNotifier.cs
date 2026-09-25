@@ -1,4 +1,5 @@
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Mail;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -272,7 +273,9 @@ public sealed class TierChangeNotifier
                  + string.Join('\n', changes.Select(c => "• " + c.Sentence))
                  + "\n\nThese changes are already in effect.";
 
-        await _messages.SendAsync(subject, body, recipients, senderId, ct);
+        // Posted as well as shown: a change to what a group's plan covers alters what they may do
+        // tomorrow, and "already in effect" is not news to leave in a bell.
+        await _messages.SendAsync(subject, body, recipients, senderId, ct, MailKinds.PlanChanged);
     }
 
     private async Task<(List<OrganizationSubscription> Free, List<OrganizationSubscription> Paid)>

@@ -22,6 +22,11 @@ struct IsHauntedApp: App {
                     return .handled
                 })
                 .onOpenURL { url in
+                    // A file handed over — AirDrop, Files, Mail — is a session bundle to open.
+                    if url.isFileURL {
+                        Task { await FieldBundleOpener.open(url, dependencies: dependencies, router: router) }
+                        return
+                    }
                     // Website URLs and ishaunted:// links land on the logically
                     // matching native screen — one URL space, two front ends.
                     if let link = DeepLinkParser.parse(url) {

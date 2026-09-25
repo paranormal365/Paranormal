@@ -106,7 +106,10 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
 
         var mediaFileIds = await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => ids.Contains(f.FieldSessionUploadId))
-            .Select(f => f.UploadFileId)
+            // A bundle member has no file row to delete: its bytes are inside the session's
+            // single .ben, which is in documentFileIds and goes with the session.
+            .Where(f => f.UploadFileId != null)
+            .Select(f => f.UploadFileId!.Value)
             .ToListAsync(ct);
 
         int citations;

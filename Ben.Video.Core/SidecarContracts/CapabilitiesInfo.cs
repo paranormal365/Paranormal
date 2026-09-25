@@ -48,4 +48,17 @@ public static class SidecarCapabilities
 
     /// <summary>Whole-export concat + audio mix assembly (phase 162).</summary>
     public const string ExportAssemble = "export-assemble";
+
+    /// <summary>
+    /// Can be asked to stop — <c>POST /v1/shutdown</c>, the "off" half of the Windows switch
+    /// (2026-09-20).
+    /// </summary>
+    /// <remarks>
+    /// This one exists for a specific reason. 1.1.1 is released and installed on people's machines,
+    /// and it has no such endpoint. Without this gate the editor would show a "Turn off" button to
+    /// everyone running one, and pressing it would 404 — a button that looks broken because it is.
+    /// Advertising the ability instead means the switch appears by itself once somebody is running
+    /// a sidecar that can honour it, and stays hidden until then.
+    /// </remarks>
+    public const string Shutdown = "shutdown";
 }

@@ -22,7 +22,12 @@ public static class CaseStatusExtensions
         CaseStatus.Active      => "bg-success",
         CaseStatus.Summarized  => "bg-warning text-dark",
         CaseStatus.Closed      => "bg-dark",
-        CaseStatus.Public      => "bg-info text-dark",
+        // NOT text-dark. Bootstrap's own --bs-info is a bright cyan that wants dark text, and this
+        // line was written for it; this template remaps --bs-info to #66366c, a deep purple, where
+        // dark text measures 2.31:1 and white measures 9.09:1. Found 2026-09-22 on the public case
+        // list and the case header. The other text-dark pairings below are on --bs-warning
+        // (#aaa256, an olive), where dark text is right at 8.01:1.
+        CaseStatus.Public      => "bg-info",
         CaseStatus.Haunted     => "bg-warning text-dark",
         CaseStatus.Transferred => "bg-secondary",
         // Danger, not warning: a paused case needs somebody to act (renew, or reassign), and the

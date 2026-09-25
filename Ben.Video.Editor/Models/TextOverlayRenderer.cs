@@ -94,7 +94,7 @@ public static class TextOverlayRenderer
             ? fraction * canvasW
             : 0.0;
 
-        var shadow     = SvgShadowFilter.Build(overlay.ShadowColor, overlay.ShadowOffsetX, overlay.ShadowOffsetY, overlay.ShadowBlur);
+        var shadow     = SvgShadowFilter.Build(overlay.ShadowColor, overlay.ShadowOffsetX, overlay.ShadowOffsetY, overlay.ShadowBlur, canvasW, canvasH);
         var shadowAttr = overlay.ShadowBlur > 0 ? " filter=\"url(#bv-shadow)\"" : string.Empty;
 
         string tspans;

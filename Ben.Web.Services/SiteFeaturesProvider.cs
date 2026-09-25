@@ -47,6 +47,7 @@ public sealed class SiteFeaturesProvider
             [SiteFeatures.Voting]       = true,
             [SiteFeatures.PublicFeed]   = false,
             [SiteFeatures.Publications] = false,
+            [SiteFeatures.Store]        = false,
         };
 
     // A scope factory rather than the client itself: this is a singleton and IBenAdminClient is
@@ -63,6 +64,22 @@ public sealed class SiteFeaturesProvider
     private volatile bool _planPurchasesEnabled = true;
     private long _nextRefreshTicks;
     private int _refreshing;
+
+    /// <summary>
+    /// Which refresh is the newest. An older answer may never overwrite a newer one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Found 2026-09-21.</b> A refresh reads the API and then writes what it read, and two
+    /// could be in flight at once — the background one a stale timer started, and the one
+    /// <see cref="PrimeAsync"/> runs the moment an administrator saves. Nothing ordered them, so
+    /// the SLOWER of the two won, and a slower background read started before the save wrote the
+    /// value the administrator had just cleared straight back over the cleared one.</para>
+    ///
+    /// <para>It showed up as a site-wide announcement that would not go away, which is the worst
+    /// shape this could take: the notice everybody is shown is the one nobody can withdraw. The
+    /// e2e walk had been passing on timing alone.</para>
+    /// </remarks>
+    private long _refreshSequence;
 
     public SiteFeaturesProvider(IServiceScopeFactory scopeFactory, ILogger<SiteFeaturesProvider> logger)
     {
@@ -143,11 +160,20 @@ public sealed class SiteFeaturesProvider
 
     private async Task RefreshAsync(CancellationToken ct)
     {
+        // Taken BEFORE the request goes out, so "newest" means the most recently ASKED rather than
+        // the most recently answered — which is the whole point, since the answers come back out
+        // of order.
+        var mine = Interlocked.Increment(ref _refreshSequence);
+
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var client = scope.ServiceProvider.GetRequiredService<IBenAdminClient>();
             var info = await client.GetSiteFeaturesAsync(ct);
+
+            // A refresh that was overtaken while it was waiting has nothing to say: whatever it is
+            // holding was already true before the newer one asked.
+            if (Interlocked.Read(ref _refreshSequence) != mine) return;
 
             // An empty or absent answer is not an instruction to switch the site off. Only a
             // response that actually names features replaces the snapshot.
@@ -194,11 +220,12 @@ public static class SiteFeatures
     public const string Voting       = "features.voting";
     public const string PublicFeed   = "features.public-feed";
     public const string Publications = "features.publications";
+    public const string Store        = "features.store";
 
     /// <summary>Every declared key, for the guard test and the admin help text.</summary>
     public static readonly IReadOnlyList<string> All =
     [
         VideoEditor, Equipment, Events, Discovery, CmsPages,
-        MediaLibrary, OrgMessaging, Voting, PublicFeed, Publications,
+        MediaLibrary, OrgMessaging, Voting, PublicFeed, Publications, Store,
     ];
 }

@@ -34,7 +34,11 @@ see what you are about to change before you do.
 
 ## Deleting
 
-Press the trash button on a row. What happens next depends on whether anyone else is using it.
+Press the trash button, on a row of **Your Files** or on a card in the **Media Library**. Both do
+exactly the same thing — the Media Library only offers it on a file that is yours, because a file
+you have handed to a group is deleted by somebody with that group's permission instead.
+
+What happens next depends on whether anyone else is using it.
 
 **Nobody else is using it.** You are asked once, and it is gone — the file, its details, and any
 shares to individual people.

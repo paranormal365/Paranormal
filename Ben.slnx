@@ -33,5 +33,12 @@
     <Project Path="Ben.Wasm.Video/Ben.Wasm.Video.csproj" />
     <Project Path="Ben.Wasm.Video.Tests/Ben.Wasm.Video.Tests.csproj" />
   </Folder>
+  <Folder Name="/Canvas Editor/">
+    <Project Path="Ben.Canvas.Core/Ben.Canvas.Core.csproj" />
+    <Project Path="Ben.Canvas.Editor/Ben.Canvas.Editor.csproj" />
+    <Project Path="Ben.Wasm.Canvas/Ben.Wasm.Canvas.csproj" />
+    <Project Path="Ben.Canvas.Tests/Ben.Canvas.Tests.csproj" />
+    <Project Path="Ben.Canvas.Playwright/Ben.Canvas.Playwright.csproj" />
+  </Folder>
   <Project Path="Ben.Web.Tests/Ben.Web.Tests.csproj" />
 </Solution>

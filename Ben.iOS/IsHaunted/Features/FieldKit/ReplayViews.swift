@@ -5,24 +5,18 @@ import BenKit
 
 /// The session's readings as a trace, with the playhead and every marker on it.
 ///
-/// Downsampled for drawing: a five-hour session is tens of thousands of readings and a chart
-/// cannot show more points than the screen has pixels. The downsampling keeps the EXTREMES of
-/// each bucket rather than averaging, because averaging is exactly what would erase the spike
-/// somebody opened the session to look at.
+/// The trace arrives already thinned — `FieldTrace`, worked out once when the replay loaded —
+/// so what this redraws on every tick of the playhead is a line of at most a few hundred points
+/// whose identities do not change, not a fresh derivation from every reading of the night.
 struct ReadingsChart: View {
     let timeline: ReplayTimeline
+    let trace: FieldTrace
     let playhead: Date
     var onScrub: (Date) -> Void
 
-    private struct Point: Identifiable {
-        let id = UUID()
-        let at: Date
-        let milligauss: Double
-    }
-
     var body: some View {
         Chart {
-            ForEach(points) { point in
+            ForEach(trace.points) { point in
                 LineMark(x: .value("Time", point.at),
                          y: .value("mG from base", point.milligauss))
                     .foregroundStyle(Theme.ecto)
@@ -73,7 +67,9 @@ struct ReadingsChart: View {
         // time somebody opens the review. An empty chart with an axis reads as "nothing happened",
         // which is a claim about the night rather than about the setup.
         .overlay {
-            if !timeline.baselines.isSet {
+            // The FIELD base, specifically: this chart draws only the field line, and a session
+            // with a sound base and no field base was an empty grid with nothing said.
+            if timeline.baselines.magneticMicrotesla == nil {
                 VStack(spacing: 6) {
                     Image(systemName: "gauge.with.dots.needle.bottom.0percent")
                         .font(.title2).foregroundStyle(Theme.fog)
@@ -92,33 +88,6 @@ struct ReadingsChart: View {
         }
         .accessibilityLabel("Magnetic field over the session")
     }
-
-    /// At most this many points reach the chart. Beyond it the line is slower to draw than it
-    /// is to read.
-    private static let maxPoints = 400
-
-    private var points: [Point] {
-        let readings = timeline.readings.compactMap { reading -> Point? in
-            guard let field = reading.measurements?["emf"]?.numberValue,
-                  let base = timeline.baselines.magneticMicrotesla
-            else { return nil }
-            return Point(at: reading.at, milligauss: (field - base) * 10)
-        }
-        guard readings.count > Self.maxPoints else { return readings }
-
-        // Keep the highest and lowest of each bucket. Averaging would flatten the one moment
-        // worth looking at into the noise around it.
-        let bucketSize = Int(ceil(Double(readings.count) / Double(Self.maxPoints / 2)))
-        var kept: [Point] = []
-        for start in stride(from: 0, to: readings.count, by: bucketSize) {
-            let bucket = readings[start..<min(start + bucketSize, readings.count)]
-            guard let low = bucket.min(by: { $0.milligauss < $1.milligauss }),
-                  let high = bucket.max(by: { $0.milligauss < $1.milligauss })
-            else { continue }
-            kept.append(contentsOf: low.at <= high.at ? [low, high] : [high, low])
-        }
-        return kept
-    }
 }
 
 /// Where somebody walked, and where they were at the playhead.
@@ -129,11 +98,43 @@ struct MovementMap: View {
     let timeline: ReplayTimeline
     let frame: ReplayFrame
     let stills: [CaptureMark]
+    /// The walked path as coordinates — converted once by the screen, after the replay loads.
+    let track: [CLLocationCoordinate2D]
 
     @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
-        map.overlay(alignment: .topLeading) { roomPlate }
+        // A session with no fix used to be drawn as a map of the whole continent with a caption
+        // over it, which reads as "somewhere in North America" rather than "nowhere". Nothing
+        // recorded gets a card that says so, not a map of a place nobody went.
+        if hasSomewhere {
+            map.overlay(alignment: .topLeading) { roomPlate }
+        } else {
+            nowhere
+        }
+    }
+
+    private var hasSomewhere: Bool {
+        !track.isEmpty
+            || frame.position?.coordinate != nil
+            || !markersWithPlaces.isEmpty
+            || stills.contains { $0.coordinate != nil }
+    }
+
+    private var nowhere: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "location.slash")
+                .font(.title3).foregroundStyle(Theme.fog)
+            Text("No position was recorded for this session.")
+                .font(.caption).foregroundStyle(Theme.bone)
+            Text("Location was switched off, or a fix never arrived — indoors it often doesn't.")
+                .font(.caption2).foregroundStyle(Theme.fog)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28).padding(.horizontal, 16)
+        .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("replay-no-position")
     }
 
     /// The room, over the map, because it is the one thing on this screen a fix cannot tell
@@ -189,15 +190,24 @@ struct MovementMap: View {
                         .stroke(Theme.ecto.opacity(0.4), lineWidth: 1)
                 }
                 Annotation("", coordinate: here) {
+                    // The arrow sits OUTSIDE the dot rather than inside it: a 9pt glyph inside a
+                    // 14pt circle was a smudge at map scale, and which way it pointed — the whole
+                    // point of drawing it — could not be read.
                     ZStack {
-                        Circle().fill(Theme.ecto).frame(width: 14, height: 14)
-                        if let heading = frame.headingDegrees {
+                        if let facing = frame.facing {
                             Image(systemName: "location.north.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Theme.ink)
-                                .rotationEffect(.degrees(heading))
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Theme.ecto)
+                                .shadow(color: .black.opacity(0.6), radius: 2)
+                                .rotationEffect(.degrees(facing.degrees))
+                                .accessibilityLabel(
+                                    "\(facing.what) \(PositionReadout.compass(facing.degrees))")
+                        } else {
+                            Circle().fill(Theme.ecto).frame(width: 14, height: 14)
+                                .shadow(color: .black.opacity(0.6), radius: 2)
                         }
                     }
+                    .accessibilityIdentifier("replay-here")
                 }
             }
         }
@@ -214,10 +224,6 @@ struct MovementMap: View {
             }
         }
         .accessibilityLabel("Where this session went")
-    }
-
-    private var track: [CLLocationCoordinate2D] {
-        timeline.track.compactMap { $0.position.coordinate }
     }
 
     private var markersWithPlaces: [FieldMarkerRecord] {

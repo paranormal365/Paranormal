@@ -1,0 +1,231 @@
+@inject IMediaUrlBuilder Urls
+
+@*
+    A product's files (store sellers, backlog 251, P11): manuals, firmware, software and documents,
+    each either for buyers — downloadable from a paid order — or private to the seller and the store
+    (Ben, 09/24/2026). Uploads go up to 95 MB; a manual can also be written here, or imported from a
+    Markdown or plain-text file. The admin's editor and the seller's both draw this; each page brings
+    its own client, so this injects nothing that can change anything.
+*@
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+    <h2 class="h6 fw-bold mb-0">Files @Help</h2>
+</div>
+<p class="small text-secondary">
+    <strong>For buyers</strong> files appear on the order page of everybody who bought this item, for as long as they keep the order.
+    <strong>Private</strong> files are only for you and the store — build notes, supplier sheets, the master copy.
+</p>
+
+@if (Error is not null)
+{
+    <div class="alert alert-danger py-2" id="files-refusal">@Error</div>
+}
+
+<BenListState TItem="StoreProductFileRecord" Result="Files" Loading="Loading" EmptyText="No files yet" OnRetry="OnRetry">
+    <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle small" data-testid="product-files">
+            <thead><tr><th>Title</th><th>Kind</th><th>Version</th><th>Who gets it</th><th class="text-end">Size</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var f in Files.Items)
+                {
+                    var x = f;
+                    <tr data-testid="product-file" data-title="@x.Title">
+                        @if (_editing == x.Id)
+                        {
+                            <td><input class="form-control form-control-sm" maxlength="200" aria-label="Title" @bind="_editTitle" /></td>
+                            <td>
+                                @if (x.IsManual) { <span>Manual</span> }
+                                else
+                                {
+                                    <select class="form-select form-select-sm" aria-label="Kind" @bind="_editKind">
+                                        @foreach (var k in Enum.GetValues<StoreProductFileKind>()) { <option value="@k">@KindText(k)</option> }
+                                    </select>
+                                }
+                            </td>
+                            <td><input class="form-control form-control-sm" maxlength="40" aria-label="Version" @bind="_editVersion" /></td>
+                            <td>
+                                <select class="form-select form-select-sm" aria-label="Who gets it" @bind="_editAudience">
+                                    <option value="@StoreFileAudience.Buyers">For buyers</option>
+                                    <option value="@StoreFileAudience.Private">Private</option>
+                                </select>
+                            </td>
+                            <td></td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-sm btn-primary" data-testid="file-save" disabled="@Busy" @onclick="@(() => SaveAsync(x))">Save</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => _editing = null)">Cancel</button>
+                            </td>
+                        }
+                        else
+                        {
+                            <td>
+                                @if (x.IsManual) { <a href="/store/manuals/@x.Id" target="_blank" rel="noopener" data-testid="file-open">@x.Title</a> }
+                                else { <a href="@Urls.StoreProductFile(x.Id)" download="@x.FileName" data-testid="file-open">@x.Title</a> }
+                                @if (x.FileName is { } name) { <div class="text-secondary">@name</div> }
+                            </td>
+                            <td>@KindText(x.Kind)</td>
+                            <td>@x.VersionLabel</td>
+                            <td>
+                                @if (x.Audience == StoreFileAudience.Buyers) { <span class="badge bg-success-subtle text-success-emphasis" data-testid="file-audience">For buyers</span> }
+                                else { <span class="badge bg-secondary-subtle text-secondary-emphasis" data-testid="file-audience">Private</span> }
+                            </td>
+                            <td class="text-end text-nowrap">@(x.SizeBytes is { } b ? Size(b) : "")</td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="file-edit" disabled="@Busy" @onclick="@(() => Edit(x))">Edit</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-testid="file-delete" disabled="@Busy" @onclick="@(() => OnDelete.InvokeAsync(x.Id))">Remove</button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</BenListState>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body small">
+                <h3 class="h6">Upload a file</h3>
+                <div class="mb-2">
+                    <InputFile id="file-upload-input" class="form-control form-control-sm" OnChange="Chosen" />
+                    <div class="form-text">Up to 95 MB — a PDF manual, a firmware image, a zip of software.</div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-12"><label class="form-label" for="file-title">Title</label><input id="file-title" class="form-control form-control-sm" maxlength="200" @bind="_title" /></div>
+                    <div class="col-sm-4">
+                        <label class="form-label" for="file-kind">Kind</label>
+                        <select id="file-kind" class="form-select form-select-sm" @bind="_kind">
+                            @foreach (var k in Enum.GetValues<StoreProductFileKind>()) { <option value="@k">@KindText(k)</option> }
+                        </select>
+                    </div>
+                    <div class="col-sm-4"><label class="form-label" for="file-version">Version</label><input id="file-version" class="form-control form-control-sm" maxlength="40" @bind="_version" /></div>
+                    <div class="col-sm-4">
+                        <label class="form-label" for="file-audience">Who gets it</label>
+                        <select id="file-audience" class="form-select form-select-sm" @bind="_audience">
+                            <option value="@StoreFileAudience.Buyers">For buyers</option>
+                            <option value="@StoreFileAudience.Private">Private</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" id="file-upload" disabled="@(Busy || _chosen is null)" @onclick="UploadAsync">Upload</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body small">
+                <h3 class="h6">Write a manual</h3>
+                <p class="text-secondary mb-2">Written here, it prints cleanly and reads on a phone. Import a Markdown (.md) or text (.txt) file to start from.</p>
+                <div class="row g-2 mb-2">
+                    <div class="col-12"><label class="form-label" for="manual-title">Title</label><input id="manual-title" class="form-control form-control-sm" maxlength="200" @bind="_manualTitle" /></div>
+                    <div class="col-sm-6"><label class="form-label" for="manual-version">Version</label><input id="manual-version" class="form-control form-control-sm" maxlength="40" @bind="_manualVersion" /></div>
+                    <div class="col-sm-6">
+                        <label class="form-label" for="manual-audience">Who gets it</label>
+                        <select id="manual-audience" class="form-select form-select-sm" @bind="_manualAudience">
+                            <option value="@StoreFileAudience.Buyers">For buyers</option>
+                            <option value="@StoreFileAudience.Private">Private</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="manual-import">Import from a file</label>
+                        <InputFile id="manual-import" class="form-control form-control-sm" accept=".md,.markdown,.txt" OnChange="ImportAsync" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="manual-body">The manual <span class="text-secondary">(Markdown: # headings, **bold**, - lists)</span></label>
+                        <textarea id="manual-body" class="form-control form-control-sm font-monospace" rows="8" @bind="_manualBody"></textarea>
+                    </div>
+                </div>
+                @if (_importError is not null) { <div class="alert alert-warning py-1 px-2">@_importError</div> }
+                <button type="button" class="btn btn-sm btn-primary" id="manual-save" disabled="@Busy" @onclick="WriteAsync">Add the manual</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public LoadResult<StoreProductFileRecord> Files { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>The chosen file and what it is. The page sends it — it returns true when it went up, to clear the form.</summary>
+    [Parameter] public Func<IBrowserFile, SaveStoreProductFileRequest, Task<bool>>? OnUpload { get; set; }
+    [Parameter] public Func<SaveStoreManualRequest, Task<bool>>? OnManual { get; set; }
+    [Parameter] public EventCallback<(Guid FileId, SaveStoreProductFileRequest Meta)> OnSave { get; set; }
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+
+    /// <summary>A literal HelpLink from the page, so the help guards can read the slug.</summary>
+    [Parameter] public RenderFragment? Help { get; set; }
+
+    private IBrowserFile? _chosen;
+    private string _title = "", _manualTitle = "", _manualBody = "";
+    private string? _version, _manualVersion, _importError, _editTitle, _editVersion;
+    private StoreProductFileKind _kind = StoreProductFileKind.Manual, _editKind;
+    private StoreFileAudience _audience = StoreFileAudience.Buyers, _manualAudience = StoreFileAudience.Buyers, _editAudience;
+    private Guid? _editing;
+
+    private void Chosen(InputFileChangeEventArgs e)
+    {
+        _chosen = e.File;
+        if (string.IsNullOrWhiteSpace(_title)) _title = Path.GetFileNameWithoutExtension(e.File.Name);
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_chosen is null || OnUpload is null) return;
+        if (await OnUpload(_chosen, new SaveStoreProductFileRequest(_title, _kind, _audience, _version, 0)))
+        {
+            _chosen = null; _title = ""; _version = null;
+        }
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _importError = null;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(2 * 1024 * 1024));
+            _manualBody = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(_manualTitle)) _manualTitle = Path.GetFileNameWithoutExtension(e.File.Name);
+        }
+        catch (IOException) { _importError = "That file is too large to import — 2 MB at most. Upload it as a file instead."; }
+    }
+
+    private async Task WriteAsync()
+    {
+        if (OnManual is null) return;
+        if (await OnManual(new SaveStoreManualRequest(_manualTitle, _manualBody, IsMarkdown: true, _manualAudience, _manualVersion)))
+        {
+            _manualTitle = ""; _manualBody = ""; _manualVersion = null;
+        }
+    }
+
+    private void Edit(StoreProductFileRecord x)
+    {
+        _editing = x.Id;
+        _editTitle = x.Title; _editVersion = x.VersionLabel; _editKind = x.Kind; _editAudience = x.Audience;
+    }
+
+    private async Task SaveAsync(StoreProductFileRecord x)
+    {
+        await OnSave.InvokeAsync((x.Id, new SaveStoreProductFileRequest(_editTitle ?? "", _editKind, _editAudience, _editVersion, x.SortOrder)));
+        _editing = null;
+    }
+
+    public static string KindText(StoreProductFileKind kind) => kind switch
+    {
+        StoreProductFileKind.Manual => "Manual",
+        StoreProductFileKind.Firmware => "Firmware",
+        StoreProductFileKind.Software => "Software",
+        StoreProductFileKind.Document => "Document",
+        _ => "Other",
+    };
+
+    public static string Size(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / 1024d / 1024d:0.#} MB",
+        >= 1024 => $"{bytes / 1024d:0} KB",
+        _ => $"{bytes} bytes",
+    };
+}

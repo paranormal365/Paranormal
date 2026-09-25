@@ -236,3 +236,48 @@ export function abortRequest(requestId) {
     const controller = inFlight.get(requestId);
     if (controller) controller.abort();
 }
+
+/**
+ * What the browser says it is running on, for deciding whether to offer the on/off switch at all.
+ * Returns a short platform string ('Windows', 'macOS', ...) or null when the browser will not say.
+ *
+ * navigator.platform is deprecated and misreports on some browsers, so the modern userAgentData is
+ * asked first; the user-agent fallback exists because Safari and Firefox do not implement it.
+ */
+export function getPlatform() {
+    try {
+        const hinted = navigator.userAgentData?.platform;
+        if (hinted) return hinted;
+        const ua = navigator.userAgent || '';
+        if (ua.includes('Windows')) return 'Windows';
+        if (ua.includes('Mac OS')) return 'macOS';
+        return null;
+    } catch { return null; }
+}
+
+/**
+ * Asks the operating system to start the sidecar, by navigating to its registered protocol link.
+ *
+ * A web page cannot start a program; this is the one sanctioned way round that, and it is why the
+ * Windows installer registers the scheme and the Store package declares it in its manifest. The
+ * browser shows the person a prompt the first time ("Open BenVideo Sidecar?") — which is the
+ * point: it is their decision, not the page's.
+ *
+ * Done through a hidden iframe rather than by assigning to location.href. Assigning navigates the
+ * page the editor is running in: with the scheme unregistered that can leave the tab on an error
+ * page, and with it registered the tab sits half-navigated behind the prompt. Everything the
+ * iframe does is contained, and the editor keeps its state either way.
+ *
+ * Returns nothing and throws nothing, deliberately: there is no way to learn from here whether the
+ * program actually started. The caller finds out by probing for it, which is the only honest answer.
+ */
+export function launchViaProtocol(uri) {
+    try {
+        const frame = document.createElement('iframe');
+        frame.style.display = 'none';
+        frame.src = uri;
+        document.body.appendChild(frame);
+        // Long enough for the browser to have acted on the src; any prompt outlives the frame.
+        setTimeout(() => { try { frame.remove(); } catch { /* already gone */ } }, 10000);
+    } catch { /* nothing more a web page can do */ }
+}

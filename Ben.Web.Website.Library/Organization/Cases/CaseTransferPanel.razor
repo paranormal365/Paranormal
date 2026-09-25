@@ -57,6 +57,13 @@
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="badge @StatusBadge(transfer.Status)">@StatusLabel(transfer.Status)</span>
                                     <span class="small text-secondary">@transfer.DateProposed.ToViewerLocalTime(UserState).ToDisplayDate()</span>
+                                    @* Mapped on purpose and rendered nowhere until the 2026-09-17
+                                       audit: a group being asked to take on somebody else's case
+                                       could see which group was asking and not which person. *@
+                                    @if (!string.IsNullOrWhiteSpace(transfer.ProposedByDisplayName))
+                                    {
+                                        <span class="small text-secondary">· asked by @transfer.ProposedByDisplayName</span>
+                                    }
                                 </div>
                                 <div class="small">
                                     <span class="fw-semibold">@(transfer.FromOrganizationName ?? "This org")</span>

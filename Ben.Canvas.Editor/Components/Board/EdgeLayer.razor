@@ -1,0 +1,167 @@
+@*
+    Connectors: one SVG in world coordinates beneath the blocks.
+
+    Each connector is a wide invisible hit path over a thin visible line, because a two-pixel line is
+    impossible to click and impossible to tap. Arrowheads are plain paths rather than SVG markers: a marker
+    needs a document id, and url(#id) references resolve against <base href>, which breaks under a sub-path.
+    Labels are SVG text with a stroke halo; WebKit misplaces foreignObject inside transformed ancestors.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<svg class="bc-edges" aria-label="Connectors" role="group">
+    @foreach (var edge in Store.Document.Edges)
+    {
+        var from = Store.FindNode(edge.FromNodeId);
+        var to = Store.FindNode(edge.ToNodeId);
+        if (from is null || to is null) continue;
+
+        var path = EdgeGeometry.Resolve(CanvasHitTester.RectOf(from), CanvasHitTester.RectOf(to), edge.FromSide, edge.ToSide, edge.Route);
+        var d = path.ToSvgPath();
+        var selected = Selection.EdgeId == edge.Id;
+
+        <g @key="edge.Id" class="@EdgeClass(edge)" data-bc-edge="@edge.Id" data-bc-selected="@(selected ? "true" : null)"
+           role="img" tabindex="@(selected ? "0" : "-1")" aria-label="@EdgeLabel(edge, from, to)">
+            <path class="bc-edge__hit" d="@d" />
+            <path class="bc-edge__line" d="@d" />
+            <path class="bc-edge__focus" d="@d" />
+            @* Each end draws its own marker. The migrations have already resolved an old board's
+               single Arrow switch into these two, so nothing here has to know which era it came from. *@
+            @if (Marker(edge.EffectiveToMarker) is { } toShape)
+            {
+                <path class="bc-edge__head bc-edge__head--@toShape" d="@MarkerPath(path, atEnd: true, marker: edge.EffectiveToMarker)" />
+            }
+            @if (Marker(edge.EffectiveFromMarker) is { } fromShape)
+            {
+                <path class="bc-edge__head bc-edge__head--@fromShape" d="@MarkerPath(path, atEnd: false, marker: edge.EffectiveFromMarker)" />
+            }
+            @* The icon rides in the middle of the line with the label beneath it, so a connector can
+               be marked and named at once — the family tree's child line is marked, not labelled. *@
+            @if (!string.IsNullOrWhiteSpace(edge.Icon))
+            {
+                <!text class="bc-edge__icon" x="@CssNumber.F(path.MidPoint.X)" y="@CssNumber.F(path.MidPoint.Y)"
+                      text-anchor="middle" dominant-baseline="middle">@edge.Icon</!text>
+            }
+            @if (!string.IsNullOrWhiteSpace(edge.Label))
+            {
+                @* <!text> is SVG's text element; the ! stops Razor reading it as its own <text> tag. *@
+                <!text class="bc-edge__label" x="@CssNumber.F(path.MidPoint.X)" y="@CssNumber.F(LabelY(path, edge))"
+                      text-anchor="middle" dominant-baseline="middle">@edge.Label</!text>
+            }
+        </g>
+    }
+    <path class="bc-connect-preview" />
+</svg>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Selection.OnChanged += Refresh;
+    }
+
+    private static string EdgeClass(CanvasEdge edge) =>
+        (CanvasPalette.IsValid(edge.ColorKey) ? $"bc-edge bc-edge--c{edge.ColorKey}" : "bc-edge")
+        + (edge.Line == EdgeLine.Dashed ? " bc-edge--dashed" : "");
+
+    private static string EdgeLabel(CanvasEdge edge, CanvasNode from, CanvasNode to)
+    {
+        var label = $"Connector from {NodeWords.Title(from)} to {NodeWords.Title(to)}";
+        return string.IsNullOrWhiteSpace(edge.Label) ? label : $"{label}: {edge.Label}";
+    }
+
+    /// <summary>A closed triangle at one end, pointing along the curve's tangent there.</summary>
+    /// <summary>The shape name for the CSS class, or null when nothing is drawn.</summary>
+    internal static string? Marker(EdgeMarker marker) => marker switch
+    {
+        EdgeMarker.Arrow => "arrow",
+        EdgeMarker.Diamond => "diamond",
+        EdgeMarker.Dot => "dot",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A label sits clear of the icon when a connector carries both.
+    /// </summary>
+    internal static double LabelY(EdgePath path, CanvasEdge edge) =>
+        string.IsNullOrWhiteSpace(edge.Icon) ? path.MidPoint.Y : path.MidPoint.Y + 16;
+
+    /// <summary>
+    /// One end's marker, aimed along the direction the connector actually arrives in.
+    /// </summary>
+    /// <remarks>
+    /// The aim comes from <c>EdgePath.StartControl</c>/<c>EndControl</c>, not from P1/P2 — those
+    /// control points are unused on an elbow, and a marker aimed by them would point somewhere the
+    /// line never went.
+    /// </remarks>
+    internal static string MarkerPath(EdgePath path, bool atEnd, EdgeMarker marker, double size = 10) =>
+        marker switch
+        {
+            EdgeMarker.Diamond => DiamondHead(path, atEnd, size),
+            EdgeMarker.Dot => DotHead(path, atEnd, size),
+            _ => ArrowHead(path, atEnd, size),
+        };
+
+    /// <summary>A four-point diamond centred on the end: the family tree's marriage marker.</summary>
+    internal static string DiamondHead(EdgePath path, bool atEnd, double size = 10)
+    {
+        var (tip, ux, uy) = Aim(path, atEnd);
+        var half = size * 0.5;
+        // Along the line one way, across it the other: a rhombus, not a square on its corner.
+        var cx = tip.X - ux * half;
+        var cy = tip.Y - uy * half;
+        return FormattableString.Invariant(
+            $"M {CssNumber.F(cx + ux * half)} {CssNumber.F(cy + uy * half)} L {CssNumber.F(cx - uy * half * 0.7)} {CssNumber.F(cy + ux * half * 0.7)} L {CssNumber.F(cx - ux * half)} {CssNumber.F(cy - uy * half)} L {CssNumber.F(cx + uy * half * 0.7)} {CssNumber.F(cy - ux * half * 0.7)} Z");
+    }
+
+    /// <summary>A round dot at the end, drawn as two arcs so it is one path like the others.</summary>
+    internal static string DotHead(EdgePath path, bool atEnd, double size = 10)
+    {
+        var (tip, ux, uy) = Aim(path, atEnd);
+        var r = size * 0.35;
+        var cx = tip.X - ux * r;
+        var cy = tip.Y - uy * r;
+        return FormattableString.Invariant(
+            $"M {CssNumber.F(cx - r)} {CssNumber.F(cy)} A {CssNumber.F(r)} {CssNumber.F(r)} 0 1 0 {CssNumber.F(cx + r)} {CssNumber.F(cy)} A {CssNumber.F(r)} {CssNumber.F(r)} 0 1 0 {CssNumber.F(cx - r)} {CssNumber.F(cy)} Z");
+    }
+
+    /// <summary>The end point and the unit direction the connector arrives in there.</summary>
+    private static (CanvasPoint Tip, double Ux, double Uy) Aim(EdgePath path, bool atEnd)
+    {
+        var tip = atEnd ? path.P3 : path.P0;
+        var control = atEnd ? path.EndControl : path.StartControl;
+        var dx = tip.X - control.X;
+        var dy = tip.Y - control.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1e-6) return (tip, 1, 0);
+        return (tip, dx / length, dy / length);
+    }
+
+    internal static string ArrowHead(EdgePath path, bool atEnd, double size = 10)
+    {
+        var tip = atEnd ? path.P3 : path.P0;
+        var control = atEnd ? path.EndControl : path.StartControl;
+        var dx = tip.X - control.X;
+        var dy = tip.Y - control.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1e-6) { dx = 1; dy = 0; length = 1; }
+        var ux = dx / length;
+        var uy = dy / length;
+        var baseX = tip.X - ux * size;
+        var baseY = tip.Y - uy * size;
+        var half = size * 0.55;
+        return FormattableString.Invariant(
+            $"M {CssNumber.F(tip.X)} {CssNumber.F(tip.Y)} L {CssNumber.F(baseX - uy * half)} {CssNumber.F(baseY + ux * half)} L {CssNumber.F(baseX + uy * half)} {CssNumber.F(baseY - ux * half)} Z");
+    }
+
+    private void Changed(CanvasChange change) => _ = InvokeAsync(StateHasChanged);
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Selection.OnChanged -= Refresh;
+    }
+}

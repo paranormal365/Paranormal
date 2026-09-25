@@ -48,6 +48,10 @@ def put(cfg, path, value):
 put(base, "ConnectionStrings:BenDbConnectionString", conn)
 put(base, "FileStorage:RootPath", file_root)
 put(base, "AppBaseUrl", base_url)
+# The origin emailed links are built on, and the API's own (it is hosted under /webapi) for the
+# links it answers itself, like an entry pass. Neither was written before 2026-09-23.
+put(base, "SiteIdentity:BaseUrl", base_url)
+put(base, "SiteIdentity:ApiBaseUrl", base_url.rstrip("/") + "/webapi")
 
 # Serilog's sink holds its own copy of the connection string, so pointing the app at a database is
 # not enough on its own.
@@ -92,3 +96,5 @@ for path in carry:
         print(f"    {path:34} MISSING from the dev file")
 print(f"    {'FileStorage:RootPath':34} {file_root}")
 print(f"    {'AppBaseUrl':34} {base_url}")
+print(f"    {'SiteIdentity:BaseUrl':34} {base_url}")
+print(f"    {'SiteIdentity:ApiBaseUrl':34} {base_url.rstrip('/')}/webapi")

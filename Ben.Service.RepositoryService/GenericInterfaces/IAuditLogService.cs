@@ -59,4 +59,19 @@ public interface IAuditLogService
     /// <param name="userId">ID of the user who performed the delete.</param>
     /// <param name="source">Application that originated the action.</param>
     Task LogDeleteAsync(string entityType, Guid entityId, object entity, Guid userId, string source);
+
+    /// <summary>
+    /// Logs that somebody LOOKED at something that is a copy of another person's business.
+    /// </summary>
+    /// <remarks>
+    /// Not for ordinary reading — a row per page view would bury the rows that matter and make the
+    /// table a performance problem rather than a record. This is for the handful of places where
+    /// looking IS the sensitive act: a queued letter's body, which carries a guest's name, a
+    /// working reset link or a pass that opens a door (item 245).
+    /// </remarks>
+    /// <param name="what">
+    /// What was looked at and why it was allowed, serialized into <c>ChangesJson</c>. There is no
+    /// before and no after, so this is the only thing the row can say beyond who and when.
+    /// </param>
+    Task LogReadAsync(string entityType, Guid entityId, object what, Guid userId, string source);
 }

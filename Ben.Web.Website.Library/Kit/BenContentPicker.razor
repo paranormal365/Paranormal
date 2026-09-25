@@ -82,7 +82,7 @@
                             <div class="d-flex align-items-center justify-content-center p-2" style="height:110px;overflow:hidden;">
                                 @if (item.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true)
                                 {
-                                    <UserMediaPreview FileId="@item.Id" FileName="@item.Name"
+                                    <UserMediaPreview FileId="@item.Id" FileName="@item.Name" ZoomOnClick="false"
                                                       ContentType="@item.ContentType" FileSize="@(item.FileSize ?? 0)" />
                                 }
                                 else if (IsPlayable(item) && _previewLoaded.Contains(item.Id))

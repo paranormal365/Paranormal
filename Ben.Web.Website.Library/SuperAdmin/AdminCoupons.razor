@@ -369,11 +369,11 @@
         <div class="row mb-3">
             <div class="col-auto">
                 <label class="form-label" for="cpn-from">Valid from</label>
-                <input id="cpn-from" type="date" class="form-control" @bind="_form.ValidFrom" />
+                <BenDateField Mode="DateEntryMode.Date" Id="cpn-from" @bind-Value="_form.ValidFrom" />
             </div>
             <div class="col-auto">
                 <label class="form-label" for="cpn-until">Redeem by</label>
-                <input id="cpn-until" type="date" class="form-control" @bind="_form.RedeemBy" />
+                <BenDateField Mode="DateEntryMode.Date" Id="cpn-until" @bind-Value="_form.RedeemBy" />
             </div>
             <div class="col-auto">
                 <label class="form-label" for="cpn-budget">Total redemptions</label>

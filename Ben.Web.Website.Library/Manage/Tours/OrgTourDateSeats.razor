@@ -57,6 +57,13 @@
             }
         </p>
 
+        @* The way to the meeting point (item 247). Here rather than in a menu, because a guide
+           opens this page on the night and the door is the thing they need from it. *@
+        <a class="btn btn-primary mb-3" id="tour-date-door"
+           href="@($"/organizations/{OrgId}/events/{EventId}/tour-door")">
+            <BenIcon Name="check-square" Class="me-1" />Scan guests in
+        </a>
+
         @if (_error is not null)
         {
             <div class="alert alert-danger" id="seats-error">@_error</div>

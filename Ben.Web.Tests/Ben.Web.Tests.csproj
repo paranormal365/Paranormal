@@ -26,6 +26,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ben.Data.WebApi\Ben.Data.WebApi.csproj" />
+    <!-- The canvas document format, so the board the seeder hand-builds can be read back with the
+         editor's own reader. Core is a plain library with no packages and no Blazor. -->
+    <ProjectReference Include="..\Ben.Canvas.Core\Ben.Canvas.Core.csproj" />
     <ProjectReference Include="..\Ben.Web.Website.Library\Ben.Web.Website.Library.csproj" />
     <!-- The website host itself, for services that live there because they need the host's
          Data Protection ring (UploadTicketService and kin). -->

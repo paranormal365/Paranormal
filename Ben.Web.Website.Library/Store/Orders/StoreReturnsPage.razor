@@ -1,0 +1,66 @@
+@page "/store/returns"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenAdminClient Store
+
+<PageTitle>Returns and refunds — Store</PageTitle>
+
+@*
+    Returns and refunds (storefront S4.13), the page the order summary's "Returns" link opens. NOT
+    behind the store switch: a buyer may need it after the shop has gone dark. The window and the
+    contact address come from the store settings when the shop is open; when it is dark they are
+    read from nowhere, and the page says it in general words instead of guessing a number.
+
+    Policy is Ben's: this page states only the window (a setting) and how a return is arranged. It
+    promises nothing about condition or who pays return postage until he decides it.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:48rem;">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="/store">Store</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Returns and refunds</li>
+        </ol>
+    </nav>
+    <h1 class="h3">Returns and refunds<HelpLink Slug="shopping-at-the-store" Anchor="returns-and-refunds" /></h1>
+
+    <div class="ben-store-description" data-testid="returns-text">
+        <p>
+            @if (_info.Item is { } info)
+            {
+                <text>You can return something within <strong>@info.ReturnsWindowDays days</strong> of its delivery.</text>
+            }
+            else
+            {
+                <text>You can return something within the returns window printed on your receipt and invoice.</text>
+            }
+        </p>
+        <h2 class="h5">How to return something</h2>
+        <ol>
+            <li>Get in touch first, with your order number — it's on your receipt, your invoice and your order page.</li>
+            <li>We'll reply with where to send it.</li>
+            <li>Once it's back with us, the refund goes to the card you paid with. Banks usually show it within 5–10 business days.</li>
+        </ol>
+        <h2 class="h5">Faulty or damaged?</h2>
+        <p>Tell us what happened, with a photo if you can, and we'll sort it out with you.</p>
+        <h2 class="h5">Refunds you'll see</h2>
+        <p>A refund appears on your order page and invoice as soon as it's made, and you're emailed when it is.</p>
+        <p>
+            Questions?
+            @if (_info.Item?.SupportEmail is { } support)
+            {
+                <a href="@($"mailto:{support}")">@support</a>
+            }
+            else
+            {
+                <a href="/contact">Contact us</a>
+            }
+            — or <a href="/store/orders/lookup">find your order</a> first.
+        </p>
+    </div>
+</div>
+
+@code {
+    private ItemResult<StorePublicInfo> _info;
+
+    protected override async Task OnInitializedAsync() => _info = await Store.GetStoreInfoAsync();
+}

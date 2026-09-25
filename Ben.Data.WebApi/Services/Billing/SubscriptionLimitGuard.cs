@@ -172,8 +172,26 @@ public sealed class SubscriptionLimitGuard
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        // The STANDING row if there is one, else the newest — and never an arbitrary one
+        // (2026-09-17 audit). This took FirstOrDefault with no ordering at all, so a group with
+        // more than one row got whichever the database handed back. Rows accumulate: lapsing
+        // leaves the old row behind and re-subscribing writes a new one, so a group that lapsed on
+        // Small and came back on Standard could be enforced against Small's caps, refusing a
+        // paying customer records they had just bought, with the answer changing between calls.
+        //
+        // Deliberately NOT the same rule as TierAreaResolution.EffectiveTierAsync, which drops a
+        // lapsed group to the free tier. These numbers include PhotoRetentionDays and
+        // RecordingRetentionDays, which MediaRetentionPolicy feeds to the job that DELETES; making
+        // a lapse shorten retention would erase a group's photographs for missing a payment, and
+        // item 84's rule is the opposite — "read access continues, everything already here stays
+        // readable". A lapsed group is stopped from ADDING by RefusalIfLapsedAsync above, which is
+        // the whole of what lapsing is meant to cost. So the caps it already had simply stand.
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+            .Where(s => s.OrganizationId == organizationId)
+            .OrderByDescending(s => s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Active
+                                 || s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Free)
+            .ThenByDescending(s => s.DateCreated)
+            .FirstOrDefaultAsync(ct);
 
         // A group with no subscription row sits on whatever the resolver says its member count
         // buys — which for enforcement means the band the resolver picks, with no contract.

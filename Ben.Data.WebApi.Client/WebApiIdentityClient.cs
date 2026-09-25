@@ -106,6 +106,22 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
         return detail ?? "That reset link is invalid or has expired. Request a new one.";
     }
 
+    public async Task<string?> TakeOverAccountAsync(
+        string email, string code, string newPassword, CancellationToken token = default)
+    {
+        using var response = await _httpClient.PostAsJsonAsync(
+            "/api/public/account-handover", new { email, code, newPassword }, token);
+
+        if (response.IsSuccessStatusCode) return null;
+
+        // This endpoint answers in prose already — one neutral sentence for everything that could
+        // be wrong, or the password policy's own complaint. Nothing to translate.
+        var said = (await response.Content.ReadAsStringAsync(token)).Trim().Trim('"');
+        return said.Length > 0 && !said.StartsWith('{')
+            ? said
+            : "That link is no longer valid. Ask whoever set the account up to send it again.";
+    }
+
     /// <summary>
     /// The sentences inside a 400, whichever of Identity's two problem shapes it used.
     /// </summary>

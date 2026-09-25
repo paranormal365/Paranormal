@@ -32,6 +32,18 @@
         "Debug"
       ],
       "port": 5180
+    },
+    {
+      "name": "canvas-editor",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "/Users/ben/Source/Ben/Ben.Wasm.Canvas",
+        "--configuration",
+        "Debug"
+      ],
+      "port": 5125
     }
   ]
 }

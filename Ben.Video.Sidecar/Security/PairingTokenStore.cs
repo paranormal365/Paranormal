@@ -14,12 +14,30 @@ public sealed class PairingTokenStore
 {
     private const int TokenBytes = 32;
     private readonly string _tokenFilePath;
+    private readonly string _awaitingFirstPairingPath;
     private byte[] _tokenHash = [];
 
     public PairingTokenStore(string configDir)
     {
         _tokenFilePath = Path.Combine(configDir, "pairing-token");
+        _awaitingFirstPairingPath = Path.Combine(configDir, "awaiting-first-pairing");
     }
+
+    /// <summary>
+    /// No browser has paired with this token yet. True from the moment a token is made until the
+    /// first code is exchanged, and kept on disk so it survives the sidecar being closed and
+    /// started again in between.
+    /// </summary>
+    /// <remarks>
+    /// On Windows this decides whether the sidecar opens its pairing window when it starts: a new
+    /// install has nothing else to show the person their code, and an install that has paired has
+    /// no reason to show anything at all. A marker for "not yet" rather than one for "done", so an
+    /// install from before this existed, whose browsers are already paired, reads as done.
+    /// </remarks>
+    public bool AwaitingFirstPairing => File.Exists(_awaitingFirstPairingPath);
+
+    /// <summary>Raised on whichever thread exchanged a code, after the exchange succeeded.</summary>
+    public event Action? Paired;
 
     /// <summary>True the first time this store loads (no token file existed yet) — the caller
     /// uses this to decide whether to print the plaintext token to the console.</summary>
@@ -61,6 +79,9 @@ public sealed class PairingTokenStore
         _tokenHash = Hash(token);
         PlaintextOnFirstRun = token;
         WasJustCreated = true;
+
+        // A new token un-pairs every browser, so this install is back to waiting for its first.
+        File.WriteAllText(_awaitingFirstPairingPath, "");
     }
 
     /// <summary>Constant-time comparison against the stored token — never a plain string
@@ -116,6 +137,20 @@ public sealed class PairingTokenStore
     }
 
     /// <summary>
+    /// Whether <paramref name="code"/> would still be accepted: not expired, not used, and not
+    /// replaced by a newer one (every load of the /pair page mints a new code).
+    /// </summary>
+    public bool IsCurrentCode(string code)
+    {
+        lock (_codeLock)
+        {
+            return _codeHash is not null
+                && DateTimeOffset.UtcNow < _codeExpiresUtc
+                && CryptographicOperations.FixedTimeEquals(Hash(code), _codeHash);
+        }
+    }
+
+    /// <summary>
     /// Exchanges a presented 6-digit code for the long pairing token. Returns null when the code
     /// is wrong, expired, or already used. Success consumes the code — a second exchange needs a
     /// fresh one, so a code observed over someone's shoulder after use is worthless.
@@ -134,7 +169,12 @@ public sealed class PairingTokenStore
 
         // The token file is the plaintext source of truth (mode 600); reading it here instead of
         // caching plaintext in this object keeps the long-standing in-memory posture unchanged.
-        return File.Exists(_tokenFilePath) ? File.ReadAllText(_tokenFilePath).Trim() : null;
+        var token = File.Exists(_tokenFilePath) ? File.ReadAllText(_tokenFilePath).Trim() : null;
+        if (token is null) return null;
+
+        File.Delete(_awaitingFirstPairingPath);
+        Paired?.Invoke();
+        return token;
     }
 
     private static byte[] Hash(string value) => SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));

@@ -1,0 +1,176 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Microsoft.Extensions.Hosting
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager NavManager
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
+
+@*
+    The case's research: boards written in the canvas editor, which runs on the writer's own machine.
+
+    Ben, 2026-09-16: "the research page should use this WASM so the research can be created on the end user's machine
+    and they can work on it and save drafts. They can keep the drafts which are not displayed to the members until it
+    is published." So this list holds what the group has published, plus the reader's own unfinished boards — the
+    server decides that, and says which is which.
+*@
+
+<div data-testid="case-research-boards">
+
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <p class="text-muted small mb-0 me-auto">
+            A board of what this case is made of — cards, notes, pictures, maps, links and files. It opens in its own
+            editor, keeps what you are writing on your machine, and stays yours until you publish it.
+        </p>
+        @if (_mayWrite)
+        {
+            @* A choice, not a straight open: Ben's four pictures (2026-09-18) are only useful if
+               somebody is offered them at the moment they start a board. Blank is in the list and
+               first, so the old behaviour is still one click away. *@
+            <button type="button" class="btn btn-sm btn-primary text-nowrap" id="research-new-board"
+                    @onclick="@(() => _picking = true)" disabled="@_opening">
+                <BenIcon Name="plus" Class="me-1" />New board
+            </button>
+        }
+    </div>
+
+    <BenListState TItem="CanvasDocumentSummaryRecord" Result="@_boards" Loading="@_loading"
+                  EmptyText="No research yet. A board you start stays yours until you publish it."
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <div class="list-group">
+                @foreach (var board in _boards.Items)
+                {
+                    <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                            @onclick="@(() => OpenAsync(board.Id))" disabled="@_opening">
+                        @* The published picture, as a thumbnail that opens the board rather than the picture: the
+                           board is the thing, and the picture is how it looks from the list (Ben, 2026-09-16). *@
+                        @if (board.PublishedUploadFileId is { } picture)
+                        {
+                            <img src="@MediaUrls.Thumbnail(picture)" alt="" loading="lazy" width="72" height="48"
+                                 class="rounded border object-fit-cover flex-shrink-0" />
+                        }
+                        else
+                        {
+                            <BenIcon Name="layout" Class="text-secondary" />
+                        }
+                        <span class="me-auto text-start">
+                            <span class="d-block">@board.Name</span>
+                            <span class="text-secondary small">
+                                @(board.CreatedByName ?? "Member")
+                                @if (board.DateUpdated is { } updated)
+                                {
+                                    <text> · @updated.ToViewerLocalTime(UserState).ToDisplayDate()</text>
+                                }
+                            </span>
+                        </span>
+                        @if (!board.IsPublished)
+                        {
+                            <span class="badge text-bg-secondary">Draft — only you</span>
+                        }
+                        else if (board.HasUnpublishedChanges)
+                        {
+                            <span class="badge text-bg-warning">Published · newer draft</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-success">Published</span>
+                        }
+                    </button>
+                }
+            </div>
+        </ChildContent>
+    </BenListState>
+
+    <BenModal @bind-Visible="_picking" Title="Start a new board" Size="lg">
+        <p class="text-muted small">
+            Pick something to start from. Everything on a template is yours to move, rename or delete —
+            it is a head start, not a form.
+        </p>
+        <div class="list-group" data-testid="board-template-list">
+            @foreach (var template in CanvasBoardTemplates.All)
+            {
+                <button type="button" class="list-group-item list-group-item-action d-flex align-items-start gap-3"
+                        id="@($"board-template-{template.Id}")" disabled="@_opening"
+                        @onclick="@(() => OpenAsync(null, template.Id))">
+                    <BenIcon Name="@template.IconName" Class="text-secondary mt-1 flex-shrink-0" />
+                    <span class="text-start">
+                        <span class="d-block fw-semibold">@template.Name</span>
+                        <span class="text-secondary small">@template.Summary</span>
+                    </span>
+                </button>
+            }
+        </div>
+    </BenModal>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    /// <summary>What this person may do on the case, from the page that already asked.</summary>
+    [Parameter] public MyOrgPermissionsItem? Permissions { get; set; }
+
+    private LoadResult<CanvasDocumentSummaryRecord> _boards = LoadResult<CanvasDocumentSummaryRecord>.Ok([]);
+    private bool _loading = true;
+    private bool _opening;
+    private bool _picking;
+
+    private bool _mayWrite => Permissions?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Update) == true;
+
+    /// <summary>Where the canvas is: the mount in production, a dev server on a development machine.</summary>
+    private string CanvasUrl => StandaloneCanvasAddress.For(
+        HostEnvironment.IsDevelopment(), Configuration["CanvasEditor:StandaloneUrl"]);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _boards = await AdminClient.GetCaseBoardsAsync(CaseId);
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Hands the case — and a board, when one was chosen — to the canvas, already signed in.
+    /// </summary>
+    /// <remarks>
+    /// The code goes in the URL's fragment, which browsers never send to a server, so it stays out of access logs and
+    /// out of any Referer. Same tab: a window.open after an await has lost its user gesture. A refused code is not a
+    /// dead end — the canvas opens and asks for a sign-in.
+    /// </remarks>
+    /// <param name="boardId">A board to open, or null for a new one.</param>
+    /// <param name="templateId">
+    /// What a new board starts from, or null for an empty one. Ignored by the editor when
+    /// <paramref name="boardId"/> is given, so the two are never both acted on.
+    /// </param>
+    private async Task OpenAsync(Guid? boardId, string? templateId = null)
+    {
+        _opening = true;
+        _picking = false;
+
+        string? code = null;
+        try
+        {
+            code = (await AdminClient.GetEditorHandoffCodeAsync())?.Code;
+        }
+        catch
+        {
+            // Nothing to say here: the canvas is still reachable, it will just ask them to sign in.
+        }
+
+        var fragment = new List<string>();
+        if (!string.IsNullOrWhiteSpace(code)) fragment.Add($"handoff={Uri.EscapeDataString(code)}");
+        if (boardId is { } open) fragment.Add($"doc={open:D}");
+        if (templateId is not null) fragment.Add($"template={Uri.EscapeDataString(templateId)}");
+        fragment.Add($"case={CaseId:D}");
+        fragment.Add($"org={OrgId:D}");
+
+        NavManager.NavigateTo(CanvasUrl + "#" + string.Join("&", fragment), forceLoad: true);
+    }
+}

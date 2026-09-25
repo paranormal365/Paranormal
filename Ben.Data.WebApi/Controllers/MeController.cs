@@ -45,9 +45,10 @@ public sealed class MeController : BenControllerBase
                 var isAdmin = await _userManager.IsInRoleAsync(linkedUser, RoleNames.Admin);
                 var isModerator = isSuperAdmin
                                   || await _userManager.IsInRoleAsync(linkedUser, RoleNames.Moderator);
+                var isSeller = await _userManager.IsInRoleAsync(linkedUser, RoleNames.Seller);
                 return Ok(new MeResponse(
                     linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    linkedUser.EmailKind, linkedUser.EmailConfirmed));
+                    linkedUser.EmailKind, linkedUser.EmailConfirmed, isSeller));
             }
         }
 
@@ -61,9 +62,10 @@ public sealed class MeController : BenControllerBase
                 var isAdmin = await _userManager.IsInRoleAsync(user, RoleNames.Admin);
                 var isModerator = isSuperAdmin
                                   || await _userManager.IsInRoleAsync(user, RoleNames.Moderator);
+                var isSeller = await _userManager.IsInRoleAsync(user, RoleNames.Seller);
                 return Ok(new MeResponse(
                     user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    user.EmailKind, user.EmailConfirmed));
+                    user.EmailKind, user.EmailConfirmed, isSeller));
             }
         }
         catch (FormatException)
@@ -108,4 +110,4 @@ public sealed class MeController : BenControllerBase
 /// </param>
 public record MeResponse(
     Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false,
-    EmailAddressKind EmailKind = EmailAddressKind.Ordinary, bool EmailConfirmed = true);
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary, bool EmailConfirmed = true, bool IsSeller = false);

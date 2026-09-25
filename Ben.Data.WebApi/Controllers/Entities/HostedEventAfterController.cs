@@ -174,7 +174,7 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
                 db.UploadFiles.Add(new UploadFile
                 {
                     Id = uploadId, UploadFileTypeId = FileTypeId, OwnerOrganizationId = copy.OrganizationId,
-                    FileName = file.UploadFile.FileName, StoredFileName = storedName,
+                    FileName = ingested.ServedFileName(file.UploadFile.FileName), StoredFileName = storedName,
                     ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
                     StoragePath = storagePath, IsPublic = false,
                     DateCreated = now, CreatedByAppUserId = actorId,

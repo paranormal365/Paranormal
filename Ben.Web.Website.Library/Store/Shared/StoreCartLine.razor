@@ -1,0 +1,173 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    One line of the cart (storefront S3.5), in the shape of the surface it sits on — Smarty's four
+    item shapes: the cart page's card (shop-page-cart-1.html), the drawer's row
+    (sidebar-float-cart.html), the header menu's thumbnail row (shop-index-1.html) and the
+    checkout's read-only "Your items" (shop-page-checkout.html).
+
+    The numbers come from the line as the server priced it. Nothing here does arithmetic beyond
+    what Smarty prints ("$x / item"), so the surfaces cannot disagree about a total.
+*@
+
+@switch (Mode)
+{
+    case StoreCartLineMode.Page:
+        <div class="card mb-3 overflow-hidden position-relative ben-cart-card @(Line.IsPurchasable ? null : "ben-cart-card--problem")" data-testid="cart-line" data-sku="@Line.Sku">
+            <button type="button" class="btn btn-link ben-cart-line__remove position-absolute top-0 end-0" aria-label="@($"Remove {Line.ProductName}")"
+                    disabled="@Busy" @onclick="OnRemove">
+                <BenIcon Name="trash-2" />
+            </button>
+            <div class="card-body">
+                <div class="row g-3 align-items-center">
+                    <div class="col-4 col-md-2">
+                        <a href="@Href" class="d-block ratio ratio-1x1">
+                            @Picture("ben-cart-card__image")
+                        </a>
+                    </div>
+                    <div class="col-8 col-md-5 pe-5 pe-md-0">
+                        <a href="@Href" class="ben-link-normal fw-medium">@Line.ProductName</a>
+                        @if (!string.IsNullOrWhiteSpace(Line.VariantName))
+                        {
+                            <div class="small text-secondary">@Line.VariantName</div>
+                        }
+                        <div class="small text-secondary">Unit price: @StoreMoney.Format(Line.UnitPrice)</div>
+                        <div class="small text-secondary">SKU <span class="font-monospace">@Line.Sku</span></div>
+                    </div>
+                    <div class="col-12 col-md-5">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <StoreQuantity Value="@Line.Quantity" ValueChanged="OnQuantity" Max="@QuantityMax" Min="1"
+                                               Disabled="@(Busy || !Line.IsPurchasable && Line.Problem == StoreCartSentences.NoLongerAvailable)"
+                                               ItemName="@Line.ProductName" Id="@($"qty-{Line.VariantId}")" />
+                                <div class="small mt-1" data-testid="cart-line-stock">@StockNote</div>
+                            </div>
+                            <div class="text-end">
+                                @if (Line.CompareAtPrice is { } was)
+                                {
+                                    <del class="small text-secondary d-block">@StoreMoney.Format(was * Line.Quantity)</del>
+                                }
+                                <div class="fw-medium" data-testid="cart-line-total">@StoreMoney.Format(Line.LineTotal)</div>
+                                @if (Line.YouSave is { } save && save > 0)
+                                {
+                                    <div class="small text-success">You save @StoreMoney.Format(save)</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        break;
+
+    case StoreCartLineMode.Drawer:
+        <div class="ben-cart-line" data-testid="cart-line" data-sku="@Line.Sku">
+            <a href="@Href" @onclick="OnNavigate">@Picture("ben-cart-line__image")</a>
+            <div class="flex-grow-1 min-w-0">
+                <div class="d-flex align-items-start gap-2">
+                    <a href="@Href" class="ben-link-normal fw-medium flex-grow-1 text-truncate" @onclick="OnNavigate">@Line.ProductName</a>
+                    <button type="button" class="btn btn-sm btn-link p-0 ben-cart-line__remove" aria-label="@($"Remove {Line.ProductName}")"
+                            disabled="@Busy" @onclick="OnRemove">
+                        <BenIcon Name="trash-2" />
+                    </button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Line.VariantName))
+                {
+                    <div class="small text-secondary">@Line.VariantName</div>
+                }
+                <div class="d-flex align-items-center justify-content-between gap-2 mt-1">
+                    <StoreQuantity Value="@Line.Quantity" ValueChanged="OnQuantity" Max="@QuantityMax" Min="1"
+                                   Disabled="@(Busy || Line.Problem == StoreCartSentences.NoLongerAvailable)"
+                                   ItemName="@Line.ProductName" />
+                    <div class="text-end">
+                        <div class="fw-medium">@StoreMoney.Format(Line.LineTotal)</div>
+                        <div class="small text-secondary">@StoreMoney.Format(Line.UnitPrice) / item</div>
+                    </div>
+                </div>
+                @if (Line.Problem is { } problem)
+                {
+                    <div class="small text-danger mt-1">@problem</div>
+                }
+            </div>
+        </div>
+        break;
+
+    case StoreCartLineMode.Dropdown:
+        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="@Href" data-testid="cart-line" @onclick="OnNavigate">
+            @Picture("ben-cart-dd__thumb")
+            <span class="flex-grow-1 min-w-0 text-truncate small">@Line.Quantity × @Line.ProductName</span>
+            <span class="small fw-medium">@StoreMoney.Format(Line.LineTotal)</span>
+        </a>
+        break;
+
+    default:
+        <div class="d-flex align-items-center gap-3 py-2 border-bottom" data-testid="cart-line">
+            <span class="position-relative flex-shrink-0">
+                @Picture("ben-cart-line__image")
+                <span class="badge rounded-pill bg-secondary position-absolute top-0 start-100 translate-middle">@Line.Quantity</span>
+            </span>
+            <div class="flex-grow-1 min-w-0">
+                <div class="fw-medium text-truncate">@Line.ProductName</div>
+                @if (!string.IsNullOrWhiteSpace(Line.VariantName))
+                {
+                    <div class="small text-secondary">@Line.VariantName</div>
+                }
+            </div>
+            <div class="fw-medium">@StoreMoney.Format(Line.LineTotal)</div>
+        </div>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public StoreCartLineView Line { get; set; } = default!;
+    [Parameter] public StoreCartLineMode Mode { get; set; } = StoreCartLineMode.Page;
+
+    /// <summary>The store's "Only n left" number, from the cart.</summary>
+    [Parameter] public int LowStockThreshold { get; set; } = 3;
+
+    /// <summary>A change is on its way: the controls wait for it.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback<int> QuantityChanged { get; set; }
+    [Parameter] public EventCallback Removed { get; set; }
+
+    /// <summary>A link on the line was followed — the drawer and the menu close for it.</summary>
+    [Parameter] public EventCallback Navigated { get; set; }
+
+    private string Href => $"/store/p/{Line.ProductSlug}";
+
+    /// <summary>The + button stops at what can be bought; a line already over it can still come down.</summary>
+    private int QuantityMax => Math.Max(Line.Quantity, Math.Min(Line.Available, StoreCartRules.MaxQuantityPerLine));
+
+    private RenderFragment StockNote => __builder =>
+    {
+        if (Line.Problem is { } problem)
+        {
+            <span class="text-danger">@problem</span>
+        }
+        else if (Line.Available <= LowStockThreshold)
+        {
+            <span class="ben-store-note--low">Only @Line.Available left</span>
+        }
+        else
+        {
+            <span class="text-secondary">@Line.Available in stock</span>
+        }
+    };
+
+    private RenderFragment Picture(string css) => __builder =>
+    {
+        if (Line.ImageUploadFileId is { } picture)
+        {
+            <img class="@css" src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" loading="lazy" />
+        }
+        else
+        {
+            <span class="@css d-inline-grid place-items-center text-secondary" aria-hidden="true"><BenIcon Name="package" /></span>
+        }
+    };
+
+    private Task OnQuantity(int quantity) => QuantityChanged.InvokeAsync(quantity);
+    private Task OnRemove() => Removed.InvokeAsync();
+    private Task OnNavigate() => Navigated.InvokeAsync();
+}

@@ -18,6 +18,109 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-25
+
+- The service is ready to run the store: card payments and refunds go through Stripe, and sales tax
+  is worked out and filed through Stripe as well. The store itself is waiting for its products and is
+  not open yet.
+- Codes handed out for a night, and the passes they made, are deleted a month after the night instead
+  of being kept.
+
+## 2026-09-21
+
+- An account created for somebody who did not ask for one now writes to them, naming who set it up
+  and carrying a link that hands it over. The letter is essential and cannot be declined.
+
+- The apps can join an investigation from a code a guide is showing, and can ask what a code is
+  for before anybody signs in. What a code buys is sending to that one visit; reading is
+  unchanged, so a guest gets back only what they sent.
+- The service records which letters a person has asked not to receive, and stops sending those. The
+  letters that get somebody back into their account, and receipts, cannot be declined.
+- Every letter the service sends can now carry wording the site has on file for it, not only the
+  three that could before.
+- A group can be given a joining link, so its people can be let in without each having to apply.
+
+## 2026-09-19
+
+- The dashboard's three calls hold their answers for five minutes, keyed by the range asked
+  for. "Registered and never arrived" looks at the last 90 days instead of every account
+  ever created, and the date each account and case was created is indexed.
+- Sign-ins through a Microsoft account are recorded, once per twelve hours of use. They
+  never were: a Microsoft session is a token validated on every request rather than a
+  moment somebody signs in, so there was no obvious thing to record.
+- The users list can be asked when each account last signed in and how many times.
+
+## 2026-09-18
+
+- A board that links to another board is checked when it is published: the service refuses to publish
+  one whose target has not been published, and says which. A picker that only offers published boards
+  stops the state being created; holding the rule here stops it being reached any other way.
+- Reading a board by its published copy is now a request of its own, so following a link to another
+  board never reaches its author's unpublished draft.
+
+## 2026-09-17
+
+- Money figures are worked out and filed more carefully. Several sums rounded a fraction of a cent
+  the wrong way, or rounded each item before adding rather than once at the end, and one rounded
+  the amount by one convention while taxing it by another — so a record could disagree with itself.
+  Amounts on existing records are unchanged; this is about what is written from now on.
+- Tax charged for event credits is the tax that is filed. It was being worked out again when the
+  payment came back, so a change to a tax rule or to a group's address in between could leave a
+  receipt saying something different from the card statement.
+- A renewal attempt is now recognised as the same attempt when it is retried across a date
+  boundary, so a retry cannot become a second payment for one period.
+- A subscription period's agreed price is no longer altered by anything bought mid-period. The extra
+  purchase is recorded as its own charge and payment, which is where it belongs.
+- A group's capabilities and permission areas now come from a plan that is actually standing, so
+  they match what the checks enforce. A plan that has ended no longer supplies them.
+- A place of your own in a group is no longer retried indefinitely when a payment has failed; it
+  ends, and you are told once.
+
+- A place tells a stranger less about a private residence. Its street address, postcode and exact
+  position are no longer returned to an anonymous caller, and its name is withheld as well, because
+  a home is often named after the family in it; the city, the state and an approximate position
+  still come back so a page can say roughly where it is. Asking as a signed-in caller now requires
+  a reason to know — one of your groups has worked there, you added the place, or you administer
+  the site — and otherwise answers the same as it would to anybody. A public location is
+  unaffected.
+- A link preview for a case, and a case's vote tally, follow the same rules as every other public
+  case surface: substituted names on a private engagement, and nothing at all once a case stops
+  being published.
+- Nearby search answers with public locations as well as groups and events, for those that have
+  published work at them. Optional addition; a caller that ignores the new list behaves as before.
+- A published case says which public location it is about, when it has one.
+- Reading a client message thread no longer depends on the group's plan being current. Writing
+  still does. A lapse leaves everything already recorded readable, which is what it always said.
+- What a caller may do in a group now includes whether the group is read-only, so a client can say
+  so before offering a control that will be refused.
+- An account can ask how much of its storage allowance is used, and is told there is no cap when a
+  group's plan covers it.
+- A case answers who agreed to publish its footage to the feed, and when.
+- A feed post can name a public location it is about, and the feed can be narrowed to one. A place's
+  page returns its latest posts and says whether the reader may add one. Both the field and the
+  filter are optional additions, so an app that sends neither behaves as before; an older app shows a
+  place's posts as ordinary posts. Posting about a private residence is refused.
+- A place also answers with the caller's own groups' cases there, whatever their status.
+- A case can be created naming the shared place it concerns, either one already on file or one
+  described with it, and a place's public page now also lists the cases published there. Both fields
+  are optional additions, so an app that sends neither behaves exactly as before.
+- What an account may keep private is now decided by its plan, not by whether it works alone. An
+  account with no plan has its cases and its visits at public locations shared by default and cannot
+  narrow them; an account with a plan chooses. Work at a private residence, and anything already
+  private, is unaffected.
+- A case counted as public, or opened for anyone to add recordings to, now means a case that has
+  actually been published. Two older checks read the publish setting without asking whether the case
+  had been published, which is what every other answer on the service has always meant by it.
+- A video, a recording or an image on a case can be asked for a byte range, so it plays and can be seeked in the page instead of only being downloadable. The same applies to a case's public page, a place's archive, an event's evidence and a group's files.
+- Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behaviour.
+
+## 2026-09-16
+
+- The public archive lists and serves recordings that live inside a session's single file, by the file row's id; publishing such a session is no longer refused, and its recordings are screened like any other before they show.
+- Research boards on a case have their own addresses: a group's boards, one board, and publishing one. A board nobody has published is not in the list for anybody but the person writing it.
+- The older research pages and their attachments have been removed, along with their addresses. Files those pages referred to are untouched: they are the case's files and stay on the case's Files tab.
+- The canvas is no longer behind a site switch. It answers signed-in callers wherever the service is running.
+
 ## 2026-09-14
 
 - A client's list of cases now says which request each case was accepted from, as a new field that older apps ignore.

@@ -260,13 +260,13 @@ public sealed class VenueRequestsController : OrgCmsControllerBase
 
         var waiting = requests.Where(r => r.Status == VenueHostingRequestStatus.Pending)
             .OrderBy(r => r.DateCreated)
-            .Select(r => VenueRecords.Request(r, r.HostedEvent, r.HostedEvent.Place.Name))
+            .Select(r => VenueRecords.Request(r, r.HostedEvent, r.HostedEvent.Place.Name ?? "a place"))
             .ToList();
 
         var answered = requests.Where(r => r.Status != VenueHostingRequestStatus.Pending)
             .OrderByDescending(r => r.DecidedUtc)
             .Take(50)
-            .Select(r => VenueRecords.Request(r, r.HostedEvent, r.HostedEvent.Place.Name))
+            .Select(r => VenueRecords.Request(r, r.HostedEvent, r.HostedEvent.Place.Name ?? "a place"))
             .ToList();
 
         var grants = await db.OrganizationVenueGrants.AsNoTracking()
@@ -284,7 +284,7 @@ public sealed class VenueRequestsController : OrgCmsControllerBase
 
         return new(
             waiting, answered,
-            [.. grants.Select(g => VenueRecords.Grant(g, g.GranteeOrganization.Name, g.Place.Name,
+            [.. grants.Select(g => VenueRecords.Grant(g, g.GranteeOrganization.Name, g.Place.Name ?? "a place",
                 [.. events.Where(e => e.VenueGrantId == g.Id).Select(e => new VenueGrantEventRecord(e.Id, e.Name, e.LifecycleState))]))],
             note);
     }

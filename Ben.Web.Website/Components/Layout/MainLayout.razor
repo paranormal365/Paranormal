@@ -11,6 +11,8 @@
 @inject EntraTokenHolder EntraTokenHolder
 @inject PersistentComponentState AppState
 @inject Ben.Web.Services.SiteFeaturesProvider Features
+@inject StoreCartTokenHolder CartToken
+@inject VisitorAddressHolder Visitor
 
 @*
     The template's app-wrap skeleton. Everything below the markup is carried over from the
@@ -33,6 +35,7 @@
         <BenNav IsAuthenticated="@TokenStore.IsAuthenticated"
                 IsSuperAdmin="@TokenStore.IsSuperAdmin"
                 IsModerator="@TokenStore.IsModerator"
+                IsSeller="@TokenStore.IsSeller"
                 IsImpersonating="@TokenStore.IsImpersonating" />
 
         <main class="app-body">
@@ -63,6 +66,12 @@
 
         @* One toast host for the whole app; BenToastService is what pages talk to. *@
         <BenToastHost />
+
+        @* The slide-out cart (storefront S3.5): one for the whole app, opened by Add to cart. *@
+        @if (Features.IsOn(SiteFeatures.Store))
+        {
+            <Ben.Web.Website.Library.Store.Cart.StoreCartDrawer />
+        }
 
         @* One tooltip for every icon-only row action in every grid (BenGridAction, and command
            buttons given Class="ben-grid-action"). Telerik reads each target's title, so the words
@@ -105,6 +114,13 @@
             EntraTokenHolder.Email               = token.Email;
             EntraTokenHolder.EntraOid            = token.EntraOid;
             EntraTokenHolder.IsEntraAuthenticated = token.IsEntraAuthenticated;
+        }
+
+        // The cart token and the visitor's address, the same way (StoreCartTokenPersister).
+        if (AppState.TryTakeFromJson<SerializedStoreVisitor>(StoreCartTokenPersister.Key, out var visitor) && visitor is not null)
+        {
+            CartToken.Token = visitor.CartToken;
+            Visitor.Address = visitor.Address;
         }
 
         base.OnInitialized();
@@ -259,6 +275,7 @@
                     TokenStore.OriginalUserId?.ToString(),
                     TokenStore.OriginalUserEmail,
                     TokenStore.OriginalUserDisplayName,
+                    TokenStore.IsSeller,
                     TokenStore.IsEntraSession
                 ));
             }
@@ -294,6 +311,7 @@
                 TokenStore.OriginalUserEmail = state.OriginalUserEmail;
                 TokenStore.OriginalUserDisplayName = state.OriginalUserDisplayName;
                 TokenStore.IsEntraSession = state.IsEntraSession;
+                TokenStore.IsSeller = state.IsSeller;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -339,6 +357,9 @@
         // to come back with it — otherwise ending that impersonation looks like a password
         // session and writes the admin's own bridged token into local storage, where a later
         // reload would restore a stale one instead of re-bridging. Defaulted, same rule as above.
+        // Store sellers (backlog 251): the Selling workspace is in the menu only while this is
+        // true, so it must survive a reload like IsModerator. Defaulted, same rule as above.
+        bool IsSeller = false,
         bool IsEntraSession = false
     );
 

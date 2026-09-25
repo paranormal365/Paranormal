@@ -1,0 +1,35 @@
+.bc-handle {
+    position: absolute;
+    width: var(--bc-handle-size);
+    height: var(--bc-handle-size);
+    background: var(--bc-surface-1);
+    border: 2px solid var(--bc-selection-stroke);
+    border-radius: 2px;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--bc-zoom, 1)));
+    touch-action: none;
+}
+
+/* A hit area wider than the square, so a handle is easy to catch. */
+.bc-handle::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--bc-handle-hit);
+    height: var(--bc-handle-hit);
+    transform: translate(-50%, -50%);
+}
+
+.bc-handle--tl { left: 0; top: 0; }
+.bc-handle--t { left: 50%; top: 0; }
+.bc-handle--tr { left: 100%; top: 0; }
+.bc-handle--r { left: 100%; top: 50%; }
+.bc-handle--br { left: 100%; top: 100%; }
+.bc-handle--b { left: 50%; top: 100%; }
+.bc-handle--bl { left: 0; top: 100%; }
+.bc-handle--l { left: 0; top: 50%; }
+
+@media (pointer: coarse) {
+    .bc-handle::before { width: 44px; height: 44px; }
+}

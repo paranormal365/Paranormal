@@ -62,6 +62,34 @@ public abstract class BenControllerBase : ControllerBase
             && entra.Principal.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
     }
 
+    /// <summary>
+    /// The caller's account on an endpoint that does <b>not</b> require sign-in, whichever way they
+    /// signed in; null for a visitor (storefront S3.3).
+    /// </summary>
+    /// <remarks>
+    /// The same gap as <see cref="CallerIsSuperAdminAsync"/>: on an <c>[AllowAnonymous]</c> endpoint
+    /// only the local bearer is read, so a member signed in with Microsoft arrives with no principal
+    /// and would shop as a guest forever — their cart never following them to another device. The
+    /// Entra scheme is asked by hand, and only when it is registered (asking for an unregistered
+    /// scheme throws).
+    /// </remarks>
+    protected async Task<Guid?> GetCurrentUserIdOrNullAcrossSchemesAsync()
+    {
+        if (GetCurrentUserIdOrNull() is { } local) return local;
+
+        var schemes = HttpContext?.RequestServices?
+            .GetService<Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider>();
+        if (schemes is null) return null;
+        if (await schemes.GetSchemeAsync(Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme) is null)
+            return null;
+
+        var entra = await HttpContext!.AuthenticateAsync(Ben.Data.Common.Constants.AuthPolicyNames.EntraScheme);
+        if (!entra.Succeeded || entra.Principal is null) return null;
+
+        var value = entra.Principal.FindFirstValue(EntraClaimsTransformation.AppUserIdClaimType);
+        return Guid.TryParse(value, out var id) && id != Guid.Empty ? id : null;
+    }
+
     /// <summary>The refusal for a Viewer who tries to change a group's work — a sentence, not a bare 403.</summary>
     protected static ObjectResult ViewerReadOnly()
         => new("You're a viewer in this group: you can see its work but not change it.") { StatusCode = 403 };
@@ -133,6 +161,64 @@ public abstract class BenControllerBase : ControllerBase
 
         if (HttpContext?.RequestServices?.GetService<IAuditLogService>() is { } audit)
             await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
+    }
+
+    /// <summary>
+    /// <see cref="SaveAndAuditAsync{TEntity}"/>, with more writes that must commit alongside the
+    /// change or not at all (item 239b).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two saves, one transaction.</b> The change is saved first because what follows
+    /// may read it back by id — a mailer that loads the booking, for one — and cannot see a row
+    /// that has not been written. <paramref name="alongside"/> then adds its own rows to the SAME
+    /// context, and the second save writes them. The commit is the only point at which any of it
+    /// becomes true, so a failure anywhere leaves nothing behind.</para>
+    ///
+    /// <para><b>The audit waits for the commit.</b> It is written through its own service on its
+    /// own connection, so inside the transaction it would commit on its own — and a rollback would
+    /// leave a record of a change that never happened.</para>
+    ///
+    /// <para><b>Nothing in <paramref name="alongside"/> may write on another connection.</b> That
+    /// connection would not be in the transaction, and where readers wait on writers it can be
+    /// held up by the rows the first save wrote.</para>
+    /// </remarks>
+    protected async Task SaveInOneTransactionAndAuditAsync<TEntity>(
+        DbContext db, TEntity entity, Guid entityId, Guid userId,
+        Func<Task> alongside, CancellationToken ct)
+        where TEntity : class
+    {
+        var before = db.Entry(entity).OriginalValues.ToObject();
+
+        await SaveInOneTransactionAsync(db, alongside, ct);
+
+        if (HttpContext?.RequestServices?.GetService<IAuditLogService>() is { } audit)
+            await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
+    }
+
+    /// <summary>
+    /// Saves what is pending and <paramref name="alongside"/>'s writes as one: both commit, or
+    /// neither does (item 239b).
+    /// </summary>
+    /// <remarks>
+    /// For a caller whose follow-up reads back by id what the first save wrote — a mailer loading
+    /// the row its letter is about — and so cannot simply add to the same single save. Where the
+    /// follow-up needs nothing read back, one ordinary save is simpler and just as atomic. See
+    /// <see cref="SaveInOneTransactionAndAuditAsync{TEntity}"/> for why nothing in
+    /// <paramref name="alongside"/> may write on another connection.
+    /// </remarks>
+    protected static async Task SaveInOneTransactionAsync(
+        DbContext db, Func<Task> alongside, CancellationToken ct)
+    {
+        // IsRelational: the InMemory provider has no transactions and throws rather than ignoring
+        // the call, and a controller built by a unit test on it must still save.
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        await db.SaveChangesAsync(ct);
+        await alongside();
+        await db.SaveChangesAsync(ct);
+        if (tx is not null) await tx.CommitAsync(ct);
     }
 
     protected async Task TryAuditAsync(Task auditTask)

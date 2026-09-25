@@ -50,6 +50,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
 
+    public Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceCaseRow>($"/api/places/{placeId}/my-cases", token);
+
+    public Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlacePostsRecord>($"/api/places/{placeId}/posts", token);
+
     public Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default)
@@ -222,6 +229,45 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default)
         => _api.GetListAsync<DuplicatePlaceGroup>("/api/admin/places/duplicates", token);
 
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlacePage>> GetAdminPlacesAsync(
+        string? query = null, PlaceKind? kind = null, int page = 1, int pageSize = 50,
+        CancellationToken token = default)
+    {
+        var url = $"/api/admin/places?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(query)) url += $"&query={Uri.EscapeDataString(query)}";
+        if (kind is { } k) url += $"&kind={(int)k}";
+        return _api.GetItemAsync<AdminPlacePage>(url, token);
+    }
+
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlaceUsage>> GetAdminPlaceUsageAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetItemAsync<AdminPlaceUsage>($"/api/admin/places/{placeId}/usage", token);
+
+    /// <inheritdoc />
+    public Task<(AdminPlaceRow? Place, string? Error)> SetAdminPlaceKindAsync(
+        Guid placeId, PlaceKind kind, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetPlaceKindRequest, AdminPlaceRow>(
+            HttpMethod.Post, $"/api/admin/places/{placeId}/kind",
+            new SetPlaceKindRequest(kind), token);
+
+    /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/admin/places/{placeId}", token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<AdminPlaceDetail>> GetAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetItemAsync<AdminPlaceDetail>($"/api/admin/places/{placeId}", token);
+
+    /// <inheritdoc />
+    public Task<(AdminPlaceDetail? Place, string? Error)> EditAdminPlaceAsync(
+        Guid placeId, AdminEditPlaceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminEditPlaceRequest, AdminPlaceDetail>(
+            HttpMethod.Put, $"/api/admin/places/{placeId}", request, token);
+
     public Task<LoadResult<TestFeedPostRecord>> GetTestFeedPostsAsync(CancellationToken token = default)
         => _api.GetListAsync<TestFeedPostRecord>("/api/admin/feed/test-posts", token);
 
@@ -257,6 +303,11 @@ public sealed partial class BenAdminClientAdapter
     }
 
     /// <inheritdoc />
+    public Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<SessionFileRecord>("/api/admin/session-files", token);
+
+    /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);
@@ -273,6 +324,46 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<MergePlaceRequest, PlaceMergeResult>(
             HttpMethod.Post, $"/api/admin/places/{losingPlaceId}/merge",
             new MergePlaceRequest(intoPlaceId), token);
+
+    // ── Evidence added straight to a place (item 250) ─────────────────────────
+
+    public Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
+        Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
+        CancellationToken token = default)
+    {
+        var form = new MultipartFormDataContent();
+        var part = new StreamContent(content);
+        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(part, "file", fileName);
+        if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "caption");
+        form.Add(new StringContent(((int)kind).ToString()), "kind");
+
+        return _api.PostMultipartExpectingReasonAsync<PlaceEvidenceAdded>(
+            $"/api/places/{placeId}/evidence", form, token);
+    }
+
+    public Task<bool> RemovePlaceEvidenceAsync(
+        Guid placeId, Guid evidenceId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/places/{placeId}/evidence/{evidenceId}", token);
+
+    /// <summary>
+    /// Built rather than fetched, and anonymous on purpose: this is an <c>&lt;img&gt;</c> or a
+    /// <c>&lt;video&gt;</c> src on a page a stranger is reading, and neither carries a token.
+    /// </summary>
+    public string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId)
+        => $"{_webApiBaseUrl}/api/public/places/{placeId}/evidence/{evidenceId}/file";
+
+    public Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<NewPublicPlaceRequest, PlaceCreated>(
+            HttpMethod.Post, "/api/places/public-location", request, token);
+
+    public Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetPlaceDescriptionRequest, PlaceRecord>(
+            HttpMethod.Put, $"/api/places/{placeId}/description",
+            new SetPlaceDescriptionRequest(description), token);
 }
 
 /// <summary>The body the merge endpoint expects.</summary>

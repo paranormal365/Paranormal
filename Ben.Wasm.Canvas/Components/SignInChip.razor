@@ -1,0 +1,48 @@
+@using Ben.Wasm.Canvas.Services
+@implements IDisposable
+@inject TokenStore Tokens
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@*
+    Copied from Ben.Wasm.Video/Components/SignInChip.razor: the standalone editor's only door to
+    signing in and out. The video editor once had none, so the only way in was to know the URL.
+*@
+@if (Tokens.IsAuthenticated)
+{
+    <span class="bwc-signin bwc-signin--in" title="Signed in: saving boards to a case and publishing are available">
+        <span class="bwc-signin__dot" aria-hidden="true"></span>
+        <button type="button" class="bwc-signin__action" @onclick="SignOutAsync">Sign out</button>
+    </span>
+}
+else
+{
+    <button type="button" class="bwc-signin bwc-signin__action"
+            @onclick="GoToSignIn"
+            title="Sign in to save boards to a case and publish them">
+        Sign in
+    </button>
+}
+
+@code {
+    protected override void OnInitialized() => Tokens.Changed += OnTokensChanged;
+
+    private void OnTokensChanged() => InvokeAsync(StateHasChanged);
+
+    /// <summary>
+    /// Goes to the sign-in page relative to this app's own base.
+    /// </summary>
+    /// <remarks>
+    /// Relative, not "/login": in production the editor is served under /editors/canvas/, where "/" is
+    /// the site's root, so an absolute path would navigate out of the editor entirely.
+    /// </remarks>
+    private void GoToSignIn() => Nav.NavigateTo($"{Nav.BaseUri}login");
+
+    private async Task SignOutAsync()
+    {
+        await Auth.LogoutAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose() => Tokens.Changed -= OnTokensChanged;
+}

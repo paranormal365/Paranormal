@@ -1,0 +1,82 @@
+@*
+    An overview of the whole board with the visible area outlined. Pressing or dragging on it centres the
+    view there. Hidden below 768px wide, where the screen is better spent on the board.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject CanvasViewportState Viewport
+
+<div class="bc-minimap" aria-hidden="true"
+     @onpointerdown="OnPointer" @onpointermove="OnPointerMove">
+    <svg viewBox="@ViewBox" preserveAspectRatio="xMidYMid meet" @ref="_svg">
+        @foreach (var node in Store.Document.Nodes)
+        {
+            <rect class="bc-minimap__node" x="@CssNumber.F(node.X)" y="@CssNumber.F(node.Y)" width="@CssNumber.F(node.Width)" height="@CssNumber.F(node.Height)" />
+        }
+        <rect class="bc-minimap__view" x="@CssNumber.F(_view.X)" y="@CssNumber.F(_view.Y)" width="@CssNumber.F(_view.Width)" height="@CssNumber.F(_view.Height)" />
+    </svg>
+</div>
+
+@code {
+    private const double Width = 160;
+    private const double Height = 100;
+    private ElementReference _svg;
+    private WorldRect _bounds;
+    private WorldRect _view;
+
+    [Parameter] public EventCallback OnViewportMoved { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Viewport.OnChanged += Refresh;
+    }
+
+    protected override bool ShouldRender() => !Viewport.GestureActive;
+
+    protected override void OnParametersSet() => Measure();
+
+    private void Measure()
+    {
+        _view = Viewport.VisibleWorldRect();
+        var content = WorldRect.Bounds(Store.Document.Nodes.Select(CanvasHitTester.RectOf));
+        _bounds = (content.IsEmpty ? _view : content.Union(_view)).Inflate(40);
+    }
+
+    private string ViewBox => FormattableString.Invariant(
+        $"{CssNumber.F(_bounds.X)} {CssNumber.F(_bounds.Y)} {CssNumber.F(Math.Max(1, _bounds.Width))} {CssNumber.F(Math.Max(1, _bounds.Height))}");
+
+    private Task OnPointer(PointerEventArgs e) => CentreAt(e.OffsetX, e.OffsetY);
+
+    private Task OnPointerMove(PointerEventArgs e) => e.Buttons == 1 ? CentreAt(e.OffsetX, e.OffsetY) : Task.CompletedTask;
+
+    private Task CentreAt(double offsetX, double offsetY)
+    {
+        // The SVG keeps its aspect inside 160x100, so map through the fitted scale.
+        var scale = Math.Min(Width / Math.Max(1, _bounds.Width), Height / Math.Max(1, _bounds.Height));
+        var padX = (Width - _bounds.Width * scale) / 2;
+        var padY = (Height - _bounds.Height * scale) / 2;
+        var worldX = _bounds.X + (offsetX - padX) / scale;
+        var worldY = _bounds.Y + (offsetY - padY) / scale;
+        Viewport.CentreOn(worldX, worldY);
+        return OnViewportMoved.InvokeAsync();
+    }
+
+    private void Changed(CanvasChange change)
+    {
+        Measure();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Refresh()
+    {
+        Measure();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Viewport.OnChanged -= Refresh;
+    }
+}

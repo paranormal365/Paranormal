@@ -13,7 +13,8 @@
     ValueField, DefaultText, @bind-Value), so a call site converts by changing the tag name.
 *@
 
-<select class="form-select @Class"
+<select id="@Id"
+        class="form-select @Class"
         style="@(Width is not null ? $"width:{Width};" : null)"
         disabled="@(!Enabled)"
         title="@Title"
@@ -54,6 +55,17 @@
     [Parameter] public EventCallback<TValue?> OnChange { get; set; }
 
     [Parameter] public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// The control's id, so a <c>&lt;label for&gt;</c> can point at it.
+    /// </summary>
+    /// <remarks>
+    /// Added for item 246's token builder, whose two dropdowns are the whole interface — and
+    /// <c>LabelAssociationTests</c> refused the page until they had one, correctly: a label
+    /// pointing at nothing does not focus the control when clicked, and a screen reader announces
+    /// the control unlabelled.
+    /// </remarks>
+    [Parameter] public string? Id { get; set; }
+
     [Parameter] public string? Class { get; set; }
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? AriaLabel { get; set; }

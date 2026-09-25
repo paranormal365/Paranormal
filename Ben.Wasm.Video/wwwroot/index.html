@@ -79,6 +79,11 @@
     <link href="_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
     <!-- …and the map onto the site palette, which must win over both of the above. -->
     <link href="_content/Ben.Video.Editor/css/ben-video-theme.css" rel="stylesheet" />
+    <!-- The clip browser's styles, which are NOT scoped: most of that component is built by hand
+         with RenderTreeBuilder, which the compiler never stamps a scope attribute onto, and the
+         scope hash it does produce differs between machines. That file's header has the story.
+         After the theme so it can rely on the --bv-* variables. -->
+    <link href="_content/Ben.Video.Editor/css/clip-browser.css" rel="stylesheet" />
     <!-- This host's own shell (page ground, login screen). Last, so its rules beat the Kendo
          baseline rather than losing to it — it sat before the theme and was being overridden. -->
     <link rel="stylesheet" href="css/app.css" />

@@ -124,11 +124,25 @@ You choose them on the **New session** sheet before the session opens, and the s
 the running session's screen under *Recording* — switching one off tears it down rather than
 leaving it running quietly, which is the whole reason to switch video off at two in the morning.
 
-Video starts **off**. With it on, a **Video** button appears in the capture bar next to Photo.
-Photographs are always available whatever the channels say.
+Video starts **off**. With it on, the camera stays on: a viewfinder to aim by on the running
+session's screen, and the sentry's eye for movement seen through it. It is not a recording — five
+hours of video is tens of gigabytes and a flat battery long before the night is over.
 
-Video is captured as **clips**, not a continuous recording. Five hours of video is tens of
-gigabytes and a flat battery long before the night is over.
+The **Photo** button takes a photograph of whatever the camera sees, without leaving the app. With
+video on, the photo is taken there and then of what the viewfinder shows; with it off, a viewfinder
+opens so you can frame the shot and closes itself after. Photographs are always available whatever
+the channels say. Clips are not offered from a running session for now.
+
+### If you put the app away
+
+A session **with sound on** carries on when you switch to another app, go to the home screen or
+lock the phone: the sound and every reading keep being recorded in your pocket, because recording
+sound is what keeps the app awake. With sound off nothing does — iOS pauses the app a few seconds
+after it leaves the screen, and the readings stop until you come back. The camera never carries on;
+iOS takes it from any app that is not on screen, and it comes back the moment you do. Either way the
+stretch you were away is marked on the review, *App put away* to *Back in the app*, with a line
+saying which of those happened, so nobody reading the session later mistakes a dark camera for a
+dead one. The session player on the website shades the same stretch.
 
 ![The capture bar, the channel switches, and what has been marked](/help/media/the-mobile-apps/iphone-controls.png)
 
@@ -263,9 +277,11 @@ everything recorded up to that moment intact. Its end time is left unknown, beca
 Recording works offline; **sending needs a connection**. When you have one, choose the
 investigation it belongs to — which chooses its case too — and pick which recordings go with it.
 
-Files go up **one at a time**, so a dropped connection costs one file rather than the night, and
-anything that failed can be sent again without re-sending what already arrived. Each file
-travels with a checksum, and a file that arrives damaged is flagged rather than quietly accepted.
+Everything you tick goes up together as **one `.ben` file** — the readings, the marks and the
+recordings, sealed with a checksum of every part. If the connection drops, press **Send** again:
+the server replaces its own copy rather than making a second, and a file that arrives damaged is
+refused rather than quietly accepted. On the website the session appears as that one file, not as
+a wall of separate uploads.
 
 Who can send a recording to an investigation: anyone who was **on** it, any active **member of
 the group** running it, and — when the investigation or its case is **public** — anybody at all.
@@ -340,9 +356,40 @@ suggests, so the real upload is usually smaller.
 
 ### Exporting a session
 
-A session can also be exported as a **.zip in the IsHaunted device data format** — the same
-published format any instrument maker can write. That file can go by AirDrop, email or Files to
-anyone, whether or not they use this site.
+From a session's review screen, **Export a bundle** writes the whole night as one **`.ben` file**
+and hands it to the share sheet, so it can go by AirDrop, Messages, Mail or Files to anyone. Inside
+it is the published IsHaunted device data format — the same one any instrument maker can write —
+so it is readable outside this app too.
+
+The file carries a **seal**: a checksum of every part, and the id of the phone and the account that
+recorded it. A copy that lost or changed bytes on the way fails its seal and is refused when opened,
+rather than opened with a hole in it. The seal says which device made the recording; it is not a
+signature, and it never carries anybody's name.
+
+### Opening a session somebody sent you — or pulling your own back down
+
+A `.ben` that reaches your phone opens in the app, and **plays exactly as it did for the person who
+recorded it**: the same trace, the same map, the same marks and recordings, with the review screen,
+the replay, the trimmer and the export all working as if the night had been recorded on your phone.
+The only difference is a line on the review screen that says where it came from.
+
+There are three ways in, and they all lead to the same place:
+
+- **Tap the file** wherever it arrived — an AirDrop, a message, a mail attachment, Files. The
+  app is offered to open it.
+- **Open a .ben file** on the Field Kit screen shows the Files browser, for a file already saved.
+- **On the server, not on this phone**, further down the Field Kit screen, lists the sessions you
+  have sent up that are not on this phone — sent from another device, or cleared from this one.
+  **Download** brings the whole night back, and the app already knows it is on the server. Only
+  sessions that were sent as one file are offered; anything sent before session files existed is
+  counted underneath, and is still on the website.
+
+![An imported session on the review screen: the trace, the map, the marks, and where it came from](/help/media/the-mobile-apps/iphone-review-imported.png)
+
+A session that is **already on this phone** is not imported twice; the app says which one it is.
+Imported sessions show in the list with *shared with you*, *from the server* or *opened from a file*
+under the name, and the review screen's facts carry a **Source** line to match — so a night somebody
+handed you is never quietly attributed to you.
 
 ## Sharing what you found — the field archive
 
@@ -383,6 +430,25 @@ normally stay on the phone that made them.
   makes the archive worth reading, and what a paid plan buys is keeping your work to yourself in
   the first place. So it is worth a moment's thought before the first publish: what people have
   already read cannot be unread either way.
+
+**On the website, the same place page goes further.** A public location offers to schedule a visit
+there and to post about it, and if you have no group at all it offers to set you up with a private
+space of your own in one step — free, and yours. What you record there is public on a free account,
+exactly as a published session is. See
+[Investigating on your own](getting-started#investigating-on-your-own).
+
+## How much you can keep
+
+An account with no paid plan behind it holds a limited amount of recorded material. **My field
+sessions** on the website shows what you have used, with a bar that turns amber and then red as it
+fills, so the cap is something you see coming rather than something you meet when an upload is
+refused.
+
+If a group you belong to is on a paid plan, that covers your storage and the page says so — there
+is no personal cap to show you, and it does not invent one.
+
+When you are close to full there are two ways on: remove sessions you no longer need, or join a
+group on a paid plan. Removing a session frees its space immediately.
 
 ## Deleting a session
 

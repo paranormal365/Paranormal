@@ -1,0 +1,28 @@
+@*
+    "Your cart is empty", "No products match" (storefront S2.5) — the structure of Smarty's empty
+    cart (shop-page-cart-empty.html): a picture, a line, a sentence and a way on. Smarty's large
+    inline illustration is a sprite icon here.
+*@
+
+<div class="ben-store-empty">
+    <div class="ben-store-empty__icon" aria-hidden="true"><BenIcon Name="@Icon" /></div>
+    <h2 class="h4">@Title</h2>
+    @if (!string.IsNullOrWhiteSpace(Lead))
+    {
+        <p class="text-secondary mb-3">@Lead</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(LinkText) && !string.IsNullOrWhiteSpace(LinkHref))
+    {
+        <a class="btn btn-primary" href="@LinkHref">@LinkText</a>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "shopping-bag";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Lead { get; set; }
+    [Parameter] public string? LinkText { get; set; }
+    [Parameter] public string? LinkHref { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

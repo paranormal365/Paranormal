@@ -83,6 +83,55 @@ public sealed class PaidPlanTests
         return orgId;
     }
 
+    // ── public by default (Ben, 2026-09-17) ──────────────────────────────────
+
+    /// <summary>
+    /// Ben, 2026-09-17: "if paid, they can make their work private. By default we should be able to
+    /// collect information as public for unpaid plan."
+    /// </summary>
+    [Theory]
+    [InlineData(null,                        true)]   // pays nothing
+    [InlineData(SubscriptionStatus.Active,   false)]  // pays
+    [InlineData(SubscriptionStatus.Lapsed,   true)]   // stopped paying
+    public async Task Whether_everything_is_public_by_default_is_the_plans_answer(
+        SubscriptionStatus? plan, bool expected)
+    {
+        var f = CreateFactory();
+        var orgId = await AddGroupAsync(f, members: 1, plan: plan);
+
+        await using var db = await f.CreateDbContextAsync();
+        Assert.Equal(expected, await PaidPlan.PublicByDefaultAsync(db, orgId, default));
+    }
+
+    /// <summary>
+    /// Both sentences, both directions. They are worded the way the archive's is and for the same
+    /// reason — one day they reach the phone, where naming a plan or a price is a 3.1.1 risk.
+    /// </summary>
+    [Fact]
+    public async Task The_unpaid_account_is_told_why_its_work_at_a_public_place_is_public()
+    {
+        var f = CreateFactory();
+        var free = await AddGroupAsync(f, members: 1);
+        var paid = await AddGroupAsync(f, members: 1, plan: SubscriptionStatus.Active);
+
+        await using var db = await f.CreateDbContextAsync();
+
+        var aboutCases = await PaidPlan.WhyCannotKeepCasePrivateAsync(db, free, default);
+        var aboutVisits = await PaidPlan.WhyCannotNarrowInvestigationAsync(db, free, default);
+
+        Assert.NotNull(aboutCases);
+        Assert.NotNull(aboutVisits);
+        foreach (var said in new[] { aboutCases!, aboutVisits! })
+        {
+            Assert.Contains("on this account", said, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("plan", said);
+            Assert.DoesNotContain("$", said);
+        }
+
+        Assert.Null(await PaidPlan.WhyCannotKeepCasePrivateAsync(db, paid, default));
+        Assert.Null(await PaidPlan.WhyCannotNarrowInvestigationAsync(db, paid, default));
+    }
+
     // ── privacy ──────────────────────────────────────────────────────────────
 
     [Fact]

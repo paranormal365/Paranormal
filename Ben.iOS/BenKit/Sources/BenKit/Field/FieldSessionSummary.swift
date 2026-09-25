@@ -19,11 +19,18 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     /// same instruments back up, video included, without reopening the model.
     public var channels: CaptureChannels
 
+    /// When it arrived as a `.ben`, and from which device — nil for a session recorded here.
+    public var importedAt: Date?
+    public var sourceDeviceId: String?
+    public var recordedByAccountId: UUID?
+
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
                 readingCount: Int, markerCount: Int, captureCount: Int,
                 serverSessionId: UUID? = nil, uploadedAt: Date? = nil,
-                channels: CaptureChannels = .default) {
+                channels: CaptureChannels = .default,
+                importedAt: Date? = nil, sourceDeviceId: String? = nil,
+                recordedByAccountId: UUID? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -37,6 +44,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.serverSessionId = serverSessionId
         self.uploadedAt = uploadedAt
         self.channels = channels
+        self.importedAt = importedAt
+        self.sourceDeviceId = sourceDeviceId
+        self.recordedByAccountId = recordedByAccountId
     }
 
     init(_ session: FieldSession) {
@@ -52,7 +62,21 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   captureCount: session.captureCount,
                   serverSessionId: session.serverSessionId,
                   uploadedAt: session.uploadedAt,
-                  channels: session.channels)
+                  channels: session.channels,
+                  importedAt: session.importedAt,
+                  sourceDeviceId: session.sourceDeviceId,
+                  recordedByAccountId: session.recordedByAccountId)
+    }
+
+    /// Whether this session arrived as a `.ben` rather than being recorded on this device.
+    public var isImported: Bool { importedAt != nil }
+
+    /// Whether the seal says another device recorded it — "shared with you", as opposed to
+    /// your own night pulled back from the server. Unknown seals count as somebody else's.
+    public func wasRecordedElsewhere(thisDeviceId: String?) -> Bool {
+        guard isImported else { return false }
+        guard let sourceDeviceId, let thisDeviceId else { return true }
+        return sourceDeviceId != thisDeviceId
     }
 
     /// Whether anybody has given this session a name of its own.

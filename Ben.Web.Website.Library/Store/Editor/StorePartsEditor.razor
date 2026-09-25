@@ -1,0 +1,177 @@
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    An item's parts and what a unit costs to make (store sellers, backlog 251, P4). Shared by the
+    seller's editor and the store's. The total is worked out as the seller types, by the same
+    StoreCostMath the server saves with, so what they see is what is kept. Never shown to shoppers.
+*@
+
+<h5>Parts @Help</h5>
+<p class="text-secondary small">
+    What one unit is built from. A price can be for a pack (a bag of 100 for $6.99) or for one piece; say how many
+    pieces one unit uses. Only you and the store see this — it's how your pay is worked out.
+</p>
+
+@if (Saved is null)
+{
+    <div class="text-secondary small">Loading the parts…</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle" id="parts" style="min-width:60rem;">
+            <thead>
+                <tr>
+                    <th style="width:3.5rem;"></th><th>Part</th><th>Price</th><th>For</th><th>Pieces a pack</th>
+                    <th>Used a unit</th><th>On hand</th><th class="text-end">A unit</th><th>Links</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (draft, i) in _drafts.Select((d, i) => (d, i)))
+                {
+                    var d = draft;
+                    <tr data-testid="part-row">
+                        <td>
+                            @if (d.ThumbnailUploadFileId is { } thumb)
+                            {
+                                <img src="@MediaUrls.StoreImage(thumb, thumbnail: true)" alt="@d.Name" width="44" height="44" class="rounded border" style="object-fit:cover;" />
+                            }
+                        </td>
+                        <td><label class="visually-hidden" for="@($"part-name-{i}")">Part</label>
+                            <input id="@($"part-name-{i}")" class="form-control form-control-sm" style="min-width:10rem;" maxlength="200" @bind="d.Name" @bind:event="oninput" /></td>
+                        <td><label class="visually-hidden" for="@($"part-price-{i}")">Price</label>
+                            <input id="@($"part-price-{i}")" type="number" step="0.0001" min="0" class="form-control form-control-sm" style="width:6.5rem;" @bind="d.Price" @bind:event="oninput" /></td>
+                        <td><label class="visually-hidden" for="@($"part-basis-{i}")">Price is for</label>
+                            <select id="@($"part-basis-{i}")" class="form-select form-select-sm" @bind="d.PriceBasis">
+                                <option value="@StorePartPriceBasis.PerPack">a pack</option>
+                                <option value="@StorePartPriceBasis.PerPiece">one piece</option>
+                            </select></td>
+                        <td><label class="visually-hidden" for="@($"part-pack-{i}")">Pieces a pack</label>
+                            <input id="@($"part-pack-{i}")" type="number" min="1" class="form-control form-control-sm" style="width:5rem;"
+                                   disabled="@(d.PriceBasis == StorePartPriceBasis.PerPiece)" @bind="d.PiecesPerPack" @bind:event="oninput" /></td>
+                        <td><label class="visually-hidden" for="@($"part-per-unit-{i}")">Used in a unit</label>
+                            <input id="@($"part-per-unit-{i}")" type="number" step="0.0001" min="0" class="form-control form-control-sm" style="width:5.5rem;" @bind="d.QuantityPerUnit" @bind:event="oninput" /></td>
+                        <td><label class="visually-hidden" for="@($"part-on-hand-{i}")">On hand</label>
+                            <input id="@($"part-on-hand-{i}")" type="number" min="0" class="form-control form-control-sm" style="width:5rem;" placeholder="—" @bind="d.OnHand" @bind:event="oninput" /></td>
+                        <td class="text-end text-nowrap" data-testid="part-cost">@Cents(StoreCostMath.PartCostPerUnit(d.PriceBasis, d.Price, d.PiecesPerPack, d.QuantityPerUnit))</td>
+                        <td style="min-width:12rem;">
+                            <label class="visually-hidden" for="@($"part-buy-{i}")">Where to buy it</label>
+                            <input id="@($"part-buy-{i}")" class="form-control form-control-sm mb-1" maxlength="500" placeholder="Where to buy it — https://…" @bind="d.BuyUrl" />
+                            <label class="visually-hidden" for="@($"part-info-{i}")">More about it</label>
+                            <input id="@($"part-info-{i}")" class="form-control form-control-sm" maxlength="500" placeholder="Datasheet — https://…" @bind="d.InfoUrl" />
+                        </td>
+                        <td class="text-nowrap">
+                            @if (d.Id is { } id)
+                            {
+                                <label class="btn btn-sm btn-outline-secondary mb-0" title="A picture of this part">
+                                    <BenIcon Name="camera" /><span class="visually-hidden">A picture of @d.Name</span>
+                                    <InputFile class="d-none" accept="image/*" OnChange="@(e => OnPicture.InvokeAsync((id, e)))" />
+                                </label>
+                                @if (d.ThumbnailUploadFileId is not null)
+                                {
+                                    <BenGridAction Icon="image" Label="Remove the picture" OnClick="@(() => OnRemovePicture.InvokeAsync(id))" />
+                                }
+                            }
+                            <BenGridAction Icon="trash-2" Label="Remove this part" Tone="GridActionTone.Danger" OnClick="@(() => _drafts.Remove(d))" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="part-add" disabled="@(_drafts.Count >= 100)"
+            @onclick="@(() => _drafts.Add(new PartDraft()))">Add a part</button>
+
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-6 col-md-3">
+            <label class="form-label small" for="parts-other">Other costs a unit</label>
+            <div class="input-group input-group-sm">
+                <span class="input-group-text">$</span>
+                <input id="parts-other" type="number" step="0.0001" min="0" class="form-control" @bind="_other" @bind:event="oninput" />
+            </div>
+        </div>
+        <div class="col-12 col-md-9">
+            <label class="form-label small" for="parts-other-note">What they cover</label>
+            <input id="parts-other-note" class="form-control form-control-sm" maxlength="300" placeholder="Solder, glue, the box it ships in" @bind="_otherNote" />
+        </div>
+    </div>
+
+    <div class="card mb-3" data-testid="parts-total">
+        <div class="card-body d-flex flex-wrap gap-4">
+            <div>
+                <div class="text-secondary small">A unit costs to make</div>
+                <div class="fs-4 fw-semibold" id="parts-cost-basis">@StoreMoney.Format(Total)</div>
+            </div>
+            @if (Buildable is { } units)
+            {
+                <div>
+                    <div class="text-secondary small">You can build from the parts on hand</div>
+                    <div class="fs-4 fw-semibold" id="parts-buildable">@units @(units == 1 ? "unit" : "units")</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert alert-danger py-2" id="parts-refusal">@Error</div>
+    }
+    <button type="button" class="btn btn-primary" id="parts-save" disabled="@Busy" @onclick="SaveAsync">Save parts</button>
+}
+
+@code {
+    /// <summary>The parts as last saved; a new one replaces the drafts.</summary>
+    [Parameter] public StorePartsRecord? Saved { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<SaveStorePartsRequest> OnSave { get; set; }
+    [Parameter] public EventCallback<(Guid PartId, InputFileChangeEventArgs File)> OnPicture { get; set; }
+    [Parameter] public EventCallback<Guid> OnRemovePicture { get; set; }
+
+    /// <summary>The page's own help link — a literal there, so the help guards can check it.</summary>
+    [Parameter] public RenderFragment? Help { get; set; }
+
+    private sealed class PartDraft
+    {
+        public Guid? Id { get; set; }
+        public string Name { get; set; } = "";
+        public StorePartPriceBasis PriceBasis { get; set; } = StorePartPriceBasis.PerPiece;
+        public decimal Price { get; set; }
+        public int PiecesPerPack { get; set; } = 1;
+        public decimal QuantityPerUnit { get; set; } = 1;
+        public int? OnHand { get; set; }
+        public string? InfoUrl { get; set; }
+        public string? BuyUrl { get; set; }
+        public Guid? ThumbnailUploadFileId { get; set; }
+    }
+
+    private List<PartDraft> _drafts = [];
+    private decimal _other;
+    private string? _otherNote;
+    private StorePartsRecord? _adopted;
+
+    protected override void OnParametersSet()
+    {
+        if (Saved is null || ReferenceEquals(Saved, _adopted)) return;
+        _adopted = Saved;
+        _drafts = Saved.Parts.Select(p => new PartDraft
+        {
+            Id = p.Id, Name = p.Name, PriceBasis = p.PriceBasis, Price = p.Price, PiecesPerPack = p.PiecesPerPack,
+            QuantityPerUnit = p.QuantityPerUnit, OnHand = p.OnHand, InfoUrl = p.InfoUrl, BuyUrl = p.BuyUrl, ThumbnailUploadFileId = p.ThumbnailUploadFileId,
+        }).ToList();
+        _other = Saved.OtherCostPerUnit;
+        _otherNote = Saved.OtherCostNote;
+    }
+
+    private decimal Total => StoreCostMath.CostBasis(
+        _drafts.Select(d => StoreCostMath.PartCostPerUnit(d.PriceBasis, d.Price, d.PiecesPerPack, d.QuantityPerUnit)), _other);
+
+    private int? Buildable => StoreCostMath.Buildable(_drafts.Select(d => (d.OnHand, d.QuantityPerUnit)));
+
+    /// <summary>A part's share to the hundredth of a cent where it has one — "$0.2097".</summary>
+    private static string Cents(decimal dollars) => dollars == StoreMoney.Round(dollars) ? StoreMoney.Format(dollars) : $"${dollars:0.00##}";
+
+    private Task SaveAsync() => OnSave.InvokeAsync(new SaveStorePartsRequest(
+        _drafts.Select(d => new SaveStorePartRequest(d.Id, d.Name, d.PriceBasis, d.Price, d.PiecesPerPack, d.QuantityPerUnit, d.InfoUrl, d.BuyUrl, d.OnHand)).ToList(),
+        _other, _otherNote, Saved?.EditedAt));
+}

@@ -48,7 +48,17 @@ public class EntraClaimsTransformationTests
             new DbContextOptionsBuilder<BenDataContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var external = new ExternalSignInService(
             um.Object, sim.Object, new UserHandleService(factory), new Mock<IConfirmationSender>().Object);
-        return new EntraClaimsTransformation(um.Object, external, NullLogger<EntraClaimsTransformation>.Instance);
+        // A real recorder over the same in-memory factory: it must never change what the
+        // transformation DECIDES, so it is wired for real rather than mocked away, and these
+        // tests hold that. Its own behaviour is EntraSignInRecorderTests'.
+        var visits = new EntraSignInRecorder(
+            factory,
+            new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()),
+            NullLogger<EntraSignInRecorder>.Instance);
+
+        return new EntraClaimsTransformation(
+            um.Object, external, visits, NullLogger<EntraClaimsTransformation>.Instance);
     }
 
     private static bool Resolved(ClaimsPrincipal principal) =>

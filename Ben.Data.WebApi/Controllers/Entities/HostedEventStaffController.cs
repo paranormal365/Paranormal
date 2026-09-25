@@ -117,6 +117,42 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
         // field and a different act.
         var appUserId = request.AppUserId;
 
+        // AND PICKING SOMEBODY MEANS PICKING A MEMBER (2026-09-17 audit).
+        //
+        // The comment above states the rule and nothing enforced it: request.AppUserId came
+        // straight from the body, and the row was written with DateConfirmed = now — live
+        // immediately, no acceptance. So a host could name ANY account GUID on the site and hand
+        // it the booking board with guests' names, emails and dietary notes, the door, the files,
+        // and the event room as a moderator. OrAsStaffAsync matches on the event and the user and
+        // nothing else, so the row itself is the grant. EventBookingAlertSettings would then start
+        // mailing that stranger the guest list.
+        //
+        // Non-members are still perfectly welcome as staff — a hotel's weekend helper is the case
+        // the feature exists for — but they arrive through the ADDRESS, which is an invitation
+        // they have to accept. That is the consent gate, and this path went round it.
+        //
+        // TourController.SetGuides asks the same question of the same shape of request; its
+        // refusal is worded for guides, so this one says it in its own words.
+        if (appUserId is { } picked)
+        {
+            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == picked && m.IsActive, ct);
+
+            if (!isMember)
+            {
+                var pickedName = await db.AppUsers.AsNoTracking()
+                    .Where(u => u.Id == picked)
+                    .Select(u => u.DisplayName)
+                    .FirstOrDefaultAsync(ct);
+
+                return BadRequest(
+                    $"{pickedName ?? "That person"} isn't a member of this group, so they can't be picked "
+                    + "as staff. Invite them by email address instead — an invitation is theirs to "
+                    + "accept, and being handed other people's names and allergies is a thing to "
+                    + "say yes to.");
+            }
+        }
+
         var staff = appUserId is { } who
             ? await db.HostedEventStaff.FirstOrDefaultAsync(
                   s => s.HostedEventId == eventId && s.AppUserId == who, ct)
@@ -159,9 +195,14 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
 
         if (invited) Reissue(staff, now);
 
-        await db.SaveChangesAsync(ct);
-
-        if (invited) await _mail.SendStaffInviteAsync(db, staff.Id, ct);
+        // An invitation and the letter carrying its link commit together, or neither does (item
+        // 239b): the mailer reads the row back by id, so it is saved, the letter queued, and both
+        // written by a second save inside one transaction. A member added directly has no letter
+        // and no token, so theirs is one ordinary save.
+        if (invited)
+            await SaveInOneTransactionAsync(db, () => _mail.SendStaffInviteAsync(db, staff.Id, ct), ct);
+        else
+            await db.SaveChangesAsync(ct);
 
         return Ok(await ListAsync(db, eventId, ct));
     }
@@ -189,12 +230,31 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
         if (staff.DateConfirmed is not null)
             return Conflict("They have already accepted — there is nothing to send.");
 
+        // Asked BEFORE reissuing. A fresh token kills the link in the letter they already have, so
+        // rotating it when there is no way to send the new one leaves them with nothing that works
+        // — which is what happened when this was asked afterwards. (Adding a helper queues its
+        // first letter regardless; this button exists only to send one now.)
+        if (!_mail.IsConfigured)
+            return Conflict("This site has no outgoing mail set up, so nothing was sent.");
+
         Reissue(staff, DateTime.UtcNow);
         staff.UpdatedByAppUserId = userId.Value;
-        await db.SaveChangesAsync(ct);
 
-        if (!await _mail.SendStaffInviteAsync(db, staff.Id, ct))
-            return Conflict("This site has no outgoing mail set up, so nothing was sent.");
+        // The new token and the letter carrying it commit together (item 239b), so a failure
+        // leaves the old link working rather than replaced by one nobody was sent. Nothing to send
+        // is a failure too: it throws inside the transaction so the reissue is rolled back with it.
+        try
+        {
+            await SaveInOneTransactionAsync(db, async () =>
+            {
+                if (!await _mail.SendStaffInviteAsync(db, staff.Id, ct))
+                    throw new NothingToSendException();
+            }, ct);
+        }
+        catch (NothingToSendException)
+        {
+            return Conflict("There was no address to send the invitation to, so nothing was sent.");
+        }
 
         return Ok(await ListAsync(db, eventId, ct));
     }
@@ -283,4 +343,10 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
 
     private static string? Trimmed(string? value)
         => value?.Trim() is { Length: > 0 } v ? v : null;
+
+    /// <summary>
+    /// The mailer had nothing to send, raised inside a transaction so that what it was about is
+    /// rolled back with it rather than committed on its own.
+    /// </summary>
+    private sealed class NothingToSendException : Exception;
 }

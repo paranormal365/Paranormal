@@ -34,6 +34,7 @@
 
     <nav id="nav-menu" class="primary-nav flex-grow-1 custom-scroll">
         <ul class="nav-menu">
+            @{ _activeUrl = MostSpecificMatch(); }
             @foreach (var section in VisibleSections)
             {
                 @if (section.Title is { } title)
@@ -85,6 +86,9 @@
 
     /// <summary>Item 186 F5: may reach the moderation desk. True for a SuperAdmin implicitly.</summary>
     [Parameter] public bool IsModerator { get; set; }
+
+    /// <summary>Store sellers (backlog 251): holds the Seller role, so has a Selling workspace.</summary>
+    [Parameter] public bool IsSeller { get; set; }
     [Parameter] public bool IsImpersonating { get; set; }
 
     private string _filter = string.Empty;
@@ -214,6 +218,11 @@
                 // one of the few entries that matters more signed out than signed in.
                 if (Features.IsOn(SiteFeatures.Publications))
                     main.Add(new NavItem("Publications", "book-open", "/publications"));
+
+                // The gear store (branch storefront). Dark until it ships: the switch defaults off,
+                // and the store's own pages refuse their URLs through the same provider.
+                if (Features.IsOn(SiteFeatures.Store))
+                    main.Add(new NavItem("Store", "shopping-cart", "/store"));
             }
 
             if (IsAuthenticated)
@@ -282,6 +291,21 @@
                     media.Add(new NavItem("My Videos",     "film",  "/my-videos"));
                 main.Add(Group("Media", "layers", media.ToArray()));
 
+                // ── Store ─────────────────────────────────────────────────────
+                // Storefront. Browse, My Orders and Favourites (S6.3). A buyer's orders
+                // must stay reachable when the shop is dark (the Reported Posts precedent in the
+                // admin menu) — but the store launches dark, and a "My Orders" for everybody would
+                // announce a shop that is not open. So with the switch off it is shown only to a
+                // person who has an order (S4.13, Ben's dark-launch rule of 09/24).
+                if (Features.IsOn(SiteFeatures.Store))
+                    main.Add(Group("Store", "shopping-cart",
+                        new NavItem("Browse the Store", "shopping-bag", "/store"),
+                        new NavItem("My Orders", "package", "/store/orders"),
+                        new NavItem("Favourites", "heart", "/store/favourites"),
+                        new NavItem("My Questions", "help-circle", "/store/questions")));
+                else if (_hasStoreOrders)
+                    main.Add(new NavItem("My Orders", "package", "/store/orders"));
+
                 // ── Community ─────────────────────────────────────────────────
                 var community = new List<NavItem>();
 
@@ -321,7 +345,30 @@
                     new NavItem("Moderation", "shield", children:
                     [
                         new NavItem("Media Review",   "image", "/moderation/media"),
+                        // The place archive's own queue. Its endpoints existed with no entrance,
+                        // so a flagged session or photograph stayed held forever (2026-09-17).
+                        new NavItem("Place Archive",  "archive", "/moderation/archive"),
                         new NavItem("Reported Posts", "flag",  "/admin/feed-reports"),
+                    ]),
+                }));
+            }
+
+            // Store sellers (backlog 251): a seller's own items, packages and earnings. Its own
+            // entry, like Moderation, because a seller cannot open Administration — and shown
+            // while impersonating, so a SuperAdmin standing in for a seller sees what they see.
+            // Each page joins this list in the phase that builds it (StoreLinksResolveTests).
+            // Behind the store switch like every other way into the shop: until the store is
+            // switched on no menu may show it, a seller's included (Ben, 09/25; StoreMenusStayDarkTests).
+            if (IsSeller && Features.IsOn(SiteFeatures.Store))
+            {
+                sections.Add(new Section(null, new[]
+                {
+                    new NavItem("Selling", "package", children:
+                    [
+                        new NavItem("My Items", "box", "/store/selling"),
+                        new NavItem("My Packages", "truck", "/store/selling/packages"),
+                        new NavItem("My Earnings", "dollar-sign", "/store/selling/earnings"),
+                        new NavItem("Questions", "help-circle", "/store/selling/questions"),
                     ]),
                 }));
             }
@@ -362,39 +409,64 @@
         {
             new NavItem("All Cases",          "folder",   "/admin/cases"),
             new NavItem("All Investigations", "calendar", "/admin/investigations"),
+            // Beside the cases and investigations rather than down in Content: a list of
+            // everybody's recorded nights is the work the site exists for, not a taxonomy or a
+            // moderation queue. Ben, 2026-09-16.
+            new NavItem("Session Files",      "package",  "/admin/session-files"),
         }),
-        new NavItem("Content", "layers", children: new[]
+        // Four groups where there used to be one called "Content" holding seventeen entries —
+        // taxonomy, moderation, group housekeeping and three destructive deletes in a single list
+        // somebody had to read to the end of. Nothing here is new or renamed; it is the same
+        // entries under headings that say what they are, the way System already reads.
+        new NavItem("Content Types", "layers", children: new[]
         {
             new NavItem("File Types",           "file",   "/admin/file-types"),
             new NavItem("Lookup Types",         "list",   "/admin/lookup-types"),
             new NavItem("Clipart Library",      "image",  "/admin/video-assets"),
             new NavItem("Experience Taxonomy",  "layers", "/admin/experience-taxonomy"),
             new NavItem("Equipment Taxonomy",   "tool",   "/admin/equipment-taxonomy"),
+        }),
+        // A SuperAdmin never sees the top-level Moderation section — that one exists for somebody
+        // who moderates WITHOUT running the site — so the name is free to mean the same thing here.
+        new NavItem("Moderation", "shield", children: new[]
+        {
             // Left in place when the feed is switched off, unlike the reader-facing entries: a
             // feed that has been turned off may still have reports somebody never got to, and
             // hiding the only way to see them would strand them.
-            new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
-            new NavItem("Media Review",         "image",  "/moderation/media"),
-            new NavItem("Group Ads",            "star",   "/admin/org-ads"),
-            new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
-            new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
-            // Item 235 phase 9: who runs a place, when a code could not settle it.
-            new NavItem("Venue Claims",         "key",    "/admin/venue-claims"),
-            // Sessions whose readings are not on this server — a Playwright run against a shared
-            // database leaves the row here and the bytes on the machine that ran it.
-            new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
+            new NavItem("Reported Posts",       "flag",    "/admin/feed-reports"),
+            new NavItem("Media Review",         "image",   "/moderation/media"),
+            new NavItem("Place Archive",        "archive", "/moderation/archive"),
             // Feed posts by the seeded accounts — what a Playwright run leaves on the live feed.
             // Hidden, not deleted, and reversible from the same page.
             new NavItem("Test Posts",           "eye-off", "/admin/test-posts"),
-            // Last in the group, and named for what it does rather than something softer:
-            // it destroys a group and everything belonging to it, and a menu entry that
-            // read "Tidy up" would be the first half of an accident.
-            new NavItem("Delete a Group",       "trash-2", "/admin/delete-group"),
-            // Same reasoning, same bluntness. The users grid links straight into this page with
-            // an account chosen; the menu entry is for arriving at it deliberately.
-            new NavItem("Delete a Person",      "user-x",  "/admin/delete-user"),
-            // Item 183. A group closes a case; only this page deletes one, and the all-cases
-            // grid links in with the case already chosen.
+        }),
+        new NavItem("Groups & Places", "map-pin", children: new[]
+        {
+            new NavItem("Group Ads",            "star",      "/admin/org-ads"),
+            new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
+            // C8: the catalogue came after the duplicate finder, because for a long time the only
+            // thing anybody needed to do to a place was fold two of them together. Listing them,
+            // taking one off the public map and removing one are all only reachable from here.
+            new NavItem("Places",               "map",       "/admin/places"),
+            new NavItem("Duplicate Places",     "map-pin",   "/admin/place-duplicates"),
+            // Item 235 phase 9: who runs a place, when a code could not settle it.
+            new NavItem("Venue Claims",         "key",       "/admin/venue-claims"),
+            // Sessions whose readings are not on this server — a Playwright run against a shared
+            // database leaves the row here and the bytes on the machine that ran it.
+            new NavItem("Orphaned Sessions",    "slash",     "/admin/orphaned-sessions"),
+        }),
+        // Their own group, and last, because that is the whole point: the three entries that
+        // destroy something sat in the middle of a list of taxonomy editors, one mis-click from
+        // "Duplicate Places". Named for what they do rather than something softer — a menu entry
+        // reading "Tidy up" would be the first half of an accident.
+        new NavItem("Deleting", "trash-2", children: new[]
+        {
+            new NavItem("Delete a Group",       "trash-2",      "/admin/delete-group"),
+            // The users grid links straight into this page with an account chosen; the menu entry
+            // is for arriving at it deliberately.
+            new NavItem("Delete a Person",      "user-x",       "/admin/delete-user"),
+            // Item 183. A group closes a case; only this page deletes one, and the all-cases grid
+            // links in with the case already chosen.
             new NavItem("Delete a Case",        "folder-minus", "/admin/delete-case"),
         }),
         new NavItem("Billing", "dollar-sign", children: new[]
@@ -412,6 +484,23 @@
             // Phase 17b: every hosted event, removal and appeals.
             new NavItem("Events",        "calendar",    "/admin/events"),
         }),
+        // Storefront: the gear store's back office. Shown whether or not the shop is switched on —
+        // the catalogue is entered while it is dark (precedent: Reported Posts stays with the feed
+        // off). Orders joins this group when its page lands (S5.5).
+        new NavItem("Store", "shopping-cart", children: new[]
+        {
+            new NavItem("Store Dashboard",  "bar-chart-2",    "/admin/store"),
+            new NavItem("Orders",           "shopping-bag",   "/admin/store/orders"),
+            new NavItem("Categories",       "layers",         "/admin/store/categories"),
+            new NavItem("Products",         "package",        "/admin/store/products"),
+            new NavItem("Sale Requests",    "inbox",          "/admin/store/sale-requests"),
+            new NavItem("Sellers",          "users",          "/admin/store/sellers"),
+            new NavItem("Stock",            "box",            "/admin/store/stock"),
+            new NavItem("Discount Codes",   "tag",            "/admin/store/coupons"),
+            new NavItem("Reviews",          "message-square", "/admin/store/reviews"),
+            new NavItem("Questions",        "help-circle",    "/admin/store/questions"),
+            new NavItem("Store Settings",   "sliders",        "/admin/store/settings"),
+        }),
         new NavItem("System", "settings", children: new[]
         {
             new NavItem("Site Settings",    "settings", "/admin/site-settings"),
@@ -423,6 +512,12 @@
             new NavItem("Sidecar Installs", "download", "/admin/sidecar-telemetry"),
             new NavItem("Rate Limits", "shield", "/admin/rate-limits"),
             new NavItem("Outgoing Mail", "send", "/admin/mail"),
+
+            // Beside Outgoing Mail, because the two answer halves of one question: what went out,
+            // and what it said. Without an entry here the screen existed and nothing on the site
+            // led to it — reachable only by typing the URL, which is the same dead end this
+            // codebase keeps finding from the other direction (item 246).
+            new NavItem("Email Templates", "edit-3", "/admin/email-templates"),
         }),
     };
 
@@ -460,6 +555,9 @@
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
     private int? _userCount;
 
+    /// <summary>Whether this person has a paid store order — read only while the shop is dark (see the Store group).</summary>
+    private bool _hasStoreOrders;
+
     /// <summary>
     /// An inventory count, shaped as the bucket the badge renderer already takes.
     /// </summary>
@@ -486,6 +584,12 @@
         try
         {
             _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+
+            if (!Features.IsOn(SiteFeatures.Store))
+            {
+                var orders = await AdminClient.GetMyStoreOrdersAsync();
+                _hasStoreOrders = !orders.Failed && orders.Items.Count > 0;
+            }
 
             // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
             _organizationCount = (await AdminClient.GetOrganizationsAsync()).Items.Count;
@@ -607,14 +711,39 @@
     private bool ContainsActive(NavItem group)
         => group.Children.Any(c => IsActive(c) || ContainsActive(c));
 
-    private bool IsActive(NavItem item)
+    /// <summary>The address lit in the menu this render; set by <see cref="MostSpecificMatch"/>.</summary>
+    private string? _activeUrl;
+
+    private string CurrentPath => "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
+
+    /// <summary>
+    /// The one address lit in the menu: the longest entry that covers this page. "Browse the Store"
+    /// (/store) covers /store/favourites too, and lit beside "Favourites" it said the page was in
+    /// two places at once (seen by eye, 09/24). A page no entry names exactly — a case under
+    /// /cases — still lights the entry above it.
+    /// </summary>
+    private string? MostSpecificMatch()
     {
-        if (string.IsNullOrEmpty(item.Url)) return false;
-        var path = "/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0].TrimEnd('/');
-        if (item.Url == "/") return path == "/";
-        return path.Equals(item.Url, StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith(item.Url + "/", StringComparison.OrdinalIgnoreCase);
+        var path = CurrentPath;
+        static IEnumerable<NavItem> All(IEnumerable<NavItem> items) => items.SelectMany(i => All(i.Children).Prepend(i));
+        return All(Sections.SelectMany(s => s.Items))
+            .Select(i => i.Url)
+            .Where(url => Covers(url, path))
+            .OrderByDescending(url => url!.Length)
+            .FirstOrDefault();
     }
+
+    /// <summary>The entry's address is this page, or a folder this page sits in.</summary>
+    private static bool Covers(string? url, string path)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        if (url == "/") return path == "/";
+        return path.Equals(url, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(url + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsActive(NavItem item)
+        => Covers(item.Url, CurrentPath) && string.Equals(item.Url, _activeUrl, StringComparison.OrdinalIgnoreCase);
 
     // Raised off the renderer's synchronization context by NotificationState's poll.
     private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
@@ -630,10 +759,18 @@
     });
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
 
+    /// <remarks>
+    /// The identity always comes back — the swap is local state. What can fail is the round trip
+    /// that re-reads the roles, and when it does the SuperAdmin returns without Administration
+    /// access until they sign out and in again. That used to be silent while this navigated
+    /// straight to /admin/users, a page which then refuses them (2026-09-17 audit). Sending them
+    /// home with the reason beats sending them to a refusal with none.
+    /// </remarks>
     private async Task ReturnToSuperAdmin()
     {
-        await AuthService.StopImpersonatingAsync();
-        NavManager.NavigateTo("/admin/users");
+        var restored = await AuthService.StopImpersonatingAsync();
+
+        NavManager.NavigateTo(restored ? "/admin/users" : "/?roles-unconfirmed=1");
         await InvokeAsync(StateHasChanged);
     }
 

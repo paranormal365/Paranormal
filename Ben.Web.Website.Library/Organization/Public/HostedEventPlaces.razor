@@ -73,7 +73,15 @@
     {
         <div class="event-act__ask mb-1">Coming along?</div>
 
-        @if (_plan is { IsPicking: true, Units.Count: > 0 } anyone)
+        @* The server worked out WHY nothing can be booked and said so in a sentence; nothing
+           rendered it (2026-09-17 audit), so a visitor met a form or a grey grid and had to
+           guess. The record's own doc predicted it: "'The event has been called off' and
+           'bookings closed on Friday' are different facts and a greyed-out grid says neither." *@
+        @if (!string.IsNullOrWhiteSpace(_plan?.ClosedSentence))
+        {
+            <p class="text-secondary" data-testid="event-closed-sentence">@_plan!.ClosedSentence</p>
+        }
+        else if (_plan is { IsPicking: true, Units.Count: > 0 } anyone)
         {
             @* Signed out, the plan can be chosen from too (slice 11d): the places wait fifteen minutes
                for the emailed link, which is what stands behind them instead of an account. *@
@@ -99,6 +107,10 @@
     else if (_plan is { IsPicking: true, Units.Count: > 0 } picking)
     {
         <HostedEventPicker Hosted="Hosted" Plan="picking" OnHeld="OnBookingChanged" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_plan?.ClosedSentence))
+    {
+        <p class="text-secondary" data-testid="event-closed-sentence">@_plan!.ClosedSentence</p>
     }
     else
     {

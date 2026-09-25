@@ -38,9 +38,17 @@ public sealed class InvestigationController : BenControllerBase
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Services.ClientStatusMailer clientMail)
+        Services.ClientStatusMailer clientMail,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
-        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security; }
+        _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security;
+        _sanitizer = sanitizer; }
+
+    /// <summary>
+    /// An investigation's notes are drawn as markup on the group's case screen
+    /// (<c>InvestigationPanel.razor</c>), so they are sanitized on the way in (2026-09-20).
+    /// </summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -147,28 +155,26 @@ public sealed class InvestigationController : BenControllerBase
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
         if (placement.Error is not null) return BadRequest(placement.Error);
 
-        // The sharing scope follows the place unless the caller states one. A case-bound visit is
-        // at somebody's home more often than not, so the cautious default is also the common one.
-        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
-            return BadRequest(scopeError);
+        // The sharing scope follows the place unless the caller states one, and the plan decides
+        // where "follows the place" starts: an account that pays nothing shares what it finds at a
+        // public location with everyone (Ben, 2026-09-17). A case-bound visit is at somebody's home
+        // more often than not, and a home is untouched by the plan rule — the cautious default is
+        // still the common one.
+        //
+        // This replaces a solo-plan check that asked whether the ORGANIZATION was personal. It was
+        // the wrong question (see PersonalOrganizations), and it was asked here and not by the flat
+        // door in OrgInvestigationsController — so the same visit was refused or allowed depending
+        // on which screen scheduled it. Both doors now call the same overload.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
 
-        // A solo plan's investigations are public ones. Checked AFTER the default is resolved, so
-        // somebody who states nothing is judged on what they would actually have got — the place's
-        // cautious default is private, and refusing them for a value they never typed would be
-        // both baffling and correct-looking.
-        if (entity.Visibility != InvestigationVisibility.Public)
-        {
-            var org = await db.Organizations.AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == entity.OrganizationId, ct);
-            if (org is not null
-                && Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
-                       org, Services.PersonalOrganizations.PersonalAction.CreatePrivateInvestigation)
-                   is { } notForSolo)
-            {
-                return BadRequest(notForSolo);
-            }
-        }
+        entity.Visibility = request.Visibility
+            ?? InvestigationVisibilityFilter.DefaultFor(placement.Place, publicByDefault);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
+            return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string newSlugRefusal)
             return BadRequest(newSlugRefusal);
@@ -230,7 +236,7 @@ public sealed class InvestigationController : BenControllerBase
         entity.ScheduledDateTime   = request.ScheduledDateTime;
         entity.EndDateTime         = request.EndDateTime;
         entity.Status              = request.Status;
-        entity.Notes               = request.Notes?.Trim();
+        entity.Notes               = CaseController.CleanDescription(request.Notes, _sanitizer);
         entity.EvidenceDueDate     = request.EvidenceDueDate;
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
@@ -244,7 +250,16 @@ public sealed class InvestigationController : BenControllerBase
         // Only changed when the caller says so: an edit that says nothing about sharing should not
         // silently re-derive a scope somebody may have deliberately narrowed.
         if (request.Visibility is { } requested) entity.Visibility = requested;
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+
+        // Judged on the value the row will actually carry, whether this edit typed it or not:
+        // moving a visit from a home to a landmark is how an unpaid account's group-only scope
+        // becomes a scope the plan does not allow, without anybody touching the dropdown.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
@@ -516,6 +531,11 @@ public sealed class InvestigationController : BenControllerBase
 /// </summary>
 [ApiController]
 [Route("api/evidence-votes")]
+// Behind the voting switch, like PublicCaseVoteController and UploadFileVoteController. This one
+// was missed (2026-09-17 audit): the widget dutifully hid itself while both halves of the
+// endpoint — the [AllowAnonymous] summary AND the signed-in read and cast — kept answering, so a
+// site whose admin page said Voting was Off still took votes from anything holding a URL.
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureVoting)]
 public sealed class EvidenceVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
@@ -652,13 +672,20 @@ public sealed class EvidenceVoteController : BenControllerBase
         // Return updated summary
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Where(v => v.UploadFileId == uploadFileId).ToListAsync(ct);
+        // Score included, which it was not until 2026-09-21. The record's own note says it is
+        // "computed server-side and rendered as given — never re-derived from the counts", and
+        // leaving the argument off did not re-derive it either: it took the default of ZERO. So
+        // casting a vote answered with a score of 0 however the votes stood, and the widget
+        // showed that until something reloaded the page. The GET beside this has always been
+        // right, which is why nothing noticed.
         return Ok(new EvidenceVoteSummary(
             uploadFileId,
             votes.Count(v => v.VoteType == EvidenceVoteType.Confirms),
             votes.Count(v => v.VoteType == EvidenceVoteType.Disputes),
             votes.Count(v => v.VoteType == EvidenceVoteType.Inconclusive),
             votes.Count,
-            request.VoteType));
+            request.VoteType,
+            EvidenceVoteScore.Score(votes.Select(v => v.VoteType))));
     }
 
     /// <summary>Remove the current user's vote.</summary>

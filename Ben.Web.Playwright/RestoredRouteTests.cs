@@ -22,7 +22,10 @@ public class RestoredRouteTests : BenTestBase
 
     [TestCase("/upload-files",        "Upload")]
     [TestCase("/media-library",       "Media")]
-    [TestCase("/organization-security","Security")]
+    // /organization-security is gone on purpose (2026-09-21): it was a scaffold left behind by
+    // the security library, never linked from anywhere, and deleting it was the point of that
+    // change. Its own fixture went with it and this line did not, so the parity guard was left
+    // asserting a route the product had deliberately removed.
     [TestCase("/organizations/{org}/equipment-feedback", "Feedback")]
     public async Task RestoredRoute_RendersContent(string path, string expected)
     {

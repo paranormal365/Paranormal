@@ -12,6 +12,11 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// A host pointed at a scratch database keeps that database's files beside it, as run-e2e.sh does,
+// rather than in the shared .uploads (crawl W14). Development only; see DevUploadsPairing.
+if (builder.Environment.IsDevelopment())
+    Ben.Data.WebApi.Services.DevUploadsPairing.Apply(builder.Configuration, Console.Out);
+
 /* LOGGING */
 
 // Everything about levels and sinks now comes from configuration — nothing is pinned here.
@@ -66,9 +71,36 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+// REFUSE TO START rather than fail per request.
+//
+// A missing registration on a scoped or transient service is not found when the app boots — it is
+// found when a request needs it. On 2026-09-20 OutboxEmailService asked for a bare SiteIdentity
+// (the host registers it with Configure<T>, which provides only IOptions<T>). The API started,
+// passed its own health check, and returned 500 to everything before [Authorize] ran: a public
+// endpoint 500ing where 200 was expected, a protected one where 401 was. The deploy's smoke checks
+// were the first thing to notice, in production.
+//
+// ValidateOnBuild walks every registration at startup and throws if one cannot be satisfied, so
+// the same mistake stops the deploy instead of serving errors. ValidateScopes goes with it: a
+// singleton capturing a scoped dependency is the other half of this failure, and it is only ever
+// found by the request that gets a disposed context.
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    options.ValidateOnBuild = true;
+    options.ValidateScopes = true;
+});
+
 /* END LOGGING */
 
-builder.Services.AddControllers();
+// AddControllersAsServices, not AddControllers alone.
+//
+// ValidateOnBuild above walks every REGISTRATION, and MVC does not register controllers: it
+// activates them itself, resolving their constructor arguments one at a time when a request
+// arrives. So the refuse-to-start guard had a hole exactly the shape of the bug it was added for
+// — on 2026-09-21 a new controller asked for a bare SiteIdentity, the API started clean, and the
+// endpoint 500ed on first use. Registering the controllers as services puts them inside the walk,
+// and the same mistake now stops the host instead of one screen.
+builder.Services.AddControllers().AddControllersAsServices();
 builder.Services.AddMemoryCache();
 builder.Services.AddBenRateLimiting(builder.Configuration);
 
@@ -191,6 +223,13 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorServ
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // The one place an uploaded media file is taken in — see IMediaIngestService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+// Storefront: files category and product pictures as site-owned uploads (StoreImageStorage).
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.StoreImageStorage>();
+
+// Reads .ben session bundles and serves what is inside them as byte ranges. Singleton because
+// the index it caches describes files that never change once written.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleStore,
+                              Ben.Data.WebApi.Services.FieldSessions.BenBundleStore>();
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
@@ -201,9 +240,26 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
 // Handoff codes are issued by one request and redeemed by another, so the store has to outlive
 // both — and it holds nothing worth persisting, since every code dies within a minute (phase 12).
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>();
+// ── Case canvas link previews (canvas plan M6-10) ────────────────────────────
+// The one HttpClient that fetches an address somebody pasted. Its primary handler dials only the
+// address SafeUrlFetcher vetted, follows no redirect, sends no cookie and uses no proxy — see
+// SafeUrlFetcher for why each of those matters. Named, so no other code picks this handler up by
+// accident and no other handler is used for these fetches.
+builder.Services.AddHttpClient(Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.ClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.CreateHandler());
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.ISafeUrlFetcher, Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlService>();
+// One server-wide ceiling on picture fetches, shared by every request — so a singleton.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlImageCeiling>();
+// The real clock, for services that take one so tests can move it (LinkUnfurlService).
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton(builder.Services, TimeProvider.System);
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
+// The origin every emailed link is built on. Unset, it falls back to AppBaseUrl — the setting both
+// deploy paths actually wrote — rather than leaving every link in every letter relative.
+builder.Services.PostConfigure<Ben.Data.Common.SiteIdentity>(site =>
+    Ben.Data.Common.SiteIdentity.UseAppBaseUrlWhenUnset(site, builder.Configuration["AppBaseUrl"]));
 // Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
 // exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
 // screen, which must send immediately and show the raw failure — a diagnostic that queues is not a
@@ -212,6 +268,12 @@ builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.G
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.SmtpEmailService>();
 builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService,
                               Ben.Data.WebApi.Services.OutboxEmailService>();
+// The SAME instance behind both interfaces. A second registration would build a second outbox
+// service, which is harmless today and would quietly stop being harmless the moment either grows
+// state — and "there are two of these" is not a thing anybody would think to check (item 239b).
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.IOutboxEmailQueue>(sp =>
+    (Ben.Data.WebApi.Services.OutboxEmailService)
+        sp.GetRequiredService<Ben.Data.Common.Interfaces.IEmailService>());
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
 // ── @names ───────────────────────────────────────────────────────────────────
@@ -224,6 +286,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.EmailLinkAccounts>();
 // same checks, and every defect found on one was then found on the other; a third provider would
 // have inherited none of the fixes. Controllers keep only token validation and HTTP.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.ExternalSignInService>();
+// Singleton: it keeps one memory entry per person for the length of a visit, and a
+// per-request copy would remember nothing and ask the database on every single request.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.EntraSignInRecorder>();
 // The create-and-confirm path shared by /signup and the signed-out request wizard (site
 // evaluation 2026-09-06, phase 1).
 builder.Services.AddScoped<Ben.Data.WebApi.Services.AccountCreationService>();
@@ -260,6 +325,11 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // first pass it finds nothing and writes nothing, so it stays registered rather than being a step
 // somebody has to remember on one deployment and never again.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBackfillService>();
+
+// The same job for the six fields the 2026-09-20 sweep found, two of which reach people who
+// never signed in. Beside the one above because they are the same kind of cleanup and somebody
+// looking for one should find the other.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.MarkupFieldSanitizeBackfillService>();
 // Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
 
@@ -290,9 +360,22 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Tells a free account it is nearly full BEFORE the guard refuses an upload (Ben, 2026-09-22).
+// A limit somebody meets with no warning reads as the site breaking.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.AccountStorageWarningJob>();
 // Link previews (2026-09-14) are week-long snapshots of other sites; this forgets the stale ones.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewRetentionJob>();
+// A request for help that nobody ever claimed is deleted rather than kept for ever. Its entity doc
+// said rows were "ignored after DateExpires" and nothing ever swept them, so an anonymous
+// visitor's account of somebody else's home stayed indefinitely (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PendingClientRequestExpiryJob>();
+// A guest code lives a day and nothing removed one, so each kept its guide's account row alive for
+// good (crawl C3). Swept a month after it ran out, with the passes it minted.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.GuestCodeExpiryJob>();
 // Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
 // letters that went a month ago. Nothing else sends mail any more.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
@@ -321,6 +404,56 @@ builder.Services.Configure<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway,
                               Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
+// The store's side of Stripe (storefront S4.2): the SAME StripeGateway singleton, never a second
+// client — or pretend Stripe in a Development test checkout (StoreStripeMode, three conditions).
+if (Ben.Data.WebApi.Services.Store.StoreStripeMode.UseFakes(builder.Environment, builder.Configuration))
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStoreStripeGateway,
+                                  Ben.Data.WebApi.Services.Billing.StripeIntegration.FakeStoreStripeGateway>();
+else
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStoreStripeGateway>(sp =>
+        (Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway)
+            sp.GetRequiredService<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway>());
+// Storefront: whether Stripe Tax is ready. Pretend Stripe only in Development with no key and
+// Stripe:AllowFakeCheckout on (StoreStripeMode); anywhere else the real probe, which says
+// "Online payment isn't set up." rather than pretending.
+builder.Services.AddSingleton(Ben.Data.WebApi.Services.Store.StorePaymentSetup.From(builder.Environment, builder.Configuration));
+// S4.3: the tax service IS the probe, one instance under both names, so the settings page and the
+// checkout ask the same Stripe the same way.
+if (Ben.Data.WebApi.Services.Store.StoreStripeMode.UseFakes(builder.Environment, builder.Configuration))
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxService, Ben.Data.WebApi.Services.Store.FakeStoreTaxService>();
+else
+    builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxService, Ben.Data.WebApi.Services.Store.StripeTaxService>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.IStoreTaxProbe>(sp =>
+    sp.GetRequiredService<Ben.Data.WebApi.Services.Store.IStoreTaxService>());
+// S4.4-S4.5: the store's letters (through the outbox) and its bells.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreAlerts>();
+// Store sellers (backlog 251): the bells between sellers and the store.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreSellerAlerts>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderPayments>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreCheckoutService>();
+// The order desk (storefront S5.3): refunds and the journey after payment.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreRefundService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderTransitions>();
+// Store sellers P7: each package packed, shipped and delivered on its own.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreParcelTransitions>();
+// S4.8: unfinished checkouts give their stock back every MINUTE (its own timer — the shared one
+// runs every five, which would let a 15-minute hold run to 20); failed tax filings retry; idle
+// carts are swept.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Store.StoreReservationExpiryService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreTaxRetryJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreCartSweepJob>();
+// Store sellers P9: what Stripe kept of each payment, read once its balance transaction settles.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreFeeCaptureJob>();
+// Store sellers P13: a replaced version selling out comes off sale when it has nothing left.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreSupersededSweepJob>();
+// S5.6: the morning's low stock, once a day while the store is on.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.StoreLowStockJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
@@ -332,7 +465,12 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSy
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
 // Item 235 phase 4: four jobs, four keys. Arranging an event is not deciding who comes, deciding
 // is not standing at the door, and none of the three is spending the group's money.
-builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>();
+// The db factory is passed so "any member may read an event" can actually mean it — see
+// HostedEventAccess.CanReadEventAsync (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>(sp =>
+    new Ben.Data.WebApi.Services.Access.HostedEventAccess(
+        sp.GetRequiredService<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>(),
+        sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>()));
 // Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
 // unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
@@ -358,6 +496,13 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
 // about on the next pass and the rest collapse into one summary; the digest is the daily (or weekly)
 // letter for everybody who would rather not hear as it happens, and the safety net for those who do.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventStaffRoomWriter>();
+// SINGLETON, not scoped, and this is load-bearing: MapIdentityApi resolves IEmailSender from the
+// ROOT provider, so an IdentityEmailSender depending on a scoped service makes the whole API
+// refuse to start — "cannot resolve from root provider because it requires scoped service". It is
+// safe as a singleton because it holds no per-request state and takes an IDbContextFactory, which
+// is exactly what that factory exists for.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Mail.MailComposer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
@@ -497,6 +642,8 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHand
     Ben.Data.WebApi.Authorization.AppAdministratorHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.ModeratorHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.SellerHandler>();
 
 // Feed media screening (item 186 F5/F5b). The automatic ONNX classifier registers when its model
 // file is present (fetched by scripts/get-screener-model.sh — 87 MB, deliberately not in git);
@@ -561,6 +708,13 @@ builder.Services.AddAuthorization(options =>
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.ModeratorRequirement()));
+
+    // Store sellers (backlog 251): the Seller role, and only that — see SellerRequirement.
+    options.AddPolicy(AuthPolicyNames.Seller, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.SellerRequirement()));
 
     // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
     // EntraAuthController's Register/Link actions — those need to read the caller's OID/email
@@ -752,6 +906,9 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     // Item 235's two plans. Needs the host group from the development seeders above, and makes
     // its own venue — a hotel with described rooms is the one thing the site had no example of.
     await Ben.Data.WebApi.SeedData.HostedEventDemoSeeder.SeedAsync(app.Services, app.Configuration);
+    // Storefront: a small store to open the screens on — five shelves, seven products, GHOST10.
+    // Needs the Store Image file type (UploadFileTypeSeeder) and the equipment models it links to.
+    await Ben.Data.WebApi.SeedData.StoreDemoSeeder.SeedAsync(app.Services, app.Configuration);
 
     // ── The backfills run a SECOND time, and have to ─────────────────────────
     //

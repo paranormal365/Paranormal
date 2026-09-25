@@ -61,7 +61,7 @@
                     </div>
                     <div class="col-12 col-md-5">
                         <label class="form-label" for="copy-starts">First date</label>
-                        <input class="form-control" id="copy-starts" type="date" @bind="_startsOn" />
+                        <BenDateField Mode="DateEntryMode.Date" Id="copy-starts" @bind-Value="_startsOn" />
                         <div class="form-text">
                             @(p.Nights == 1 ? "One date" : $"All {p.Nights} dates") move with it, keeping their gaps.
                         </div>

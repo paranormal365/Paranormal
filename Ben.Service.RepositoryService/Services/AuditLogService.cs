@@ -56,6 +56,12 @@ public sealed class AuditLogService : IAuditLogService
         return WriteAsync(AuditAction.Delete, entityType, entityId, userId, source, changesJson);
     }
 
+    public Task LogReadAsync(string entityType, Guid entityId, object what, Guid userId, string source)
+    {
+        var changesJson = JsonSerializer.Serialize(what, _jsonOptions);
+        return WriteAsync(AuditAction.Read, entityType, entityId, userId, source, changesJson);
+    }
+
     private async Task WriteAsync(AuditAction action, string entityType, Guid entityId, Guid userId,
         string source, string changesJson)
     {

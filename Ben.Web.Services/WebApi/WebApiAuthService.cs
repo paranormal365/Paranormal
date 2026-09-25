@@ -51,6 +51,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.IsModerator = me.IsModerator;
+                _tokenStore.IsSeller = me.IsSeller;
                 _tokenStore.UserId = me.UserId;
             }
         }
@@ -83,6 +84,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.IsModerator = me.IsModerator;
+                _tokenStore.IsSeller = me.IsSeller;
             }
         }
         catch { /* non-fatal — the session still works, roles stay false */ }
@@ -118,6 +120,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
+        _tokenStore.IsSeller = false;
         _tokenStore.IsImpersonating = false;
         _tokenStore.OriginalAccessToken = null;
         _tokenStore.OriginalRefreshToken = null;
@@ -147,9 +150,25 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         return true;
     }
 
-    public async Task StopImpersonatingAsync(CancellationToken token = default)
+    /// <summary>
+    /// Returns to the SuperAdmin's own identity, and reports whether it came back intact.
+    /// </summary>
+    /// <remarks>
+    /// <para>The token swap itself cannot fail — it is local state, and <c>IsImpersonating</c> is
+    /// cleared unconditionally below, so nobody is ever left carrying the impersonated identity.
+    /// What CAN fail is the <c>/api/me</c> round trip that re-reads the roles, and the comment
+    /// there records the consequence: the SuperAdmin comes back stripped of Administration access
+    /// until they sign out and in again.</para>
+    ///
+    /// <para>That used to be silent, and the caller navigated to <c>/admin/users</c> regardless —
+    /// a page that then refuses them (2026-09-17 audit). The bool is so the caller can say so.
+    /// False means "you are yourself again, but your roles could not be confirmed".</para>
+    /// </remarks>
+    public async Task<bool> StopImpersonatingAsync(CancellationToken token = default)
     {
-        if (!_tokenStore.IsImpersonating) return;
+        if (!_tokenStore.IsImpersonating) return true;
+
+        var rolesRestored = true;
 
         _tokenStore.AccessToken = _tokenStore.OriginalAccessToken;
         _tokenStore.RefreshToken = _tokenStore.OriginalRefreshToken;
@@ -161,6 +180,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
+        _tokenStore.IsSeller = false;
 
         // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
         // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
@@ -172,15 +192,17 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
             try
             {
                 var me = await _apiClient.GetAsync<MeResult>("/api/me", token);
-                if (me is not null)
+                if (me is null) rolesRestored = false;
+                else
                 {
                     _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                     _tokenStore.IsAdmin = me.IsAdmin;
                     _tokenStore.IsModerator = me.IsModerator;
+                    _tokenStore.IsSeller = me.IsSeller;
                     _tokenStore.UserId = me.UserId;
                 }
             }
-            catch { /* non-fatal — IsSuperAdmin stays false */ }
+            catch { rolesRestored = false; }
         }
 
         _tokenStore.IsImpersonating = false;
@@ -192,6 +214,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         // Restore expiry from the re-applied token (unknown, set to now so refresh triggers)
         _tokenStore.AccessTokenExpiresAtUtc = DateTimeOffset.UtcNow;
         _tokenStore.NotifyStateChanged();
+        return rolesRestored;
     }
 
     private void ApplyTokenResponse(WebApiTokenResponse response)
@@ -202,14 +225,15 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
 
         // Note: JwtClaimsParser cannot extract claims from opaque Identity API tokens.
         // UserId and IsSuperAdmin are set via /api/me after login instead.
-        var (userId, isSuperAdmin, isAdmin, isModerator) = JwtClaimsParser.ParseClaims(response.AccessToken);
+        var (userId, isSuperAdmin, isAdmin, isModerator, isSeller) = JwtClaimsParser.ParseClaims(response.AccessToken);
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
         _tokenStore.IsAdmin = isAdmin;
         _tokenStore.IsModerator = isModerator;
+        _tokenStore.IsSeller = isSeller;
     }
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>
-internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false);
+internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false, bool IsSeller = false);
 

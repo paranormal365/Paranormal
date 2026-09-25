@@ -29,10 +29,19 @@ public class AddressMapTests : BenTestBase
         public double[]? LastTap { get; set; }
     }
 
+    /// <summary>What the map is showing, once it has finished showing it.</summary>
+    /// <remarks>
+    /// It waited for the map to DESCRIBE itself and then read immediately, so a pin placed a
+    /// moment after the map first answered was not there yet and the reading came back with none.
+    /// It waits for the pin too now — bounded, and it still returns whatever it finds, so a map
+    /// that genuinely draws nothing fails the assertion rather than hanging.
+    /// </remarks>
     private Task<MapState> StateAsync() => Page.EvaluateAsync<MapState>(@"async (path) => {
         const mod = await import(path);
         const el = document.querySelector('.ben-map');
         for (let i = 0; i < 40 && !mod.describe(el.id); i++) await new Promise(r => setTimeout(r, 250));
+        for (let i = 0; i < 40 && (mod.describe(el.id)?.annotations ?? 0) === 0; i++)
+            await new Promise(r => setTimeout(r, 250));
         const d = mod.describe(el.id);
         return { Size: d.size, Span: d.span, Annotations: d.annotations, Overlays: d.overlays, LastTap: d.lastTap };
     }", MapModule);
@@ -44,9 +53,17 @@ public class AddressMapTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/profile");
         await WaitUntilLoadedAsync();
 
-        await ClickUntilAsync(Page.GetByText("Contact", new() { Exact = true }).First,
-            Page.GetByRole(AriaRole.Button, new() { Name = "Add" }).First);
-        await ClickUntilAsync(Page.GetByRole(AriaRole.Button, new() { Name = "Add" }).First,
+        // The TAB, not any text saying "Contact".
+        //
+        // GetByText("Contact").First matched the footer link that every page carries, so the test
+        // navigated to the public Contact Us page and then waited for an Add button that page has
+        // never had. It only bit once the profile's tabs started rendering a moment later than the
+        // footer, at which point the first match flipped from the tab to the link (2026-09-21).
+        var contactTab = Main.GetByRole(AriaRole.Tab, new() { Name = "Contact", Exact = true });
+        await Expect(contactTab).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await ClickUntilAsync(contactTab, Main.GetByRole(AriaRole.Button, new() { Name = "Add" }).First);
+        await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Add" }).First,
             Page.Locator(".ben-map").First);
 
         var map = Page.Locator(".ben-map").First;

@@ -1,3 +1,4 @@
+@using Ben.Video.Core.SidecarContracts
 @inject NativeSidecarService NativeSidecar
 @inject Microsoft.Extensions.Options.IOptions<VideoEditorOptions> OptionsAccessor
 
@@ -23,7 +24,26 @@
                         @* "Download and run it" with nothing to click. The downloads page existed
                            the whole time, one level below the standalone editor, and nothing here
                            linked to it (2026-09-05 audit, F17). *@
-                        <p>No sidecar found on this machine. Install it, then click Retry.</p>
+                        @* Two different situations look identical from here: not installed, and
+                           installed but not running. On Windows the second one is now fixable from
+                           this panel, so say so rather than sending somebody to reinstall
+                           something they already have. *@
+                        @if (NativeSidecar.SwitchIsOffered == true)
+                        {
+                            <p>No sidecar is running. If it is installed, turn it on here.</p>
+                            <TelerikButton OnClick="TurnOnAsync"
+                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                           Enabled="@(!_busy)">
+                                @(_busy ? "Starting…" : "Turn on")
+                            </TelerikButton>
+                            <p class="bv-sidecar-panel__hint">
+                                Your browser will ask for permission the first time.
+                            </p>
+                        }
+                        else
+                        {
+                            <p>No sidecar found on this machine. Install it, then click Retry.</p>
+                        }
                         @if (Options.SidecarDownloadUrl is { Length: > 0 } downloadUrl)
                         {
                             <p>
@@ -32,7 +52,12 @@
                                 — there is a build for Windows and for Mac.
                             </p>
                         }
-                        <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw">Retry</TelerikButton>
+                        @if (_switchMessage is not null)
+                        {
+                            <p class="bv-sidecar-panel__hint">@_switchMessage</p>
+                        }
+                        <TelerikButton OnClick="RetryAsync" Icon="@SvgIcon.ArrowRotateCw"
+                                       FillMode="@ThemeConstants.Button.FillMode.Flat">Retry</TelerikButton>
                     </div>
                     break;
 
@@ -57,7 +82,18 @@
                         {
                             @* "pair.sh reopens it" is macOS wording and was shown to everybody,
                                Windows included, where no such file exists (2026-09-05 audit, F17). *@
-                            <p>Type the 6-digit code from the sidecar's pairing page. It opens by itself when the sidecar is installed, and the sidecar's own menu or shortcut reopens it. Each browser pairs once.</p>
+                            <p>Paste or type the 6-digit code from the sidecar's own window. Each browser pairs once.</p>
+                        }
+                        @* On Windows the sidecar opens its own window with a code until a browser has paired with
+                           it (1.1.3). This link is for everything else: that window closed, a second browser, or a
+                           Mac. The pairing page is the sidecar's own GET /pair, which shows a fresh code each time it
+                           is opened. The editor has just found the sidecar, so it knows the port — link straight to it. *@
+                        @if (NativeSidecar.DiscoveredPort is { } pairPort)
+                        {
+                            <p class="bv-sidecar-panel__hint">
+                                <a href="@($"http://127.0.0.1:{pairPort}/pair")" target="_blank" rel="noopener"
+                                   data-testid="sidecar-pairing-page">Show a pairing code</a> — it opens in a new tab.
+                            </p>
                         }
                         <TelerikTextBox @bind-Value="_code" PlaceHolder="6-digit code" Width="100%" />
                         @if (NativeSidecar.LastError is not null)
@@ -84,6 +120,25 @@
                                 ? string.Join(", ", NativeSidecar.Capabilities.Capabilities.Order())
                                 : "none")
                         </p>
+                        @* Ben, 2026-09-20: a Windows user should be able to turn this off without
+                           hunting for it in Task Manager. Off is a request to the sidecar itself;
+                           on is a protocol link, which is why only Windows gets the pair of them. *@
+                        @* Gated on the sidecar SAYING it can be stopped, not on the platform alone:
+                           1.1.1 is installed on people's machines and has no such endpoint, so an
+                           ungated button would 404 and look broken. It appears by itself once they
+                           are running a sidecar that can honour it. *@
+                        @if (NativeSidecar.SwitchIsOffered == true
+                             && NativeSidecar.HasCapability(SidecarCapabilities.Shutdown))
+                        {
+                            <TelerikButton OnClick="TurnOffAsync" Enabled="@(!_busy)"
+                                           ThemeColor="@(_forceNextStop ? ThemeConstants.Button.ThemeColor.Error : ThemeConstants.Button.ThemeColor.Base)">
+                                @(_busy ? "Stopping…" : _forceNextStop ? "Turn off anyway" : "Turn off")
+                            </TelerikButton>
+                        }
+                        @if (_switchMessage is not null)
+                        {
+                            <p class="bv-sidecar-panel__hint">@_switchMessage</p>
+                        }
                         <TelerikButton OnClick="ForgetAsync" FillMode="@ThemeConstants.Button.FillMode.Flat">
                             Forget pairing
                         </TelerikButton>
@@ -96,6 +151,29 @@
                         <span>Looking for a sidecar…</span>
                     </div>
                     break;
+            }
+
+            @* Shown for ANY sidecar whose version we know — connected, found-but-unpaired, or
+               paired-and-rejected alike. It first sat inside the connected branch only, which is
+               the state somebody with a WORKING old sidecar is in; but a sidecar that has not been
+               paired yet is just as out of date, and that is the more likely state for somebody
+               who has not touched this in months (2026-09-19).
+
+               The only thing that will ever tell somebody their sidecar is old: there is no
+               auto-updater and no update feed, so an install from before 1.1.0 — which watched the
+               whole filesystem and pinned a core for as long as it ran — would otherwise stay that
+               way for ever. A quiet line, not a warning: nothing in front of them is broken. *@
+            @if (IsSidecarOutOfDate)
+            {
+                <p class="bv-sidecar-panel__update">
+                    A newer sidecar is available (@Options.PublishedSidecarVersion; you have
+                    @NativeSidecar.Info?.AppVersion).
+                    @if (Options.SidecarDownloadUrl is { Length: > 0 } updateUrl)
+                    {
+                        <a href="@updateUrl" target="_blank" rel="noopener">Download it</a>
+                        <text> and run the installer over the top — your pairing is kept.</text>
+                    }
+                </p>
             }
 
         </div>
@@ -114,6 +192,28 @@
     private string _code = string.Empty;
     private bool _pairing;
 
+    /// <summary>A start or stop is in flight — both take long enough to need saying so.</summary>
+    private bool _busy;
+
+    /// <summary>What the last press of the switch did, in words, or nothing to say.</summary>
+    private string? _switchMessage;
+
+    /// <summary>
+    /// The sidecar refused to stop because work is in progress, so the next press means it.
+    /// </summary>
+    /// <remarks>
+    /// The second press is the person's decision after being told what it costs — which is why the
+    /// button changes its wording and its colour rather than quietly doing something different.
+    /// </remarks>
+    private bool _forceNextStop;
+
+    /// <summary>
+    /// True only when both versions are known and the installed one is genuinely older — see
+    /// SidecarUpdateCheck for why every uncertain case answers no.
+    /// </summary>
+    private bool IsSidecarOutOfDate =>
+        SidecarUpdateCheck.IsOutOfDate(NativeSidecar.Info?.AppVersion, Options.PublishedSidecarVersion);
+
     private async Task RetryAsync() => await NativeSidecar.ProbeAsync();
 
     private async Task PairAsync()
@@ -124,6 +224,51 @@
     }
 
     private async Task ForgetAsync() => await NativeSidecar.ForgetPairingAsync();
+
+    /// <summary>
+    /// Asked after the first render rather than on initialisation: it is a JS call, and under
+    /// prerendering there is no browser to ask yet.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await NativeSidecar.RefreshSwitchAvailabilityAsync();
+        StateHasChanged();
+    }
+
+    private async Task TurnOnAsync()
+    {
+        _busy = true;
+        _switchMessage = null;
+        try
+        {
+            var started = await NativeSidecar.StartAsync();
+            // Nothing answering covers four cases we cannot tell apart from here: not installed, an
+            // older install that never registered the link, the person dismissed the browser's
+            // prompt, or it is simply still starting. The wording names them instead of guessing.
+            _switchMessage = started
+                ? null
+                : "Nothing started. If your browser asked for permission and you dismissed it, try "
+                  + "again. Sidecars installed before this feature cannot be started this way — "
+                  + "start it yourself, or install the latest one below.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task TurnOffAsync()
+    {
+        _busy = true;
+        try
+        {
+            var outcome = await NativeSidecar.StopAsync(force: _forceNextStop);
+            _switchMessage = SidecarSwitch.Explain(outcome, NativeSidecar.LastRefusedJobCount);
+
+            // Armed only by a refusal, and disarmed by anything else — so a "turn off anyway"
+            // button can never be left sitting there after the reason for it has gone.
+            _forceNextStop = outcome == SidecarStopOutcome.WorkInProgress;
+        }
+        finally { _busy = false; }
+    }
 
     private static string Shorten(string ffmpegVersionLine)
     {

@@ -1,0 +1,26 @@
+.bc-text {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+}
+
+.bc-text--empty { color: var(--bc-text-muted); font-style: italic; }
+
+.bc-text a { color: var(--bc-accent); }
+
+.bc-text__input {
+    display: block;
+    width: 100%;
+    height: 100%;
+    resize: none;
+    border: 0;
+    outline: none;
+    padding: 0;
+    background: transparent;
+    color: var(--bc-text);
+    font: inherit;
+    line-height: 1.4;
+}

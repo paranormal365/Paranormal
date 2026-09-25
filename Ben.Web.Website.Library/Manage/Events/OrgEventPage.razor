@@ -275,11 +275,11 @@
 
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-from">First @ev.DateNoun</label>
-                                <input id="event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-from" @bind-Value="_form.StartsOn" />
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-to">Last @ev.DateNoun</label>
-                                <input id="event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-to" @bind-Value="_form.EndsOn" />
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-start-time">Usually starts</label>
@@ -643,8 +643,7 @@
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label" for="event-venue-agreed">When</label>
-                                    <input id="event-venue-agreed" type="date" class="form-control"
-                                           @bind="_form.VenueAgreedOn" />
+                                    <BenDateField Mode="DateEntryMode.Date" Id="event-venue-agreed" @bind-Value="_form.VenueAgreedOn" />
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <label class="form-label" for="event-venue-reference">
@@ -706,8 +705,7 @@
                                 <label class="form-label" for="event-bookings-close">
                                     Bookings close
                                 </label>
-                                <input id="event-bookings-close" type="date" class="form-control"
-                                       @bind="_form.BookingsCloseOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-bookings-close" @bind-Value="_form.BookingsCloseOn" />
                                 <div class="form-text">
                                     Empty means they never do. Requests already waiting are still
                                     yours to decide after it.
@@ -787,8 +785,7 @@
                                 <label class="form-label" for="event-go-no-go">
                                     Decide by
                                 </label>
-                                <input id="event-go-no-go" type="date" class="form-control"
-                                       @bind="_form.GoNoGoDeadline" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-go-no-go" @bind-Value="_form.GoNoGoDeadline" />
                                 <div class="form-text">
                                     We'll remind you a week and a day before.
                                 </div>

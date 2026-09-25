@@ -1,0 +1,64 @@
+@*
+    Resize handles and connect ports, drawn above the blocks.
+
+    They cannot live inside a block: a block paints with contain:paint, which would clip a handle sitting on
+    its edge, and a handle inside a lower block would disappear under the next one. Handles are counter-
+    scaled by the zoom so they stay the same size on screen, and hidden while any gesture runs.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<div class="bc-overlay">
+    @if (SingleNode() is { } node)
+    {
+        var d = BlockRegistry.Get(node.Type);
+        <div class="bc-selection @(Selection.ConnectMode ? "bc-selection--connect" : null)" data-bc-node="@node.Id" style="@RectStyle(node.X, node.Y, node.Width, node.Height)">
+            @if (!node.Locked)
+            {
+                <ResizeHandles NodeId="node.Id" ResizableWidth="d.ResizableWidth" ResizableHeight="d.ResizableHeight" />
+            }
+            <ConnectPorts NodeId="node.Id" />
+        </div>
+    }
+    else if (Selection.GroupId is { } gid && Store.FindGroup(gid) is { } group)
+    {
+        <div class="bc-selection" style="@RectStyle(group.X, group.Y, group.Width, group.Height)">
+            <ResizeHandles GroupId="group.Id" ResizableWidth="true" ResizableHeight="true" />
+        </div>
+    }
+    else
+    {
+        @foreach (var id in Selection.NodeIds)
+        {
+            if (Store.FindNode(id) is { } each)
+            {
+                <div @key="id" class="bc-selection bc-selection--outline" style="@RectStyle(each.X, each.Y, each.Width, each.Height)"></div>
+            }
+        }
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Selection.OnChanged += Refresh;
+    }
+
+    private CanvasNode? SingleNode() =>
+        Selection.NodeIds.Count == 1 && Selection.EditingNodeId is null ? Store.FindNode(Selection.NodeIds.First()) : null;
+
+    private static string RectStyle(double x, double y, double w, double h) => FormattableString.Invariant(
+        $"left:{CssNumber.F(x)}px;top:{CssNumber.F(y)}px;width:{CssNumber.F(w)}px;height:{CssNumber.F(h)}px");
+
+    private void Changed(CanvasChange change) => _ = InvokeAsync(StateHasChanged);
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Selection.OnChanged -= Refresh;
+    }
+}

@@ -144,8 +144,13 @@ public class CaseControllerTests
 
     // ── Create ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Ben, 2026-09-17: "I proposed a case, but I should be able to accept it as it was created by
+    /// me... unless I say it is up to a group decision, it should be accepted." A case opened by
+    /// somebody who may change a case's status was proposed to nobody.
+    /// </summary>
     [Fact]
-    public async Task Create_Admin_ReturnsCreated()
+    public async Task Create_Admin_ReturnsCreated_AndAcceptsIt()
     {
         var (factory, orgId, userId) = await SeedAsync();
         var ctrl   = Build(factory, userId);
@@ -153,6 +158,18 @@ public class CaseControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(created.Value);
         Assert.Equal("Haunted House", dto.Title);
+        Assert.Equal(CaseStatus.Accepted, dto.Status);
+    }
+
+    /// <summary>Asking for the group's decision leaves the case waiting, as every case used to.</summary>
+    [Fact]
+    public async Task Create_PutToTheGroup_LeavesItProposed()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var request = MakeCreateRequest("Up to everyone") with { PutToTheGroup = true };
+
+        var dto = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, request, default)).Result!).Value!;
         Assert.Equal(CaseStatus.Proposed, dto.Status);
     }
 
@@ -191,6 +208,12 @@ public class CaseControllerTests
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
+    //
+    // These pass isPublic: TRUE, and it is not what any of them is about. The seeded org pays
+    // nothing, so from 2026-09-17 a case it opens is created public, and an update that asked for
+    // false would be refused with "a case at a public location is public on this account" — the
+    // rule these tests would then be accidentally testing instead of titles, managers and dates.
+    // Sending the case's own state leaves each one about the thing it is named for.
 
     [Fact]
     public async Task Update_Admin_UpdatesTitleAndStatus()
@@ -199,7 +222,7 @@ public class CaseControllerTests
         var ctrl    = Build(factory, userId);
         var caseId  = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, false, null), default);
+        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, true, null), default);
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(ok.Value);
         Assert.Equal("Updated", dto.Title);
@@ -232,7 +255,7 @@ public class CaseControllerTests
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
         var result = await ctrl.Update(orgId, caseId,
-            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
 
         var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(managerId, dto.CaseManagerAppUserId);
@@ -259,7 +282,7 @@ public class CaseControllerTests
         }
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
-        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
 
         var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, default)).Result);
 
@@ -273,7 +296,7 @@ public class CaseControllerTests
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, false, null), default);
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, true, null), default);
 
         await using var db = await factory.CreateDbContextAsync();
         var c = await db.Cases.FindAsync(caseId);
@@ -293,10 +316,10 @@ public class CaseControllerTests
         var admin = Build(factory, adminId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await admin.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
         // Assign case manager
-        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, false, managerId), default);
+        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, true, managerId), default);
 
         var mgr = Build(factory, managerId);
-        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, false, managerId), default);
+        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, true, managerId), default);
         Assert.IsType<OkObjectResult>(result.Result);
     }
 
@@ -1100,104 +1123,138 @@ public class CaseControllerTests
         Assert.DoesNotContain("casey", saved.UrlName, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── Research pages on the timeline (beta feedback, 2026-09-14) ───────────
+    // ── Who published this case's footage (2026-09-17 audit) ────────────────────────────────
+    //
+    // FeedPostConsent is append-only and its entity doc states its purpose: "When a client asks
+    // 'who put this footage up', this row is the answer." The whole table was write-only — the
+    // only other references in the tree were two purges — so the question had no answer anywhere.
 
-    private static async Task<Guid> SeedResearchPageAsync(
-        IDbContextFactory<BenDataContext> factory, Guid caseId, Guid userId, string title,
-        DateTime? eventDateTime, DateTime? publishedUtc, string? excerpt = "What the page says")
+    private static async Task<Guid> SeedCaseWithConsentAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId, bool postStillExists)
     {
-        var id = Guid.NewGuid();
         await using var db = await factory.CreateDbContextAsync();
-        db.CaseResearchEntries.Add(new CaseResearchEntry
+
+        var caseId = Guid.NewGuid();
+        db.Cases.Add(new Case
         {
-            Id = id, CaseId = caseId, ResearchType = CaseResearchType.Note, Title = title,
-            EventDateTime = eventDateTime,
-            PublishedUtc = publishedUtc, PublishedByAppUserId = publishedUtc is null ? null : userId,
-            PublishedBlocksJson = publishedUtc is null ? null : "{\"version\":1,\"blocks\":[]}",
-            DraftBlocksJson = publishedUtc is null ? "{\"version\":1,\"blocks\":[]}" : null,
-            DraftAuthorAppUserId = publishedUtc is null ? userId : null,
-            Excerpt = excerpt,
+            Id = caseId, OrganizationId = orgId, Title = "A private engagement",
+            CaseYear = 2026, OrgCaseNumber = 7,
+            StreetAddress1 = "1 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+            IsPrivateEngagement = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
+
+        Guid? postId = null;
+        if (postStillExists)
+        {
+            postId = Guid.NewGuid();
+            db.OrgMessages.Add(new OrgMessage
+            {
+                Id = postId.Value, OrganizationId = orgId, AuthorAppUserId = userId,
+                ChannelType = OrgMessageChannel.PublicFeed, Body = "A render",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+        }
+
+        db.FeedPostConsents.Add(new FeedPostConsent
+        {
+            Id = Guid.NewGuid(),
+            OrgMessageId = postId,
+            CaseId = caseId,
+            AgreedByAppUserId = userId,
+            AgreedUtc = DateTime.UtcNow.AddDays(-3),
+            WordingVersion = 1,
+        });
+
         await db.SaveChangesAsync();
-        return id;
+        return caseId;
+    }
+
+    private static async Task<IReadOnlyList<CaseFeedConsentRecord>> ConsentsAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid caseId, Guid userId)
+    {
+        var result = await Build(factory, userId, isAdmin: true).GetFeedConsents(orgId, caseId, default);
+        return (IReadOnlyList<CaseFeedConsentRecord>)Assert.IsType<OkObjectResult>(result.Result).Value!;
     }
 
     [Fact]
-    public async Task Timeline_PublishedDatedResearchPage_AppearsReadOnlyAndLinked()
+    public async Task GetFeedConsents_NamesWhoAgreedAndWhen()
     {
         var (factory, orgId, userId) = await SeedAsync();
-        var caseId = await CreateCaseAsync(factory, orgId, userId);
-        var pageId = await SeedResearchPageAsync(factory, caseId, userId, "The cemetery records",
-            eventDateTime: new DateTime(1921, 5, 2, 0, 0, 0, DateTimeKind.Utc), publishedUtc: DateTime.UtcNow);
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
 
-        var row = Assert.Single(await TimelineAsync(factory, userId, orgId, caseId));
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
 
-        Assert.Equal(pageId, row.ResearchEntryId);
-        Assert.True(row.IsReadOnly);
-        Assert.Equal(CaseTimelineEntryType.ResearchNote, row.EntryType);
-        Assert.Equal(CaseTimelineVisibility.OrgOnly, row.Visibility);
-        Assert.Equal("The cemetery records", row.Title);
-        Assert.Equal("<p>What the page says</p>", row.Body);
+        Assert.Equal(userId, consent.AgreedByAppUserId);
+        Assert.Equal(1, consent.WordingVersion);
+        Assert.True(consent.PostExists);
     }
 
+    /// <summary>
+    /// The consent outlives the post on purpose. "Somebody agreed and then took it down" and
+    /// "nobody ever agreed" are different facts, so the row is reported either way rather than
+    /// filtered out with its post.
+    /// </summary>
     [Fact]
-    public async Task Timeline_UnpublishedOrUndatedResearchPage_StaysOff()
+    public async Task GetFeedConsents_KeepsTheRecordAfterThePostIsGone()
     {
         var (factory, orgId, userId) = await SeedAsync();
-        var caseId = await CreateCaseAsync(factory, orgId, userId);
-        await SeedResearchPageAsync(factory, caseId, userId, "Still a draft",
-            eventDateTime: new DateTime(1921, 5, 2, 0, 0, 0, DateTimeKind.Utc), publishedUtc: null);
-        await SeedResearchPageAsync(factory, caseId, userId, "Published, no date",
-            eventDateTime: null, publishedUtc: DateTime.UtcNow);
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: false);
 
-        Assert.Empty(await TimelineAsync(factory, userId, orgId, caseId));
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
+
+        Assert.False(consent.PostExists);
+        Assert.Null(consent.OrgMessageId);
     }
 
     [Fact]
-    public async Task Timeline_InvestigationBinder_LeavesResearchPagesOut()
+    public async Task GetFeedConsents_ACaseNobodyPublished_AnswersEmpty()
     {
         var (factory, orgId, userId) = await SeedAsync();
-        var caseId = await CreateCaseAsync(factory, orgId, userId);
-        var invId  = await SeedInvestigationAsync(factory, caseId, userId);
-        await SeedTimelineEntryAsync(factory, caseId, userId, "In the binder", investigationId: invId,
-            eventDateTime: new DateTime(2026, 3, 14, 21, 0, 0, DateTimeKind.Utc));
-        await SeedResearchPageAsync(factory, caseId, userId, "Case research",
-            eventDateTime: new DateTime(2026, 3, 14, 20, 0, 0, DateTimeKind.Utc), publishedUtc: DateTime.UtcNow);
 
-        var titles = (await TimelineAsync(factory, userId, orgId, caseId, invId)).Select(e => e.Title).ToList();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, Title = "Never published",
+                CaseYear = 2026, OrgCaseNumber = 8,
+                StreetAddress1 = "2 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
 
-        Assert.Equal(["In the binder"], titles);
+        await using var read = await factory.CreateDbContextAsync();
+        var plainCaseId = (await read.Cases.FirstAsync(c => c.Title == "Never published")).Id;
+
+        Assert.Empty(await ConsentsAsync(factory, orgId, plainCaseId, userId));
     }
 
     [Fact]
-    public async Task Timeline_ResearchPages_TakeTheirPlaceByEventTime()
+    public async Task GetFeedConsents_NonMember_ReturnsForbid()
     {
         var (factory, orgId, userId) = await SeedAsync();
-        var caseId = await CreateCaseAsync(factory, orgId, userId);
-        var moment = new DateTime(2026, 3, 14, 21, 30, 0, DateTimeKind.Utc);
-        await SeedTimelineEntryAsync(factory, caseId, userId, "Before", eventDateTime: moment.AddHours(-2));
-        await SeedTimelineEntryAsync(factory, caseId, userId, "Same moment entry", eventDateTime: moment);
-        await SeedTimelineEntryAsync(factory, caseId, userId, "After", eventDateTime: moment.AddHours(2));
-        await SeedResearchPageAsync(factory, caseId, userId, "Same moment page", eventDateTime: moment, publishedUtc: DateTime.UtcNow);
-        await SeedResearchPageAsync(factory, caseId, userId, "Long ago page", eventDateTime: moment.AddYears(-100), publishedUtc: DateTime.UtcNow);
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
 
-        var titles = (await TimelineAsync(factory, userId, orgId, caseId)).Select(e => e.Title).ToList();
+        var result = await Build(factory, Guid.NewGuid()).GetFeedConsents(orgId, caseId, default);
 
-        Assert.Equal(["Long ago page", "Before", "Same moment entry", "Same moment page", "After"], titles);
+        Assert.IsType<ForbidResult>(result.Result);
     }
 
+    /// <summary>
+    /// Matched on both ids: a caseId from another org must not resolve just because the caller
+    /// belongs to the org they named in the route.
+    /// </summary>
     [Fact]
-    public void MergeByMoment_KeepsEachListsOwnOrder()
+    public async Task GetFeedConsents_ACaseFromAnotherOrg_IsNotFound()
     {
-        // Entries whose ties the database already broke must come out in that order, even when a page lands between them.
-        var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        CaseTimelineEntryRecord Row(string title, DateTime at) => new() { Id = Guid.NewGuid(), Title = title, EventDateTime = at, DateCreated = at };
-        var entries = new List<CaseTimelineEntryRecord> { Row("b", t), Row("a", t), Row("c", t.AddHours(1)) };
-        var pages   = new List<CaseTimelineEntryRecord> { Row("page", t.AddMinutes(30)) };
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
 
-        var titles = Ben.Data.WebApi.Controllers.Entities.CaseController.MergeByMoment(entries, pages).Select(r => r.Title);
+        var result = await Build(factory, userId, isAdmin: true)
+            .GetFeedConsents(Guid.NewGuid(), caseId, default);
 
-        Assert.Equal(["b", "a", "page", "c"], titles);
+        // Another org this caller does not belong to is refused before the case is looked at.
+        Assert.IsType<ForbidResult>(result.Result);
     }
 }

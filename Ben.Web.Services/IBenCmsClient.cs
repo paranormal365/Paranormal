@@ -57,6 +57,23 @@ public interface IBenCmsClient
     /// <summary>Throws the draft away, leaving the live page as it was.</summary>
     Task<bool> DiscardCmsDraftAsync(Guid orgId, Guid pageId, CancellationToken token = default);
 
+    /// <summary>Starts a draft, keeping the server's sentence when it refuses.</summary>
+    /// <remarks>
+    /// Both draft endpoints refuse in words that tell somebody what to do instead — "That page
+    /// isn't published, so it can be edited directly." and "There is no draft to publish." The
+    /// page wrote "That draft couldn't be started." and "Those changes couldn't be published."
+    /// over them, which say only that it did not work (2026-09-04 finding 4).
+    ///
+    /// Discard is deliberately NOT here: that endpoint refuses without a sentence, so a variant
+    /// would carry nothing and exist only for symmetry.
+    /// </remarks>
+    Task<(CmsDraftStateResponse? Draft, string? Error)> StartCmsDraftExpectingReasonAsync(
+        Guid orgId, Guid pageId, CancellationToken token = default);
+
+    /// <summary>Publishes a draft, keeping the server's sentence when it refuses.</summary>
+    Task<(bool Published, string? Error)> PublishCmsDraftExpectingReasonAsync(
+        Guid orgId, Guid pageId, CancellationToken token = default);
+
     // ── The group's saved templates (item #80, part 2) ──────────────────────
 
     Task<LoadResult<CmsTemplateRecord>> GetCmsTemplatesAsync(Guid orgId, CmsTemplateScope? scope = null, CancellationToken token = default);

@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    An unrecognised component is an error, not a warning.
+
+    RZ10012 is what the Razor compiler says when it meets <SomeComponent /> and cannot resolve it:
+    "Found markup element with unexpected name". It then emits the element as LITERAL MARKUP, and a
+    browser silently drops a tag it does not know. Nothing throws, nothing logs, the page renders —
+    and the component is simply absent. The only symptom is a feature that is not there.
+
+    It has shipped three times in this repository, every time for the same reason (a component in a
+    folder the consuming page did not @using), and every time it was found by a person looking at a
+    screen rather than by the build:
+      · <NewInvestigationWindow> in PlaceView — the button that opened it did nothing at all.
+      · <EvidenceVoteWidget> in PlaceView — the place page showed the vote tally with no way to
+        vote, found 2026-09-22 in a build log, not by anybody using the page.
+    A warning did not stop any of them, because a warning in a solution build is invisible: an
+    incremental build that recompiles nothing reports "0 Warning(s)" and reads as proof.
+
+    So it fails the build instead. The fix is always one @using on the consuming page.
+  -->
+  <PropertyGroup>
+    <WarningsAsErrors>$(WarningsAsErrors);RZ10012</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

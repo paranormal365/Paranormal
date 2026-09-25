@@ -1,0 +1,233 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@inject IWebApiClient Api
+
+@*
+    Deleting a file you own, and the two questions that follow when somebody else is using it
+    (item 180 Phase B). Lifted out of UploadFiles.razor unchanged on 2026-09-19, when the media
+    library needed the same thing: the flow has a plain confirm, a usage list, and two decisions
+    with real consequences, and a second copy of that would have drifted from this one the first
+    time either was touched.
+
+    Every data-testid is the one UploadFiles.razor had, so the Playwright fixtures written for it
+    keep holding this — which is what made the extraction safe to do at all.
+
+    The host supplies nothing but a file and a way to hear that it is gone. Ownership is NOT
+    decided here: the server decides it, and the caller decides whether to offer the button.
+*@
+
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete File" Width="420px"
+                  Busy="@_isDeleting" BusyText="Deleting…" ConfirmText="Delete"
+                  OnConfirm="ConfirmPlainDelete" OnCancel="@(() => _target = null)">
+    @if (_target is not null)
+    {
+        <p class="mb-1">Delete <strong>@_target.FileName</strong>?</p>
+        @if (_usage is { PersonShares: > 0 } or { IsPublic: true })
+        {
+            <p class="text-secondary small mb-0">
+                It is @(_usage!.IsPublic ? "public" : "")@(_usage.IsPublic && _usage.PersonShares > 0 ? " and " : "")@(_usage.PersonShares > 0 ? $"shared with {_usage.PersonShares} {(_usage.PersonShares == 1 ? "person" : "people")}" : ""). Those shares end with it.
+            </p>
+        }
+    }
+</BenConfirmDialog>
+
+<BenModal @bind-Visible="@_showInUseDialog" Title="This file is in use">
+    <ChildContent>
+        @if (_target is not null && _usage is not null)
+        {
+            <p class="mb-2"><strong>@_target.FileName</strong> is being used by:</p>
+            <ul class="small mb-3" data-testid="file-usage-list">
+                @foreach (var o in _usage.Organizations)
+                {
+                    <li>
+                        <strong>@o.OrganizationName</strong>
+                        <span class="text-secondary">— @UsageSentence(o)</span>
+                    </li>
+                }
+            </ul>
+
+            @if (_step == DeleteStep.AskEverywhere)
+            {
+                <p class="mb-1 fw-semibold">Do you want it removed everywhere it is shared?</p>
+                <p class="text-secondary small">
+                    Yes ends every share, removes the copies those groups took — including any
+                    comments and votes on them — and then deletes the file. There is no undo.
+                </p>
+            }
+            else
+            {
+                <p class="mb-1 fw-semibold">Do you still want it out of your files?</p>
+                <p class="text-secondary small">
+                    If so, the file and its details are handed to the group using it. It leaves
+                    your files, the group keeps everything that points at it, and only people in
+                    that group with the right permission will see it. You will not be able to get
+                    it back.
+                </p>
+                @if (_usage.Organizations.Count > 1)
+                {
+                    <label class="form-label small fw-semibold" for="reassign-org">Hand it to</label>
+                    <select id="reassign-org" class="form-select form-select-sm mb-2" style="max-width:320px" @bind="@_reassignOrgId">
+                        @foreach (var o in _usage.Organizations)
+                        {
+                            <option value="@o.OrganizationId">@o.OrganizationName</option>
+                        }
+                    </select>
+                }
+            }
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0">@_error</div>
+            }
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            @if (_step == DeleteStep.AskEverywhere)
+            {
+                <button type="button" class="btn btn-danger" data-testid="delete-everywhere" @onclick="ConfirmDeleteEverywhere" disabled="@_isDeleting">
+                    @(_isDeleting ? "Removing…" : "Yes, remove it everywhere")
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-testid="delete-not-everywhere" @onclick="@(() => _step = DeleteStep.AskReassign)" disabled="@_isDeleting">No</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary" data-testid="reassign-file" @onclick="ConfirmReassign" disabled="@_isDeleting">
+                    @(_isDeleting ? "Handing over…" : $"Hand it to {ReassignOrgName()}")
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-testid="keep-file" @onclick="Close" disabled="@_isDeleting">Keep it</button>
+            }
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    /// <summary>Raised with the file's id once it has actually gone from this person's files.</summary>
+    /// <remarks>
+    /// Raised for a hand-over too: the file still exists, but it has left the person who asked —
+    /// which is what their list has to stop showing.
+    /// </remarks>
+    [Parameter] public EventCallback<Guid> OnGone { get; set; }
+
+    private enum DeleteStep { AskEverywhere, AskReassign }
+
+    private bool _showDeleteConfirm;
+    private bool _showInUseDialog;
+    private UploadFileRecord? _target;
+    private FileUsageRecord? _usage;
+    private DeleteStep _step = DeleteStep.AskEverywhere;
+    private Guid _reassignOrgId;
+    private bool _isDeleting;
+    private string? _error;
+
+    /// <summary>
+    /// Begins the flow for one file.
+    /// </summary>
+    /// <remarks>
+    /// The usage comes FIRST and decides which dialog opens. A file nobody else is using gets a
+    /// plain confirm; a file a group is using gets Ben's two questions — remove it everywhere? and
+    /// if not, still delete it, by handing it to the group?
+    /// </remarks>
+    public async Task StartAsync(UploadFileRecord file)
+    {
+        _target = file;
+        _error  = null;
+        _step   = DeleteStep.AskEverywhere;
+        _usage  = await Api.GetUploadFileUsageAsync(file.Id);
+
+        if (_usage is { InUseByAnOrganization: true })
+        {
+            _reassignOrgId   = _usage.Organizations[0].OrganizationId;
+            _showInUseDialog = true;
+        }
+        else
+        {
+            _showDeleteConfirm = true;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ConfirmPlainDelete()
+    {
+        if (_target is null) return;
+        _isDeleting = true;
+        var ok = await Api.DeleteUploadFileAsync(_target.Id);
+        _isDeleting = false;
+        if (ok)
+        {
+            await Gone(_target.Id);
+            return;
+        }
+
+        // The server refuses a plain delete once a group is using it — re-ask with the usage.
+        _usage = await Api.GetUploadFileUsageAsync(_target.Id);
+        _showDeleteConfirm = false;
+        if (_usage is { InUseByAnOrganization: true })
+        {
+            _reassignOrgId   = _usage.Organizations[0].OrganizationId;
+            _showInUseDialog = true;
+        }
+        else
+        {
+            _error = "The file could not be deleted.";
+        }
+    }
+
+    private async Task ConfirmDeleteEverywhere()
+    {
+        if (_target is null) return;
+        _isDeleting = true; _error = null;
+        var result = await Api.DeleteUploadFileEverywhereAsync(_target.Id);
+        _isDeleting = false;
+        if (result is null)
+        {
+            _error = "Everything shared was removed, but something else still holds this file, so it stays.";
+            return;
+        }
+        await Gone(_target.Id);
+    }
+
+    private async Task ConfirmReassign()
+    {
+        if (_target is null) return;
+        _isDeleting = true; _error = null;
+        var moved = await Api.ReassignUploadFileAsync(_target.Id, _reassignOrgId);
+        _isDeleting = false;
+        if (moved is null)
+        {
+            _error = "The file could not be handed over.";
+            return;
+        }
+        // It has left this person's files, which is what they asked for.
+        await Gone(_target.Id);
+    }
+
+    private async Task Gone(Guid fileId)
+    {
+        Close();
+        await OnGone.InvokeAsync(fileId);
+    }
+
+    private void Close()
+    {
+        _showDeleteConfirm = false;
+        _showInUseDialog   = false;
+        _target = null;
+        _usage  = null;
+        _error  = null;
+    }
+
+    private string ReassignOrgName()
+        => _usage?.Organizations.FirstOrDefault(o => o.OrganizationId == _reassignOrgId)?.OrganizationName ?? "the group";
+
+    private static string UsageSentence(FileUsageOrganizationRecord o)
+    {
+        var parts = new List<string>();
+        if (o.Shares > 0)      parts.Add(o.Shares == 1 ? "a share" : $"{o.Shares} shares");
+        if (o.CaseCopies > 0)  parts.Add(o.CaseCopies == 1 ? "a copy on a case" : $"copies on {o.CaseCopies} cases");
+        if (o.GroupCopies > 0) parts.Add(o.GroupCopies == 1 ? "a copy in its files" : $"{o.GroupCopies} copies in its files");
+        if (o.DirectLinks > 0) parts.Add(o.DirectLinks == 1 ? "one direct link" : $"{o.DirectLinks} direct links");
+        return string.Join(", ", parts);
+    }
+}

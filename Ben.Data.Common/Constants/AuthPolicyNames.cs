@@ -44,6 +44,16 @@ public static class AuthPolicyNames
     public const string Moderator = "Moderator";
 
     /// <summary>
+    /// Requires the caller to hold <see cref="RoleNames.Seller"/> (store sellers, backlog 251).
+    /// </summary>
+    /// <remarks>
+    /// Unlike moderation, a SuperAdmin is NOT a seller implicitly: every seller endpoint works on
+    /// the caller's own items, and a SuperAdmin has items of their own only if they are a seller.
+    /// The store's admin pages are where a SuperAdmin reaches every item.
+    /// </remarks>
+    public const string Seller = "Seller";
+
+    /// <summary>
     /// The Microsoft Entra JWT bearer scheme, registered in <c>Program.cs</c> only when Entra is
     /// configured. Shared so an endpoint that must authenticate it explicitly — an anonymous one,
     /// which the default scheme alone cannot see — names the same string the registration does.

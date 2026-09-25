@@ -258,7 +258,10 @@ struct CameraPicker: UIViewControllerRepresentable {
             if let videoURL = info[.mediaURL] as? URL {
                 let destination = FileManager.default.temporaryDirectory
                     .appendingPathComponent("feed-\(UUID().uuidString).mov")
-                try? FileManager.default.moveItem(at: videoURL, to: destination)
+                // A move that failed used to be staged anyway, as a file that was not there — and
+                // the post then failed later, in words about the upload rather than the file.
+                // Nothing staged is the honest outcome; the camera can be opened again.
+                guard (try? FileManager.default.moveItem(at: videoURL, to: destination)) != nil else { return }
                 let size = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? Int64) ?? 0
                 parent.onCaptured(MediaUpload(
                     fileURL: destination, filename: destination.lastPathComponent,
@@ -274,7 +277,7 @@ struct CameraPicker: UIViewControllerRepresentable {
 
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("feed-\(UUID().uuidString).jpg")
-            try? data.write(to: url)
+            guard (try? data.write(to: url)) != nil else { return }
             parent.onCaptured(MediaUpload(
                 fileURL: url, filename: url.lastPathComponent,
                 contentType: "image/jpeg", byteCount: Int64(data.count)))

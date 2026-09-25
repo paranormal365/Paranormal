@@ -10,6 +10,7 @@ public class DateTimeViewerExtensionsTests
         public bool IsAuthenticated => true;
         public bool IsSuperAdmin => false;
         public bool IsModerator => false;
+        public bool IsSeller => false;
         public bool IsAdmin => false;
         public bool IsImpersonating => false;
         public string? UserEmail => null;

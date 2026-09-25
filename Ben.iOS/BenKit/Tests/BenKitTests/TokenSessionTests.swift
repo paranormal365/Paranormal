@@ -70,6 +70,58 @@ struct TokenSessionTests {
         #expect(first == .sessionEnded)
     }
 
+    /// `/refresh` is rate limited on the server. A 429 is "not now", not "you are refused" —
+    /// the token stays, the request goes out without a header, and the next call tries again.
+    @Test(arguments: [429, 408, 503])
+    func aBusyServerDoesNotEndTheSession(status: Int) async {
+        let transport = MockTransport(status: status)
+        let storage = InMemoryTokenStorage(tokens: Self.expiredTokens())
+        let session = TokenSession(storage: storage, transport: transport, environment: { .dev })
+
+        #expect(await session.validAccessToken() == nil)
+        #expect(await session.isSignedIn == true)
+        #expect(storage.load()?.refreshToken == "r1")
+        #expect(transport.requestCount(pathSuffix: "/refresh") == 1)
+
+        // And the next caller tries again rather than reusing a dead answer.
+        _ = await session.validAccessToken()
+        #expect(transport.requestCount(pathSuffix: "/refresh") == 2)
+    }
+
+    /// A request that went out with the old token and came back 401 after a new one was adopted —
+    /// a refresh, or a sign-in on top of a stale keychain — must not end the session it knows
+    /// nothing about.
+    @Test func aRefusalOfAReplacedTokenDoesNotEndTheSession() async {
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "old", refreshToken: "r1", expiresAt: Date(timeIntervalSinceNow: 600)))
+        let session = TokenSession(storage: storage, transport: MockTransport(status: 500), environment: { .dev })
+        await session.adopt(AccessTokenResponse(accessToken: "new", expiresIn: 3600, refreshToken: "r2"))
+
+        await session.handleUnauthorized(bearer: "old")
+        #expect(await session.isSignedIn == true)
+        #expect(storage.load()?.accessToken == "new")
+
+        // The token actually held being refused is still the session ending.
+        await session.handleUnauthorized(bearer: "new")
+        #expect(await session.isSignedIn == false)
+    }
+
+    /// And the client passes the token the request carried, not just the fact that it carried one.
+    @Test func theClientReportsWhichTokenWasRefused() async {
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "old", refreshToken: "r1", expiresAt: Date(timeIntervalSinceNow: 600)))
+        let tokens = TokenSession(storage: storage, transport: MockTransport(status: 500), environment: { .dev })
+        // The request is built with "old", then a sign-in lands before the 401 comes back.
+        let transport = MockTransport { request in
+            await tokens.adopt(AccessTokenResponse(accessToken: "new", expiresIn: 3600, refreshToken: "r2"))
+            return (Data(), MockTransport.response(for: request, status: 401))
+        }
+        let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+
+        _ = await api.send(Endpoint(.get, "api/me"))
+        #expect(await tokens.isSignedIn == true)
+    }
+
     @Test func adoptStoresWithThirtySecondSafetyMargin() async {
         let fixedNow = Date(timeIntervalSince1970: 1_000_000)
         let storage = InMemoryTokenStorage()

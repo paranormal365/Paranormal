@@ -196,16 +196,32 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
     }
 
     /// <summary>Cancel a permission request (requester only).</summary>
+    /// <remarks>
+    /// <b>The canceller is the token, not a query parameter.</b> This read
+    /// <c>cancelledByAppUserId</c> from the query string and compared it against the request's
+    /// own requester — so the check passed for anybody who could name the requester's id, and the
+    /// audit row recorded whatever the caller claimed. Found in the 2026-09-17 audit, which is
+    /// also where this endpoint turned out to have no client at all: nothing had ever called it,
+    /// so the hole had never been reachable in practice.
+    /// </remarks>
     [HttpPut("{requestId:guid}/cancel")]
     public async Task<ActionResult<UploadFilePermissionRequestRecord>> Cancel(
-        Guid requestId, [FromQuery] Guid cancelledByAppUserId, CancellationToken cancellationToken)
+        Guid requestId, CancellationToken cancellationToken)
     {
+        var cancelledByAppUserId = GetCurrentUserId();
+        if (cancelledByAppUserId == Guid.Empty) return Unauthorized();
+
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var before = await db.UploadFilePermissionRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         var request = await db.UploadFilePermissionRequests.FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
         if (request is null) return NotFound();
         if (request.RequestedByAppUserId != cancelledByAppUserId
             && !User.IsInRole(RoleNames.SuperAdmin)) return Forbid();
+
+        // Only a request still waiting can be withdrawn. Cancelling one a reviewer has already
+        // answered would quietly overwrite their decision.
+        if (request.RequestStatus != FilePermissionRequestStatus.Pending)
+            return BadRequest("That request has already been answered.");
 
         request.RequestStatus = FilePermissionRequestStatus.Cancelled;
         request.DateUpdated = DateTime.UtcNow;

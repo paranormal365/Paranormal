@@ -46,6 +46,7 @@ public sealed class PersistedAuthStateCoversRolesTests
     [InlineData("IsSuperAdmin")]
     [InlineData("IsAdmin")]
     [InlineData("IsModerator")]
+    [InlineData("IsSeller")]
     [InlineData("IsImpersonating")]
     public void Every_role_flag_is_persisted_and_restored(string flag)
     {

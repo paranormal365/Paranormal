@@ -52,23 +52,9 @@ internal static class InvestigationPlacement
         }
         else if (newPlace is not null && newPlace.HasAnything)
         {
-            place = new Place
-            {
-                Id = Guid.NewGuid(),
-                Name = Trimmed(newPlace.Name),
-                StreetAddress1 = Trimmed(newPlace.StreetAddress1),
-                StreetAddress2 = Trimmed(newPlace.StreetAddress2),
-                City = Trimmed(newPlace.City),
-                State = Trimmed(newPlace.State),
-                ZipCode = Trimmed(newPlace.ZipCode),
-                Country = Trimmed(newPlace.Country) ?? "US",
-                Latitude = newPlace.Latitude,
-                Longitude = newPlace.Longitude,
-                Kind = newPlace.Kind ?? PlaceKind.PrivateResidence,
-                DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId,
-            };
-            await PlaceGeocoder.GeocodeAsync(place, trustSuppliedCoordinates: true, ct);
+            // Through PlaceFactory since 2026-09-17, so a case naming a place and a visit naming
+            // one build it identically.
+            place = await PlaceFactory.CreateAsync(newPlace, userId, ct);
             db.Places.Add(place);
         }
         else if (investigation.CaseId is { } caseId)
@@ -118,8 +104,6 @@ internal static class InvestigationPlacement
         return new PlacementResult(place, null);
     }
 
-    private static string? Trimmed(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 /// <summary>Where an investigation ended up, or why it could not be placed.</summary>

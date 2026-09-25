@@ -1,0 +1,541 @@
+/* ClipBrowser's styles, deliberately NOT a scoped ClipBrowser.razor.css.
+ *
+ * Most of that component's panes are built by hand with RenderTreeBuilder, and the Razor compiler
+ * stamps its b-xxxxxxxxxx scope attribute only onto markup it compiles. Hand-built elements came out
+ * with the right class names and none of the styles - not a render error, not a build warning, just
+ * a screen that looks slightly wrong. The fix was a CssScope constant holding the hash, copied by
+ * hand into all sixty hand-built elements.
+ *
+ * That constant could not be right. The hash the compiler produces DIFFERS BETWEEN MACHINES - this
+ * repository's Windows server stamps b-ix6pdo4zfh and the author's Mac stamps b-xbjan6uni8, almost
+ * certainly because it is derived from a path and the separators differ. Two sessions corrected the
+ * constant to opposite values within a day, each measuring honestly, each breaking the other's
+ * build. Whichever machine builds last wins and the other ships unstyled panes.
+ *
+ * So the styles left CSS isolation instead. No attribute, no hash, no machine to be wrong on. Every
+ * class here is used by ClipBrowser and nothing else - checked before the move - so being global
+ * costs nothing. If you add a rule, give it a bv- prefixed class that stays unique to this
+ * component. (2026-09-22)
+ */
+
+/* ── Collapsed (pinned to floating window) ──────────────────────────────── */
+.bv-browser--collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    border: none;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+/* ── Floating window title bar ───────────────────────────────────────────── */
+.bv-browser-window__title-bar {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    width: 100%;
+}
+
+.bv-browser-window__title {
+    flex: 1;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+/* Window content needs a fill-height flex column so tabs + grid scroll properly */
+.bv-browser-window .k-window-content {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* ── Header action group (Add + Pin) ─────────────────────────────────────── */
+.bv-browser__header-actions {
+    display: flex;
+    align-items: center;
+    gap: .125rem;
+}
+
+/* ── Browser panel ──────────────────────────────────────────────────────── */
+:host,
+.bv-browser {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.bv-browser__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--kendo-color-border, var(--bv-border));
+    flex-shrink: 0;
+}
+
+.bv-browser__title {
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+/* ── Loading ─────────────────────────────────────────────────────────────── */
+.bv-browser__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    flex: 1;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .8125rem;
+    padding: 1rem;
+}
+
+/* ── Server-tab scope selector (item 91) ────────────────────────────────── */
+/* Sits above every state of the list — including the empty one, so a scope that matches nothing
+   can still be changed. Wraps rather than scrolls: the panel is often narrow, and a selector that
+   scrolls sideways is a selector nobody finds the third dropdown in. */
+.bv-browser__scope {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    padding: .4rem .5rem;
+    border-bottom: 1px solid var(--bv-border);
+    background: var(--bv-panel-bg);
+}
+
+.bv-browser__scope-select {
+    flex: 1 1 8rem;
+    min-width: 0;          /* or a long case title stretches the row instead of truncating */
+    max-width: 100%;
+    padding: .2rem .35rem;
+    font-size: .75rem;
+    color: var(--bv-text);
+    background: var(--bv-surface-1);
+    border: 1px solid var(--bv-border);
+    border-radius: 3px;
+}
+
+/* The editor's own accent first, the host's Kendo primary as the fallback — the other order paints
+   navy text on the dark ground, which is why a test enforces it. */
+.bv-browser__scope-select:focus-visible {
+    outline: 2px solid var(--bv-accent, var(--kendo-color-primary));
+    outline-offset: -1px;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.bv-browser__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    flex: 1;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    font-size: .8125rem;
+}
+
+.bv-browser__empty-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.bv-browser__empty p {
+    margin: 0;
+}
+
+/* ── Clip card grid ─────────────────────────────────────────────────────── */
+.bv-browser__grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: .5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .375rem;
+}
+
+/* ── Individual clip card ───────────────────────────────────────────────── */
+.bv-clip-card {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .375rem .5rem;
+    border-radius: 6px;
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    cursor: grab;
+    transition: border-color 120ms, background 120ms;
+    min-height: 52px;
+}
+
+.bv-clip-card:hover {
+    border-color: var(--bv-accent, var(--kendo-color-primary));
+    background: var(--bv-surface-3);
+}
+
+.bv-clip-card--selected {
+    border-color: var(--bv-accent, var(--kendo-color-primary));
+    background: var(--bv-accent-muted);
+}
+
+.bv-clip-card--dragging {
+    opacity: .5;
+    outline: 2px dashed var(--bv-accent, var(--kendo-color-primary));
+    cursor: grabbing;
+}
+
+/* thumbnail */
+.bv-clip-card__thumb {
+    width: 64px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bv-clip-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bv-clip-card__thumb-placeholder {
+    position: relative;
+    font-size: 1.25rem;
+    /* The tile behind it is #111 in both themes, so this needs a fixed light colour rather than a
+       dark one: #444 on #111 measured 1.94:1, and the play glyph is the only thing saying the tile
+       is a video at all while its thumbnail is still being made (2026-09-18 audit). */
+    color: #9aa4ad;
+}
+
+/* On-demand preview trigger for Server-tab video rows — hidden until hover, matches the
+   hover-reveal pattern already used for .bv-clip-card__actions. */
+.bv-clip-card__preview-btn {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .55);
+    border: none;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.bv-clip-card:hover .bv-clip-card__preview-btn {
+    opacity: 1;
+}
+
+/* Icon-only thumb (audio clips, image fallback) */
+.bv-clip-card__thumb--icon {
+    width: 64px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: .65;
+}
+
+/* info */
+.bv-clip-card__info {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: .125rem;
+}
+
+.bv-clip-card__name {
+    font-size: .8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bv-clip-card__meta {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+/* action buttons */
+.bv-clip-card__actions {
+    display: flex;
+    gap: .25rem;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 120ms;
+}
+
+.bv-clip-card:hover .bv-clip-card__actions,
+.bv-clip-card--selected .bv-clip-card__actions,
+.bv-clip-card--busy .bv-clip-card__actions {
+    opacity: 1;
+}
+
+/* Phase 150 — Server-tab download progress + "downloaded locally" badge */
+.bv-clip-card__download-progress {
+    width: 4.5rem;
+}
+
+.bv-clip-card__download-bar {
+    width: 100%;
+}
+
+.bv-clip-card__cached-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kendo-color-success, #4caf50);
+    /* Unlike the download button/progress bar (actions, hidden until hover), "already downloaded"
+       is glance-able status, not an action — stays visible regardless of .bv-clip-card__actions'
+       own opacity:0 default so the user can tell at a glance what they already have locally. */
+    opacity: 1 !important;
+    gap: .25rem;
+}
+
+/* The word beside the tick. V-2: the tick alone said "something happened" and its only
+   explanation was a hover title, so somebody who had just watched a download finish went looking
+   in the bins and found nothing. The next step is a second click; this says so. */
+.bv-clip-card__cached-label {
+    font-size: .625rem;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--kendo-color-success, #4caf50);
+}
+
+/* Owner and case, under the file size on a Server-tab card (V-3). Dimmer than the size, and
+   clipped rather than wrapped: it identifies a row at a glance, and the full text is in its
+   title. */
+.bv-clip-card__provenance {
+    font-size: .625rem;
+    line-height: 1.2;
+    color: var(--kendo-color-subtle, #9aa0a6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* V-4: a bin card whose bytes are not here. The words already say so; this makes the card
+   findable in a grid of twenty without reading every line. */
+/* --bv-attention, not the raw warning colour. The theme mixes that one toward the body colour for
+   exactly this reason — see its definition — because the flat amber measures 2.49:1 on a light
+   page, and "media missing" is the line telling somebody their clip will not render
+   (2026-09-19). */
+.bv-clip-card__meta--missing {
+    color: var(--bv-attention, var(--kendo-color-warning, #f0ad4e));
+}
+
+/* ── Error banner ───────────────────────────────────────────────────────── */
+.bv-browser__error {
+    padding: .5rem .75rem;
+    background: #3b1a1a;
+    color: #e06c75;
+    font-size: .75rem;
+    border-top: 1px solid #5c2a2a;
+    flex-shrink: 0;
+}
+
+/* ── Import progress window ────────────────────────────────────────────────── */
+
+.bv-import-list {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    padding: .25rem 0;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.bv-import-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .5rem;
+    border-radius: .375rem;
+    background: var(--kendo-color-surface-alt, var(--bv-surface-1));
+    border: 1px solid var(--kendo-color-border, var(--bv-border));
+}
+
+.bv-import-row__thumb {
+    flex-shrink: 0;
+    width: 64px;
+    height: 48px;
+    border-radius: .25rem;
+    overflow: hidden;
+    background: var(--kendo-color-surface, var(--bv-surface-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bv-import-row__thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bv-import-row__thumb-icon {
+    font-size: 1.5rem;
+    opacity: .55;
+}
+
+.bv-import-row__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.bv-import-row__name {
+    font-size: .8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bv-import-row__meta {
+    font-size: .7rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+}
+
+.bv-import-row__wasm {
+    color: var(--bv-accent, var(--kendo-color-primary));
+}
+
+.bv-import-row__bar {
+    height: 6px;
+    margin-top: .25rem;
+}
+
+.bv-import-row__error {
+    font-size: .7rem;
+    color: var(--kendo-color-error, #e06c75);
+    margin-top: .25rem;
+}
+
+/* Stage badge */
+.bv-import-badge {
+    flex-shrink: 0;
+    font-size: .65rem;
+    font-weight: 700;
+    padding: .15rem .45rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+    align-self: flex-start;
+    margin-top: .15rem;
+}
+
+.bv-import-badge--queued     { color: var(--bv-text-muted); border-color: var(--bv-border); }
+.bv-import-badge--preview    { color: var(--bv-text-muted); border-color: var(--bv-border); }
+.bv-import-badge--writing    { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--metadata   { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--thumbnails { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--audio      { color: var(--bv-accent, var(--kendo-color-primary)); }
+.bv-import-badge--done       { color: #4caf89; border-color: #4caf89; }
+.bv-import-badge--error      { color: var(--kendo-color-error, #e06c75); border-color: var(--kendo-color-error, #e06c75); }
+
+/* Item #59-#65 flakiness investigation, phase 145 */
+.bv-import-row__cancel {
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: .15rem;
+}
+
+/* ── Library tab ────────────────────────────────────────────────────────────── */
+/* Plain descendant selectors, and they have to be. These three were written for the scoped
+   ClipBrowser.razor.css, where the tab strip was reached through `::deep` because TelerikTabStrip's
+   root carried no scope attribute. When the file moved here and became global (2026-09-22) the
+   `::deep` came with it — and outside CSS isolation `::deep` is not a selector at all, so the
+   browser dropped all three rules and the fault below came straight back: the video editor's
+   import tests timed out clicking cards the grid now covered. Fixed 2026-09-23;
+   ClipBrowserCssScopeTests refuses `::deep` in any global stylesheet.
+
+   Without it the tab strip kept its default flex:0 1 auto, so it was as tall as its tab headers
+   and its content box came out one pixel high with overflow:hidden. Every card in the media bin
+   was in the page, and none of it could be seen: importing a picture looked like nothing had
+   happened at all. */
+.bv-browser .bv-browser__tabs {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* And the tab's own content box is display:block by default, which means whatever is inside it
+   ignores flex sizing and grows to its content instead of scrolling. */
+.bv-browser .bv-browser__tabs .k-tabstrip-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.bv-browser .bv-browser__local,
+.bv-browser .bv-browser__library {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+
+/* Cancelled is not an error: somebody asked for it. Muted rather than red. */
+.bv-import-badge--cancelled  { color: var(--bv-text-muted); border-color: var(--bv-border); }
+
+/* How much of the browser's storage the imported media takes. Quiet: it is a fact worth having to
+   hand, not a warning (2026-09-05 audit, media-2). */
+.bv-browser__storage {
+    margin-left: auto;
+    margin-right: .5rem;
+    font-size: .68rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    white-space: nowrap;
+    cursor: default;
+}
+
+/* A refused library, with the host's own way in beneath it. Neither an error nor an empty state:
+   there is something the person can do, and both of the old treatments described a situation that
+   was not true (2026-09-05 audit, F11 and site-11). */
+.bv-browser__signin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .6rem;
+    padding: 1.25rem .75rem;
+    text-align: center;
+    font-size: .8rem;
+    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+}
+
+.bv-browser__signin p { margin: 0; line-height: 1.5; }

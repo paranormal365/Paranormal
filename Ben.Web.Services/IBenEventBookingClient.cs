@@ -237,6 +237,14 @@ public interface IBenEventBookingClient
     /// Which night they are walking in on (phase 7). Given, the scan records an arrival for that
     /// night — the only way a three-night weekend can answer "who was here on the Saturday".
     /// </param>
+    /// <summary>Scans a tour guest's pass at the meeting point (item 247).</summary>
+    /// <remarks>
+    /// A refused scan is a RESULT, not an error: "we don't recognise that code" is the answer the
+    /// guide reads out, and an error would make the page show its own failure text instead.
+    /// </remarks>
+    Task<(TourScanResult? Result, string? Error)> ScanTourPassAsync(
+        Guid orgId, Guid eventId, string code, CancellationToken token = default);
+
     Task<(HostedEventScanResult? Result, string? Error)> ScanEventPassAsync(
         Guid orgId, Guid eventId, string code, bool checkIn, Guid? nightId = null,
         CancellationToken token = default);

@@ -396,6 +396,19 @@
                     </div>
                 </div>
             </BenTab>
+
+            @* The way in. Its own page rather than a panel here, because it is a list somebody
+               links to from the footer of a letter — but the profile is where a person looks for
+               it, so the tab points at it. *@
+            <BenTab Title="Emails">
+                <p class="text-secondary small">
+                    Choose which of the site's emails you want. Everything is on by default, and
+                    the letters you need to get into your account are always sent.
+                </p>
+                <a class="btn btn-primary" id="profile-email-preferences" href="/email-preferences">
+                    Choose your emails
+                </a>
+            </BenTab>
         </BenTabs>
     }
 </div>

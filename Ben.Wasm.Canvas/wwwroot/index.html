@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <!-- Page zoom is left enabled: the board owns pinch itself (touch-action: none), and taking zoom
+         away from the rest of the page would fail people who need it. viewport-fit=cover lets the
+         layout use the iPhone's safe-area insets; interactive-widget asks Chromium browsers to shrink
+         the layout for the on-screen keyboard (iOS ignores it; the editor handles iOS itself). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- The Night ground, so the browser chrome and the pre-CSS paint are already dark. -->
+    <meta name="theme-color" content="#212529" />
+    <title>IsHaunted Canvas</title>
+    <!-- Patched to /editors/canvas/ at publish. Every asset and route below resolves against it. -->
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <!-- Theme before anything paints. Copied verbatim from Ben.Wasm.Video, which mirrors the site's
+         ben-boot.js keys (layoutSettings.theme / ben-theme), so a browser that has been to the site
+         opens the canvas in the theme chosen there. Inline and render-blocking on purpose: loading it
+         as a file would let the page paint light first and flash. -->
+    <script>
+      (function () {
+        var theme;
+        try {
+          var settings = JSON.parse(localStorage.getItem('layoutSettings') || '{}');
+          theme = settings.theme;
+          if (theme !== 'light' && theme !== 'dark') theme = localStorage.getItem('ben-theme');
+        } catch (e) { /* storage blocked - fall through to the default */ }
+
+        if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+
+      /* Flips the theme and writes it back under the template's own keys, read-modify-write, so the
+         site's other layoutSettings keys survive. */
+      function benToggleTheme() {
+        var root = document.documentElement;
+        var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-bs-theme', next);
+        try {
+          var settings = {};
+          try { settings = JSON.parse(localStorage.getItem('layoutSettings') || '{}') || {}; } catch (e) { settings = {}; }
+          settings.theme = next;
+          localStorage.setItem('layoutSettings', JSON.stringify(settings));
+          localStorage.setItem('ben-theme', next);
+        } catch (e) { /* storage blocked - the choice lasts for this page only */ }
+      }
+    </script>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <!-- Faces declared before anything asks for them. -->
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <!-- Scoped component CSS through this app's own bundle: publish fingerprints the library's bundle
+         name, so linking it directly 404s in every published build while working in development. -->
+    <link rel="stylesheet" href="Ben.Wasm.Canvas.styles.css" />
+    <script type="importmap"></script>
+    <!-- Kendo's Bootstrap flavour, the site's starting point, so both hosts correct the same baseline. -->
+    <link rel="stylesheet" href="_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" />
+    <!-- The site's palette. After Kendo: both define variables on :root, and the later file wins. -->
+    <link rel="stylesheet" href="css/site-palette.css" />
+    <!-- The site's own Kendo remap, loaded in the same place the site loads it. -->
+    <link rel="stylesheet" href="theme/telerik-night.css" />
+    <!-- The editor's token fallbacks, then the map onto the palette, which must win over them. -->
+    <link rel="stylesheet" href="_content/Ben.Canvas.Editor/css/bc-variables.css" />
+    <link rel="stylesheet" href="_content/Ben.Canvas.Editor/css/bc-theme.css" />
+    <link rel="stylesheet" href="_content/Ben.Canvas.Editor/css/bc-kit.css" />
+    <!-- The Bootstrap classes the copied Kit components and login page use. -->
+    <link rel="stylesheet" href="css/bootstrap-subset.css" />
+    <!-- This host's shell. Last, so its rules settle arguments. -->
+    <link rel="stylesheet" href="css/app.css" />
+    <!-- Telerik's JS from the local package, not a CDN. -->
+    <script src="_content/Telerik.UI.for.Blazor/js/telerik-blazor.js"></script>
+    <!-- Classic script before Blazor starts, so the base-aware module loader exists before any import. -->
+    <script src="_content/Ben.Canvas.Editor/js/moduleLoader.js"></script>
+</head>
+
+<!-- k-body is what the Kendo theme keys its base type and colour off, the same as the site. -->
+<body class="k-body">
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>

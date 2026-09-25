@@ -1,0 +1,30 @@
+@*
+    What an empty board says, and the one thing to do next. Outside the board element; only its card takes
+    pointers, so the board underneath still pans and pastes.
+*@
+
+@if (Visible)
+{
+    <div class="bc-empty-wrap">
+        <div class="bc-empty">
+            <h2 class="bc-empty__title">@CanvasCopy.Titles.EmptyBoard</h2>
+            @if (!ReadOnly)
+            {
+            <p class="bc-empty__hint">@CanvasCopy.Sentences.EmptyBoardHint</p>
+            <div class="bc-empty__actions">
+                <button type="button" class="btn btn-primary btn-sm" data-bc-action="add-card" @onclick="@(() => OnAction.InvokeAsync("add-card"))">
+                    @CanvasCopy.Buttons.AddACard
+                </button>
+            </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    /// <summary>A view-only board says it is empty and offers nothing to add.</summary>
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+}

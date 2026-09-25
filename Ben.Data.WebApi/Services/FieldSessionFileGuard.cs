@@ -55,6 +55,24 @@ public static class FieldSessionFileGuard
         return null;
     }
 
+    /// <summary>
+    /// What to serve a recording as, from its name — the first type the extension is allowed to
+    /// be.
+    /// </summary>
+    /// <remarks>
+    /// For a recording inside a <c>.ben</c> bundle, which has no stored file of its own to carry a
+    /// content type. Only ever reached for a name <see cref="Refusal"/> already accepted, so the
+    /// fallback is a belt on a pair of braces rather than a guess about unknown bytes.
+    /// </remarks>
+    public static string ContentTypeFor(string relativePath)
+    {
+        var extension = Path.GetExtension(relativePath);
+        return !string.IsNullOrEmpty(extension)
+            && ContentTypesByExtension.TryGetValue(extension, out var types)
+                ? types[0]
+                : "application/octet-stream";
+    }
+
     /// <summary>The container signatures, as bytes rather than as anybody's word.</summary>
     public static bool HeaderMatches(string extension, ReadOnlySpan<byte> h)
     {

@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Services.Billing;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
@@ -125,6 +126,13 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
         if (!stageIsMeaningful)
             return Conflict($"A {stage.ToString().ToLowerInvariant()} photo doesn't apply to a loan that is {status.ToString().ToLowerInvariant()}.");
 
+
+        // The free account's allowance, asked BEFORE a byte is written (C1, 2026-09-22). Counting
+        // what an account holds is not a cap; a cap is only a cap where somebody asks it, and this
+        // door never did.
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, file.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+
         var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
         // Ben's rule (2026-08-24): strip on ANY upload, keep what came off beside the record.
@@ -144,7 +152,7 @@ public sealed class EquipmentLoanHistoryController : BenControllerBase
             Id                 = uploadFileId,
             UploadFileTypeId   = UploadFileTypeSeeder.EquipmentPhotoFileTypeId,
             AppUserId          = userId,
-            FileName           = file.FileName,
+            FileName           = ingested.ServedFileName(file.FileName),
             StoredFileName     = storedName,
             ContentType        = ingested.ServedContentType,
             FileSize           = ingested.ServedFileSize,

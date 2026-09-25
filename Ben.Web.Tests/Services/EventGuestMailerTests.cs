@@ -55,8 +55,12 @@ public sealed class EventGuestMailerTests
         var letter = Assert.Single(sent);
         Assert.Contains("confirmed", letter.Subject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("data:image/png;base64,", letter.HtmlBody);
-        // And the link as well, for the client that strips data URIs instead.
-        Assert.Contains("/api/public/event-passes/", letter.HtmlBody);
+        // And the link as well, for the client that strips data URIs instead — on the API's origin,
+        // since the site does not serve /api. It was built on the site's until 2026-09-23, and
+        // could not have opened. A template is handed the same link.
+        Assert.Contains("https://test.local/webapi/api/public/event-passes/", letter.HtmlBody);
+        Assert.DoesNotContain("https://test.local/api/", letter.HtmlBody);
+        Assert.StartsWith("https://test.local/webapi/api/public/event-passes/", letter.Payload!.Supplied!["PassUrl"].Value);
         Assert.Contains("One code admits your whole party", letter.HtmlBody);
     }
 
@@ -141,7 +145,16 @@ public sealed class EventGuestMailerTests
 
         var (_, mailer) = Mailer();
         await using (var db = await sqlite.NewContextAsync())
+        {
             await mailer.SendDecisionAsync(db, bookingId, default);
+
+            // Not written yet: the stamp rides in the caller's save with the letter itself (item
+            // 239b), so it can no longer be set for a letter that was never queued.
+            await using (var peek = await sqlite.NewContextAsync())
+                Assert.Null((await peek.HostedEventPasses.SingleAsync()).EmailedUtc);
+
+            await db.SaveChangesAsync();
+        }
 
         await using (var db = await sqlite.NewContextAsync())
         {
@@ -336,10 +349,23 @@ public sealed class EventGuestMailerTests
                         StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── what must never break a decision ─────────────────────────────────────
+    // ── a decision and its letter ────────────────────────────────────────────
 
+    /// <summary>
+    /// A decision letter that cannot be queued is the caller's to know about, not swallowed here.
+    /// </summary>
+    /// <remarks>
+    /// <para>This was <c>A_send_that_throws_never_undoes_the_decision</c>: answer false rather than
+    /// throw, because a guest who is confirmed but whose letter bounced is a confirmed guest. Right
+    /// while the letter was a call to a mail system. It is now a row in the caller's transaction
+    /// (item 239b), and a swallowed failure there would let the decision commit without it — the
+    /// confirmed guest with no pass, in silence, which is what the change exists to stop.</para>
+    ///
+    /// <para>What the caller then does is <c>ABookingDecisionCommitsWithItsLetterTests</c>: the
+    /// decision is not saved and the host is told to try again.</para>
+    /// </remarks>
     [Fact]
-    public async Task A_send_that_throws_never_undoes_the_decision()
+    public async Task A_decision_letter_that_cannot_be_queued_reaches_the_caller()
     {
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var seeded = await SeedAsync(sqlite);
@@ -347,32 +373,51 @@ public sealed class EventGuestMailerTests
 
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(true);
-        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
-             .ThrowsAsync(new InvalidOperationException("no smtp host"));
 
-        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance);
+        var queue = new Mock<Ben.Data.WebApi.Services.IOutboxEmailQueue>();
+        queue.Setup(q => q.EnqueueAsync(
+                 It.IsAny<Ben.Data.Source.Context.BenDataContext>(),
+                 It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .ThrowsAsync(new InvalidOperationException("the outbox is unreachable"));
+
+        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                          queue.Object);
 
         await using var db = await sqlite.NewContextAsync();
-        // Answers false rather than throwing. A guest who is confirmed but whose letter bounced is
-        // a confirmed guest.
-        Assert.False(await mailer.SendDecisionAsync(db, bookingId, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => mailer.SendDecisionAsync(db, bookingId, default));
     }
 
+    /// <summary>
+    /// With no mail set up the letter still waits in the outbox, and the pass is not marked sent.
+    /// </summary>
+    /// <remarks>
+    /// It used to be skipped outright, which left the one letter carrying the pass unreadable at
+    /// /admin/mail and unfollowable by any browser test (2026-09-23). Queued is not sent, though:
+    /// the host's "not sent yet" mark must stay until something can actually leave.
+    /// </remarks>
     [Fact]
-    public async Task Nothing_is_sent_when_the_deployment_has_no_mail()
+    public async Task Without_mail_the_letter_waits_and_the_pass_is_not_marked_sent()
     {
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var seeded = await SeedAsync(sqlite);
         var bookingId = await BookAsync(sqlite, HostedEventBookingStatus.Confirmed, seeded);
+        await IssuePassAsync(sqlite, bookingId);
 
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsConfigured).Returns(false);
-        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance);
+        var mailer = new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                          new ForwardingOutboxQueue(email.Object));
 
-        await using var db = await sqlite.NewContextAsync();
-        Assert.False(await mailer.SendDecisionAsync(db, bookingId, default));
-        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()),
-                     Times.Never);
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            Assert.True(await mailer.SendDecisionAsync(db, bookingId, default));
+            await db.SaveChangesAsync();
+        }
+
+        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Once);
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Null((await db.HostedEventPasses.SingleAsync()).EmailedUtc);
     }
 
     [Fact]
@@ -389,7 +434,7 @@ public sealed class EventGuestMailerTests
     // ── plumbing ─────────────────────────────────────────────────────────────
 
     private static IOptions<SiteIdentity> Site()
-        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local" });
+        => Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local", ApiBaseUrl = "https://test.local/webapi" });
 
     private static Sent Mailer()
     {
@@ -400,8 +445,22 @@ public sealed class EventGuestMailerTests
              .Callback<EmailMessage, CancellationToken>((m, _) => messages.Add(m))
              .Returns(Task.CompletedTask);
 
+        // SendAskedAsync no longer goes through IEmailService: it queues into the caller's
+        // context so the letter commits with the request it describes (item 239b). Recording both
+        // into the same list keeps every assertion below about WHAT the letter says, while the
+        // route it took is what changed.
+        var queue = new Mock<Ben.Data.WebApi.Services.IOutboxEmailQueue>();
+        queue.Setup(q => q.EnqueueAsync(
+                 It.IsAny<Ben.Data.Source.Context.BenDataContext>(),
+                 It.IsAny<EmailMessage>(),
+                 It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Source.Context.BenDataContext, EmailMessage, CancellationToken>(
+                 (_, m, _) => messages.Add(m))
+             .Returns(Task.CompletedTask);
+
         return new Sent(messages,
-            new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance));
+            new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance,
+                                 queue.Object));
     }
 
     /// <summary>The calendar file a confirmed booking's letter carries, as text.</summary>

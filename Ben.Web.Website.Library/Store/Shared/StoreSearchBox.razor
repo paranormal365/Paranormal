@@ -1,0 +1,80 @@
+@inject IBenAdminClient Store
+@inject IMediaUrlBuilder MediaUrls
+@implements IDisposable
+
+@*
+    The store's search (storefront S2.6). A real form that submits to /store/products?q=, so Enter
+    works before the page is interactive and with no script at all; once it is, typing two
+    characters or more offers up to eight products as links, a quarter of a second after the last
+    key.
+*@
+
+<form class="ben-store-search" action="/store/products" method="get" role="search">
+    <div class="input-group">
+        <label class="visually-hidden" for="@Id">Search the store</label>
+        <input id="@Id" name="q" type="search" class="form-control" placeholder="Search the store" autocomplete="off"
+               value="@_text" @oninput="OnInputAsync" @onkeydown="OnKeyDown" data-testid="store-search" />
+        <button type="submit" class="btn btn-primary" aria-label="Search"><BenIcon Name="search" /></button>
+    </div>
+    @if (_open && _suggestions.Count > 0)
+    {
+        <ul class="ben-store-search__list" data-testid="store-search-suggestions">
+            @foreach (var s in _suggestions)
+            {
+                <li>
+                    <a class="ben-store-search__item" href="@($"/store/p/{s.Slug}")">
+                        @if (s.ImageUploadFileId is { } picture)
+                        {
+                            <img src="@MediaUrls.StoreImage(picture, thumbnail: true)" alt="" />
+                        }
+                        <span class="flex-grow-1">@s.Name</span>
+                        <span class="text-secondary small">@StoreMoney.Format(s.MinPrice)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</form>
+
+@code {
+    [Parameter] public string Id { get; set; } = "store-search";
+
+    /// <summary>What the box starts with — the listing's current search.</summary>
+    [Parameter] public string? Initial { get; set; }
+
+    private string? _text;
+    private bool _open;
+    private IReadOnlyList<StoreSearchSuggestion> _suggestions = [];
+    private CancellationTokenSource? _pending;
+
+    protected override void OnParametersSet() => _text ??= Initial;
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString();
+        _pending?.Cancel();
+        _pending = new CancellationTokenSource();
+        var token = _pending.Token;
+
+        var term = _text?.Trim() ?? "";
+        if (term.Length < 2) { _suggestions = []; _open = false; return; }
+
+        try
+        {
+            await Task.Delay(250, token);
+            var found = await Store.SuggestStoreProductsAsync(term, token);
+            if (token.IsCancellationRequested) return;
+            // A failed lookup offers nothing; the search button still works.
+            _suggestions = found.Failed ? [] : found.Items;
+            _open = true;
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _open = false;
+    }
+
+    public void Dispose() { _pending?.Cancel(); _pending?.Dispose(); }
+}

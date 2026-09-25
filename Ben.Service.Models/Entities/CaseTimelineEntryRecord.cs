@@ -25,11 +25,12 @@ public record CaseTimelineEntryRecord
     public Guid? UpdatedByAppUserId { get; init; }
 
     /// <summary>
-    /// The research page this row stands for, when it is one (2026-09-14): a published research page with a date appears on
-    /// the timeline where it happened. Such a row is changed on its page, not here.
+    /// True for a row the timeline shows but does not own.
     /// </summary>
-    public Guid? ResearchEntryId { get; init; }
-
-    /// <summary>True for a row the timeline shows but does not own — a research page's.</summary>
+    /// <remarks>
+    /// Nothing sets it today. Research pages did, from 2026-09-14 until they were retired on 2026-09-16, and the
+    /// next thing that wants to put a row on the timeline it does not own will want it again — so the flag stays,
+    /// and the rows that carry it stay uneditable here.
+    /// </remarks>
     public bool IsReadOnly { get; init; }
 }

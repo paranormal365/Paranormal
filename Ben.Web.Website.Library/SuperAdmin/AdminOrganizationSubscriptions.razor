@@ -139,11 +139,11 @@
         <div class="row mb-3">
             <div class="col-auto">
                 <label class="form-label" for="sub-start">Period start</label>
-                <input id="sub-start" type="date" class="form-control" @bind="_form.PeriodStart" />
+                <BenDateField Mode="DateEntryMode.Date" Id="sub-start" @bind-Value="_form.PeriodStart" />
             </div>
             <div class="col-auto">
                 <label class="form-label" for="sub-end">Period end</label>
-                <input id="sub-end" type="date" class="form-control" @bind="_form.PeriodEnd" />
+                <BenDateField Mode="DateEntryMode.Date" Id="sub-end" @bind-Value="_form.PeriodEnd" />
             </div>
             <div class="col-auto d-flex align-items-end pb-2">
                 <label>

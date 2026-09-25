@@ -108,7 +108,7 @@ public class ReadDoesNotGrantDestructionTests
         var root = Path.Combine(dir!.FullName, "Ben.Data.WebApi", "Controllers", "Entities");
         string[] guarded =
         [
-            "CaseNoteController.cs", "CaseFileController.cs", "CaseResearchController.cs",
+            "CaseNoteController.cs", "CaseFileController.cs",
             // Added when the sweep of 2026-08-26 reached the client-facing surfaces. The report
             // controller is the one that mattered most: sixteen endpoints on Case.Read, including
             // publishing a report to the client and deleting a published one.
@@ -117,6 +117,10 @@ public class ReadDoesNotGrantDestructionTests
             // The verb the sweep missed: Create here had no per-row manage gate to save it, so
             // Investigation.Read scheduled visits until the read-only-member e2e caught the button.
             "OrgInvestigationsController.cs",
+            // Canvas plan review R25, 2026-09-14: case boards are saved by anybody with Cases
+            // Update, so the next copy-paste of "can they read the case?" onto a PUT would let
+            // every reader overwrite the board.
+            "CanvasDocumentController.cs",
         ];
 
         var offenders = new List<string>();

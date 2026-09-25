@@ -48,3 +48,12 @@
     opacity: .75;
     font-size: .8125rem;
 }
+
+/* The Overlay slot (storefront): a title and a button over the picture. Laid over the whole frame
+   and lets clicks through to the slide's own link; whatever the caller draws inside turns them
+   back on for itself (ben-store.css, .ben-store-hero__overlay > *). */
+.ben-slideshow__overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}

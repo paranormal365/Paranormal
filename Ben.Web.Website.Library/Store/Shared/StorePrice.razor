@@ -1,0 +1,31 @@
+@*
+    A price, as the store shows one everywhere (storefront S2.5): the old price struck through when
+    there is one, then the price; a range as "from" when variants differ.
+*@
+
+<span class="ben-price @(Large ? "ben-price--lg" : null)">
+    @if (Was is { } was && was > Price)
+    {
+        <del class="ben-price__was">@StoreMoney.Format(was)</del>
+    }
+    @if (Max is { } max && max > Price)
+    {
+        <span>@StoreMoney.Format(Price) – @StoreMoney.Format(max)</span>
+    }
+    else
+    {
+        <span>@StoreMoney.Format(Price)</span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public decimal Price { get; set; }
+
+    /// <summary>The highest variant's price, for a range.</summary>
+    [Parameter] public decimal? Max { get; set; }
+
+    /// <summary>The old price, drawn struck through.</summary>
+    [Parameter] public decimal? Was { get; set; }
+
+    [Parameter] public bool Large { get; set; }
+}

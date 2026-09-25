@@ -25,7 +25,24 @@ public sealed record BenMapPin(
     string? Color = null,
     bool Dimmed = false,
     string? Cluster = null,
-    string? IconSvgPath = null);
+    string? IconSvgPath = null,
+    /// <summary>
+    /// Which way this pin points, clockwise from north — and a request to be drawn as a direction
+    /// rather than as a pin.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ben, 2026-09-16, watching a session play back: "In the player map, it shows a green circle.
+    /// I wanted an arrow." A teardrop pin says WHERE somebody was and nothing about which way they
+    /// were facing, which on a replay is half the question.
+    /// </para>
+    /// <para>
+    /// Set, the map draws a flat arrow rotated to this bearing and centred on the coordinate —
+    /// not a pin with something rotating inside it, which reads as a pin that has come loose.
+    /// Null leaves the pin exactly as it was.
+    /// </para>
+    /// </remarks>
+    double? RotationDegrees = null);
 
 /// <summary>A filled circle of a real radius on the ground — an address's region.</summary>
 public sealed record BenMapCircle(

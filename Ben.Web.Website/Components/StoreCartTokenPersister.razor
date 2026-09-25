@@ -1,0 +1,29 @@
+@* StoreCartTokenPersister.razor (storefront S3.4)
+   No rendermode — runs in the static SSR HTTP scope, where the cookie middleware has filled
+   StoreCartTokenHolder and VisitorAddressHolder. Writes both into the page, as EntraTokenPersister
+   does; MainLayout (circuit scope) reads them back in OnInitialized. The circuit has no
+   HttpContext, so this is the only way the cart cookie's value reaches it — without ever
+   reaching JavaScript.
+*@
+
+@inject StoreCartTokenHolder CartToken
+@inject VisitorAddressHolder Visitor
+@inject PersistentComponentState AppState
+@implements IDisposable
+
+@code {
+    public const string Key = "StoreVisitor";
+
+    private PersistingComponentStateSubscription _sub;
+
+    protected override void OnInitialized()
+        => _sub = AppState.RegisterOnPersisting(PersistAsync, RenderMode.InteractiveServer);
+
+    private Task PersistAsync()
+    {
+        AppState.PersistAsJson(Key, new SerializedStoreVisitor(CartToken.Token, Visitor.Address));
+        return Task.CompletedTask;
+    }
+
+    public void Dispose() => _sub.Dispose();
+}

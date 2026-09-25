@@ -11,6 +11,56 @@ import CryptoKit
 /// A five-hour session is tens of thousands of records and never needs to be in memory at once.
 public struct DeviceDataExporter: Sendable {
 
+    /// What a session bundle is called.
+    ///
+    /// Ben, 2026-09-16: "Even if we need to give it its own type like .ben but know that is a
+    /// field session zipped for player." A ZIP underneath, and named for what it is rather than
+    /// for how it is packed — so a phone handed one knows to open it, and a person looking at one
+    /// knows what they have. The same file the site takes in, hands back, and plays out of.
+    public static let fileExtension = ".ben"
+
+    /// What it is, when something asks for a type rather than a name.
+    public static let contentType = "application/vnd.ishaunted.field-session"
+
+    /// What to call a session's bundle.
+    ///
+    /// **A name a person can read.** These were `session-<uuid>.ben`, which is fine for a thing
+    /// only a server ever opens and useless the moment somebody AirDrops one — a phone showing
+    /// "session-afbc7810-1ae8-4a57-90a9-2b2380047d64.ben" has told the person nothing about what
+    /// they are being handed. The id still travels inside `data.json`, where it is what actually
+    /// identifies the session; the server matches on that and never on the file name.
+    ///
+    /// The date leads so a folder of them sorts into the order they were recorded, and it is
+    /// written year-first because that is the one spelling nobody can misread — the rule that
+    /// dates are unambiguous, kept somewhere a slash cannot go.
+    public static func bundleName(startedAt: Date, label: String?) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HHmm"
+        let stamp = formatter.string(from: startedAt)
+
+        let words = cleanedForFileName(label) ?? "Field session"
+        return "\(stamp) \(words)\(fileExtension)"
+    }
+
+    /// The operator's own words, made safe to be a file name — or nil if nothing is left.
+    ///
+    /// Slashes and colons are the two that matter: one makes a path and the other is a separator
+    /// on the Mac these land on. The rest is trimming, so a label somebody typed with a trailing
+    /// space does not become a file name with one.
+    static func cleanedForFileName(_ label: String?) -> String? {
+        guard let label else { return nil }
+        let forbidden = CharacterSet(charactersIn: "/\\:?%*|\"<>\u{0}")
+        let cleaned = label.components(separatedBy: forbidden).joined(separator: " ")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        // Long enough for a real description of a room, short enough to survive every filesystem
+        // and every mail attachment name this may pass through.
+        let trimmed = String(cleaned.prefix(60)).trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private let files: SessionFileStore
 
     public init(files: SessionFileStore) {
@@ -30,6 +80,21 @@ public struct DeviceDataExporter: Sendable {
         public var trigger: DeviceDataEnvelope.Trigger
         /// Relative paths, as stored on the session.
         public var includedMedia: [String]
+
+        /// A file to use in place of the session's own, by relative path.
+        ///
+        /// How a trimmed or shrunk recording reaches the bundle: the send screen cuts and
+        /// converts into a scratch directory first, and hands the result here. The bundle keeps
+        /// the ORIGINAL path — the readings name it, and rewriting those to point at a temporary
+        /// file name would break every reference in the document. The session's own copy is never
+        /// touched either way.
+        public var substitutes: [String: URL]
+        /// The account signed in when this was recorded, and the device that recorded it.
+        ///
+        /// Both go into the seal. Neither is required: a session recorded with nobody signed in
+        /// is an ordinary session, and the device id is best-effort by nature.
+        public var recordedByAccountId: UUID?
+        public var deviceId: String?
         /// The stretch to send, when the operator chose one (item 210).
         ///
         /// **Nil means the whole session**, which is what every caller wanting the old behaviour
@@ -42,6 +107,8 @@ public struct DeviceDataExporter: Sendable {
         public init(sessionId: UUID, startedAt: Date, endedAt: Date?, locationLabel: String?,
                     deviceModel: String, timezone: String?, batteryPercentAtStart: Double?,
                     trigger: DeviceDataEnvelope.Trigger, includedMedia: [String],
+                    substitutes: [String: URL] = [:],
+                    recordedByAccountId: UUID? = nil, deviceId: String? = nil,
                     window: SessionWindow? = nil) {
             self.sessionId = sessionId
             self.startedAt = startedAt
@@ -52,6 +119,9 @@ public struct DeviceDataExporter: Sendable {
             self.batteryPercentAtStart = batteryPercentAtStart
             self.trigger = trigger
             self.includedMedia = includedMedia
+            self.substitutes = substitutes
+            self.recordedByAccountId = recordedByAccountId
+            self.deviceId = deviceId
             self.window = window
         }
     }
@@ -80,7 +150,8 @@ public struct DeviceDataExporter: Sendable {
                            batteryPercentAtStart: request.batteryPercentAtStart,
                            locationLabel: request.locationLabel,
                            timezone: request.timezone,
-                           trigger: request.trigger))
+                           trigger: request.trigger,
+                           recordedByAccountId: request.recordedByAccountId))
 
         // Encoded with no readings, then the array spliced in — so the readings never have to
         // be held as objects.
@@ -102,8 +173,14 @@ public struct DeviceDataExporter: Sendable {
     }
 
     /// Writes the whole bundle: `data.json` plus the chosen media under `media/`.
-    public func export(_ request: Request, log: ReadingLog, to directory: URL) async throws -> Result {
-        var document = try await buildDocument(request, log: log)
+    /// - Parameter document: a document already built and adjusted by the caller, when it has one.
+    ///   The send screen rebases each cut recording's audio offsets before sealing, and rebuilding
+    ///   the document here would quietly throw that away — putting every trimmed recording back as
+    ///   far from its readings as the amount cut off its front.
+    public func export(_ request: Request, log: ReadingLog, to directory: URL,
+                       document prepared: Data? = nil) async throws -> Result {
+        var document: Data
+        if let prepared { document = prepared } else { document = try await buildDocument(request, log: log) }
 
         // Stamp each included file's digest into the readings that name it, so a reader can
         // prove the pairing survived transit — audio attached to the wrong reading is worse
@@ -111,12 +188,35 @@ public struct DeviceDataExporter: Sendable {
         var entries: [ZipWriter.Entry] = []
         var included: Set<String> = []
 
+        // Stripped copies of photographs live here for as long as it takes to seal the bundle.
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bundle-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
         for path in request.includedMedia {
-            let url = files.fileURL(for: request.sessionId, relativePath: path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            // A cut or shrunk copy stands in for the session's own, under the same path.
+            let original = request.substitutes[path]
+                ?? files.fileURL(for: request.sessionId, relativePath: path)
+            guard FileManager.default.fileExists(atPath: original.path) else { continue }
+
+            // A photograph goes in with its EXIF off. Not because the position is unwanted — the
+            // session records position and heading on purpose — but because a bundle is served as
+            // the bytes that were sent, and a session can be shared with its coordinates withheld.
+            // A JPEG still carrying a fix would hand over the address the document refused. The
+            // original is untouched on the phone, where it is the evidence.
+            var url = original
+            if ImageMetadataStripper.canStrip(original) {
+                let clean = scratch.appendingPathComponent(
+                    (path as NSString).lastPathComponent)
+                if ImageMetadataStripper.write(original, to: clean) { url = clean }
+            }
+
             entries.append(ZipWriter.Entry(path: path, file: url))
             included.insert(path)
 
+            // Digested from what is actually going IN. Stamping the original's digest over a
+            // stripped copy would make every photograph fail the check it exists to pass.
             if let digest = try? Self.sha256(of: url) {
                 document = Self.stampDigest(digest, forFilename: path, in: document)
             }
@@ -127,9 +227,27 @@ public struct DeviceDataExporter: Sendable {
 
         entries.insert(ZipWriter.Entry(path: "data.json", data: document), at: 0)
 
+        // The seal goes in last and covers everything else, including data.json — so a changed
+        // reading is as detectable as a swapped recording. It cannot cover itself, which is why
+        // it is added after the digests are taken rather than counted among them.
+        var sealed: [SessionSeal.Entry] = []
+        for entry in entries {
+            guard let (digest, size) = try? Self.digestAndSize(of: entry) else { continue }
+            sealed.append(SessionSeal.Entry(path: entry.path, sha256: digest, byteCount: size))
+        }
+        let seal = SessionSeal(
+            recordedByAccountId: request.recordedByAccountId,
+            deviceId: request.deviceId,
+            sessionId: request.sessionId,
+            sealedAt: Date(),
+            entries: sealed)
+        entries.append(ZipWriter.Entry(
+            path: SessionSeal.entryPath, data: try DeviceDataJSON.encoder.encode(seal)))
+
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory
-            .appendingPathComponent("session-\(request.sessionId.uuidString.lowercased()).zip")
+            .appendingPathComponent(
+                Self.bundleName(startedAt: request.startedAt, label: request.locationLabel))
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
@@ -164,6 +282,23 @@ public struct DeviceDataExporter: Sendable {
             hasher.update(data: chunk)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The digest and size of whatever a zip entry is carrying, from disk or from memory.
+    ///
+    /// Taken off the bytes that are actually going in, which for a photograph is the stripped
+    /// copy rather than the original. A seal computed from the originals would fail on every
+    /// bundle the moment anybody checked it.
+    static func digestAndSize(of entry: ZipWriter.Entry) throws -> (String, Int64) {
+        switch entry.source {
+        case .data(let data):
+            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            return (digest, Int64(data.count))
+        case .file(let url):
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]
+                        as? NSNumber)??.int64Value ?? 0
+            return (try sha256(of: url), size)
+        }
     }
 
     /// Adds `"sha256":"…"` to every `audio_ref` naming this file.

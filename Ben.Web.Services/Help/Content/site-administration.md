@@ -168,7 +168,42 @@ Unset reads as **on**, so a site that never touches this setting behaves exactly
 **Administration → Users** lists every account; the view button on a row opens that person's
 record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
 files and site roles. Each tab edits directly, and every change is written to the audit log
-under your name.
+under your name. A photo in the files tab opens in the photo editor. See *Editing a photo* in
+Organization Administration.
+
+### Former members
+
+Closing an account does not remove it. The person's name, contact details and credentials go, but
+the row stays so that the cases, evidence and messages they wrote for a group remain where that
+group left them, signed "A former member". Deleting the row outright would take a group's record
+of its own work with it.
+
+That means every account ever closed is still in this list. **Include former members**, above the
+grid, decides whether you see them; it is off when you arrive, and a count beside it says how many
+are being hidden — so a search that finds nobody tells you to tick the box rather than reading as
+though that person was never here.
+
+A group's own member list never shows them at all. Nobody there can give a closed account a role,
+invite it or ask it to do anything, so it would only be clutter on a screen people work from.
+
+### Last sign-in and how many
+
+Two columns on the list answer who is actually using the site. **Last sign-in** is the most
+recent one; **Sign-ins** is how many there have been. Both sort, so a click on either heading
+puts the quietest or the busiest accounts at the top, and an account nobody has ever signed in
+to reads **Never** rather than sitting blank.
+
+Every way in is counted the same: a password, Sign in with Apple, a Microsoft account, and the
+code that hands a session to the standalone editor.
+
+Two things worth knowing before you read too much into a number:
+
+- **Nothing goes back further than 20 August 2026**, when sign-ins began being recorded. An
+  account older than that has a count from that day, not from the day it was made.
+- **A Microsoft account is counted once every twelve hours of use**, not once per sign-in. A
+  Microsoft session is a token that arrives with every page rather than a moment somebody signs
+  in, so there is no exact answer — a working day counts as one, and coming back in the evening
+  counts as another. Microsoft sign-ins were not recorded at all before 19 September 2026.
 
 The **Addresses** tab has two buttons beside each address once it has been placed on the map:
 **Map** shows the address with its region circle, and **Directions** opens the directions
@@ -200,8 +235,8 @@ you take while impersonating are real actions on their account.
 
 ## Site roles
 
-There are three roles that apply across the whole site, separate from anyone's role inside a
-group:
+There are four roles that apply across the whole site, separate from anyone's role inside a
+group. They add up: somebody can hold any mix of them.
 
 - **SuperAdmin** — everything: every page under Administration, impersonation, billing, and the
   power to hand out these roles.
@@ -210,6 +245,9 @@ group:
 - **Moderator** — reviews what people post: the feed's report queue and the media awaiting
   review, with the power to approve, hold or hide. No billing, no user administration, no
   impersonation. A SuperAdmin can moderate without holding this role.
+- **Seller** — a member who makes and sells their own items in the store. Only people with this
+  role are offered in a product's **Seller** field. It opens no part of Administration, and a
+  seller never sets a price or puts an item on sale — a SuperAdmin does both.
 
 Everyone else is an ordinary member. Creating an account and confirming an email address makes
 someone a verified member; it never puts them in a site role.
@@ -347,6 +385,129 @@ different fixes, and a polite summary tells you neither.
 
 If it succeeds and the message still does not arrive, the mail left this server and the problem is
 delivery — spam filtering, or the recipient's provider rejecting it after accepting it.
+
+### Every letter the site meant to send
+
+Under the settings, **Recent letters** lists what the site has actually tried to send lately. It
+opens on the pile you came for: the ones it has **given up on**.
+
+Each row says who it was for, what it was, when it was written, and where it got to — accepted by
+the mail server, still waiting with its next attempt time, or given up with the server's own last
+error against it.
+
+**Accepted is not received.** It means the mail server took the message. Whether anybody got it is
+only knowable from bounce reports, which this site does not collect. If a letter is accepted and
+the person still has nothing, the problem is delivery rather than sending, and the section above is
+the wrong place to look.
+
+**Send again** puts one given-up letter back in the queue; the sender picks it up on its next pass,
+within five minutes. There is a bulk version for after you have fixed a relay — it says how many it
+will requeue.
+
+Two letters cannot be sent again, and say so rather than offering a button that fails:
+
+- One the mail server already accepted. Sending it again would send a duplicate.
+- One whose **words were cleared**. A letter's body is deleted a month after it is accepted,
+  because a body carries somebody's name, what they booked and — for a hosted event — a working
+  door code. That is the trade: the record of the letter is kept for as long as you need it, the
+  contents are not. Whatever wrote it has to write it again.
+
+### Reading a letter
+
+**Read it** on a row opens what the site actually sent, drawn as the person received it. It answers
+the question the rest of the row cannot: not *did it go* but *what did it say* — the one you need
+when somebody reports that a confirmation was wrong, or blank, or meant for somebody else.
+
+![A letter that was sent, opened for reading](help-media:site-administration/reading-a-letter.png)
+
+Three things are worth knowing before you use it.
+
+**Opening a letter is recorded against your account.** A letter is a copy of somebody else's
+business: a booking names a guest, a password reset carries a working link, an event pass carries a
+code that opens a door. You may read one — somebody has to be able to answer what was sent — but
+who read whose letter is kept, and it is in the audit log as a **Read**.
+
+**A letter whose words were cleared cannot be read**, and says when they went instead of showing an
+empty frame. An empty frame would read as a letter that was sent blank, which is a far more
+alarming thing than "we no longer keep the words".
+
+**The letter cannot do anything.** It is drawn in a sealed frame that runs nothing — no scripts, no
+requests back out. A letter carries whatever somebody typed into a form somewhere, and an
+administration page that ran it would be a worse problem than the one you opened it to diagnose.
+
+
+## Email templates
+
+Every letter the site sends is written in code. **Email templates** lets you write your own version
+of one, and that version is used from the moment you publish it.
+
+**Deleting what you wrote puts the original back.** The letter the code writes never left the code
+— your template only stands in front of it — so "Use the site's letter" is a complete undo, and
+there is nothing to restore.
+
+### Filling in the details
+
+A letter says the reader's name, or the date, because of a **token**: a word in braces that is
+replaced when the letter is written.
+
+Pick a **table**, then a **column**, then **Add token**, and `{AppUsers.DisplayName}` is added to
+the body. Move it where you want it.
+
+![Writing a letter: the table and column dropdowns, the pieces, and the ready-made tokens](help-media:site-administration/email-template-editor.png)
+
+The tables on offer are the ones *that letter* actually has in its hands. A password-reset letter
+carries the person and nothing else, so it offers `AppUsers` alone — and it refuses to save a token
+it could never fill in, rather than sending a letter with a gap in it. Columns that are the site's
+business rather than a reader's — anything holding a password, a security code or a machine's
+bookkeeping — are never offered.
+
+There are also ready-made ones that need no table:
+
+| Token | Looks like |
+|---|---|
+| `{Date}` | 09/20/2026 |
+| `{Time}` | 9:05 AM |
+| `{FullDate}` | September 20, 2026 |
+| `{FullDateTime}` | September 20, 2026 9:05 AM |
+| `{Year}` | 2026 |
+| `{SiteName}` | IsHaunted.com |
+| `{SiteUrl}` | https://ishaunted.com |
+
+**Times are the reader's, not yours.** A letter written at 9:05 in the morning in Tennessee says
+10:05 to somebody in New York and 3:05 in the afternoon to somebody in London. A date column from a
+table is treated the same way, so nobody is shown a time they were never in.
+
+### Looking at it before anybody gets it
+
+**Preview** fills the tokens in with made-up details — Marguerite Ashdown, at 1201 Del Rio Pike —
+and draws the letter as it would arrive. Nothing real is used, so opening a preview never shows you
+somebody's actual name or address.
+
+![The body of a letter being written, with the preview underneath](help-media:site-administration/email-template-preview.png)
+
+**Save draft** keeps what you are working on without changing anything anybody receives. **Publish**
+is what takes effect, and it applies to the next letter of that kind — nothing already queued is
+rewritten.
+
+### Writing the body
+
+The body is HTML, and email HTML is not web HTML: tables for layout, every style written directly
+on the element, and no stylesheet. Outlook draws mail with Word's engine and Gmail removes style
+blocks, so anything cleverer falls apart somewhere. That is why the box is a plain one rather than
+a word processor — a rich editor would quietly rewrite exactly the markup that makes a letter
+survive those clients.
+
+If a template ever fails to render, the site sends its own letter instead and records why. Nothing
+you can write here can stop a letter going out.
+
+### The store's letters
+
+The store sends six letters, each one editable here like any other: the buyer's **receipt** ("Thank
+you for your order"), **Your order is on its way** (carrier and tracking — or that it went without
+tracking), **A refund on your order**, **A link to your order** (for "Find my order"), and to
+SuperAdmins **A new store order** and **Store stock is running low**. Each has a starter to begin from
+and sample values in the preview. A template you publish is used from then on; deleting it brings the
+site's own letter back.
 
 ## Knowing whether a member was ever emailed
 
@@ -521,6 +682,89 @@ Turned off:
 Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
 have their own switch, **Sell event credits**.
 
+## The storage ceiling
+
+**Administration → Site Settings → Limits → Free account storage (MB)** is what a free account may
+keep to itself. Leaving the box empty is safe: there is a built-in default of 2048 MB.
+
+Raising it takes effect immediately and needs no deploy, which is the point — when there is more
+disk, this is the one number to change.
+
+![The storage ceiling](help-media:site-administration/storage-ceiling.png)
+*Free account storage, in the Limits group. Empty means the built-in default.*
+
+**What counts against it** is everything stored under the person: recordings, photographs, video
+projects, equipment pictures, place evidence, feed media. What does not: a group's own work, the
+superseded version of a replaced file, and anything published to a public location's archive,
+which earns its space. Members of a group on a paid plan are not capped at all.
+
+**People are warned before they meet it.** A message goes out at 90% used and a stronger one at
+95%, each sent once. Somebody who frees space and drops back under 90% is warned again the next
+time they fill up, rather than being told once in their life and then meeting the limit in
+silence. Lowering the ceiling can therefore put accounts straight into the warned band on the next
+pass, which is the intended behaviour but worth expecting.
+
+## Places
+
+**Administration → Places** lists every location on the site: the homes groups work in and the
+public locations anybody signed in can contribute to. Search by name, street, town or state, and
+narrow to one kind or the other.
+
+Each row carries the three counts that decide what you can do with it — cases, visits and pieces
+of evidence. A row with nothing against it anywhere is one that can be removed; a row with
+anything against it is one to merge or make private instead.
+
+**Add a place** opens the same form everybody else uses, so a location you add is matched against
+what already exists rather than becoming a second record of the same building.
+
+### Correcting a place
+
+The pencil on a row opens the place for editing: what it is called, its street, town, state and
+ZIP, and where it sits on the map.
+
+This is the only door there is. The page where somebody adds a public location tells them "there
+is already a place at that address, and it is recorded as somebody's home — if that is wrong, ask
+a site administrator to correct it", and this is where that correction happens.
+
+**An address that already belongs to another record is refused.** Two records of one building
+split its evidence between them, which is the thing the whole archive is built to avoid, so an
+edit that would land on an occupied address stops and names the record already there. Use
+**Duplicate Places** to fold the two together instead.
+
+**Coordinates.** Type them and they are kept exactly as given — somebody correcting a record by
+hand usually knows better than an automatic lookup. Leave them empty and change the address, and
+the old position is thrown away and the new address looked up instead: a pin left over from the
+previous address is worse than no pin, because nothing on the map says it is wrong.
+
+**Look up the address again** re-runs that lookup without changing anything else, which is what a
+row reading "not on the map" needs. When the lookup still cannot place it, the page says why
+rather than showing an empty map — a misspelt street and an address that simply is not in the
+mapping service look identical otherwise.
+
+### Taking a place off the public map
+
+This is the repair for the mistake that matters most: somewhere somebody lives, entered as a
+public location. A public location has a page strangers can read and add photographs to, so a home
+listed that way is a public evidence page for an address a family lives at.
+
+**Make it a private residence** takes the page away and stops anybody adding to it. Nothing
+recorded there is deleted — the group working the case keeps every file, every session and every
+note. It is the safe answer, and it is almost always the right one.
+
+Going the other way, **Make it a public location**, is refused for anything carrying a street
+number. If a genuine landmark has a street address on it, clear the address first. The refusal is
+deliberate: promoting a row on a list of fifty is exactly how somebody's home would end up public.
+
+### Deleting a place
+
+Only possible while nothing at all points at the record — no case, no visit, no evidence, no
+event, no room, no venue profile, no contact, no claim. If anything does, the refusal names it
+("3 cases and 6 pieces of evidence still point at it") so you know what to move first.
+
+For a place that is a duplicate of another, use **Duplicate Places** instead: merging moves
+everything onto the record you keep and then removes the empty one. For a place with real history
+that should not be public, make it private rather than trying to empty it.
+
 ## Merging two groups
 
 **Administration → Groups → Merge Groups** takes two organizations and ends with one. Choose
@@ -559,7 +803,7 @@ a test row, a case opened against the wrong group.
 Read the preview first. It has two halves, and they are two different things happening.
 
 **Destroyed.** Everything that exists only because the case does: its timeline, files, notes,
-messages, research, reports, investigations, contacts, votes, transfer records and any client
+messages, research boards, reports, investigations, contacts, votes, transfer records and any client
 access rows. Files the case took its own copy of are destroyed with it.
 
 **Kept, with the case reference removed.** Anything that belongs to somebody else and merely
@@ -813,3 +1057,374 @@ on the campaign itself — deals differ per referrer, so the percent does too. A
 percent is not counted, and the owed figure wears a **partial** badge when that happens, so a low
 number never reads as a settled one. Recording a payout pre-fills the outstanding balance and
 lands on the ledger like everything else.
+
+## The store
+
+The store sells scientific gear for investigations — EMF meters, spirit boxes, recorders — to
+anyone, with or without an account. Everything about it is managed under **Store** in the
+administration menu: the dashboard, categories, products, stock, discount codes, reviews and the
+store's own settings. Every one of those screens works while the shop is switched off, which is
+how the catalogue gets entered, priced and photographed before any visitor can see it.
+
+![The store dashboard: orders to pack and ship, reviews waiting, sales, and what is running low](help-media:site-administration/store-dashboard.png)
+
+## Turning the store on
+
+Two switches, for two different jobs:
+
+- **Feature — Store**, under Site Settings → Features, shows or hides the whole shop. Off, the
+  store's pages, cart and checkout answer "page not found". Orders already placed are untouched:
+  a buyer's order page, the thank-you page and the links in their letters keep working, and so do
+  these admin screens.
+- **Take orders**, on the store settings page, pauses buying without hiding anything. The
+  catalogue stays browsable and every cart says the store isn't taking orders at the moment. This
+  is the switch to reach for if something goes wrong with payments.
+
+Before switching the shop on, open **Store Settings** and read the **Ready to sell** checklist. It
+lists every reason the store could not take an order right now — no ship-from address, nothing
+live with stock, Stripe keys missing, Stripe Tax not active in the Stripe dashboard, the shop
+switched off — and says **Ready to sell** only when the list is empty.
+
+![Store Settings, with the Ready to sell checklist beside the form](help-media:site-administration/store-settings.png)
+
+## Categories and products
+
+A **category** is a shelf: EMF meters, spirit boxes, field accessories. Each has an address
+(/store/c/emf-meters), an optional picture, a place in the order, and its own on/off switch.
+Hiding a category takes its products off the store without touching them — the page tells you
+how many live products it will hide before you confirm, and showing the category again puts back
+exactly what was live. A category holding products cannot be removed; move them first. The last
+category cannot be removed either.
+
+**Subcategories.** A category can sit under another one — choose it in **Sits under** when editing
+it. They go one level deep: a subcategory sits under a top-level category, and a category that has
+subcategories stays at the top. On the Categories page subcategories are listed indented under their
+category, and the arrows move a row among its own level. In a product's **Category** list they read
+"Category › Subcategory". Hiding a category hides its subcategories' products too, and a category
+with subcategories cannot be removed until they are moved or removed.
+
+![The products list: each product's price, stock, seller and whether it is live](help-media:site-administration/store-products.png)
+
+**What shoppers see.** A category or subcategory appears on the store only when something is on
+sale under it — a category counts its subcategories' products, so it appears as soon as any of them
+has something for sale. An empty one stays out of sight (its address says "Page not found") but is
+always there to file products in. The store's front page shows top-level categories; the side list
+on the product pages shows subcategories under them. Only SuperAdmins can change categories.
+
+A **product** starts with just a name. It arrives hidden, with one variant at $0.00 waiting for a
+price. It goes on sale with **Activate**, which refuses — saying what to do — until the product
+has a price, at least one picture, a live variant and a visible category. A product's address
+(/store/p/k-ii-emf-meter) is made from its name once and then kept: renaming a product does not
+break links people have shared. Type a new address only if you mean to.
+
+**Preview** — the button at the top of the product, the tab beside Pictures, or the eye on
+the products list — shows the product page as a shopper will see it: the pictures, the price, the
+choices, the description and the specifications. It is drawn from what is on the form now, so a
+change shows before you save it (the note above it says when something is unsaved), and it works
+while the store is switched off. With the store on, **Open the saved page** shows the real page
+as it stands.
+
+**Seller** names the member who makes and sells the product; leave it on "The site's own stock"
+for anything the site sells itself. Only people with the Seller role are listed — give it on their
+**Site Roles** tab first. Shoppers never see who the seller is, and the products list shows it in
+its **Seller** column. A seller who leaves the site leaves their products behind as the site's
+own.
+
+A product that has been sold can be switched off but never deleted, because its orders, invoices
+and refunds point at it. **Duplicate** makes a hidden copy — options, variants with new SKUs and no
+stock, specifications and copies of every picture — for a product that differs only slightly.
+
+![Editing a product: its details, with tabs for options and variants, pictures and a live preview](help-media:site-administration/store-product-edit.png)
+
+## Options, variants and stock
+
+**Options** are what a buyer chooses — Colour, Size — up to three per product, each with its
+values (a Colour can show round swatches from a hex colour; everything else shows as buttons).
+**Generate variants** makes one variant for every combination the product does not have yet, so
+two colours by three sizes makes six; running it again adds nothing. A value some variant is made
+of cannot be removed from its option until that variant stops using it.
+
+Each **variant** has its own SKU, price, optional old price (shown struck through — it must be
+higher than the price), and stock. A variant that has been ordered can be switched off but not
+deleted, and a live product always keeps at least one live variant.
+
+Stock only ever changes with a reason — **Received**, **Correction** or **Damaged** — and every
+change leaves a line in the variant's stock log saying who, when, by how much and what it left.
+**Sold**, **Refunded** and **Cancelled** lines are written by the store itself. A change is
+refused rather than applied if it would leave fewer on the shelf than open checkouts are holding.
+
+The **Stock** page shows every live variant at once: on hand, held by checkouts in progress, and
+free to sell, with a low-stock filter. Type a delivery into the **Receive** column across as many
+variants as it covers and save once — all of it is applied or none of it is, and a refusal names
+the SKU that stopped it. A supplier's sheet can be uploaded as a CSV of `Sku,Delta` rows, with the
+same all-or-nothing rule; **Export CSV** downloads the whole stock list for a stocktake.
+
+![The stock page: on hand, held by checkouts, free to sell, and a box to receive more](help-media:site-administration/store-stock.png)
+
+## Product pictures
+
+Up to twelve pictures per product, in the order you drag them. A picture can be tied to a
+variant, so choosing that colour shows that photograph. Every picture is stored as a clean copy —
+the camera details and location are removed — sized for a sharp product page, with a small copy
+for cards and the cart. A live product keeps at least one picture.
+
+## Sellers and sale requests
+
+A member with the **Seller** role (given on their Site Roles tab) has a **Selling** section of their
+own. It is in their menu only while the store is switched on — like every other way into the shop —
+but its pages work at their addresses while it is off, so a seller you send to `/store/selling` can
+prepare their items before the store opens. There they add items as hidden drafts and edit their words, pictures, options, variants and
+stock — never the price, web address, placement, tax code or seller, and never another seller's
+item. A variant they add starts switched off and unpriced.
+
+A seller's item goes on sale only when they ask. **Store → Sale Requests** lists the requests
+waiting, oldest first, each with what the seller wants a unit (on top of cost) and what the item
+still needs before it can go on sale. Set the selling price on the item's **Options & variants**
+tab, then press **Approve and put on sale** — this fixes the seller's asking price onto the item as
+what they are paid. Or press **Decline…** and say why; the seller reads it. The dashboard's **Sale
+requests** tile and a **Waiting** badge on the products list show when any are waiting.
+
+**Put on sale** isn't offered on a seller's item: approving their request is the way, because it
+records what they are paid. A seller can take their own item off sale at any time, and the
+SuperAdmins get a message when they do.
+
+![Sale requests: the item, what the seller asks, and what it still needs](help-media:site-administration/store-sale-requests.png)
+
+## Packages and partial shipping
+
+An order ships as one **package per seller**: the store's own stock is one package, and each seller
+sends their own. Every package has its own status (being prepared, packed, shipped, delivered),
+carrier and tracking — or "No tracking provided". The order page shows a card per package with its
+own **Mark packed**, **Ship…**, **Correct tracking…** and **Mark delivered** buttons; a seller does the
+same for their own packages from **Selling → My Packages**.
+
+The order's status follows its packages: **Partially shipped** while some have gone and some
+haven't, **Shipped** once all have, **Delivered** once all have arrived. The buyer gets one "on its
+way" email per package, listing only that package's items. An order can't be cancelled whole once
+any package has shipped, and its address can't change then either — refund the items instead.
+**Refunds and packages.** The **Refund…** dialog can give back a package's shipping (and the tax on it)
+alongside items — each package's shipping only once. **Cancel package…** on a package that hasn't
+gone refunds its items and its shipping, puts the items back on the shelf if you tick it, and marks
+the package cancelled; the rest of the order carries on, and it reads **Shipped** once everything
+left has gone. The only package left can't be cancelled alone — cancel the whole order, which gives
+back every package's shipping. A package that has gone can't be cancelled: refund its items instead.
+The **To ship** tile counts partly shipped orders too. The CSV export has a row per item with its
+package, sender, carrier and tracking.
+
+![An order in two packages, each with its own status, tracking and buttons](help-media:site-administration/store-order-packages.png)
+
+## Parts and cost
+
+Every product's **Parts & cost** tab holds its parts list — each part's price per pack or per piece,
+how many a unit uses, links and a picture — and an **other costs** line. Together they make the
+product's **cost basis**, rounded to the cent once at the end. A seller keeps their own item's list;
+the store keeps the list for its own stock. A seller is paid cost basis plus their approved asking
+price for each unit sold. None of it is ever shown to shoppers.
+
+## Product files
+
+A product's **Files** tab holds its manuals, firmware, software and documents — uploads up to 95 MB,
+or a manual written on the site (Markdown, or imported from a `.md` or `.txt` file). Each file is
+**for buyers** or **private**. A file for buyers appears under **Downloads** on the order page of
+everyone who bought the product, once paid, while the order isn't cancelled and unless that line was
+refunded in full; a private one is only for the store and the product's seller. The seller manages
+their own item's files; the store can change any. Changes are recorded in the product's history.
+
+## FAQ and questions
+
+Each product has an **FAQ** tab — questions and answers shown on its page after the reviews, with a
+switch to hide them. Signed-in shoppers can also **ask a question** from the page. A question about a
+seller's item goes to that seller; one about the store's own stock goes to every SuperAdmin, and waits
+under **Store → Questions** (**The store's own** shows those; **Every item** shows sellers' too, and the
+store can answer any). Answering or declining tells the shopper, who reads it under **My Questions**;
+neither side is told who the other is. **Add to the FAQ…** copies an answered question into the
+product's FAQ, reworded if need be — the shopper's own answer is left as it was. A person's questions
+go with their account when it's closed or deleted.
+
+![Questions: the store's own stock first, with Answer, Decline and Add to the FAQ](help-media:site-administration/store-questions.png)
+
+## Versions
+
+A product that has been on sale can have a **new version** (**Versions** tab → **Start a new
+version…**): a hidden draft copying everything but the stock — words, pictures, options and variants
+(new SKUs), parts, FAQ and files — linked back to the old one. Whoever starts it chooses what happens
+to the old one when the new one **first goes on sale**: sell what's left and then come off sale (a
+daily job takes it off once nothing is on hand), stay on sale beside it, or come off sale at once.
+It happens once; after that the choice is fixed. An old version taken off this way keeps its page —
+"No longer made", with a link to the new one — and can't be bought; putting it back on sale by hand
+clears that. Each product has one newer version at most, and a product a newer version links back to
+can't be deleted.
+
+## The item's page
+
+A product's **Page** tab holds its own **returns** words (shown under the store's returns window),
+its **warranty**, and up to three **videos** (mp4, webm or mov, 95 MB each, served from a copy with
+the location and camera details removed where the host has ffmpeg; the door serves a file only while
+a product holds it). **Take and show reviews** is the store's alone — a seller can't change it. Off
+hides the item's reviews and its stars everywhere (cards, sorting, the rating filter) and nobody can
+write one; switching it back on brings them back.
+
+## Paying sellers
+
+Payouts are made by hand: the store takes the whole payment for every order and pays its sellers
+outside the site — a bank transfer, a check — then records it. **Store → Sellers** lists everyone
+with the Seller role or earnings on the books: what each is **owed**, what's **ready to pay**, what
+they've been paid to date and when last.
+
+A seller's earnings are written when their package **ships**: cost + asking price for each unit (as
+fixed when the order was placed) and the label credit. A refund of units that had shipped takes
+their earning back; units refunded before shipping were never earned. A refund by amount is the
+store's to bear — add an **Adjustment…** (with a note the seller reads) to charge a seller for one.
+
+**Ready to pay** is what's older than the returns window, so a return can't take it back after it's
+paid. On a seller's page, **Record payment…** pays either what's ready or everything owed; it marks
+exactly those earnings paid. If their earnings changed while the page was open, it refuses and says
+the new figure — record it again. A seller who owes the store (refunds after payment) carries it
+forward: nothing can be recorded until their balance is positive again. **Void…** a payment recorded
+in error and its earnings are owed again. **Export CSV** lists every line with when it was paid.
+
+A seller who closes their account with earnings unpaid is allowed to; the SuperAdmins are told, and
+their page stays here to settle it.
+
+![Sellers: what each is owed, ready to pay, and has been paid](help-media:site-administration/store-sellers.png)
+
+![One seller's books: Record payment, adjustments, and every line](help-media:site-administration/store-seller.png)
+
+## Economics and fees
+
+A product's **Parts & cost** tab ends with its **Economics**: what a unit costs to make, what its
+seller asks and earns (cost + asking price), the price, the card fee on one bought alone, and what
+the store keeps. **Suggested price** covers the seller's earning (or the cost of the store's own
+stock), adds the store's markup, and leaves room for the card fee. A price that wouldn't cover the
+seller's earning plus the fee is flagged in red.
+
+The markup and the fee estimate are on **Store Settings → Prices and fees** (30%, 2.9% and $0.30
+unless changed). The estimate is for one unit bought alone; an order of several pays the fixed part
+once.
+
+**What an order came to** is fixed at checkout on every line — its cost, the seller's ask and
+earning, and the store's markup — so later changes to a parts list or an asking price change the
+next order, never one already placed. An order's **Economics** card shows the sellers' earnings and
+label credits, the items' markup less the discount, the shipping the store kept, the card fee Stripe
+really took (read from Stripe shortly after payment; "not known yet" until then) and what the store
+keeps — on what wasn't refunded. Stripe keeps its fee when a payment is refunded; the store absorbs
+discount codes and fees.
+
+## A product's history
+
+The **History** tab on a product lists every change to it, newest first: who made it, when, and
+what it was, in a sentence — "Renamed it from “REM Pod” to “REM Pod II”", "Changed Default’s
+price from $59.99 to $64.99", "Received 12 of Large". It covers details, going on and off sale,
+the seller, options, variants, prices, stock counted in or written off, and pictures. Sales and
+refunds are in each variant's stock log instead. A save that changed nothing adds no line.
+
+When an item has a seller, the seller sees its history too, with two differences: price lines
+are left out, and a change the store's staff made reads **The store** rather than a name.
+
+![A product's history: every change, and who made it](help-media:site-administration/store-product-history.png)
+
+## Discount codes
+
+Store discount codes (GHOST10) are separate from the plan coupons under Billing. A code takes a
+percentage or a dollar amount off the products — never shipping or tax — and can have a minimum
+order, a start and end date, a total number of uses and a number of uses per buyer. The list says
+what stops a code working today: **Takes nothing off**, **Expires before it starts**, **Used up**
+or **Expired**. Once an order has used a code it can be retired (switched off) but not renamed or
+deleted, because the order keeps the code it was bought with.
+
+## Orders and fulfilment
+
+**Orders** (under Store) lists every paid order and every checkout still waiting for payment,
+newest first. Search by order number, buyer, email, SKU, product or tracking number; filter by
+status, discount code, dates, **Waiting to go out or needing attention**, **Needing attention**, and
+**Refunds that failed or are stuck**. Checkouts that were never paid and have finished are left out
+unless you ask for them. The dashboard's **To pack**, **To ship** and **Needs attention** tiles, and
+a discount code's "N orders", open this list already filtered. **Export CSV** downloads what the
+filters show, one row per item — number, date, buyer's state, SKU, quantity, prices, discount, tax,
+shipping and refunds.
+
+![The order desk: every order with its buyer, total and status](help-media:site-administration/store-orders.png)
+
+Open an order for everything about it: the buyer, where it is going, the items, the money, its
+refunds and its history. Packing, shipping and delivery are done **on each package's card** — an
+order with one package has one card; see **Packages and partial shipping** for more than one. The
+buttons are only the ones that make sense now:
+
+- **Mark packed** — for a paid package.
+- **Ship…** — choose the **carrier** (USPS, UPS, FedEx, DHL or Other) and type the **tracking
+  number**; the tracking link is made from the two, and the dialog shows it before you confirm. For
+  "Other" you may paste the carrier's own https link. If the parcel is not tracked, tick **No
+  tracking provided** — it ships with the carrier and no number, and the buyer is told it went
+  without tracking. Shipping emails the buyer straight away.
+- **Correct tracking…** (or **Add tracking…** for a parcel sent untracked) — fixes the carrier or
+  number on a shipped package. It does not email the buyer; use **Resend email…** if they need it.
+- **Mark delivered** — for a shipped package.
+- **Edit address…** — until the first package ships. Changing the buyer's email replaces the order's private link
+  (the old one stops working) and sends the receipt to the new address. Sales tax is not worked out
+  again for a new state; the history notes it.
+- **Resend email…** — the receipt, or "Your order is on its way" once it has shipped.
+- **Release checkout** — lets go of a checkout still waiting for payment, giving back its stock and
+  discount code. It is refused while the payment is still going through at Stripe.
+- **Invoice** prints the order's invoice; **Open in Stripe** opens the payment in Stripe's dashboard.
+
+![One order on the desk: its actions, the buyer, where it's going, the items and the money](help-media:site-administration/store-order.png)
+
+**Needs attention.** An order is flagged when something about its payment needs a person to look —
+paid after its checkout was cancelled, or an amount that did not match. It cannot be packed or shipped
+until you read the reason and press **I've looked — clear it**.
+
+**Notes** you add go into the order's history with your name. Everything done to an order is there,
+newest first.
+
+## Refunds and cancellations
+
+**Refund…** on an order gives money back to the buyer's card through Stripe. Refund **by item** —
+choosing how many of each, and whether they go back on the shelf — or **by amount** (shipping, a
+goodwill amount), which never restocks. Every refund needs a reason. You can refund up to what is
+still refundable; a refund still going through at Stripe counts against that.
+
+A refund moves nothing until Stripe says the money has gone: then the stock goes back (if you chose),
+the order's refunded total rises, it becomes **Refunded** when nothing is left, the buyer is emailed,
+and the sales tax filing is reversed. **A pending refund finishes when Stripe says so** — the refund
+shows **Awaiting Stripe** meanwhile, and the order updates by itself. If Stripe refuses, the refund
+shows **Failed** with Stripe's reason and nothing else changed; **Try again** looks for it at Stripe
+first and never refunds twice. A refund made in Stripe's own dashboard is recorded on the order too
+("Refunded from the Stripe dashboard"), without restocking.
+
+**Cancel…** is for a paid order that has not shipped: it refunds everything still refundable,
+shipping included, puts the items back on the shelf if you tick it, and marks the order Cancelled
+once the refund goes through. A shipped order is refunded instead.
+
+**Refunds that failed or are stuck** on the Orders list finds the ones to look at. **Export refunds**
+on the same page downloads every refund in the chosen dates with its status and Stripe's ids.
+
+## Store reviews
+
+Buyers can review what they bought, and every review waits in **Reviews** until somebody approves
+or refuses it. Only approved reviews count toward a product's stars. Refusing needs a reason,
+because the reviewer is told why. The shop can reply under an approved review; refusing a review
+later takes the reply down with it. The queue shows the oldest waiting review first.
+
+The reviewer sees their own review on the product page the whole time — "Waiting for approval", then
+published, or the reason it wasn't. A reviewer who edits a published review sends it back to the
+queue, and it comes down until it's approved again.
+
+![The review queue: a waiting review with Approve, Refuse and Delete](help-media:site-administration/store-reviews.png)
+
+## Store settings
+
+The store settings page holds the flat shipping rate and the free-shipping threshold, the low-stock
+number, the ship-from address Stripe Tax works sales tax out from, the support email shown as
+"Need help?", the returns window, how long a checkout holds its stock, and whether to offer Stripe
+Link. The whole form is checked before anything is saved, so one mistyped value saves nothing and
+says which value it was. Site Settings shows these values too, read-only, with a link here.
+
+The page also lists the states Stripe Tax is registered in — registrations are made in the Stripe
+dashboard, and a buyer in any other state is charged no sales tax.
+
+## Stock alerts
+
+Every morning while the store is on, each SuperAdmin gets a bell and an email — "Store stock: N
+running low" — listing the variants on sale that are at or under the store's low-stock number, with
+a button to the Stock page. It comes once a day, and not at all when nothing is low. The dashboard's
+low-stock table and the Stock page's **Running low only** filter show the same thing at any time.

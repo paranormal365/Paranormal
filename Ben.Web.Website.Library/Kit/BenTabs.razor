@@ -6,10 +6,6 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<CascadingValue Value="this" IsFixed="true">
-    @* Children register themselves during this first pass; the markup below renders from that list. *@
-    <div class="d-none">@ChildContent</div>
-</CascadingValue>
 
 @* W-A2 of the 2026-09-06 evaluation: a group page carries fifteen tabs, which wrapped onto a
    second row and pushed the page's content down by the height of a row of buttons — and, worse,
@@ -50,14 +46,21 @@
     }
 </ul>
 
-<div class="tab-content pt-3">
-    @if (_tabs.Count > 0 && ActiveIndex >= 0 && ActiveIndex < _tabs.Count)
-    {
-        <div class="tab-pane fade show active" role="tabpanel">
-            @_tabs[ActiveIndex].ChildContent
-        </div>
-    }
-</div>
+@* Each BenTab draws its own pane, when it is the active one, from the content it was just handed.
+
+   The strip used to draw the active pane itself, from the tab's ChildContent — but Blazor hands a
+   child its new parameters only after the parent has finished drawing, so the pane was always the
+   content from the render BEFORE. Content that read the page's fields never showed it; content that
+   read a value handed down by that render (a BenItemState context) was one save behind — on the
+   store's product editor, "Generate variants" stayed disabled after the options were saved,
+   because the button still saw the product from before (storefront S1.11). A tab rendering its own
+   pane cannot lag: its markup and its parameters arrive together. The tabs register as they first
+   render; the strip above draws from that list. *@
+<CascadingValue Value="this" IsFixed="true">
+    <div class="tab-content pt-3">
+        @ChildContent
+    </div>
+</CascadingValue>
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
@@ -124,6 +127,12 @@
 
         StateHasChanged();
     }
+
+    /// <summary>Whether this tab's pane is the one showing.</summary>
+    internal bool IsActive(BenTab tab) => _tabs.IndexOf(tab) is var i && i >= 0 && i == ActiveIndex;
+
+    /// <summary>A tab's title, icon, badge or disabled state changed; redraw the strip.</summary>
+    internal void HeaderChanged() => StateHasChanged();
 
     internal void Unregister(BenTab tab)
     {

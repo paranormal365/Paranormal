@@ -1,0 +1,49 @@
+@*
+    A phone's bottom sheet: properties, the Add list, More, or the paste box.
+
+    Not modal: the board above stays usable, so a person can select another block while properties are
+    open. The grip is a real button (a tap takes the sheet between half and full height, which is what a
+    keyboard or VoiceOver user needs) and it can be dragged. The sheet has no style attribute of its own,
+    because the drag script writes --bc-sheet-dy on it and a Blazor render would wipe that.
+*@
+@implements IAsyncDisposable
+@inject CanvasLayoutState Layout
+
+<section class="bc-sheet bc-sheet--open bc-sheet--@Layout.SheetSnap" role="dialog" aria-modal="false" aria-label="@Label"
+         @ref="_sheet" @onkeydown="OnKeyDown">
+    <button type="button" class="bc-sheet__grip" aria-label="Resize panel" title="Resize panel" @onclick="@(() => Layout.CycleSnapAsync())">
+        <span class="bc-sheet__pill" aria-hidden="true"></span>
+    </button>
+    <header class="bc-sheet__head">
+        <h2 class="bc-sheet__title">@Label</h2>
+        <button type="button" class="bc-sheet__close" data-bc-action="sheet-close" aria-label="Close" title="Close" @onclick="OnClose">
+            <BcIcon Name="x" />
+        </button>
+    </header>
+    <div class="bc-sheet__body">
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    private ElementReference _sheet;
+    private bool _attached;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !OperatingSystem.IsBrowser()) return;
+        _attached = true;
+        await Layout.AttachSheetAsync(_sheet);
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_attached) await Layout.DetachSheetAsync(_sheet);
+    }
+}

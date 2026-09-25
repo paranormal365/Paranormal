@@ -54,14 +54,17 @@ public sealed class FieldSessionShareController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<FieldSessionShareController> _log;
+    private readonly Services.FieldSessions.IBenBundleStore _bundles;
 
     public FieldSessionShareController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
+        Services.FieldSessions.IBenBundleStore bundles,
         ILogger<FieldSessionShareController> log)
     {
         _db = db;
         _fileStorage = fileStorage;
+        _bundles = bundles;
         _log = log;
     }
 
@@ -265,7 +268,11 @@ public sealed class FieldSessionShareController : BenControllerBase
             return NotFound("This session's readings are no longer on the server.");
 
         string document;
-        await using (var stream = await _fileStorage.OpenReadAsync(path, ct))
+        // A bundle session keeps its document inside its one .ben, read as a range of it.
+        await using (var stream = session.IsBundle
+                         ? await _bundles.OpenEntryAsync(
+                               path, Services.FieldSessions.BenBundle.DocumentEntryPath, ct)
+                         : await _fileStorage.OpenReadAsync(path, ct))
         {
             if (stream is null) return NotFound("This session's readings are no longer on the server.");
             using var reader = new StreamReader(stream);
@@ -331,7 +338,26 @@ public sealed class FieldSessionShareController : BenControllerBase
                 f => f.Id == fileId && f.FieldSessionUploadId == link.FieldSessionUploadId, ct);
         if (file is null) return NotFound();
 
-        if (file.UploadFile.StoragePath is not { } recordingPath || !_fileStorage.Exists(recordingPath))
+        // Inside the session's own file, for a session that arrived as one.
+        if (file.BundleEntryPath is { Length: > 0 } entryPath)
+        {
+            var bundlePath = await db.FieldSessionUploads.AsNoTracking()
+                .Where(s => s.Id == link.FieldSessionUploadId)
+                .Select(s => s.DocumentUploadFile.StoragePath)
+                .FirstOrDefaultAsync(ct);
+            if (bundlePath is not { Length: > 0 } || !_fileStorage.Exists(bundlePath))
+                return NotFound("That recording is no longer on the server.");
+
+            var member = await _bundles.OpenEntryAsync(bundlePath, entryPath, ct);
+            if (member is null) return NotFound("That recording isn't in this session's file.");
+
+            await RecordViewAsync(db, link, fileId, ct);
+            return File(member,
+                        file.ContentType ?? Services.FieldSessionFileGuard.ContentTypeFor(file.RelativePath),
+                        Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
+        }
+
+        if (file.UploadFile?.StoragePath is not { } recordingPath || !_fileStorage.Exists(recordingPath))
             return NotFound("That recording is no longer on the server.");
 
         await RecordViewAsync(db, link, fileId, ct);

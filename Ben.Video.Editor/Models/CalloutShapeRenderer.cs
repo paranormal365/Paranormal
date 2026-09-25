@@ -37,7 +37,7 @@ public static class CalloutShapeRenderer
         var sw     = clip.StrokeWidth;
         var op     = clip.Opacity;
 
-        var shadow = SvgShadowFilter.Build(clip.ShadowColor, clip.ShadowOffsetX, clip.ShadowOffsetY, clip.ShadowBlur);
+        var shadow = SvgShadowFilter.Build(clip.ShadowColor, clip.ShadowOffsetX, clip.ShadowOffsetY, clip.ShadowBlur, canvasW, canvasH);
         var shape  = clip.Shape switch
         {
             ShapeType.Arrow     => RenderArrow(clip, pxX, pxY, pxW, pxH, canvasW, canvasH, fill, stroke, sw),
@@ -195,8 +195,8 @@ public static class CalloutShapeRenderer
         var mx = PxX(CalloutControlPoints.MidX,   (x1 + x2) / 2);
         var my = PxY(CalloutControlPoints.MidY,   (y1 + y2) / 2);
 
-        // Arrow head size proportional to stroke width
-        var headSize = Math.Max(sw * 4, 12.0);
+        // Head size from the stroke AND the arrow's own length — see ArrowHeadSize.
+        var headSize = ArrowHeadSize.For(sw, Math.Sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)));
 
         // Angle of the END SEGMENT (from midpoint to tip) for arrowhead orientation
         var dx = x2 - mx;

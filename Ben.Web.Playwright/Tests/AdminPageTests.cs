@@ -54,6 +54,22 @@ public class AdminPageTests : BenTestBase
         // Item 235. Only a SuperAdmin can open it, and it is the only screen that can refund a
         // credit — so if it breaks, nobody else would ever find out.
         ("/admin/event-credits",       "Event Credits"),
+        // Storefront S1.11. SuperAdmin only and working with the shop switched off — the time
+        // the catalogue is built, when nobody else could notice one of these broken.
+        ("/admin/store",               "Running low"),
+        ("/admin/store/categories",    "The shelves of the store"),
+        ("/admin/store/products",      "New products start hidden"),
+        ("/admin/store/stock",         "free to sell"),
+        ("/admin/store/coupons",       "Discount Codes"),
+        ("/admin/store/reviews",       "Only approved ones count"),
+        ("/admin/store/settings",      "Store Settings"),
+        ("/admin/store/orders",        "Pack, ship and refund"),
+        // Store sellers P3: sellers asking for their items to go on sale.
+        ("/admin/store/sale-requests", "Sellers ask for their items to go on sale"),
+        // Store sellers P10: what each seller is owed, and recording payments.
+        ("/admin/store/sellers",       "What each seller has earned and been paid"),
+        // Store sellers P12: shoppers' questions, the store's own stock first.
+        ("/admin/store/questions",     "Questions about the store's own stock come here"),
     };
 
     [Test]

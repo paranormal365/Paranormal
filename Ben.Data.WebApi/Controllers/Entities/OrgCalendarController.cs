@@ -151,8 +151,14 @@ public sealed class OrgCalendarEventController : BenControllerBase
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         ILogger<OrgCalendarEventController> logger,
         ICmsMarkupSanitizer sanitizer,
-        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail)
-    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; _sanitizer = sanitizer; _tourMail = tourMail; }
+        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail,
+        Ben.Data.WebApi.Services.IOutboxEmailQueue outbox)
+    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; _sanitizer = sanitizer; _tourMail = tourMail; _outbox = outbox; }
+
+    /// <summary>
+    /// Where a guide's sign-up letter goes: into the same save as the token it carries (item 239b).
+    /// </summary>
+    private readonly Ben.Data.WebApi.Services.IOutboxEmailQueue _outbox;
 
     /// <summary>
     /// The tour's own welcome, sent when a seat is APPROVED rather than when it is asked for
@@ -248,6 +254,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             return BadRequest(tourRefusal);
 
         await ApplyTourDefaultsAsync(db, entity, request, ct);
+        StampHouseClock(entity);
 
         await EnsurePublicSlugAsync(db, entity, ct);
 
@@ -397,6 +404,22 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (tour.DurationMinutes is { } minutes && entity.EndDateTime <= entity.StartDateTime)
             entity.EndDateTime = entity.StartDateTime.AddMinutes(minutes);
     }
+
+    /// <summary>
+    /// Gives a date the house clock when nothing else has given it one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Last, so a tour's own zone still wins — a walk runs on the tour's clock, and this only
+    /// catches the dates nothing else spoke for. A tour and a hosted event have always been stamped
+    /// this way on create; an ordinary calendar event's zone was left null, and a null zone is what
+    /// published "8:00 PM UTC" for a cave in Tennessee on the public list (first-run walk,
+    /// 2026-09-20).</para>
+    ///
+    /// <para>On update as well as create, because the rows that already exist with no zone are
+    /// fixed the next time somebody edits them rather than waiting on a backfill.</para>
+    /// </remarks>
+    private static void StampHouseClock(OrgCalendarEvent entity)
+        => entity.TimeZoneId ??= HouseClock.ZoneId;
 
     /// <summary>Sets who leads a date, or the refusal naming who cannot.</summary>
     private static async Task<string?> SetGuidesAsync(
@@ -557,6 +580,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         // The same tour defaults as on create, or a date that was edited would lose the clock it
         // was scheduled with the moment somebody changed its title.
         await ApplyTourDefaultsAsync(db, entity, request, ct);
+        StampHouseClock(entity);
 
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
@@ -824,39 +848,43 @@ public sealed class OrgCalendarEventController : BenControllerBase
             if (!string.IsNullOrWhiteSpace(request.DisplayName)) invite.DisplayName = request.DisplayName.Trim();
         }
 
-        await db.SaveChangesAsync(ct);
-
         // Item 233 deliberately does NOT send the tour's own welcome here, attachment and all.
         // A guide typed this address on a pavement in the dark and nobody has proved it yet; the
         // full details — meeting point, guide's face, how to pay — go out when the link is
         // confirmed, which is the first moment there is somebody on the other end of it.
-        if (_email.IsConfigured)
-        {
-            var link = _site.AbsoluteUrl($"/attending/{token}");
-            var safeTitle = Ben.Data.WebApi.Services.NotificationText.Safe(ev.Title);
-            try
-            {
-                await _email.SendAsync(email,
-                    $"You're signed up for {ev.Title}",
-                    $"<p>Someone from the group signed you up for <strong>{safeTitle}</strong> on "
-                    + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
-                    + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
-                    + "<p>Confirming lets you share photos, recordings and anything else from the "
-                    + "night with the group. That link is good for two weeks and only works once.</p>", ct);
-            }
-            catch (Exception ex)
-            {
-                // Logged, never surfaced: the same reasoning as the public flow, and a guide can
-                // do nothing about a bounced address anyway.
-                _logger.LogWarning(ex, "Could not send a guest sign-up link for event {EventId}.", eventId);
-            }
-        }
-        else
-        {
+        //
+        // The letter is queued into THIS context and written by the save below with the token it
+        // carries (item 239b). Signing somebody up again rotates the token, so saving it first and
+        // writing the letter afterwards could leave them with a dead link and no new one.
+        //
+        // Queued whether or not mail is set up: it waits in the outbox until it is, readable at
+        // /admin/mail meanwhile. Said, without the link — used by anybody, it confirms attendance
+        // in the guest's name and burns their own copy (NoCredentialsInLogsTests).
+        if (!_email.IsConfigured)
             _logger.LogInformation(
-                "Email is not configured; guest sign-up link for event {EventId} was not sent. Token: {Token}",
-                eventId, token);
+                "Email is not configured; the guest sign-up link for event {EventId} is waiting in the outbox.",
+                eventId);
+
+        var link = _site.AbsoluteUrl($"/attending/{token}");
+        var safeTitle = Ben.Data.WebApi.Services.NotificationText.Safe(ev.Title);
+        try
+        {
+            await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
+                $"You're signed up for {ev.Title}",
+                $"<p>Someone from the group signed you up for <strong>{safeTitle}</strong> on "
+                + $"{ev.StartDateTime:dddd, MMMM d}.</p>"
+                + $"<p><a href=\"{link}\">Confirm you're coming</a></p>"
+                + "<p>Confirming lets you share photos, recordings and anything else from the "
+                + "night with the group. That link is good for two weeks and only works once.</p>"), ct);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Logged, never surfaced: the same reasoning as the public flow, and a guide can
+            // do nothing about a bounced address anyway. Error, which the database log keeps.
+            _logger.LogError(ex, "Could not queue a guest sign-up link for event {EventId}.", eventId);
+        }
+
+        await db.SaveChangesAsync(ct);
 
         return Ok(true);
     }
@@ -951,6 +979,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
         seat.SeatDecidedUtc         = DateTime.UtcNow;
         seat.SeatDecidedByAppUserId = GetCurrentUserId();
         seat.GuestAcknowledgedUtc   = null;
+
+        // The pass is minted HERE, in the same save that gives them the place — not in the mailer
+        // that tells them about it (item 247). A pass written by the letter would not exist for a
+        // guest whose letter failed to send, and they would arrive at the meeting point with
+        // nothing to show for a seat they genuinely hold.
+        Services.Tours.TourPasses.Ensure(seat);
+
         await db.SaveChangesAsync(ct);
 
         // Now it is true, so now it is sent.

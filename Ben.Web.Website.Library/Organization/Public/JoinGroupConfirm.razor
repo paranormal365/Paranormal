@@ -1,0 +1,145 @@
+@page "/join/{Token}"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@* Somebody walking through a group's invitation link.
+
+   THE PERSON READING THIS MAY NEVER HAVE HEARD OF THIS SITE. They were sent a link by somebody
+   they already know, so the page names the group first and asks second.
+
+   IT NEVER JOINS ON LOAD. A chat app's link preview, a mail scanner, or a browser prefetch would
+   otherwise put somebody in a group that holds case material about real people at real addresses.
+   It takes a person pressing the button.
+
+   AND IT NEEDS AN ACCOUNT. The event door makes a passwordless account from an address, because
+   the address was proved by the click and a guest list is a guest list. A group roster is not:
+   a click on a link pasted into a group chat proves nothing about who is holding the phone. *@
+
+<PageTitle>Join a group</PageTitle>
+
+<div class="container py-5" style="max-width:640px;">
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Checking your link…" />
+        </div>
+    }
+    else if (_invite is not { } invite)
+    {
+        <div class="card">
+            <div class="card-body py-5 text-center" id="join-gone">
+                <h3 class="mb-3">This link isn't working</h3>
+                <p class="text-secondary mb-0">
+                    Invitation links last a fortnight, and a group can replace one at any time.
+                    Ask whoever sent it to you for the current one — it takes them a moment.
+                </p>
+            </div>
+        </div>
+    }
+    else if (_joined || invite.AlreadyAMember)
+    {
+        <div class="card">
+            <div class="card-body py-5 text-center" id="join-done">
+                <h3 class="mb-3">You're in</h3>
+                <p class="text-secondary mb-4">
+                    You're a member of <strong>@invite.OrganizationName</strong>.
+                </p>
+                <a class="btn btn-primary" href="@($"/organizations/{invite.OrganizationId}")">
+                    Go to @invite.OrganizationName
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body py-4">
+                <h3 class="mb-1" id="join-asking">Join @invite.OrganizationName</h3>
+                <p class="text-secondary">
+                    Somebody at this group sent you this link. Accepting makes you a member: you'll
+                    see the group's cases, investigations and messages, and they'll see you on the
+                    roster.
+                </p>
+
+                @if (_error is not null)
+                {
+                    <div class="alert alert-danger py-2" id="join-error">@_error</div>
+                }
+
+                @if (_signedIn)
+                {
+                    <button type="button" class="btn btn-primary" id="join-accept"
+                            @onclick="AcceptAsync" disabled="@_busy">
+                        @(_busy ? "Joining…" : $"Join {invite.OrganizationName}")
+                    </button>
+                }
+                else
+                {
+                    @* Back to THIS page afterwards, or signing in becomes a dead end that loses
+                       the invitation — a link always shows. *@
+                    <p class="mb-3">You'll need an account first. It takes a minute.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-primary" id="join-signin" href="@SignInHref">Sign in and join</a>
+                        <a class="btn btn-outline-secondary" id="join-signup" href="@SignUpHref">Create an account</a>
+                    </div>
+                }
+
+                @if (invite.ExpiresUtc is { } until)
+                {
+                    <p class="text-secondary small mt-3 mb-0" id="join-expires">
+                        This link stops working @until.ToLocalTime().ToString("MMMM d, yyyy").
+                    </p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private OrganizationJoinInviteRecord? _invite;
+    private bool _loading = true;
+    private bool _signedIn;
+    private bool _joined;
+    private bool _busy;
+    private string? _error;
+
+    private string Returning => Uri.EscapeDataString($"/join/{Token}");
+    private string SignInHref => $"/login?returnUrl={Returning}";
+    private string SignUpHref => $"/signup?returnUrl={Returning}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Anonymous on purpose — the page has to be readable by somebody with no account — but it
+        // still waits, so a person who IS signed in is offered the button rather than the login.
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+        _signedIn = UserState.IsAuthenticated;
+
+        _invite  = await AdminClient.GetJoinInviteAsync(Token);
+        _loading = false;
+    }
+
+    private async Task AcceptAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (result, error) = await AdminClient.AcceptJoinInviteAsync(Token);
+            if (result is not null) { _invite = result; _joined = true; }
+            // The likeliest refusal is the 402 explaining the price of a second member, and it is
+            // the group's problem rather than this person's — so it is shown as the group's
+            // sentence, without inviting them to try again at something retrying cannot fix.
+            else _error = error ?? "That didn't work. Ask whoever invited you for a new link.";
+        }
+        finally { _busy = false; }
+    }
+}

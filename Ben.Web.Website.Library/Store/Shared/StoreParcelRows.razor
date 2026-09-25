@@ -1,0 +1,33 @@
+@*
+    One shipping row per package, under a surface's own Shipping row, when an order ships as two or
+    more (store sellers, backlog 251, P6). Each seller ships their own package at the store's flat
+    rate, free once its own items reach the free-shipping amount (Ben, 09/24/2026) — so each row
+    says its own price, and how much more of that seller's things would make it free. One package
+    draws nothing here: the Shipping row above already says it all.
+*@
+
+@if (Parcels is { Count: > 1 } parcels)
+{
+    <div class="ben-summary__parcels" data-testid="summary-parcels">
+        @foreach (var parcel in parcels)
+        {
+            <div class="ben-summary__row small ps-2" data-testid="summary-parcel" data-number="@parcel.Number">
+                <span class="text-secondary">@parcel.Title</span>
+                <span class="@(parcel.IsFree ? "text-success fw-medium" : null)">@parcel.ShippingText</span>
+            </div>
+            @if (ShowNotes && parcel.MoreForFree is { } more)
+            {
+                <div class="small text-secondary ps-2 mb-1" data-testid="summary-parcel-note">
+                    Add @StoreMoney.Format(more) more from @parcel.ShipsFrom to ship this package free.
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<StoreCartParcelView>? Parcels { get; set; }
+
+    /// <summary>The "add more to ship free" notes — for a cart, never for an order already placed.</summary>
+    [Parameter] public bool ShowNotes { get; set; }
+}

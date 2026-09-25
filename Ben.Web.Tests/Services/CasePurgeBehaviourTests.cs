@@ -289,6 +289,51 @@ public sealed class CasePurgeBehaviourTests
         Assert.Equal(1, result.FieldSessionsDetached);
     }
 
+    /// <summary>
+    /// A board on the case is deleted with it; the same person's personal board is not.
+    /// </summary>
+    /// <remarks>
+    /// <para>Canvas plan review R3, 2026-09-14. The foreign key is SetNull, so without an explicit
+    /// delete the database would quietly keep the board and clear its case — turning the case's
+    /// working document, with its witness names, addresses and evidence pictures, into a personal
+    /// board of whoever happened to create it, who may since have left the group. A board is not
+    /// like a video project (an editor's own work that loses the link): it IS the case's notes.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_board_on_the_case_is_deleted_with_it_and_a_personal_board_is_not()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var caseBoard = Guid.NewGuid();
+        var personalBoard = Guid.NewGuid();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = caseBoard, CaseId = CaseId, Name = "Henderson board",
+                DocumentJson = "{\"title\":\"Henderson board\",\"nodes\":[]}", Revision = 3,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            db.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = personalBoard, CaseId = null, Name = "My own sketch",
+                DocumentJson = "{\"title\":\"My own sketch\",\"nodes\":[]}", Revision = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var (purge, _) = Build(sqlite);
+
+        var (_, error) = await purge.PurgeAsync(CaseId, CaseTitle, AdminId);
+        Assert.Null(error);
+
+        await using var verify = await sqlite.NewContextAsync();
+        Assert.True(await verify.CanvasDocuments.FindAsync(caseBoard) is null,
+            "the case's board survived the case purge (its CaseId merely cleared), so the case's "
+            + "notes now live on as somebody's personal board");
+        Assert.NotNull(await verify.CanvasDocuments.FindAsync(personalBoard));
+    }
+
     [Fact]
     public async Task A_case_with_nothing_in_it_deletes_cleanly()
     {

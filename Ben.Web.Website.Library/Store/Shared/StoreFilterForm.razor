@@ -1,0 +1,171 @@
+@inject NavigationManager Nav
+
+@*
+    The listing's filters (storefront S2.6), after Smarty's sidebar: price bands and a custom range,
+    each option's values with how many products have them, a rating "& up", and "in stock only".
+    The address is the state — every choice is a link or a navigation to a new query string, so a
+    filtered listing can be shared, refreshed and stepped back through. Chosen filters show as
+    chips with an ✕; each group has its own "clear".
+*@
+
+@if (Chosen.Count > 0)
+{
+    <div class="d-flex flex-wrap gap-1 mb-2" aria-label="Chosen filters" data-testid="filter-chips">
+        @foreach (var (label, href) in Chosen)
+        {
+            <a class="badge rounded-pill bg-primary-subtle text-primary-emphasis text-decoration-none ben-filter-chip" href="@href">
+                @label <BenIcon Name="x" Title="@($"Remove {label}")" />
+            </a>
+        }
+        <a class="small ms-1 ben-link-muted" href="@(Href(new StoreListingQuery(Q: Query.Q, Sort: Query.Sort)))">Clear all</a>
+    </div>
+}
+
+<div class="ben-filter-group">
+    <div class="ben-filter-group__title">
+        <span>Price</span>
+        @if (Query.PriceBand is not null || Query.PriceMin is not null || Query.PriceMax is not null)
+        {
+            <a class="small fw-normal ben-link-muted" href="@(Href(Query with { PriceBand = null, PriceMin = null, PriceMax = null, Page = 1 }))">Clear</a>
+        }
+    </div>
+    <ul class="list-unstyled mb-2">
+        @foreach (var band in Facets.PriceBands)
+        {
+            <li>
+                <a class="ben-link-normal @(band.Key == Query.PriceBand ? "fw-semibold" : null)" data-testid="price-band"
+                   aria-current="@(band.Key == Query.PriceBand ? "true" : null)"
+                   href="@(Href(Query with { PriceBand = band.Key == Query.PriceBand ? null : band.Key, PriceMin = null, PriceMax = null, Page = 1 }))">
+                    @band.Label <span class="text-secondary small">(@band.Count)</span>
+                </a>
+            </li>
+        }
+    </ul>
+    <div class="d-flex gap-2 align-items-end">
+        <div>
+            <label class="form-label small mb-0" for="@($"{IdPrefix}-min")">From $</label>
+            <input id="@($"{IdPrefix}-min")" type="number" min="0" class="form-control form-control-sm" style="width:5.5rem;" @bind="_min" />
+        </div>
+        <div>
+            <label class="form-label small mb-0" for="@($"{IdPrefix}-max")">To $</label>
+            <input id="@($"{IdPrefix}-max")" type="number" min="0" class="form-control form-control-sm" style="width:5.5rem;" @bind="_max" />
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ApplyRange">Go</button>
+    </div>
+</div>
+
+@foreach (var option in Facets.Options)
+{
+    var o = option;
+    <div class="ben-filter-group">
+        <div class="ben-filter-group__title">
+            <span>@o.Name</span>
+            @if ((Query.Options ?? []).Any(q => q.StartsWith(o.Name + ":", StringComparison.OrdinalIgnoreCase)))
+            {
+                <a class="small fw-normal ben-link-muted" href="@(Href(Query with { Options = (Query.Options ?? []).Where(q => !q.StartsWith(o.Name + ":", StringComparison.OrdinalIgnoreCase)).ToList(), Page = 1 }))">Clear</a>
+            }
+        </div>
+        @foreach (var value in o.Values)
+        {
+            var v = value;
+            var id = $"{IdPrefix}-{o.Name}-{v.Label}".Replace(' ', '-').ToLowerInvariant();
+            var on = IsChosen(v.Value);
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="@id" checked="@on" data-testid="option-filter" @onchange="@(() => Toggle(v.Value))" />
+                <label class="form-check-label" for="@id">
+                    @if (!string.IsNullOrWhiteSpace(v.SwatchHex))
+                    {
+                        <span class="d-inline-block rounded-circle border me-1 align-middle" style="@($"width:.9rem;height:.9rem;background:{v.SwatchHex};")"></span>
+                    }
+                    @v.Label <span class="text-secondary small">(@v.Count)</span>
+                </label>
+            </div>
+        }
+    </div>
+}
+
+<div class="ben-filter-group">
+    <div class="ben-filter-group__title"><span>Rating</span></div>
+    <ul class="list-unstyled mb-0">
+        @foreach (var rating in Facets.Ratings.Where(r => r.Count > 0))
+        {
+            <li>
+                <a class="ben-link-normal @(rating.Stars == Query.MinRating ? "fw-semibold" : null)"
+                   href="@(Href(Query with { MinRating = rating.Stars == Query.MinRating ? null : rating.Stars, Page = 1 }))">
+                    <span class="ben-stars">@(new string('★', rating.Stars))<span class="ben-stars__empty">@(new string('★', 5 - rating.Stars))</span></span>
+                    &amp; up <span class="text-secondary small">(@rating.Count)</span>
+                </a>
+            </li>
+        }
+        @if (Facets.Ratings.All(r => r.Count == 0))
+        {
+            <li class="text-secondary small">No reviews yet.</li>
+        }
+    </ul>
+</div>
+
+<div class="ben-filter-group">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="@($"{IdPrefix}-instock")" checked="@Query.InStock"
+               @onchange="@(() => Go(Query with { InStock = !Query.InStock, Page = 1 }))" />
+        <label class="form-check-label" for="@($"{IdPrefix}-instock")">In stock only <span class="text-secondary small">(@Facets.InStockCount)</span></label>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoreFilterFacets Facets { get; set; } = default!;
+    [Parameter, EditorRequired] public StoreListingQuery Query { get; set; } = default!;
+
+    /// <summary>The listing's own address — /store/products or /store/c/{slug}.</summary>
+    [Parameter, EditorRequired] public string BaseHref { get; set; } = "/store/products";
+
+    /// <summary>Keeps ids unique when the form is drawn twice (sidebar and the phone's dialog).</summary>
+    [Parameter] public string IdPrefix { get; set; } = "filter";
+
+    /// <summary>Called after choosing, so the phone's dialog can close.</summary>
+    [Parameter] public EventCallback OnChosen { get; set; }
+
+    private decimal? _min, _max;
+
+    protected override void OnParametersSet() { _min = Query.PriceMin; _max = Query.PriceMax; }
+
+    private static string QueryWith(StoreListingQuery q) => StoreListingQueryString.From(q);
+
+    private string Href(StoreListingQuery q) => BaseHref + QueryWith(q);
+
+    private bool IsChosen(string value) => (Query.Options ?? []).Any(o => string.Equals(o, value, StringComparison.OrdinalIgnoreCase));
+
+    private void Toggle(string value)
+        => Go(IsChosen(value)
+            ? StoreListingQueryString.Without(Query, value)
+            : Query with { Options = (Query.Options ?? []).Append(value).ToList(), Page = 1 });
+
+    private void ApplyRange() => Go(Query with { PriceBand = null, PriceMin = _min, PriceMax = _max, Page = 1 });
+
+    private void Go(StoreListingQuery q)
+    {
+        _ = OnChosen.InvokeAsync();
+        Nav.NavigateTo(BaseHref + QueryWith(q));
+    }
+
+    /// <summary>Every chosen filter as a chip and the address without it.</summary>
+    private List<(string Label, string Href)> Chosen
+    {
+        get
+        {
+            var chips = new List<(string, string)>();
+            if (StoreCatalogConstants.BandFor(Query.PriceBand) is { } band)
+                chips.Add((band.Label, BaseHref + QueryWith(Query with { PriceBand = null, Page = 1 })));
+            if (Query.PriceMin is not null || Query.PriceMax is not null)
+                chips.Add(($"{(Query.PriceMin is { } lo ? StoreMoney.Format(lo) : "$0")} – {(Query.PriceMax is { } hi ? StoreMoney.Format(hi) : "any")}",
+                    BaseHref + QueryWith(Query with { PriceMin = null, PriceMax = null, Page = 1 })));
+            foreach (var option in Query.Options ?? [])
+                chips.Add((option.Replace(":", ": "), BaseHref + QueryWith(StoreListingQueryString.Without(Query, option))));
+            if (Query.MinRating is { } stars)
+                chips.Add(($"{stars}★ & up", BaseHref + QueryWith(Query with { MinRating = null, Page = 1 })));
+            if (Query.InStock)
+                chips.Add(("In stock", BaseHref + QueryWith(Query with { InStock = false, Page = 1 })));
+            return chips;
+        }
+    }
+}

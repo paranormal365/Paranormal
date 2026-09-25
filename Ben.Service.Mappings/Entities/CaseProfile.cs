@@ -8,7 +8,11 @@ public class CaseProfile : Profile
     {
         CreateMap<Case, CaseRecord>()
             .ForMember(d => d.CaseManagerDisplayName,
-                       o => o.MapFrom(s => s.CaseManagerAppUser != null ? s.CaseManagerAppUser.DisplayName : null));
+                       o => o.MapFrom(s => s.CaseManagerAppUser != null ? s.CaseManagerAppUser.DisplayName : null))
+            // Null unless the caller included the navigation. The case page does; the list does
+            // not, and does not need to.
+            .ForMember(d => d.PlaceName,
+                       o => o.MapFrom(s => s.Place != null ? s.Place.Name : null));
     }
 }
 

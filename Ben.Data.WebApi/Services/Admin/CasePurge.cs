@@ -33,7 +33,6 @@ public sealed record CasePurgePreview(
     int Files,
     int Notes,
     int Messages,
-    int ResearchEntries,
     int Reports,
     int Investigations,
     int Contacts,
@@ -51,7 +50,11 @@ public sealed record CasePurgePreview(
     int PublicPagesUnlinked,
 
     // ── worth reading before pressing the button ──────────────────────────────
-    string? ClientName);
+    string? ClientName,
+
+    // ── destroyed, added after the rest (canvas plan R3) ──────────────────────
+    // Last and defaulted so the website's copy of this record still deserialises an older API.
+    int Boards = 0);
 
 /// <summary>What deleting the case actually did.</summary>
 public sealed record CasePurgeResult(
@@ -144,7 +147,6 @@ public sealed class CasePurge
             Files:            await db.CaseFiles.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Notes:            await db.CaseNotes.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Messages:         await db.CaseMessages.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
-            ResearchEntries:  await db.CaseResearchEntries.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Reports:          reportIds.Count,
             Investigations:   investigationIds.Count,
             Contacts:         await db.CaseContacts.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
@@ -162,7 +164,8 @@ public sealed class CasePurge
             EvidenceVotesUnlinked:  await db.EvidenceVotes.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             PublicPagesUnlinked:    await db.OrganizationPages.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
 
-            ClientName: clientName);
+            ClientName: clientName,
+            Boards:     await db.CanvasDocuments.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct));
     }
 
     /// <summary>
@@ -259,6 +262,11 @@ public sealed class CasePurge
             await db.InvestigationDutyAssignments.Where(x => attendeeIds.Contains(x.InvestigationAttendeeId)).ExecuteDeleteAsync(ct);
             await db.InvestigationAttendees.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.InvestigationFindings.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            // Guests' credentials, then the codes that minted them (item 248). Explicit and in
+            // order, like everything else here: leaning on the schema's cascade is how a purge
+            // finds out on production that one was never configured.
+            await db.InvestigationGuestPasses.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
+            await db.InvestigationJoinCodes.Where(x => investigationIds.Contains(x.InvestigationId)).ExecuteDeleteAsync(ct);
             await db.InvestigationScheduleProposals.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.Investigations.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
 
@@ -272,13 +280,17 @@ public sealed class CasePurge
             await db.CaseRelatedPeople.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             // A research page's rail goes with the page (the database cascades it too; named so a provider without
             // cascades removes it in the same order).
-            await db.CaseResearchAttachments.Where(x => x.ResearchEntry.CaseId == caseId).ExecuteDeleteAsync(ct);
-            await db.CaseResearchEntries.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseTransferLogs.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseVotes.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             // The consent a feed post recorded against this case. Its CaseId is required, so it
             // cannot outlive the case even though the post it belongs to does.
             await db.FeedPostConsents.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
+            // A board on the case IS the case's notes — witness names, addresses, evidence
+            // pictures laid out on one surface — so it goes with the case. Its foreign key is
+            // SetNull, and leaving that to the database would keep the board as a personal board
+            // of whoever created it, who may have left the group. A video project is different:
+            // it is an editor's own work, and it only loses the link above.
+            await db.CanvasDocuments.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
 
             await db.Cases.Where(c => c.Id == caseId).ExecuteDeleteAsync(ct);
 

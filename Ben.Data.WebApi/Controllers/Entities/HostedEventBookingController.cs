@@ -44,6 +44,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<HostedEventBookingController> _logger;
 
+    /// <summary>
+    /// Where the venue's invitation goes: into the same save as the token it carries (item 239b).
+    /// </summary>
+    private readonly IOutboxEmailQueue _outbox;
+
     /// <summary>An invitation is good for a fortnight, the same as every other link here.</summary>
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(14);
 
@@ -55,9 +60,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         EventGuestMailer guestMail,
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
-        ILogger<HostedEventBookingController> logger)
+        ILogger<HostedEventBookingController> logger,
+        IOutboxEmailQueue outbox)
         : base(dbFactory, mapper, security)
     {
+        _outbox = outbox;
         _sync = sync; _access = access; _guestMail = guestMail;
         _email = email; _site = site.Value; _logger = logger;
     }
@@ -177,11 +184,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // night, which is the queue this whole feature exists to remove.
         await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
 
-        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
-
-        // After the save, and best effort. A guest who is confirmed but whose letter bounced is a
-        // confirmed guest; a letter sent about a confirmation that then failed to save is a lie.
-        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
+        // The confirmation and the letter carrying the pass commit together, or neither does (item
+        // 239b). It used to be "after the save, and best effort" — right while the letter was a
+        // call to a mail system that might not answer, since a confirmed guest whose letter
+        // bounced is still a confirmed guest. The letter is now a row in this database, sent later
+        // by the outbox and retried there. Failing to write it means the database failed, and
+        // then the host is better told "try again" than left believing a guest has their pass.
+        await SaveInOneTransactionAndAuditAsync(db, booking, booking.Id, userId.Value,
+            () => _guestMail.SendDecisionAsync(db, booking.Id, ct), ct);
 
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }
@@ -545,9 +555,13 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             invite.UpdatedByAppUserId = userId.Value;
         }
 
+        // Queued BEFORE the save, so the token and the letter carrying it are one write (item
+        // 239b). Inviting again rotates the token; saving it first and sending afterwards could
+        // leave the guest's earlier link dead and no new one written — and because the outbox
+        // swallowed its own failure, "sent" still came back true to the host at the door.
+        var sent = await TryQueueInviteAsync(db, email, ev, token, ct);
         await db.SaveChangesAsync(ct);
 
-        var sent = await TrySendInviteAsync(email, ev, token, ct);
         return Ok(new HostedEventGuestInviteRecord(email, sent, expires));
     }
 
@@ -677,6 +691,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (pass is null)
             return BadRequest("This booking has no live pass to send. Issue one first.");
 
+        // Refused, where the confirmation itself queues regardless: this button's only purpose is
+        // to send the letter now, and with no mail set up it cannot. The confirmation's letter
+        // already waits in the outbox; a second copy there would tell the host nothing.
         if (!_guestMail.IsConfigured)
             return Conflict("This site has no outgoing mail set up, so the letter cannot be sent. "
                           + "Show them the pass from this screen instead.");
@@ -689,9 +706,23 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return Conflict("This guest's account has no email address, so there is nobody to "
                           + "post the letter to.");
 
-        if (!await _guestMail.SendDecisionAsync(db, booking.Id, ct))
+        // One save for the letter and the pass's EmailedUtc (item 239b), so the board's "not sent
+        // yet" mark clears only when a letter really was queued. It used to clear regardless: the
+        // send swallowed its own failures and returned, the stamp was saved, and the host was told
+        // 200 for a letter that did not exist — the exact thing the paragraph above forbids.
+        try
+        {
+            if (!await _guestMail.SendDecisionAsync(db, booking.Id, ct))
+                return Conflict("The letter could not be sent just now and nothing was posted. Try "
+                              + "again in a minute, or show them the pass from this screen.");
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Could not queue the pass letter for booking {BookingId}.", booking.Id);
             return Conflict("The letter could not be sent just now and nothing was posted. Try "
                           + "again in a minute, or show them the pass from this screen.");
+        }
 
         return Ok(await PassRecordAsync(db, pass.Id, ct));
     }
@@ -883,47 +914,57 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             pass.ReissuedFromHostedEventPassId is not null);
 
     /// <summary>
-    /// Sends the invitation, and reports honestly whether it went.
+    /// Queues the invitation into the caller's context, and reports honestly whether it did.
     /// </summary>
     /// <remarks>
     /// <para>Unlike the public flow, the truth is told to the caller here. A host is not a
     /// stranger who might be probing for accounts; they are the person who will stand at a door
     /// wondering why nobody came, and "we could not send it" is exactly what they need to know.
-    /// The invitation is saved either way, and the link is in the log.</para>
+    /// The invitation is saved either way. When mail is not set up the letter is queued all the
+    /// same and waits in the outbox — readable by a site administrator at /admin/mail, which is how
+    /// the browser tests follow it — but the host is told it was NOT sent, because nothing left.
+    /// The link is shown nowhere else: not on the board, and not in the log, because whoever held
+    /// it could ask for a place as the guest.</para>
+    ///
+    /// <para>Not saved here: the caller's save writes the letter with the token it carries, so
+    /// true means the letter is in that same write (item 239b).</para>
     ///
     /// <para>It deliberately says nothing about the room, the price or the programme. Those are
     /// the confirmation's to say, and this letter goes to an address nobody has proved yet.</para>
     /// </remarks>
-    private async Task<bool> TrySendInviteAsync(
-        string email, HostedEvent ev, string token, CancellationToken ct)
+    private async Task<bool> TryQueueInviteAsync(
+        BenDataContext db, string email, HostedEvent ev, string token, CancellationToken ct)
     {
         var link = _site.AbsoluteUrl($"/attending/{token}");
 
+        // Queued either way (see the remarks). Said, without the link — used by anybody it asks
+        // for a place in the guest's name and burns their own copy (NoCredentialsInLogsTests).
         if (!_email.IsConfigured)
-        {
             _logger.LogInformation(
-                "Email is not configured; the invitation to hosted event {EventId} was not sent. "
-              + "Link: {Link}", ev.Id, link);
-            return false;
-        }
+                "Email is not configured; the invitation to hosted event {EventId} is waiting in the outbox.",
+                ev.Id);
 
         var safeName = NotificationText.Safe(ev.Name);
         try
         {
-            await _email.SendAsync(email,
+            await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
                 $"You're invited to {ev.Name}",
                 $"<p>The venue has invited you to <strong>{safeName}</strong>, starting "
               + $"{ev.StartsOn:dddd, MMMM d}.</p>"
               + $"<p><a href=\"{link}\">Accept the invitation</a></p>"
               + "<p>Accepting puts your name in front of the venue, who will confirm your place "
               + "and tell you what happens next. That link is good for two weeks and only works "
-              + "once.</p>", ct);
-            return true;
+              + "once.</p>"), ct);
+
+            // Sent means it will leave. Queued with nowhere to go is the truth the host needs.
+            return _email.IsConfigured;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex,
-                "Could not send an invitation to hosted event {EventId}.", ev.Id);
+            // Error, which the database log keeps: a Warning is how a letter that never went
+            // stayed invisible before (item 239).
+            _logger.LogError(ex,
+                "Could not queue an invitation to hosted event {EventId}.", ev.Id);
             return false;
         }
     }
@@ -966,12 +1007,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 ? "The venue could not take this booking."
                 : "The venue released this booking.", ct);
 
-        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
-
         // A guest who is not coming must be told exactly as reliably as one who is, which is why
         // this is the same call the confirmation makes rather than a second path that could quietly
-        // stop being used.
-        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
+        // stop being used — and why it commits with the decision in the same way (item 239b).
+        await SaveInOneTransactionAndAuditAsync(db, booking, booking.Id, userId.Value,
+            () => _guestMail.SendDecisionAsync(db, booking.Id, ct), ct);
 
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }

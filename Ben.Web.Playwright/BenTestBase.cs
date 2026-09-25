@@ -37,6 +37,54 @@ namespace Ben.Web.Playwright;
 /// </remarks>
 public abstract class BenTestBase : PageTest
 {
+    // ── Theme ────────────────────────────────────────────────────────────────
+
+    /// <summary>The theme this run is asked to use: <c>BEN_THEME=dark</c>, or nothing.</summary>
+    /// <remarks>
+    /// <para><b>Why a switch in the base rather than a setting per fixture.</b> The site picks its
+    /// theme in <c>ben-boot.js</c>: the <c>layoutSettings</c> localStorage object, then a legacy
+    /// key, then <c>prefers-color-scheme</c>, then light. A Playwright context with no colour
+    /// scheme set reports light, so every fixture that did not say otherwise — the sweep, the
+    /// visual audit — has been walking the LIGHT site, while the walks that set
+    /// <c>ColorScheme.Dark</c> walked the dark one. Two instruments, two themes, and nothing
+    /// said which. Found 2026-09-21 when the audit's contrast figures did not match the CSS.</para>
+    ///
+    /// <para>Set, this does both halves: the colour scheme for a fresh context (so the boot
+    /// script's media-query fallback picks dark) and the <c>layoutSettings</c> object for the very
+    /// first paint (so nothing flashes light first). A derived fixture that overrides
+    /// <see cref="ContextOptions"/> without calling base loses the first half and keeps the
+    /// second, which is enough.</para>
+    /// </remarks>
+    protected static bool DarkThemeRequested
+        => string.Equals(Environment.GetEnvironmentVariable("BEN_THEME"), "dark",
+                         StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>"dark" or "light", for report headings, so a reader knows what was measured.</summary>
+    protected static string ThemeName => DarkThemeRequested ? "dark" : "light";
+
+    public override BrowserNewContextOptions ContextOptions()
+    {
+        var options = base.ContextOptions() ?? new BrowserNewContextOptions();
+        if (DarkThemeRequested) options.ColorScheme = ColorScheme.Dark;
+        return options;
+    }
+
+    [SetUp]
+    public async Task ApplyRequestedThemeAsync()
+    {
+        if (!DarkThemeRequested) return;
+
+        // The same object the help captures seed, for the same reason: the boot script reads it
+        // synchronously from <head>, so this is what makes the FIRST paint dark rather than the
+        // second.
+        await Context.AddInitScriptAsync("""
+            try {
+                localStorage.setItem('layoutSettings', JSON.stringify({ theme: 'dark' }));
+                localStorage.setItem('ben-theme', 'dark');
+            } catch (e) { /* storage blocked; the media-query fallback still applies */ }
+            """);
+    }
+
     /// <summary>
     /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
     /// <para>
@@ -49,6 +97,12 @@ public abstract class BenTestBase : PageTest
 
     /// <summary>Root URL of the WebApi. Override with the BEN_API_URL env var.</summary>
     protected static string ApiUrl => Environment.GetEnvironmentVariable("BEN_API_URL") ?? "http://localhost:5252";
+
+    /// <summary><see cref="ApiUrl"/>, for helper classes that are not fixtures.</summary>
+    internal static string ApiUrlForHelpers => ApiUrl;
+
+    /// <summary><see cref="SuperAdminTokenAsync"/>, for helper classes that are not fixtures.</summary>
+    internal static Task<string?> SuperAdminTokenForHelpersAsync() => SuperAdminTokenAsync();
 
     // ── Site feature switches ────────────────────────────────────────────────
     //
@@ -172,6 +226,142 @@ public abstract class BenTestBase : PageTest
         });
         Assert.That(made.Ok, Is.True, await made.TextAsync());
         return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
+    }
+
+    /// <summary>
+    /// Publishes a seeded hosted event, and answers with the slug its public page lives at.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a test has to do this at all.</b> HostedEventDemoSeeder creates both of its
+    /// events as <c>Draft</c>, deliberately, and says so: "the point of the seed is a plan to
+    /// arrange, and publishing it would spend one of the group's credits every time a database is
+    /// built." The public endpoints answer only for Published, Live or Ended
+    /// (<c>HostedEventStates.OnThePublicSite</c>), so a fixture that wants the event's PUBLIC page
+    /// has to put it there itself.</para>
+    ///
+    /// <para><b>Four fixtures used to assume somebody else had.</b> They asked the public endpoint
+    /// and asserted it answered, which was true on the shared e2e database only because an earlier
+    /// run had published that event and the row outlived it. On a genuinely fresh database — the
+    /// first one built in eight months — all eight of their tests failed at once (item 243,
+    /// 2026-09-19). The green they had been giving was borrowed from history.</para>
+    ///
+    /// <para><b>Safe to call every time.</b> Publishing an event that is already published costs
+    /// nothing: the controller only asks the entitlement on an event whose FirstPublishedUtc is
+    /// null, and "the second publish of the same event is free, for ever, because the first one
+    /// paid for it". The seeded group's tier is not excluded from HostEvents, so the first publish
+    /// is free too — capabilities are excluded per tier, and nothing excludes that one.</para>
+    ///
+    /// <para>A refusal is reported with the server's own sentence rather than as "not on the public
+    /// site", so the next person reads why instead of guessing.</para>
+    /// </remarks>
+    protected async Task<string> PublishSeededEventAsync(string orgId, string eventId)
+    {
+        await using var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var login = await api.PostAsync("/login", new()
+        {
+            DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+        });
+        Assert.That(login.Ok, Is.True, "the admin seat should be able to sign in to publish a seeded event");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+        var published = await api.PostAsync(
+            $"/api/organizations/{orgId}/events/{eventId}/publish",
+            new() { Headers = headers, DataObject = new { } });
+        Assert.That(published.Ok, Is.True,
+            "the seeded event could not be published: " + await published.TextAsync());
+
+        var ev = await api.GetAsync($"/api/public/hosted-events/{eventId}");
+        Assert.That(ev.Ok, Is.True,
+            "the seeded event was published and still is not on the public site: " + await ev.TextAsync());
+        return (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString()!;
+    }
+
+    /// <summary>
+    /// The link a letter to <paramref name="to"/> carried, read from the outbox — failing loudly
+    /// when there is none.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the outbox and not the log.</b> The harness has no mail server, so an emailed
+    /// link — confirming a sign-up, holding picked seats — has to be read from somewhere. It used to
+    /// be the API's log, which meant the API wrote working credentials into a text file for the
+    /// tests' benefit (NoCredentialsInLogsTests). The outbox takes every letter whether or not SMTP
+    /// is set up, and a SuperAdmin can read one's body, audited, which is the same thing a person
+    /// answering "did we send it?" does.</para>
+    ///
+    /// <para><b>It also needs nothing but the admin seat.</b> Two of the four readers asked for a
+    /// BEN_API_LOG variable that run-e2e.sh never set — one of them spelled BEN_API_LOGE — so the
+    /// sign-up and onboarding journeys skipped in every standard run, and a skip reads as a pass.</para>
+    ///
+    /// <para>Newest letter first, and every test's address is its own, so the letter found is the
+    /// one this test caused.</para>
+    /// </remarks>
+    /// <param name="linkPath">Where the link's path starts: "/confirm-email?" or "/event-picks/".</param>
+    /// <returns>The link from that path onward — ready to follow after BaseUrl.</returns>
+    protected async Task<string> LinkFromTheOutboxAsync(string to, string linkPath)
+    {
+        var link = await TryLinkFromTheOutboxAsync(to, linkPath);
+        Assert.That(link, Is.Not.Null,
+            $"No letter to {to} carrying a {linkPath} link reached the outbox. With no mail server "
+          + "the letter should still be queued — look at /admin/mail as the SuperAdmin.");
+        return link!;
+    }
+
+    /// <summary>
+    /// <see cref="LinkFromTheOutboxAsync"/>, answering null instead of failing — for a capture that
+    /// takes a picture only when it can.
+    /// </summary>
+    protected async Task<string?> TryLinkFromTheOutboxAsync(string to, string linkPath)
+    {
+        // From the path to the end of the attribute. Decoded first: a link in HTML writes its & as
+        // &amp;, and following that literally is a different link.
+        var shape = new Regex(Regex.Escape(linkPath) + "[^\"'<>\\s]*");
+
+        var html = await TryLetterFromTheOutboxAsync(to, body => shape.IsMatch(System.Net.WebUtility.HtmlDecode(body)));
+        return html is null ? null : shape.Match(System.Net.WebUtility.HtmlDecode(html)).Value;
+    }
+
+    /// <summary>
+    /// The body of the newest letter to <paramref name="to"/> that <paramref name="matches"/>, read
+    /// from the outbox as the SuperAdmin — or null after ten seconds of looking.
+    /// </summary>
+    /// <remarks>What <see cref="LinkFromTheOutboxAsync"/> reads, for a test that wants the whole letter.</remarks>
+    protected async Task<string?> TryLetterFromTheOutboxAsync(string to, Func<string, bool> matches)
+    {
+        await using var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var login = await api.PostAsync("/login", new()
+        {
+            DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+        });
+        Assert.That(login.Ok, Is.True,
+            "the admin seat reads the outbox for emailed letters, and could not sign in: " + await login.TextAsync());
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var list = await api.GetAsync("/api/admin/mail/outbox?take=100", new() { Headers = auth });
+            Assert.That(list.Ok, Is.True, "the outbox could not be read: " + await list.TextAsync());
+
+            foreach (var row in (await list.JsonAsync())!.Value.EnumerateArray())
+            {
+                if (!string.Equals(row.GetProperty("to").GetString(), to, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!row.GetProperty("hasBody").GetBoolean()) continue;
+
+                var body = await api.GetAsync(
+                    $"/api/admin/mail/outbox/{row.GetProperty("id").GetString()}/body", new() { Headers = auth });
+                if (!body.Ok) continue;
+
+                var html = (await body.JsonAsync())!.Value.GetProperty("html").GetString();
+                if (html is not null && matches(html)) return html;
+            }
+
+            await Task.Delay(500);
+        }
+
+        return null;
     }
 
     protected async Task<string> OrgIdBySlugAsync(string slug)
@@ -331,6 +521,268 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected static string ClientEmail        => Environment.GetEnvironmentVariable("BEN_CLIENT_EMAIL")        ?? "daniel.park@benco.dev";
     protected static string ClientPassword     => RequiredSecret("BEN_CLIENT_PASSWORD");
+
+    /// <summary>
+    /// Wren — an account in no group at all, and no group's client either.
+    /// </summary>
+    /// <remarks>
+    /// <para>The free lane's own seat (2026-09-17). <see cref="ClientEmail"/> is also group-less,
+    /// but a client has a case being worked and so passes the feed's "people who belong here"
+    /// rule — which makes him useless for testing the wider door a public place opens. Wren passes
+    /// nothing: no membership, no case, no client access. She is who the free lane exists for, and
+    /// what she may and may not do is the whole point of her.</para>
+    ///
+    /// <para>She has no personal organization either, because minting one is the behaviour under
+    /// test and a seat already through the door cannot test the door.</para>
+    /// </remarks>
+    protected static string SoloEmail          => Environment.GetEnvironmentVariable("BEN_SOLO_EMAIL")          ?? "wren.ashby@benco.dev";
+    protected static string SoloPassword       => RequiredSecret("BEN_SOLO_PASSWORD");
+
+    /// <summary>Hazel — the demo seller (store sellers, backlog 251): the Seller role, her own items, nothing else.</summary>
+    protected static string SellerEmail        => Environment.GetEnvironmentVariable("BEN_SELLER_EMAIL")        ?? "hazel.marsh@benco.dev";
+    protected static string SellerPassword     => RequiredSecret("BEN_SELLER_PASSWORD");
+
+    // ── The public feed's switch, for fixtures that need it on ───────────────
+
+    /// <summary>
+    /// Turns the public feed on and <b>waits until the service agrees</b>, returning what it was
+    /// before so the caller can put it back.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the waiting half exists.</b> Setting a site setting and starting to click is a
+    /// race, and it is a race that loses quietly: the feed reads as off, a composer does not render,
+    /// and three tests time out looking for an element whose absence is correct. That happened on
+    /// 2026-09-17 — the place-post fixtures passed whenever some earlier fixture had left the feed
+    /// on and failed whenever they were first, which is the worst possible failure pattern because
+    /// it looks like flakiness in the product.</para>
+    ///
+    /// <para>Confirmation is <c>GET /api/feed</c>: it 404s wholesale while the feed is off, so a
+    /// 200 is the service saying the switch has landed — and it is the same answer the pages under
+    /// test depend on, rather than a proxy for it.</para>
+    ///
+    /// <para>Returns null when the switch could not be set or never took. That is a <b>missing
+    /// precondition</b> and the caller should <c>Assert.Ignore</c>, never fail: a fixture that
+    /// cannot arrange its own world has not found a bug.</para>
+    /// </remarks>
+    protected static async Task<bool?> TurnTheFeedOnAsync()
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+
+        bool wasOn;
+        using (var read = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) })
+        {
+            read.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            try
+            {
+                var settings = await read.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
+                wasOn = settings.EnumerateArray().Any(setting =>
+                    setting.GetProperty("key").GetString() == FeedSwitchKey
+                    && setting.TryGetProperty("value", out var value)
+                    && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase));
+            }
+            catch (HttpRequestException) { return null; }
+        }
+
+        if (!await SetFeedSwitchAsync(token, on: true)) return null;
+
+        // Waited for on the WEBSITE, not the API, and this is the whole point of the wait.
+        //
+        // The API answers /api/feed the moment the setting is written. The website does not: its
+        // FeatureGate reads SiteFeaturesProvider, a singleton that refreshes on a 30-SECOND
+        // snapshot, and nothing primes it when a switch is flipped through the API rather than
+        // through the admin page. So the old probe proved the API agreed and then handed the
+        // browser a page that still said the feed was off — for up to half a minute.
+        //
+        // It never showed while the e2e database carried the switch already on from a previous
+        // run. On a genuinely fresh one, where the feed starts off by default, it failed at once
+        // (item 243, 2026-09-19): the tests timed out looking for a tab whose absence was correct.
+        //
+        // Forty seconds, because it has to outlast a 30-second snapshot that may have refreshed
+        // the instant before the setting was written.
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                using var response = await probe.GetAsync("/feed");
+                if (response.IsSuccessStatusCode)
+                {
+                    // The gate renders "There is nothing at this address" when the flag is off, so
+                    // asking for the tab strip asks the question the tests actually need answered.
+                    var html = await response.Content.ReadAsStringAsync();
+                    if (html.Contains("Latest", StringComparison.Ordinal)) return wasOn;
+                }
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(1000);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Refuses the run unless the host is serving the build that is on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a crawl must not start without this.</b> On 2026-09-22 the every-seat sweep
+    /// reported <b>879 findings and failed</b>, on thirteen "content clipped" rows — one of the two
+    /// shapes the sweep treats as never a design choice. Restarting the host and running the same
+    /// sweep, same code, same minute, gave <b>96 findings and passed</b>. Nothing about the site had
+    /// changed.</para>
+    ///
+    /// <para>The host builds its static-asset URL map once, at startup. A later build that changes a
+    /// fingerprint — <c>c40b809e</c> moved the clip browser's CSS out of isolation, which changed
+    /// <c>Ben.Video.Editor.*.bundle.scp.css</c> — leaves a host that serves the NEW stylesheet text
+    /// from disk while its map still only knows the OLD name. The <c>@import</c> 404s, every scoped
+    /// style in that library is missing from every page, and the pages really are clipped and
+    /// unreadable. The auditor was not wrong. The run was.</para>
+    ///
+    /// <para>That is the worst kind of bad result: not noise, which gets discounted, but a confident
+    /// failure naming real selectors on real screens. It is indistinguishable from a regression
+    /// until somebody restarts the host, and nobody restarts the host because the report looks like
+    /// work to do.</para>
+    ///
+    /// <para>The test is the host's own words: its scoped-CSS bundle names the library bundles it
+    /// expects, so asking the host for each one asks whether it can finish the page it just served.
+    /// A host that cannot is stale, or broken, and either way its screens are not the product.</para>
+    /// </remarks>
+    protected static async Task RefuseAStaleHostAsync()
+    {
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(20) };
+
+        const string bundleUrl = "/Ben.Web.Website.styles.css";
+        string bundle;
+        try
+        {
+            using var got = await probe.GetAsync(bundleUrl);
+            Assert.That(got.IsSuccessStatusCode, Is.True,
+                $"{BaseUrl}{bundleUrl} answered {(int)got.StatusCode}. The host is not serving its own "
+              + "scoped-CSS bundle, so nothing walked would be styled. Start the site before crawling.");
+            bundle = await got.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            Assert.Fail($"Could not reach {BaseUrl}{bundleUrl}: {ex.Message}");
+            return;
+        }
+
+        var imports = System.Text.RegularExpressions.Regex
+            .Matches(bundle, @"@import\s+['""]([^'""]+)['""]")
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToList();
+
+        var missing = new List<string>();
+        foreach (var href in imports)
+        {
+            using var got = await probe.GetAsync("/" + href.TrimStart('/'));
+            if (!got.IsSuccessStatusCode) missing.Add($"{href} → {(int)got.StatusCode}");
+        }
+
+        Assert.That(missing, Is.Empty,
+            "The host is serving a stylesheet that names files it cannot serve, which means it was "
+          + "started before the build now on disk. Every scoped style in those libraries is missing "
+          + "from every page, so a crawl would report real-looking clipping and contrast faults that "
+          + "do not exist — 879 findings instead of 96, on 2026-09-22.\n\n  "
+          + string.Join("\n  ", missing)
+          + "\n\nRestart the site (scripts/run-e2e.sh, or the restart script) and run again.");
+    }
+
+    /// <summary>Puts the feed switch back where <see cref="TurnTheFeedOnAsync"/> found it.</summary>
+    protected static async Task PutTheFeedBackAsync(bool? wasOn)
+    {
+        if (wasOn is not { } previous) return;
+        if (await SuperAdminTokenAsync() is { } token) await SetFeedSwitchAsync(token, previous);
+    }
+
+    /// <summary>The site setting that switches the public feed on.</summary>
+    protected const string FeedSwitchKey = "features.public-feed";
+
+    /// <summary>The site setting that shows the store (storefront).</summary>
+    protected const string StoreSwitchKey = "features.store";
+
+    /// <summary>
+    /// Sets the store switch and waits until the WEBSITE agrees — its feature snapshot refreshes
+    /// every 30 seconds, so the API agreeing proves nothing about the page a browser is about to
+    /// open (see <see cref="TurnTheFeedOnAsync"/>). Returns what the switch was before, or null
+    /// when it could not be changed.
+    /// </summary>
+    protected static async Task<bool?> SetTheStoreAsync(bool on)
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+        var wasOn = !await FeatureIsOffAsync(StoreSwitchKey);
+
+        using (var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) })
+        {
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            using var response = await http.PutAsJsonAsync($"/api/admin/site-settings/{StoreSwitchKey}", new { value = on ? "true" : "false" });
+            if (!response.IsSuccessStatusCode) return null;
+        }
+
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                // Asks for the page each state draws, not merely the absence of the other: an API
+                // that already says off behind a website that still says on draws neither.
+                var html = await probe.GetStringAsync("/store");
+                var settled = on
+                    ? html.Contains("data-testid=\"store-hero\"", StringComparison.Ordinal)
+                    : html.Contains("There is nothing at this address.", StringComparison.Ordinal);
+                if (settled) return wasOn;
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(1000);
+        }
+        return null;
+    }
+
+    /// <summary>Puts the store switch back where <see cref="SetTheStoreAsync"/> found it.</summary>
+    protected static async Task PutTheStoreBackAsync(bool? wasOn)
+    {
+        if (wasOn is { } previous) await SetTheStoreAsync(previous);
+    }
+
+    private static async Task<bool> SetFeedSwitchAsync(string token, bool on)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var response = await http.PutAsJsonAsync(
+                $"/api/admin/site-settings/{FeedSwitchKey}", new { value = on ? "true" : "false" });
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException) { return false; }
+    }
+
+    /// <summary>
+    /// A SuperAdmin bearer token, or null when sign-in failed.
+    /// </summary>
+    /// <remarks>
+    /// A plain <c>HttpClient</c> rather than Playwright's request context: the Playwright instance
+    /// is created per test and does not exist during <c>[OneTimeSetUp]</c>, which is where this is
+    /// needed.
+    /// </remarks>
+    protected static async Task<string?> SuperAdminTokenAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        try
+        {
+            using var response = await http.PostAsJsonAsync("/login",
+                new { email = SuperAdminEmail, password = SuperAdminPassword });
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            return json.GetProperty("accessToken").GetString();
+        }
+        catch (HttpRequestException) { return null; }
+    }
 
     /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.
@@ -766,15 +1218,32 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected async Task WaitUntilLoadedAsync(int timeoutMs = 15_000)
     {
-        var placeholder = Main.GetByText("Loading", new() { Exact = false });
+        // The SPINNER is the signal, and the word is a hint at best.
+        //
+        // Both halves of that mattered. Several screens spin with no words at all, so a
+        // text-only wait returned immediately and callers photographed and asserted against a
+        // placeholder — that is how the first-run walk came back "ok" on a page still loading.
+        // And a page is allowed to TALK about loading without doing it: /changes renders the
+        // changelog line "…no longer says there are no accounts while it is still loading", which
+        // a text-only wait reads as a page that never came up. BenLoaderOverlay is this site's one
+        // loading marker and always renders a .spinner-border, so structure answers both.
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)
         {
-            if (await placeholder.CountAsync() == 0) return;
+            try
+            {
+                // The spinner alone, and nothing about the words. BenLoaderOverlay is the one
+                // loading marker on this site and ALWAYS renders a .spinner-border — including
+                // behind BenListState — so a page with no spinner has finished, whatever its prose
+                // happens to say. Consulting the text as well only reintroduced the /changes bug
+                // from the other direction, and made every page that mentions loading wait.
+                if (await Spinners.CountAsync() == 0) return;
+            }
+            catch (Exception) { return; }   // the page went away; the caller's assertion will say so
             await Task.Delay(150);
         }
-        // Deliberately does not throw: some pages keep a permanent element containing the word,
-        // and a caller's own assertion is a better failure message than a generic timeout here.
+        // Deliberately does not throw: a caller's own assertion is a better failure message than
+        // a generic timeout here.
     }
 
     /// <summary>
@@ -908,7 +1377,30 @@ public abstract class BenTestBase : PageTest
     protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
 
     /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
-    protected ILocator Spinners => Main.Locator(".spinner-border:visible");
+    /// <summary>Anything on the page that means "not finished yet".</summary>
+    /// <remarks>
+    /// <para>Every walk treats "no spinners" as "the page has settled", so whatever this misses is
+    /// a page photographed, audited and reported while it is still empty — and an empty page has no
+    /// clipping and no contrast fault, so it comes back CLEAN. A false pass, not a flaky one.</para>
+    ///
+    /// <para>It used to be <c>.spinner-border:visible</c> alone. <c>BenLoaderOverlay</c> renders a
+    /// spinner, so its 33 uses were always seen; but **36 places across 34 files** say so with text
+    /// instead — <c>&lt;p class="text-secondary"&gt;Loading…&lt;/p&gt;</c> and its div and span
+    /// variants — and **33 of those files have no spinner anywhere**, so on those screens no walk
+    /// could tell a loading page from a finished one. Found while fixing W2, where exactly that let
+    /// ProductWalk photograph the admin dashboard mid-load and then report that it never said
+    /// "Sign-ins and registrations" (2026-09-22, W13).</para>
+    ///
+    /// <para>Matched by exact text, not a substring: a page is allowed to TALK about loading. All
+    /// 36 use the ellipsis character, and a new one spelled any other way will not be seen —
+    /// <c>LoadingPlaceholdersAreVisibleToTheHarnessTests</c> fails when that happens rather than
+    /// leaving it to be discovered by a report that says a screen is clean.</para>
+    /// </remarks>
+    protected ILocator Spinners => Main.Locator(
+        ".spinner-border:visible, "
+      + "p:text-is(\"Loading…\"):visible, "
+      + "div:text-is(\"Loading…\"):visible, "
+      + "span:text-is(\"Loading…\"):visible");
 
     /// <summary>Waits until the circuit has taken over the server-rendered page.</summary>
     /// <remarks>
@@ -1090,4 +1582,61 @@ public abstract class BenTestBase : PageTest
             + "start. Check the browser console: an exception during render kills the circuit and "
             + "leaves the page frozen exactly like this.");
     }
+
+    /// <summary>
+    /// Uploads the room photo fixture under a unique name to the signed-in SuperAdmin's own files,
+    /// then presses that file's Edit image button. Returns the name it was uploaded under. Shared by
+    /// ImageEditorTests and the help capture.
+    /// </summary>
+    /// <param name="fileName">Unique by default, so the test finds its own upload; the help capture
+    /// passes a readable one because the name is the dialog's title.</param>
+    protected async Task<string> OpenPhotoEditorOnAFreshUploadAsync(string? fileName = null)
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/users");
+        await WaitForTheCircuitAsync();
+        var search = Page.GetByPlaceholder("Search by name or email");
+        await Expect(search).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await search.FillAsync(SuperAdminEmail);
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Search" }).ClickAsync();
+        var view = Page.Locator("tr", new() { HasTextString = "AverageBen" })
+                       .GetByRole(AriaRole.Button, new() { Name = "View" })
+                       .Or(Page.Locator("tr", new() { HasTextString = "AverageBen" }).GetByRole(AriaRole.Link, new() { Name = "View" }))
+                       .First;
+        await ClickUntilUrlAsync(view, @"/admin/users/[0-9a-f\-]+");
+        await WaitForTheCircuitAsync();
+
+        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files" })
+                           .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Files" }))
+                           .First;
+        await filesTab.ClickAsync();
+
+        var name = fileName ?? $"editor-{Guid.NewGuid():N}.jpg";
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Upload File" }).ClickAsync();
+        var upload = Page.Locator(".modal-dialog", new() { HasTextString = "Upload File" });
+        await upload.Locator("select").SelectOptionAsync(new SelectOptionValue { Label = "Case Evidence" });
+        await upload.Locator("input[type=file]").SetInputFilesAsync(new FilePayload
+        {
+            Name = name,
+            MimeType = "image/jpeg",
+            Buffer = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg")),
+        });
+        await Expect(upload.GetByText(name)).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await upload.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true }).ClickAsync();
+
+        // The grid shows ten files a page in the order the API returns them, and this account
+        // collects a file every run - so the new one can be on any page.
+        var row = Page.Locator("tr", new() { HasTextString = name });
+        var next = Page.GetByRole(AriaRole.Button, new() { Name = "Go to the next page" });
+        for (var pageNo = 0; pageNo < 40 && !await row.IsVisibleAsync(); pageNo++)
+        {
+            await Page.WaitForTimeoutAsync(pageNo == 0 ? 2_000 : 300);
+            if (await row.IsVisibleAsync()) break;
+            if (!await next.IsVisibleAsync() || await next.IsDisabledAsync()) break;
+            await next.ClickAsync();
+        }
+        await Expect(row).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await row.Locator("button[title='Edit image']").ClickAsync();
+        return name;
+    }
+
 }

@@ -276,7 +276,7 @@ public sealed class HostedEventDoorDutiesTests
         var controller = new HostedEventBookingController(
             sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, security.Object, new HostedEventCalendarSync(),
             new HostedEventAccess(security.Object), new EventGuestMailer(email, site, NullLogger<EventGuestMailer>.Instance),
-            email, site, NullLogger<HostedEventBookingController>.Instance) { ControllerContext = As(DoorMemberId) };
+            email, site, NullLogger<HostedEventBookingController>.Instance, new ForwardingOutboxQueue(email)) { ControllerContext = As(DoorMemberId) };
 
         var cameIn = DateTime.UtcNow.AddMinutes(-75);
         var result = Assert.IsType<HostedEventScanResult>(Assert.IsType<OkObjectResult>((await controller.Scan(OrgId, TonightEventId,

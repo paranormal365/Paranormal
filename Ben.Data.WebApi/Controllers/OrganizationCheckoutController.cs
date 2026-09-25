@@ -111,6 +111,29 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
 
+        // ALREADY PAID THROUGH, and not changing cadence (2026-09-17 audit).
+        //
+        // The seat path a couple of hundred lines down has always asked this; the group path
+        // never did. Fulfilment dates a checkout period from NOW — unlike a renewal, a session
+        // carries no period start — and ReplaceSnapshotAsync drops the snapshot of the period
+        // they are standing in. So a group paid through December who pressed "Renew" in September
+        // paid a second full price and got a period running from September: two charges, two
+        // receipts, and three months of already-paid service quietly gone. A double-click or two
+        // open tabs did the same thing.
+        //
+        // Only a SAME-cadence purchase is refused. Changing monthly to yearly is a deliberate
+        // change of plan and still goes through; refusing that would break the button the billing
+        // page offers for it.
+        if (sub is { Status: SubscriptionStatus.Active, CurrentPeriodEnd: { } paidThrough }
+            && paidThrough > DateTime.UtcNow
+            && sub.Interval == request.Interval)
+        {
+            return BadRequest(
+                $"This group is already paid through {paidThrough:MM/dd/yyyy}, so there is nothing "
+                + "to buy yet. It renews on its own; changing to a different billing cadence is "
+                + "the one thing you can do before then.");
+        }
+
         // The coupon is validated NOW so a bad code refuses before anyone reaches a card form —
         // but redeemed only at fulfillment, where the money is recorded, like the manual path.
         var payable = listPrice;

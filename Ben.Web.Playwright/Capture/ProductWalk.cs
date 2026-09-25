@@ -135,7 +135,25 @@ public sealed class ProductWalk : BenTestBase
         try { text = await Main.InnerTextAsync(new() { Timeout = 10_000 }); }
         catch (Exception) { text = ""; }
 
-        if (text.Contains("An unhandled error has occurred")) problems.Add("unhandled error banner");
+        // Looked for OUTSIDE the page's own content, and through the banner's own element — because
+        // a page is allowed to TALK about an error without being one. /changes carries a line about
+        // the day that phrase stopped appearing, and reading `main` counted the changelog's own
+        // words as proof the changelog was broken. RouteCrawlTests was corrected for exactly this
+        // on 2026-09-19; this copy of the same check was not, and repeated the mistake (2026-09-20).
+        //
+        // Outside is also where a real one lives: #blazor-error-ui is rendered beyond the layout's
+        // content region.
+        var banner = await Page.EvaluateAsync<bool>(@"() => {
+            const main  = document.querySelector('.app-content, main, .content-wrapper');
+            const body  = document.body.innerText || '';
+            const inner = main ? (main.innerText || '') : '';
+            const chrome = inner ? body.split(inner).join(' ') : body;
+            const err = document.querySelector('#blazor-error-ui');
+            const shown = !!err && getComputedStyle(err).display !== 'none';
+            return shown || /An unhandled error has occurred/i.test(chrome);
+        }");
+
+        if (banner) problems.Add("unhandled error banner");
         if (await Page.Locator("#blazor-error-ui").IsVisibleAsync()) problems.Add("Blazor error bar showing");
         if (text.Contains("Page not found") || text.Contains("Sorry, there's nothing at this address")) problems.Add("not found");
         if (text.Trim().Length < 40) problems.Add($"rendered only {text.Trim().Length} characters");
@@ -202,7 +220,9 @@ public sealed class ProductWalk : BenTestBase
     /// <summary>Follows the first link on the page whose address starts with <paramref name="prefix"/>.</summary>
     private async Task FollowAsync(string prefix)
     {
-        var link = Main.Locator($"a[href^='{prefix}']").First;
+        // Not the "New …" link that sits first on a list page: the step is after a thing that exists, and
+        // "one user" used to photograph the New User form (2026-09-16).
+        var link = Main.Locator($"a[href^='{prefix}']:not([href$='/new'])").First;
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 20_000 });
         var href = (await link.GetAttributeAsync("href"))!;
         await ClickUntilUrlAsync(link, Regex.Escape(href.Split('?')[0]));
@@ -258,11 +278,23 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("an event's page", () => FollowAsync("/o/"));
         await StepAsync("the feed", () => GoAsync("/feed"));
         await StepAsync("a post", () => FollowAsync("/feed/"));
+        // The arc's front door for a stranger: one location, everybody's work at it. A visitor must
+        // see the published half and be offered no box (2026-09-17).
+        await StepAsync("a public place, as a stranger",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.GetByText("Published investigations", new() { Exact = false })
+                .Or(Main.GetByText("Nothing has been published", new() { Exact = false })));
         await StepAsync("equipment catalog", () => GoAsync("/equipment-catalog"));
         await StepAsync("gear people own", () => OrgTabAsync("Gear people own"));
         await StepAsync("an item somebody owns", () => FollowIfAnyAsync("/equipment/"));
         await StepAsync("a tour's public page", () => GoAsync("/o/pw-tour-1789070429/tours/church-street-walk"));
         await StepAsync("publications", () => GoAsync("/publications"));
+        // Storefront: the shop as a stranger finds it — the front, a shelf, one product.
+        await StepAsync("the store", () => GoAsync("/store"), Main.Locator("[data-testid=store-hero]"));
+        await StepAsync("a shelf", () => GoAsync("/store/c/spirit-boxes"), Main.Locator("[data-testid=listing-grid]"));
+        await StepAsync("a product", () => FollowAsync("/store/p/"), Main.Locator("[data-testid=product-price]"));
+        await StepAsync("the cart", () => GoAsync("/store/cart"),
+            Main.Locator("[data-testid=order-summary]").Or(Main.GetByText("Your cart is empty")));
         await StepAsync("pricing, a card and a button for every plan", () => GoAsync("/pricing"),
             Main.Locator("[data-testid=pricing-band] [data-testid=pricing-cta] a, [data-testid=pricing-band] [data-testid=pricing-cta] button, #pricing-not-on-sale"), expect: "Pricing");
         await StepAsync("ask for an investigation", () => GoAsync("/my-requests/new"));
@@ -328,9 +360,7 @@ public sealed class ProductWalk : BenTestBase
         {
             await OpenCaseNamedAsync(org, "Belmont");
             await GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research");
-        }, Main.Locator("[data-testid=research-page-link]"));
-        await StepAsync("a published research page, to read", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
-            Main.Locator("[data-testid=block-reader]"));
+        }, Main.Locator("[data-testid=case-research-boards]"));
         await StepAsync("a published case: vote and take it back", async () =>
         {
             await GoAsync("/o/paranormal365/cases");
@@ -359,9 +389,85 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("what's on", () => GoAsync("/events"));
         await StepAsync("my events", () => GoAsync("/my-events"));
         await StepAsync("group messages", () => GoAsync($"/organizations/{org}/messages"));
+        // The place hub as a member sees it (2026-09-17): their own groups' visits and cases, what
+        // others shared, the published cases, the posts, and the buttons that start work here.
+        await StepAsync("a public place, signed in",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.GetByText("Shared by other groups", new() { Exact = false }));
+        await StepAsync("a new case names its place", async () =>
+        {
+            await GoAsync($"/organizations/{org}/cases/new?place=40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+        }, Main.GetByTestId("case-place-chosen")
+               .Or(Main.GetByText("What kind of place is this?", new() { Exact = false })));
         await StepAsync("notifications", () => GoAsync("/notifications"));
         await StepAsync("upload files", () => GoAsync("/upload-files"));
         await StepAsync("the admin area refuses", () => GoAsync("/admin/dashboard"));
+
+        Finish();
+    }
+
+    // ── 3b. Somebody in no group at all — the free lane's own seat ────────────
+
+    /// <summary>
+    /// Wren: an account, and nothing else. The persona the free lane is for.
+    /// </summary>
+    /// <remarks>
+    /// <para>Added 2026-09-17, because until then no walk covered somebody who belongs to nothing —
+    /// every seat here is a member, a client, a viewer or an admin, and each of them passes doors
+    /// she does not. Most of what she opens should REFUSE her in words rather than show an empty
+    /// page, which is the thing this walk exists to catch.</para>
+    ///
+    /// <para>She may already have a space of her own, from a browser test that minted her one. The
+    /// walk does not care: it reads what the page offers rather than asserting which offer it is.</para>
+    /// </remarks>
+    [Test]
+    public async Task Somebody_in_no_group()
+    {
+        _persona = "3b-no-group";
+        await LoginAsync(SoloEmail, SoloPassword);
+
+        await StepAsync("home, signed in", () => GoAsync("/"));
+        await StepAsync("a public place, where the free lane starts",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.Locator(".place-investigate-solo").Or(Main.Locator(".place-investigate")));
+        await StepAsync("the feed, which she may read", () => GoAsync("/feed"));
+        await StepAsync("my investigations", () => GoAsync("/my-investigations"));
+        await StepAsync("my evidence", () => GoAsync("/my-evidence"));
+        await StepAsync("my files", () => GoAsync("/upload-files"));
+        await StepAsync("my profile", () => GoAsync("/profile"));
+        await StepAsync("organizations — hers, if she has made one", () => GoAsync("/organizations"));
+        await StepAsync("find a group", () => GoAsync("/find"));
+        await StepAsync("pricing", () => GoAsync("/pricing"), expect: "Pricing");
+        await StepAsync("ask a group for help", () => GoAsync("/my-requests/new"));
+        await StepAsync("notifications", () => GoAsync("/notifications"));
+        await StepAsync("the admin area refuses", () => GoAsync("/admin/dashboard"));
+
+        Finish();
+    }
+
+    // ── 3c. A member who sells through the store (store sellers, backlog 251) ─
+
+    /// <summary>
+    /// Hazel Marsh, the demo seller: her items and every tab of one, her packages, earnings and
+    /// questions — and the store's admin pages, which she never sees.
+    /// </summary>
+    [Test]
+    public async Task A_seller()
+    {
+        _persona = "3c-seller";
+        await LoginAsync(SellerEmail, SellerPassword);
+        const string remPod = "/store/selling/items/a1000000-0000-0000-0000-000000000028";
+
+        await StepAsync("my items", () => GoAsync("/store/selling"), expect: "Hand-Built REM Pod");
+        foreach (var tab in new[] { "details", "variants", "pictures", "parts", "files", "faq", "versions", "page", "history", "preview" })
+            await StepAsync($"the REM pod — {tab}", () => GoAsync($"{remPod}?tab={tab}"));
+        await StepAsync("the draft", () => GoAsync("/store/selling/items/a1000000-0000-0000-0000-000000000029"), expect: "Pocket EMF Logger");
+        await StepAsync("my packages", () => GoAsync("/store/selling/packages"));
+        await StepAsync("my earnings", () => GoAsync("/store/selling/earnings"), expect: "Owed to you");
+        await StepAsync("questions", () => GoAsync("/store/selling/questions"));
+        await StepAsync("her item as shoppers see it", () => GoAsync("/store/p/hand-built-rem-pod"));
+        await StepAsync("the store's admin refuses", () => GoAsync("/admin/store/products"));
 
         Finish();
     }
@@ -432,11 +538,10 @@ public sealed class ProductWalk : BenTestBase
         }, Main.Locator("#case-edit-description .k-editor"));
         await StepAsync("leaving Edit Case unchanged goes back to the case", () => ClickUntilUrlAsync(Main.Locator("#case-edit-cancel"), $@"/organizations/{org}/cases/[0-9a-f\-]{{36}}$"));
         await StepAsync("case notes, formatted", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=notes"), Main.Locator("#case-notes-new"));
-        await StepAsync("the timeline, with its research page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=timeline"),
-            Main.Locator("[data-testid=timeline-open-research-page]"));
-        await StepAsync("research, with New page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research"), Main.Locator("#research-new-page"));
-        await StepAsync("a research page, as somebody who may edit it", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
-            Main.Locator("[data-testid=block-page]"));
+        await StepAsync("the timeline", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=timeline"));
+        // The boards themselves live in another application on another host, so the walk stops at the door: it is
+        // checking the site's own pages, and CanvasResearchHandoverTests covers what is through it.
+        await StepAsync("research, with New board", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research"), Main.Locator("#research-new-board"));
         var caseAddress = $"/organizations/{org}/cases";
         await StepAsync("an investigation from the list", async () =>
         {
@@ -462,7 +567,17 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("events", () => GoAsync($"/organizations/{org}/events"));
         await StepAsync("an event", () => FollowAsync($"/organizations/{org}/events/"));
         await StepAsync("the venue", () => GoAsync($"/organizations/{org}/venue"));
-        await StepAsync("organization security", () => GoAsync("/organization-security"));
+        // /organization-security was deleted on 2026-09-21 — a scaffold from the security
+        // library that nothing linked to. The walk kept visiting it, which would now report a
+        // "Page not found" as a finding about the product rather than about this list.
+        await StepAsync("a guest code", async () =>
+        {
+            // The sheet a guide holds up (item 248). Reached by its own address rather than by
+            // pressing the button, because the walk visits screens and the button needs a row.
+            await GoAsync($"/organizations/{org}?tab=investigations");
+            await FollowIfAnyAsync($"/organizations/{org}/investigations/");
+        });
+        await StepAsync("joining with a code", () => GoAsync("/tonight"));
         await StepAsync("start another group", () => GoAsync("/organizations/new"));
         await StepAsync("case video editor", async () =>
         {
@@ -485,7 +600,10 @@ public sealed class ProductWalk : BenTestBase
         _persona = "6-superadmin";
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
-        await StepAsync("dashboard", () => GoAsync("/admin/dashboard"), expect: "Sign-ins and registrations");
+        // Waits, like its two siblings below, instead of checking a string once after the
+        // screenshot: #site-dashboard appears only when the charts have loaded.
+        await StepAsync("dashboard", () => GoAsync("/admin/dashboard"),
+                        Main.Locator("#site-dashboard"), expect: "Sign-ins and registrations");
         await StepAsync("dashboard, events tab", () => GoAsync("/admin/dashboard?tab=events"), Main.Locator("#events-dashboard"));
         await StepAsync("dashboard, event health tab", () => GoAsync("/admin/dashboard?tab=event-health"), Main.Locator("#event-health"));
         await StepAsync("every screen of one event, from the list", async () =>
@@ -500,11 +618,16 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",
                      "/admin/org-subscriptions", "/admin/subscription-tiers", "/admin/member-seats", "/admin/coupons",
                      "/admin/billing-ledger", "/admin/tax-rates", "/admin/referrals", "/admin/org-ads", "/admin/roles",
-                     "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/audit-log", "/admin/error-log",
+                     "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/email-templates",
+                     "/admin/audit-log", "/admin/error-log",
                      "/admin/support-tickets", "/admin/feed-reports", "/admin/test-posts", "/admin/venue-claims",
-                     "/admin/place-duplicates", "/admin/merge-groups", "/admin/orphaned-sessions", "/admin/video-assets",
+                     "/admin/places", "/admin/place-duplicates", "/admin/merge-groups",
+                     "/admin/orphaned-sessions", "/admin/video-assets",
                      "/admin/sidecar-telemetry", "/admin/file-types", "/admin/lookup-types", "/admin/equipment-taxonomy",
                      "/admin/experience-taxonomy", "/admin/delete-case", "/admin/delete-group", "/admin/delete-user",
+                     "/admin/store", "/admin/store/categories", "/admin/store/products", "/admin/store/stock",
+                     "/admin/store/coupons", "/admin/store/reviews", "/admin/store/settings", "/admin/store/orders",
+                     "/admin/store/sale-requests", "/admin/store/sellers", "/admin/store/questions",
                  })
             await StepAsync(route.Replace("/admin/", "admin "), () => GoAsync(route));
         await StepAsync("one user", async () =>
@@ -512,6 +635,31 @@ public sealed class ProductWalk : BenTestBase
             await GoAsync("/admin/users");
             await FollowAsync("/admin/users/");
         });
+
+        // Storefront: the product editor is reached only from the list, so the route alone would
+        // walk past it. Needs one product — the demo seed provides seven.
+        await StepAsync("one product, from the list", async () =>
+        {
+            await GoAsync("/admin/store/products");
+            await FollowAsync("/admin/store/products/");
+        });
+
+        // The order desk (S5.5): one order is reached only from the list. The demo seed's seven orders provide it.
+        await StepAsync("one order, from the list", async () =>
+        {
+            await GoAsync("/admin/store/orders");
+            await FollowAsync("/admin/store/orders/");
+        });
+
+        // The route alone proves nothing here: the page renders its list before anything is
+        // chosen, so a broken editor would walk past as a perfectly good screen.
+        await StepAsync("writing one of the site's letters", async () =>
+        {
+            await GoAsync("/admin/email-templates");
+            await ClickUntilAsync(
+                Main.GetByText("Reset your password", new() { Exact = true }).First,
+                Main.Locator("[data-testid=template-body]"));
+        }, Main.Locator("[data-testid=template-body]"));
 
         Finish();
     }

@@ -104,6 +104,61 @@ public sealed class HostedEventEmailPickTests
         return sqlite;
     }
 
+    /// <summary>
+    /// The pick letter is filed as the letter it is, and hands a template its hold link.
+    /// </summary>
+    /// <remarks>
+    /// It was filed as "choose-your-emails" — a preferences letter that does not exist — so
+    /// /admin/mail showed a seat hold under the wrong name, and it handed a template nothing, so a
+    /// template for it would have rendered with no way to hold the places.
+    /// </remarks>
+    [Fact]
+    public async Task The_pick_letter_is_filed_as_holding_places_and_hands_a_template_its_link()
+    {
+        await using var sqlite = await SeedAsync();
+        var letters = new List<Ben.Data.Common.Interfaces.EmailMessage>();
+        var email = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(Moq.It.IsAny<Ben.Data.Common.Interfaces.EmailMessage>(), Moq.It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Common.Interfaces.EmailMessage, CancellationToken>((m, _) => letters.Add(m))
+             .Returns(Task.CompletedTask);
+        var mailer = new EventGuestMailer(email.Object,
+            Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://test.local" }),
+            NullLogger<EventGuestMailer>.Instance);
+
+        Assert.IsType<OkObjectResult>(
+            (await Anonymous(sqlite).Pick(EventId, Picking(Stranger, SeatA1Id), mailer, default)).Result);
+
+        var letter = Assert.Single(letters);
+        Assert.Equal(Ben.Data.Common.Mail.MailKinds.HoldYourPlaces.Key, letter.Kind);
+
+        var holdUrl = letter.Payload!.Supplied!["HoldUrl"].Value;
+        Assert.Contains("/event-picks/", holdUrl);
+        // The same link the built-in letter carries, so a template and the letter agree.
+        Assert.Contains(holdUrl, letter.HtmlBody);
+        Assert.Equal(Stranger, letter.Payload.Tables!["AppUsers"]["Email"]);
+    }
+
+    /// <summary>
+    /// A template for the pick letter that leaves out the hold link is refused when it is saved.
+    /// </summary>
+    /// <remarks>
+    /// Under the old kind this was accepted: it declared no link, so there was nothing to require.
+    /// </remarks>
+    [Fact]
+    public void A_template_for_the_pick_letter_without_the_hold_link_is_refused()
+    {
+        var kind = Ben.Data.Common.Mail.MailKinds.HoldYourPlaces;
+
+        Assert.Equal(["a way to hold the places"],
+            Ben.Data.Common.Mail.MailTokens.MissingRequired(
+                "Hold your places", "<p>Hello {AppUsers.DisplayName}, you picked some places.</p>", kind));
+
+        // Either spelling of the link will do — the bare URL or the ready-made button.
+        Assert.Empty(Ben.Data.Common.Mail.MailTokens.MissingRequired("Hold your places", "<p>{HoldButton}</p>", kind));
+        Assert.Empty(Ben.Data.Common.Mail.MailTokens.MissingRequired("Hold your places", "<a href=\"{HoldUrl}\">Hold</a>", kind));
+    }
+
     private static EventGuestMailer NoMail()
     {
         var email = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();

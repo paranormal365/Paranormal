@@ -38,7 +38,20 @@ DIST="$INSTALLER_DIR/dist"
 APP="$DIST/BenVideoSidecar.app"
 BUNDLE_ID="video.ben.sidecar"
 
-echo "==> Building BenVideo sidecar installer for $RID (unsigned, testing only)"
+# The version is READ from the csproj rather than written here. It used to be a hard-coded "1.0.0"
+# in three places, which survived the bump to 1.1.1: the bundle and the .pkg both went on claiming
+# 1.0.0, and because install.sh reports CFBundleShortVersionString to the telemetry endpoint, every
+# install of 1.1.1 would have been recorded on the admin dashboard as a 1.0.0 install. The Windows
+# builder has always read the csproj (build-installer.ps1); this now does the same, and a guard
+# test holds it (SidecarReleaseVersionTests).
+VERSION="$(sed -n 's:.*<Version>[[:space:]]*\([^<[:space:]]*\)[[:space:]]*</Version>.*:\1:p' \
+  "$PROJECT_DIR/Ben.Video.Sidecar.csproj" | head -1)"
+if [[ -z "$VERSION" ]]; then
+  echo "error: Ben.Video.Sidecar.csproj has no <Version> — refusing to stamp a made-up number." >&2
+  exit 1
+fi
+
+echo "==> Building BenVideo sidecar $VERSION installer for $RID (unsigned, testing only)"
 
 # The bundled binaries are the whole point of installing rather than running from the build tree —
 # a published app can't fall back to a dev-path override, so a missing ffmpeg here would produce an
@@ -56,7 +69,9 @@ rm -rf "$APP" "$DIST/BenVideoSidecar-$RID.pkg" "$DIST/BenVideoSidecar-$RID" "$DI
 mkdir -p "$APP/Contents/MacOS"
 
 echo "==> dotnet publish (self-contained, so the target machine needs no .NET runtime)"
-dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" \
+# -f net10.0: the project also builds a Windows-only target (net10.0-windows), and a publish of a
+# project with two has to be told which.
+dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" -f net10.0 \
   -c Release -r "$RID" --self-contained true \
   -o "$APP/Contents/MacOS" --nologo -v q
 
@@ -76,8 +91,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key>              <string>BenVideo Sidecar</string>
     <key>CFBundleDisplayName</key>       <string>BenVideo Sidecar</string>
     <key>CFBundleIdentifier</key>        <string>$BUNDLE_ID</string>
-    <key>CFBundleVersion</key>           <string>1.0.0</string>
-    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key>           <string>$VERSION</string>
+    <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundlePackageType</key>       <string>APPL</string>
     <key>CFBundleExecutable</key>        <string>Ben.Video.Sidecar</string>
     <key>LSMinimumSystemVersion</key>    <string>13.0</string>
@@ -98,7 +113,7 @@ echo "==> App bundle: $APP ($SIZE)"
 PKG="$DIST/BenVideoSidecar-$RID.pkg"
 pkgbuild \
   --identifier "$BUNDLE_ID" \
-  --version "1.0.0" \
+  --version "$VERSION" \
   --install-location "$HOME/Applications/BenVideoSidecar.app" \
   --root "$APP" \
   "$PKG" >/dev/null

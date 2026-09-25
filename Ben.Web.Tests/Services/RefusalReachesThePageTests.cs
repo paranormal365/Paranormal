@@ -74,6 +74,75 @@ public sealed class RefusalReachesThePageTests
     }
 
     /// <summary>
+    /// The roles editor, which had the same fault on three buttons at once.
+    /// </summary>
+    /// <remarks>
+    /// Saving a role, adding somebody to one and taking somebody out all wrote "Failed to save
+    /// role.", "Failed to add member." and "Failed to remove member." over whatever the server
+    /// said — and those endpoints refuse in words worth reading: "That role does not belong to
+    /// this group.", "Name is required.", and, on the SuperAdmin side, "You cannot remove your own
+    /// SuperAdmin role. Ask another SuperAdmin to do it." A person told the last of those knows
+    /// exactly what to do next; a person told "Failed to remove member." does not.
+    /// </remarks>
+    [Fact]
+    public async Task The_roles_editors_refusal_survives_the_trip_to_the_page()
+    {
+        const string foreign = "That role does not belong to this group.";
+
+        var (result, error) = await Client(Refusal(HttpStatusCode.BadRequest, foreign))
+            .UpdateOrgRoleExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid(),
+                new UpdateOrgRoleRequest("A role", null, IsActive: true, SortOrder: 0));
+
+        Assert.Null(result);
+        Assert.Equal(foreign, error);
+    }
+
+    /// <summary>Taking somebody out of a role keeps its reason too — a different verb, a different
+    /// path through the client, and the one carrying the best sentence of the three.</summary>
+    [Fact]
+    public async Task Removing_somebody_from_a_role_keeps_its_reason()
+    {
+        const string ownRole = "You cannot remove your own SuperAdmin role. Ask another SuperAdmin to do it.";
+
+        var (removed, error) = await Client(Refusal(HttpStatusCode.Conflict, ownRole))
+            .RemoveOrgRoleMemberExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.False(removed);
+        Assert.Equal(ownRole, error);
+    }
+
+    /// <summary>Publishing a draft keeps its reason — the one endpoint here that answers with no
+    /// body at all, so the client has to read the STATUS to tell a refusal from a success.</summary>
+    /// <remarks>
+    /// "There is no draft to publish." usually means somebody published it in another tab. The
+    /// page said "Those changes couldn't be published.", which reads like a failure to save and
+    /// sends the author looking for a fault that is not there.
+    /// </remarks>
+    [Fact]
+    public async Task Publishing_a_cms_draft_keeps_its_reason()
+    {
+        const string noDraft = "There is no draft to publish.";
+
+        var (published, error) = await Client(Refusal(HttpStatusCode.Conflict, noDraft))
+            .PublishCmsDraftExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.False(published);
+        Assert.Equal(noDraft, error);
+    }
+
+    /// <summary>And a publish that succeeds is not read as a refusal, which the status is what
+    /// distinguishes: a 204 and a bodiless refusal look identical to the prose path.</summary>
+    [Fact]
+    public async Task A_publish_that_works_is_not_mistaken_for_a_refusal()
+    {
+        var (published, error) = await Client(new HttpResponseMessage(HttpStatusCode.NoContent))
+            .PublishCmsDraftExpectingReasonAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.True(published);
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// A 403 carries no sentence, and the page falls back to its own wording. The point of the
     /// change is not that every refusal now has prose — it is that the page stops inventing one
     /// when the server did supply it.

@@ -389,7 +389,17 @@
         {
             // The server answers the same whether this is the first report or the fifth, so the
             // button says the same thing either way.
-            await AdminClient.ReportCaseAsync(CaseId, null);
+            //
+            // But that is about a duplicate, not a FAILURE (2026-09-17 audit). A refusal is a
+            // false too, because the transport maps one to false rather than throwing, so the
+            // catch below never saw it — and "Reported" is a sentence a person stops looking
+            // after. Abuse then sits unreported because somebody was told it wasn't.
+            if (!await AdminClient.ReportCaseAsync(CaseId, null))
+            {
+                _actionError = "That could not be reported. Please try again.";
+                return;
+            }
+
             _reported = true;
             _shareNote = "Reported";
         }

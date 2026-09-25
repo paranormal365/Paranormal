@@ -152,11 +152,7 @@ public sealed class CasePrivacyRetrofit
             .Where(f => f.CaseTimelineEntry.CaseId == caseId).Select(f => f.UploadFileId).ToListAsync(ct);
         var reports = await db.CaseReportSectionFiles.AsNoTracking()
             .Where(f => f.Section.CaseReport.CaseId == caseId).Select(f => f.UploadFileId).ToListAsync(ct);
-        var research = await db.CaseResearchEntries.AsNoTracking()
-            .Where(e => e.CaseId == caseId && e.UploadFileId != null)
-            .Select(e => e.UploadFileId!.Value).ToListAsync(ct);
-
-        return [.. direct.Concat(timeline).Concat(reports).Concat(research).Distinct()];
+        return [.. direct.Concat(timeline).Concat(reports).Distinct()];
     }
 
     /// <summary>

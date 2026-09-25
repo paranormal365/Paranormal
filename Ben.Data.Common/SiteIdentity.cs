@@ -36,10 +36,47 @@ public sealed class SiteIdentity
     /// <summary>One line saying what the site is, for a link preview with nothing better to show.</summary>
     public string Tagline { get; set; } = "Find paranormal investigators near you.";
 
+    /// <summary>
+    /// The API's own public origin, no trailing slash — <c>https://ishaunted.com/webapi</c>.
+    /// </summary>
+    /// <remarks>
+    /// For the few links in a letter that the API itself answers — an entry pass drawn as a PNG.
+    /// The site origin cannot serve those: the website does not forward <c>/api</c>, and the API
+    /// lives under <c>/webapi</c>. Until 2026-09-23 the pass link was built on the site origin
+    /// and could not have opened.
+    /// </remarks>
+    public string ApiBaseUrl { get; set; } = "";
+
     /// <summary>An absolute URL for a path, or the path unchanged when no origin is configured.</summary>
     public string AbsoluteUrl(string relativePath)
     {
         if (string.IsNullOrWhiteSpace(BaseUrl)) return relativePath;
         return $"{BaseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
+    }
+
+    /// <summary>
+    /// An absolute URL for a path the API answers, or the path unchanged when the API's origin is
+    /// not configured — never the site origin, which would be a link that cannot open.
+    /// </summary>
+    public string ApiAbsoluteUrl(string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(ApiBaseUrl)) return relativePath;
+        return $"{ApiBaseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
+    }
+
+    /// <summary>
+    /// Fills an unset <see cref="BaseUrl"/> from the older <c>AppBaseUrl</c> setting.
+    /// </summary>
+    /// <remarks>
+    /// Both deploy paths set the API's <c>AppBaseUrl</c> and, until 2026-09-23, never its
+    /// <c>SiteIdentity:BaseUrl</c> — so every link the API built with <see cref="AbsoluteUrl"/>
+    /// (the seat pick, the /attending and /helping links, reset and handover, the logo in every
+    /// letter) was relative, which a mail client cannot open. The confirmation letter alone
+    /// worked, because it fell back to AppBaseUrl by hand. The fallback now lives here, once.
+    /// </remarks>
+    public static void UseAppBaseUrlWhenUnset(SiteIdentity site, string? appBaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(site.BaseUrl) && !string.IsNullOrWhiteSpace(appBaseUrl))
+            site.BaseUrl = appBaseUrl.TrimEnd('/');
     }
 }

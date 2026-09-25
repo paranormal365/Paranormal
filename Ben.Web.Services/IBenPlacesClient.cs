@@ -59,6 +59,25 @@ public interface IBenPlacesClient
     Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
 
     /// <summary>
+    /// The caller's own groups' cases at this place, whatever their status (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Answers the question a member arrives at a place with — do we already have a case here? —
+    /// which the public list cannot, because the answer is usually a case nobody published.
+    /// </remarks>
+    Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// A place's posts for a signed-in reader, and whether they may add one (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The anonymous place endpoint carries the posts too, but it is called without a token on
+    /// purpose and so always answers "no" to whether you may post. This is the same question asked
+    /// as somebody.
+    /// </remarks>
+    Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
     /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
     /// exists.
     /// </summary>
@@ -287,6 +306,15 @@ public interface IBenPlacesClient
     Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
         MapBounds? bounds = null, CancellationToken token = default);
 
+    /// <summary>
+    /// Every session file on the server, newest first — what /admin/session-files lists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. Deleting a session is its owner's decision, or the orphan sweep for sessions
+    /// whose bytes are gone; neither belongs on a list whose job is to show what is there.
+    /// </remarks>
+    Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(CancellationToken token = default);
+
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default);
@@ -300,9 +328,82 @@ public interface IBenPlacesClient
 
     Task<LoadResult<DuplicatePlaceGroup>> GetDuplicatePlacesAsync(CancellationToken token = default);
 
+    // ── The catalogue: what exists, what kind it is, getting rid of one (C8) ──
+
+    /// <summary>Every place, newest first, narrowed by name, town or kind.</summary>
+    Task<ItemResult<AdminPlacePage>> GetAdminPlacesAsync(
+        string? query = null, PlaceKind? kind = null, int page = 1, int pageSize = 50,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// What is holding a place, asked before the delete button is offered rather than after it is
+    /// pressed.
+    /// </summary>
+    Task<ItemResult<AdminPlaceUsage>> GetAdminPlaceUsageAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Puts a place on the public map or takes it off. Promotion is refused for anything carrying
+    /// a street number.
+    /// </summary>
+    Task<(AdminPlaceRow? Place, string? Error)> SetAdminPlaceKindAsync(
+        Guid placeId, PlaceKind kind, CancellationToken token = default);
+
+    /// <summary>
+    /// Removes a place nothing points at. The refusal names what is in the way.
+    /// </summary>
+    Task<(bool Deleted, string? Error)> DeleteAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>One place, in full, for the edit form.</summary>
+    Task<ItemResult<AdminPlaceDetail>> GetAdminPlaceAsync(
+        Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// Corrects a place. Refused, in words, when the new address already belongs to another
+    /// record — that is what the merge screen is for.
+    /// </summary>
+    Task<(AdminPlaceDetail? Place, string? Error)> EditAdminPlaceAsync(
+        Guid placeId, AdminEditPlaceRequest request, CancellationToken token = default);
+
     /// <summary>
     /// Moves everything off one place onto another and deletes the empty one. Irreversible.
     /// </summary>
     Task<(PlaceMergeResult? Result, string? Error)> MergePlaceAsync(
         Guid losingPlaceId, Guid intoPlaceId, CancellationToken token = default);
+
+    // ── Evidence added straight to a place (item 250) ─────────────────────────
+
+    /// <summary>
+    /// Adds one file to a public place's evidence.
+    /// </summary>
+    /// <returns>
+    /// What the server says, including whether it is showing yet — held is not a failure and the
+    /// page must not report it as one.
+    /// </returns>
+    Task<(PlaceEvidenceAdded? Added, string? Error)> AddPlaceEvidenceAsync(
+        Guid placeId, Stream content, string fileName, string contentType, string? caption,
+        Ben.Data.Common.Enums.PlaceMediaKind kind = Ben.Data.Common.Enums.PlaceMediaKind.Evidence,
+        CancellationToken token = default);
+
+    /// <summary>Takes back something this account added. Only ever their own.</summary>
+    Task<bool> RemovePlaceEvidenceAsync(Guid placeId, Guid evidenceId, CancellationToken token = default);
+
+    /// <summary>Where a browser fetches one piece of a place's evidence. Anonymous by design.</summary>
+    string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId);
+
+    /// <summary>
+    /// Puts a public location on the map — a landmark, a business, a cemetery (item 250).
+    /// </summary>
+    /// <remarks>
+    /// Until this there was no way to create a place at all; they only ever appeared sideways,
+    /// when a case or an investigation happened to bind one. A landmark nobody had yet
+    /// investigated could not be named.
+    /// </remarks>
+    Task<(PlaceCreated? Created, string? Error)> CreatePublicPlaceAsync(
+        NewPublicPlaceRequest request, CancellationToken token = default);
+
+    /// <summary>Writes what a public location is, for somebody who has never been (item 250).</summary>
+    Task<(PlaceRecord? Place, string? Error)> SetPlaceDescriptionAsync(
+        Guid placeId, string? description, CancellationToken token = default);
 }

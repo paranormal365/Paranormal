@@ -63,6 +63,61 @@ public static class PaidPlan
             + "stays there — it is what makes the archive worth reading.";
 
     /// <summary>
+    /// Whether everything this group records at a public place is public because it pays nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ben, 2026-09-17:</b> "Everything a solo person submits is going to be public by
+    /// default… if paid, they can make their work private. By default we should be able to collect
+    /// information as public for unpaid plan." The same bargain
+    /// <see cref="WhyCannotKeepPrivateAsync"/> already strikes over field sessions, applied to the
+    /// cases and investigations at a public place.</para>
+    ///
+    /// <para><b>Keyed on the plan, never on <c>IsPersonal</c>.</b> Those are different questions and
+    /// the old gates asked the wrong one: a paid solo subscriber was refused a case outright while an
+    /// unpaid group of one could open one and keep it to itself — backwards in both directions. A
+    /// personal organization is an organization; what it pays is what decides this.</para>
+    ///
+    /// <para><b>The other half of the rule lives in the places it governs</b>, because "public by
+    /// default" is a decision about one case or one investigation and only its own controller knows
+    /// which place it is at. A private residence is never touched by this: that is the paid lane, and
+    /// nobody is publishing somebody's home for want of a subscription.</para>
+    /// </remarks>
+    public static async Task<bool> PublicByDefaultAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+        => !await CoversOrganizationAsync(db, organizationId, ct);
+
+    /// <summary>
+    /// Why this group may not keep a case at a public place to itself, or null when it may.
+    /// </summary>
+    /// <remarks>
+    /// Asked at the moment a case would stop being public, not on every save: a case that is already
+    /// private stays private, the way the member cap never evicted anybody. Says nothing about a
+    /// price or where one is bought, for the reason given on <see cref="WhyCannotKeepPrivateAsync"/> —
+    /// these sentences reach the phone one day.
+    /// </remarks>
+    public static async Task<string?> WhyCannotKeepCasePrivateAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+        => await PublicByDefaultAsync(db, organizationId, ct)
+            ? "On this account a case at a public location is public. What you record there joins "
+            + "the place's own page, which is what makes it worth reading."
+            : null;
+
+    /// <summary>
+    /// Why this group may not narrow an investigation at a public place, or null when it may.
+    /// </summary>
+    /// <remarks>
+    /// The same rule as <see cref="WhyCannotKeepCasePrivateAsync"/>, worded for the scope control
+    /// rather than the publish box. Both are one question — does this account pay — and both are
+    /// asked here so the two answers cannot drift apart.
+    /// </remarks>
+    public static async Task<string?> WhyCannotNarrowInvestigationAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+        => await PublicByDefaultAsync(db, organizationId, ct)
+            ? "On this account a visit to a public location is shared with everyone. What you find "
+            + "there joins the place's own page, which is what makes it worth reading."
+            : null;
+
+    /// <summary>
     /// Why this group may not take on another member, or null when it may.
     /// </summary>
     /// <remarks>
