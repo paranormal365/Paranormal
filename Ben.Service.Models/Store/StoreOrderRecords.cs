@@ -26,7 +26,22 @@ public sealed record StoreOrderView(
     IReadOnlyList<StoreOrderItemView> Items, StoreCheckoutTotals Totals, decimal RefundedAmount, string? CouponCode,
     string? Carrier, string? TrackingNumber, string? TrackingUrl, DateTime? ShippedUtc, DateTime? DeliveredUtc,
     IReadOnlyList<StoreRefundView> Refunds, IReadOnlyList<StoreOrderEventView> Events, int ReturnsWindowDays,
-    string? SupportEmail);
+    string? SupportEmail, IReadOnlyList<StoreOrderParcelView>? Parcels = null);
+
+/// <summary>
+/// One package of an order as its buyer sees it (store sellers, backlog 251, P6/P7): who sends it,
+/// what its shipping cost, where it stands, and how to follow it.
+/// </summary>
+/// <param name="ItemIds">The order lines in this package.</param>
+public sealed record StoreOrderParcelView(
+    int Number, string ShipsFrom, StoreParcelStatus Status, decimal Shipping, string? Carrier, string? TrackingNumber,
+    string? TrackingUrl, DateTime? ShippedUtc, DateTime? DeliveredUtc, IReadOnlyList<Guid> ItemIds)
+{
+    public string Title => $"Package {Number} · Ships from {ShipsFrom}";
+
+    /// <summary>As a shipping row: a package with no shipping cost ships free.</summary>
+    public StoreCartParcelView AsRow() => new(Number, ShipsFrom, [], 0m, Shipping, Shipping == 0m, null);
+}
 
 public sealed record StoreOrderSummaryView(
     Guid Id, int OrderNumber, DateTime PlacedUtc, decimal Total, StoreOrderStatus Status, string PaymentStatus,
@@ -45,4 +60,5 @@ public sealed record StoreInvoiceRecord(
     int OrderNumber, DateTime PlacedUtc, DateTime? PaidUtc, StoreInvoiceParty BillFrom, StoreInvoiceParty BillTo,
     StoreInvoiceParty ShipTo, IReadOnlyList<StoreInvoiceLine> Lines, decimal Subtotal, decimal Discount,
     string? CouponCode, decimal Shipping, decimal Tax, decimal Total, decimal Refunded, decimal Balance,
-    string? Carrier, string? TrackingNumber, int ReturnsWindowDays, string? SupportEmail);
+    string? Carrier, string? TrackingNumber, int ReturnsWindowDays, string? SupportEmail,
+    IReadOnlyList<StoreOrderParcelView>? Parcels = null);

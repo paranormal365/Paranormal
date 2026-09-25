@@ -21,7 +21,13 @@ public static class StoreOrderViews
         => o.Status is StoreOrderStatus.Cancelled or StoreOrderStatus.Refunded || o.PaidUtc is not null;
 
     public static StoreCheckoutTotals Totals(StoreOrder o)
-        => new(o.Subtotal, o.DiscountAmount, o.ShippingAmount, o.TaxAmount, o.Total, o.ShippingTaxAmount);
+        => new(o.Subtotal, o.DiscountAmount, o.ShippingAmount, o.TaxAmount, o.Total, o.ShippingTaxAmount,
+            o.Parcels.Count == 0 ? null : Parcels(o).Select(x => x.AsRow()).ToList());
+
+    /// <summary>The order's packages as the buyer sees them (store sellers P6). Callers load <c>Parcels</c> with the order.</summary>
+    public static IReadOnlyList<StoreOrderParcelView> Parcels(StoreOrder o) => o.Parcels.OrderBy(x => x.Number).Select(x => new StoreOrderParcelView(
+        x.Number, StoreParcelNames.ShipsFrom(x.SellerAppUserId, x.SellerName), x.Status, x.ShippingAmount, x.Carrier, x.TrackingNumber,
+        x.TrackingUrl, x.ShippedUtc, x.DeliveredUtc, o.Items.Where(i => i.ParcelId == x.Id).Select(i => i.Id).ToList())).ToList();
 
     public static StoreOrderAddressView Shipping(StoreOrder o)
         => new(o.ShipName, o.ShipPhone, null, o.ShipStreet1, o.ShipStreet2, o.ShipCity, o.ShipState, o.ShipZip, o.ShipCountry);
@@ -39,7 +45,7 @@ public static class StoreOrderViews
             o.Refunds.OrderBy(r => r.DateCreated).Select(r => new StoreRefundView(r.DateCreated, r.Amount, r.Reason, r.Status)).ToList(),
             o.Events.Where(e => BuyerSees(e.Kind)).OrderBy(e => e.OccurredUtc)
                 .Select(e => new StoreOrderEventView(e.Kind, BuyerNote(e), e.Amount, e.OccurredUtc)).ToList(),
-            returnsWindowDays, supportEmail);
+            returnsWindowDays, supportEmail, Parcels(o));
 
     /// <summary>The events a buyer is told about; attention, letters and notes are the store's own business.</summary>
     private static bool BuyerSees(StoreOrderEventKind k) => k is StoreOrderEventKind.Placed or StoreOrderEventKind.PaymentSucceeded
@@ -67,6 +73,6 @@ public static class StoreOrderViews
             i.LineDiscount, i.TaxAmount, i.LineTotal - i.LineDiscount)).ToList();
         return new StoreInvoiceRecord(o.OrderNumber, o.PlacedUtc, o.PaidUtc, from, billTo, shipTo, lines, o.Subtotal, o.DiscountAmount,
             o.CouponCode, o.ShippingAmount, o.TaxAmount, o.Total, o.RefundedAmount, o.Total - o.RefundedAmount,
-            o.Carrier, o.TrackingNumber, s.ReturnsWindowDays, supportEmail);
+            o.Carrier, o.TrackingNumber, s.ReturnsWindowDays, supportEmail, Parcels(o));
     }
 }

@@ -17,7 +17,8 @@ public sealed record StoreCheckoutRequest(
 /// <param name="Tax">All the sales tax, shipping's included.</param>
 /// <param name="ShippingTax">The part of <paramref name="Tax"/> charged on shipping (some states tax it).</param>
 public sealed record StoreCheckoutTotals(
-    decimal Subtotal, decimal Discount, decimal Shipping, decimal Tax, decimal Total, decimal ShippingTax = 0m);
+    decimal Subtotal, decimal Discount, decimal Shipping, decimal Tax, decimal Total, decimal ShippingTax = 0m,
+    IReadOnlyList<StoreCartParcelView>? Parcels = null);
 
 /// <summary>An order placed and waiting for payment — or already paid, when nothing was owed.</summary>
 /// <param name="ClientSecret">What the Payment Element mounts with; null when <paramref name="PaidWithoutCharge"/>.</param>

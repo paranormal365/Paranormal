@@ -124,7 +124,7 @@ public sealed class StoreOrderController(
             System.Text.Encoding.UTF8.GetBytes(a), System.Text.Encoding.UTF8.GetBytes(b));
 
     private static Task<StoreOrder?> LoadAsync(BenDataContext db, Guid id, CancellationToken ct)
-        => db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Refunds).Include(o => o.Events)
+        => db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Parcels).Include(o => o.Refunds).Include(o => o.Events)
             .AsSplitQuery().FirstOrDefaultAsync(o => o.Id == id, ct);
 
     private static async Task<IReadOnlyDictionary<Guid, string>> ProductSlugsAsync(BenDataContext db, StoreOrder order, CancellationToken ct)

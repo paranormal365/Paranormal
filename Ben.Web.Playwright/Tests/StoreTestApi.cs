@@ -149,6 +149,25 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
     }
 
     /// <summary>A live, one-variant product with stock — the card adds it straight to the cart.</summary>
+    /// <summary>
+    /// Hands a product to a seller (store sellers, P6): the store names them on its details, as the
+    /// admin's Seller box does. The product keeps whatever else it had.
+    /// </summary>
+    public async Task<JsonElement> GiveToSellerAsync(JsonElement product, string sellerEmail)
+    {
+        var sellers = await SendAsync(HttpMethod.Get, "/api/admin/store/products/sellers");
+        var seller = sellers.EnumerateArray().First(s => string.Equals(s.GetProperty("email").GetString(), sellerEmail, StringComparison.OrdinalIgnoreCase));
+        var id = product.GetProperty("id").GetGuid();
+        var p = await SendAsync(HttpMethod.Get, $"/api/admin/store/products/{id}");
+        return await SendAsync(HttpMethod.Put, $"/api/admin/store/products/{id}", new
+        {
+            categoryId = p.GetProperty("categoryId").GetGuid(), equipmentModelId = (Guid?)null, name = p.GetProperty("name").GetString(),
+            slug = p.GetProperty("slug").GetString(), shortDescription = (string?)null, longDescriptionHtml = (string?)null,
+            isFeatured = false, newUntilUtc = (DateTime?)null, stripeTaxCode = (string?)null, sortOrder = p.GetProperty("sortOrder").GetInt32(),
+            specs = Array.Empty<object>(), sellerAppUserId = seller.GetProperty("id").GetGuid(),
+        });
+    }
+
     public async Task<JsonElement> BuyableAsync(string name, decimal price, int onHand = 10)
     {
         var product = await ProductAsync(await SharedShelfAsync(), name, live: true, price: price);

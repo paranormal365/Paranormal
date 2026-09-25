@@ -72,8 +72,13 @@ public sealed class StoreCheckoutService(
 
     private sealed record Priced(
         List<Line> Lines, decimal Subtotal, StoreCoupon? Coupon, decimal Discount, IReadOnlyList<decimal> Shares,
-        decimal Shipping, StoreTaxResult Tax, decimal Total, StoreParcelPlanResult Plan)
+        decimal Shipping, StoreTaxResult Tax, decimal Total, StoreParcelPlanResult Plan, IReadOnlyDictionary<Guid, string?> SellerNames)
     {
+        /// <summary>The packages as the buyer's summary draws them.</summary>
+        public IReadOnlyList<StoreCartParcelView> ParcelRows => Plan.Parcels.Select(x => new StoreCartParcelView(x.Number,
+            StoreParcelNames.ShipsFrom(x.SellerAppUserId, x.SellerAppUserId is { } id ? SellerNames.GetValueOrDefault(id) : null),
+            x.VariantIds, x.ItemsSubtotal, x.Shipping, x.IsFree, null)).ToList();
+
         /// <summary>Each package's share of the tax on shipping, to the cent, in package order.</summary>
         public IReadOnlyList<decimal> ParcelShippingTax
             => StoreParcelPlan.SplitShippingTax(Plan.Parcels.Select(x => x.Shipping).ToList(), Tax.ShippingTaxCents / 100m);
@@ -177,7 +182,10 @@ public sealed class StoreCheckoutService(
 
         var taxAmount = taxed.TaxCents / 100m;
         var total = subtotal - discount + shipping + taxAmount;
-        var priced = new Priced(lines, subtotal, coupon, discount, shares, shipping, taxed, total, plan);
+        var sellerIds = plan.Parcels.Where(x => x.SellerAppUserId is not null).Select(x => x.SellerAppUserId!.Value).ToList();
+        var sellerNames = sellerIds.Count == 0 ? new Dictionary<Guid, string?>()
+            : await db.AppUsers.AsNoTracking().Where(u => sellerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+        var priced = new Priced(lines, subtotal, coupon, discount, shares, shipping, taxed, total, plan, sellerNames);
         var fingerprint = Fingerprint(lines.Select(l => (l.Variant.Id, l.Quantity, l.Variant.Price, l.Product.SellerAppUserId)), coupon?.Id, request.Shipping, email);
 
         // 6. The same checkout again: rewrite the open order to what is charged now.
@@ -297,9 +305,7 @@ public sealed class StoreCheckoutService(
             BuyerNotes = Blank(r.BuyerNotes), PlacedUtc = now, DateCreated = now,
         };
 
-        var sellerIds = p.Plan.Parcels.Where(x => x.SellerAppUserId is not null).Select(x => x.SellerAppUserId!.Value).ToList();
-        var sellerNames = sellerIds.Count == 0 ? new Dictionary<Guid, string?>()
-            : await db.AppUsers.AsNoTracking().Where(u => sellerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+        var sellerNames = p.SellerNames;
 
         var pictures = await db.StoreProductImages.AsNoTracking()
             .Where(i => p.Lines.Select(l => l.Product.Id).Contains(i.ProductId))
@@ -424,7 +430,7 @@ public sealed class StoreCheckoutService(
         var fake = gateway is FakeStoreStripeGateway;
         return new StoreCheckoutPrepared(order.Id, order.OrderNumber, paid ? null : secret,
             paid ? null : fake ? FakeStoreStripeGateway.PublishableKey : stripe.Value.PublishableKey,
-            new StoreCheckoutTotals(p.Subtotal, p.Discount, p.Shipping, p.Tax.TaxCents / 100m, p.Total, p.Tax.ShippingTaxCents / 100m),
+            new StoreCheckoutTotals(p.Subtotal, p.Discount, p.Shipping, p.Tax.TaxCents / 100m, p.Total, p.Tax.ShippingTaxCents / 100m, p.ParcelRows),
             paid, $"/store/checkout/complete?order={order.Id}", order.ReservationExpiresUtc ?? Now, fake, allowLink);
     }
 

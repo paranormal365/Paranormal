@@ -132,6 +132,20 @@
                                             <small class="d-block text-secondary">Ships to addresses in the United States.</small>
                                         </label>
                                     </div>
+                                    @if (cart.IsSplit)
+                                    {
+                                        @* Store sellers P6: each seller ships their own package (Ben, 09/24/2026). *@
+                                        <div class="alert alert-info small py-2 mt-2" data-testid="checkout-packages">
+                                            <strong>Your order will arrive in @cart.Parcels!.Count packages.</strong>
+                                            Each maker sends their own, with its own tracking.
+                                            <ul class="mb-0 mt-1 ps-3">
+                                                @foreach (var parcel in cart.Parcels!)
+                                                {
+                                                    <li data-testid="checkout-package">@parcel.Title — @parcel.ShippingText</li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
 
                                     <div class="form-floating mt-4">
                                         <textarea class="form-control" id="checkout-notes" placeholder="Order notes" style="height:5rem" maxlength="500"

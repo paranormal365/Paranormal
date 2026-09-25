@@ -89,6 +89,7 @@
                         <span>Shipping</span>
                         <span class="@(money.ShippingIsFree ? "text-success fw-medium" : null)">@money.ShippingText</span>
                     </div>
+                    <StoreParcelRows Parcels="money.Parcels" ShowNotes="true" />
                     <div class="ben-summary__row fw-semibold" data-testid="summary-total"><span>Total before tax</span><span>@StoreMoney.Format(money.TotalBeforeTax)</span></div>
                     <div class="text-secondary">Sales tax is worked out at checkout.</div>
                 </div>

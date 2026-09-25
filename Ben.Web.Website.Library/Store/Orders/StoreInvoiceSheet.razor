@@ -74,6 +74,14 @@
                         <dt class="col-7 fw-normal">Discount@(Invoice.CouponCode is { } c ? $" ({c})" : null)</dt><dd class="col-5">−@StoreMoney.Format(Invoice.Discount)</dd>
                     }
                     <dt class="col-7 fw-normal">Shipping</dt><dd class="col-5">@(Invoice.Shipping == 0 ? "Free" : StoreMoney.Format(Invoice.Shipping))</dd>
+                    @if (Invoice.Parcels is { Count: > 1 } parcels)
+                    {
+                        @foreach (var parcel in parcels)
+                        {
+                            <dt class="col-7 fw-normal small text-secondary ps-3" data-testid="invoice-parcel">@parcel.Title</dt>
+                            <dd class="col-5 small">@(parcel.Shipping == 0 ? "Free" : StoreMoney.Format(parcel.Shipping))</dd>
+                        }
+                    }
                     <dt class="col-7 fw-normal">Sales tax</dt><dd class="col-5">@StoreMoney.Format(Invoice.Tax)</dd>
                     <dt class="col-7">Total</dt><dd class="col-5 fw-bold">@StoreMoney.Format(Invoice.Total)</dd>
                     @if (Invoice.Refunded > 0)

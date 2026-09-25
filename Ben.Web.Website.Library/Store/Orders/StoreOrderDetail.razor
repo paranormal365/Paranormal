@@ -197,6 +197,7 @@
                         <div class="ben-summary__row text-success"><span>Discount@(order.CouponCode is { } c ? $" ({c})" : null)</span><span>−@StoreMoney.Format(order.Totals.Discount)</span></div>
                     }
                     <div class="ben-summary__row"><span>Shipping</span><span>@(order.Totals.Shipping == 0 ? "Free" : StoreMoney.Format(order.Totals.Shipping))</span></div>
+                    <StoreParcelRows Parcels="order.Totals.Parcels" />
                     <div class="ben-summary__row" data-testid="order-tax">
                         <span>Sales tax@(order.Totals.ShippingTax > 0 ? $" (includes {StoreMoney.Format(order.Totals.ShippingTax)} on shipping)" : null)</span>
                         <span>@StoreMoney.Format(order.Totals.Tax)</span>

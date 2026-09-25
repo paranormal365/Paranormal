@@ -70,6 +70,7 @@
                     <div class="px-3 small ben-cart-dd__rows" data-testid="cart-menu-money">
                         <div data-testid="summary-products"><span>Products</span><span>@StoreMoney.Format(cart.Subtotal)</span></div>
                         <div data-testid="summary-shipping"><span>Shipping</span><span>@cart.ShippingText</span></div>
+                        <StoreParcelRows Parcels="cart.Parcels" />
                         <div class="fw-semibold" data-testid="summary-total"><span>Total before tax</span><span>@StoreMoney.Format(cart.TotalBeforeTax)</span></div>
                     </div>
                     @if (!cart.CanCheckout && cart.WhyNotCheckout is { } why)

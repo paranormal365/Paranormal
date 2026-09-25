@@ -76,7 +76,7 @@ public sealed class AdminStoreOrderController(
     public async Task<ActionResult<StoreInvoiceRecord>> Invoice(Guid id, [FromServices] Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var order = await db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Refunds)
+        var order = await db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Parcels).Include(o => o.Refunds)
             .AsSplitQuery().FirstOrDefaultAsync(o => o.Id == id, ct);
         if (order is null || order.PaidUtc is null) return NotFound();
         var settings = await StoreSettingsReader.ReadAsync(db, ct);

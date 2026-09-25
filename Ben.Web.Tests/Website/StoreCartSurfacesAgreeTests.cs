@@ -51,6 +51,19 @@ public sealed class StoreCartSurfacesAgreeTests
     public void Every_surface_draws_its_lines_with_StoreCartLine(string surface)
         => Assert.Matches(@"<StoreCartLine\b", Read(surface));
 
+    /// <summary>
+    /// Store sellers P6: an order that ships as packages shows a shipping row per package on every
+    /// surface that shows its shipping — three copies of the rows would drift, so all draw one component.
+    /// </summary>
+    [Theory]
+    [InlineData("Ben.Web.Website/Components/Layout/BenCartButton.razor")]
+    [InlineData("Ben.Web.Website.Library/Store/Cart/StoreCartDrawer.razor")]
+    [InlineData("Ben.Web.Website.Library/Store/Shared/StoreOrderSummary.razor")]
+    [InlineData("Ben.Web.Website.Library/Store/Checkout/StoreCheckoutCompletePage.razor")]
+    [InlineData("Ben.Web.Website.Library/Store/Orders/StoreOrderDetail.razor")]
+    public void Every_surface_draws_a_row_per_package(string surface)
+        => Assert.Matches(@"<StoreParcelRows\b", Read(surface));
+
     [Fact]
     public void The_cart_page_uses_the_order_summary()
         => Assert.Matches(@"<StoreOrderSummary\b", Read("Ben.Web.Website.Library/Store/Cart/StoreCartPage.razor"));

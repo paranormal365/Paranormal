@@ -108,7 +108,7 @@ public static class StoreOrderDesk
     public static async Task<StoreOrderDetailAdminRecord?> DetailAsync(BenDataContext db, Guid id, string? secretKey, DateTime now, CancellationToken ct)
     {
         var o = await db.StoreOrders.AsNoTracking()
-            .Include(x => x.Items).Include(x => x.Refunds).ThenInclude(r => r.Items).Include(x => x.Events)
+            .Include(x => x.Items).Include(x => x.Parcels).Include(x => x.Refunds).ThenInclude(r => r.Items).Include(x => x.Events)
             .AsSplitQuery().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (o is null) return null;
 

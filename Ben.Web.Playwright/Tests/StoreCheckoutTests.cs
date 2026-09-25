@@ -134,6 +134,46 @@ public class StoreCheckoutTests : BenTestBase
     }
 
     [Test]
+    [Description("Store stock and a seller's item are two packages: a row each in the cart, the checkout says so, and the thank-you page lists both.")]
+    public async Task Two_packages_through_checkout_to_the_order_page()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var ours = await api.BuyableAsync(Unique("Investigators torch"), 12m);
+        var hers = await api.GiveToSellerAsync(await api.BuyableAsync(Unique("Hand-wound spirit box"), 18m), SellerEmail);
+        await AddToCartAsync(ours);
+        await AddToCartAsync(hers);
+
+        await Page.GotoAsync($"{BaseUrl}/store/cart");
+        await WaitForTheCircuitAsync();
+        var summary = Page.Locator("[data-testid=order-summary]");
+        await Expect(summary.Locator("[data-testid=summary-parcel]")).ToHaveCountAsync(2, new() { Timeout = 30_000 });
+        await Expect(summary.Locator("[data-testid=summary-parcel][data-number='1']")).ToContainTextAsync("Package 1 · Ships from IsHaunted.com");
+        await Expect(summary.Locator("[data-testid=summary-parcel][data-number='2']")).ToContainTextAsync("Package 2 · Ships from Hazel Marsh");
+
+        await ClickUntilAsync(Page.Locator("#cart-to-checkout"), Page.Locator("#checkout-email"));
+        await Expect(Page.Locator("[data-testid=checkout-packages]")).ToContainTextAsync("Your order will arrive in 2 packages");
+        await FillAsync(Buyer());
+        await ContinueAsync();
+        await Expect(Page.Locator("[data-testid=order-summary] [data-testid=summary-parcel]")).ToHaveCountAsync(2, new() { Timeout = 30_000 });
+        await PayAsync();
+
+        await Expect(Page.Locator("[data-testid=summary-parcel]")).ToHaveCountAsync(2, new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=summary-parcel][data-number='2']")).ToContainTextAsync("Ships from Hazel Marsh");
+    }
+
+    [Test]
+    [Description("One seller's cart shows one Shipping row and no package rows, as before.")]
+    public async Task One_package_has_no_package_rows()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        await AddToCartAsync(await api.BuyableAsync(Unique("Field notebook"), 9m));
+        await Page.GotoAsync($"{BaseUrl}/store/cart");
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("[data-testid=order-summary] [data-testid=summary-shipping]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=summary-parcel]")).ToHaveCountAsync(0);
+    }
+
+    [Test]
     [Description("Stock that went while the buyer was typing is refused in words on the page, and nothing is held.")]
     public async Task Checkout_refuses_more_than_on_hand()
     {

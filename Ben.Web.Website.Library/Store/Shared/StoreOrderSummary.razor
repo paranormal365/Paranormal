@@ -32,6 +32,7 @@
             <span class="@(Cart.Shipping is null ? "text-secondary" : Cart.ShippingIsFree ? "text-success fw-medium" : null)">@Cart.ShippingText</span>
         }
     </div>
+    <StoreParcelRows Parcels="@(Totals is { } t0 ? t0.Parcels : Cart.Parcels)" ShowNotes="@(Totals is null)" />
     @* fees slot — Smarty's "Fees" line; the store charges none beyond sales tax *@
     <div class="ben-summary__row" data-testid="summary-tax">
         <span>Sales tax</span>
@@ -107,10 +108,13 @@
 
     [Parameter] public bool Sticky { get; set; }
 
-    /// <summary>"Spend $12.50 more for free shipping", while that is true.</summary>
+    /// <summary>
+    /// "Spend $12.50 more for free shipping", while that is true — for a cart that ships as one
+    /// package. Split into packages, each package's row says it for itself (store sellers P6).
+    /// </summary>
     private string? FreeShippingNote
-        => Cart is { IsEmpty: false, ShippingIsFree: false, FreeShippingThreshold: > 0 }
-           && Cart.FreeShippingThreshold - (Cart.Subtotal - Cart.Discount) is var more && more > 0
+        => Cart is { IsEmpty: false, ShippingIsFree: false, FreeShippingThreshold: > 0, IsSplit: false }
+           && (Cart.Parcels is [{ MoreForFree: { } left }] ? left : Cart.FreeShippingThreshold - (Cart.Subtotal - Cart.Discount)) is var more && more > 0
             ? $"Spend {StoreMoney.Format(more)} more for free shipping."
             : null;
 }
