@@ -96,6 +96,13 @@
         <p class="small text-secondary mt-4 mb-0">
             Paid by card.
             @if (Invoice.Carrier is { } carrier) { <text>Shipped by @carrier@(Invoice.TrackingNumber is { } t ? $", tracking {t}" : null).</text> }
+            @if (Invoice.Parcels is { Count: > 1 } sent)
+            {
+                @foreach (var p in sent.Where(p => p.Carrier is not null))
+                {
+                    <text>Package @p.Number shipped by @p.Carrier@(p.TrackingNumber is { } t ? $", tracking {t}" : null). </text>
+                }
+            }
             Returns within @Invoice.ReturnsWindowDays days of delivery.
             @if (Invoice.SupportEmail is { } support) { <text>Questions: @support</text> }
         </p>

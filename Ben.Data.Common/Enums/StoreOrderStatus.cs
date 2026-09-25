@@ -24,4 +24,10 @@ public enum StoreOrderStatus
 
     /// <summary>Paid, then refunded to a zero balance.</summary>
     Refunded = 6,
+
+    /// <summary>
+    /// Some of its packages have shipped and some have not (store sellers, backlog 251, P7) — each
+    /// seller ships their own (Ben, 09/24/2026: "the status is Partially Shipped").
+    /// </summary>
+    PartiallyShipped = 7,
 }

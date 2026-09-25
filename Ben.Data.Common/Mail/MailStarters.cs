@@ -131,6 +131,20 @@ public static class MailStarters
             MailBlocks.Paragraph("You can always see the order, and its tracking, on <a href=\"{OrderUrl}\">its page</a>.")),
         [MailKinds.StoreOrderShipped.Key]);
 
+    /// <summary>A package for a seller to send (store sellers P7).</summary>
+    public static readonly MailStarter SellerParcelToShip = new(
+        "seller-parcel-to-ship", "A package for a seller to ship",
+        "What goes in the package, where it's going, and the seller's packages page.",
+        "Order {StoreOrders.OrderNumber}: a package for you to ship",
+        Branded(
+            MailBlocks.Heading("A package for you to ship"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. Order {StoreOrders.OrderNumber} is paid, and this package is yours to send:"),
+            "{ItemsTable}",
+            MailBlocks.Paragraph("It is going to:<br>{ShipTo}"),
+            MailBlocks.Button("Open my packages", "{SellerPackagesUrl}"),
+            MailBlocks.Paragraph("Buy the label as you usually do, then mark it shipped with its carrier and tracking number.")),
+        [MailKinds.StoreSellerParcelToShip.Key]);
+
     /// <summary>Money on its way back (S5.2).</summary>
     public static readonly MailStarter OrderRefunded = new(
         "order-refunded", "A refund",
@@ -276,7 +290,7 @@ public static class MailStarters
     [
         Confirmation, PasswordReset, Receipt, Invoice, Invitation, AccountMade, HoldPlaces,
         RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink,
-        OrderShipped, OrderRefunded, LowStock, Plain,
+        OrderShipped, OrderRefunded, LowStock, SellerParcelToShip, Plain,
     ];
 
     /// <summary>

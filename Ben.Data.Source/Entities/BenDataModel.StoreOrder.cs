@@ -93,9 +93,6 @@ namespace Ben.Data.Source.Entities
         public DateTime? CancelledUtc { get; set; }
         public string? CancellationReason { get; set; }
 
-        public string? Carrier { get; set; }
-        public string? TrackingNumber { get; set; }
-        public string? TrackingUrl { get; set; }
 
         public string? BuyerNotes { get; set; }
         public string? AdminNotes { get; set; }

@@ -82,3 +82,21 @@ public sealed record SellerCategoryRecord(Guid Id, string Name);
 public sealed record SellerItemRecord(
     StoreProductAdminRecord Item, StoreSellerItemStatus Status, decimal? SellerAskPerUnit, StoreSaleRequestRecord? Request);
 
+
+// ── The seller's packages (P7) ───────────────────────────────────────────────
+
+public sealed record SellerParcelLineRecord(string ProductName, string? VariantName, string Sku, int Quantity, Guid? ImageUploadFileId);
+
+/// <summary>
+/// One package a seller sends (store sellers, backlog 251, P7): what goes in it, where it's going,
+/// and where it stands.
+/// </summary>
+/// <param name="PackageCount">How many packages the order ships in — "package 2 of 2".</param>
+/// <param name="ShipTo">The buyer's name and address, until the package is delivered; null after, and for a cancelled one.</param>
+/// <param name="LabelCredit">What the seller is credited for the label — the flat rate, even when it shipped free.</param>
+/// <param name="OnHold">The store is looking at the order first; nothing can be packed or shipped until it clears it.</param>
+public sealed record SellerParcelRecord(
+    Guid Id, Guid OrderId, int OrderNumber, int Number, int PackageCount, DateTime? PaidUtc, StoreParcelStatus Status,
+    IReadOnlyList<SellerParcelLineRecord> Lines, StoreOrderAddressView? ShipTo, decimal LabelCredit,
+    string? Carrier, string? TrackingNumber, string? TrackingUrl, DateTime? ShippedUtc, DateTime? DeliveredUtc,
+    bool OnHold, bool CanPack, bool CanShip, bool CanCorrectTracking, bool CanDeliver);

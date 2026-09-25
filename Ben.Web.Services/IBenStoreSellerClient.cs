@@ -68,6 +68,20 @@ public interface IBenStoreSellerClient
 
     Task<(SellerItemRecord? Result, string? Error)> DeleteSellerItemImageAsync(Guid productId, Guid imageId, CancellationToken token = default);
 
+    // ── packages (P7) ────────────────────────────────────────────────────────
+
+    Task<LoadResult<SellerParcelRecord>> GetMySellerParcelsAsync(bool openOnly = false, CancellationToken token = default);
+
+    Task<ItemResult<SellerParcelRecord>> GetMySellerParcelAsync(Guid parcelId, CancellationToken token = default);
+
+    Task<(SellerParcelRecord? Result, string? Error)> PackSellerParcelAsync(Guid parcelId, CancellationToken token = default);
+
+    Task<(SellerParcelRecord? Result, string? Error)> ShipSellerParcelAsync(Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default);
+
+    Task<(SellerParcelRecord? Result, string? Error)> CorrectSellerParcelTrackingAsync(Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default);
+
+    Task<(SellerParcelRecord? Result, string? Error)> DeliverSellerParcelAsync(Guid parcelId, CancellationToken token = default);
+
     // ── parts and cost (P4) ──────────────────────────────────────────────────
 
     Task<ItemResult<StorePartsRecord>> GetSellerItemPartsAsync(Guid productId, CancellationToken token = default);

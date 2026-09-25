@@ -16,20 +16,13 @@ public sealed record StoreDeskResult(bool NotFound, string? Refusal)
 }
 
 /// <summary>
-/// An order's journey after payment (storefront S5.3): packed, shipped, delivered — and the desk's
-/// other work on it: notes, the address, attention, letters again, cancelling, releasing a checkout.
+/// The order desk's work on an order (storefront S5.3): notes, the address, attention, letters
+/// again, cancelling, releasing a checkout. Packing, shipping and delivering are per package since
+/// store sellers P7 — <see cref="StoreParcelTransitions"/>.
 /// </summary>
 /// <remarks>
 /// <para><b>Every move is one conditional update</b> (<c>WHERE Status = @from</c>), and the row count
-/// decides: two admins pressing Ship at once ship it once, and the loser is told what it already is.</para>
-///
-/// <para><b>Shipping (Ben, 09/24):</b> a carrier from the list and its tracking number, the link built
-/// from the two — or "No tracking provided", when a parcel goes without one. The buyer's letter is
-/// queued in the same transaction as the shipment.</para>
-///
-/// <para><b>Attention stops the parcel.</b> An order flagged for attention (paid after its checkout
-/// was cancelled, an amount that did not match…) cannot be packed or shipped until an admin has
-/// looked and cleared it.</para>
+/// decides: two admins pressing the same button at once do it once, and the loser is told.</para>
 /// </remarks>
 public sealed class StoreOrderTransitions(
     IDbContextFactory<BenDataContext> dbFactory, StoreOrderMailer mailer, StoreAlerts alerts,
@@ -46,122 +39,9 @@ public sealed class StoreOrderTransitions(
         StoreOrderStatus.Delivered => "delivered",
         StoreOrderStatus.Cancelled => "cancelled",
         StoreOrderStatus.Refunded => "refunded",
+        StoreOrderStatus.PartiallyShipped => "partly shipped",
         _ => s.ToString().ToLowerInvariant(),
     };
-
-    public async Task<StoreDeskResult> PackAsync(Guid orderId, Guid actor, CancellationToken ct = default)
-    {
-        var now = Now;
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var order = await db.StoreOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId, ct);
-        if (order is null) return StoreDeskResult.Missing;
-        if (order.NeedsAttention) return StoreDeskResult.No(StoreOrderDeskSentences.NeedsAttentionFirst(order.AttentionReason ?? "look at it first."));
-
-        var rows = await db.StoreOrders.Where(o => o.Id == orderId && o.Status == StoreOrderStatus.Paid && !o.NeedsAttention)
-            .ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, StoreOrderStatus.Packed).SetProperty(o => o.PackedUtc, now)
-                .SetProperty(o => o.DateUpdated, now), ct);
-        if (rows == 0) return StoreDeskResult.No(StoreOrderDeskSentences.OnlyPaidCanBePacked(Words(await StatusAsync(db, orderId, ct))));
-
-        db.StoreOrderEvents.Add(Moved(orderId, StoreOrderEventKind.Packed, StoreOrderStatus.Paid, StoreOrderStatus.Packed, actor, now));
-        await db.SaveChangesAsync(ct);
-        return StoreDeskResult.Done;
-    }
-
-    /// <summary>What is wrong with a shipment as typed; null when it will do. Also returns the tracking link to store.</summary>
-    public static (string? Problem, string? Number, string? Link) CheckShipment(StoreShipmentInfo info)
-    {
-        if (!StoreCarriers.IsKnown(info.Carrier)) return (StoreOrderDeskSentences.PickACarrier, null, null);
-        if (info.NoTracking) return (null, null, null);
-
-        var number = info.TrackingNumber?.Trim();
-        if (string.IsNullOrEmpty(number)) return (StoreOrderDeskSentences.NeedsTracking, null, null);
-        if (number.Length > 64) return ("That tracking number is longer than any carrier's.", null, null);
-
-        var link = StoreCarriers.TrackingUrl(info.Carrier, number);
-        if (link is null && info.Carrier == StoreCarriers.Other && !string.IsNullOrWhiteSpace(info.TrackingUrl))
-        {
-            var typed = info.TrackingUrl.Trim();
-            if (!Uri.TryCreate(typed, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-                return (StoreOrderDeskSentences.TrackingLinkHttps, null, null);
-            link = uri.ToString();
-        }
-        return (null, number, link);
-    }
-
-    public async Task<StoreDeskResult> ShipAsync(Guid orderId, StoreShipmentInfo info, Guid actor, CancellationToken ct = default)
-    {
-        var (problem, number, link) = CheckShipment(info);
-        if (problem is not null) return StoreDeskResult.No(problem);
-
-        var now = Now;
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var order = await db.StoreOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId, ct);
-        if (order is null) return StoreDeskResult.Missing;
-        if (order.NeedsAttention) return StoreDeskResult.No(StoreOrderDeskSentences.NeedsAttentionFirst(order.AttentionReason ?? "look at it first."));
-
-        await using (var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null)
-        {
-            var from = order.Status;
-            var rows = await db.StoreOrders
-                .Where(o => o.Id == orderId && (o.Status == StoreOrderStatus.Paid || o.Status == StoreOrderStatus.Packed) && !o.NeedsAttention)
-                .ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, StoreOrderStatus.Shipped).SetProperty(o => o.ShippedUtc, now)
-                    .SetProperty(o => o.PackedUtc, o => o.PackedUtc ?? now)
-                    .SetProperty(o => o.Carrier, info.Carrier).SetProperty(o => o.TrackingNumber, number)
-                    .SetProperty(o => o.TrackingUrl, link).SetProperty(o => o.DateUpdated, now), ct);
-            if (rows == 0) return StoreDeskResult.No(StoreOrderDeskSentences.OnlyPaidOrPackedCanShip(Words(await StatusAsync(db, orderId, ct))));
-
-            order.Status = StoreOrderStatus.Shipped;
-            order.Carrier = info.Carrier;
-            order.TrackingNumber = number;
-            order.TrackingUrl = link;
-            var note = number is null ? $"{info.Carrier} — {StoreOrderDeskSentences.NoTrackingLabel}" : $"{info.Carrier} {number}";
-            if (!string.IsNullOrWhiteSpace(info.Note)) note += $" — {info.Note.Trim()}";
-            db.StoreOrderEvents.Add(Moved(orderId, StoreOrderEventKind.Shipped, from, StoreOrderStatus.Shipped, actor, now, note));
-            await mailer.QueueShippedAsync(db, order, order.Items.ToList(), now, ct);
-            await db.SaveChangesAsync(ct);
-            if (tx is not null) await tx.CommitAsync(ct);
-        }
-        await alerts.OrderShippedAsync(orderId, ct);
-        return StoreDeskResult.Done;
-    }
-
-    /// <summary>Fixes a mistyped tracking number (or adds one to a parcel first sent as untracked). No letter: re-send it if the buyer needs it.</summary>
-    public async Task<StoreDeskResult> CorrectTrackingAsync(Guid orderId, StoreShipmentInfo info, Guid actor, CancellationToken ct = default)
-    {
-        var (problem, number, link) = CheckShipment(info);
-        if (problem is not null) return StoreDeskResult.No(problem);
-
-        var now = Now;
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (!await db.StoreOrders.AnyAsync(o => o.Id == orderId, ct)) return StoreDeskResult.Missing;
-        var rows = await db.StoreOrders.Where(o => o.Id == orderId && o.Status == StoreOrderStatus.Shipped)
-            .ExecuteUpdateAsync(s => s.SetProperty(o => o.Carrier, info.Carrier).SetProperty(o => o.TrackingNumber, number)
-                .SetProperty(o => o.TrackingUrl, link).SetProperty(o => o.DateUpdated, now), ct);
-        if (rows == 0) return StoreDeskResult.No(StoreOrderDeskSentences.TrackingOnlyWhenShipped);
-
-        db.StoreOrderEvents.Add(Moved(orderId, StoreOrderEventKind.TrackingChanged, null, null, actor, now,
-            number is null ? $"{info.Carrier} — {StoreOrderDeskSentences.NoTrackingLabel}" : $"{info.Carrier} {number}"));
-        await db.SaveChangesAsync(ct);
-        return StoreDeskResult.Done;
-    }
-
-    public async Task<StoreDeskResult> DeliverAsync(Guid orderId, Guid actor, CancellationToken ct = default)
-    {
-        var now = Now;
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (!await db.StoreOrders.AnyAsync(o => o.Id == orderId, ct)) return StoreDeskResult.Missing;
-        var rows = await db.StoreOrders.Where(o => o.Id == orderId && o.Status == StoreOrderStatus.Shipped)
-            .ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, StoreOrderStatus.Delivered).SetProperty(o => o.DeliveredUtc, now)
-                .SetProperty(o => o.DateUpdated, now), ct);
-        if (rows == 0) return StoreDeskResult.No(StoreOrderDeskSentences.OnlyShippedCanBeDelivered);
-
-        db.StoreOrderEvents.Add(Moved(orderId, StoreOrderEventKind.Delivered, StoreOrderStatus.Shipped, StoreOrderStatus.Delivered, actor, now));
-        // A person who closed their account while this was on its way: now it has arrived, the address goes.
-        var order = await db.StoreOrders.FirstAsync(o => o.Id == orderId, ct);
-        if (order.PendingAnonymisationSinceUtc is not null) await StoreOrderScrub.ScrubAsync(db, order, null, now, ct);
-        await db.SaveChangesAsync(ct);
-        return StoreDeskResult.Done;
-    }
 
     /// <summary>Cancels a paid order that has not shipped: a full refund of what is left, and Cancelled when it goes through.</summary>
     public async Task<(StoreDeskResult Result, StoreRefundAttempt? Refund)> CancelAsync(Guid orderId, CancelStoreOrderRequest request, Guid actor, CancellationToken ct = default)
@@ -170,7 +50,8 @@ public sealed class StoreOrderTransitions(
         var order = await db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Refunds).ThenInclude(r => r.Items)
             .AsSplitQuery().FirstOrDefaultAsync(o => o.Id == orderId, ct);
         if (order is null) return (StoreDeskResult.Missing, null);
-        if (order.Status is StoreOrderStatus.Shipped or StoreOrderStatus.Delivered) return (StoreDeskResult.No(StoreOrderDeskSentences.AlreadyOnItsWay), null);
+        if (order.Status is StoreOrderStatus.Shipped or StoreOrderStatus.Delivered or StoreOrderStatus.PartiallyShipped)
+            return (StoreDeskResult.No(StoreOrderDeskSentences.AlreadyOnItsWay), null);
         if (order.Status is not (StoreOrderStatus.Paid or StoreOrderStatus.Packed)) return (StoreDeskResult.No(StoreOrderDeskSentences.CannotCancel(Words(order.Status))), null);
         if (string.IsNullOrWhiteSpace(request.Reason)) return (StoreDeskResult.No(StoreOrderDeskSentences.RefundNeedsReason), null);
 
@@ -275,8 +156,13 @@ public sealed class StoreOrderTransitions(
                 await mailer.QueueConfirmationAsync(db, order, order.Items.ToList(), now, ct);
                 break;
             case "shipped":
-                if (order.Carrier is null) return StoreDeskResult.No(StoreOrderDeskSentences.ShippedLetterNeedsCarrier);
-                await mailer.QueueShippedAsync(db, order, order.Items.ToList(), now, ct);
+                // Every package that has gone, each with its own letter (store sellers P7).
+                var parcels = await db.StoreOrderParcels.Where(x => x.OrderId == orderId).ToListAsync(ct);
+                var sent = parcels.Where(x => x.Carrier is not null).OrderBy(x => x.Number).ToList();
+                if (sent.Count == 0) return StoreDeskResult.No(StoreOrderDeskSentences.ShippedLetterNeedsCarrier);
+                var count = parcels.Count(x => x.Status != StoreParcelStatus.Cancelled);
+                foreach (var parcel in sent)
+                    await mailer.QueueShippedAsync(db, order, parcel, order.Items.Where(i => i.ParcelId == parcel.Id).ToList(), count, now, ct);
                 break;
             default:
                 return StoreDeskResult.No(StoreOrderDeskSentences.UnknownLetter);

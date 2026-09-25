@@ -229,6 +229,10 @@ public sealed class StoreRefundService(
             {
                 order.Status = StoreOrderStatus.Refunded;
             }
+            // An order ended before its packages went: none of them will now (store sellers P7).
+            if (order.Status is StoreOrderStatus.Cancelled or StoreOrderStatus.Refunded)
+                await db.StoreOrderParcels.Where(x => x.OrderId == order.Id && (x.Status == StoreParcelStatus.Waiting || x.Status == StoreParcelStatus.Packed))
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, StoreParcelStatus.Cancelled).SetProperty(x => x.CancelledUtc, now), ct);
             db.StoreOrderEvents.Add(new StoreOrderEvent
             {
                 Id = Guid.NewGuid(), OrderId = order.Id, Kind = StoreOrderEventKind.RefundSucceeded, FromStatus = before,

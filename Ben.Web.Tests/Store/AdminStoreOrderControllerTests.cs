@@ -43,7 +43,8 @@ public sealed class AdminStoreOrderControllerTests : IAsyncLifetime
         var payments = new StoreOrderPayments(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreOrderPayments>.Instance);
         var refunds = new StoreRefundService(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreRefundService>.Instance);
         var desk = new StoreOrderTransitions(_sqlite.Factory, mailer, alerts, refunds, payments);
-        return new AdminStoreOrderController(_sqlite.Factory, desk, refunds, Options.Create(new StripeOptions { SecretKey = "sk_test_x" }))
+        return new AdminStoreOrderController(_sqlite.Factory, desk, refunds, Options.Create(new StripeOptions { SecretKey = "sk_test_x" }),
+            new StoreParcelTransitions(_sqlite.Factory, mailer, alerts))
         {
             ControllerContext = StoreTestData.SignedInAs(_admin.Id),
         };
@@ -66,8 +67,15 @@ public sealed class AdminStoreOrderControllerTests : IAsyncLifetime
             Id = Guid.NewGuid(), OrderId = order.Id, ProductId = v.ProductId, VariantId = v.Id, ProductName = product, Sku = sku,
             UnitPrice = 20m, Quantity = 1, LineTotal = 20m, DateCreated = DateTime.UtcNow,
         });
+        db.StoreOrderParcels.Add(new StoreOrderParcel { Id = Guid.NewGuid(), OrderId = order.Id, Number = 1, DateCreated = DateTime.UtcNow });
         await db.SaveChangesAsync();
         return order;
+    }
+
+    private async Task<Guid> ParcelIdAsync(Guid orderId)
+    {
+        await using var db = await _sqlite.NewContextAsync();
+        return await db.StoreOrderParcels.Where(x => x.OrderId == orderId).Select(x => x.Id).SingleAsync();
     }
 
     private static List<StoreOrderListRecord> Rows(ActionResult<IEnumerable<StoreOrderListRecord>> r)
@@ -125,10 +133,11 @@ public sealed class AdminStoreOrderControllerTests : IAsyncLifetime
     {
         var order = await OrderAsync();
 
-        var refused = await Controller().Ship(order.Id, new StoreShipmentInfo(StoreCarriers.Usps, null, null, null), default);
+        var parcel = await ParcelIdAsync(order.Id);
+        var refused = await Controller().Ship(order.Id, parcel, new StoreShipmentInfo(StoreCarriers.Usps, null, null, null), default);
         Assert.Equal(StoreOrderDeskSentences.NeedsTracking, Assert.IsType<ConflictObjectResult>(refused).Value);
 
-        var shipped = await Controller().Ship(order.Id, new StoreShipmentInfo(StoreCarriers.Usps, null, null, null, NoTracking: true), default);
+        var shipped = await Controller().Ship(order.Id, parcel, new StoreShipmentInfo(StoreCarriers.Usps, null, null, null, NoTracking: true), default);
         var detail = (StoreOrderDetailAdminRecord)Assert.IsType<OkObjectResult>(shipped).Value!;
         Assert.Equal((StoreOrderStatus.Shipped, (string?)null), (detail.Status, detail.TrackingNumber));
         Assert.True(detail.Can.CanCorrectTracking);
@@ -172,7 +181,7 @@ public sealed class AdminStoreOrderControllerTests : IAsyncLifetime
     public async Task A_stranger_order_id_is_404()
     {
         Assert.IsType<NotFoundResult>((await Controller().Get(Guid.NewGuid(), default)).Result);
-        Assert.IsType<NotFoundResult>(await Controller().Pack(Guid.NewGuid(), default));
+        Assert.IsType<NotFoundResult>(await Controller().Pack(Guid.NewGuid(), Guid.NewGuid(), default));
     }
 
     [Fact]

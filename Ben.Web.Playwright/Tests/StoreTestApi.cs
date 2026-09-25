@@ -199,7 +199,10 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
     /// <summary>Whether this run pays at real Stripe (BEN_STRIPE_E2E=1) rather than through the test checkout.</summary>
     public static bool RealStripe => Environment.GetEnvironmentVariable("BEN_STRIPE_E2E") == "1";
 
-    public static async Task<Guid> PaidGuestOrderAsync(JsonElement product, string email)
+    public static Task<Guid> PaidGuestOrderAsync(JsonElement product, string email) => PaidGuestOrderAsync([product], email);
+
+    /// <summary>One paid guest order holding one of each product — a store item and a seller's make two packages (store sellers P7).</summary>
+    public static async Task<Guid> PaidGuestOrderAsync(IReadOnlyList<JsonElement> products, string email)
     {
         // Paid through the test checkout's own door, which real Stripe does not have: the order desk's
         // tests are about the desk, and real payments are proven by StoreRealStripeTests.
@@ -219,9 +222,12 @@ internal sealed class StoreTestApi(HttpClient http) : IDisposable
             }
         }
 
-        var variant = product.GetProperty("variants")[0].GetProperty("id").GetGuid();
-        var added = await PostAsync("/api/store/cart/items", new { variantId = variant, quantity = 1 });
-        Assert.That(added.IsSuccessStatusCode, Is.True, $"adding to the cart answered {(int)added.StatusCode}: {await added.Content.ReadAsStringAsync()}");
+        foreach (var product in products)
+        {
+            var variant = product.GetProperty("variants")[0].GetProperty("id").GetGuid();
+            var added = await PostAsync("/api/store/cart/items", new { variantId = variant, quantity = 1 });
+            Assert.That(added.IsSuccessStatusCode, Is.True, $"adding to the cart answered {(int)added.StatusCode}: {await added.Content.ReadAsStringAsync()}");
+        }
 
         var prepared = await PostAsync("/api/store/checkout/payment-intent", new
         {

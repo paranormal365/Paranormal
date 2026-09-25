@@ -435,6 +435,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreCheckoutService>(
 // The order desk (storefront S5.3): refunds and the journey after payment.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreRefundService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreOrderTransitions>();
+// Store sellers P7: each package packed, shipped and delivered on its own.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Store.StoreParcelTransitions>();
 // S4.8: unfinished checkouts give their stock back every MINUTE (its own timer — the shared one
 // runs every five, which would let a 15-minute hold run to 20); failed tax filings retry; idle
 // carts are swept.

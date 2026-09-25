@@ -50,7 +50,8 @@ public sealed class StoreOrderPayments(
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
     private static readonly StoreOrderStatus[] PaidStates =
-        [StoreOrderStatus.Paid, StoreOrderStatus.Packed, StoreOrderStatus.Shipped, StoreOrderStatus.Delivered, StoreOrderStatus.Refunded];
+        [StoreOrderStatus.Paid, StoreOrderStatus.Packed, StoreOrderStatus.Shipped, StoreOrderStatus.Delivered, StoreOrderStatus.Refunded,
+         StoreOrderStatus.PartiallyShipped];
 
     // ── paid ─────────────────────────────────────────────────────────────────
 
@@ -370,6 +371,9 @@ public sealed class StoreOrderPayments(
             log.LogInformation("Store order {OrderId} was already released.", orderId);
             return false;
         }
+        // Its packages were never going anywhere (store sellers P7).
+        await db.StoreOrderParcels.Where(x => x.OrderId == orderId && x.Status == StoreParcelStatus.Waiting)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, StoreParcelStatus.Cancelled).SetProperty(x => x.CancelledUtc, now), ct);
 
         var items = await db.StoreOrderItems.AsNoTracking().Where(i => i.OrderId == orderId).ToListAsync(ct);
         foreach (var item in items)

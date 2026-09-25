@@ -152,6 +152,10 @@ public class StoreBrowseTests : BenTestBase
         await Page.WaitForURLAsync(url => !url.Contains("opt="));
         await Expect(Page.Locator("[data-testid=listing-count]")).Not.ToHaveTextAsync("1 product", new() { Timeout = 15_000 });
 
+        // Sorting from a page of its own: after the chip, the listing is swapped in place, and the
+        // circuit check can pass on the markup being replaced — the choice then lands on a select
+        // nothing is listening to yet (it began failing once the e2e database held ~465 products).
+        await Page.GotoAsync($"{BaseUrl}/store/products");
         await WaitForTheCircuitAsync();
         await Page.Locator("#listing-sort").SelectOptionAsync("price-desc");
         await Page.WaitForURLAsync("**/store/products?sort=price-desc");

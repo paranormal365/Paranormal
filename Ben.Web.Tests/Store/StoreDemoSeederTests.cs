@@ -164,7 +164,7 @@ public sealed class StoreDemoSeederTests
         Assert.Contains(orders, o => o.ShippingTaxAmount > 0);
         Assert.Contains(orders, o => o.CouponCode == StoreDemoSeeder.CouponCode && o.DiscountAmount > 0);
         Assert.Contains(orders, o => o.Status == Ben.Data.Common.Enums.StoreOrderStatus.Refunded && o.RefundedAmount == o.Total);
-        Assert.Contains(orders, o => o.Status == Ben.Data.Common.Enums.StoreOrderStatus.Shipped && o.TrackingUrl != null);
+        Assert.Contains(await db.StoreOrderParcels.ToListAsync(), x => x.Status == Ben.Data.Common.Enums.StoreParcelStatus.Shipped && x.TrackingUrl != null);
         Assert.Single(orders, o => o.BuyerAppUserId == null);
     }
 

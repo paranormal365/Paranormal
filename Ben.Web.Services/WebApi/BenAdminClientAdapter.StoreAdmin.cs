@@ -287,17 +287,18 @@ public sealed partial class BenAdminClientAdapter
     private Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeskAsync(HttpMethod method, string path, object? body, CancellationToken token)
         => _api.SendExpectingReasonAsync<object, StoreOrderDetailAdminRecord>(method, path, body ?? new { }, token);
 
-    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> PackStoreOrderAsync(Guid orderId, CancellationToken token = default)
-        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/pack", null, token);
+    // Packages (store sellers P7): each is packed, shipped and delivered on its own.
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> PackStoreParcelAsync(Guid orderId, Guid parcelId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/pack", null, token);
 
-    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ShipStoreOrderAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default)
-        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/ship", shipment, token);
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> ShipStoreParcelAsync(Guid orderId, Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/ship", shipment, token);
 
-    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CorrectStoreOrderTrackingAsync(Guid orderId, StoreShipmentInfo shipment, CancellationToken token = default)
-        => DeskAsync(HttpMethod.Put, $"/api/admin/store/orders/{orderId}/tracking", shipment, token);
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CorrectStoreParcelTrackingAsync(Guid orderId, Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Put, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/tracking", shipment, token);
 
-    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreOrderAsync(Guid orderId, CancellationToken token = default)
-        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/deliver", null, token);
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreParcelAsync(Guid orderId, Guid parcelId, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/deliver", null, token);
 
     public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreOrderAsync(Guid orderId, CancelStoreOrderRequest request, CancellationToken token = default)
         => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/cancel", request, token);

@@ -1185,6 +1185,21 @@ requests** tile and a **Waiting** badge on the products list show when any are w
 records what they are paid. A seller can take their own item off sale at any time, and the
 SuperAdmins get a message when they do.
 
+## Packages and partial shipping
+
+An order ships as one **package per seller**: the store's own stock is one package, and each seller
+sends their own. Every package has its own status (being prepared, packed, shipped, delivered),
+carrier and tracking — or "No tracking provided". The order page shows a card per package with its
+own **Mark packed**, **Ship…**, **Correct tracking…** and **Mark delivered** buttons; a seller does the
+same for their own packages from **Selling → My Packages**.
+
+The order's status follows its packages: **Partially shipped** while some have gone and some
+haven't, **Shipped** once all have, **Delivered** once all have arrived. The buyer gets one "on its
+way" email per package, listing only that package's items. An order can't be cancelled whole once
+any package has shipped, and its address can't change then either — refund the items instead.
+The **To ship** tile counts partly shipped orders too. The CSV export has a row per item with its
+package, sender, carrier and tracking.
+
 ## Parts and cost
 
 Every product's **Parts & cost** tab holds its parts list — each part's price per pack or per piece,

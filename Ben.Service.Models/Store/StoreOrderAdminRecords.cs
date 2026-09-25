@@ -71,7 +71,21 @@ public sealed record StoreOrderDetailAdminRecord(
     bool NeedsAttention, string? AttentionReason,
     string? StripePaymentIntentId, string? StripeTaxTransactionId, string? StripeDashboardUrl,
     IReadOnlyList<StoreRefundRecord> Refunds, IReadOnlyList<StoreOrderEventRecord> Events,
-    StoreOrderAbilities Can, DateTime? ReservationExpiresUtc);
+    StoreOrderAbilities Can, DateTime? ReservationExpiresUtc, IReadOnlyList<StoreOrderParcelAdminRecord>? Parcels = null);
+
+/// <summary>
+/// One package of an order on the order desk (store sellers, backlog 251, P7): whose it is, what it
+/// holds and where it stands, and what may be done to it now.
+/// </summary>
+/// <param name="SellerShippingCredit">What its seller is credited for the label — the flat rate, even when it shipped free.</param>
+public sealed record StoreOrderParcelAdminRecord(
+    Guid Id, int Number, Guid? SellerAppUserId, string ShipsFrom, StoreParcelStatus Status, decimal Shipping, decimal ShippingTax,
+    decimal SellerShippingCredit, string? Carrier, string? TrackingNumber, string? TrackingUrl, DateTime? PackedUtc,
+    DateTime? ShippedUtc, DateTime? DeliveredUtc, IReadOnlyList<Guid> ItemIds,
+    bool CanPack, bool CanShip, bool CanCorrectTracking, bool CanDeliver, bool CanResendShipped)
+{
+    public string Title => $"Package {Number} · Ships from {ShipsFrom}";
+}
 
 /// <summary>The order list's filters as the page asks them (and the address it keeps them in).</summary>
 public sealed record StoreOrderListQuery(
@@ -105,6 +119,9 @@ public sealed record StoreRefundResult(StoreRefundRecord Refund, string? Message
 /// <summary>The order desk's sentences, shared by the services that say them and the tests that look for them.</summary>
 public static class StoreOrderDeskSentences
 {
+    /// <summary>A package of an order that isn't paid, or is already finished (store sellers P7).</summary>
+    public const string NotReadyToFulfil = "This order isn't waiting to be sent — it isn't paid, or it's cancelled or refunded.";
+
     public static string OnlyPaidCanBePacked(string status) => $"Only a paid order can be packed; this one is {status}.";
     public static string NeedsAttentionFirst(string reason) => $"This order needs attention first — {reason}";
     public static string OnlyPaidOrPackedCanShip(string status) => $"Only a paid or packed order can be shipped; this one is {status}.";

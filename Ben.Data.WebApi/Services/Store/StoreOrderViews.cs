@@ -24,6 +24,14 @@ public static class StoreOrderViews
         => new(o.Subtotal, o.DiscountAmount, o.ShippingAmount, o.TaxAmount, o.Total, o.ShippingTaxAmount,
             o.Parcels.Count == 0 ? null : Parcels(o).Select(x => x.AsRow()).ToList());
 
+    /// <summary>
+    /// The order's carrier and tracking when it went as one package — what the single-shipment
+    /// fields still say; for an order in several packages each package says its own (store sellers P7).
+    /// </summary>
+    public static (string? Carrier, string? Number, string? Url) SoleShipment(StoreOrder o)
+        => o.Parcels.Where(x => x.Status != StoreParcelStatus.Cancelled).ToList() is [var only]
+            ? (only.Carrier, only.TrackingNumber, only.TrackingUrl) : (null, null, null);
+
     /// <summary>The order's packages as the buyer sees them (store sellers P6). Callers load <c>Parcels</c> with the order.</summary>
     public static IReadOnlyList<StoreOrderParcelView> Parcels(StoreOrder o) => o.Parcels.OrderBy(x => x.Number).Select(x => new StoreOrderParcelView(
         x.Number, StoreParcelNames.ShipsFrom(x.SellerAppUserId, x.SellerName), x.Status, x.ShippingAmount, x.Carrier, x.TrackingNumber,
@@ -41,7 +49,7 @@ public static class StoreOrderViews
             o.Items.OrderBy(i => i.DateCreated).ThenBy(i => i.Sku).Select(i => new StoreOrderItemView(
                 i.Id, i.ProductId, productSlugs.GetValueOrDefault(i.ProductId), i.ProductName, i.VariantName, i.Sku, i.ImageUploadFileId,
                 i.UnitPrice, i.CompareAtPrice, i.Quantity, i.LineDiscount, i.LineTotal, i.TaxAmount, i.QuantityRefunded)).ToList(),
-            Totals(o), o.RefundedAmount, o.CouponCode, o.Carrier, o.TrackingNumber, o.TrackingUrl, o.ShippedUtc, o.DeliveredUtc,
+            Totals(o), o.RefundedAmount, o.CouponCode, SoleShipment(o).Carrier, SoleShipment(o).Number, SoleShipment(o).Url, o.ShippedUtc, o.DeliveredUtc,
             o.Refunds.OrderBy(r => r.DateCreated).Select(r => new StoreRefundView(r.DateCreated, r.Amount, r.Reason, r.Status)).ToList(),
             o.Events.Where(e => BuyerSees(e.Kind)).OrderBy(e => e.OccurredUtc)
                 .Select(e => new StoreOrderEventView(e.Kind, BuyerNote(e), e.Amount, e.OccurredUtc)).ToList(),
@@ -73,6 +81,6 @@ public static class StoreOrderViews
             i.LineDiscount, i.TaxAmount, i.LineTotal - i.LineDiscount)).ToList();
         return new StoreInvoiceRecord(o.OrderNumber, o.PlacedUtc, o.PaidUtc, from, billTo, shipTo, lines, o.Subtotal, o.DiscountAmount,
             o.CouponCode, o.ShippingAmount, o.TaxAmount, o.Total, o.RefundedAmount, o.Total - o.RefundedAmount,
-            o.Carrier, o.TrackingNumber, s.ReturnsWindowDays, supportEmail, Parcels(o));
+            SoleShipment(o).Carrier, SoleShipment(o).Number, s.ReturnsWindowDays, supportEmail, Parcels(o));
     }
 }

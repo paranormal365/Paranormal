@@ -58,7 +58,8 @@ public sealed class AdminStoreDashboardController(IDbContextFactory<BenDataConte
         return Ok(new StoreDashboardRecord(
             s.Enabled, s.CheckoutEnabled, window,
             OrdersToPack: await db.StoreOrders.CountAsync(o => o.Status == StoreOrderStatus.Paid, ct),
-            OrdersToShip: await db.StoreOrders.CountAsync(o => o.Status == StoreOrderStatus.Packed, ct),
+            // A partly shipped order still has a package to send (store sellers P7).
+            OrdersToShip: await db.StoreOrders.CountAsync(o => o.Status == StoreOrderStatus.Packed || o.Status == StoreOrderStatus.PartiallyShipped, ct),
             OrdersNeedingAttention: await db.StoreOrders.CountAsync(o => o.NeedsAttention, ct),
             ReviewsPending: await db.StoreReviews.CountAsync(r => r.Status == StoreReviewStatus.Pending, ct),
             UnitsHeldByOpenCheckouts: held,

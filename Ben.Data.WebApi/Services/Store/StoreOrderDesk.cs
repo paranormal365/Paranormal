@@ -36,7 +36,7 @@ public static class StoreOrderDesk
             q = q.Where(o => (number != null && o.OrderNumber == number)
                           || o.BuyerEmailNormalized.Contains(upper)
                           || o.BuyerName.ToLower().Contains(lower)
-                          || (o.TrackingNumber != null && o.TrackingNumber.ToLower().Contains(lower))
+                          || o.Parcels.Any(x => x.TrackingNumber != null && x.TrackingNumber.ToLower().Contains(lower))
                           || o.Items.Any(i => i.Sku.ToLower().Contains(lower) || i.ProductName.ToLower().Contains(lower)));
         }
         if (!string.IsNullOrWhiteSpace(f.Coupon))
@@ -47,7 +47,8 @@ public static class StoreOrderDesk
         if (f.From is { } from) q = q.Where(o => o.PlacedUtc >= from);
         if (f.To is { } to) q = q.Where(o => o.PlacedUtc < to.Date.AddDays(1));
         if (f.NeedsAction)
-            q = q.Where(o => o.NeedsAttention || o.Status == StoreOrderStatus.Paid || o.Status == StoreOrderStatus.Packed);
+            q = q.Where(o => o.NeedsAttention || o.Status == StoreOrderStatus.Paid || o.Status == StoreOrderStatus.Packed
+                          || o.Status == StoreOrderStatus.PartiallyShipped);
         if (f.Attention) q = q.Where(o => o.NeedsAttention);
         if (f.RefundAttention)
         {
@@ -84,19 +85,39 @@ public static class StoreOrderDesk
 
     public static StoreOrderAbilities Abilities(StoreOrder o, decimal refundable)
     {
+        // Packing and shipping are per package (store sellers P7); the order can "pack" or "ship" when any of its packages can.
         var waiting = o.Status is StoreOrderStatus.Paid or StoreOrderStatus.Packed;
+        var parcels = ParcelsFor(o);
         return new StoreOrderAbilities(
-            CanPack: o.Status == StoreOrderStatus.Paid && !o.NeedsAttention,
-            CanShip: waiting && !o.NeedsAttention,
-            CanCorrectTracking: o.Status == StoreOrderStatus.Shipped,
-            CanDeliver: o.Status == StoreOrderStatus.Shipped,
+            CanPack: parcels.Any(x => x.CanPack),
+            CanShip: parcels.Any(x => x.CanShip),
+            CanCorrectTracking: parcels.Any(x => x.CanCorrectTracking),
+            CanDeliver: parcels.Any(x => x.CanDeliver),
             CanCancel: waiting && RealPayment(o),
             CanRefund: o.PaidUtc is not null && refundable > 0 && RealPayment(o),
             CanEditAddress: waiting,
             CanClearAttention: o.NeedsAttention,
             CanResendConfirmation: o.PaidUtc is not null,
-            CanResendShipped: o.Carrier is not null,
+            CanResendShipped: parcels.Any(x => x.CanResendShipped),
             CanRelease: o.Status == StoreOrderStatus.PendingPayment && o.ReservationReleasedUtc is null);
+    }
+
+    private static readonly StoreOrderStatus[] Fulfilling =
+        [StoreOrderStatus.Paid, StoreOrderStatus.Packed, StoreOrderStatus.PartiallyShipped, StoreOrderStatus.Shipped];
+
+    /// <summary>Each package of the order, with what may be done to it now. Callers load <c>Parcels</c> and <c>Items</c>.</summary>
+    public static IReadOnlyList<StoreOrderParcelAdminRecord> ParcelsFor(StoreOrder o)
+    {
+        var sendable = Fulfilling.Contains(o.Status) && !o.NeedsAttention;
+        return o.Parcels.OrderBy(x => x.Number).Select(x => new StoreOrderParcelAdminRecord(
+            x.Id, x.Number, x.SellerAppUserId, StoreParcelNames.ShipsFrom(x.SellerAppUserId, x.SellerName), x.Status,
+            x.ShippingAmount, x.ShippingTaxAmount, x.SellerShippingCredit, x.Carrier, x.TrackingNumber, x.TrackingUrl,
+            x.PackedUtc, x.ShippedUtc, x.DeliveredUtc, o.Items.Where(i => i.ParcelId == x.Id).Select(i => i.Id).ToList(),
+            CanPack: sendable && x.Status == StoreParcelStatus.Waiting,
+            CanShip: sendable && x.Status is StoreParcelStatus.Waiting or StoreParcelStatus.Packed,
+            CanCorrectTracking: x.Status == StoreParcelStatus.Shipped,
+            CanDeliver: x.Status == StoreParcelStatus.Shipped,
+            CanResendShipped: x.Carrier is not null)).ToList();
     }
 
     /// <summary>The payment in Stripe's dashboard, test or live by the key in use; null when there is none to open.</summary>
@@ -137,27 +158,33 @@ public static class StoreOrderDesk
             o.Id, o.OrderNumber, o.Status, StoreOrderViews.PaymentStatus(o), o.PlacedUtc, o.PaidUtc, o.PackedUtc, o.ShippedUtc,
             o.DeliveredUtc, o.CancelledUtc, o.CancellationReason, o.BuyerAppUserId, o.BuyerName, o.BuyerEmail,
             StoreOrderViews.Shipping(o), StoreOrderViews.Billing(o), o.BuyerNotes, items, StoreOrderViews.Totals(o),
-            o.RefundedAmount, refundable, o.CouponCode, o.Carrier, o.TrackingNumber, o.TrackingUrl,
+            o.RefundedAmount, refundable, o.CouponCode, StoreOrderViews.SoleShipment(o).Carrier, StoreOrderViews.SoleShipment(o).Number,
+            StoreOrderViews.SoleShipment(o).Url,
             o.NeedsAttention, o.AttentionReason, o.StripePaymentIntentId, o.StripeTaxTransactionId, DashboardUrl(o, secretKey),
-            refunds, events, Abilities(o, refundable), o.ReservationExpiresUtc);
+            refunds, events, Abilities(o, refundable), o.ReservationExpiresUtc, ParcelsFor(o));
     }
 
     /// <summary>One row per order item — what a spreadsheet of sales wants.</summary>
     public static async Task<List<string>> ExportAsync(BenDataContext db, StoreOrderFilter f, DateTime now, CancellationToken ct)
     {
-        var orders = await Filtered(db, f, now).Include(o => o.Items).AsSplitQuery().ToListAsync(ct);
+        var orders = await Filtered(db, f, now).Include(o => o.Items).Include(o => o.Parcels).AsSplitQuery().ToListAsync(ct);
         var lines = new List<string>
         {
             StoreCsv.Line("OrderNumber", "Placed", "Status", "BuyerEmail", "ShipState", "ShipZip", "Sku", "Product", "Quantity",
                 "UnitPrice", "LineDiscount", "LineTax", "Shipping", "ShippingTax", "OrderTotal", "Refunded", "Coupon",
-                "PaymentIntent", "TaxTransaction"),
+                "PaymentIntent", "TaxTransaction", "Package", "ShipsFrom", "PackageStatus", "Carrier", "Tracking"),
         };
         foreach (var o in orders.OrderBy(o => o.OrderNumber))
             foreach (var i in o.Items.OrderBy(i => i.DateCreated))
+            {
+                var parcel = o.Parcels.FirstOrDefault(x => x.Id == i.ParcelId);
                 lines.Add(StoreCsv.Line(o.OrderNumber, o.PlacedUtc.ToString("yyyy-MM-dd HH:mm"), o.Status, o.BuyerEmail, o.ShipState, o.ShipZip,
                     i.Sku, i.ProductName + (string.IsNullOrWhiteSpace(i.VariantName) ? "" : $" — {i.VariantName}"), i.Quantity,
                     i.UnitPrice, i.LineDiscount, i.TaxAmount, o.ShippingAmount, o.ShippingTaxAmount, o.Total, o.RefundedAmount,
-                    o.CouponCode, o.StripePaymentIntentId, o.StripeTaxTransactionId));
+                    o.CouponCode, o.StripePaymentIntentId, o.StripeTaxTransactionId, parcel?.Number,
+                    parcel is null ? null : StoreParcelNames.ShipsFrom(parcel.SellerAppUserId, parcel.SellerName), parcel?.Status,
+                    parcel?.Carrier, parcel?.TrackingNumber));
+            }
         return lines;
     }
 

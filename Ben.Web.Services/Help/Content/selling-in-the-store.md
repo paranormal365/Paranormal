@@ -79,6 +79,25 @@ hand, the tab also says how many units you could build from them.
 
 Only you and the store see this tab; shoppers never do.
 
+## Sending packages
+
+**Each seller sends their own package.** When a paid order has your items in it you get an email and
+a message, and it appears under **Selling → My Packages** with what goes in it and the buyer's name
+and address (shown until it's delivered).
+
+1. Buy the label the way you usually do — Pirate Ship, the post office, your own account.
+2. Optionally **Mark packed** while you get it ready.
+3. **Ship…** — choose the carrier and type the tracking number, or tick **No tracking provided**.
+   The buyer is emailed straight away, about your package only.
+4. **Mark delivered** when it arrives, if the store hasn't already.
+
+You're credited the store's flat shipping rate for every package you send — even when the buyer's
+shipping was free. If an order is on hold while the store looks at it, the package says so; wait
+until it clears.
+
+When an order has packages from more than one seller, the buyer sees each package with its own
+tracking, and the order reads **Partially shipped** until every package has gone.
+
 ## Going on sale
 
 When an item is ready, press **Ask to put it on sale…** and say what you'd like to be paid for each

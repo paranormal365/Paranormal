@@ -17,7 +17,26 @@ public static class StoreOrderStatusText
         StoreOrderStatus.Delivered => "Delivered",
         StoreOrderStatus.Cancelled => "Cancelled",
         StoreOrderStatus.Refunded => "Refunded",
+        StoreOrderStatus.PartiallyShipped => "Partially shipped",
         _ => status.ToString(),
+    };
+
+    /// <summary>How a package's status reads (store sellers P7).</summary>
+    public static string Label(StoreParcelStatus status) => status switch
+    {
+        StoreParcelStatus.Waiting => "Being prepared",
+        StoreParcelStatus.Packed => "Packed",
+        StoreParcelStatus.Shipped => "Shipped",
+        StoreParcelStatus.Delivered => "Delivered",
+        _ => "Cancelled",
+    };
+
+    public static string Tone(StoreParcelStatus status) => status switch
+    {
+        StoreParcelStatus.Delivered => "success",
+        StoreParcelStatus.Shipped => "primary",
+        StoreParcelStatus.Cancelled => "danger",
+        _ => "warning",
     };
 
     /// <summary>The Bootstrap colour name: text-{tone}, bg-{tone}-subtle.</summary>
@@ -28,7 +47,7 @@ public static class StoreOrderStatusText
     {
         StoreOrderStatus.Delivered => "success",
         StoreOrderStatus.Shipped => "primary",
-        StoreOrderStatus.Paid or StoreOrderStatus.Packed => "warning",
+        StoreOrderStatus.Paid or StoreOrderStatus.Packed or StoreOrderStatus.PartiallyShipped => "warning",
         StoreOrderStatus.Cancelled => "danger",
         _ => "secondary",
     };

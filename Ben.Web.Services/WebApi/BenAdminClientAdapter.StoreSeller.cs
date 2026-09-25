@@ -91,6 +91,24 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<UpdateStoreImageRequest, SellerItemRecord>(
                HttpMethod.Put, $"/api/seller/store/products/{productId}/images/{imageId}", request, token);
 
+    public Task<LoadResult<SellerParcelRecord>> GetMySellerParcelsAsync(bool openOnly = false, CancellationToken token = default)
+        => _api.GetListAsync<SellerParcelRecord>("/api/seller/store/parcels" + (openOnly ? "?open=true" : ""), token);
+
+    public Task<ItemResult<SellerParcelRecord>> GetMySellerParcelAsync(Guid parcelId, CancellationToken token = default)
+        => _api.GetItemAsync<SellerParcelRecord>($"/api/seller/store/parcels/{parcelId}", token);
+
+    public Task<(SellerParcelRecord? Result, string? Error)> PackSellerParcelAsync(Guid parcelId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, SellerParcelRecord>(HttpMethod.Post, $"/api/seller/store/parcels/{parcelId}/pack", new { }, token);
+
+    public Task<(SellerParcelRecord? Result, string? Error)> ShipSellerParcelAsync(Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<StoreShipmentInfo, SellerParcelRecord>(HttpMethod.Post, $"/api/seller/store/parcels/{parcelId}/ship", shipment, token);
+
+    public Task<(SellerParcelRecord? Result, string? Error)> CorrectSellerParcelTrackingAsync(Guid parcelId, StoreShipmentInfo shipment, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<StoreShipmentInfo, SellerParcelRecord>(HttpMethod.Put, $"/api/seller/store/parcels/{parcelId}/tracking", shipment, token);
+
+    public Task<(SellerParcelRecord? Result, string? Error)> DeliverSellerParcelAsync(Guid parcelId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, SellerParcelRecord>(HttpMethod.Post, $"/api/seller/store/parcels/{parcelId}/deliver", new { }, token);
+
     public Task<ItemResult<StorePartsRecord>> GetSellerItemPartsAsync(Guid productId, CancellationToken token = default)
         => _api.GetItemAsync<StorePartsRecord>($"/api/seller/store/products/{productId}/parts", token);
 

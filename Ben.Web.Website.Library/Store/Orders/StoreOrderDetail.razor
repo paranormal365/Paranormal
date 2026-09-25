@@ -117,6 +117,33 @@
             </div>
         </div>
 
+        @if (order.Parcels is { Count: > 1 } parcels)
+        {
+            @* Store sellers P7: each maker sends their own package, with its own tracking. *@
+            <div class="small mb-4" data-testid="order-packages">
+                <div class="mb-1">This order comes in @parcels.Count packages.</div>
+                @foreach (var parcel in parcels)
+                {
+                    <div class="d-flex flex-wrap gap-2 align-items-center py-1 border-bottom" data-testid="order-package" data-number="@parcel.Number">
+                        <span class="fw-medium">@parcel.Title</span>
+                        <span class="badge bg-@StoreOrderStatusText.Tone(parcel.Status)-subtle text-@StoreOrderStatusText.Tone(parcel.Status)-emphasis" data-testid="order-package-status">@StoreOrderStatusText.Label(parcel.Status)</span>
+                        @if (parcel.Carrier is { } via)
+                        {
+                            <span>@via</span>
+                            @if (parcel.TrackingNumber is { Length: > 0 } number)
+                            {
+                                @if (parcel.TrackingUrl is { } link) { <a href="@link" target="_blank" rel="noopener" data-testid="order-package-tracking">@number</a> }
+                                else { <span>@number</span> }
+                            }
+                            else { <span class="text-secondary">sent without tracking</span> }
+                        }
+                        <span class="text-secondary">@string.Join(", ", order.Items.Where(i => parcel.ItemIds.Contains(i.Id)).Select(i => i.ProductName))</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
         <div class="small mb-4" data-testid="order-delivery">
             @if (order.Carrier is { } carrier)
             {
@@ -151,6 +178,7 @@
                 <span>Delivery: standard shipping — we'll email the tracking number when it ships.</span>
             }
         </div>
+        }
 
         <div class="border-top pt-3">
             @foreach (var item in order.Items)

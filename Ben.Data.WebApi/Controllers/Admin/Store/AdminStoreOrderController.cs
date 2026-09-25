@@ -30,7 +30,7 @@ namespace Ben.Data.WebApi.Controllers.Admin.Store;
 [Route("api/admin/store/orders")]
 public sealed class AdminStoreOrderController(
     IDbContextFactory<BenDataContext> dbFactory, StoreOrderTransitions desk, StoreRefundService refunds,
-    IOptions<StripeOptions> stripe, TimeProvider? clock = null) : BenControllerBase
+    IOptions<StripeOptions> stripe, StoreParcelTransitions parcels, TimeProvider? clock = null) : BenControllerBase
 {
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
@@ -84,21 +84,23 @@ public sealed class AdminStoreOrderController(
         return Ok(StoreOrderViews.Invoice(order, settings, site.Value.Name, support));
     }
 
-    [HttpPost("{id:guid}/pack")]
-    public async Task<IActionResult> Pack(Guid id, CancellationToken ct)
-        => await AnswerAsync(id, await desk.PackAsync(id, GetCurrentUserIdOrThrow(), ct), ct);
+    // ── packages (store sellers P7): each is packed, shipped and delivered on its own ──
 
-    [HttpPost("{id:guid}/ship")]
-    public async Task<IActionResult> Ship(Guid id, [FromBody] StoreShipmentInfo info, CancellationToken ct)
-        => await AnswerAsync(id, await desk.ShipAsync(id, info, GetCurrentUserIdOrThrow(), ct), ct);
+    [HttpPost("{id:guid}/parcels/{parcelId:guid}/pack")]
+    public async Task<IActionResult> Pack(Guid id, Guid parcelId, CancellationToken ct)
+        => await AnswerAsync(id, await parcels.PackAsync(id, parcelId, GetCurrentUserIdOrThrow(), ct: ct), ct);
 
-    [HttpPut("{id:guid}/tracking")]
-    public async Task<IActionResult> Tracking(Guid id, [FromBody] StoreShipmentInfo info, CancellationToken ct)
-        => await AnswerAsync(id, await desk.CorrectTrackingAsync(id, info, GetCurrentUserIdOrThrow(), ct), ct);
+    [HttpPost("{id:guid}/parcels/{parcelId:guid}/ship")]
+    public async Task<IActionResult> Ship(Guid id, Guid parcelId, [FromBody] StoreShipmentInfo info, CancellationToken ct)
+        => await AnswerAsync(id, await parcels.ShipAsync(id, parcelId, info, GetCurrentUserIdOrThrow(), ct: ct), ct);
 
-    [HttpPost("{id:guid}/deliver")]
-    public async Task<IActionResult> Deliver(Guid id, CancellationToken ct)
-        => await AnswerAsync(id, await desk.DeliverAsync(id, GetCurrentUserIdOrThrow(), ct), ct);
+    [HttpPut("{id:guid}/parcels/{parcelId:guid}/tracking")]
+    public async Task<IActionResult> Tracking(Guid id, Guid parcelId, [FromBody] StoreShipmentInfo info, CancellationToken ct)
+        => await AnswerAsync(id, await parcels.CorrectTrackingAsync(id, parcelId, info, GetCurrentUserIdOrThrow(), ct: ct), ct);
+
+    [HttpPost("{id:guid}/parcels/{parcelId:guid}/deliver")]
+    public async Task<IActionResult> Deliver(Guid id, Guid parcelId, CancellationToken ct)
+        => await AnswerAsync(id, await parcels.DeliverAsync(id, parcelId, GetCurrentUserIdOrThrow(), ct: ct), ct);
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelStoreOrderRequest request, CancellationToken ct)

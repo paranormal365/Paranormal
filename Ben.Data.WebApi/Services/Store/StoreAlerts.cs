@@ -60,6 +60,21 @@ public sealed class StoreAlerts(
                 .Select(u => new { u.Email, u.DisplayName }).ToListAsync(ct);
             await mailer.QueueNewOrderAlertAsync(db, order, order.Items.ToList(),
                 emails.Select(e => (e.Email!, e.DisplayName)).ToList(), Now, ct);
+
+            // Store sellers P7: each seller with a package in it hears — a letter and a bell.
+            var parcels = await db.StoreOrderParcels.AsNoTracking().Where(x => x.OrderId == orderId && x.SellerAppUserId != null).ToListAsync(ct);
+            foreach (var parcel in parcels)
+            {
+                var seller = await db.AppUsers.AsNoTracking().Where(u => u.Id == parcel.SellerAppUserId)
+                    .Select(u => new { u.Id, u.Email, u.DisplayName }).FirstOrDefaultAsync(ct);
+                if (seller is null) continue;
+                if (seller.Email is { } sellerEmail)
+                    await mailer.QueueSellerParcelAsync(db, order, parcel, order.Items.Where(i => i.ParcelId == parcel.Id).ToList(),
+                        sellerEmail, seller.DisplayName, Now, ct);
+                await messages.SendAsync($"Order {order.OrderNumber}: a package for you to ship",
+                    $"Order {order.OrderNumber} is paid, and package {parcel.Number} is yours to send. Pack and ship it from Selling: /store/selling/packages",
+                    [seller.Id], admins[0], ct);
+            }
             await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -74,12 +89,19 @@ public sealed class StoreAlerts(
             $"{reason} Open the order: /admin/store/orders/{orderId}", ct);
 
     /// <summary>A refund Stripe refused after accepting it.</summary>
-    /// <summary>The buyer's bell when their order ships (a member; a guest has the letter).</summary>
-    public Task OrderShippedAsync(Guid orderId, CancellationToken ct = default)
-        => BuyerAsync(orderId, o => ($"Your order {o.OrderNumber} is on its way",
-            string.IsNullOrWhiteSpace(o.TrackingNumber)
-                ? $"Order {o.OrderNumber} has shipped with {o.Carrier}, without tracking. {StoreOrderMailer.ViewPath(o)}"
-                : $"Order {o.OrderNumber} has shipped with {o.Carrier}, tracking {o.TrackingNumber}. {StoreOrderMailer.ViewPath(o)}"), ct);
+    /// <summary>The buyer's bell when a package of their order ships (a member; a guest has the letter).</summary>
+    public async Task ParcelShippedAsync(Guid parcelId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var parcel = await db.StoreOrderParcels.AsNoTracking().FirstOrDefaultAsync(x => x.Id == parcelId, ct);
+        if (parcel is null) return;
+        var count = await db.StoreOrderParcels.CountAsync(x => x.OrderId == parcel.OrderId && x.Status != Ben.Data.Common.Enums.StoreParcelStatus.Cancelled, ct);
+        var which = count > 1 ? $" (package {parcel.Number} of {count})" : "";
+        await BuyerAsync(parcel.OrderId, o => ($"Your order {o.OrderNumber} is on its way{which}",
+            string.IsNullOrWhiteSpace(parcel.TrackingNumber)
+                ? $"Order {o.OrderNumber}{which} has shipped with {parcel.Carrier}, without tracking. {StoreOrderMailer.ViewPath(o)}"
+                : $"Order {o.OrderNumber}{which} has shipped with {parcel.Carrier}, tracking {parcel.TrackingNumber}. {StoreOrderMailer.ViewPath(o)}"), ct);
+    }
 
     /// <summary>The buyer's bell when a refund goes through.</summary>
     public async Task OrderRefundedAsync(Guid refundId, CancellationToken ct = default)

@@ -232,9 +232,6 @@ namespace Ben.Data.Source.Context
             order.Property(e => e.StripeTaxTransactionId).HasMaxLength(128);
             order.Property(e => e.AccessToken).HasMaxLength(64);
             order.Property(e => e.CancellationReason).HasMaxLength(500);
-            order.Property(e => e.Carrier).HasMaxLength(60);
-            order.Property(e => e.TrackingNumber).HasMaxLength(100);
-            order.Property(e => e.TrackingUrl).HasMaxLength(500);
             order.Property(e => e.BuyerNotes).HasMaxLength(1000);
             order.Property(e => e.AdminNotes).HasMaxLength(2000);
             order.Property(e => e.AttentionReason).HasMaxLength(300);

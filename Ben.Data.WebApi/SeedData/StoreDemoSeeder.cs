@@ -189,6 +189,7 @@ internal static class StoreDemoSeeder
         await SeedOrdersAsync(db, now, ct);
         await SeedReviewsAsync(db, ownerId, now, ct);
         await SeedSellerDemoAsync(db, ownerId, now, ct);
+        await SeedSellerOrdersAsync(db, now, ct);
     }
 
     // ── A member seller's items (store sellers, backlog 251) ─────────────────
@@ -291,7 +292,10 @@ internal static class StoreDemoSeeder
         public static readonly Guid SarahPaid = Id(101), SarahShipped = Id(102), SarahDelivered = Id(103), SarahRefunded = Id(104),
             Guest = Id(105), JamesDelivered = Id(106), SarahAbandoned = Id(107),
             // The K-II's reviewers bought one (S6.4): a review needs a paid order to hang on.
-            JamesKii = Id(108), EmmaKii = Id(109);
+            JamesKii = Id(108), EmmaKii = Id(109),
+            // Store sellers P7: Sarah's order in two packages — the store's shipped, Hazel's still to go —
+            // and James's REM pod from Hazel, delivered.
+            SarahTwoPackages = Id(110), JamesRemPod = Id(111);
     }
 
     private sealed record LineSeed(string Sku, int Quantity);
@@ -458,6 +462,88 @@ internal static class StoreDemoSeeder
         await StoreRatingCaches.RecomputeAsync(db, productId, ct);
     }
 
+    /// <summary>
+    /// Orders with Hazel's REM pod in them (store sellers P7): one in two packages, "Partially
+    /// shipped" — the store's gone, hers waiting — and one of hers delivered. Built like the others,
+    /// then split into packages by seller.
+    /// </summary>
+    private static async Task SeedSellerOrdersAsync(BenDataContext db, DateTime now, CancellationToken ct)
+    {
+        var hazel = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail == HazelEmail.ToUpperInvariant())
+            .Select(u => new { u.Id, u.DisplayName }).FirstOrDefaultAsync(ct);
+        if (hazel is null) return;
+        var skus = new[] { "KII-EMF", "HM-REMPOD" };
+        var variants = await db.StoreProductVariants.AsNoTracking().Include(v => v.Product).Where(v => skus.Contains(v.Sku))
+            .ToDictionaryAsync(v => v.Sku, ct);
+        if (variants.Count < 2 || variants["HM-REMPOD"].Product.SellerAppUserId != hazel.Id) return;
+        var pictures = (await db.StoreProductImages.AsNoTracking().Where(i => variants.Values.Select(v => v.ProductId).Contains(i.ProductId))
+                .Select(i => new { i.ProductId, i.VariantId, i.UploadFileId, i.SortOrder }).ToListAsync(ct))
+            .Select(i => (i.ProductId, i.VariantId, i.UploadFileId, i.SortOrder)).ToList();
+        var people = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail == SarahEmail.ToUpperInvariant() || u.NormalizedEmail == JamesEmail.ToUpperInvariant())
+            .ToDictionaryAsync(u => u.NormalizedEmail!, ct);
+
+        // (seed, the store's package, Hazel's package)
+        (OrderSeed Seed, StoreParcelStatus Ours, StoreParcelStatus Hers)[] seeds =
+        [
+            (new(SeededOrders.SarahTwoPackages, SarahEmail, StoreOrderStatus.PartiallyShipped, [new("KII-EMF", 1), new("HM-REMPOD", 1)],
+                7.95m, 0.0925m, true, "TN", "Nashville", "37203", 2), StoreParcelStatus.Shipped, StoreParcelStatus.Waiting),
+            (new(SeededOrders.JamesRemPod, JamesEmail, StoreOrderStatus.Delivered, [new("HM-REMPOD", 1)],
+                0m, 0.07m, false, "IN", "Indianapolis", "46204", 12), StoreParcelStatus.Cancelled, StoreParcelStatus.Delivered),
+        ];
+        foreach (var (seed, ours, hers) in seeds)
+        {
+            if (await db.StoreOrders.AnyAsync(o => o.Id == seed.Id, ct)) continue;
+            if (people.GetValueOrDefault(seed.Email.ToUpperInvariant()) is not { } buyer) continue;
+            var placed = now.AddDays(-seed.DaysAgo);
+            var order = BuildOrder(seed, buyer, variants, pictures, placed);
+
+            // One package per seller: the store's own stock carries the order's shipping; Hazel's shipped free and is credited the rate.
+            var only = order.Parcels.Single();
+            order.Parcels.Clear();
+            var n = 1;
+            var siteItems = order.Items.Where(i => variants.Values.First(v => v.Id == i.VariantId).Product.SellerAppUserId is null).ToList();
+            if (siteItems.Count > 0)
+            {
+                var site = NewParcel(order, n++, null, null, ours, order.ShippingAmount, order.ShippingTaxAmount, 0m, placed);
+                foreach (var i in siteItems) i.ParcelId = site.Id;
+            }
+            var hersParcel = NewParcel(order, n, hazel.Id, hazel.DisplayName, hers, 0m, 0m, 7.95m, placed);
+            foreach (var i in order.Items.Except(siteItems)) i.ParcelId = hersParcel.Id;
+            _ = only;
+
+            if (seed.Status == StoreOrderStatus.PartiallyShipped)
+            {
+                order.PackedUtc = placed.AddHours(20);
+                order.Events.Add(new StoreOrderEvent { Id = Guid.NewGuid(), OrderId = order.Id, Kind = StoreOrderEventKind.Shipped,
+                    FromStatus = StoreOrderStatus.Paid, ToStatus = StoreOrderStatus.PartiallyShipped, Note = "Package 1: USPS", OccurredUtc = placed.AddDays(1) });
+            }
+            db.StoreOrders.Add(order);
+            await StoreOrderNumbers.SaveNumberedAsync(db, order, ct);
+        }
+
+        static StoreOrderParcel NewParcel(StoreOrder order, int number, Guid? seller, string? name, StoreParcelStatus status,
+            decimal shipping, decimal shippingTax, decimal credit, DateTime placed)
+        {
+            var parcel = new StoreOrderParcel
+            {
+                Id = Guid.NewGuid(), OrderId = order.Id, Number = number, SellerAppUserId = seller, SellerName = name, Status = status,
+                ShippingAmount = shipping, ShippingTaxAmount = shippingTax, SellerShippingCredit = credit, DateCreated = placed,
+            };
+            if (status is StoreParcelStatus.Shipped or StoreParcelStatus.Delivered)
+            {
+                parcel.PackedUtc = placed.AddHours(20);
+                parcel.ShippedUtc = placed.AddDays(1);
+                parcel.Carrier = seller is null ? "USPS" : "UPS";
+                parcel.TrackingNumber = seller is null ? "9400 1000 0000 0000 0000 99" : "1Z999AA10123456784";
+                parcel.TrackingUrl = seller is null ? "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400100000000000000099"
+                    : "https://www.ups.com/track?tracknum=1Z999AA10123456784";
+            }
+            if (status == StoreParcelStatus.Delivered) parcel.DeliveredUtc = placed.AddDays(4);
+            if (status != StoreParcelStatus.Cancelled) order.Parcels.Add(parcel);
+            return parcel;
+        }
+    }
+
     private static StoreOrder BuildOrder(OrderSeed seed, AppUser? buyer, IReadOnlyDictionary<string, StoreProductVariant> variants,
         List<(Guid ProductId, Guid? VariantId, Guid UploadFileId, int SortOrder)> pictures, DateTime placed)
     {
@@ -532,9 +618,6 @@ internal static class StoreDemoSeeder
         {
             order.PackedUtc = paid.Value.AddHours(20);
             order.ShippedUtc = paid.Value.AddDays(1);
-            order.Carrier = "USPS";
-            order.TrackingNumber = $"9400 1000 0000 0000 0000 {n:D2}";
-            order.TrackingUrl = $"https://tools.usps.com/go/TrackConfirmAction?tLabels=94001000000000000000{n:D2}";
             Event(StoreOrderEventKind.Packed, order.PackedUtc.Value, StoreOrderStatus.Packed);
             Event(StoreOrderEventKind.Shipped, order.ShippedUtc.Value, StoreOrderStatus.Shipped, note: "USPS");
         }
@@ -554,10 +637,16 @@ internal static class StoreDemoSeeder
                 StoreOrderStatus.Cancelled => StoreParcelStatus.Cancelled,
                 _ => StoreParcelStatus.Waiting,
             },
-            ShippingAmount = seed.Shipping, ShippingTaxAmount = shippingTax, Carrier = order.Carrier, TrackingNumber = order.TrackingNumber,
-            TrackingUrl = order.TrackingUrl, PackedUtc = order.PackedUtc, ShippedUtc = order.ShippedUtc, DeliveredUtc = order.DeliveredUtc,
+            ShippingAmount = seed.Shipping, ShippingTaxAmount = shippingTax, PackedUtc = order.PackedUtc, ShippedUtc = order.ShippedUtc,
+            DeliveredUtc = order.DeliveredUtc,
             DateCreated = placed,
         };
+        if (order.ShippedUtc is not null)
+        {
+            parcel.Carrier = "USPS";
+            parcel.TrackingNumber = $"9400 1000 0000 0000 0000 {n:D2}";
+            parcel.TrackingUrl = $"https://tools.usps.com/go/TrackConfirmAction?tLabels=94001000000000000000{n:D2}";
+        }
         order.Parcels.Add(parcel);
         foreach (var item in items) item.ParcelId = parcel.Id;
 

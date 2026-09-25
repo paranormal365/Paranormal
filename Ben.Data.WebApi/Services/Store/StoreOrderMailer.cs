@@ -116,32 +116,42 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
         return true;
     }
 
-    /// <summary>"Your order is on its way" (S5.2): carrier, tracking and what is in the parcel. Outbox only.</summary>
-    public async Task QueueShippedAsync(BenDataContext db, StoreOrder order, IReadOnlyList<StoreOrderItem> items, DateTime now, CancellationToken ct)
+    /// <summary>
+    /// "Your order is on its way" (S5.2): carrier, tracking and what is in the package. One letter per
+    /// package (store sellers P7) — "package 1 of 2", with only that package's items. Outbox only.
+    /// </summary>
+    public async Task QueueShippedAsync(BenDataContext db, StoreOrder order, StoreOrderParcel parcel, IReadOnlyList<StoreOrderItem> items,
+        int parcelCount, DateTime now, CancellationToken ct)
     {
         var url = _site.AbsoluteUrl(ViewPath(order));
-        var tracking = order.TrackingUrl;
+        var tracking = parcel.TrackingUrl;
+        var split = parcelCount > 1;
+        var what = split
+            ? $"Part of order <strong>{order.OrderNumber}</strong> — package {parcel.Number} of {parcelCount}, from {Safe(StoreParcelNames.ShipsFrom(parcel.SellerAppUserId, parcel.SellerName))} —"
+            : $"Order <strong>{order.OrderNumber}</strong>";
         var body = new StringBuilder();
         body.Append($"<p>Hello {Safe(order.BuyerName)},</p>");
-        body.Append(string.IsNullOrWhiteSpace(order.TrackingNumber)
+        body.Append(string.IsNullOrWhiteSpace(parcel.TrackingNumber)
             // "No tracking provided" (Ben, 09/24): not every parcel is tracked, and the letter says so plainly.
-            ? $"<p>Order <strong>{order.OrderNumber}</strong> has shipped with {Safe(order.Carrier)}. It was sent without "
+            ? $"<p>{what} has shipped with {Safe(parcel.Carrier)}. It was sent without "
               + "tracking, so there is no number to follow — it should reach you in the usual few days.</p>"
-            : $"<p>Order <strong>{order.OrderNumber}</strong> has shipped with {Safe(order.Carrier)}. "
-              + $"The tracking number is <strong>{Safe(order.TrackingNumber)}</strong>.</p>");
+            : $"<p>{what} has shipped with {Safe(parcel.Carrier)}. "
+              + $"The tracking number is <strong>{Safe(parcel.TrackingNumber)}</strong>.</p>");
+        if (split) body.Append("<p>The rest of your order comes in its own package, with its own letter.</p>");
         body.Append(ItemsTable(items));
         body.Append($"<p>It is going to:<br>{AddressBlock(order)}</p>");
 
         var supplied = new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
         {
             ["OrderUrl"] = new(url),
-            ["Carrier"] = new(order.Carrier ?? ""),
-            ["TrackingNumber"] = new(order.TrackingNumber ?? ""),
+            ["Carrier"] = new(parcel.Carrier ?? ""),
+            ["TrackingNumber"] = new(parcel.TrackingNumber ?? ""),
             ["TrackingUrl"] = new(tracking ?? url),
             ["ItemsTable"] = new(ItemsTable(items), IsHtml: true),
+            ["Package"] = new(split ? $"Package {parcel.Number} of {parcelCount}" : ""),
         };
         await QueueAsync(db, order, MailKinds.StoreOrderShipped, order.BuyerEmail,
-            $"Your order {order.OrderNumber} is on its way",
+            split ? $"Part of your order {order.OrderNumber} is on its way (package {parcel.Number} of {parcelCount})" : $"Your order {order.OrderNumber} is on its way",
             BenEmailLayout.Wrap(_site, "Your order is on its way", body.ToString(),
                 tracking is null ? "See your order" : "Track it", tracking ?? url),
             supplied, now, ct);
@@ -199,6 +209,40 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
                     },
                     MailRows.Person(email, name))), ct);
         }
+    }
+
+    /// <summary>
+    /// A package for a seller to send (store sellers P7): what goes in it and where it's going, and
+    /// the way to their packages page. Written to the seller, never to the buyer.
+    /// </summary>
+    public async Task QueueSellerParcelAsync(BenDataContext db, StoreOrder order, StoreOrderParcel parcel, IReadOnlyList<StoreOrderItem> items,
+        string sellerEmail, string? sellerName, DateTime now, CancellationToken ct)
+    {
+        var url = _site.AbsoluteUrl("/store/selling/packages");
+        var table = ItemsTable(items);
+        var shipTo = AddressBlock(order);
+        var body = $"<p>Hello {Safe(sellerName ?? "there")},</p>"
+                 + $"<p>Order <strong>{order.OrderNumber}</strong> is paid, and package {parcel.Number} is yours to send:</p>"
+                 + table + $"<p>It is going to:<br>{shipTo}</p>"
+                 + "<p>Buy the label as you usually do, then mark it shipped with its carrier and tracking number "
+                 + $"(or \"No tracking provided\"). You're credited {Usd(parcel.SellerShippingCredit)} for the label.</p>";
+        await queue.EnqueueAsync(db, new EmailMessage(
+            sellerEmail, $"Order {order.OrderNumber}: a package for you to ship",
+            BenEmailLayout.Wrap(_site, "A package for you to ship", body, "Open my packages", url),
+            Kind: MailKinds.StoreSellerParcelToShip.Key,
+            Payload: MailRows.For(MailKinds.StoreSellerParcelToShip,
+                new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["SellerPackagesUrl"] = new(url),
+                    ["ItemsTable"] = new(table, IsHtml: true),
+                    ["ShipTo"] = new(shipTo, IsHtml: true),
+                },
+                MailRows.Person(sellerEmail, sellerName), order)), ct);
+        db.StoreOrderEvents.Add(new StoreOrderEvent
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, ParcelId = parcel.Id, Kind = StoreOrderEventKind.LetterQueued,
+            Note = MailKinds.StoreSellerParcelToShip.Key, OccurredUtc = now,
+        });
     }
 
     private static string ItemsRefunded(IReadOnlyList<(string Product, int Quantity)> lines)

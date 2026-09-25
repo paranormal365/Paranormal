@@ -61,6 +61,48 @@ public class StoreAdminOrderTests : BenTestBase
     }
 
     [Test]
+    [Description("An order with a seller's item is two packages: the store ships its own, the order reads Partially shipped; the seller ships theirs from My Packages, and it reads Shipped.")]
+    public async Task Each_package_ships_on_its_own()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var ours = await api.BuyableAsync(Unique("Desk torch"), 14m);
+        var hers = await api.GiveToSellerAsync(await api.BuyableAsync(Unique("Hand-wound spirit box"), 22m), SellerEmail);
+        var email = Buyer();
+        var id = await StoreTestApi.PaidGuestOrderAsync([ours, hers], email);
+        var number = (await api.SendAsync(HttpMethod.Get, $"/api/admin/store/orders/{id}")).GetProperty("orderNumber").GetInt32();
+
+        // The store ships package 1.
+        await OpenOrderAsync(id);
+        await Expect(Page.Locator("[data-testid=order-package]")).ToHaveCountAsync(2);
+        await Expect(Page.Locator("[data-testid=order-package][data-number='2']")).ToContainTextAsync("Ships from Hazel Marsh");
+        await ClickUntilAsync(Page.Locator("#parcel-1-ship"), Page.Locator("#ship-carrier"));
+        await Page.SelectOptionAsync("#ship-carrier", "USPS");
+        await FillAndConfirmAsync("#ship-tracking", "9400111122224444");
+        await Page.Locator("#ship-confirm").ClickAsync();
+        await Expect(Page.Locator("[data-testid=order-status]")).ToHaveTextAsync("Partially shipped", new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=order-package][data-number='1'] [data-testid=order-package-status]")).ToHaveTextAsync("Shipped");
+        await Expect(Page.Locator("[data-testid=order-package][data-number='2'] [data-testid=order-package-status]")).ToHaveTextAsync("Being prepared");
+        var first = await TryLetterFromTheOutboxAsync(email, body => body.Contains("9400111122224444") && body.Contains("package 1 of 2"));
+        Assert.That(first, Is.Not.Null, "the buyer's letter for package 1 did not reach the outbox");
+
+        // Hazel ships package 2 from her own page.
+        await LoginAsync(SellerEmail, SellerPassword);
+        await Page.GotoAsync($"{BaseUrl}/store/selling/packages");
+        await WaitForTheCircuitAsync();
+        var card = Page.Locator($"[data-testid=seller-package][data-order='{number}']");
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(card.Locator("[data-testid=seller-package-ship-to]")).ToContainTextAsync("3 Birch Rd");
+        await ClickUntilAsync(card.Locator("[data-testid=seller-package-ship]"), Page.Locator("#ship-carrier"));
+        await Page.SelectOptionAsync("#ship-carrier", "UPS");
+        await Page.Locator("#ship-no-tracking").CheckAsync();
+        await Page.Locator("#ship-confirm").ClickAsync();
+        await Expect(Page.Locator("#ship-confirm")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        var order = await api.SendAsync(HttpMethod.Get, $"/api/admin/store/orders/{id}");
+        Assert.That(order.GetProperty("status").GetInt32(), Is.EqualTo(3), "both packages have gone, so the order is Shipped");
+    }
+
+    [Test]
     [Description("A tracking number is required — unless 'No tracking provided' is chosen, which ships without one and tells the buyer so.")]
     public async Task Orders_ship_without_tracking_only_when_it_says_so()
     {

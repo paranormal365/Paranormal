@@ -427,7 +427,8 @@ public static class MailKinds
          new("Carrier", "Who is carrying it — USPS, UPS, FedEx, DHL or Other."),
          new("TrackingNumber", "The carrier's tracking number."),
          new("TrackingUrl", "The carrier's own tracking page for that number; empty for Other."),
-         new("ItemsTable", "What was shipped: each item, how many, and its price.", IsHtml: true)]);
+         new("ItemsTable", "What was shipped: each item, how many, and its price.", IsHtml: true),
+         new("Package", "Which package this is, when an order ships as more than one — \"Package 1 of 2\"; empty otherwise.")]);
 
     public static readonly MailKindInfo StoreOrderRefunded = new(
         "store-order-refunded", "A refund on your order",
@@ -437,6 +438,14 @@ public static class MailKinds
          new("RefundAmount", "How much was refunded this time, in dollars."),
          new("RefundReason", "Why, in the words the admin gave."),
          new("RefundLines", "The items refunded and how many, when the refund was by item.", IsHtml: true)]);
+
+    public static readonly MailKindInfo StoreSellerParcelToShip = new(
+        "store-seller-parcel-to-ship", "A package for you to ship",
+        "Tells a seller a paid store order has a package of their items to send, with where it's going.",
+        ["AppUsers", "StoreOrders"],
+        [new("SellerPackagesUrl", "The seller's packages page, where they pack and ship it.", Required: true, Provides: "a way to ship it"),
+         new("ItemsTable", "What goes in the package: each item and how many.", IsHtml: true),
+         new("ShipTo", "Where the package is going, on separate lines.", IsHtml: true)]);
 
     public static readonly MailKindInfo StoreLowStock = new(
         "store-low-stock", "Store stock is running low",
@@ -461,6 +470,7 @@ public static class MailKinds
         PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
         VenueClaimCode,
         StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink, StoreOrderShipped, StoreOrderRefunded, StoreLowStock,
+        StoreSellerParcelToShip,
     ];
 
     /// <summary>The kind with this key, or null when nothing declares it.</summary>

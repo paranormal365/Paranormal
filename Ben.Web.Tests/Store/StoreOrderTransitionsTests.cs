@@ -53,10 +53,43 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
         order.AccessToken = $"old-token-{order.Id:N}";
         order.NeedsAttention = attention is not null;
         order.AttentionReason = attention;
-        order.Carrier = carrier;
+        // Every order ships as packages (store sellers P7); this one is a single package of the store's own.
+        var parcel = new StoreOrderParcel
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, Number = 1, DateCreated = DateTime.UtcNow, Carrier = carrier,
+            Status = status switch
+            {
+                StoreOrderStatus.Packed => StoreParcelStatus.Packed,
+                StoreOrderStatus.Shipped => StoreParcelStatus.Shipped,
+                StoreOrderStatus.Delivered => StoreParcelStatus.Delivered,
+                StoreOrderStatus.Cancelled => StoreParcelStatus.Cancelled,
+                _ => StoreParcelStatus.Waiting,
+            },
+        };
+        db.StoreOrderParcels.Add(parcel);
+        foreach (var item in db.StoreOrderItems.Local.Where(i => i.OrderId == order.Id)) item.ParcelId = parcel.Id;
         await db.SaveChangesAsync();
         return order.Id;
     }
+
+    private StoreParcelTransitions Parcels()
+    {
+        var site = Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://test.local" });
+        var mailer = new StoreOrderMailer(TestOutbox.WithoutMail(_sqlite.Factory), site);
+        var alerts = new StoreAlerts(_sqlite.Factory, new PlatformMessageService(_sqlite.Factory), mailer, NullLogger<StoreAlerts>.Instance);
+        return new StoreParcelTransitions(_sqlite.Factory, mailer, alerts);
+    }
+
+    private async Task<StoreOrderParcel> ParcelAsync(Guid orderId)
+    {
+        await using var db = await _sqlite.NewContextAsync();
+        return await db.StoreOrderParcels.AsNoTracking().SingleAsync(x => x.OrderId == orderId);
+    }
+
+    private async Task<StoreDeskResult> PackAsync(Guid id) => await Parcels().PackAsync(id, (await ParcelAsync(id)).Id, _admin.Id);
+    private async Task<StoreDeskResult> ShipAsync(Guid id, StoreShipmentInfo info) => await Parcels().ShipAsync(id, (await ParcelAsync(id)).Id, info, _admin.Id);
+    private async Task<StoreDeskResult> CorrectAsync(Guid id, StoreShipmentInfo info) => await Parcels().CorrectTrackingAsync(id, (await ParcelAsync(id)).Id, info, _admin.Id);
+    private async Task<StoreDeskResult> DeliverAsync(Guid id) => await Parcels().DeliverAsync(id, (await ParcelAsync(id)).Id, _admin.Id);
 
     private async Task<(StoreOrder Order, List<OutboxEmail> Letters, List<StoreOrderEvent> Events)> ReadAsync(Guid id)
     {
@@ -75,7 +108,7 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task Pack_is_refused_while_attention_is_set()
     {
         var id = await OrderAsync(attention: "Stripe reports $10.00 received; the order is $59.99.");
-        var result = await Desk().PackAsync(id, _admin.Id);
+        var result = await PackAsync(id);
 
         Assert.Equal(StoreOrderDeskSentences.NeedsAttentionFirst("Stripe reports $10.00 received; the order is $59.99."), result.Refusal);
         Assert.Equal(StoreOrderStatus.Paid, (await ReadAsync(id)).Order.Status);
@@ -85,8 +118,8 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task Packing_twice_says_what_it_already_is()
     {
         var id = await OrderAsync();
-        Assert.True((await Desk().PackAsync(id, _admin.Id)).Ok);
-        Assert.Equal(StoreOrderDeskSentences.OnlyPaidCanBePacked("packed"), (await Desk().PackAsync(id, _admin.Id)).Refusal);
+        Assert.True((await PackAsync(id)).Ok);
+        Assert.Equal("Only a package waiting to be packed can be packed; this one is packed.", (await PackAsync(id)).Refusal);
     }
 
     // ── Ship ─────────────────────────────────────────────────────────────────
@@ -95,12 +128,13 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task A_tracked_shipment_builds_the_carriers_link_and_writes_to_the_buyer_once()
     {
         var id = await OrderAsync(StoreOrderStatus.Packed);
-        var result = await Desk().ShipAsync(id, Tracked(), _admin.Id);
+        var result = await ShipAsync(id, Tracked());
 
         var (order, letters, events) = await ReadAsync(id);
+        var parcel = await ParcelAsync(id);
         Assert.True(result.Ok);
-        Assert.Equal((StoreOrderStatus.Shipped, StoreCarriers.Usps, "9400 1111 2222 3333"), (order.Status, order.Carrier, order.TrackingNumber));
-        Assert.Equal(StoreCarriers.TrackingUrl(StoreCarriers.Usps, "9400 1111 2222 3333"), order.TrackingUrl);
+        Assert.Equal((StoreOrderStatus.Shipped, StoreCarriers.Usps, "9400 1111 2222 3333"), (order.Status, parcel.Carrier, parcel.TrackingNumber));
+        Assert.Equal(StoreCarriers.TrackingUrl(StoreCarriers.Usps, "9400 1111 2222 3333"), parcel.TrackingUrl);
         var letter = Assert.Single(letters, l => l.Kind == MailKinds.StoreOrderShipped.Key);
         Assert.Contains("9400 1111 2222 3333", letter.HtmlBody);
         Assert.Contains(events, e => e.Kind == StoreOrderEventKind.Shipped);
@@ -110,12 +144,13 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task No_tracking_provided_ships_without_a_number_or_a_link_and_the_letter_says_so()
     {
         var id = await OrderAsync();
-        var result = await Desk().ShipAsync(id, Untracked(), _admin.Id);
+        var result = await ShipAsync(id, Untracked());
 
         var (order, letters, events) = await ReadAsync(id);
+        var parcel = await ParcelAsync(id);
         Assert.True(result.Ok);
         Assert.Equal((StoreOrderStatus.Shipped, StoreCarriers.Usps, (string?)null, (string?)null),
-            (order.Status, order.Carrier, order.TrackingNumber, order.TrackingUrl));
+            (order.Status, parcel.Carrier, parcel.TrackingNumber, parcel.TrackingUrl));
         Assert.Contains("without tracking", Assert.Single(letters, l => l.Kind == MailKinds.StoreOrderShipped.Key).HtmlBody);
         Assert.Contains(events, e => e.Kind == StoreOrderEventKind.Shipped && e.Note!.Contains(StoreOrderDeskSentences.NoTrackingLabel));
     }
@@ -127,7 +162,7 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task A_shipment_as_typed_is_refused_in_words(string carrier, string number, bool untracked, string? link, string sentence)
     {
         var id = await OrderAsync();
-        var result = await Desk().ShipAsync(id, new StoreShipmentInfo(carrier, number, link, null, untracked), _admin.Id);
+        var result = await ShipAsync(id, new StoreShipmentInfo(carrier, number, link, null, untracked));
 
         Assert.Equal(sentence, result.Refusal);
         var (order, letters, _) = await ReadAsync(id);
@@ -139,37 +174,37 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     public async Task Other_takes_a_pasted_https_link()
     {
         var id = await OrderAsync();
-        await Desk().ShipAsync(id, new StoreShipmentInfo(StoreCarriers.Other, "AB12", "https://track.example.com/AB12", null), _admin.Id);
-        Assert.Equal("https://track.example.com/AB12", (await ReadAsync(id)).Order.TrackingUrl);
+        await ShipAsync(id, new StoreShipmentInfo(StoreCarriers.Other, "AB12", "https://track.example.com/AB12", null));
+        Assert.Equal("https://track.example.com/AB12", (await ParcelAsync(id)).TrackingUrl);
     }
 
     [Fact]
     public async Task Ship_is_refused_while_attention_is_set()
     {
         var id = await OrderAsync(attention: "Paid after the checkout was cancelled.");
-        Assert.StartsWith("This order needs attention first", (await Desk().ShipAsync(id, Tracked(), _admin.Id)).Refusal);
+        Assert.StartsWith("This order needs attention first", (await ShipAsync(id, Tracked())).Refusal);
     }
 
     [Fact]
     public async Task Tracking_can_be_added_later_to_an_untracked_parcel_and_only_once_shipped()
     {
         var id = await OrderAsync();
-        Assert.Equal(StoreOrderDeskSentences.TrackingOnlyWhenShipped, (await Desk().CorrectTrackingAsync(id, Tracked(), _admin.Id)).Refusal);
+        Assert.Equal(StoreOrderDeskSentences.TrackingOnlyWhenShipped, (await CorrectAsync(id, Tracked())).Refusal);
 
-        await Desk().ShipAsync(id, Untracked(), _admin.Id);
-        Assert.True((await Desk().CorrectTrackingAsync(id, Tracked(StoreCarriers.Ups, "1Z999"), _admin.Id)).Ok);
+        await ShipAsync(id, Untracked());
+        Assert.True((await CorrectAsync(id, Tracked(StoreCarriers.Ups, "1Z999"))).Ok);
 
-        var order = (await ReadAsync(id)).Order;
-        Assert.Equal((StoreCarriers.Ups, "1Z999", StoreCarriers.TrackingUrl(StoreCarriers.Ups, "1Z999")), (order.Carrier, order.TrackingNumber, order.TrackingUrl));
+        var parcel = await ParcelAsync(id);
+        Assert.Equal((StoreCarriers.Ups, "1Z999", StoreCarriers.TrackingUrl(StoreCarriers.Ups, "1Z999")), (parcel.Carrier, parcel.TrackingNumber, parcel.TrackingUrl));
     }
 
     [Fact]
     public async Task Only_a_shipped_order_can_be_delivered()
     {
         var id = await OrderAsync();
-        Assert.Equal(StoreOrderDeskSentences.OnlyShippedCanBeDelivered, (await Desk().DeliverAsync(id, _admin.Id)).Refusal);
-        await Desk().ShipAsync(id, Tracked(), _admin.Id);
-        Assert.True((await Desk().DeliverAsync(id, _admin.Id)).Ok);
+        Assert.Equal(StoreOrderDeskSentences.OnlyShippedCanBeDelivered, (await DeliverAsync(id)).Refusal);
+        await ShipAsync(id, Tracked());
+        Assert.True((await DeliverAsync(id)).Ok);
         Assert.Equal(StoreOrderStatus.Delivered, (await ReadAsync(id)).Order.Status);
     }
 
@@ -245,7 +280,7 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     {
         var id = await OrderAsync(attention: "Check it");
         Assert.True((await Desk().ClearAttentionAsync(id, _admin.Id)).Ok);
-        Assert.True((await Desk().PackAsync(id, _admin.Id)).Ok);
+        Assert.True((await PackAsync(id)).Ok);
         Assert.Equal(StoreOrderDeskSentences.NothingToClear, (await Desk().ClearAttentionAsync(id, _admin.Id)).Refusal);
     }
 
