@@ -98,6 +98,21 @@ until it clears.
 When an order has packages from more than one seller, the buyer sees each package with its own
 tracking, and the order reads **Partially shipped** until every package has gone.
 
+## Your earnings
+
+**Selling → My Earnings** shows what you've earned and been paid. You earn when a package **ships**:
+the cost to make each unit (from your parts list) plus the asking price the store approved, fixed
+when the order was placed — and the store's shipping rate for the label.
+
+- **Owed to you** — everything not yet paid.
+- **Ready to pay** — earnings older than the returns window, which the store pays.
+- **Inside the returns window** — still recent enough for a return.
+- **Paid to date** — every payment the store has recorded.
+
+A return after your package shipped takes that unit's earning back. The store pays you outside the
+site — a transfer or a check — and records it here. The tables below break it down by item, by
+order and by year: the year's **Paid** column is what goes on that year's tax forms.
+
 ## Going on sale
 
 When an item is ready, press **Ask to put it on sale…** and say what you'd like to be paid for each

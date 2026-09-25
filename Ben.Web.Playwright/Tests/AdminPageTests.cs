@@ -66,6 +66,8 @@ public class AdminPageTests : BenTestBase
         ("/admin/store/orders",        "Pack, ship and refund"),
         // Store sellers P3: sellers asking for their items to go on sale.
         ("/admin/store/sale-requests", "Sellers ask for their items to go on sale"),
+        // Store sellers P10: what each seller is owed, and recording payments.
+        ("/admin/store/sellers",       "What each seller has earned and been paid"),
     };
 
     [Test]

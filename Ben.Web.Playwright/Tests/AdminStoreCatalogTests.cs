@@ -54,7 +54,7 @@ public class AdminStoreCatalogTests : BenTestBase
             Page.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First,
             Page.GetByRole(AriaRole.Link, new() { Name = "Store Settings", Exact = false }).First);
 
-        foreach (var entry in new[] { "Store Dashboard", "Categories", "Products", "Sale Requests", "Stock", "Discount Codes", "Reviews", "Store Settings" })
+        foreach (var entry in new[] { "Store Dashboard", "Categories", "Products", "Sale Requests", "Sellers", "Stock", "Discount Codes", "Reviews", "Store Settings" })
             await Expect(Page.GetByRole(AriaRole.Link, new() { Name = entry, Exact = true }).First).ToBeVisibleAsync();
     }
 

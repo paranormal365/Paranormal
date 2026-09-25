@@ -1,0 +1,45 @@
+@page "/store/selling/earnings"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenStoreSellerClient Seller
+@inject IBenUserState User
+@inject NavigationManager Nav
+
+<PageTitle>My earnings — Selling</PageTitle>
+
+@*
+    A seller's earnings (store sellers, backlog 251, P10; Ben's point 8): what they've earned by item
+    and by order, what's been paid and what's still owed, and each year's totals for their tax forms.
+    The store pays by hand and records it; this page only reads.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:72rem;">
+    <h1 class="h3 mb-1">My earnings<HelpLink Slug="selling-in-the-store" Anchor="your-earnings" /></h1>
+    <p class="text-secondary mb-3">For each unit that ships you earn its cost plus your asking price, and the store's shipping rate for the label.</p>
+
+    <BenItemState TItem="SellerEarningsRecord" Result="_result" Loading="_loading" LoadingText="Loading your earnings…" OnRetry="LoadAsync">
+        <ChildContent Context="e">
+            <SellerEarningsView Earnings="e" />
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    private ItemResult<SellerEarningsRecord> _result;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await Seller.GetMySellerEarningsAsync();
+        _loading = false;
+    }
+}

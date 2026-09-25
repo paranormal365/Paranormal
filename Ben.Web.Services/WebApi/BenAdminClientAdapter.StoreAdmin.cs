@@ -141,6 +141,32 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<object, StorePartsRecord>(
                HttpMethod.Delete, $"/api/admin/store/products/{productId}/parts/{partId}/picture", new { }, token);
 
+    // ── sellers' earnings and payouts (store sellers P10) ────────────────────
+
+    public Task<LoadResult<StoreSellerBalanceRecord>> GetStoreSellerBalancesAsync(CancellationToken token = default)
+        => _api.GetListAsync<StoreSellerBalanceRecord>("/api/admin/store/sellers", token);
+
+    public Task<ItemResult<StoreSellerDetailRecord>> GetStoreSellerAsync(Guid sellerId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreSellerDetailRecord>($"/api/admin/store/sellers/{sellerId}", token);
+
+    public Task<(StoreSellerDetailRecord? Result, string? Error)> RecordStoreSellerPaymentAsync(Guid sellerId, RecordSellerPaymentRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RecordSellerPaymentRequest, StoreSellerDetailRecord>(
+               HttpMethod.Post, $"/api/admin/store/sellers/{sellerId}/payments", request, token);
+
+    public Task<(StoreSellerDetailRecord? Result, string? Error)> VoidStoreSellerPaymentAsync(Guid sellerId, Guid payoutId, VoidSellerPaymentRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<VoidSellerPaymentRequest, StoreSellerDetailRecord>(
+               HttpMethod.Post, $"/api/admin/store/sellers/{sellerId}/payments/{payoutId}/void", request, token);
+
+    public Task<(StoreSellerDetailRecord? Result, string? Error)> AdjustStoreSellerAsync(Guid sellerId, SellerAdjustmentRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SellerAdjustmentRequest, StoreSellerDetailRecord>(
+               HttpMethod.Post, $"/api/admin/store/sellers/{sellerId}/adjustments", request, token);
+
+    public async Task<(byte[] Data, string FileName)?> DownloadStoreSellerCsvAsync(Guid sellerId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/admin/store/sellers/{sellerId}/export.csv", "seller-earnings.csv", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
+
     // ── sale requests (store sellers P3) ─────────────────────────────────────
 
     public Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default)

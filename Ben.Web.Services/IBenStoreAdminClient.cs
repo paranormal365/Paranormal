@@ -96,6 +96,21 @@ public interface IBenStoreAdminClient
 
     Task<(StorePartsRecord? Result, string? Error)> RemoveStorePartPictureAsync(Guid productId, Guid partId, CancellationToken token = default);
 
+    // ── sellers' earnings and payouts (store sellers P10) ────────────────────
+
+    Task<LoadResult<StoreSellerBalanceRecord>> GetStoreSellerBalancesAsync(CancellationToken token = default);
+
+    Task<ItemResult<StoreSellerDetailRecord>> GetStoreSellerAsync(Guid sellerId, CancellationToken token = default);
+
+    /// <summary>Records a payment made outside the site. Refused (409) with the new figure when the earnings changed since the page opened.</summary>
+    Task<(StoreSellerDetailRecord? Result, string? Error)> RecordStoreSellerPaymentAsync(Guid sellerId, RecordSellerPaymentRequest request, CancellationToken token = default);
+
+    Task<(StoreSellerDetailRecord? Result, string? Error)> VoidStoreSellerPaymentAsync(Guid sellerId, Guid payoutId, VoidSellerPaymentRequest request, CancellationToken token = default);
+
+    Task<(StoreSellerDetailRecord? Result, string? Error)> AdjustStoreSellerAsync(Guid sellerId, SellerAdjustmentRequest request, CancellationToken token = default);
+
+    Task<(byte[] Data, string FileName)?> DownloadStoreSellerCsvAsync(Guid sellerId, CancellationToken token = default);
+
     /// <summary>Sellers' requests to go on sale: the ones waiting, oldest first, or with <paramref name="decided"/> the answered ones.</summary>
     Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default);
 

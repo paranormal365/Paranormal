@@ -1,0 +1,60 @@
+@page "/admin/store/sellers"
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>SuperAdmin — Sellers</PageTitle>
+
+@*
+    The store's sellers and what it owes them (store sellers, backlog 251, P10). Payouts are manual
+    (Ben, 09/24/2026): pay a seller outside the site, then record it on their page.
+*@
+
+<div class="container-fluid px-3" style="max-width:64rem;">
+    <div class="mb-3">
+        <h3 class="mb-0">Sellers<HelpLink Slug="site-administration" Anchor="paying-sellers" /></h3>
+        <p class="text-secondary small mb-0">
+            What each seller has earned and been paid. "Ready to pay" is what's older than the returns window. Pay them outside the site, then record it.
+        </p>
+    </div>
+
+    <BenListState TItem="StoreSellerBalanceRecord" Result="_result" Loading="_loading" EmptyText="No sellers yet — give somebody the Seller role on their Site Roles tab" OnRetry="LoadAsync">
+        <div class="table-responsive">
+            <table class="table align-middle" data-testid="sellers">
+                <thead><tr><th>Seller</th><th class="text-end">On sale</th><th class="text-end">Owed</th><th class="text-end">Ready to pay</th><th class="text-end">Paid to date</th><th>Last paid</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _result.Items)
+                    {
+                        <tr data-testid="seller-row" data-seller="@s.SellerAppUserId">
+                            <td><a href="@($"/admin/store/sellers/{s.SellerAppUserId}")" class="fw-medium">@s.Name</a><div class="small text-secondary">@s.Email</div></td>
+                            <td class="text-end">@s.ItemsOnSale</td>
+                            <td class="text-end">@StoreMoney.Format(s.Owed)</td>
+                            <td class="text-end fw-semibold" data-testid="seller-payable">@StoreMoney.Format(s.PayableNow)</td>
+                            <td class="text-end">@StoreMoney.Format(s.PaidToDate)</td>
+                            <td>@(s.LastPaidOnUtc is { } d ? d.ToString("MM/dd/yyyy") : "–")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+</div>
+
+@code {
+    private LoadResult<StoreSellerBalanceRecord> _result;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetStoreSellerBalancesAsync();
+        _loading = false;
+    }
+}

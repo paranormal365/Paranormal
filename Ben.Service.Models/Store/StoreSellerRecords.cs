@@ -100,3 +100,43 @@ public sealed record SellerParcelRecord(
     IReadOnlyList<SellerParcelLineRecord> Lines, StoreOrderAddressView? ShipTo, decimal LabelCredit,
     string? Carrier, string? TrackingNumber, string? TrackingUrl, DateTime? ShippedUtc, DateTime? DeliveredUtc,
     bool OnHold, bool CanPack, bool CanShip, bool CanCorrectTracking, bool CanDeliver);
+
+// ── Earnings and payouts (P10) ───────────────────────────────────────────────
+
+/// <summary>
+/// One seller's earnings (store sellers, backlog 251, P10), for their own page and the store's.
+/// </summary>
+/// <param name="Owed">Every line not yet paid.</param>
+/// <param name="PayableNow">The unpaid lines up to <paramref name="Cutoff"/> — past the returns window, so a return can no longer take them back.</param>
+/// <param name="Waiting">The unpaid lines still inside the returns window.</param>
+public sealed record SellerEarningsRecord(
+    decimal Owed, decimal PayableNow, decimal Waiting, decimal PaidToDate, DateTime Cutoff,
+    IReadOnlyList<SellerEarningsItemRecord> Items, IReadOnlyList<SellerEarningsOrderRecord> Orders,
+    IReadOnlyList<SellerEarningLineRecord> Lines, IReadOnlyList<SellerPayoutRecord> Payouts,
+    IReadOnlyList<SellerEarningsYearRecord> Years);
+
+public sealed record SellerEarningsItemRecord(Guid ProductId, string Name, int Units, decimal Earned);
+
+public sealed record SellerEarningsOrderRecord(Guid OrderId, int OrderNumber, DateTime EarnedUtc, decimal Earned, bool Paid);
+
+public sealed record SellerEarningLineRecord(
+    Guid Id, StoreEarningKind Kind, decimal Amount, int? Units, string? Note, int? OrderNumber, DateTime OccurredUtc, Guid? PayoutId);
+
+public sealed record SellerPayoutRecord(Guid Id, decimal Amount, DateTime CutoffUtc, DateTime PaidOnUtc, string? Reference, DateTime? VoidedUtc, string? VoidReason);
+
+/// <summary>A calendar year's earnings and payments — what a seller's tax forms want.</summary>
+public sealed record SellerEarningsYearRecord(int Year, decimal Earned, decimal Paid);
+
+/// <summary>A seller on the store's sellers page.</summary>
+public sealed record StoreSellerBalanceRecord(
+    Guid SellerAppUserId, string Name, string? Email, decimal Owed, decimal PayableNow, decimal PaidToDate, DateTime? LastPaidOnUtc, int ItemsOnSale);
+
+/// <summary>The store's view of one seller: their earnings and who they are.</summary>
+public sealed record StoreSellerDetailRecord(Guid SellerAppUserId, string Name, string? Email, SellerEarningsRecord Earnings, int ReturnsWindowDays);
+
+/// <param name="Expected">What the page showed as payable — a payment is refused if the lines changed since.</param>
+public sealed record RecordSellerPaymentRequest(DateTime CutoffUtc, decimal Expected, DateTime PaidOnUtc, string? Reference);
+
+public sealed record VoidSellerPaymentRequest(string Reason);
+
+public sealed record SellerAdjustmentRequest(decimal Amount, string Note);

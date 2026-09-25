@@ -488,7 +488,7 @@ internal static class StoreDemoSeeder
             (new(SeededOrders.SarahTwoPackages, SarahEmail, StoreOrderStatus.PartiallyShipped, [new("KII-EMF", 1), new("HM-REMPOD", 1)],
                 7.95m, 0.0925m, true, "TN", "Nashville", "37203", 2), StoreParcelStatus.Shipped, StoreParcelStatus.Waiting),
             (new(SeededOrders.JamesRemPod, JamesEmail, StoreOrderStatus.Delivered, [new("HM-REMPOD", 1)],
-                0m, 0.07m, false, "IN", "Indianapolis", "46204", 12), StoreParcelStatus.Cancelled, StoreParcelStatus.Delivered),
+                0m, 0.07m, false, "IN", "Indianapolis", "46204", 40), StoreParcelStatus.Cancelled, StoreParcelStatus.Delivered),
         ];
         foreach (var (seed, ours, hers) in seeds)
         {
@@ -529,7 +529,24 @@ internal static class StoreDemoSeeder
             }
             db.StoreOrders.Add(order);
             await StoreOrderNumbers.SaveNumberedAsync(db, order, ct);
+
+            // A package of hers that went is earned (store sellers P10): its units and its label.
+            if (hers is StoreParcelStatus.Shipped or StoreParcelStatus.Delivered)
+            {
+                await StoreSellerLedger.RecordShipmentAsync(db, hersParcel, order.Items.Where(i => i.ParcelId == hersParcel.Id).ToList(),
+                    hersParcel.ShippedUtc ?? placed, ct);
+                await db.SaveChangesAsync(ct);
+            }
         }
+
+        // Hazel's packages that have gone but predate her earnings being kept: earned now, once.
+        var unearned = await db.StoreOrderParcels.Where(x => x.SellerAppUserId == hazel.Id
+                && (x.Status == StoreParcelStatus.Shipped || x.Status == StoreParcelStatus.Delivered)
+                && !db.StoreSellerEarnings.Any(e => e.ParcelId == x.Id)).ToListAsync(ct);
+        foreach (var parcel in unearned)
+            await StoreSellerLedger.RecordShipmentAsync(db, parcel, await db.StoreOrderItems.Where(i => i.ParcelId == parcel.Id).ToListAsync(ct),
+                parcel.ShippedUtc ?? now, ct);
+        await db.SaveChangesAsync(ct);
 
         static StoreOrderParcel NewParcel(StoreOrder order, int number, Guid? seller, string? name, StoreParcelStatus status,
             decimal shipping, decimal shippingTax, decimal credit, DateTime placed)

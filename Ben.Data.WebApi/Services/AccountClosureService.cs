@@ -140,6 +140,27 @@ public sealed class AccountClosureService
         _log.LogInformation("Account {UserId} was closed by its owner at {ClosedAt:u}.",
             userId, user.DateClosed);
 
+        // A seller who leaves with money on the books (store sellers P10): allowed — the store
+        // still owes it, or is owed it — and the SuperAdmins are told, so it is settled by hand.
+        var unpaid = (await db.StoreSellerEarnings.AsNoTracking().Where(e => e.SellerAppUserId == userId && e.PayoutId == null)
+            .Select(e => e.Amount).ToListAsync(ct)).Sum();
+        if (unpaid != 0m)
+        {
+            try
+            {
+                var admins = await Store.StoreAlerts.SuperAdminIdsAsync(db, ct);
+                if (admins.Count > 0)
+                    await new PlatformMessageService(_dbContextFactory).SendAsync(
+                        "A seller closed their account with earnings unpaid",
+                        $"A seller closed their account while {Ben.Service.Models.Store.StoreMoney.Format(unpaid)} of their earnings was unpaid. "
+                      + $"Settle it on their page: /admin/store/sellers/{userId}", admins, admins[0], ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError(ex, "The admins could not be told that closed account {UserId} had unpaid earnings.", userId);
+            }
+        }
+
         return new ClosureResult(true, null);
     }
 
@@ -259,6 +280,10 @@ public sealed class AccountClosureService
         // Tracked rather than ExecuteUpdate: closure's own tests run on the InMemory provider.
         foreach (var sold in await db.StoreProducts.Where(p => p.SellerAppUserId == userId).ToListAsync(ct))
             sold.SellerAppUserId = null;
+        // Their name on the packages they sent goes too (store sellers P10): the buyer's "Ships
+        // from" reads as a former seller. The packages and the earnings stay — they are money records.
+        foreach (var sent in await db.StoreOrderParcels.Where(x => x.SellerAppUserId == userId && x.SellerName != null).ToListAsync(ct))
+            sent.SellerName = AccountClosure.FormerMemberName;
         await db.SaveChangesAsync(ct);
 
         // Bytes after the rows, and never fatal: a closure that has already anonymised the

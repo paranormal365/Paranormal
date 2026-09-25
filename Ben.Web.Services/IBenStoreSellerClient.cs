@@ -68,6 +68,10 @@ public interface IBenStoreSellerClient
 
     Task<(SellerItemRecord? Result, string? Error)> DeleteSellerItemImageAsync(Guid productId, Guid imageId, CancellationToken token = default);
 
+    // ── earnings (P10) ───────────────────────────────────────────────────────
+
+    Task<ItemResult<SellerEarningsRecord>> GetMySellerEarningsAsync(CancellationToken token = default);
+
     // ── packages (P7) ────────────────────────────────────────────────────────
 
     Task<LoadResult<SellerParcelRecord>> GetMySellerParcelsAsync(bool openOnly = false, CancellationToken token = default);

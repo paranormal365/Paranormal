@@ -1214,6 +1214,28 @@ product's **cost basis**, rounded to the cent once at the end. A seller keeps th
 the store keeps the list for its own stock. A seller is paid cost basis plus their approved asking
 price for each unit sold. None of it is ever shown to shoppers.
 
+## Paying sellers
+
+Payouts are made by hand: the store takes the whole payment for every order and pays its sellers
+outside the site — a bank transfer, a check — then records it. **Store → Sellers** lists everyone
+with the Seller role or earnings on the books: what each is **owed**, what's **ready to pay**, what
+they've been paid to date and when last.
+
+A seller's earnings are written when their package **ships**: cost + asking price for each unit (as
+fixed when the order was placed) and the label credit. A refund of units that had shipped takes
+their earning back; units refunded before shipping were never earned. A refund by amount is the
+store's to bear — add an **Adjustment…** (with a note the seller reads) to charge a seller for one.
+
+**Ready to pay** is what's older than the returns window, so a return can't take it back after it's
+paid. On a seller's page, **Record payment…** pays either what's ready or everything owed; it marks
+exactly those earnings paid. If their earnings changed while the page was open, it refuses and says
+the new figure — record it again. A seller who owes the store (refunds after payment) carries it
+forward: nothing can be recorded until their balance is positive again. **Void…** a payment recorded
+in error and its earnings are owed again. **Export CSV** lists every line with when it was paid.
+
+A seller who closes their account with earnings unpaid is allowed to; the SuperAdmins are told, and
+their page stays here to settle it.
+
 ## Economics and fees
 
 A product's **Parts & cost** tab ends with its **Economics**: what a unit costs to make, what its

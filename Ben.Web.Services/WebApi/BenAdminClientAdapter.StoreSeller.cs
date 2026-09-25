@@ -91,6 +91,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<UpdateStoreImageRequest, SellerItemRecord>(
                HttpMethod.Put, $"/api/seller/store/products/{productId}/images/{imageId}", request, token);
 
+    public Task<ItemResult<SellerEarningsRecord>> GetMySellerEarningsAsync(CancellationToken token = default)
+        => _api.GetItemAsync<SellerEarningsRecord>("/api/seller/store/earnings", token);
+
     public Task<LoadResult<SellerParcelRecord>> GetMySellerParcelsAsync(bool openOnly = false, CancellationToken token = default)
         => _api.GetListAsync<SellerParcelRecord>("/api/seller/store/parcels" + (openOnly ? "?open=true" : ""), token);
 

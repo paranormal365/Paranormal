@@ -273,6 +273,9 @@ public sealed class StoreRefundService(
             {
                 order.Status = StoreOrderStatus.Refunded;
             }
+            // Units a seller had already earned — shipped — take their earning back (store sellers P10).
+            await StoreSellerLedger.RecordRefundAsync(db, refundId, now, ct);
+
             // One package cancelled (store sellers P8): it will not go, and the order reads what is left.
             if (parcelCancelled is { } gone && !cancelling)
             {

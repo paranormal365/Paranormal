@@ -363,7 +363,8 @@ database needs, in order, **before** the code is deployed:
    columns; one package backfilled per existing order). Additive — except `StoreOrderTrackingToParcels`,
    which moves any order-level tracking onto package 1 and then drops StoreOrders' Carrier, TrackingNumber
    and TrackingUrl. Deploy the code with it: the old code reads those columns. Then `StoreRefundShipping`
-   (one new table) and `StoreEconomics` (six columns; old lines' markup set to their price).
+   (one new table), `StoreEconomics` (six columns; old lines' markup set to their price) and
+   `StoreSellerEarnings` (two new tables).
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

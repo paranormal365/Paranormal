@@ -76,7 +76,7 @@ public sealed class StoreControllersAreGatedTests
         var admin = typeof(PublicStoreController).Assembly.GetTypes()
             .Where(t => t.Namespace == "Ben.Data.WebApi.Controllers.Admin.Store" && t.Name.EndsWith("Controller", StringComparison.Ordinal))
             .ToList();
-        Assert.Equal(9, admin.Count);   // S5.4 added the order desk; store sellers P3 the sale-request queue
+        Assert.Equal(10, admin.Count);   // S5.4 added the order desk; store sellers P3 the sale-request queue, P10 the sellers' books
         Assert.All(admin, t =>
         {
             Assert.Equal(Ben.Data.Common.Constants.RoleNames.SuperAdmin, t.GetCustomAttribute<AuthorizeAttribute>()?.Policy);

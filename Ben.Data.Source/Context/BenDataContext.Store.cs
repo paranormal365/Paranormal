@@ -345,6 +345,34 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.OrderItemId).OnDelete(DeleteBehavior.NoAction);
             refundItem.ToTable(t => t.HasCheckConstraint("CK_StoreRefundItems_Quantity", "[Quantity] >= 1"));
 
+            // Store sellers P10: what sellers are owed, and what they've been paid. Every person key is
+            // NoAction: these are money records, kept when an account goes (its name is anonymised).
+            var earning = modelBuilder.Entity<StoreSellerEarning>();
+            earning.Property(e => e.Amount).HasPrecision(18, 2);
+            earning.Property(e => e.Note).HasMaxLength(StoreSellerPayout.MaxNoteLength);
+            earning.HasIndex(e => new { e.SellerAppUserId, e.PayoutId, e.OccurredUtc });
+            earning.HasIndex(e => e.OrderItemId).IsUnique().HasFilter("[Kind] = 0");
+            earning.HasIndex(e => e.ParcelId).IsUnique().HasFilter("[Kind] = 1");
+            earning.HasIndex(e => new { e.RefundId, e.OrderItemId }).IsUnique().HasFilter("[Kind] = 2");
+            earning.HasOne(e => e.SellerAppUser).WithMany()
+                .HasForeignKey(e => e.SellerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            earning.HasOne(e => e.Payout).WithMany()
+                .HasForeignKey(e => e.PayoutId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            earning.HasOne<AppUser>().WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            var payout = modelBuilder.Entity<StoreSellerPayout>();
+            payout.Property(e => e.Amount).HasPrecision(18, 2);
+            payout.Property(e => e.Reference).HasMaxLength(StoreSellerPayout.MaxNoteLength);
+            payout.Property(e => e.VoidReason).HasMaxLength(StoreSellerPayout.MaxNoteLength);
+            payout.HasIndex(e => new { e.SellerAppUserId, e.PaidOnUtc });
+            payout.HasOne(e => e.SellerAppUser).WithMany()
+                .HasForeignKey(e => e.SellerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            payout.HasOne<AppUser>().WithMany()
+                .HasForeignKey(e => e.RecordedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            payout.HasOne<AppUser>().WithMany()
+                .HasForeignKey(e => e.VoidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // Store sellers P8: package shipping given back with a refund.
             var refundShipping = modelBuilder.Entity<StoreRefundShipping>();
             refundShipping.Property(e => e.Amount).HasPrecision(18, 2);

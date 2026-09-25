@@ -179,6 +179,10 @@ public sealed class StoreParcelTransitions(
             if (rolled == StoreOrderStatus.Delivered) tracked0.DeliveredUtc ??= now;
         }
 
+        // A seller's package that has gone is earned now — its units and its label (store sellers P10).
+        if (to == StoreParcelStatus.Shipped)
+            await StoreSellerLedger.RecordShipmentAsync(db, tracked, tracked0.Items.Where(i => i.ParcelId == parcelId).ToList(), now, ct);
+
         db.StoreOrderEvents.Add(Event(orderId, parcelId, kind, was, tracked0.Status, actor, now,
             $"Package {tracked.Number}" + (note is null ? "" : $": {note}")));
 
