@@ -310,6 +310,24 @@ public class AdminStoreCatalogTests : BenTestBase
     }
 
     [Test]
+    [Description("An item's History tab lists who changed what, newest first — the price line included for the store's staff.")]
+    public async Task The_history_tab_says_who_changed_what()
+    {
+        using var api = await StoreTestApi.OpenAsync();
+        var product = await api.ProductAsync(await api.CategoryAsync(Unique("Trigger Objects")), Unique("REM Pod"), live: true);
+
+        await Page.GotoAsync($"{BaseUrl}/admin/store/products/{product.GetProperty("id").GetGuid()}/edit?tab=history");
+        await WaitForTheCircuitAsync();
+
+        var lines = Page.Locator("[data-testid=product-history-line]");
+        await Expect(lines.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(lines.First.Locator("[data-testid=product-history-summary]")).ToHaveTextAsync("Put it on sale.");
+        await Expect(lines.Last.Locator("[data-testid=product-history-summary]")).ToHaveTextAsync("Created it.");
+        await Expect(Page.Locator("[data-testid=product-history-line][data-area=Price]")).ToContainTextAsync("$39.00");
+        await Expect(lines.First.Locator("[data-testid=product-history-actor]")).Not.ToHaveTextAsync("The store");
+    }
+
+    [Test]
     [Description("Hiding a category says how many live products go with it BEFORE saving, then hides them.")]
     public async Task Category_deactivate_warns_about_live_products()
     {

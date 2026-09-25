@@ -345,6 +345,16 @@ namespace Ben.Data.Source.Context
             movement.HasOne(e => e.ActorAppUser).WithMany()
                 .HasForeignKey(e => e.ActorAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             movement.ToTable(t => t.HasCheckConstraint("CK_StoreStockMovements_Delta", "[Delta] <> 0"));
+
+            // Store sellers P2: an item's history. It goes with the item (only a never-sold item
+            // can be deleted); the person who made a change is NoAction, like the stock log's.
+            var change = modelBuilder.Entity<StoreProductChange>();
+            change.Property(e => e.Summary).HasMaxLength(StoreProductChange.MaxSummaryLength);
+            change.HasIndex(e => new { e.ProductId, e.OccurredUtc });
+            change.HasOne(e => e.Product).WithMany()
+                .HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            change.HasOne(e => e.ActorAppUser).WithMany()
+                .HasForeignKey(e => e.ActorAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
         }
 
         // ── M3: favourites, reviews and helpful votes ─────────────────────────────────────

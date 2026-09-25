@@ -355,6 +355,10 @@ database needs, in order, **before** the code is deployed:
    `StoreSubcategories` — `dotnet ef database update` with an explicit `--connection` (it ignores
    the environment variable). Additive: 21 new tables, two new nullable columns; nothing existing is
    changed or dropped.
+
+   With the sellers work (branch `store-sellers`), then: `StoreProductSaleCounters` (one nullable
+   column, backfilled from paid orders) and `StoreProductHistory` (one new table, a "Created it."
+   line backfilled per product). Additive as well.
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

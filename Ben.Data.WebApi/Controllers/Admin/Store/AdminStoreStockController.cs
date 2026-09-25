@@ -19,8 +19,8 @@ namespace Ben.Data.WebApi.Controllers.Admin.Store;
 /// <remarks>
 /// <para><b>All or nothing.</b> A delivery is one event; a save that applied four lines and
 /// refused the fifth would leave the shelf matching neither the delivery note nor what the admin
-/// typed. <see cref="StoreStock.AdjustManyAsync"/> runs every line in one transaction and names the
-/// SKU that stopped it.</para>
+/// typed. <see cref="StoreProductHistory.AdjustStockAsync"/> runs every line in one transaction,
+/// names the SKU that stopped it, and leaves each item a line in its history (store sellers P2).</para>
 ///
 /// <para><b>Available is what matters.</b> On hand less what checkouts in progress are holding —
 /// the same figure the product page's "Only 3 left" uses.</para>
@@ -55,9 +55,9 @@ public sealed class AdminStoreStockController(IDbContextFactory<BenDataContext> 
             return BadRequest("Nothing was changed — the same item is listed twice.");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var refusal = await StoreStock.AdjustManyAsync(db,
+        var refusal = await StoreProductHistory.AdjustStockAsync(db,
             lines.Select(l => new StoreStockChange(l.VariantId, l.Delta, l.SetTo)).ToList(),
-            request.Reason, request.Note, userId, DateTime.UtcNow, ct);
+            request.Reason, request.Note, userId, StoreChangeActor.Store, DateTime.UtcNow, ct);
         if (refusal is not null) return BadRequest(refusal);
 
         return Ok(new StoreStockAdjusted(lines.Count, await RowsAsync(db, null, false, ct)));
@@ -102,8 +102,8 @@ public sealed class AdminStoreStockController(IDbContextFactory<BenDataContext> 
         }
         if (changes.Count == 0) return BadRequest("Nothing was changed — every row's change was 0.");
 
-        var refusal = await StoreStock.AdjustManyAsync(db, changes, StoreStockReason.Received,
-            string.IsNullOrWhiteSpace(note) ? $"Imported from {Path.GetFileName(file.FileName)}" : note, userId, DateTime.UtcNow, ct);
+        var refusal = await StoreProductHistory.AdjustStockAsync(db, changes, StoreStockReason.Received,
+            string.IsNullOrWhiteSpace(note) ? $"Imported from {Path.GetFileName(file.FileName)}" : note, userId, StoreChangeActor.Store, DateTime.UtcNow, ct);
         if (refusal is not null) return BadRequest(refusal);
 
         return Ok(new StoreStockAdjusted(changes.Count, await RowsAsync(db, null, false, ct)));

@@ -107,6 +107,13 @@ public sealed record StoreStockMovementRecord(
     Guid Id, int Delta, int QuantityAfter, StoreStockReason Reason, string? Note, Guid? OrderId,
     int? OrderNumber, DateTime OccurredUtc, string? ActorDisplayName);
 
+/// <summary>
+/// One line of an item's history (store sellers, backlog 251, P2). <paramref name="ActorName"/> is
+/// the person's name for the store's staff; a seller reads "You" or "The store" instead.
+/// </summary>
+public sealed record StoreProductChangeRecord(
+    Guid Id, StoreProductChangeArea Area, string Summary, StoreChangeActor ActorRole, string ActorName, DateTime OccurredUtc);
+
 /// <summary>What a bulk receive or a CSV import changed.</summary>
 public sealed record StoreStockAdjusted(int VariantsChanged, IReadOnlyList<StoreStockRow> Rows);
 

@@ -117,6 +117,9 @@ public sealed partial class BenAdminClientAdapter
         Guid productId, Guid variantId, CancellationToken token = default)
         => _api.GetListAsync<StoreStockMovementRecord>($"/api/admin/store/products/{productId}/variants/{variantId}/stock", token);
 
+    public Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default)
+        => _api.GetListAsync<StoreProductChangeRecord>($"/api/admin/store/products/{productId}/history", token);
+
     public Task<(StoreProductAdminRecord? Result, string? Error)> AddStoreProductImageAsync(
         Guid productId, MultipartFormDataContent content, CancellationToken token = default)
         => _api.PostMultipartExpectingReasonAsync<StoreProductAdminRecord>($"/api/admin/store/products/{productId}/images", content, token);

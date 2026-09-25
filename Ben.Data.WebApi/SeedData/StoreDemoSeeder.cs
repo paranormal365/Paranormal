@@ -227,9 +227,15 @@ internal static class StoreDemoSeeder
             variants: [new("HM-EMFLOG", [], 0m, null, 0, Default: true)],
             specs: []);
 
-        await db.StoreProducts
+        var given = await db.StoreProducts
             .Where(p => (p.Id == SeededSellerProducts.RemPod || p.Id == SeededSellerProducts.EmfLogger) && p.SellerAppUserId == null)
+            .Select(p => p.Id).ToListAsync(ct);
+        if (given.Count == 0) return;
+        await db.StoreProducts.Where(p => given.Contains(p.Id))
             .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAppUserId, seller), ct);
+        foreach (var id in given)
+            StoreProductHistory.Record(db, id, StoreProductChangeArea.Seller, "Gave it to Hazel Marsh to sell.", ownerId, StoreChangeActor.Store, now.AddSeconds(1));
+        await db.SaveChangesAsync(ct);
     }
 
     // ── Orders (storefront S4.12) ────────────────────────────────────────────
@@ -526,6 +532,10 @@ internal static class StoreDemoSeeder
             ShortDescription = shortDescription, LongDescriptionHtml = html, IsActive = active, IsFeatured = featured,
             NewUntilUtc = newUntil, SortOrder = n, DateCreated = now, CreatedByAppUserId = ownerId,
         });
+        // Its history opens as the admin pages would have written it (store sellers P2).
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Created, "Created it.", ownerId, StoreChangeActor.Store, now);
+        if (active)
+            StoreProductHistory.Record(db, productId, StoreProductChangeArea.Sale, "Put it on sale.", ownerId, StoreChangeActor.Store, now.AddSeconds(2));
 
         // Options and their values, with ids derived from the product's so a re-run is stable.
         var valueIds = new Dictionary<string, Guid>();

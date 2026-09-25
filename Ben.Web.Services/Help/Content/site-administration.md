@@ -1167,6 +1167,17 @@ variant, so choosing that colour shows that photograph. Every picture is stored 
 the camera details and location are removed — sized for a sharp product page, with a small copy
 for cards and the cart. A live product keeps at least one picture.
 
+## A product's history
+
+The **History** tab on a product lists every change to it, newest first: who made it, when, and
+what it was, in a sentence — "Renamed it from “REM Pod” to “REM Pod II”", "Changed Default’s
+price from $59.99 to $64.99", "Received 12 of Large". It covers details, going on and off sale,
+the seller, options, variants, prices, stock counted in or written off, and pictures. Sales and
+refunds are in each variant's stock log instead. A save that changed nothing adds no line.
+
+When an item has a seller, the seller sees its history too, with two differences: price lines
+are left out, and a change the store's staff made reads **The store** rather than a name.
+
 ## Discount codes
 
 Store discount codes (GHOST10) are separate from the plan coupons under Billing. A code takes a

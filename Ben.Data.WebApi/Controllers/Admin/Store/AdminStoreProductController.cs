@@ -143,6 +143,7 @@ public sealed partial class AdminStoreProductController(
             OptionSignature = string.Empty, Price = 0m, IsActive = true, IsDefault = true,
             DateCreated = now, CreatedByAppUserId = userId,
         });
+        StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Created, "Created it.", userId, StoreChangeActor.Store, now);
         await db.SaveChangesAsync(ct);
         await TryAuditAsync(auditLog.LogCreateAsync(nameof(StoreProduct), product.Id, product, userId, AppSources.WebApi));
 
@@ -159,6 +160,7 @@ public sealed partial class AdminStoreProductController(
         var product = await db.StoreProducts.Include(p => p.Specs).FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null) return NotFound();
         var before = Clone(product);
+        var was = StoreProductHistory.DetailsSnapshot.Of(product, product.Specs);
 
         var name = request.Name?.Trim();
         if (string.IsNullOrEmpty(name)) return BadRequest("A product needs a name.");
@@ -207,15 +209,22 @@ public sealed partial class AdminStoreProductController(
         product.UpdatedByAppUserId = userId;
 
         db.StoreProductSpecs.RemoveRange(product.Specs);
+        var specs = new List<StoreProductSpec>();
         var order = 0;
         foreach (var group in request.Specs ?? [])
             foreach (var item in group.Items ?? [])
-                db.StoreProductSpecs.Add(new StoreProductSpec
+                specs.Add(new StoreProductSpec
                 {
                     Id = Guid.NewGuid(), ProductId = id, GroupName = group.GroupName.Trim(),
                     Name = item.Name.Trim(), Value = item.Value.Trim(), SortOrder = order++,
                     DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
                 });
+        db.StoreProductSpecs.AddRange(specs);
+
+        var becomes = StoreProductHistory.DetailsSnapshot.Of(product, specs);
+        StoreProductHistory.Record(db, id,
+            StoreProductHistory.DescribeDetails(was, becomes, await HistoryNamesAsync(db, was, becomes, ct)),
+            userId, StoreChangeActor.Store, product.DateUpdated.Value);
 
         await db.SaveChangesAsync(ct);
         await TryAuditAsync(auditLog.LogUpdateAsync(nameof(StoreProduct), id, before, product, userId, AppSources.WebApi));
@@ -345,6 +354,8 @@ public sealed partial class AdminStoreProductController(
             });
         }
 
+        StoreProductHistory.Record(db, copy.Id, StoreProductChangeArea.Created, $"Copied it from “{source.Name}”.",
+            userId, StoreChangeActor.Store, now);
         await db.SaveChangesAsync(ct);
         await StorePriceCaches.RecomputeAsync(db, copy.Id, ct);
         await TryAuditAsync(auditLog.LogCreateAsync(nameof(StoreProduct), copy.Id, copy, userId, AppSources.WebApi));
@@ -415,6 +426,8 @@ public sealed partial class AdminStoreProductController(
         }
 
         var now = DateTime.UtcNow;
+        var optionsWere = OptionsKey(product.Options.OrderBy(o => o.SortOrder)
+            .Select(o => (o.Name, o.Values.OrderBy(v => v.SortOrder).Select(v => (v.Value, v.IsActive, v.SwatchHex)))));
         var keptOptions = wanted.Where(o => o.Id is not null).Select(o => o.Id!.Value).ToHashSet();
         db.StoreProductOptionValues.RemoveRange(leaving);
         db.StoreProductOptions.RemoveRange(product.Options.Where(o => !keptOptions.Contains(o.Id)));
@@ -452,9 +465,24 @@ public sealed partial class AdminStoreProductController(
 
         product.DateUpdated = now;
         product.UpdatedByAppUserId = userId;
+        var optionsNow = OptionsKey(wanted.Select(o => (o.Name.Trim(),
+            o.Values.Select(v => (v.Value.Trim(), v.IsActive, o.Kind == StoreOptionKind.Swatch ? v.SwatchHex!.Trim().ToLowerInvariant() : null)))));
+        if (optionsNow.Said != optionsWere.Said)
+            StoreProductHistory.Record(db, id, StoreProductChangeArea.Options, optionsNow.Said, userId, StoreChangeActor.Store, now);
+        else if (optionsNow.Colours != optionsWere.Colours)
+            StoreProductHistory.Record(db, id, StoreProductChangeArea.Options, "Changed the swatch colours.", userId, StoreChangeActor.Store, now);
         await db.SaveChangesAsync(ct);
         await StorePriceCaches.RecomputeAsync(db, id, ct);
         return Ok(await LoadAsync(db, id, ct));
+    }
+
+    /// <summary>What an option list says in the history, and its swatch colours apart.</summary>
+    private static (string Said, string Colours) OptionsKey(
+        IEnumerable<(string Name, IEnumerable<(string Value, bool IsActive, string? SwatchHex)> Values)> options)
+    {
+        var list = options.Select(o => (o.Name, Values: o.Values.ToList())).ToList();
+        return (StoreProductHistory.DescribeOptions(list.Select(o => (o.Name, o.Values.Select(v => v.IsActive ? v.Value : $"{v.Value} (off)")))),
+                string.Join("|", list.SelectMany(o => o.Values.Select(v => v.SwatchHex))));
     }
 
     /// <summary>
@@ -529,6 +557,10 @@ public sealed partial class AdminStoreProductController(
                 variants.Where(v => v.IsActive).OrderBy(v => v.SortOrder).First().IsDefault = true;
         }
 
+        if (added > 0)
+            StoreProductHistory.Record(db, id, StoreProductChangeArea.Variants,
+                added == 1 ? "Added a variant for the one new combination of choices." : $"Added {added} variants, one for each new combination of choices.",
+                userId, StoreChangeActor.Store, now);
         await db.SaveChangesAsync(ct);
         await StorePriceCaches.RecomputeAsync(db, id, ct);
         var record = await LoadAsync(db, id, ct);
@@ -551,6 +583,8 @@ public sealed partial class AdminStoreProductController(
         };
         if (await ApplyVariantAsync(db, product, variant, request, isNew: true, ct) is { } refused) return refused;
         db.StoreProductVariants.Add(variant);
+        StoreProductHistory.Record(db, id, StoreProductHistory.DescribeNewVariant(variant, request.InitialStock ?? 0),
+            userId, StoreChangeActor.Store, variant.DateCreated);
         await db.SaveChangesAsync(ct);
 
         if (request.InitialStock is > 0 and var stock)
@@ -575,9 +609,12 @@ public sealed partial class AdminStoreProductController(
             && !await db.StoreProductVariants.AnyAsync(v => v.ProductId == id && v.Id != variantId && v.IsActive, ct))
             return BadRequest(LastLiveVariant);
 
+        var variantWas = StoreProductHistory.VariantSnapshot.Of(variant);
         if (await ApplyVariantAsync(db, product, variant, request, isNew: false, ct) is { } refused) return refused;
         variant.DateUpdated = DateTime.UtcNow;
         variant.UpdatedByAppUserId = userId;
+        StoreProductHistory.Record(db, id, StoreProductHistory.DescribeVariant(variantWas, StoreProductHistory.VariantSnapshot.Of(variant)),
+            userId, StoreChangeActor.Store, variant.DateUpdated.Value);
         await db.SaveChangesAsync(ct);
 
         await StorePriceCaches.RecomputeAsync(db, id, ct);
@@ -587,7 +624,7 @@ public sealed partial class AdminStoreProductController(
     [HttpDelete("{id:guid}/variants/{variantId:guid}")]
     public async Task<ActionResult<StoreProductAdminRecord>> DeleteVariant(Guid id, Guid variantId, CancellationToken ct)
     {
-        GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var product = await db.StoreProducts.FirstOrDefaultAsync(p => p.Id == id, ct);
         var variant = await db.StoreProductVariants.FirstOrDefaultAsync(v => v.Id == variantId && v.ProductId == id, ct);
@@ -603,6 +640,8 @@ public sealed partial class AdminStoreProductController(
             .ExecuteUpdateAsync(s => s.SetProperty(i => i.VariantId, (Guid?)null), ct);
         db.StoreProductVariants.Remove(variant);
         if (variant.IsDefault) (others.FirstOrDefault(v => v.IsActive) ?? others[0]).IsDefault = true;
+        StoreProductHistory.Record(db, id, StoreProductChangeArea.Variants,
+            $"Removed {StorePriceCaches.Label(variant.Name)} ({variant.Sku}).", userId, StoreChangeActor.Store, DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
 
         await StorePriceCaches.RecomputeAsync(db, id, ct);
@@ -622,8 +661,8 @@ public sealed partial class AdminStoreProductController(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (!await db.StoreProductVariants.AnyAsync(v => v.Id == variantId && v.ProductId == id, ct)) return NotFound();
 
-        var refusal = await StoreStock.AdjustManyAsync(db, [new StoreStockChange(variantId, request.Delta, request.SetTo)],
-            request.Reason, request.Note, userId, DateTime.UtcNow, ct);
+        var refusal = await StoreProductHistory.AdjustStockAsync(db, [new StoreStockChange(variantId, request.Delta, request.SetTo)],
+            request.Reason, request.Note, userId, StoreChangeActor.Store, DateTime.UtcNow, ct);
         if (refusal is not null) return BadRequest(refusal);
 
         return Ok(await LoadAsync(db, id, ct));
@@ -645,6 +684,41 @@ public sealed partial class AdminStoreProductController(
                 db.AppUsers.Where(u => u.Id == m.ActorAppUserId).Select(u => u.DisplayName ?? u.UserName).FirstOrDefault()))
             .ToListAsync(ct));
     }
+
+    // ── history ──────────────────────────────────────────────────────────────
+
+    /// <summary>Who changed what, newest first (store sellers P2) — every line, with names.</summary>
+    [HttpGet("{id:guid}/history")]
+    public async Task<ActionResult<IEnumerable<StoreProductChangeRecord>>> History(
+        Guid id, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await db.StoreProducts.AnyAsync(p => p.Id == id, ct)) return NotFound();
+        return Ok(ListPaging.Apply(await StoreProductHistory.ReadAsync(db, id, forSeller: null, ct), page, pageSize, Response));
+    }
+
+    /// <summary>The names a details line needs: the categories, equipment and sellers that changed.</summary>
+    private static async Task<Dictionary<Guid, string>> HistoryNamesAsync(
+        BenDataContext db, StoreProductHistory.DetailsSnapshot was, StoreProductHistory.DetailsSnapshot now, CancellationToken ct)
+    {
+        var names = new Dictionary<Guid, string>();
+        if (was.CategoryId != now.CategoryId)
+            foreach (var c in await db.StoreCategories.AsNoTracking().Where(c => c.Id == was.CategoryId || c.Id == now.CategoryId)
+                         .Select(c => new { c.Id, c.Name }).ToListAsync(ct))
+                names[c.Id] = c.Name;
+        if (was.EquipmentModelId != now.EquipmentModelId && now.EquipmentModelId is { } model)
+            foreach (var m in await db.EquipmentModels.AsNoTracking().Where(m => m.Id == model)
+                         .Select(m => new { m.Id, m.Name, Brand = m.EquipmentBrand.Name }).ToListAsync(ct))
+                names[m.Id] = $"{m.Brand} {m.Name}";
+        if (was.SellerAppUserId != now.SellerAppUserId)
+            foreach (var u in await db.AppUsers.AsNoTracking().Where(u => u.Id == was.SellerAppUserId || u.Id == now.SellerAppUserId)
+                         .Select(u => new { u.Id, u.DisplayName }).ToListAsync(ct))
+                names[u.Id] = u.DisplayName ?? "a seller";   // never an email: the seller reads this too
+        return names;
+    }
+
+    private static async Task<string> VariantLabelAsync(BenDataContext db, Guid variantId, CancellationToken ct)
+        => StorePriceCaches.Label(await db.StoreProductVariants.AsNoTracking().Where(v => v.Id == variantId).Select(v => v.Name).FirstOrDefaultAsync(ct));
 
     /// <summary>Why a stock request cannot be applied as asked, or null. Shared with the stock page.</summary>
     internal static string? StockRequestProblem(int? delta, int? setTo, StoreStockReason reason)
@@ -687,6 +761,9 @@ public sealed partial class AdminStoreProductController(
             SortOrder = (await db.StoreProductImages.Where(i => i.ProductId == id).MaxAsync(i => (int?)i.SortOrder, ct) ?? -1) + 1,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
+        StoreProductHistory.Record(db, id, StoreProductChangeArea.Pictures,
+            variantId is { } shows ? $"Added a picture of {await VariantLabelAsync(db, shows, ct)}." : "Added a picture.",
+            userId, StoreChangeActor.Store, DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
         return Ok(await LoadAsync(db, id, ct));
     }
@@ -695,14 +772,16 @@ public sealed partial class AdminStoreProductController(
     public async Task<ActionResult<StoreProductAdminRecord>> ReorderImages(
         Guid id, [FromBody] ReorderRequest request, CancellationToken ct)
     {
-        GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var pictures = await db.StoreProductImages.Where(i => i.ProductId == id).ToListAsync(ct);
         var ordered = request.OrderedIds ?? [];
         if (ordered.Count != pictures.Count || !pictures.All(p => ordered.Contains(p.Id)))
             return BadRequest("That isn't the full list of pictures.");
 
+        var moved = pictures.Any(p => p.SortOrder != IndexOf(ordered, p.Id));
         foreach (var picture in pictures) picture.SortOrder = IndexOf(ordered, picture.Id);
+        if (moved) StoreProductHistory.Record(db, id, StoreProductChangeArea.Pictures, "Reordered the pictures.", userId, StoreChangeActor.Store, DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
         return Ok(await LoadAsync(db, id, ct));
     }
@@ -720,10 +799,15 @@ public sealed partial class AdminStoreProductController(
         var alt = Trimmed(request.AltText);
         if (alt?.Length > 200) return BadRequest("A picture's description is 200 characters at most.");
 
+        var said = new List<string>();
+        if (picture.AltText != alt) said.Add("Changed a picture’s description.");
+        if (picture.VariantId != request.VariantId)
+            said.Add(request.VariantId is { } shows ? $"Showed a picture with {await VariantLabelAsync(db, shows, ct)}." : "Showed a picture with every variant.");
         picture.AltText = alt;
         picture.VariantId = request.VariantId;
         picture.DateUpdated = DateTime.UtcNow;
         picture.UpdatedByAppUserId = userId;
+        StoreProductHistory.Record(db, id, StoreProductChangeArea.Pictures, string.Join(" ", said), userId, StoreChangeActor.Store, picture.DateUpdated.Value);
         await db.SaveChangesAsync(ct);
         return Ok(await LoadAsync(db, id, ct));
     }
@@ -731,7 +815,7 @@ public sealed partial class AdminStoreProductController(
     [HttpDelete("{id:guid}/images/{imageId:guid}")]
     public async Task<ActionResult<StoreProductAdminRecord>> DeleteImage(Guid id, Guid imageId, CancellationToken ct)
     {
-        GetCurrentUserIdOrThrow();
+        var userId = GetCurrentUserIdOrThrow();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var product = await db.StoreProducts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
         var picture = await db.StoreProductImages.FirstOrDefaultAsync(i => i.Id == imageId && i.ProductId == id, ct);
@@ -740,6 +824,7 @@ public sealed partial class AdminStoreProductController(
             return BadRequest("A live product keeps at least one picture. Add another first, or take it off sale.");
 
         db.StoreProductImages.Remove(picture);
+        StoreProductHistory.Record(db, id, StoreProductChangeArea.Pictures, "Removed a picture.", userId, StoreChangeActor.Store, DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
         await images.RemoveAsync(db, picture.UploadFileId, ct);
         return Ok(await LoadAsync(db, id, ct));
@@ -765,6 +850,8 @@ public sealed partial class AdminStoreProductController(
             product.IsActive = on;
             product.DateUpdated = DateTime.UtcNow;
             product.UpdatedByAppUserId = userId;
+            StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Sale, on ? "Put it on sale." : "Took it off sale.",
+                userId, StoreChangeActor.Store, product.DateUpdated.Value);
             await db.SaveChangesAsync(ct);
             await TryAuditAsync(auditLog.LogUpdateAsync(nameof(StoreProduct), product.Id, before, product, userId, AppSources.WebApi));
         }

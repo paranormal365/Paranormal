@@ -83,6 +83,9 @@ public interface IBenStoreAdminClient
     Task<LoadResult<StoreStockMovementRecord>> GetStoreVariantStockLogAsync(
         Guid productId, Guid variantId, CancellationToken token = default);
 
+    /// <summary>An item's history, newest first, every line with names (store sellers P2).</summary>
+    Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default);
+
     /// <summary>A multipart body: the picture in <c>file</c>, optionally <c>altText</c> and <c>variantId</c>.</summary>
     Task<(StoreProductAdminRecord? Result, string? Error)> AddStoreProductImageAsync(
         Guid productId, MultipartFormDataContent content, CancellationToken token = default);

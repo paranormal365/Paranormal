@@ -14,4 +14,7 @@ public interface IBenStoreSellerClient
     Task<LoadResult<SellerProductListRecord>> GetMySellerProductsAsync(CancellationToken token = default);
 
     Task<ItemResult<SellerWorkspaceSummary>> GetSellerWorkspaceSummaryAsync(CancellationToken token = default);
+
+    /// <summary>One of the caller's items' history — no store price lines, the staff as "The store".</summary>
+    Task<LoadResult<StoreProductChangeRecord>> GetMySellerProductHistoryAsync(Guid productId, CancellationToken token = default);
 }

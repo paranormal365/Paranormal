@@ -1,5 +1,6 @@
 @page "/admin/store/products/{ProductId:guid}/edit"
 @using Ben.Web.Website.Library.Store.Shared
+@using Ben.Web.Website.Library.Store.Editor
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -58,7 +59,7 @@
                 <div class="alert alert-danger" id="product-refusal">@_pageError</div>
             }
 
-            <BenTabs @bind-ActiveId="_tab" NavClass="nav-tabs flex-wrap">
+            <BenTabs @bind-ActiveId="_tab" @bind-ActiveId:after="TabChangedAsync" NavClass="nav-tabs flex-wrap">
                 <BenTab Title="Details" Id="details">
                     <div class="row g-3 pt-3">
                         <div class="col-md-8">
@@ -334,6 +335,13 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="History" Id="history">
+                    <div class="pt-3">
+                        <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
+                        <StoreProductHistoryList Result="_history" Loading="_historyLoading" OnRetry="LoadHistoryAsync" />
+                    </div>
+                </BenTab>
+
                 <BenTab Title="Preview" Id="preview">
                     <div class="pt-3">
                         <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-testid="editor-preview">
@@ -562,8 +570,25 @@
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
         _settings = await AdminClient.GetStoreSettingsAsync();
-        if (Tab is "details" or "variants" or "pictures" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "history" or "preview") _tab = Tab;
         await LoadAsync();
+        await TabChangedAsync();
+    }
+
+    private LoadResult<StoreProductChangeRecord> _history;
+    private bool _historyLoading;
+
+    /// <summary>The history loads when its tab opens, so it always includes the save just made.</summary>
+    private async Task TabChangedAsync()
+    {
+        if (_tab == "history") await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _historyLoading = true;
+        _history = await AdminClient.GetStoreProductHistoryAsync(ProductId);
+        _historyLoading = false;
     }
 
     private async Task LoadAsync()
