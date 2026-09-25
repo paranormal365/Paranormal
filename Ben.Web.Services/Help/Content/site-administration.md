@@ -1185,6 +1185,8 @@ requests** tile and a **Waiting** badge on the products list show when any are w
 records what they are paid. A seller can take their own item off sale at any time, and the
 SuperAdmins get a message when they do.
 
+![Sale requests: the item, what the seller asks, and what it still needs](help-media:site-administration/store-sale-requests.png)
+
 ## Packages and partial shipping
 
 An order ships as one **package per seller**: the store's own stock is one package, and each seller
@@ -1205,6 +1207,8 @@ left has gone. The only package left can't be cancelled alone — cancel the who
 back every package's shipping. A package that has gone can't be cancelled: refund its items instead.
 The **To ship** tile counts partly shipped orders too. The CSV export has a row per item with its
 package, sender, carrier and tracking.
+
+![An order in two packages, each with its own status, tracking and buttons](help-media:site-administration/store-order-packages.png)
 
 ## Parts and cost
 
@@ -1233,6 +1237,8 @@ store can answer any). Answering or declining tells the shopper, who reads it un
 neither side is told who the other is. **Add to the FAQ…** copies an answered question into the
 product's FAQ, reworded if need be — the shopper's own answer is left as it was. A person's questions
 go with their account when it's closed or deleted.
+
+![Questions: the store's own stock first, with Answer, Decline and Add to the FAQ](help-media:site-administration/store-questions.png)
 
 ## Versions
 
@@ -1277,6 +1283,10 @@ in error and its earnings are owed again. **Export CSV** lists every line with w
 A seller who closes their account with earnings unpaid is allowed to; the SuperAdmins are told, and
 their page stays here to settle it.
 
+![Sellers: what each is owed, ready to pay, and has been paid](help-media:site-administration/store-sellers.png)
+
+![One seller's books: Record payment, adjustments, and every line](help-media:site-administration/store-seller.png)
+
 ## Economics and fees
 
 A product's **Parts & cost** tab ends with its **Economics**: what a unit costs to make, what its
@@ -1308,6 +1318,8 @@ refunds are in each variant's stock log instead. A save that changed nothing add
 When an item has a seller, the seller sees its history too, with two differences: price lines
 are left out, and a change the store's staff made reads **The store** rather than a name.
 
+![A product's history: every change, and who made it](help-media:site-administration/store-product-history.png)
+
 ## Discount codes
 
 Store discount codes (GHOST10) are separate from the plan coupons under Billing. A code takes a
@@ -1331,18 +1343,20 @@ shipping and refunds.
 ![The order desk: every order with its buyer, total and status](help-media:site-administration/store-orders.png)
 
 Open an order for everything about it: the buyer, where it is going, the items, the money, its
-refunds and its history. The buttons along the top are only the ones that make sense now:
+refunds and its history. Packing, shipping and delivery are done **on each package's card** — an
+order with one package has one card; see **Packages and partial shipping** for more than one. The
+buttons are only the ones that make sense now:
 
-- **Mark packed** — for a paid order.
+- **Mark packed** — for a paid package.
 - **Ship…** — choose the **carrier** (USPS, UPS, FedEx, DHL or Other) and type the **tracking
   number**; the tracking link is made from the two, and the dialog shows it before you confirm. For
   "Other" you may paste the carrier's own https link. If the parcel is not tracked, tick **No
   tracking provided** — it ships with the carrier and no number, and the buyer is told it went
   without tracking. Shipping emails the buyer straight away.
 - **Correct tracking…** (or **Add tracking…** for a parcel sent untracked) — fixes the carrier or
-  number on a shipped order. It does not email the buyer; use **Resend email…** if they need it.
-- **Mark delivered** — for a shipped order.
-- **Edit address…** — until it ships. Changing the buyer's email replaces the order's private link
+  number on a shipped package. It does not email the buyer; use **Resend email…** if they need it.
+- **Mark delivered** — for a shipped package.
+- **Edit address…** — until the first package ships. Changing the buyer's email replaces the order's private link
   (the old one stops working) and sends the receipt to the new address. Sales tax is not worked out
   again for a new state; the history notes it.
 - **Resend email…** — the receipt, or "Your order is on its way" once it has shipped.

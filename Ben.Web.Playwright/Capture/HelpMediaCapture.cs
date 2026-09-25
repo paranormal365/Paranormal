@@ -2354,6 +2354,75 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/store/favourites");
         await ShootAsync(slug, "favourites.png", proves: "REM Pod");
+
+        // Store sellers: an order in two packages with its downloads, the questions a shopper asked,
+        // the questions and answers on an item's page, and a version that's no longer made.
+        await GoAsync($"/store/orders/{StoreSeeded(110)}");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "order-packages.png", proves: "Ships from Hazel Marsh");
+        await ShootAsync(slug, "downloads.png", selector: "[data-testid=order-downloads]", proves: "REM Pod quick start",
+            around: new Around(Left: 16, Top: 40, Right: 16, Bottom: 16));
+
+        await GoAsync("/store/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "my-questions.png", proves: "Does it come with a carrying case?");
+
+        await GoAsync("/store/p/hand-built-rem-pod");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "product-questions.png", selector: "#faq", proves: "Questions and answers");
+
+        await LogoutAsync();
+        await GoAsync("/store/p/field-thermometer");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "no-longer-made.png", proves: "No longer made");
+    }
+
+    /// <summary>
+    /// selling-in-the-store: the demo seller's workspace — her items, one item's tabs, her packages,
+    /// her earnings and her questions (store sellers, backlog 251). Public shots: the document is for
+    /// any signed-in seller. Run on a fresh side database, like <see cref="Capture_Shopping"/>.
+    /// </summary>
+    [Test]
+    [Description("selling-in-the-store: items, an item's editor tabs, packages, earnings and questions.")]
+    public async Task Capture_Selling()
+    {
+        const string slug = "selling-in-the-store";
+        var remPod = $"/store/selling/items/{StoreSeeded(28)}";
+        await LoginAsync(SellerEmail, SellerPassword);
+
+        await GoAsync("/store/selling");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "my-items.png", proves: "Hand-Built REM Pod");
+
+        await GoAsync(remPod);
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "item-edit.png", proves: "Hand-Built REM Pod");
+
+        foreach (var (tab, name, proves) in new[]
+                 {
+                     ("parts", "parts.png", "A unit costs to make"),
+                     ("files", "files.png", "REM Pod quick start"),
+                     ("faq", "faq.png", "Frequently asked questions"),
+                     ("versions", "versions.png", "Start a new version"),
+                     ("page", "page.png", "Up to three — mp4, webm or mov"),
+                 })
+        {
+            await GoAsync($"{remPod}?tab={tab}");
+            await WaitForTheCircuitAsync();
+            await ShootAsync(slug, name, proves: proves);
+        }
+
+        await GoAsync("/store/selling/packages");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "packages.png", proves: "Ship to");
+
+        await GoAsync("/store/selling/earnings");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "earnings.png", proves: "Owed to you");
+
+        await GoAsync("/store/selling/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "questions.png", proves: "Does it come with a carrying case?");
     }
 
     /// <summary>
@@ -2410,6 +2479,33 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/admin/store/settings");
         await ShootAsync(slug, "store-settings.png", gated: true, proves: "Flat rate");
+
+        // Store sellers: the sale requests, the sellers' books, one seller, the questions, an order
+        // in two packages, and a product's history.
+        await GoAsync("/admin/store/sale-requests");
+        await WaitForTheCircuitAsync();
+        await ClickUntilAsync(Page.Locator("[data-testid=sale-request-filter]").Nth(1), Page.Locator("[data-testid=sale-request]").First);
+        await ShootAsync(slug, "store-sale-requests.png", gated: true, proves: "Hand-Built REM Pod");
+
+        await GoAsync("/admin/store/sellers");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-sellers.png", gated: true, proves: "Hazel Marsh");
+        var seller = await Page.Locator("a[href^='/admin/store/sellers/']").First.GetAttributeAsync("href");
+        await GoAsync(seller!);
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-seller.png", gated: true, proves: "Record payment");
+
+        await GoAsync("/admin/store/questions");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-questions.png", gated: true, proves: "Can this be used outdoors in the rain?");
+
+        await GoAsync($"/admin/store/orders/{StoreSeeded(110)}");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-order-packages.png", gated: true, proves: "Hazel Marsh");
+
+        await GoAsync($"/admin/store/products/{StoreSeeded(28)}/edit?tab=history");
+        await WaitForTheCircuitAsync();
+        await ShootAsync(slug, "store-product-history.png", gated: true, proves: "Gave it to Hazel Marsh to sell.");
     }
 
     // ── Publications ──────────────────────────────────────────────────────────

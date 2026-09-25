@@ -446,6 +446,32 @@ public sealed class ProductWalk : BenTestBase
         Finish();
     }
 
+    // ── 3c. A member who sells through the store (store sellers, backlog 251) ─
+
+    /// <summary>
+    /// Hazel Marsh, the demo seller: her items and every tab of one, her packages, earnings and
+    /// questions — and the store's admin pages, which she never sees.
+    /// </summary>
+    [Test]
+    public async Task A_seller()
+    {
+        _persona = "3c-seller";
+        await LoginAsync(SellerEmail, SellerPassword);
+        const string remPod = "/store/selling/items/a1000000-0000-0000-0000-000000000028";
+
+        await StepAsync("my items", () => GoAsync("/store/selling"), expect: "Hand-Built REM Pod");
+        foreach (var tab in new[] { "details", "variants", "pictures", "parts", "files", "faq", "versions", "page", "history", "preview" })
+            await StepAsync($"the REM pod — {tab}", () => GoAsync($"{remPod}?tab={tab}"));
+        await StepAsync("the draft", () => GoAsync("/store/selling/items/a1000000-0000-0000-0000-000000000029"), expect: "Pocket EMF Logger");
+        await StepAsync("my packages", () => GoAsync("/store/selling/packages"));
+        await StepAsync("my earnings", () => GoAsync("/store/selling/earnings"), expect: "Owed to you");
+        await StepAsync("questions", () => GoAsync("/store/selling/questions"));
+        await StepAsync("her item as shoppers see it", () => GoAsync("/store/p/hand-built-rem-pod"));
+        await StepAsync("the store's admin refuses", () => GoAsync("/admin/store/products"));
+
+        Finish();
+    }
+
     // ── 4. A member who may look and change nothing ───────────────────────────
 
     [Test]

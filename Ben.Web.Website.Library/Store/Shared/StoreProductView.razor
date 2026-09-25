@@ -41,7 +41,7 @@ else if (Product.IsPreview)
 @if (Product.Discontinued)
 {
     <div class="alert alert-secondary" data-testid="product-discontinued">
-        <strong>No longer made.</strong>
+        <strong>No longer made.</strong>@(" ")
         @if (Product.NewerVersion is { } replacement)
         {
             <span>It's been replaced by <a class="alert-link" href="@($"/store/p/{replacement.Slug}")" data-testid="product-replaced-by">@VersionName(replacement)</a>.</span>
@@ -103,7 +103,8 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
                 {
                     <div class="text-secondary">SKU <span class="font-monospace" data-testid="product-sku">@variant.Sku</span></div>
                     <div data-testid="product-stock">
-                        @if (variant.Available <= 0) { <span class="text-danger fw-semibold">Sold out</span> }
+                        @if (Product.Discontinued) { }
+                        else if (variant.Available <= 0) { <span class="text-danger fw-semibold">Sold out</span> }
                         else if (variant.Available <= Product.LowStockThreshold) { <span class="ben-store-note--low fw-semibold">Only @variant.Available left</span> }
                         else { <span class="text-success">In stock</span> }
                     </div>

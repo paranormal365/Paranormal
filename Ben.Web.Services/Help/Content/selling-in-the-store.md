@@ -26,6 +26,8 @@ The counts at the top say how many of your items are drafts, on sale and off sal
 Press **Add an item** to start a new one: a name and a shelf are enough. It starts as a draft,
 hidden from shoppers, and opens in its editor.
 
+![My Items: each item with where it stands, its price and what it has sold](/help/media/selling-in-the-store/my-items.png)
+
 ## Editing an item
 
 Open an item from My Items. Its editor has five tabs:
@@ -42,6 +44,8 @@ Changes to an item that's on sale show in the store straight away.
 If somebody at the store saved the item after you opened it, your save is refused with a
 sentence saying so, rather than quietly overwriting theirs. Press **Reload**, then make your
 change again.
+
+![An item's editor: its details, and the tabs for everything else](/help/media/selling-in-the-store/item-edit.png)
 
 ## Options and variants
 
@@ -79,6 +83,8 @@ hand, the tab also says how many units you could build from them.
 
 Only you and the store see this tab; shoppers never do.
 
+![Parts & cost: each part, what a unit uses, and what a unit costs to make](/help/media/selling-in-the-store/parts.png)
+
 ## Files
 
 The **Files** tab keeps an item's manuals, firmware, software and documents. For each file choose
@@ -99,6 +105,8 @@ A Word document is best uploaded as a file.
 **Edit** changes a file's title, kind, version or who gets it; **Remove** takes it away — buyers who
 had it lose it too. Every change is in the item's **History**.
 
+![Files: a manual for buyers and private build notes, with upload and write-a-manual below](/help/media/selling-in-the-store/files.png)
+
 ## FAQ and questions
 
 Shoppers can ask about your item from its page. A question comes to you privately — you get a
@@ -113,6 +121,10 @@ told who answered: the store passes it on.
 The item's **FAQ** tab holds its questions and answers — the ones people keep asking, answered once.
 They show on the item's page after the reviews, in the order you set. Switch **Show the FAQ** off to
 hide them for a while without losing them.
+
+![Questions: what shoppers asked, with Answer, Decline and Add to the FAQ](/help/media/selling-in-the-store/questions.png)
+
+![The FAQ tab: each question and answer in order, and the switch that shows them](/help/media/selling-in-the-store/faq.png)
 
 ## Versions
 
@@ -129,6 +141,8 @@ it to go on sale as usual. Nothing happens to the old one until then, and you ca
 until that day; after it, it has happened. An old version that comes off sale keeps its page, which
 says it's no longer made and links to the new one.
 
+![Versions: this version's name, and Start a new version](/help/media/selling-in-the-store/versions.png)
+
 ## The item's page
 
 The **Page** tab holds what the item's page says beyond its description:
@@ -140,6 +154,8 @@ The **Page** tab holds what the item's page says beyond its description:
   pictures. The location and camera details are removed from the copy shoppers get.
 
 Whether an item takes reviews is the store's choice; the tab says whether yours does.
+
+![The item's page: returns and warranty words, and videos](/help/media/selling-in-the-store/page.png)
 
 ## Sending packages
 
@@ -160,6 +176,8 @@ until it clears.
 When an order has packages from more than one seller, the buyer sees each package with its own
 tracking, and the order reads **Partially shipped** until every package has gone.
 
+![My Packages: what goes in each, where it goes, and Ship](/help/media/selling-in-the-store/packages.png)
+
 ## Your earnings
 
 **Selling → My Earnings** shows what you've earned and been paid. You earn when a package **ships**:
@@ -174,6 +192,8 @@ when the order was placed — and the store's shipping rate for the label.
 A return after your package shipped takes that unit's earning back. The store pays you outside the
 site — a transfer or a check — and records it here. The tables below break it down by item, by
 order and by year: the year's **Paid** column is what goes on that year's tax forms.
+
+![My Earnings: owed, ready to pay, and paid — by item, by order, and by year](/help/media/selling-in-the-store/earnings.png)
 
 ## Going on sale
 

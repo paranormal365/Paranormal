@@ -62,6 +62,8 @@ When an item is replaced by a better one, its page says so: **A newer version is
 link. If the old one is no longer made, its page stays up — so a saved link still works — but says
 **No longer made** and points to the new one. A new version's page links back to the one before.
 
+![A replaced item: No longer made, and a link to the new version](/help/media/shopping-at-the-store/no-longer-made.png)
+
 ## Your cart
 
 You don't need an account to shop. Your cart belongs to your browser until you sign in, and then
@@ -95,9 +97,9 @@ never off shipping or tax, and if it can't be used the cart says why — for exa
 has expired." Once applied, a code shows in a green badge; the × beside it removes it.
 
 **The totals.**
-- **Shipping** is a flat rate for the whole order, and free once your order, after any
-  discount, reaches the free-shipping amount. The cart tells you how much more you need to
-  spend.
+- **Shipping** is a flat rate for each package, and a package is free once its own items, after
+  any discount, reach the free-shipping amount. The cart tells you how much more you need to
+  spend. Most orders are one package; see **Delivery** for when there's more than one.
 - **Sales tax** is worked out at checkout from your delivery address, so the cart shows the
   **total before tax**.
 
@@ -147,9 +149,14 @@ account, **Sign in** on the checkout page first and the order is kept with your 
 The store ships to addresses in the fifty United States and Washington, DC. It doesn't ship to US
 territories, military addresses or other countries yet.
 
-Shipping is one flat price for the whole order, however many things are in it, and it's free once
-your products come to a set amount — the cart tells you how much more would make it free. The
-shipping line in the cart and at checkout always shows what you'll pay.
+**One package or more.** Most things come from the store's own shelves, but some are made and sent by
+members who sell through the store. Each sender's items travel as their own package, so an order can
+arrive in more than one — the cart and checkout say so, and list each package ("Package 2 · Ships from
+Hazel Marsh") with its shipping.
+
+Shipping is a flat price for each package, however many things are in it, and a package ships free
+once its own items come to a set amount — the cart tells you how much more would make it free. The
+shipping lines in the cart and at checkout always show what you'll pay.
 
 ## Sales tax
 
@@ -162,13 +169,17 @@ do, that is included in the sales tax line.
 
 **With an account.** Orders you place while signed in are under **My Orders** in the menu (also
 linked at the bottom of the store's front page). Each one shows its number, date, total and where
-it has got to: *Paid — being prepared*, *Packed*, *Shipped*, *Delivered*, *Cancelled* or *Refunded*.
+it has got to: *Paid — being prepared*, *Packed*, *Partially shipped* (some of its packages are on their
+way), *Shipped*, *Delivered*, *Cancelled* or *Refunded*. An order in more than one package lists each
+package on its page, with where it has got to and its own tracking number.
 Open an order to see where it's going, what's in it, what it came to, and its tracking number once
 it ships. Checkouts you started but never paid for aren't orders, so they aren't listed.
 
 ![My Orders, each order with its date, total and where it has got to](/help/media/shopping-at-the-store/my-orders.png)
 
 ![One order: where it's going, how it's being paid, and its tracking number](/help/media/shopping-at-the-store/order.png)
+
+![An order in two packages: each one's sender, where it has got to and its tracking](/help/media/shopping-at-the-store/order-packages.png)
 
 **As a guest.** Your receipt email has a private link to your order — keep that email, because it
 is the way back. If you've lost it, go to **Find my order** (at the bottom of the store's front
@@ -189,6 +200,8 @@ them under **Downloads**; they stay there for as long as you have the order. A m
 site opens as a page of its own, with a **Print** button. If an item is refunded in full, its
 downloads go with it.
 
+![Downloads on an order: the REM Pod's quick-start manual](/help/media/shopping-at-the-store/downloads.png)
+
 ## Asking a question
 
 Not sure an item is right? Its page has **Questions and answers** after the reviews — what other
@@ -196,6 +209,10 @@ shoppers have asked — and **Ask a question** (sign in first). Your question go
 sells the item: the store, or the member who makes it. You get a message when it's answered, and the
 answer is under **My Questions** in the menu. Only you see it — unless they add it to the item's
 questions and answers for everybody, which never shows your name.
+
+![An item's questions and answers, with Ask a question](/help/media/shopping-at-the-store/product-questions.png)
+
+![My Questions: each question, waiting or with its answer](/help/media/shopping-at-the-store/my-questions.png)
 
 ## Returns and refunds
 
