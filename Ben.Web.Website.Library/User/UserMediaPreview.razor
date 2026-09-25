@@ -46,7 +46,7 @@ else if (_isImage)
              loading="lazy" decoding="async"
              @onload="@(() => ReportAsync(MediaPreviewOutcome.Shown))"
              @onerror="@OnImageErrorAsync"
-             @onclick="ToggleFullSize" />
+             @onclick="PictureClicked" />
 
         @if (_showFull)
         {
@@ -95,6 +95,18 @@ else
     /// pixels it actually is instead of a blur pretending to be a photograph.
     /// </remarks>
     [Parameter] public bool Fill { get; set; }
+
+    /// <summary>
+    /// Whether clicking the picture opens it full size. Off where a click means something else — in
+    /// the content picker a click chooses the file, and the full-size overlay it used to open as well
+    /// covered the dialog's own "Use this file" button (found by the e2e run of 09/25/2026).
+    /// </summary>
+    [Parameter] public bool ZoomOnClick { get; set; } = true;
+
+    private void PictureClicked()
+    {
+        if (ZoomOnClick) ToggleFullSize();
+    }
 
     /// <summary>
     /// Reports whether this file actually showed itself, so the surrounding card can say so.

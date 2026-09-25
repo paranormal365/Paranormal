@@ -157,8 +157,22 @@ public class StoreBrowseTests : BenTestBase
         // nothing is listening to yet (it began failing once the e2e database held ~465 products).
         await Page.GotoAsync($"{BaseUrl}/store/products");
         await WaitForTheCircuitAsync();
-        await Page.Locator("#listing-sort").SelectOptionAsync("price-desc");
-        await Page.WaitForURLAsync("**/store/products?sort=price-desc");
+        // Still a race on a full run (09/25): the page can pass the circuit check a moment before the
+        // listing's own interactive render, and a choice made then is lost. A person would choose again;
+        // so does the test — away and back, since choosing the same option twice fires no change.
+        for (var attempt = 0; ; attempt++)
+        {
+            await Page.Locator("#listing-sort").SelectOptionAsync("price-desc");
+            try
+            {
+                await Page.WaitForURLAsync("**/store/products?sort=price-desc", new() { Timeout = 5_000 });
+                break;
+            }
+            catch (TimeoutException) when (attempt < 4)
+            {
+                await Page.Locator("#listing-sort").SelectOptionAsync("popular");
+            }
+        }
         await Expect(Page.Locator("[data-testid=store-card]").First).ToHaveAttributeAsync("data-slug", "rem-pod", new() { Timeout = 15_000 });
 
         await Page.GotoAsync($"{BaseUrl}/store/c/spirit-boxes");
