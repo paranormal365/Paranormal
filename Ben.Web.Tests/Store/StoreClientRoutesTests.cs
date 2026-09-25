@@ -67,6 +67,42 @@ public sealed class StoreClientRoutesTests
           + "screen can reach them:\n  " + string.Join("\n  ", uncalled));
     }
 
+    /// <summary>The seller workspace's actions (store sellers, backlog 251), read from Controllers/Seller.</summary>
+    internal static IEnumerable<(string Controller, string Verb, string Route)> SellerRoutes()
+    {
+        var folder = Path.Combine(Root(), "Ben.Data.WebApi", "Controllers", "Seller");
+        foreach (var file in Directory.EnumerateFiles(folder, "*.cs"))
+        {
+            var source = File.ReadAllText(file);
+            foreach (Match route in Regex.Matches(source, @"\[Route\(""([^""]+)""\)\]"))
+            {
+                // A file may hold more than one controller; each action belongs to the Route above it.
+                var prefix = route.Groups[1].Value.Trim('/');
+                var end = source.IndexOf("[Route(", route.Index + 1, StringComparison.Ordinal);
+                var body = source[route.Index..(end < 0 ? source.Length : end)];
+                foreach (Match m in Regex.Matches(body, @"\[Http(Get|Post|Put|Delete)(?:\(""([^""]*)""\))?\]"))
+                    yield return (Path.GetFileNameWithoutExtension(file), m.Groups[1].Value.ToUpperInvariant(),
+                                  m.Groups[2].Value.Length == 0 ? prefix : $"{prefix}/{m.Groups[2].Value}");
+            }
+        }
+    }
+
+    [Fact]
+    public void Every_seller_action_is_called_by_the_seller_client()
+    {
+        var client = File.ReadAllText(Path.Combine(Root(), "Ben.Web.Services", "WebApi", "BenAdminClientAdapter.StoreSeller.cs"));
+        Assert.NotEmpty(SellerRoutes());
+
+        var uncalled = SellerRoutes()
+            .Where(r => !Regex.IsMatch(client, "\"/" + Pattern(r.Route) + @"(\?[^""]*)?"""))
+            .Select(r => $"{r.Verb} {r.Route}  ({r.Controller})")
+            .ToList();
+
+        Assert.True(uncalled.Count == 0,
+            "These seller endpoints have no call in BenAdminClientAdapter.StoreSeller.cs, so no "
+          + "screen can reach them:\n  " + string.Join("\n  ", uncalled));
+    }
+
     /// <summary>The public store's actions, read from its controller.</summary>
     internal static IEnumerable<(string Verb, string Route)> PublicStoreRoutes()
     {

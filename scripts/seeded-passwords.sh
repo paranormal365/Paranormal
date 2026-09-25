@@ -48,9 +48,13 @@ export BEN_VIEWER_PASSWORD="${BEN_VIEWER_PASSWORD:-$(_ben_seeded_password devdat
 # with the DevData password, like Victor.
 export BEN_SOLO_PASSWORD="${BEN_SOLO_PASSWORD:-$(_ben_seeded_password devdata)}"
 
+# Hazel — the demo seller (store sellers, backlog 251). Seeded by the roster seeder with the
+# DevData password, like Wren and Victor.
+export BEN_SELLER_PASSWORD="${BEN_SELLER_PASSWORD:-$(_ben_seeded_password devdata)}"
+
 # `${!name}` is bash-only, so the check reads the value through eval instead — it must not break
 # when this file is sourced from zsh, and a silent break here means silently skipped tests.
-for _v in BEN_SUPERADMIN_PASSWORD BEN_USER_PASSWORD BEN_MEMBER_PASSWORD BEN_CLIENT_PASSWORD BEN_VIEWER_PASSWORD BEN_SOLO_PASSWORD; do
+for _v in BEN_SUPERADMIN_PASSWORD BEN_USER_PASSWORD BEN_MEMBER_PASSWORD BEN_CLIENT_PASSWORD BEN_VIEWER_PASSWORD BEN_SOLO_PASSWORD BEN_SELLER_PASSWORD; do
   eval "_ben_val=\$$_v"
   if [ -z "$_ben_val" ]; then
     echo "   $_v could not be derived from $_BEN_SECRETS — anything signing in with it will be skipped."

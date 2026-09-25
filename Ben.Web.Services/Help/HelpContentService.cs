@@ -47,7 +47,7 @@ public sealed class HelpContentService
     /// <summary>Every document this reader may see, grouped into sections in display order.</summary>
     public IReadOnlyList<HelpSection> SectionsFor(HelpViewer viewer, Func<string, bool>? featureOn = null)
         => _documents.Value
-            .Where(d => viewer.CanSee(d.Audience) && FeatureAllows(d, featureOn))
+            .Where(d => viewer.CanSee(d) && FeatureAllows(d, featureOn))
             .GroupBy(d => d.Section)
             .OrderBy(g => g.Min(d => d.Order))
             .Select(g => new HelpSection(g.Key, g.OrderBy(d => d.Order).ThenBy(d => d.Title).ToList()))
@@ -65,7 +65,7 @@ public sealed class HelpContentService
     {
         var doc = _documents.Value.FirstOrDefault(
             d => string.Equals(d.Slug, slug, StringComparison.OrdinalIgnoreCase));
-        return doc is not null && viewer.CanSee(doc.Audience) && FeatureAllows(doc, featureOn) ? doc : null;
+        return doc is not null && viewer.CanSee(doc) && FeatureAllows(doc, featureOn) ? doc : null;
     }
 
     /// <summary>
@@ -272,6 +272,7 @@ public sealed class HelpContentService
                         : HelpAudience.AppAdministrator,
             Order:    int.TryParse(fields.GetValueOrDefault("order"), out var o) ? o : 500,
             Markdown: body,
-            Feature:  fields.TryGetValue("feature", out var feature) && !string.IsNullOrWhiteSpace(feature) ? feature : null);
+            Feature:  fields.TryGetValue("feature", out var feature) && !string.IsNullOrWhiteSpace(feature) ? feature : null,
+            Role:     fields.TryGetValue("role", out var role) && !string.IsNullOrWhiteSpace(role) ? role : null);
     }
 }

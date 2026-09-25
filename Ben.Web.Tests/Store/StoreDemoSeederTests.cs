@@ -290,4 +290,34 @@ public sealed class StoreDemoSeederTests
         var sarahs = await db.StoreOrders.FirstAsync(o => o.Id == StoreDemoSeeder.SeededOrders.SarahPaid);
         Assert.Equal("Sarah Demo", sarahs.ShipName);   // no display name: first and last
     }
+
+    [Fact]
+    public async Task The_demo_seller_has_one_item_on_sale_and_one_draft_once()
+    {
+        var sqlite = await SqliteTestDb.CreateAsync();
+        await using var _d = sqlite;
+        Guid owner, hazel = Guid.NewGuid();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var admin = StoreTestData.Person(db);
+            StoreTestData.StoreImageType(db, admin);
+            db.AppUsers.Add(new Ben.Data.Source.Entities.AppUser
+            {
+                Id = hazel, UserName = StoreDemoSeeder.HazelEmail, Email = StoreDemoSeeder.HazelEmail,
+                NormalizedEmail = StoreDemoSeeder.HazelEmail.ToUpperInvariant(), DisplayName = "Hazel Marsh", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+            owner = admin.Id;
+        }
+        for (var i = 0; i < 2; i++)
+        {
+            await using var db = await sqlite.NewContextAsync();
+            await StoreDemoSeeder.SeedCoreAsync(db, owner, default);
+        }
+
+        await using var check = await sqlite.NewContextAsync();
+        var hers = await check.StoreProducts.Where(p => p.SellerAppUserId == hazel).OrderBy(p => p.Name).ToListAsync();
+        Assert.Equal([("Hand-Built REM Pod", true), ("Pocket EMF Logger", false)], hers.Select(p => (p.Name, p.IsActive)));
+        Assert.Equal(9, await check.StoreProducts.CountAsync());   // the store's seven, and hers
+    }
 }

@@ -51,6 +51,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.IsModerator = me.IsModerator;
+                _tokenStore.IsSeller = me.IsSeller;
                 _tokenStore.UserId = me.UserId;
             }
         }
@@ -83,6 +84,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.IsModerator = me.IsModerator;
+                _tokenStore.IsSeller = me.IsSeller;
             }
         }
         catch { /* non-fatal — the session still works, roles stay false */ }
@@ -118,6 +120,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
+        _tokenStore.IsSeller = false;
         _tokenStore.IsImpersonating = false;
         _tokenStore.OriginalAccessToken = null;
         _tokenStore.OriginalRefreshToken = null;
@@ -177,6 +180,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsSuperAdmin = false;
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
+        _tokenStore.IsSeller = false;
 
         // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
         // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
@@ -194,6 +198,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                     _tokenStore.IsSuperAdmin = me.IsSuperAdmin;
                     _tokenStore.IsAdmin = me.IsAdmin;
                     _tokenStore.IsModerator = me.IsModerator;
+                    _tokenStore.IsSeller = me.IsSeller;
                     _tokenStore.UserId = me.UserId;
                 }
             }
@@ -220,14 +225,15 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
 
         // Note: JwtClaimsParser cannot extract claims from opaque Identity API tokens.
         // UserId and IsSuperAdmin are set via /api/me after login instead.
-        var (userId, isSuperAdmin, isAdmin, isModerator) = JwtClaimsParser.ParseClaims(response.AccessToken);
+        var (userId, isSuperAdmin, isAdmin, isModerator, isSeller) = JwtClaimsParser.ParseClaims(response.AccessToken);
         _tokenStore.UserId = userId;
         _tokenStore.IsSuperAdmin = isSuperAdmin;
         _tokenStore.IsAdmin = isAdmin;
         _tokenStore.IsModerator = isModerator;
+        _tokenStore.IsSeller = isSeller;
     }
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>
-internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false);
+internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false, bool IsSeller = false);
 

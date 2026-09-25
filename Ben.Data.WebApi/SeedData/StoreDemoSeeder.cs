@@ -188,6 +188,48 @@ internal static class StoreDemoSeeder
 
         await SeedOrdersAsync(db, now, ct);
         await SeedReviewsAsync(db, ownerId, now, ct);
+        await SeedSellerDemoAsync(db, ownerId, now, ct);
+    }
+
+    // ── A member seller's items (store sellers, backlog 251) ─────────────────
+
+    internal const string HazelEmail = "hazel.marsh@benco.dev";
+
+    /// <summary>The demo seller's items, by fixed id.</summary>
+    internal static class SeededSellerProducts
+    {
+        public static readonly Guid RemPod = Id(28), EmfLogger = Id(29);
+    }
+
+    /// <summary>
+    /// Hazel Marsh (the roster's demo seller) makes two things: a hand-built REM pod on sale, and
+    /// a pocket logger still a draft — so her workspace has one of each to show. Only when she is
+    /// on this database; the store's own seven products are untouched.
+    /// </summary>
+    private static async Task SeedSellerDemoAsync(BenDataContext db, Guid ownerId, DateTime now, CancellationToken ct)
+    {
+        var hazel = await db.AppUsers.AsNoTracking().Where(u => u.NormalizedEmail == HazelEmail.ToUpperInvariant())
+            .Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        if (hazel is not { } seller) return;
+
+        await ProductAsync(db, ownerId, now, n: 28, shelf: 4, "Hand-Built REM Pod", "hand-built-rem-pod", null,
+            "A REM pod built by hand, one at a time, with a louder alarm and a longer range.",
+            "<p>Each one is assembled and tested in a small workshop in Kentucky before it ships.</p>",
+            featured: false, newUntil: null, active: true,
+            options: [],
+            variants: [new("HM-REMPOD", [], 149m, null, 3, Default: true)],
+            specs: [("Power", "Battery", "Four AA")]);
+        await ProductAsync(db, ownerId, now, n: 29, shelf: 1, "Pocket EMF Logger", "pocket-emf-logger", null,
+            "A pocket meter that keeps a log of every reading.",
+            "<p>Still being finished — not on sale yet.</p>",
+            featured: false, newUntil: null, active: false,
+            options: [],
+            variants: [new("HM-EMFLOG", [], 0m, null, 0, Default: true)],
+            specs: []);
+
+        await db.StoreProducts
+            .Where(p => (p.Id == SeededSellerProducts.RemPod || p.Id == SeededSellerProducts.EmfLogger) && p.SellerAppUserId == null)
+            .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAppUserId, seller), ct);
     }
 
     // ── Orders (storefront S4.12) ────────────────────────────────────────────

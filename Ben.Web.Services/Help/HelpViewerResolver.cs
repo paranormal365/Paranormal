@@ -50,14 +50,23 @@ public sealed class HelpViewerResolver : IDisposable
         try
         {
             var audience = await _client.GetMyHelpAudienceAsync();
-            _cached = new HelpViewer(audience ?? HelpAudience.SignedIn);
+            _cached = new HelpViewer(audience ?? HelpAudience.SignedIn, Roles());
         }
         catch
         {
-            _cached = new HelpViewer(HelpAudience.SignedIn);
+            _cached = new HelpViewer(HelpAudience.SignedIn, Roles());
         }
 
         return _cached.Value;
+    }
+
+    /// <summary>The roles a document can ask for, as the signed-in session knows them.</summary>
+    private List<string> Roles()
+    {
+        var roles = new List<string>();
+        if (_userState.IsSeller) roles.Add(Ben.Data.Common.Constants.RoleNames.Seller);
+        if (_userState.IsModerator) roles.Add(Ben.Data.Common.Constants.RoleNames.Moderator);
+        return roles;
     }
 
     /// <summary>Drops the cache — call after something changes the reader's roles or memberships.</summary>

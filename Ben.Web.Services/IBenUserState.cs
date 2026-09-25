@@ -29,6 +29,12 @@ public interface IBenUserState
     /// </summary>
     bool IsModerator { get; }
 
+    /// <summary>
+    /// Whether this person holds the Seller role (store sellers, backlog 251) — and so has a
+    /// Selling workspace for their own items. A SuperAdmin is not a seller unless given the role.
+    /// </summary>
+    bool IsSeller { get; }
+
     /// <summary>Gets whether the current session is an impersonation session started by a SuperAdmin.</summary>
     bool IsImpersonating { get; }
 

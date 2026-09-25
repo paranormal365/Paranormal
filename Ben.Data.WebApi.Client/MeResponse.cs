@@ -21,7 +21,8 @@ public sealed record MeResponse(
     bool IsAdmin,
     bool IsModerator = false,
     EmailAddressKind EmailKind = EmailAddressKind.Ordinary,
-    bool EmailConfirmed = true)
+    bool EmailConfirmed = true,
+    bool IsSeller = false)
 {
     /// <summary>Whether this address is one the person chose and reads as their own.</summary>
     /// <remarks>

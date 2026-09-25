@@ -538,6 +538,10 @@ public abstract class BenTestBase : PageTest
     protected static string SoloEmail          => Environment.GetEnvironmentVariable("BEN_SOLO_EMAIL")          ?? "wren.ashby@benco.dev";
     protected static string SoloPassword       => RequiredSecret("BEN_SOLO_PASSWORD");
 
+    /// <summary>Hazel — the demo seller (store sellers, backlog 251): the Seller role, her own items, nothing else.</summary>
+    protected static string SellerEmail        => Environment.GetEnvironmentVariable("BEN_SELLER_EMAIL")        ?? "hazel.marsh@benco.dev";
+    protected static string SellerPassword     => RequiredSecret("BEN_SELLER_PASSWORD");
+
     // ── The public feed's switch, for fixtures that need it on ───────────────
 
     /// <summary>

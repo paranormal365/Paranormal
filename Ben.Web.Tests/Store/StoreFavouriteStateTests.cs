@@ -18,6 +18,7 @@ public sealed class StoreFavouriteStateTests
         public bool IsSuperAdmin => false;
         public bool IsAdmin => false;
         public bool IsModerator => false;
+        public bool IsSeller => false;
         public bool IsImpersonating => false;
         public Guid? UserId => null;
         public string? UserEmail => null;

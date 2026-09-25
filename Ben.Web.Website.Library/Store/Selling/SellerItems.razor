@@ -1,0 +1,118 @@
+@page "/store/selling"
+@using Ben.Web.Website.Library.Store.Shared
+@inject IBenStoreSellerClient Seller
+@inject IBenUserState User
+@inject NavigationManager Nav
+
+<PageTitle>My items — Selling</PageTitle>
+
+@*
+    A seller's own items (store sellers, backlog 251, P1): what they sell, where each stands, what
+    it sells for and how many have gone. The price is the store's — shown, never set here (Ben,
+    09/24/2026: "a seller only has control over their individual items … not the admin part or
+    pricing").
+
+    Only the seller client is injected: this page cannot reach the store's admin even by mistake
+    (SellerPagesUseTheSellerClientTests). Not behind the store switch — a seller prepares items
+    while the shop is dark, as the admin does.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:72rem;">
+    <h1 class="h3 mb-1">My items<HelpLink Slug="selling-in-the-store" Anchor="your-items" /></h1>
+    <p class="text-secondary mb-3">The things you sell in the store, and where each one stands.</p>
+
+    @if (_summary is { } s)
+    {
+        <div class="row g-3 mb-3" data-testid="seller-summary">
+            <div class="col-4 col-md-3"><StatCard Label="Drafts" Value="@s.Drafts.ToString()" Icon="edit-3" /></div>
+            <div class="col-4 col-md-3"><StatCard Label="On sale" Value="@s.OnSale.ToString()" Icon="shopping-bag" /></div>
+            <div class="col-4 col-md-3"><StatCard Label="Off sale" Value="@s.OffSale.ToString()" Icon="eye-off" /></div>
+        </div>
+    }
+
+    @if (_items is not { } items)
+    {
+        <div class="text-center text-secondary py-5" data-testid="seller-items-loading">
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading your items…
+        </div>
+    }
+    else if (items.Failed)
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="alert alert-danger mb-0 flex-grow-1" role="alert" id="seller-items-refusal">@_refusal</div>
+            <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+    else if (items.IsEmpty)
+    {
+        <StoreEmptyState Icon="box" Title="No items yet"
+                         Lead="Items the store lists for you appear here. Soon you'll be able to add your own." />
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle" data-testid="seller-items">
+                <thead>
+                    <tr>
+                        <th scope="col">Item</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-end">Price</th>
+                        <th scope="col" class="text-end">In stock</th>
+                        <th scope="col" class="text-end">Sold</th>
+                        <th scope="col">Last sold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items.Items)
+                    {
+                        <tr data-testid="seller-item" data-slug="@item.Slug">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <StoreLineThumb ImageUploadFileId="item.PrimaryImageUploadFileId" Alt="@item.Name" Size="40" />
+                                    <div>
+                                        <div class="fw-semibold">@item.Name</div>
+                                        <div class="small text-secondary">@item.CategoryName</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="badge text-bg-@StoreSellerStatus.Tone(item.Status)" data-testid="seller-item-status">@StoreSellerStatus.Label(item.Status)</span></td>
+                            <td class="text-end">@PriceText(item)</td>
+                            <td class="text-end">@item.StockOnHand</td>
+                            <td class="text-end">@item.UnitsSold</td>
+                            <td>@(item.LastSoldUtc is { } sold ? sold.ToViewerLocalTime(User).ToString("MM/dd/yyyy") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-secondary">The store sets each item's price. To change one, get in touch.</p>
+    }
+</div>
+
+@code {
+    private LoadResult<SellerProductListRecord>? _items;
+    private SellerWorkspaceSummary? _summary;
+    private string? _refusal;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await Seller.GetMySellerProductsAsync();
+        var error = result.Failed ? result.Reason ?? "Your items couldn't be loaded just now." : null;
+        _refusal = error;
+        _items = result;
+        var summary = await Seller.GetSellerWorkspaceSummaryAsync();
+        _summary = summary.Failed ? null : summary.Item;
+        StateHasChanged();
+    }
+
+    private static string PriceText(SellerProductListRecord item) => item.MinPrice is not { } min ? "Not priced yet"
+        : item.MaxPrice is { } max && max != min ? $"{StoreMoney.Format(min)} – {StoreMoney.Format(max)}" : StoreMoney.Format(min);
+}

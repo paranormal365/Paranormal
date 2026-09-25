@@ -68,7 +68,7 @@ public sealed class HelpCatalogCompletenessTests
 
         foreach (var document in HelpContentService.LoadAll())
         {
-            var viewer = new HelpViewer(document.Audience);
+            var viewer = new HelpViewer(document.Audience, document.Role is null ? null : [document.Role]);
 
             Assert.True(service.Find(document.Slug, viewer) is not null,
                 $"'{document.Slug}' declares audience {document.Audience} but is not returned to a "

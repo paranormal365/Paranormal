@@ -182,6 +182,9 @@ builder.Services.AddHttpClient<AppleSignInClient>((sp, client) =>
 }).AddHttpMessageHandler(sp =>
     new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IBenAdminClient, BenAdminClientAdapter>();
+// The Selling workspace's narrow client (store sellers, backlog 251) — the same scoped adapter,
+// so a seller page that asks for only this still gets the circuit's one instance.
+builder.Services.AddScoped<IBenStoreSellerClient>(sp => sp.GetRequiredService<IBenAdminClient>());
 builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredService<IWebApiTokenStore>());
 // One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
 // down with the circuit — the poll it owns must not outlive the session it polls for.

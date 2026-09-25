@@ -37,7 +37,7 @@ ledger. Alongside that, every product gains:
 | Phase | What | Status |
 |---|---|---|
 | P0 | Groundwork: sale counters (bug: product `UnitsSold` was never written) and the shared package-pricing function | Built 09/25/2026 — StoreStockTests + `A_sale_counts_on_the_product_too_and_says_when` (1 break caught), migration StoreProductSaleCounters (backfill), StoreParcelPlan + StoreParcelPlanTests 7 (3 breaks caught); StoreLowStockJobTests made date-independent (it failed from midnight UTC 09/25); unit suite green (7,457) |
-| P1 | Seller role end to end, read-only workspace, help by role, demo seller | |
+| P1 | Seller role end to end, read-only workspace, help by role, demo seller | Built 09/25/2026 — Seller policy (a SuperAdmin is NOT a seller), `IsSeller` through Me → token → user state → persisted layout state, `api/seller/store/products` behind `SellerStoreControllerBase.Mine`, Selling → My Items at `/store/selling`, help `role:` front matter, Hazel Marsh seeded with one item on sale and one draft; unit tests (SellerHandler, seller controller, guards, help by role, seeder) with 5 breaks caught; Playwright StoreSellerWorkspaceTests 2/2, both shown failing against a leaking list and an unguarded page; unit suite green (7,479) |
 | P2 | Product history | |
 | P3 | Seller editing, sale requests, taking an item off sale (also extracts the shared editor pieces) | |
 | P4 | Parts list and cost basis | |

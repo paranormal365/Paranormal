@@ -98,6 +98,12 @@ internal static class DevelopmentRosterSeeder
         await EnsureSiteRoleAsync(userManager, alice,  Ben.Data.Common.Constants.RoleNames.Admin);
         await EnsureSiteRoleAsync(userManager, miguel, Ben.Data.Common.Constants.RoleNames.Moderator);
 
+        // Store sellers (backlog 251): a member who makes and sells her own gear. Her own seat for
+        // the same reason as Alice's and Miguel's — a seller is somebody who sees ONLY their own
+        // items, and an existing seat given the role would carry everything else it already sees.
+        var hazel = await UserAsync(userManager, "hazel.marsh@benco.dev", "Hazel Marsh", seedPassword);
+        await EnsureSiteRoleAsync(userManager, hazel, Ben.Data.Common.Constants.RoleNames.Seller);
+
         var linda  = await UserAsync(userManager, "linda.maxwell@example.com", "Linda Maxwell", seedPassword);
         var robert = await UserAsync(userManager, "robert.hayes@example.com",  "Robert Hayes", seedPassword);
         var karen  = await UserAsync(userManager, "karen.foster@example.com",  "Karen Foster", seedPassword);

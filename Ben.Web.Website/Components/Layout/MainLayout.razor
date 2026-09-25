@@ -35,6 +35,7 @@
         <BenNav IsAuthenticated="@TokenStore.IsAuthenticated"
                 IsSuperAdmin="@TokenStore.IsSuperAdmin"
                 IsModerator="@TokenStore.IsModerator"
+                IsSeller="@TokenStore.IsSeller"
                 IsImpersonating="@TokenStore.IsImpersonating" />
 
         <main class="app-body">
@@ -274,6 +275,7 @@
                     TokenStore.OriginalUserId?.ToString(),
                     TokenStore.OriginalUserEmail,
                     TokenStore.OriginalUserDisplayName,
+                    TokenStore.IsSeller,
                     TokenStore.IsEntraSession
                 ));
             }
@@ -309,6 +311,7 @@
                 TokenStore.OriginalUserEmail = state.OriginalUserEmail;
                 TokenStore.OriginalUserDisplayName = state.OriginalUserDisplayName;
                 TokenStore.IsEntraSession = state.IsEntraSession;
+                TokenStore.IsSeller = state.IsSeller;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -354,6 +357,9 @@
         // to come back with it — otherwise ending that impersonation looks like a password
         // session and writes the admin's own bridged token into local storage, where a later
         // reload would restore a stale one instead of re-bridging. Defaulted, same rule as above.
+        // Store sellers (backlog 251): the Selling workspace is in the menu only while this is
+        // true, so it must survive a reload like IsModerator. Defaulted, same rule as above.
+        bool IsSeller = false,
         bool IsEntraSession = false
     );
 

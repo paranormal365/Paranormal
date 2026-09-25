@@ -632,6 +632,8 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHand
     Ben.Data.WebApi.Authorization.AppAdministratorHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Ben.Data.WebApi.Authorization.ModeratorHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Ben.Data.WebApi.Authorization.SellerHandler>();
 
 // Feed media screening (item 186 F5/F5b). The automatic ONNX classifier registers when its model
 // file is present (fetched by scripts/get-screener-model.sh — 87 MB, deliberately not in git);
@@ -696,6 +698,13 @@ builder.Services.AddAuthorization(options =>
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .AddRequirements(new Ben.Data.WebApi.Authorization.ModeratorRequirement()));
+
+    // Store sellers (backlog 251): the Seller role, and only that — see SellerRequirement.
+    options.AddPolicy(AuthPolicyNames.Seller, policy =>
+        policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .AddRequirements(new Ben.Data.WebApi.Authorization.SellerRequirement()));
 
     // "EntraOnly" policy used by [Authorize(Policy = AuthPolicyNames.EntraOnly)] on
     // EntraAuthController's Register/Link actions — those need to read the caller's OID/email
