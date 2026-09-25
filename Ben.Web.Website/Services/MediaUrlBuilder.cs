@@ -106,6 +106,26 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
 
     public string EventPhoto(Guid uploadFileId) => $"/media/event-photo/{uploadFileId}";
 
+    public string StoreProductFile(Guid fileId)
+    {
+        var cacheKey = $"store-file:{fileId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(fileId, token);
+        return _urls[cacheKey] = $"/media/store-files/{fileId}?t={Uri.EscapeDataString(ticket)}";
+    }
+
+    public string StoreOrderDownload(Guid orderId, Guid fileId, string? orderToken)
+    {
+        var cacheKey = $"store-download:{orderId}:{fileId}:{orderToken}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+        var token = _tokens.AccessToken;
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(token)) query.Add($"t={Uri.EscapeDataString(_tickets.Protect(fileId, token))}");
+        if (!string.IsNullOrWhiteSpace(orderToken)) query.Add($"o={Uri.EscapeDataString(orderToken)}");
+        return _urls[cacheKey] = $"/media/store-downloads/{orderId}/{fileId}" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+    }
+
     private string Build(Guid fileId, string kind)
     {
         var cacheKey = $"{kind}:{fileId}";

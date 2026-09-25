@@ -81,4 +81,16 @@ public interface IMediaUrlBuilder
     /// (storefront). Anonymous, and served whether or not the shop is switched on.
     /// </summary>
     string StoreImage(Guid uploadFileId, bool thumbnail = false);
+
+    /// <summary>
+    /// A product's file for the people who keep it — the store's staff and the product's seller (store
+    /// sellers P11). Private files included, so the viewer's ticket is required.
+    /// </summary>
+    string StoreProductFile(Guid fileId);
+
+    /// <summary>
+    /// A file a buyer downloads from their paid order (store sellers P11). The order's own link token
+    /// travels as well, for a guest with no account; the API checks paid, not cancelled and not refunded.
+    /// </summary>
+    string StoreOrderDownload(Guid orderId, Guid fileId, string? orderToken);
 }

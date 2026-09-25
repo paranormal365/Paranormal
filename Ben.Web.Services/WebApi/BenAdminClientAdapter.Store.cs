@@ -93,6 +93,15 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default)
         => OrderDoorAsync<StoreInvoiceRecord>(WithToken($"/api/store/orders/{orderId}/invoice", accessToken), token);
 
+    public Task<ItemResult<List<StoreOrderDownloadRecord>>> GetStoreOrderDownloadsAsync(Guid orderId, string? accessToken, CancellationToken token = default)
+        => OrderDoorAsync<List<StoreOrderDownloadRecord>>(WithToken($"/api/store/orders/{orderId}/downloads", accessToken), token);
+
+    public Task<ItemResult<StoreManualRecord>> GetStoreOrderManualAsync(Guid orderId, Guid fileId, string? accessToken, CancellationToken token = default)
+        => OrderDoorAsync<StoreManualRecord>(WithToken($"/api/store/orders/{orderId}/downloads/{fileId}/manual", accessToken), token);
+
+    public Task<ItemResult<StoreManualRecord>> GetStoreProductManualAsync(Guid fileId, CancellationToken token = default)
+        => OrderDoorAsync<StoreManualRecord>($"/api/store/product-files/{fileId}/manual", token);
+
     /// <summary>
     /// An order door's answer: the record, NOTHING on 404, or a failure for anything else.
     /// </summary>

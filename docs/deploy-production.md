@@ -364,7 +364,9 @@ database needs, in order, **before** the code is deployed:
    which moves any order-level tracking onto package 1 and then drops StoreOrders' Carrier, TrackingNumber
    and TrackingUrl. Deploy the code with it: the old code reads those columns. Then `StoreRefundShipping`
    (one new table), `StoreEconomics` (six columns; old lines' markup set to their price) and
-   `StoreSellerEarnings` (two new tables).
+   `StoreSellerEarnings` (two new tables) and `StoreProductFiles` (one new table; the API's seeder adds the
+   "Store Product File" upload type at start-up). Uploads of product files are up to 95 MB — under
+   Cloudflare's 100 MB request cap; the API's request limit for that route is 100 MB.
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

@@ -849,6 +849,37 @@ app.MapGet("/media/store-image/{fileId:guid}/thumb", async (
         accessToken: null, httpFactory, ctx, ct, cacheControl: "public, max-age=31536000, immutable");
 }).AllowAnonymous();
 
+// A product's file for the people who keep it (store sellers P11): the store's staff and the product's
+// seller, private files included. The ticket is required — the API answers 404 to anybody else.
+app.MapGet("/media/store-files/{fileId:guid}", async (
+    Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/store/product-files/{fileId}/download",
+        accessToken, httpFactory, ctx, ct, cacheControl: "private, no-store");
+}).AllowAnonymous();
+
+// A buyer's download from their paid order (store sellers P11). A signed-in buyer's ticket, or the
+// order's own link token (o) for a guest; the API checks paid, not cancelled and not wholly refunded.
+app.MapGet("/media/store-downloads/{orderId:guid}/{fileId:guid}", async (
+    Guid orderId, Guid fileId, string? t, string? o,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    if (accessToken is null && string.IsNullOrWhiteSpace(o)) return Results.NotFound();
+    var query = string.IsNullOrWhiteSpace(o) ? "" : $"?t={Uri.EscapeDataString(o)}";
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/store/orders/{orderId}/downloads/{fileId}{query}",
+        accessToken, httpFactory, ctx, ct, cacheControl: "private, no-store");
+}).AllowAnonymous();
+
 // A session on a hosted event's programme, as a calendar file (item 235 phase 10). Anonymous: the
 // programme is public once published, and a calendar app following the link carries no session.
 app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics", async (

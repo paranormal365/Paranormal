@@ -358,4 +358,19 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> RetryStoreRefundTaxAsync(Guid orderId, Guid refundId, CancellationToken token = default)
         => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/refunds/{refundId}/retry-tax", null, token);
+
+    public Task<LoadResult<StoreProductFileRecord>> GetStoreProductFilesAsync(Guid productId, CancellationToken token = default)
+        => _api.GetListAsync<StoreProductFileRecord>($"/api/admin/store/products/{productId}/files", token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> AddStoreProductFileAsync(Guid productId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<List<StoreProductFileRecord>>($"/api/admin/store/products/{productId}/files", content, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> AddStoreProductManualAsync(Guid productId, SaveStoreManualRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreManualRequest, List<StoreProductFileRecord>>(HttpMethod.Post, $"/api/admin/store/products/{productId}/files/manual", request, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> SaveStoreProductFileAsync(Guid productId, Guid fileId, SaveStoreProductFileRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreProductFileRequest, List<StoreProductFileRecord>>(HttpMethod.Put, $"/api/admin/store/products/{productId}/files/{fileId}", request, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> DeleteStoreProductFileAsync(Guid productId, Guid fileId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, List<StoreProductFileRecord>>(HttpMethod.Delete, $"/api/admin/store/products/{productId}/files/{fileId}", new { }, token);
 }

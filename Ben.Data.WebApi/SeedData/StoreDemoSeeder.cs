@@ -276,6 +276,28 @@ internal static class StoreDemoSeeder
                     OnHand = parts[i].OnHand, SortOrder = i, DateCreated = now,
                 });
         }
+        // Her quick-start manual for buyers, and her build notes kept private (P11) — written on the
+        // site, so the demo needs no stored bytes. The buyers of her REM pod find it on their order.
+        if (!await db.StoreProductFiles.AnyAsync(f => f.ProductId == remPod.Id, ct))
+        {
+            db.StoreProductFiles.Add(new StoreProductFile
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000800"), ProductId = remPod.Id, Kind = StoreProductFileKind.Manual,
+                Audience = StoreFileAudience.Buyers, Title = "REM Pod quick start", VersionLabel = "1.0", SortOrder = 0,
+                ManualHtml = "<h2>Before you start</h2><p>Fit four AA batteries, then hold <strong>Power</strong> for two seconds. "
+                           + "The ring lights green once the field is steady.</p><h2>On an investigation</h2><ul><li>Set it on a flat surface, "
+                           + "away from phones and radios.</li><li>Wait a minute for it to settle before you start asking questions.</li>"
+                           + "<li>The alarm sounds when something disturbs the field; the lights show which side.</li></ul>",
+                DateCreated = now, CreatedByAppUserId = seller,
+            });
+            db.StoreProductFiles.Add(new StoreProductFile
+            {
+                Id = new Guid("a1000000-0000-0000-0028-000000000801"), ProductId = remPod.Id, Kind = StoreProductFileKind.Document,
+                Audience = StoreFileAudience.Private, Title = "Build notes", SortOrder = 1,
+                ManualHtml = "<p>Antenna lead 14 cm. Test the alarm at arm's length before boxing.</p>",
+                DateCreated = now, CreatedByAppUserId = seller,
+            });
+        }
         await db.SaveChangesAsync(ct);
     }
 

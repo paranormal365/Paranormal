@@ -146,6 +146,33 @@ public sealed class StoreImageStorage(
     }
 
     /// <summary>
+    /// Files a product's file as it came — not a picture, so nothing is re-encoded (store sellers
+    /// P11). Ownerless and never public: every download is checked. Unsaved, like <see cref="SaveAsync"/>.
+    /// </summary>
+    public async Task<UploadFile> SaveFileAsync(BenDataContext db, Stream content, long length, string? contentType, string fileName,
+        string folder, Guid adminId, CancellationToken ct)
+    {
+        var extension = Path.GetExtension(Path.GetFileName(fileName));
+        var storedName = $"{Guid.NewGuid()}{(extension.Length is > 0 and <= 10 ? extension.ToLowerInvariant() : ".bin")}";
+        var path = $"store/{folder}/{storedName}";
+        await storage.WriteAsync(path, content, ct);
+
+        var file = new UploadFile
+        {
+            Id = Guid.NewGuid(), UploadFileTypeId = UploadFileTypeSeeder.StoreProductFileTypeId, AppUserId = null, OwnerOrganizationId = null,
+            FileName = Path.GetFileName(fileName), StoredFileName = storedName,
+            ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+            FileSize = length, StoragePath = path, IsPublic = false, ExpiresAtUtc = null,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId,
+        };
+        db.UploadFiles.Add(file);
+        return file;
+    }
+
+    /// <summary>A stored file's bytes, to stream to somebody already checked.</summary>
+    public Task<Stream> OpenAsync(string storagePath, CancellationToken ct) => storage.OpenReadAsync(storagePath, ct);
+
+    /// <summary>
     /// Removes a picture nothing points at any more — the row, then its bytes. A row something
     /// else still holds — an order line keeps the picture it was bought with — is left.
     /// </summary>

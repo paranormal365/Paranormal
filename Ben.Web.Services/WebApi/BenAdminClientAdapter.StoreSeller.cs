@@ -132,4 +132,19 @@ public sealed partial class BenAdminClientAdapter
         Guid productId, Guid imageId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, SellerItemRecord>(
                HttpMethod.Delete, $"/api/seller/store/products/{productId}/images/{imageId}", new { }, token);
+
+    public Task<LoadResult<StoreProductFileRecord>> GetSellerItemFilesAsync(Guid productId, CancellationToken token = default)
+        => _api.GetListAsync<StoreProductFileRecord>($"/api/seller/store/products/{productId}/files", token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> AddSellerItemFileAsync(Guid productId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<List<StoreProductFileRecord>>($"/api/seller/store/products/{productId}/files", content, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> AddSellerItemManualAsync(Guid productId, SaveStoreManualRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreManualRequest, List<StoreProductFileRecord>>(HttpMethod.Post, $"/api/seller/store/products/{productId}/files/manual", request, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> SaveSellerItemFileAsync(Guid productId, Guid fileId, SaveStoreProductFileRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreProductFileRequest, List<StoreProductFileRecord>>(HttpMethod.Put, $"/api/seller/store/products/{productId}/files/{fileId}", request, token);
+
+    public Task<(List<StoreProductFileRecord>? Result, string? Error)> DeleteSellerItemFileAsync(Guid productId, Guid fileId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, List<StoreProductFileRecord>>(HttpMethod.Delete, $"/api/seller/store/products/{productId}/files/{fileId}", new { }, token);
 }

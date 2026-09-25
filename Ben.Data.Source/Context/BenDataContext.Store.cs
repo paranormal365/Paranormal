@@ -345,6 +345,18 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.OrderItemId).OnDelete(DeleteBehavior.NoAction);
             refundItem.ToTable(t => t.HasCheckConstraint("CK_StoreRefundItems_Quantity", "[Quantity] >= 1"));
 
+            // Store sellers P11: files that go with a product. The bytes are NoAction — the editor
+            // removes them with the row.
+            var productFile = modelBuilder.Entity<StoreProductFile>();
+            productFile.Property(e => e.Title).HasMaxLength(StoreProductFile.MaxTitleLength);
+            productFile.Property(e => e.VersionLabel).HasMaxLength(StoreProductFile.MaxVersionLength);
+            productFile.Property(e => e.FileName).HasMaxLength(260);
+            productFile.HasIndex(e => new { e.ProductId, e.SortOrder });
+            productFile.HasOne(e => e.Product).WithMany()
+                .HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            productFile.HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             // Store sellers P10: what sellers are owed, and what they've been paid. Every person key is
             // NoAction: these are money records, kept when an account goes (its name is anonymised).
             var earning = modelBuilder.Entity<StoreSellerEarning>();

@@ -63,6 +63,15 @@ public interface IBenStoreClient
 
     Task<ItemResult<StoreInvoiceRecord>> GetStoreOrderInvoiceAsync(Guid orderId, string? accessToken, CancellationToken token = default);
 
+    /// <summary>What a paid order lets its buyer download (store sellers P11). Empty when nothing, or not theirs.</summary>
+    Task<ItemResult<List<StoreOrderDownloadRecord>>> GetStoreOrderDownloadsAsync(Guid orderId, string? accessToken, CancellationToken token = default);
+
+    /// <summary>A written manual from a paid order, to read or print.</summary>
+    Task<ItemResult<StoreManualRecord>> GetStoreOrderManualAsync(Guid orderId, Guid fileId, string? accessToken, CancellationToken token = default);
+
+    /// <summary>A written manual for the people who keep it — the store's staff and the product's seller.</summary>
+    Task<ItemResult<StoreManualRecord>> GetStoreProductManualAsync(Guid fileId, CancellationToken token = default);
+
     /// <summary>My Orders: the signed-in person's paid orders, newest first.</summary>
     Task<LoadResult<StoreOrderSummaryView>> GetMyStoreOrdersAsync(int? months = null, CancellationToken token = default);
 

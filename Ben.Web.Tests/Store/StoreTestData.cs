@@ -89,6 +89,15 @@ internal static class StoreTestData
             IsActive = true, DateCreated = Now, CreatedByAppUserId = admin.Id,
         });
 
+    /// <summary>The upload type a product's files are stored under (store sellers P11).</summary>
+    public static void StoreProductFileType(BenDataContext db, AppUser admin)
+        => db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.StoreProductFileTypeId,
+            Name = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.StoreProductFileTypeName,
+            IsActive = true, DateCreated = Now, CreatedByAppUserId = admin.Id,
+        });
+
     /// <summary>A real JPEG, so the sanitizer has something to decode.</summary>
     public static byte[] Jpeg(int width = 1200, int height = 900)
     {

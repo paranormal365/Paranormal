@@ -79,6 +79,26 @@ hand, the tab also says how many units you could build from them.
 
 Only you and the store see this tab; shoppers never do.
 
+## Files
+
+The **Files** tab keeps an item's manuals, firmware, software and documents. For each file choose
+who gets it:
+
+- **For buyers** — everybody who buys the item finds it under **Downloads** on their order page,
+  once the order is paid. It stays there for as long as they keep the order, unless that item was
+  refunded in full.
+- **Private** — only you and the store. Use it for build notes, supplier sheets or the master copy
+  of a manual.
+
+**Upload a file** takes anything up to 95 MB: a PDF, a firmware image, a zip. Give it a title — it's
+what buyers see — and, if you like, a version. **Write a manual** keeps one written on the site: it
+reads well on a phone and prints cleanly. Type it with simple Markdown (`#` for a heading, `**bold**`,
+`-` for a list), or **Import from a file** to start from a `.md` or `.txt` file you already have.
+A Word document is best uploaded as a file.
+
+**Edit** changes a file's title, kind, version or who gets it; **Remove** takes it away — buyers who
+had it lose it too. Every change is in the item's **History**.
+
 ## Sending packages
 
 **Each seller sends their own package.** When a paid order has your items in it you get an email and

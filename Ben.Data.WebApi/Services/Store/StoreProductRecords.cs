@@ -89,6 +89,13 @@ public static class StoreProductRecords
             StoreCostMath.Buildable(records.Select(r => (r.OnHand, r.QuantityPerUnit))), product.Edited);
     }
 
+    /// <summary>A product's files, in their order (P11).</summary>
+    public static Task<List<StoreProductFileRecord>> FilesAsync(BenDataContext db, Guid productId, CancellationToken ct)
+        => db.StoreProductFiles.AsNoTracking().Where(f => f.ProductId == productId).OrderBy(f => f.SortOrder).ThenBy(f => f.DateCreated)
+            .Select(f => new StoreProductFileRecord(f.Id, f.Kind, f.Audience, f.Title, f.VersionLabel, f.FileName, f.SizeBytes,
+                f.ManualHtml != null, f.SortOrder, f.DateUpdated ?? f.DateCreated))
+            .ToListAsync(ct);
+
     /// <summary>The requests <paramref name="query"/> selects, newest first, each with what its item still needs.</summary>
     public static async Task<List<StoreSaleRequestRecord>> RequestsAsync(
         BenDataContext db, IQueryable<StoreProductSaleRequest> query, CancellationToken ct)

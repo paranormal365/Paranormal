@@ -156,6 +156,15 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="Files" Id="files">
+                    <div class="pt-3">
+                        <StoreFilesPanel Files="_files" Loading="_filesLoading" Busy="_busy" Error="@_filesError" OnRetry="LoadFilesAsync"
+                                         OnUpload="UploadFileAsync" OnManual="WriteManualAsync" OnSave="@(x => SaveFileAsync(x.FileId, x.Meta))" OnDelete="DeleteFileAsync">
+                            <Help><HelpLink Slug="selling-in-the-store" Anchor="files" /></Help>
+                        </StoreFilesPanel>
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first — yours, and the store's.</p>
@@ -245,7 +254,7 @@
         if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
         _categories = await Seller.GetSellerCategoriesAsync();
-        if (Tab is "details" or "variants" or "pictures" or "parts" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
         StateHasChanged();
@@ -288,6 +297,7 @@
     {
         if (_tab == "history") await LoadHistoryAsync();
         if (_tab == "parts") await LoadPartsAsync();
+        if (_tab == "files") await LoadFilesAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -504,4 +514,55 @@
         if (saved is null) { _partsError = error ?? "The picture could not be removed."; return; }
         _parts = ItemResult<StorePartsRecord>.Ok(saved);
     }
+
+    // ── files (store sellers P11) ────────────────────────────────────────────
+
+    private LoadResult<StoreProductFileRecord> _files;
+    private bool _filesLoading;
+    private string? _filesError;
+
+    private async Task LoadFilesAsync()
+    {
+        _filesLoading = true;
+        _files = await Seller.GetSellerItemFilesAsync(ProductId);
+        _filesLoading = false;
+    }
+
+    private async Task<bool> FilesAnswerAsync(Task<(List<StoreProductFileRecord>? Result, string? Error)> call, string failed, string? done = null)
+    {
+        _busy = true; _filesError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _filesError = error ?? failed; return false; }
+            _files = LoadResult<StoreProductFileRecord>.Ok(saved);
+            if (done is not null) Toasts.Success(done);
+            return true;
+        }
+        // The panel calls these through a Func, not an EventCallback, so nothing re-renders this page by itself.
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private async Task<bool> UploadFileAsync(IBrowserFile file, SaveStoreProductFileRequest meta)
+    {
+        _filesError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(file, new Dictionary<string, string?>
+            {
+                ["title"] = meta.Title, ["kind"] = meta.Kind.ToString(), ["audience"] = meta.Audience.ToString(), ["versionLabel"] = meta.VersionLabel,
+            }, StoreUploads.MaxFileBytes);
+            return await FilesAnswerAsync(Seller.AddSellerItemFileAsync(ProductId, content), "The file could not be added.", "File added.");
+        }
+        catch (IOException) { _filesError = StoreUploads.FileTooLarge; StateHasChanged(); return false; }
+    }
+
+    private Task<bool> WriteManualAsync(SaveStoreManualRequest request)
+        => FilesAnswerAsync(Seller.AddSellerItemManualAsync(ProductId, request), "The manual could not be added.", "Manual added.");
+
+    private Task SaveFileAsync(Guid fileId, SaveStoreProductFileRequest meta)
+        => FilesAnswerAsync(Seller.SaveSellerItemFileAsync(ProductId, fileId, meta), "The file could not be saved.", "File saved.");
+
+    private Task DeleteFileAsync(Guid fileId)
+        => FilesAnswerAsync(Seller.DeleteSellerItemFileAsync(ProductId, fileId), "The file could not be removed.", "File removed.");
 }

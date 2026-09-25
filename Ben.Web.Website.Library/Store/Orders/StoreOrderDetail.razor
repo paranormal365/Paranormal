@@ -250,6 +250,32 @@
             </ul>
         }
 
+        @* Store sellers P11: the files for buyers of what this order holds — manuals, firmware, software. *@
+        @if (_downloadsFailed)
+        {
+            <p class="small text-secondary mb-4">Your downloads couldn't be loaded just now — reload the page to try again.</p>
+        }
+        else if (_downloads.Count > 0)
+        {
+            <h2 class="h6 fw-bold">Downloads</h2>
+            <ul class="list-unstyled small mb-4" data-testid="order-downloads">
+                @foreach (var d in _downloads)
+                {
+                    <li class="mb-1" data-testid="order-download">
+                        @if (d.IsManual)
+                        {
+                            <a href="@ManualHref(d)" target="_blank" rel="noopener">@d.Title</a>
+                        }
+                        else
+                        {
+                            <a href="@MediaUrls.StoreOrderDownload(Id, d.FileId, Token)" download="@d.FileName">@d.Title</a>
+                        }
+                        <span class="text-secondary">— @d.ProductName@(d.VersionLabel is { } v ? $", version {v}" : null)@(d.SizeBytes is { } b ? $", {Ben.Web.Website.Library.Store.Editor.StoreFilesPanel.Size(b)}" : null)</span>
+                    </li>
+                }
+            </ul>
+        }
+
         <p class="small text-secondary mb-0">
             Something wrong with it? You have @order.ReturnsWindowDays days from delivery to <a href="/store/returns">return it</a>.
             @if (order.SupportEmail is { } support)
@@ -267,6 +293,8 @@
     [SupplyParameterFromQuery(Name = "t")] public string? Token { get; set; }
 
     private StoreOrderView? _order;
+    private List<StoreOrderDownloadRecord> _downloads = [];
+    private bool _downloadsFailed;
     private bool? _loaded;
     private string? _refusal;
 
@@ -289,12 +317,21 @@
         var error = read.Failed ? read.Reason ?? "The order couldn't be loaded just now." : null;
         _refusal = error;
         _order = read.Item;
+        if (_order?.PaidUtc is not null)
+        {
+            var downloads = await Store.GetStoreOrderDownloadsAsync(Id, Token);
+            _downloadsFailed = downloads.Failed;
+            _downloads = downloads.Item ?? [];
+        }
         _loaded = true;
         StateHasChanged();
     }
 
     private string InvoiceHref(StoreOrderView order)
         => string.IsNullOrEmpty(Token) ? $"/store/orders/{order.Id}/invoice" : $"/store/orders/{order.Id}/invoice?t={Uri.EscapeDataString(Token)}";
+
+    private string ManualHref(StoreOrderDownloadRecord d)
+        => string.IsNullOrEmpty(Token) ? $"/store/orders/{Id}/manuals/{d.FileId}" : $"/store/orders/{Id}/manuals/{d.FileId}?t={Uri.EscapeDataString(Token)}";
 
     private static string Address(StoreOrderAddressView a)
         => string.Join(", ", new[] { a.Street1, a.Street2, a.City, $"{a.State} {a.Zip}" }.Where(p => !string.IsNullOrWhiteSpace(p)));

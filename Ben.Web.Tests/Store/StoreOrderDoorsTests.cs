@@ -45,7 +45,8 @@ public sealed class StoreOrderDoorsTests : IAsyncLifetime
         };
         if (cartHeader is not null) context.Request.Headers[StoreCartController.CartHeader] = cartHeader;
         var site = Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://test.local" });
-        return new StoreOrderController(_sqlite.Factory, new StoreOrderMailer(TestOutbox.WithoutMail(_sqlite.Factory), site), site)
+        return new StoreOrderController(_sqlite.Factory, new StoreOrderMailer(TestOutbox.WithoutMail(_sqlite.Factory), site), site,
+            new StoreImageStorage(TestMedia.StorageOnDisk(Path.GetTempPath()), new MediaSanitizationService(), TestMedia.Ingest()))
         {
             ControllerContext = new ControllerContext { HttpContext = context },
         };

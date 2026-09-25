@@ -32,4 +32,7 @@ public enum StoreProductChangeArea
 
     /// <summary>The parts list and the "other" cost line — what a unit costs to make (P4).</summary>
     Parts = 9,
+
+    /// <summary>Files: manuals, firmware, documents — added, changed, removed (P11).</summary>
+    Files = 10,
 }

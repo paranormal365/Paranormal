@@ -34,7 +34,7 @@ namespace Ben.Data.WebApi.Controllers.Store;
 [Route("api/store/orders")]
 [EnableRateLimiting(RateLimiting.StoreOrderDoorPolicy)]
 public sealed class StoreOrderController(
-    IDbContextFactory<BenDataContext> dbFactory, StoreOrderMailer mailer, IOptions<SiteIdentity> site) : BenControllerBase
+    IDbContextFactory<BenDataContext> dbFactory, StoreOrderMailer mailer, IOptions<SiteIdentity> site, StoreImageStorage storage) : BenControllerBase
 {
     public static readonly TimeSpan CartOwnershipWindow = TimeSpan.FromHours(1);
 
@@ -101,6 +101,44 @@ public sealed class StoreOrderController(
         if (order is not null && await mailer.QueueOrderLinkAsync(db, order, DateTime.UtcNow, ct))
             await db.SaveChangesAsync(ct);
         return NoContent();
+    }
+
+    // ── downloads (store sellers P11) ────────────────────────────────────────
+
+    /// <summary>The files for buyers of what this order holds — once paid, not cancelled, not for a wholly refunded line.</summary>
+    [HttpGet("{id:guid}/downloads")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<StoreOrderDownloadRecord>>> Downloads(Guid id, [FromQuery] string? t, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var order = await LoadAsync(db, id, ct);
+        if (order is null || !(await AccessAsync(db, order, t, allowCart: false, ct)).MayRead) return NotFound();
+        return Ok(await StoreOrderDownloads.ForOrderAsync(db, order, ct));
+    }
+
+    [HttpGet("{id:guid}/downloads/{fileId:guid}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Download(Guid id, Guid fileId, [FromQuery] string? t, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var order = await LoadAsync(db, id, ct);
+        if (order is null || !(await AccessAsync(db, order, t, allowCart: false, ct)).MayRead) return NotFound();
+        if ((await StoreOrderDownloads.ForOrderAsync(db, order, ct)).All(d => d.FileId != fileId)) return NotFound();
+        var upload = await db.StoreProductFiles.AsNoTracking().Where(f => f.Id == fileId).Select(f => f.UploadFile).FirstOrDefaultAsync(ct);
+        if (upload is not { StoragePath: { Length: > 0 } path }) return NotFound();
+        return File(await storage.OpenAsync(path, ct), upload.ContentType ?? "application/octet-stream", upload.FileName, enableRangeProcessing: true);
+    }
+
+    [HttpGet("{id:guid}/downloads/{fileId:guid}/manual")]
+    [AllowAnonymous]
+    public async Task<ActionResult<StoreManualRecord>> Manual(Guid id, Guid fileId, [FromQuery] string? t, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var order = await LoadAsync(db, id, ct);
+        if (order is null || !(await AccessAsync(db, order, t, allowCart: false, ct)).MayRead) return NotFound();
+        if (!(await StoreOrderDownloads.ForOrderAsync(db, order, ct)).Any(d => d.FileId == fileId && d.IsManual)) return NotFound();
+        var file = await db.StoreProductFiles.AsNoTracking().Include(f => f.Product).FirstAsync(f => f.Id == fileId, ct);
+        return Ok(new StoreManualRecord(file.Id, file.Product.Name, file.Title, file.VersionLabel, file.ManualHtml!));
     }
 
     private async Task<(bool MayRead, bool Owner)> AccessAsync(BenDataContext db, StoreOrder order, string? token, bool allowCart, CancellationToken ct)

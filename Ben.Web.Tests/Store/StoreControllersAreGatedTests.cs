@@ -29,6 +29,9 @@ public sealed class StoreControllersAreGatedTests
         [nameof(PublicStoreImageController)] =
             "Pictures serve while the shop is dark: the catalogue is entered and previewed before anybody can see it, "
           + "and an order page shows what was bought whether the shop is open or not.",
+        ["StoreProductFileController"] =
+            "A product's files for the people who keep them — the store's staff and the item's seller — who work while the "
+          + "shop is dark, like the editors that list these files (store sellers P11).",
     };
 
     private static IEnumerable<Type> StoreControllers()

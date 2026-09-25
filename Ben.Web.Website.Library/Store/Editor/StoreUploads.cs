@@ -14,11 +14,16 @@ internal static class StoreUploads
 
     public const string TooLarge = "That file is too large — 40 MB at most.";
 
+    /// <summary>A product file's ceiling (store sellers P11) — under Cloudflare's 100 MB request cap.</summary>
+    public const long MaxFileBytes = 95L * 1024 * 1024;
+
+    public const string FileTooLarge = "That file is too large — 95 MB at most.";
+
     public static async Task<MultipartFormDataContent> ContentAsync(
-        IBrowserFile file, IReadOnlyDictionary<string, string?>? fields = null)
+        IBrowserFile file, IReadOnlyDictionary<string, string?>? fields = null, long maxBytes = MaxBytes)
     {
         using var buffer = new MemoryStream();
-        await using (var browser = file.OpenReadStream(MaxBytes)) await browser.CopyToAsync(buffer);
+        await using (var browser = file.OpenReadStream(maxBytes)) await browser.CopyToAsync(buffer);
 
         var content = new MultipartFormDataContent();
         var bytes = new ByteArrayContent(buffer.ToArray());

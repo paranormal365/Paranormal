@@ -315,7 +315,13 @@
     .ben-invoice, .ben-invoice * { visibility: visible; }
     .ben-invoice { position: absolute; inset: 0 0 auto 0; border: 0; box-shadow: none; }
     .ben-invoice-toolbar { display: none; }
+    .ben-manual, .ben-manual * { visibility: visible; }
+    .ben-manual { position: absolute; inset: 0 0 auto 0; }
 }
+
+/* A written manual (store sellers P11): readable measure, pictures kept inside it. */
+.ben-manual { max-width: 48rem; }
+.ben-manual img { max-width: 100%; height: auto; }
 
 /* A line item's picture (StoreLineThumb): small, rounded, cropped square; a placeholder keeps rows lined up. */
 .ben-line-thumb { flex: 0 0 auto; object-fit: cover; border-radius: var(--bs-border-radius); border: 1px solid var(--bs-border-color); background: var(--bs-secondary-bg); }

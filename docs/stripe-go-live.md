@@ -209,7 +209,8 @@ On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for
    Carrier/TrackingNumber/TrackingUrl columns — the one migration here that removes columns),
    `StoreRefundShipping` (package shipping given back with a refund), `StoreEconomics` (each line's cost,
    seller's ask and earning, and markup; the order's Stripe fee and net), `StoreSellerEarnings` (sellers'
-   earnings and payouts).
+   earnings and payouts), `StoreProductFiles` (products' manuals and downloads; the "Store Product File"
+   upload type is added by the API's seeder when it starts).
    `dotnet ef database update` applies them all.
 2. Deploy both sites. The store is still dark.
 3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count

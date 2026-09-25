@@ -1,4 +1,5 @@
 using Ben.Data.Common.Constants;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services.Store;
 using Ben.Service.Models.Store;
@@ -214,6 +215,63 @@ public sealed class SellerStoreProductEditController(
         if (await MineAsync(db, id, ct) is null) return NotFound();
         if (await _editor.RemovePartPictureAsync(db, id, partId, Seller, ct) is { } refusal) return this.Refused(refusal);
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
+    }
+
+    // ── files (store sellers P11) ────────────────────────────────────────────
+
+    [HttpGet("{id:guid}/files")]
+    public async Task<ActionResult<IEnumerable<StoreProductFileRecord>>> Files(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        return Ok(await StoreProductRecords.FilesAsync(db, id, ct));
+    }
+
+    [HttpPost("{id:guid}/files")]
+    [RequestSizeLimit(100_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
+    public async Task<ActionResult<IEnumerable<StoreProductFileRecord>>> AddFile(Guid id, IFormFile? file, [FromForm] string? title,
+        [FromForm] StoreProductFileKind kind, [FromForm] StoreFileAudience audience, [FromForm] string? versionLabel, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (file is null || file.Length == 0) return BadRequest("There was no file in that upload.");
+        await using var stream = file.OpenReadStream();
+        if (await _editor.AddFileAsync(db, id, stream, file.Length, file.ContentType, file.FileName,
+                new SaveStoreProductFileRequest(title ?? "", kind, audience, versionLabel, 0), me, ct) is { } refusal)
+            return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FilesAsync(db, id, ct));
+    }
+
+    [HttpPost("{id:guid}/files/manual")]
+    public async Task<ActionResult<IEnumerable<StoreProductFileRecord>>> AddManual(Guid id, [FromBody] SaveStoreManualRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (await _editor.AddManualAsync(db, id, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FilesAsync(db, id, ct));
+    }
+
+    [HttpPut("{id:guid}/files/{fileId:guid}")]
+    public async Task<ActionResult<IEnumerable<StoreProductFileRecord>>> SaveFile(Guid id, Guid fileId, [FromBody] SaveStoreProductFileRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (await StoreProductEditor.UpdateFileAsync(db, id, fileId, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FilesAsync(db, id, ct));
+    }
+
+    [HttpDelete("{id:guid}/files/{fileId:guid}")]
+    public async Task<ActionResult<IEnumerable<StoreProductFileRecord>>> DeleteFile(Guid id, Guid fileId, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (await _editor.DeleteFileAsync(db, id, fileId, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.FilesAsync(db, id, ct));
     }
 
     // ── pictures ─────────────────────────────────────────────────────────────

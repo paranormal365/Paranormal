@@ -95,4 +95,16 @@ public interface IBenStoreSellerClient
     Task<(StorePartsRecord? Result, string? Error)> SetSellerPartPictureAsync(Guid productId, Guid partId, MultipartFormDataContent content, CancellationToken token = default);
 
     Task<(StorePartsRecord? Result, string? Error)> RemoveSellerPartPictureAsync(Guid productId, Guid partId, CancellationToken token = default);
+
+    // ── files (P11) ──────────────────────────────────────────────────────────
+
+    Task<LoadResult<StoreProductFileRecord>> GetSellerItemFilesAsync(Guid productId, CancellationToken token = default);
+
+    Task<(List<StoreProductFileRecord>? Result, string? Error)> AddSellerItemFileAsync(Guid productId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(List<StoreProductFileRecord>? Result, string? Error)> AddSellerItemManualAsync(Guid productId, SaveStoreManualRequest request, CancellationToken token = default);
+
+    Task<(List<StoreProductFileRecord>? Result, string? Error)> SaveSellerItemFileAsync(Guid productId, Guid fileId, SaveStoreProductFileRequest request, CancellationToken token = default);
+
+    Task<(List<StoreProductFileRecord>? Result, string? Error)> DeleteSellerItemFileAsync(Guid productId, Guid fileId, CancellationToken token = default);
 }

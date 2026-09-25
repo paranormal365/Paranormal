@@ -276,6 +276,8 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         var pictures = await db.StoreProductImages.Where(i => i.ProductId == id).Select(i => i.UploadFileId).ToListAsync(ct);
         pictures.AddRange(await db.StoreProductParts.Where(x => x.ProductId == id && x.ThumbnailUploadFileId != null)
             .Select(x => x.ThumbnailUploadFileId!.Value).ToListAsync(ct));
+        pictures.AddRange(await db.StoreProductFiles.Where(x => x.ProductId == id && x.UploadFileId != null)
+            .Select(x => x.UploadFileId!.Value).ToListAsync(ct));
 
         // Children first on the NoAction paths (a variant's choices point at values that also
         // cascade from the product; a picture's variant likewise), then the product takes the rest.
@@ -284,6 +286,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
             await db.StoreProductVariantOptionValues.Where(x => x.Variant.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProductImages.Where(i => i.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProductSaleRequests.Where(r => r.ProductId == id).ExecuteDeleteAsync(ct);
+            await db.StoreProductFiles.Where(f => f.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProducts.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
             if (tx is not null) await tx.CommitAsync(ct);
         }
@@ -937,6 +940,107 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         await images.RemoveAsync(db, file, ct);
         return null;
     }
+
+    // ── files (P11) ──────────────────────────────────────────────────────────
+
+    public const int MaxFiles = 50;
+
+    private static string? FileProblem(string? title, string? version)
+    {
+        var t = title?.Trim();
+        if (string.IsNullOrEmpty(t)) return "Give the file a title — it's what buyers see.";
+        if (t.Length > StoreProductFile.MaxTitleLength) return $"A title is {StoreProductFile.MaxTitleLength} characters at most.";
+        if (version?.Trim().Length > StoreProductFile.MaxVersionLength) return $"A version is {StoreProductFile.MaxVersionLength} characters at most.";
+        return null;
+    }
+
+    private static string Who(StoreFileAudience audience) => audience == StoreFileAudience.Buyers ? "for buyers" : "private";
+
+    /// <summary>An uploaded file for a product, up to <see cref="StoreProductFile.MaxBytes"/>.</summary>
+    public async Task<StoreEditRefusal?> AddFileAsync(BenDataContext db, Guid productId, Stream content, long length, string? contentType,
+        string fileName, SaveStoreProductFileRequest meta, StoreEditActor actor, CancellationToken ct)
+    {
+        if (length <= 0) return StoreEditRefusal.BadRequest("There was no file in that upload.");
+        if (length > StoreProductFile.MaxBytes) return StoreEditRefusal.BadRequest("That file is too large — 95 MB at most.");
+        if (FileProblem(meta.Title, meta.VersionLabel) is { } problem) return StoreEditRefusal.BadRequest(problem);
+        if (await db.StoreProductFiles.CountAsync(f => f.ProductId == productId, ct) >= MaxFiles)
+            return StoreEditRefusal.BadRequest($"A product carries {MaxFiles} files at most.");
+
+        var stored = await images.SaveFileAsync(db, content, length, contentType, fileName, $"products/{productId:N}/files", actor.UserId, ct);
+        var now = DateTime.UtcNow;
+        db.StoreProductFiles.Add(new StoreProductFile
+        {
+            Id = Guid.NewGuid(), ProductId = productId, Kind = meta.Kind, Audience = meta.Audience, Title = meta.Title.Trim(),
+            VersionLabel = Trimmed(meta.VersionLabel), UploadFileId = stored.Id, FileName = stored.FileName, SizeBytes = length,
+            SortOrder = await NextFileOrderAsync(db, productId, ct), DateCreated = now, CreatedByAppUserId = actor.UserId,
+        });
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Files, $"Added {meta.Kind.ToString().ToLowerInvariant()} “{meta.Title.Trim()}” ({Who(meta.Audience)}).",
+            actor.UserId, actor.Role, now);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    /// <summary>A manual written on the site — or imported from Markdown or plain text — kept as sanitised HTML.</summary>
+    public async Task<StoreEditRefusal?> AddManualAsync(BenDataContext db, Guid productId, SaveStoreManualRequest request, StoreEditActor actor, CancellationToken ct)
+    {
+        if (FileProblem(request.Title, request.VersionLabel) is { } problem) return StoreEditRefusal.BadRequest(problem);
+        if (string.IsNullOrWhiteSpace(request.Body)) return StoreEditRefusal.BadRequest("The manual is empty.");
+        if (await db.StoreProductFiles.CountAsync(f => f.ProductId == productId, ct) >= MaxFiles)
+            return StoreEditRefusal.BadRequest($"A product carries {MaxFiles} files at most.");
+        var html = sanitizer.SanitizeHtml(request.IsMarkdown ? Markdig.Markdown.ToHtml(request.Body) : request.Body);
+        if (html.Length > 500_000) return StoreEditRefusal.BadRequest("A written manual is 500,000 characters at most — upload a PDF instead.");
+
+        var now = DateTime.UtcNow;
+        db.StoreProductFiles.Add(new StoreProductFile
+        {
+            Id = Guid.NewGuid(), ProductId = productId, Kind = StoreProductFileKind.Manual, Audience = request.Audience,
+            Title = request.Title.Trim(), VersionLabel = Trimmed(request.VersionLabel), ManualHtml = html,
+            SortOrder = await NextFileOrderAsync(db, productId, ct), DateCreated = now, CreatedByAppUserId = actor.UserId,
+        });
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Files, $"Wrote the manual “{request.Title.Trim()}” ({Who(request.Audience)}).",
+            actor.UserId, actor.Role, now);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    /// <summary>A file's title, kind, version, order and — most of all — who may have it.</summary>
+    public static async Task<StoreEditRefusal?> UpdateFileAsync(BenDataContext db, Guid productId, Guid fileId, SaveStoreProductFileRequest meta,
+        StoreEditActor actor, CancellationToken ct)
+    {
+        var file = await db.StoreProductFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.ProductId == productId, ct);
+        if (file is null) return StoreEditRefusal.NotFound;
+        if (FileProblem(meta.Title, meta.VersionLabel) is { } problem) return StoreEditRefusal.BadRequest(problem);
+
+        var said = new List<string>();
+        if (file.Audience != meta.Audience) said.Add(meta.Audience == StoreFileAudience.Buyers ? $"Gave buyers “{meta.Title.Trim()}”." : $"Made “{meta.Title.Trim()}” private.");
+        if (file.Title != meta.Title.Trim() || file.VersionLabel != Trimmed(meta.VersionLabel) || file.Kind != meta.Kind)
+            said.Add($"Changed the file “{meta.Title.Trim()}”.");
+        if (said.Count == 0 && file.SortOrder != meta.SortOrder) said.Add($"Moved the file “{file.Title}”.");
+        if (said.Count == 0) return null;
+        file.Title = meta.Title.Trim();
+        file.Kind = file.ManualHtml is null ? meta.Kind : StoreProductFileKind.Manual;
+        file.Audience = meta.Audience;
+        file.VersionLabel = Trimmed(meta.VersionLabel);
+        file.SortOrder = meta.SortOrder;
+        file.DateUpdated = DateTime.UtcNow;
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Files, string.Join(" ", said), actor.UserId, actor.Role, file.DateUpdated.Value);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    public async Task<StoreEditRefusal?> DeleteFileAsync(BenDataContext db, Guid productId, Guid fileId, StoreEditActor actor, CancellationToken ct)
+    {
+        var file = await db.StoreProductFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.ProductId == productId, ct);
+        if (file is null) return StoreEditRefusal.NotFound;
+        db.StoreProductFiles.Remove(file);
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Files, $"Removed the file “{file.Title}”.", actor.UserId, actor.Role, DateTime.UtcNow);
+        await db.SaveChangesAsync(ct);
+        if (file.UploadFileId is { } bytes) await images.RemoveAsync(db, bytes, ct);
+        return null;
+    }
+
+    private static async Task<int> NextFileOrderAsync(BenDataContext db, Guid productId, CancellationToken ct)
+        => (await db.StoreProductFiles.Where(f => f.ProductId == productId).MaxAsync(f => (int?)f.SortOrder, ct) ?? -1) + 1;
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

@@ -97,3 +97,23 @@ public sealed record StoreOrderEconomicsLine(
 public sealed record StoreOrderEconomicsRecord(
     IReadOnlyList<StoreOrderEconomicsLine> Lines, decimal SellerEarnings, decimal SellerShippingCredits, decimal ItemsMarkup,
     decimal Discount, decimal ShippingKept, decimal? StripeFee, decimal? StripeNet, decimal StoreMargin);
+
+// ── Product files (P11) ──────────────────────────────────────────────────────
+
+/// <param name="IsManual">Written on the site as HTML, not an upload.</param>
+public sealed record StoreProductFileRecord(
+    Guid Id, StoreProductFileKind Kind, StoreFileAudience Audience, string Title, string? VersionLabel,
+    string? FileName, long? SizeBytes, bool IsManual, int SortOrder, DateTime DateUpdated);
+
+public sealed record SaveStoreProductFileRequest(string Title, StoreProductFileKind Kind, StoreFileAudience Audience, string? VersionLabel, int SortOrder);
+
+/// <summary>A manual written on the site: HTML from the editor, or Markdown/plain text imported (<paramref name="IsMarkdown"/>).</summary>
+public sealed record SaveStoreManualRequest(string Title, string Body, bool IsMarkdown, StoreFileAudience Audience, string? VersionLabel);
+
+/// <summary>A written manual, to read or print.</summary>
+public sealed record StoreManualRecord(Guid Id, string ProductName, string Title, string? VersionLabel, string Html);
+
+/// <summary>A file a buyer may download from their paid order.</summary>
+public sealed record StoreOrderDownloadRecord(
+    Guid FileId, Guid ProductId, string ProductName, string Title, StoreProductFileKind Kind, string? VersionLabel,
+    string? FileName, long? SizeBytes, bool IsManual);

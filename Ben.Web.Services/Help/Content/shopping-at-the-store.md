@@ -176,6 +176,13 @@ it or save it as a PDF.
 
 Your orders stay open to you even if the store is closed for a while.
 
+## Downloads
+
+Some items come with files — a manual, firmware, software. Once your order is paid, its page lists
+them under **Downloads**; they stay there for as long as you have the order. A manual written on the
+site opens as a page of its own, with a **Print** button. If an item is refunded in full, its
+downloads go with it.
+
 ## Returns and refunds
 
 Every order can be returned within the store's returns window — the **Returns** page (linked from

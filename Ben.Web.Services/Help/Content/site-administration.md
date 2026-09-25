@@ -1214,6 +1214,15 @@ product's **cost basis**, rounded to the cent once at the end. A seller keeps th
 the store keeps the list for its own stock. A seller is paid cost basis plus their approved asking
 price for each unit sold. None of it is ever shown to shoppers.
 
+## Product files
+
+A product's **Files** tab holds its manuals, firmware, software and documents — uploads up to 95 MB,
+or a manual written on the site (Markdown, or imported from a `.md` or `.txt` file). Each file is
+**for buyers** or **private**. A file for buyers appears under **Downloads** on the order page of
+everyone who bought the product, once paid, while the order isn't cancelled and unless that line was
+refunded in full; a private one is only for the store and the product's seller. The seller manages
+their own item's files; the store can change any. Changes are recorded in the product's history.
+
 ## Paying sellers
 
 Payouts are made by hand: the store takes the whole payment for every order and pays its sellers

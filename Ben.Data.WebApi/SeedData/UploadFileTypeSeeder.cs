@@ -89,6 +89,14 @@ internal static class UploadFileTypeSeeder
 
     internal const string StoreImageFileTypeName = "Store Image";
 
+    /// <summary>
+    /// A product's files — manuals, firmware, software, documents (store sellers P11). Never public:
+    /// each download is checked for who is asking. Fixed id, like the picture type.
+    /// </summary>
+    internal static readonly Guid StoreProductFileTypeId = new("A0000000-0000-0000-0000-000000000002");
+
+    internal const string StoreProductFileTypeName = "Store Product File";
+
     private static readonly string[] StoreImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
     /// <summary>
@@ -157,6 +165,7 @@ internal static class UploadFileTypeSeeder
         await SeedEquipmentPhotoFileTypeAsync(db, owner.Id);
 
         await SeedStoreImageFileTypeAsync(db, owner.Id);
+        await SeedStoreProductFileTypeAsync(db, owner.Id);
     }
 
     // ── Private helper ────────────────────────────────────────────────────────
@@ -440,6 +449,20 @@ internal static class UploadFileTypeSeeder
                 CreatedByAppUserId = ownerId,
             });
         }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Store Product File type exists (store sellers P11).</summary>
+    private static async Task SeedStoreProductFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == StoreProductFileTypeId)) return;
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id = StoreProductFileTypeId, Name = StoreProductFileTypeName,
+            Description = "Store product files — manuals, firmware, software, documents",
+            IsActive = true, IsPublic = false, SortOrder = 12, AllowAllExtensions = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
         await db.SaveChangesAsync();
     }
 
