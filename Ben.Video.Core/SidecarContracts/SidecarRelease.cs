@@ -22,9 +22,13 @@ namespace Ben.Video.Core.SidecarContracts;
 /// CPU core for as long as it ran and growing to 2.9 GB; it also ran from login until shutdown
 /// whether or not anyone opened the editor. Nothing would ever have told those installs, because
 /// until now nothing compared versions at all.</para>
+///
+/// <para>1.1.3: on Windows it no longer opens a console window, which stopped the sidecar when
+/// somebody closed it; a new install shows a small window with its pairing code instead. WebM clips
+/// stopped reading as 0 seconds long on every platform.</para>
 /// </remarks>
 public static class SidecarRelease
 {
     /// <summary>Kept identical to &lt;Version&gt; in Ben.Video.Sidecar.csproj.</summary>
-    public const string Version = "1.1.2";
+    public const string Version = "1.1.3";
 }

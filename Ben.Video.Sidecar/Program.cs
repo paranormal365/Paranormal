@@ -25,6 +25,13 @@ using Microsoft.AspNetCore.RateLimiting;
 //
 // AppContext.BaseDirectory is where this app's own files actually are, however it was launched,
 // so it is the right answer for a bundle, for `dotnet run`, and for the tests alike.
+#if WINDOWS
+// One copy per sign-in, and the pairing window - see Desktop/SidecarDesktop. `--pair` only prints a
+// code and ends, so it neither needs the claim nor may be refused by it.
+using var desktop = args.Contains("--pair") ? null : Ben.Video.Sidecar.Desktop.SidecarDesktop.TryClaim(args);
+if (desktop is null && !args.Contains("--pair")) return;
+#endif
+
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args            = args,
@@ -170,7 +177,13 @@ app.MapJobEndpoints();
 app.MapProbeEndpoints();
 app.MapSegmentEndpoints();
 
+#if WINDOWS
+app.Start();
+desktop?.Start(tokenStore, app.Lifetime);
+app.WaitForShutdown();
+#else
 app.Run();
+#endif
 
 static int ResolveFreePort(int startPort, int scanRange)
 {

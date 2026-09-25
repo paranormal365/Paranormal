@@ -100,12 +100,12 @@ Name: "{group}\Pairing page"; Filename: "http://127.0.0.1:43117/pair"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
-; Starts it, waits for a real health response, and opens the pairing page on whichever port it
-; actually took - the sidecar walks upwards from 43117 when one is occupied, so the port cannot be
-; assumed. -ExecutionPolicy Bypass is supplied here, so the user never meets that prompt.
+; Starts it and waits for a real health response. A new install then shows its own window with
+; the pairing code (1.1.3); an upgrade that is already paired shows nothing.
+; -ExecutionPolicy Bypass is supplied here, so the user never meets that prompt.
 Filename: "powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\post-install.ps1"" -InstallDir ""{app}"""; \
-    Description: "Start the sidecar and open the pairing page"; \
+    Description: "Start the sidecar"; \
     Flags: postinstall nowait skipifsilent runhidden
 
 [UninstallRun]

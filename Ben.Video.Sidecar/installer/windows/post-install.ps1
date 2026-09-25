@@ -1,5 +1,6 @@
-# Starts the sidecar after the Inno Setup installer has laid the files down, waits for it to prove
-# it is alive, and opens the pairing page on whichever port it took.
+# Starts the sidecar after the Inno Setup installer has laid the files down and waits for it to prove
+# it is alive. A new install shows its own pairing window (1.1.3); one that is already paired, as
+# after an upgrade, shows nothing.
 #
 # This is the tail of install.ps1 and nothing else. The copy, the autostart registry value and the
 # Unblock-File sweep all moved into the installer: Inno writes the files, [Registry] writes the Run
@@ -25,7 +26,9 @@ if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Forc
 
 $stdout = Join-Path $LogDir 'sidecar.log'
 $stderr = Join-Path $LogDir 'sidecar.err.log'
-Start-Process -FilePath $Exe -WorkingDirectory $InstallDir -WindowStyle Hidden `
+# No -WindowStyle Hidden: it is a windowed program with no console now, and Windows applies a
+# hidden style to a program's first window - which would be the pairing window.
+Start-Process -FilePath $Exe -WorkingDirectory $InstallDir `
               -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
 # Ask the running process what it is, rather than reading the log. The log is append-only, so an
@@ -52,4 +55,6 @@ if (-not $port) {
     exit 0
 }
 
-Start-Process "http://127.0.0.1:$port/pair"
+# The pairing page used to be opened here. The sidecar now opens its own window with the code when no
+# browser has paired with it yet, and a second pairing surface would only show a code that replaces
+# the one in that window.

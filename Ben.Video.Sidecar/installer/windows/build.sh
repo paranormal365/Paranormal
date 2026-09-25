@@ -52,7 +52,11 @@ echo "==> dotnet publish (self-contained, so the target machine needs no .NET ru
 # the machine doing the building. Cross-publishing Windows from a Mac then produces a Windows
 # package containing macOS binaries, which fails at the far end as "no ffmpeg for win-x64" on a
 # tester's machine rather than here.
-dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" \
+#
+# -f net10.0-windows is the windowed Windows build: no console window, and the pairing window on a
+# new install. The plain net10.0 build would run, but as a console program - which is what 1.1.2
+# shipped, and closing that console stopped the sidecar.
+dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" -f net10.0-windows \
   -p:PublishProfile="$RID" -p:BundledFfmpegRid="$RID" \
   -p:DebugType=none -p:DebugSymbols=false \
   -o "$PKG/app" --nologo -v q

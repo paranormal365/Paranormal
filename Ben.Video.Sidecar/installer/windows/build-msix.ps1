@@ -118,7 +118,9 @@ if (-not $SkipPublish) {
     Write-Host ''
     Write-Host '==> Publishing the sidecar (self-contained, single file)' -ForegroundColor Cyan
     # Same profile the .exe installer uses, so the two packages are the same program.
-    & dotnet publish (Join-Path $project 'Ben.Video.Sidecar.csproj') `
+    # net10.0-windows is the windowed build: no console window, and the pairing window on a new
+    # install. The Store's 1.1.2 was the console build, and closing its console stopped it.
+    & dotnet publish (Join-Path $project 'Ben.Video.Sidecar.csproj') -f net10.0-windows `
         -p:PublishProfile=win-x64 -p:BundledFfmpegRid=win-x64 `
         -p:DebugType=none -p:DebugSymbols=false `
         -o $stage --nologo -v q

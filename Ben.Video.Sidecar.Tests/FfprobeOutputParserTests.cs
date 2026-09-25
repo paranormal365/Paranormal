@@ -54,6 +54,42 @@ public sealed class FfprobeOutputParserTests
     }
 
     [Fact]
+    public void Parse_WebM_TakesTheContainerDuration()
+    {
+        // Real ffprobe 7 output for a 3-second VP9/Opus WebM, trimmed to the fields that matter.
+        // Matroska streams carry no "duration" at all - only a DURATION tag - so both stream
+        // lookups miss and the length lives in "format". Every browser recording is a WebM, and
+        // until 1.1.3 each one read as 0 seconds.
+        var info = FfprobeOutputParser.TryParse("""
+        {"streams":[
+            {"codec_type":"video","width":1280,"height":720,
+             "tags":{"ENCODER":"Lavc63.1.100 libvpx-vp9","DURATION":"00:00:03.000000000"}},
+            {"codec_type":"audio",
+             "tags":{"ENCODER":"Lavc63.1.100 libopus","DURATION":"00:00:03.008000000"}}],
+         "format":{"format_name":"matroska,webm","duration":"3.008000"}}
+        """);
+
+        Assert.NotNull(info);
+        Assert.Equal(3.008, info!.Duration, 3);
+        Assert.Equal(1280, info.Width);
+        Assert.Equal(720, info.Height);
+    }
+
+    [Fact]
+    public void Parse_StreamDuration_StillWinsOverTheContainer()
+    {
+        // An MP4 carries both, and the container's can be longer (an audio tail). The stream's
+        // is what the browser uses, so it keeps precedence.
+        var info = FfprobeOutputParser.TryParse("""
+        {"streams":[{"codec_type":"video","duration":"3.000000","width":1280,"height":720}],
+         "format":{"duration":"3.021333"}}
+        """);
+
+        Assert.NotNull(info);
+        Assert.Equal(3.0, info!.Duration, 3);
+    }
+
+    [Fact]
     public void Parse_NumericJsonTypes_AreAccepted()
     {
         // ffprobe emits durations as strings in most builds but numbers in some; both must work.

@@ -82,12 +82,12 @@
                         {
                             @* "pair.sh reopens it" is macOS wording and was shown to everybody,
                                Windows included, where no such file exists (2026-09-05 audit, F17). *@
-                            <p>Type the 6-digit code from the sidecar's pairing page. Each browser pairs once.</p>
+                            <p>Paste or type the 6-digit code from the sidecar's own window. Each browser pairs once.</p>
                         }
-                        @* The pairing page is the sidecar's own GET /pair, which shows a fresh code each time it is
-                           opened. The .exe installer opens it and puts a shortcut to it in the Start menu; a Microsoft
-                           Store install has neither, so without this a Store user had no way to reach a code at all.
-                           The editor has just found the sidecar, so it knows the port — link straight to it. *@
+                        @* On Windows the sidecar opens its own window with a code until a browser has paired with
+                           it (1.1.3). This link is for everything else: that window closed, a second browser, or a
+                           Mac. The pairing page is the sidecar's own GET /pair, which shows a fresh code each time it
+                           is opened. The editor has just found the sidecar, so it knows the port — link straight to it. *@
                         @if (NativeSidecar.DiscoveredPort is { } pairPort)
                         {
                             <p class="bv-sidecar-panel__hint">

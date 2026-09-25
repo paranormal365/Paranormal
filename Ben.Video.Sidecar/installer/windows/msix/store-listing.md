@@ -53,8 +53,10 @@ Fixed - this is the reserved name, and the package manifest's DisplayName has to
 
     HOW IT WORKS
 
-    SideCar has no window of its own, by design. You turn it on from the video editor and it
-    appears there as a switch, with the editor reporting whether it is running. When it is on, the
+    SideCar runs in the background. The first time it starts, it shows one small window with a
+    pairing code to copy into the video editor; after that it has no window at all. You turn it
+    on from the video editor and it appears there as a switch, with the editor reporting whether
+    it is running. When it is on, the
     editor hands it the work. When it is off, the editor falls back to rendering in the browser and
     everything still works - just slower. You can turn it off from the same switch at any time, and
     it will tell you if it is in the middle of a render rather than stopping on top of your export.
@@ -163,18 +165,18 @@ it can be bought, not what language it speaks.
 **Packages** - upload `installer/dist/BenVideoSidecar-win-x64.msix`. Do NOT sign it; Microsoft
 re-signs Store packages, which is the entire reason this route was chosen.
 
-**Screenshots** - at least one is mandatory, minimum 1366x768. SideCar has no window, so the
-screenshot has to be the editor with the SideCar switch in it. That is the one part of this
-submission that cannot be written in advance.
+**Screenshots** - at least one is mandatory, minimum 1366x768. SideCar's only window is the
+pairing one it shows until a browser pairs (1.1.3), so the main screenshot is the editor with the
+SideCar switch in it; the pairing window is worth a second.
 
 ---
 
 # Why the description is shaped the way it is
 
 Store policy expects an app to carry its own value, and a reviewer meeting a background helper with
-no window reasonably asks what it is for. The first two paragraphs answer that before anything else
+almost no window reasonably asks what it is for. The first two paragraphs answer that before anything else
 gets said: the browser has a hard ceiling, this removes it, and the work happens where the files
-already are. The "no window" fact is stated plainly under HOW IT WORKS rather than left to be
+already are. The "no window after pairing" fact is stated plainly under HOW IT WORKS rather than left to be
 discovered, and the fallback is named - the editor still works without it - because a reviewer who
 cannot install the website's account flow needs to know the app is an accelerator, not a gate.
 

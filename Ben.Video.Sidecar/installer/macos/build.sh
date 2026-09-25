@@ -69,7 +69,9 @@ rm -rf "$APP" "$DIST/BenVideoSidecar-$RID.pkg" "$DIST/BenVideoSidecar-$RID" "$DI
 mkdir -p "$APP/Contents/MacOS"
 
 echo "==> dotnet publish (self-contained, so the target machine needs no .NET runtime)"
-dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" \
+# -f net10.0: the project also builds a Windows-only target (net10.0-windows), and a publish of a
+# project with two has to be told which.
+dotnet publish "$PROJECT_DIR/Ben.Video.Sidecar.csproj" -f net10.0 \
   -c Release -r "$RID" --self-contained true \
   -o "$APP/Contents/MacOS" --nologo -v q
 

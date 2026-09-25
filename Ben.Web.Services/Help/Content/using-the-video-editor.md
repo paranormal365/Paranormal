@@ -476,8 +476,10 @@ the in-browser engine, exactly as it does now.
    has the installers and their install steps.
 2. **Turn it on**, if it isn't running: the chip's panel has a **Turn on** button on Windows, and
    your browser asks whether to open the sidecar — allow it.
-3. **Pair this browser with it.** In the same panel, click **Show a pairing code**; the sidecar
-   shows a **six-digit code**. Type that into the panel. That is all.
+3. **Pair this browser with it.** On Windows, the first time it starts the sidecar opens a small
+   window with a **six-digit code**: press **Copy code** and paste it into the panel. If that window
+   is closed, or you are on a Mac, click **Show a pairing code** in the panel instead. That is all:
+   from then on it has no window, and you turn it on and off from the chip.
 
 The chip on the toolbar tells you the state at a glance: *No sidecar* (none found), *Pair sidecar*
 (found, not yet paired) or *Native* (paired and in use).
