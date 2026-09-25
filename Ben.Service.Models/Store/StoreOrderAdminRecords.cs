@@ -35,7 +35,9 @@ public sealed record StoreRefundRecord(
 
 /// <summary>A refund to make: an amount, or items (which may go back on the shelf).</summary>
 /// <param name="Amount">For a refund by amount; null when refunding items.</param>
-public sealed record StoreRefundRequest(decimal? Amount, IReadOnlyList<StoreRefundLine>? Items, string Reason, bool Restock);
+/// <param name="ShippingForParcels">Packages whose shipping (and its tax) to give back too — what is left of it (store sellers P8).</param>
+public sealed record StoreRefundRequest(decimal? Amount, IReadOnlyList<StoreRefundLine>? Items, string Reason, bool Restock,
+    IReadOnlyList<Guid>? ShippingForParcels = null);
 
 /// <summary>How an order went out (Ben, 09/24): a carrier from the list and its tracking number — or none.</summary>
 /// <param name="TrackingNumber">Required unless <paramref name="NoTracking"/>; the link is built from it and the carrier.</param>
@@ -119,6 +121,12 @@ public sealed record StoreRefundResult(StoreRefundRecord Refund, string? Message
 /// <summary>The order desk's sentences, shared by the services that say them and the tests that look for them.</summary>
 public static class StoreOrderDeskSentences
 {
+    /// <summary>A package that has shipped can't be cancelled — refund its items instead (store sellers P8).</summary>
+    public const string PackageAlreadyGone = "That package has already gone — refund its items instead.";
+
+    /// <summary>Cancelling the only package left is cancelling the order.</summary>
+    public const string LastPackageCancelsOrder = "That's the only package left — cancel the whole order instead.";
+
     /// <summary>A package of an order that isn't paid, or is already finished (store sellers P7).</summary>
     public const string NotReadyToFulfil = "This order isn't waiting to be sent — it isn't paid, or it's cancelled or refunded.";
 

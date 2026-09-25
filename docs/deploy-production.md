@@ -362,7 +362,8 @@ database needs, in order, **before** the code is deployed:
    `FirstOnSaleUtc` backfilled) `StoreProductParts` (one table, two columns) and `StoreOrderParcels` (one table, two nullable
    columns; one package backfilled per existing order). Additive — except `StoreOrderTrackingToParcels`,
    which moves any order-level tracking onto package 1 and then drops StoreOrders' Carrier, TrackingNumber
-   and TrackingUrl. Deploy the code with it: the old code reads those columns.
+   and TrackingUrl. Deploy the code with it: the old code reads those columns. Then `StoreRefundShipping`
+   (one new table).
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

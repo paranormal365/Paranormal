@@ -102,6 +102,17 @@ public sealed class AdminStoreOrderController(
     public async Task<IActionResult> Deliver(Guid id, Guid parcelId, CancellationToken ct)
         => await AnswerAsync(id, await parcels.DeliverAsync(id, parcelId, GetCurrentUserIdOrThrow(), ct: ct), ct);
 
+    /// <summary>Cancels one package that has not gone: its items and shipping refunded (store sellers P8).</summary>
+    [HttpPost("{id:guid}/parcels/{parcelId:guid}/cancel")]
+    public async Task<IActionResult> CancelParcel(Guid id, Guid parcelId, [FromBody] CancelStoreOrderRequest request, CancellationToken ct)
+    {
+        var (result, refund) = await desk.CancelParcelAsync(id, parcelId, request, GetCurrentUserIdOrThrow(), ct);
+        if (refund?.Kind == StoreRefundOutcomeKind.Unavailable) return StatusCode(StatusCodes.Status503ServiceUnavailable, refund.Sentence);
+        if (refund?.Kind == StoreRefundOutcomeKind.StripeRefused) return StatusCode(StatusCodes.Status502BadGateway, refund.Sentence);
+        if (refund?.Kind == StoreRefundOutcomeKind.Pending) return Accepted(await DetailAsync(id, ct));
+        return await AnswerAsync(id, result, ct);
+    }
+
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelStoreOrderRequest request, CancellationToken ct)
     {

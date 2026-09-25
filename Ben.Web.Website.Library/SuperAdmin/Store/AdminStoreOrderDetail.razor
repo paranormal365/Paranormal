@@ -79,7 +79,7 @@
 
         <div class="d-flex flex-wrap gap-2 mb-3" data-testid="order-actions">
             @if (o.Can.CanRefund) { <button type="button" class="btn btn-outline-secondary" id="order-refund" disabled="@_busy" @onclick="OpenRefund">Refund…</button> }
-            @if (o.Can.CanCancel) { <button type="button" class="btn btn-outline-danger" id="order-cancel" disabled="@_busy" @onclick="@(() => { _cancelReason = ""; _cancelRestock = true; _dialogError = null; _cancelOpen = true; })">Cancel…</button> }
+            @if (o.Can.CanCancel) { <button type="button" class="btn btn-outline-danger" id="order-cancel" disabled="@_busy" @onclick="@(() => { _cancelParcel = null; _cancelReason = ""; _cancelRestock = true; _dialogError = null; _cancelOpen = true; })">Cancel…</button> }
             @if (o.Can.CanEditAddress) { <button type="button" class="btn btn-outline-secondary" id="order-edit-address" disabled="@_busy" @onclick="OpenAddress">Edit address…</button> }
             @if (o.Can.CanResendConfirmation || o.Can.CanResendShipped) { <button type="button" class="btn btn-outline-secondary" id="order-resend" disabled="@_busy" @onclick="OpenResend">Resend email…</button> }
             @if (o.Can.CanRelease) { <button type="button" class="btn btn-outline-danger" id="order-release" disabled="@_busy" @onclick="ReleaseAsync">Release checkout</button> }
@@ -171,6 +171,11 @@
                                 @if (x.CanShip) { <button type="button" class="btn btn-sm btn-primary" id="@Id("ship")" disabled="@_busy" @onclick="@(() => OpenShip(x, correcting: false))">Ship…</button> }
                                 @if (x.CanCorrectTracking) { <button type="button" class="btn btn-sm btn-outline-secondary" id="@Id("correct-tracking")" disabled="@_busy" @onclick="@(() => OpenShip(x, correcting: true))">@(x.TrackingNumber is null ? "Add tracking…" : "Correct tracking…")</button> }
                                 @if (x.CanDeliver) { <button type="button" class="btn btn-sm btn-outline-success" id="@Id("deliver")" disabled="@_busy" @onclick="@(() => DeliverAsync(x))">Mark delivered</button> }
+                                @if (!single && o.Can.CanRefund && x.Status is StoreParcelStatus.Waiting or StoreParcelStatus.Packed
+                                     && o.Parcels!.Count(p => p.Status != StoreParcelStatus.Cancelled) > 1)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="@Id("cancel")" disabled="@_busy" @onclick="@(() => OpenCancelParcel(x))">Cancel package…</button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -355,6 +360,18 @@
                     <input class="form-check-input" type="checkbox" id="refund-restock" checked="@_restock" @onchange="@(e => _restock = (bool)(e.Value ?? false))" />
                     <label class="form-check-label" for="refund-restock">Put them back on the shelf</label>
                 </div>
+                @* Store sellers P8: a package's shipping, and the tax on it, can go back too. *@
+                @foreach (var x in (ro.Parcels ?? []).Where(x => x.Shipping > 0))
+                {
+                    var parcel = x;
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="checkbox" id="@($"refund-shipping-{parcel.Number}")" checked="@_shippingFor.Contains(parcel.Id)"
+                               @onchange="@(e => { if ((bool)(e.Value ?? false)) _shippingFor.Add(parcel.Id); else _shippingFor.Remove(parcel.Id); })" />
+                        <label class="form-check-label small" for="@($"refund-shipping-{parcel.Number}")">
+                            Refund @(ro.Parcels!.Count > 1 ? $"package {parcel.Number}'s" : "the") shipping (@StoreMoney.Format(parcel.Shipping) and its tax)
+                        </label>
+                    </div>
+                }
             }
             else
             {
@@ -381,9 +398,16 @@
 </BenModal>
 
 @* ── Cancel ── *@
-<BenModal @bind-Visible="_cancelOpen" Title="Cancel this order">
+<BenModal @bind-Visible="_cancelOpen" Title="@(_cancelParcel is { } cp ? $"Cancel package {cp.Number}" : "Cancel this order")">
     <ChildContent>
-        <p class="small">Cancelling refunds everything still refundable and emails the buyer.</p>
+        @if (_cancelParcel is { } cancelling)
+        {
+            <p class="small">Cancelling this package refunds its items and its shipping, and emails the buyer. The rest of the order goes on as it is.</p>
+        }
+        else
+        {
+            <p class="small">Cancelling refunds everything still refundable and emails the buyer.</p>
+        }
         <div class="mb-2">
             <label class="form-label" for="cancel-reason">Reason</label>
             <input id="cancel-reason" class="form-control" maxlength="500" @bind="_cancelReason" @bind:event="oninput" />
@@ -531,9 +555,12 @@
         if (ok) _shipOpen = false;
     }
 
+    private readonly HashSet<Guid> _shippingFor = [];
+
     private void OpenRefund()
     {
         _quantities.Clear();
+        _shippingFor.Clear();
         _byItems = _order?.Items.Any(i => i.Refundable > 0) == true;
         _restock = true;
         _amount = null;
@@ -545,7 +572,8 @@
     private async Task RefundAsync()
     {
         var request = _byItems
-            ? new StoreRefundRequest(null, _quantities.Where(q => q.Value > 0).Select(q => new StoreRefundLine(q.Key, q.Value)).ToList(), _refundReason, _restock)
+            ? new StoreRefundRequest(null, _quantities.Where(q => q.Value > 0).Select(q => new StoreRefundLine(q.Key, q.Value)).ToList(), _refundReason, _restock,
+                _shippingFor.ToList())
             : new StoreRefundRequest(_amount, null, _refundReason, false);
         var ok = await DoAsync(() => AdminClient.RefundStoreOrderAsync(Id, request), "Refund made.", inDialog: true);
         if (!ok) return;
@@ -553,10 +581,20 @@
         if (_order?.Refunds.FirstOrDefault()?.IsAwaitingStripe == true) Toasts.Info(StoreOrderDeskSentences.RefundPending);
     }
 
+    private StoreOrderParcelAdminRecord? _cancelParcel;
+
+    private void OpenCancelParcel(StoreOrderParcelAdminRecord x)
+    {
+        _cancelParcel = x; _cancelReason = ""; _cancelRestock = true; _dialogError = null; _cancelOpen = true;
+    }
+
     private async Task CancelAsync()
     {
-        if (await DoAsync(() => AdminClient.CancelStoreOrderAsync(Id, new CancelStoreOrderRequest(_cancelReason, _cancelRestock)), "Cancelled and refunded.", inDialog: true))
-            _cancelOpen = false;
+        var request = new CancelStoreOrderRequest(_cancelReason, _cancelRestock);
+        var ok = _cancelParcel is { } parcel
+            ? await DoAsync(() => AdminClient.CancelStoreParcelAsync(Id, parcel.Id, request), $"Package {parcel.Number} cancelled and refunded.", inDialog: true)
+            : await DoAsync(() => AdminClient.CancelStoreOrderAsync(Id, request), "Cancelled and refunded.", inDialog: true);
+        if (ok) _cancelOpen = false;
     }
 
     private void OpenAddress()

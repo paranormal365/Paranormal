@@ -1197,6 +1197,12 @@ The order's status follows its packages: **Partially shipped** while some have g
 haven't, **Shipped** once all have, **Delivered** once all have arrived. The buyer gets one "on its
 way" email per package, listing only that package's items. An order can't be cancelled whole once
 any package has shipped, and its address can't change then either — refund the items instead.
+**Refunds and packages.** The **Refund…** dialog can give back a package's shipping (and the tax on it)
+alongside items — each package's shipping only once. **Cancel package…** on a package that hasn't
+gone refunds its items and its shipping, puts the items back on the shelf if you tick it, and marks
+the package cancelled; the rest of the order carries on, and it reads **Shipped** once everything
+left has gone. The only package left can't be cancelled alone — cancel the whole order, which gives
+back every package's shipping. A package that has gone can't be cancelled: refund its items instead.
 The **To ship** tile counts partly shipped orders too. The CSV export has a row per item with its
 package, sender, carrier and tracking.
 

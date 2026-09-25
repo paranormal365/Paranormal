@@ -300,6 +300,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreParcelAsync(Guid orderId, Guid parcelId, CancellationToken token = default)
         => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/deliver", null, token);
 
+    public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreParcelAsync(Guid orderId, Guid parcelId, CancelStoreOrderRequest request, CancellationToken token = default)
+        => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/parcels/{parcelId}/cancel", request, token);
+
     public Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreOrderAsync(Guid orderId, CancelStoreOrderRequest request, CancellationToken token = default)
         => DeskAsync(HttpMethod.Post, $"/api/admin/store/orders/{orderId}/cancel", request, token);
 

@@ -194,6 +194,9 @@ public interface IBenStoreAdminClient
 
     Task<(StoreOrderDetailAdminRecord? Result, string? Error)> DeliverStoreParcelAsync(Guid orderId, Guid parcelId, CancellationToken token = default);
 
+    /// <summary>Cancels one package that has not gone, refunding its items and shipping (store sellers P8).</summary>
+    Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreParcelAsync(Guid orderId, Guid parcelId, CancelStoreOrderRequest request, CancellationToken token = default);
+
     Task<(StoreOrderDetailAdminRecord? Result, string? Error)> CancelStoreOrderAsync(Guid orderId, CancelStoreOrderRequest request, CancellationToken token = default);
 
     Task<(StoreOrderDetailAdminRecord? Result, string? Error)> AddStoreOrderNoteAsync(Guid orderId, string note, CancellationToken token = default);

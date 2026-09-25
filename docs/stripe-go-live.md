@@ -206,7 +206,8 @@ On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for
    for everything on sale or sold), `StoreProductParts` (parts lists and the "other" cost line), `StoreOrderParcels`
    (an order's packages — every existing order becomes one package, from its own shipping and tracking),
    `StoreOrderTrackingToParcels` (copies any order-level tracking onto package 1, then drops the order's
-   Carrier/TrackingNumber/TrackingUrl columns — the one migration here that removes columns).
+   Carrier/TrackingNumber/TrackingUrl columns — the one migration here that removes columns),
+   `StoreRefundShipping` (package shipping given back with a refund).
    `dotnet ef database update` applies them all.
 2. Deploy both sites. The store is still dark.
 3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count

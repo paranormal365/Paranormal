@@ -339,6 +339,17 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.OrderItemId).OnDelete(DeleteBehavior.NoAction);
             refundItem.ToTable(t => t.HasCheckConstraint("CK_StoreRefundItems_Quantity", "[Quantity] >= 1"));
 
+            // Store sellers P8: package shipping given back with a refund.
+            var refundShipping = modelBuilder.Entity<StoreRefundShipping>();
+            refundShipping.Property(e => e.Amount).HasPrecision(18, 2);
+            refundShipping.HasIndex(e => new { e.RefundId, e.ParcelId }).IsUnique();
+            refundShipping.HasIndex(e => e.ParcelId);
+            refundShipping.HasOne(e => e.Refund).WithMany(r => r.Shipping)
+                .HasForeignKey(e => e.RefundId).OnDelete(DeleteBehavior.Cascade);
+            refundShipping.HasOne(e => e.Parcel).WithMany()
+                .HasForeignKey(e => e.ParcelId).OnDelete(DeleteBehavior.NoAction);
+            refundShipping.ToTable(t => t.HasCheckConstraint("CK_StoreRefundShipping_Amount", "[Amount] > 0"));
+
             // One redemption per order. Restrict to the coupon — a financial record, like the
             // subscription CouponRedemption.
             var redemption = modelBuilder.Entity<StoreCouponRedemption>();

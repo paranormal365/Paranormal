@@ -69,6 +69,37 @@ public sealed class StoreOrderTransitions(
         };
     }
 
+    /// <summary>
+    /// Cancels one package that has not gone (store sellers P8): its items and its shipping are
+    /// refunded — restocked if asked — and when the refund goes through it is marked Cancelled and
+    /// the order reads what is left.
+    /// </summary>
+    public async Task<(StoreDeskResult Result, StoreRefundAttempt? Refund)> CancelParcelAsync(
+        Guid orderId, Guid parcelId, CancelStoreOrderRequest request, Guid actor, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var order = await db.StoreOrders.AsNoTracking().Include(o => o.Items).Include(o => o.Parcels).Include(o => o.Refunds).ThenInclude(r => r.Items)
+            .AsSplitQuery().FirstOrDefaultAsync(o => o.Id == orderId, ct);
+        var parcel = order?.Parcels.FirstOrDefault(x => x.Id == parcelId);
+        if (order is null || parcel is null) return (StoreDeskResult.Missing, null);
+        if (parcel.Status is not (StoreParcelStatus.Waiting or StoreParcelStatus.Packed))
+            return (StoreDeskResult.No(StoreOrderDeskSentences.PackageAlreadyGone), null);
+        if (string.IsNullOrWhiteSpace(request.Reason)) return (StoreDeskResult.No(StoreOrderDeskSentences.RefundNeedsReason), null);
+        if (order.Parcels.Count(x => x.Status != StoreParcelStatus.Cancelled) == 1)
+            return (StoreDeskResult.No(StoreOrderDeskSentences.LastPackageCancelsOrder), null);
+
+        var lines = order.Items.Where(i => i.ParcelId == parcelId)
+            .Select(i => new StoreRefundLine(i.Id, StoreRefundService.RefundableUnits(i, order.Refunds))).Where(l => l.Quantity > 0).ToList();
+        var attempt = await refunds.RefundAsync(orderId, new StoreRefundRequest(null, lines, request.Reason, request.Restock, [parcelId]),
+            actor, cancelling: false, ct, cancellingParcel: parcelId);
+        return attempt.Kind switch
+        {
+            StoreRefundOutcomeKind.Completed or StoreRefundOutcomeKind.Pending => (StoreDeskResult.Done, attempt),
+            StoreRefundOutcomeKind.NotFound => (StoreDeskResult.Missing, attempt),
+            _ => (StoreDeskResult.No(attempt.Sentence ?? "The package could not be cancelled."), attempt),
+        };
+    }
+
     public async Task<StoreDeskResult> AddNoteAsync(Guid orderId, string? note, Guid actor, CancellationToken ct = default)
     {
         var text = note?.Trim();

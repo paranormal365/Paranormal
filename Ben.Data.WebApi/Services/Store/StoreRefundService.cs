@@ -49,6 +49,17 @@ public sealed class StoreRefundService(
     /// <summary>The event note that marks a refund made to cancel the order (so completing it cancels).</summary>
     public static string CancellationPendingNote(Guid refundId) => $"Cancellation pending: {refundId:N}";
 
+    /// <summary>The event note that marks a refund made to cancel ONE package (store sellers P8); the event names the package.</summary>
+    public static string ParcelCancellationPendingNote(Guid refundId) => $"Package cancellation pending: {refundId:N}";
+
+    /// <summary>
+    /// What of a package's shipping (and its tax) is still to give back: what was paid, less what has
+    /// been refunded and what a refund going through is giving back.
+    /// </summary>
+    public static decimal ShippingRemaining(StoreOrderParcel parcel, IEnumerable<StoreRefund> refunds)
+        => parcel.ShippingAmount + parcel.ShippingTaxAmount - parcel.ShippingRefunded
+           - refunds.Where(r => r.Status == StoreRefundStatus.Pending).SelectMany(r => r.Shipping).Where(x => x.ParcelId == parcel.Id).Sum(x => x.Amount);
+
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
     public static string IdempotencyKey(StoreRefund refund) => $"store-refund-{refund.Id:N}-{refund.Attempt}";
@@ -65,12 +76,14 @@ public sealed class StoreRefundService(
     // ── Asking ───────────────────────────────────────────────────────────────
 
     /// <param name="cancelling">This refund cancels the order: completing it sets Cancelled (see <see cref="CancellationPendingNote"/>).</param>
+    /// <param name="cancellingParcel">This refund cancels one package: completing it marks the package Cancelled (store sellers P8).</param>
     public async Task<StoreRefundAttempt> RefundAsync(Guid orderId, StoreRefundRequest request, Guid? actor,
-        bool cancelling = false, CancellationToken ct = default)
+        bool cancelling = false, CancellationToken ct = default, Guid? cancellingParcel = null)
     {
         var now = Now;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var order = await db.StoreOrders.Include(o => o.Items).Include(o => o.Refunds).ThenInclude(r => r.Items)
+        var order = await db.StoreOrders.Include(o => o.Items).Include(o => o.Parcels).Include(o => o.Refunds).ThenInclude(r => r.Items)
+            .Include(o => o.Refunds).ThenInclude(r => r.Shipping)
             .AsSplitQuery().FirstOrDefaultAsync(o => o.Id == orderId, ct);
         if (order is null) return new StoreRefundAttempt(StoreRefundOutcomeKind.NotFound, null, null);
 
@@ -82,8 +95,9 @@ public sealed class StoreRefundService(
         if (!gateway.IsConfigured) return new StoreRefundAttempt(StoreRefundOutcomeKind.Unavailable, null, StoreCheckoutSentences.PaymentsNotSetUp);
 
         var lines = (request.Items ?? []).Where(l => l.Quantity > 0).ToList();
-        if (request.Amount is not null && lines.Count > 0) return StoreRefundAttempt.Refused(StoreOrderDeskSentences.AmountOrItems);
-        if (request.Amount is null && lines.Count == 0) return StoreRefundAttempt.Refused(StoreOrderDeskSentences.AmountOrItems);
+        var shippingFor = (request.ShippingForParcels ?? []).Distinct().ToList();
+        if (request.Amount is not null && (lines.Count > 0 || shippingFor.Count > 0)) return StoreRefundAttempt.Refused(StoreOrderDeskSentences.AmountOrItems);
+        if (request.Amount is null && lines.Count == 0 && shippingFor.Count == 0) return StoreRefundAttempt.Refused(StoreOrderDeskSentences.AmountOrItems);
         if (request.Amount is not null && request.Restock) return StoreRefundAttempt.Refused(StoreOrderDeskSentences.AmountCannotRestock);
 
         var remaining = Remaining(order, order.Refunds);
@@ -111,6 +125,20 @@ public sealed class StoreRefundService(
                 refund.Items.Add(new StoreRefundItem { Id = Guid.NewGuid(), RefundId = refund.Id, OrderItemId = item.Id, Quantity = line.Quantity, Amount = value });
                 refund.Amount += value;
             }
+            // A package's shipping, when asked for — and every package's when the whole order is cancelled.
+            foreach (var parcelId in cancelling ? order.Parcels.Select(x => x.Id).ToList() : shippingFor)
+            {
+                var parcel = order.Parcels.FirstOrDefault(x => x.Id == parcelId);
+                if (parcel is null) return StoreRefundAttempt.Refused("That package isn't on this order.");
+                var owed = ShippingRemaining(parcel, order.Refunds);
+                if (owed <= 0m)
+                {
+                    if (cancelling || parcel.ShippingAmount == 0m) continue;
+                    return StoreRefundAttempt.Refused($"Package {parcel.Number}'s shipping has already been refunded.");
+                }
+                refund.Shipping.Add(new StoreRefundShipping { Id = Guid.NewGuid(), RefundId = refund.Id, ParcelId = parcel.Id, Amount = owed });
+                refund.Amount += owed;
+            }
             // Cancelling gives everything back — shipping included — not just the items' share.
             refund.Amount = cancelling ? remaining : Math.Min(refund.Amount, remaining);
         }
@@ -121,6 +149,12 @@ public sealed class StoreRefundService(
         db.StoreOrderEvents.Add(Event(order.Id, StoreOrderEventKind.RefundRequested, reason, refund.Amount, actor, now));
         if (cancelling)
             db.StoreOrderEvents.Add(Event(order.Id, StoreOrderEventKind.NoteAdded, CancellationPendingNote(refund.Id), null, actor, now));
+        if (cancellingParcel is { } cancelledParcel)
+        {
+            var note = Event(order.Id, StoreOrderEventKind.NoteAdded, ParcelCancellationPendingNote(refund.Id), null, actor, now);
+            note.ParcelId = cancelledParcel;
+            db.StoreOrderEvents.Add(note);
+        }
         await db.SaveChangesAsync(ct);
 
         // 2. Stripe.
@@ -200,6 +234,16 @@ public sealed class StoreRefundService(
             var refund = await db.StoreRefunds.AsNoTracking().Include(r => r.Items).ThenInclude(i => i.OrderItem).SingleAsync(r => r.Id == refundId, ct);
             var order = await db.StoreOrders.Include(o => o.Items).SingleAsync(o => o.Id == refund.OrderId, ct);
             var cancelling = await db.StoreOrderEvents.AnyAsync(e => e.OrderId == order.Id && e.Note == CancellationPendingNote(refundId), ct);
+            var parcelCancelled = await db.StoreOrderEvents.Where(e => e.OrderId == order.Id && e.Note == ParcelCancellationPendingNote(refundId))
+                .Select(e => e.ParcelId).FirstOrDefaultAsync(ct);
+
+            // The packages' shipping given back is counted now, once Stripe has sent it (store sellers P8).
+            foreach (var given in await db.StoreRefundShipping.AsNoTracking().Where(x => x.RefundId == refundId).ToListAsync(ct))
+            {
+                var amount = given.Amount;
+                await db.StoreOrderParcels.Where(x => x.Id == given.ParcelId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.ShippingRefunded, x => x.ShippingRefunded + amount), ct);
+            }
             var movement = cancelling ? StoreStockReason.Cancelled : StoreStockReason.Refunded;
 
             var lines = new List<(string, int)>();
@@ -229,6 +273,21 @@ public sealed class StoreRefundService(
             {
                 order.Status = StoreOrderStatus.Refunded;
             }
+            // One package cancelled (store sellers P8): it will not go, and the order reads what is left.
+            if (parcelCancelled is { } gone && !cancelling)
+            {
+                await db.StoreOrderParcels.Where(x => x.Id == gone && (x.Status == StoreParcelStatus.Waiting || x.Status == StoreParcelStatus.Packed))
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, StoreParcelStatus.Cancelled).SetProperty(x => x.CancelledUtc, now), ct);
+                var left = await db.StoreOrderParcels.Where(x => x.OrderId == order.Id).Select(x => x.Status).ToListAsync(ct);
+                if (order.Status is not (StoreOrderStatus.Refunded or StoreOrderStatus.Cancelled) && StoreParcelRollup.Status(left) is { } rolled)
+                    order.Status = rolled;
+                db.StoreOrderEvents.Add(new StoreOrderEvent
+                {
+                    Id = Guid.NewGuid(), OrderId = order.Id, ParcelId = gone, Kind = StoreOrderEventKind.NoteAdded,
+                    Note = "The package was cancelled and refunded", ActorAppUserId = actor, OccurredUtc = now,
+                });
+            }
+
             // An order ended before its packages went: none of them will now (store sellers P7).
             if (order.Status is StoreOrderStatus.Cancelled or StoreOrderStatus.Refunded)
                 await db.StoreOrderParcels.Where(x => x.OrderId == order.Id && (x.Status == StoreParcelStatus.Waiting || x.Status == StoreParcelStatus.Packed))

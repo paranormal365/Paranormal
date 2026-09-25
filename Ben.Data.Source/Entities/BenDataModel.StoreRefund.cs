@@ -38,5 +38,8 @@ namespace Ben.Data.Source.Entities
         public virtual StoreOrder Order { get; set; } = null!;
         public virtual AppUser? RequestedByAppUser { get; set; }
         public virtual ICollection<StoreRefundItem> Items { get; set; } = [];
+
+        /// <summary>Package shipping given back with it (store sellers P8).</summary>
+        public virtual ICollection<StoreRefundShipping> Shipping { get; set; } = [];
     }
 }
