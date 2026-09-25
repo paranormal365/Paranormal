@@ -16,39 +16,92 @@
 
 @if (_show)
 {
-    <BenModal @bind-Visible="_show" Title="@($"Edit: {FileName}")" Size="sm">
+    @* Full screen, not "sm". The small dialog left the picture a width of zero once the two side
+       panels had taken theirs, so the editor opened with no photo in it and nothing to show what
+       any of the unlabelled buttons would do (Ben, 09/25/2026). The audio region explorer made the
+       same move for the same reason. *@
+    <BenModal @bind-Visible="_show" Title="@($"Edit: {FileName}")" Size="fullscreen" Scrollable="false"
+              OnClose="OnClosedAsync">
     <ChildContent>
-            <div class="d-flex h-100 gap-0" style="overflow:hidden;">
+            <div class="img-editor d-flex gap-0" style="height:100%; min-height:0; overflow:hidden;">
 
-                @* ── Left toolbar ──────────────────────────────────────────── *@
+                @* ── Left toolbar: every tool says what it is ─────────────────── *@
                 <div class="d-flex flex-column gap-1 p-2 border-end bg-body-secondary"
-                     style="width:56px; flex:0 0 56px; overflow-y:auto;">
-                    <button type="button" class="btn @(Fm("select") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("select"))" title="Select"><BenIcon Name="navigation" /></button>
-                    <button type="button" class="btn @(Fm("pen") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("pen"))" title="Pen"><BenIcon Name="edit-2" /></button>
-                    <button type="button" class="btn @(Fm("text") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("text"))" title="Text"><BenIcon Name="globe" /></button>
-                    <button type="button" class="btn @(Fm("rect") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("rect"))" title="Rectangle"><BenIcon Name="square" /></button>
-                    <button type="button" class="btn @(Fm("circle") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("circle"))" title="Ellipse"><BenIcon Name="circle" /></button>
-                    <button type="button" class="btn @(Fm("arrow") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("arrow"))" title="Arrow"><BenIcon Name="arrow-left" /></button>
-                    <button type="button" class="btn @(Fm("redact") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("redact"))" title="Redact"><BenIcon Name="eye" /></button>
-                    <button type="button" class="btn @(Fm("measure") == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(()=>SetTool("measure"))" title="Ruler — click two points"><BenIcon Name="filter" /></button>
-                    <hr class="my-1" />
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="DeleteSelected" title="Delete selected"><BenIcon Name="trash-2" /></button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="BringForward" title="Bring forward"><BenIcon Name="chevron-up" /></button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SendBackward" title="Send backward"><BenIcon Name="chevron-down" /></button>
-                    <hr class="my-1" />
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>RotateAsync(-90))" title="Rotate 90° CCW"><BenIcon Name="rotate-ccw" /></button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>RotateAsync(90))" title="Rotate 90° CW"><BenIcon Name="rotate-cw" /></button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>FlipAsync("h"))" title="Flip H"><BenIcon Name="columns" /></button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>FlipAsync("v"))" title="Flip V"><BenIcon Name="align-justify" /></button>
+                     style="width:150px; flex:0 0 150px; overflow-y:auto;">
+                    <div class="small text-muted text-uppercase fw-semibold px-1">Tools</div>
+                    @foreach (var t in _tools)
+                    {
+                        var tool = t;
+                        <button type="button" data-tool="@tool.Id"
+                                class="btn btn-sm text-start text-nowrap @(_tool == tool.Id ? "btn-primary" : "btn-outline-secondary")"
+                                aria-pressed="@(_tool == tool.Id ? "true" : "false")"
+                                @onclick="@(() => SetTool(tool.Id))" title="@tool.Hint">
+                            <BenIcon Name="@tool.Icon" Class="me-1" />@tool.Label
+                        </button>
+                    }
+                    <div class="small text-muted text-uppercase fw-semibold px-1 mt-2">Selected mark</div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="DeleteSelected" title="Delete the selected mark"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="BringForward" title="Bring the selected mark forward"><BenIcon Name="chevron-up" Class="me-1" />Forward</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="SendBackward" title="Send the selected mark backward"><BenIcon Name="chevron-down" Class="me-1" />Backward</button>
+                    <div class="small text-muted text-uppercase fw-semibold px-1 mt-2">Picture</div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="@(()=>RotateAsync(-90))" title="Turn a quarter to the left"><BenIcon Name="rotate-ccw" Class="me-1" />Turn left</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="@(()=>RotateAsync(90))" title="Turn a quarter to the right"><BenIcon Name="rotate-cw" Class="me-1" />Turn right</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="@(()=>FlipAsync("h"))" title="Mirror left to right"><BenIcon Name="columns" Class="me-1" />Flip across</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-start text-nowrap" @onclick="@(()=>FlipAsync("v"))" title="Mirror top to bottom"><BenIcon Name="align-justify" Class="me-1" />Flip down</button>
                 </div>
 
-                @* ── Canvas ─────────────────────────────────────────────────── *@
-                <div id="@_containerId"
-                     style="flex:1 1 auto; min-width:0; overflow:hidden; background:#111;" />
+                @* ── The picture, with its zoom bar ──────────────────────────── *@
+                <div class="d-flex flex-column" style="flex:1 1 auto; min-width:0; min-height:0;">
+                    <div class="d-flex align-items-center flex-wrap gap-1 px-2 py-1 border-bottom bg-body-tertiary">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => ZoomAsync("out"))" title="Zoom out" aria-label="Zoom out"><BenIcon Name="zoom-out" /></button>
+                        <span class="small text-center" style="min-width:3.5rem;" data-testid="image-editor-zoom">@(_zoomPct)%</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => ZoomAsync("in"))" title="Zoom in" aria-label="Zoom in"><BenIcon Name="zoom-in" /></button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => ZoomAsync("fit"))" title="Show the whole picture">Fit</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => ZoomAsync("actual"))" title="One photo pixel per screen pixel">100%</button>
+                        <span class="small text-muted ms-2 text-truncate" style="min-width:0;" data-testid="image-editor-hint">@CurrentHint</span>
+                    </div>
+                    <div class="position-relative" style="flex:1 1 auto; min-height:0; background:#111;">
+                        <div id="@_containerId" class="position-absolute top-0 start-0 w-100 h-100" style="overflow:hidden;"></div>
+                        @if (_load != LoadState.Loaded)
+                        {
+                            <div class="position-absolute top-50 start-50 translate-middle text-center text-light small">
+                                @if (_load == LoadState.Failed)
+                                {
+                                    <BenIcon Name="alert-triangle" Class="me-1" />@("This photo couldn't be loaded, so there is nothing to edit.")
+                                }
+                                else
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>@("Loading the photo…")
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
 
                 @* ── Right panel ─────────────────────────────────────────────── *@
                 <div class="d-flex flex-column p-2 border-start bg-body-secondary"
-                     style="width:230px; flex:0 0 230px; overflow-y:auto; gap:0.4rem;">
+                     style="width:260px; flex:0 0 260px; overflow-y:auto; gap:0.4rem;">
+
+                    @* Drawing options — first, and only while a tool that uses them is chosen *@
+                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow")
+                    {
+                        <BenPanel Title="Tool Options" Collapsed="false" Class="mb-2">
+                                <div class="d-flex flex-column gap-1 pt-1">
+                                    <label class="small">Color</label>
+                                    <BenColorPicker @bind-Value="_drawColor" @bind-Value:after="PushToolOptionsAsync" />
+                                    @if (_tool is not "text")
+                                    {
+                                        <label class="small" for="imageeditorplayer-width-6d61">Width @_drawWidth</label>
+                                        <input id="imageeditorplayer-width-6d61" type="range" class="form-range" min="1" max="20" step="1" @bind="_drawWidth" @bind:event="oninput" @onchange="PushToolOptionsAsync" />
+                                    }
+                                    @if (_tool is "text")
+                                    {
+                                        <label class="small" for="imageeditorplayer-font-size-c8f7">Font size @_fontSize</label>
+                                        <input id="imageeditorplayer-font-size-c8f7" type="range" class="form-range" min="10" max="72" step="2" @bind="_fontSize" @bind:event="oninput" @onchange="PushToolOptionsAsync" />
+                                    }
+                                </div>
+                            </BenPanel>
+                    }
 
                     @* Adjustments *@
                     <BenPanel Title="Adjustments" Collapsed="false" Class="mb-2">
@@ -72,10 +125,11 @@
                         </BenPanel>
 
                     @* Evidence tools *@
-                    <BenPanel Title="Evidence Tools" Collapsed="false" Class="mb-2">
+                    <BenPanel Title="Evidence Tools" Collapsed="true" Class="mb-2">
                             <div class="d-flex flex-column gap-2 pt-1">
                                 <div>
                                     <strong class="small">Anomaly Highlight</strong>
+                                    <div class="small text-muted">Rings in the middle of the view; drag them into place with Select.</div>
                                     <div class="d-flex gap-1 align-items-center mt-1">
                                         <BenColorPicker @bind-Value="_anomalyColor" />
                                         <button type="button" class="btn btn-secondary btn-sm" @onclick="AddAnomalyHighlight">Add</button>
@@ -84,7 +138,7 @@
                                 <div>
                                     <strong class="small">Grid Overlay</strong>
                                     <div class="mt-1">
-                                        <button type="button" class="btn @(_gridOn ? "warning" : "base") btn-sm" @onclick="ToggleGrid">
+                                        <button type="button" class="btn @(_gridOn ? "btn-warning" : "btn-secondary") btn-sm" @onclick="ToggleGrid">
                                             @(_gridOn ? "Remove Grid" : "Add Grid")
                                         </button>
                                     </div>
@@ -93,42 +147,21 @@
                                     <strong class="small">Timestamp Stamp</strong>
                                     <input type="text" class="form-control" placeholder="Text (leave blank for now)" @bind="_stampText" @bind:event="oninput" />
                                     <div class="d-flex gap-1 mt-1 flex-wrap">
-                                        @foreach (var pos in new[] { ("tl","↖"), ("tr","↗"), ("bl","↙"), ("br","↘") })
+                                        @foreach (var pos in new[] { ("tl","↖","Top left"), ("tr","↗","Top right"), ("bl","↙","Bottom left"), ("br","↘","Bottom right") })
                                         {
                                             var p = pos;
-                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>AddTimestampStamp(p.Item1))" title="@p.Item1">@p.Item2</button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>AddTimestampStamp(p.Item1))" title="@p.Item3" aria-label="@p.Item3">@p.Item2</button>
                                         }
                                     </div>
                                 </div>
                             </div>
                         </BenPanel>
 
-                    @* Drawing options (context-sensitive) *@
-                    @if (_tool is "pen" or "text" or "rect" or "circle" or "arrow")
-                    {
-                        <BenPanel Title="Tool Options" Collapsed="false" Class="mb-2">
-                                <div class="d-flex flex-column gap-1 pt-1">
-                                    <label class="small">Color</label>
-                                    <BenColorPicker @bind-Value="_drawColor" />
-                                    @if (_tool is not "text")
-                                    {
-                                        <label class="small" for="imageeditorplayer-width-6d61">Width @_drawWidth</label>
-                                        <input id="imageeditorplayer-width-6d61" type="range" class="form-range" min="1" max="20" step="1" @bind="_drawWidth" @bind:event="oninput" />
-                                    }
-                                    @if (_tool is "text")
-                                    {
-                                        <label class="small" for="imageeditorplayer-font-size-c8f7">Font size @_fontSize</label>
-                                        <input id="imageeditorplayer-font-size-c8f7" type="range" class="form-range" min="10" max="72" step="2" @bind="_fontSize" @bind:event="oninput" />
-                                    }
-                                </div>
-                            </BenPanel>
-                    }
-
                     @* Layers panel *@
                     <BenPanel Collapsed="false" Class="mb-2"><HeaderContent><h2>@($"Layers ({_layers.Count})")</h2></HeaderContent><ChildContent>
                             @if (_layers.Count == 0)
                             {
-                                <p class="text-muted small mt-1 mb-0">No layers yet.</p>
+                                <p class="text-muted small mt-1 mb-0">Nothing added yet. Marks you draw appear here.</p>
                             }
                             else
                             {
@@ -137,11 +170,11 @@
                                     {
                                         var l = layer;
                                         <div class="d-flex align-items-center gap-1 py-1 border-bottom" style="font-size:0.73rem;">
-                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>ToggleLayerVisible(l))"><BenIcon Name="@(l.Visible ? "eye" : "eye-off")" /></button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>ToggleLayerVisible(l))" title="@(l.Visible ? "Hide" : "Show")"><BenIcon Name="@(l.Visible ? "eye" : "eye-off")" /></button>
                                             <span class="text-truncate flex-grow-1" title="@l.Name">@l.Name</span>
-                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerUp(l.Id))"><BenIcon Name="chevron-up" /></button>
-                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerDown(l.Id))"><BenIcon Name="chevron-down" /></button>
-                                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(()=>DeleteLayer(l.Id))"><BenIcon Name="trash-2" /></button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerUp(l.Id))" title="Up"><BenIcon Name="chevron-up" /></button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(()=>MoveLayerDown(l.Id))" title="Down"><BenIcon Name="chevron-down" /></button>
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="@(()=>DeleteLayer(l.Id))" title="Delete"><BenIcon Name="trash-2" /></button>
                                         </div>
                                         <div class="d-flex align-items-center gap-1 py-1">
                                             <span class="small text-muted" style="width:40px;">@l.Opacity%</span>
@@ -156,6 +189,10 @@
             </div>
         </ChildContent>
     <FooterContent>
+        @if (_imageSize is { } size)
+        {
+            <span class="small text-muted me-auto">@size.Width × @size.Height pixels · saved at this size</span>
+        }
         @* These were WindowActions on the Telerik window — buttons in its title bar — and the
            conversion to a Bootstrap modal dropped them, leaving both save handlers with nothing
            calling them. There was no way to keep an edit: the editor worked and then discarded
@@ -163,11 +200,11 @@
            belong and where they are visible rather than hidden in a title bar. *@
         @if (_isDirty)
         {
-            <button type="button" class="btn btn-outline-primary" @onclick="SaveEditStateAsync">
+            <button type="button" class="btn btn-outline-primary" @onclick="SaveEditStateAsync" disabled="@_saving">
                 <BenIcon Name="save" Class="me-1" />Save State
             </button>
-            <button type="button" class="btn btn-primary" @onclick="SaveAsNewVersionAsync">
-                <BenIcon Name="copy" Class="me-1" />Save as New Version
+            <button type="button" class="btn btn-primary" @onclick="SaveAsNewVersionAsync" disabled="@_saving">
+                <BenIcon Name="copy" Class="me-1" />@(_saving ? "Saving…" : "Save as New Version")
             </button>
         }
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _show = false)">Close</button>
@@ -199,6 +236,33 @@
     private bool _isDirty;
     private bool _saving;
     private string _tool = "select";
+
+    private enum LoadState { Loading, Loaded, Failed }
+    private LoadState _load = LoadState.Loading;
+    private int _zoomPct = 100;
+    private (int Width, int Height)? _imageSize;
+
+    /// <summary>
+    /// The tools, each with a name and a sentence on how to use it. The toolbar used to be eight
+    /// bare icons - a globe for Text, a funnel for the ruler - and nothing said what any of them
+    /// did. The sentence is the button's tooltip and shows above the picture while it is chosen.
+    /// </summary>
+    private sealed record ToolOption(string Id, string Label, string Icon, string Hint);
+    private static readonly List<ToolOption> _tools =
+    [
+        new("select",  "Select",    "mouse-pointer",  "Drag the picture to move around it, scroll to zoom. Click a mark you added to move or resize it."),
+        new("pen",     "Pen",       "edit-2",         "Draw freehand on the picture."),
+        new("text",    "Text",      "type",           "Click where the text should go, then type."),
+        new("rect",    "Rectangle", "square",         "Drag to draw a rectangle."),
+        new("circle",  "Ellipse",   "circle",         "Drag to draw an ellipse."),
+        new("arrow",   "Line",      "arrow-up-right", "Drag from one end of the line to the other."),
+        new("redact",  "Redact",    "eye-off",        "Drag over anything to black it out."),
+        new("measure", "Ruler",     "crosshair",      "Drag between two points to measure them, in the photo's own pixels."),
+    ];
+
+    private string CurrentHint =>
+        (_tools.FirstOrDefault(t => t.Id == _tool)?.Hint ?? "")
+        + (_tool == "select" ? "" : " Hold Alt and drag to move around; scroll to zoom.");
 
     // Adjustment state
     private int _brightness, _contrast, _saturation, _blur;
@@ -233,6 +297,17 @@
 
     public async Task OpenAsync()
     {
+        // A fresh start each time: the component outlives the dialog, and a second photo opened
+        // from the same list should not inherit the first one's sliders, tool or layers.
+        _tool = "select";
+        _load = LoadState.Loading;
+        _zoomPct = 100;
+        _imageSize = null;
+        _isDirty = false;
+        _brightness = _contrast = _saturation = _blur = 0;
+        _preset = "none";
+        _gridOn = false;
+        _layers = [];
         _show = true;
         StateHasChanged();
         await Task.Yield();
@@ -262,11 +337,29 @@
     {
         _tool = tool;
         if (_module is null) return;
-        await _module.InvokeVoidAsync("setDrawingMode", _containerId, tool,
-            new { color = _drawColor, width = _drawWidth, fontSize = _fontSize });
+        await _module.InvokeVoidAsync("setDrawingMode", _containerId, tool, ToolOptions());
     }
 
-    private string Fm(string tool) => _tool == tool ? "solid" : "flat";
+    private async Task PushToolOptionsAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setToolOptions", _containerId, ToolOptions());
+    }
+
+    private object ToolOptions() => new { color = _drawColor, width = _drawWidth, fontSize = _fontSize };
+
+    private async Task ZoomAsync(string action)
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("zoom", _containerId, action);
+    }
+
+    private async Task OnClosedAsync()
+    {
+        // Tear the canvas down with the dialog, rather than leaving Fabric and its resize observer
+        // attached to markup that is no longer on the page.
+        try { if (_module is not null) await _module.InvokeVoidAsync("destroy", _containerId); }
+        catch (JSDisconnectedException) { }
+    }
 
     // ── Adjustments ───────────────────────────────────────────────────────────
 
@@ -285,7 +378,12 @@
 
     // ── Transform ─────────────────────────────────────────────────────────────
 
-    private async Task RotateAsync(int d)  { if (_module is not null) await _module.InvokeVoidAsync("rotate", _containerId, d); }
+    private async Task RotateAsync(int d)
+    {
+        if (_module is null) return;
+        var size = await _module.InvokeAsync<int[]?>("rotate", _containerId, d);
+        if (size is [var w, var h] && _imageSize is not null) _imageSize = (w, h);
+    }
     private async Task FlipAsync(string a) { if (_module is not null) await _module.InvokeVoidAsync("flip",   _containerId, a); }
 
     private async Task DeleteSelected()
@@ -365,7 +463,7 @@
         _saving = true; StateHasChanged();
         try
         {
-            var json   = await _module.InvokeAsync<string?>("getStateJson", _containerId);
+            var json   = System.Text.Encoding.UTF8.GetString(await ReadBytesAsync("getStateBytes"));
             var result = await AdminClient.SaveImageEditStateAsync(UploadFileId, json);
             if (result is not null)
             {
@@ -383,11 +481,12 @@
         _saving = true; StateHasChanged();
         try
         {
-            var dataUrl = await _module.InvokeAsync<string?>("exportToBase64", _containerId, "png", 0.92);
-            if (string.IsNullOrEmpty(dataUrl)) return;
-            var comma  = dataUrl.IndexOf(',');
-            var bytes  = Convert.FromBase64String(comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl);
-            var result = await AdminClient.SaveImageAsNewVersionAsync(UploadFileId, bytes, "png");
+            // A photograph stays a JPEG: the same picture as a PNG is several times the size.
+            var ext    = Path.GetExtension(FileName ?? "").ToLowerInvariant();
+            var format = ext is ".jpg" or ".jpeg" ? "jpeg" : "png";
+            var bytes  = await ReadBytesAsync("exportBytes", format, 0.92);
+            if (bytes.Length == 0) return;
+            var result = await AdminClient.SaveImageAsNewVersionAsync(UploadFileId, bytes, format);
             if (result is not null)
             {
                 _isDirty = false;
@@ -398,7 +497,48 @@
         finally { _saving = false; }
     }
 
+    /// <summary>
+    /// Bytes from the editor through a stream, not a return value: a return value is one SignalR
+    /// message, capped at 128 KB for this site, and every saved picture is bigger than that.
+    /// </summary>
+    private async Task<byte[]> ReadBytesAsync(string function, params object?[] extra)
+    {
+        if (_module is null) return [];
+        var args = new object?[] { _containerId }.Concat(extra).ToArray();
+        var reference = await _module.InvokeAsync<IJSStreamReference?>(function, args);
+        if (reference is null) return [];
+        await using (reference)
+        {
+            await using var stream = await reference.OpenReadStreamAsync(maxAllowedSize: 250L * 1024 * 1024);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return copy.ToArray();
+        }
+    }
+
     // ── JS callback ───────────────────────────────────────────────────────────
+
+    [JSInvokable]
+    public void OnImageLoaded(int width, int height)
+    {
+        _load = LoadState.Loaded;
+        _imageSize = (width, height);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnImageFailed()
+    {
+        _load = LoadState.Failed;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnZoomChanged(int percent)
+    {
+        _zoomPct = percent;
+        StateHasChanged();
+    }
 
     [JSInvokable]
     public void OnEditorChanged()

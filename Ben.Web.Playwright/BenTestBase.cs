@@ -1582,4 +1582,59 @@ public abstract class BenTestBase : PageTest
             + "start. Check the browser console: an exception during render kills the circuit and "
             + "leaves the page frozen exactly like this.");
     }
+
+    /// <summary>
+    /// Uploads the room photo fixture under a unique name to the signed-in SuperAdmin's own files,
+    /// then presses that file's Edit image button. Shared by ImageEditorTests and the help capture.
+    /// </summary>
+    /// <param name="fileName">Unique by default, so the test finds its own upload; the help capture
+    /// passes a readable one because the name is the dialog's title.</param>
+    protected async Task OpenPhotoEditorOnAFreshUploadAsync(string? fileName = null)
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/users");
+        await WaitForTheCircuitAsync();
+        var search = Page.GetByPlaceholder("Search by name or email");
+        await Expect(search).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await search.FillAsync(SuperAdminEmail);
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Search" }).ClickAsync();
+        var view = Page.Locator("tr", new() { HasTextString = "AverageBen" })
+                       .GetByRole(AriaRole.Button, new() { Name = "View" })
+                       .Or(Page.Locator("tr", new() { HasTextString = "AverageBen" }).GetByRole(AriaRole.Link, new() { Name = "View" }))
+                       .First;
+        await ClickUntilUrlAsync(view, @"/admin/users/[0-9a-f\-]+");
+        await WaitForTheCircuitAsync();
+
+        var filesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Files" })
+                           .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Files" }))
+                           .First;
+        await filesTab.ClickAsync();
+
+        var name = fileName ?? $"editor-{Guid.NewGuid():N}.jpg";
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Upload File" }).ClickAsync();
+        var upload = Page.Locator(".modal-dialog", new() { HasTextString = "Upload File" });
+        await upload.Locator("select").SelectOptionAsync(new SelectOptionValue { Label = "Case Evidence" });
+        await upload.Locator("input[type=file]").SetInputFilesAsync(new FilePayload
+        {
+            Name = name,
+            MimeType = "image/jpeg",
+            Buffer = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg")),
+        });
+        await Expect(upload.GetByText(name)).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await upload.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true }).ClickAsync();
+
+        // The grid shows ten files a page in the order the API returns them, and this account
+        // collects a file every run - so the new one can be on any page.
+        var row = Page.Locator("tr", new() { HasTextString = name });
+        var next = Page.GetByRole(AriaRole.Button, new() { Name = "Go to the next page" });
+        for (var pageNo = 0; pageNo < 40 && !await row.IsVisibleAsync(); pageNo++)
+        {
+            await Page.WaitForTimeoutAsync(pageNo == 0 ? 2_000 : 300);
+            if (await row.IsVisibleAsync()) break;
+            if (!await next.IsVisibleAsync() || await next.IsDisabledAsync()) break;
+            await next.ClickAsync();
+        }
+        await Expect(row).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await row.Locator("button[title='Edit image']").ClickAsync();
+    }
+
 }

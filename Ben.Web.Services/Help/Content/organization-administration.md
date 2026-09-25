@@ -483,6 +483,27 @@ files arrive **private by default**, and someone with publish permission approve
 they ever appear publicly. The original stays the owner's: only a file's owner can delete it,
 and a group removing its copy never touches the member's own file.
 
+### Editing a photo
+
+A photo in the Files tab has an **Edit image** button. It opens the photo editor across the whole
+screen, with the photo fitted to the space and its real size shown at the bottom.
+
+![The photo editor: tools down the left, the photo in the middle, adjustments and layers on the right](help-media:organization-administration/photo-editor.png)
+
+- **Zoom** with the buttons above the photo or by scrolling over it. **Fit** shows the whole photo
+  again, and **100%** shows it pixel for pixel.
+- **Move around** a zoomed photo by dragging it with **Select**. With any other tool chosen, hold
+  **Alt** and drag.
+- **Tools** each say what they do. The line above the photo says how to use the one that is chosen,
+  and it stays chosen until you pick another. **Ruler** measures in the photo's own pixels, and
+  **Redact** blacks out anything you drag over.
+- **Turn left** and **Turn right** turn the whole photo, along with anything you have drawn on it.
+- **Adjustments**, **Filter** and **Evidence Tools** are on the right. Everything you add is listed
+  under **Layers**, where you can hide it, fade it or delete it.
+
+**Save as New Version** keeps the original untouched and saves the edited photo beside it at the
+photo's full size. A JPEG stays a JPEG.
+
 ## Editing your public pages
 
 *The CMS editor has a built-in walkthrough — the **?** button beside New Page runs it any

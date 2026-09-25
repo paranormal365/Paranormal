@@ -1,9 +1,16 @@
 # Fabric.js — vendored
 
-**Version:** 6.9.1
-**Source:** https://cdn.jsdelivr.net/npm/fabric@6.9.1/dist/index.min.js
+**Version:** 7.4.0 — the bundle's own version string, and `fabric.version` in the browser.
+This note said 6.9.1 until 09/25/2026; the file here is 7.
+**Source:** https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js — byte-identical
+(SHA-256 `d4e908b3b3654db92c08ff0f31aa6a72ba1ddeeeb43a93bc41c833e51fe37f58`, checked 09/25/2026)
+
 **Licence:** MIT — see `LICENSE` beside this file.
 **Vendored:** 2026-08-21
+
+Fabric 7 places new objects by their centre (`originX`/`originY` default to `'center'`), where 6 used
+the top-left corner. `js/image-editor.js` sets the default back to top-left when it loads Fabric,
+because every shape it draws starts at the pointer.
 
 ## Why it is here rather than on a CDN
 

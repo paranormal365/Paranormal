@@ -2001,6 +2001,33 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     /// <summary>
+    /// The photo editor, full screen, with a photo in it and one mark drawn - the Edit image button
+    /// on a Files tab. Until 09/25/2026 it opened in the smallest dialog size with no picture at all.
+    /// </summary>
+    [Test]
+    [Description("organization-administration: the photo editor.")]
+    public async Task Capture_PhotoEditor()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await OpenPhotoEditorOnAFreshUploadAsync("hallway-light.jpg");
+
+        var dialog = Page.Locator(".modal-dialog.modal-fullscreen");
+        await Expect(dialog.GetByText("1600 × 1000 pixels")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // One rectangle, so the shot shows a mark, the layer it made and the save buttons.
+        await dialog.Locator("[data-tool='rect']").ClickAsync();
+        var box = (await dialog.Locator("canvas.upper-canvas").BoundingBoxAsync())!;
+        await Page.Mouse.MoveAsync(box.X + box.Width * 0.42f, box.Y + box.Height * 0.30f);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync(box.X + box.Width * 0.58f, box.Y + box.Height * 0.55f, new() { Steps = 8 });
+        await Page.Mouse.UpAsync();
+        await Expect(dialog.GetByText("Layers (1)")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await ShootAsync("organization-administration", "photo-editor.png", gated: true,
+            proves: "saved at this size");
+    }
+
+    /// <summary>
     /// The tour screens a business runs its walks from (item 233).
     /// </summary>
     /// <remarks>

@@ -4439,8 +4439,10 @@ the in-browser engine, exactly as it does now.</p>
    has the installers and their install steps.</li>
 <li><strong>Turn it on</strong>, if it isn't running: the chip's panel has a <strong>Turn on</strong> button on Windows, and
    your browser asks whether to open the sidecar — allow it.</li>
-<li><strong>Pair this browser with it.</strong> In the same panel, click <strong>Show a pairing code</strong>; the sidecar
-   shows a <strong>six-digit code</strong>. Type that into the panel. That is all.</li>
+<li><strong>Pair this browser with it.</strong> On Windows, the first time it starts the sidecar opens a small
+   window with a <strong>six-digit code</strong>: press <strong>Copy code</strong> and paste it into the panel. If that window
+   is closed, or you are on a Mac, click <strong>Show a pairing code</strong> in the panel instead. That is all:
+   from then on it has no window, and you turn it on and off from the chip.</li>
 </ol>
 <p>The chip on the toolbar tells you the state at a glance: <em>No sidecar</em> (none found), <em>Pair sidecar</em>
 (found, not yet paired) or <em>Native</em> (paired and in use).</p>
@@ -4924,6 +4926,24 @@ filter, and thumbnail or list views. Choosing one copies it into the group's lib
 files arrive <strong>private by default</strong>, and someone with publish permission approves them before
 they ever appear publicly. The original stays the owner's: only a file's owner can delete it,
 and a group removing its copy never touches the member's own file.</p>
+<h3>Editing a photo</h3>
+<p>A photo in the Files tab has an <strong>Edit image</strong> button. It opens the photo editor across the whole
+screen, with the photo fitted to the space and its real size shown at the bottom.</p>
+<p><img alt="The photo editor: tools down the left, the photo in the middle, adjustments and layers on the right" src="../Ben.Web.Services/Help/Media/organization-administration/photo-editor.png" /></p>
+<ul>
+<li><strong>Zoom</strong> with the buttons above the photo or by scrolling over it. <strong>Fit</strong> shows the whole photo
+  again, and <strong>100%</strong> shows it pixel for pixel.</li>
+<li><strong>Move around</strong> a zoomed photo by dragging it with <strong>Select</strong>. With any other tool chosen, hold
+  <strong>Alt</strong> and drag.</li>
+<li><strong>Tools</strong> each say what they do. The line above the photo says how to use the one that is chosen,
+  and it stays chosen until you pick another. <strong>Ruler</strong> measures in the photo's own pixels, and
+  <strong>Redact</strong> blacks out anything you drag over.</li>
+<li><strong>Turn left</strong> and <strong>Turn right</strong> turn the whole photo, along with anything you have drawn on it.</li>
+<li><strong>Adjustments</strong>, <strong>Filter</strong> and <strong>Evidence Tools</strong> are on the right. Everything you add is listed
+  under <strong>Layers</strong>, where you can hide it, fade it or delete it.</li>
+</ul>
+<p><strong>Save as New Version</strong> keeps the original untouched and saves the edited photo beside it at the
+photo's full size. A JPEG stays a JPEG.</p>
 <h2>Editing your public pages</h2>
 <p><em>The CMS editor has a built-in walkthrough — the </em><em>?</em><em> button beside New Page runs it any
 time, and it runs itself once for first-time editors.</em></p>
@@ -6443,7 +6463,8 @@ different trade, and this switch is about walks.</p>
 <p><strong>Administration → Users</strong> lists every account; the view button on a row opens that person's
 record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
 files and site roles. Each tab edits directly, and every change is written to the audit log
-under your name.</p>
+under your name. A photo in the files tab opens in the photo editor. See <em>Editing a photo</em> in
+Organization Administration.</p>
 <h3>Former members</h3>
 <p>Closing an account does not remove it. The person's name, contact details and credentials go, but
 the row stays so that the cases, evidence and messages they wrote for a group remain where that

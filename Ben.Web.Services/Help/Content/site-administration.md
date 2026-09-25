@@ -168,7 +168,8 @@ Unset reads as **on**, so a site that never touches this setting behaves exactly
 **Administration → Users** lists every account; the view button on a row opens that person's
 record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
 files and site roles. Each tab edits directly, and every change is written to the audit log
-under your name.
+under your name. A photo in the files tab opens in the photo editor. See *Editing a photo* in
+Organization Administration.
 
 ### Former members
 
