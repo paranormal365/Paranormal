@@ -148,18 +148,58 @@ export async function init(containerId, imageUrl, editStateJson, dotNetRef) {
     ro.observe(container);
     inst.ro = ro;
 
-    if (editStateJson) {
-        // Fabric v6's loadFromJSON is Promise-based (the old (json, callback) signature
-        // from v5 silently no-ops — the callback is never invoked and nothing renders).
-        canvas.loadFromJSON(editStateJson).then(() => {
-            inst.baseImage = canvas.getObjects().find(o => o.layerName === '__bg__') ?? null;
-            canvas.renderAll();
-            _fitToContainer(containerId);
-            _notifyChanged(containerId);
-        }).catch(e => console.error('image-editor: failed to load edit state', e));
-    } else if (imageUrl) {
-        await _loadBaseImage(containerId, imageUrl);
-    }
+    // The photo always comes from its own address, even when there is saved work to reopen. A
+    // saved canvas carries the address it was loaded from, and that one may no longer work.
+    if (imageUrl) await _loadBaseImage(containerId, imageUrl);
+    if (editStateJson && inst.baseImage) await _restoreState(containerId, editStateJson);
+}
+
+// ── Saved work ──────────────────────────────────────────────────────────────
+//
+// "Save State" stored the whole canvas and nothing ever read it back, so it did nothing anybody
+// could see (09/25/2026). It is saved now as the editor's own record - the marks, the last filter,
+// and how the photo was turned and flipped - and reopened on the next visit.
+//
+// STATE_VERSION is 2 because everything saved before it was in the old display pixels (the canvas
+// was scaled to the dialog), so its marks would land in the wrong places on the photo. Those are
+// ignored rather than shown wrong; none of them had ever been shown at all.
+
+const STATE_VERSION = 2;
+
+async function _restoreState(containerId, json) {
+    const inst = _instances.get(containerId);
+    let state;
+    try { state = JSON.parse(json); } catch { return; }
+    if (state?.benEditor !== STATE_VERSION) return;
+
+    const img = inst.baseImage;
+    img.set({ angle: state.angle ?? 0, flipX: !!state.flipX, flipY: !!state.flipY });
+    img.setCoords();
+    inst.filterState = state.filter ?? null;
+    _applyFilterState(inst);
+
+    let objects = [];
+    try { objects = await fabric.util.enlivenObjects(state.objects ?? []); }
+    catch (e) { console.error('image-editor: saved marks could not be read', e); }
+    if (!_instances.has(containerId)) return; // closed while the marks were loading
+    objects.forEach(o => {
+        if (!o.layerId) o.layerId = _newId();
+        // Saved as they were under whatever tool drew them; reopened under Select, where marks move.
+        if (o.layerName !== '__grid__') o.selectable = inst.tool === 'select';
+        inst.canvas.add(o);
+    });
+
+    inst.zoomMode = 'fit';
+    _fitToContainer(containerId);
+    inst.canvas.renderAll();
+
+    const adjust = inst.filterState?.kind === 'adjust' ? inst.filterState.opts : {};
+    inst.dotNetRef?.invokeMethodAsync('OnStateRestored', {
+        brightness: adjust.brightness ?? 0, contrast: adjust.contrast ?? 0,
+        saturation: adjust.saturation ?? 0, blur: adjust.blur ?? 0,
+        preset: inst.filterState?.kind === 'preset' ? inst.filterState.name : 'none',
+        grid: objects.some(o => o.layerName === '__grid__'),
+    });
 }
 
 export function destroy(containerId) {
@@ -315,9 +355,24 @@ function _wirePanAndZoom(containerId) {
 
 // ── Adjustments ───────────────────────────────────────────────────────────────
 
+// The adjustments and the filter presets each replace the photo's whole filter list, so whichever
+// was used last is what the photo shows - and what is saved.
+function _applyFilterState(inst) {
+    const f = inst.filterState;
+    if (!f || !inst.baseImage) return;
+    if (f.kind === 'adjust') _setAdjustments(inst, f.opts ?? {});
+    else if (f.kind === 'preset') _setPreset(inst, f.name);
+}
+
 export function applyAdjustments(containerId, opts) {
     const inst = _instances.get(containerId);
     if (!inst || !inst.baseImage) return;
+    inst.filterState = { kind: 'adjust', opts };
+    _setAdjustments(inst, opts);
+    _notifyChanged(containerId);
+}
+
+function _setAdjustments(inst, opts) {
     const img = inst.baseImage;
     const filters = [];
     if (opts.brightness !== 0) filters.push(new fabric.filters.Brightness({ brightness: opts.brightness / 100 }));
@@ -329,12 +384,17 @@ export function applyAdjustments(containerId, opts) {
     img.filters = filters;
     img.applyFilters();
     inst.canvas.renderAll();
-    _notifyChanged(containerId);
 }
 
 export function applyPreset(containerId, preset) {
     const inst = _instances.get(containerId);
     if (!inst || !inst.baseImage) return;
+    inst.filterState = { kind: 'preset', name: preset };
+    _setPreset(inst, preset);
+    _notifyChanged(containerId);
+}
+
+function _setPreset(inst, preset) {
     const img = inst.baseImage;
     const F = fabric.filters;
     const presets = {
@@ -349,7 +409,6 @@ export function applyPreset(containerId, preset) {
     img.filters = presets[preset] ?? [];
     img.applyFilters();
     inst.canvas.renderAll();
-    _notifyChanged(containerId);
 }
 
 // ── Transform ─────────────────────────────────────────────────────────────────
@@ -773,7 +832,16 @@ function _bytes(text) {
 export function getStateBytes(containerId) {
     const inst = _instances.get(containerId);
     if (!inst) return null;
-    return _bytes(JSON.stringify(inst.canvas.toJSON(['layerId', 'layerName', 'selectable', 'evented'])));
+    const img = inst.baseImage;
+    return _bytes(JSON.stringify({
+        benEditor: STATE_VERSION,
+        angle: img?.angle ?? 0, flipX: !!img?.flipX, flipY: !!img?.flipY,
+        filter: inst.filterState ?? null,
+        // Everything except the photo itself, in the photo's own pixels.
+        objects: inst.canvas.getObjects()
+            .filter(o => o !== img)
+            .map(o => o.toObject(['layerId', 'layerName', 'selectable', 'evented'])),
+    }));
 }
 
 /**

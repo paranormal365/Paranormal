@@ -815,6 +815,22 @@ public sealed class UploadFileController : BenControllerBase
         return Ok(_mapper.Map<IEnumerable<UploadFileRecord>>(clips));
     }
 
+    // GET /api/upload-files/{id}/edit-state — the saved editor work, for the editor to reopen with.
+    // "Save State" wrote this and nothing ever read it back until 09/25/2026. Gated like the write:
+    // whoever may save work on a photo may reopen it, and nobody else needs it.
+    [HttpGet("{id:guid}/edit-state")]
+    public async Task<ActionResult<ImageEditStateRecord>> GetEditState(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.UploadFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
+        if (!await FileAudienceAccess.CanManageFileAsync(db, entity, userId, User.IsInRole(RoleNames.SuperAdmin), cancellationToken))
+            return Forbid();
+        return Ok(new ImageEditStateRecord(entity.EditStateJson));
+    }
+
     // PUT /api/upload-files/{id}/edit-state — persists the Fabric.js editor JSON snapshot
     [HttpPut("{id:guid}/edit-state")]
     public async Task<ActionResult<UploadFileRecord>> SaveEditState(
@@ -825,6 +841,11 @@ public sealed class UploadFileController : BenControllerBase
         var entity = await db.UploadFiles
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (entity is null) return NotFound();
+        // The same rule as Replace: whoever may change the file. This looked a file up by id and
+        // wrote to it for any signed-in caller, so anybody could put editor state on anybody's photo.
+        if (userId is not { } caller
+            || !await FileAudienceAccess.CanManageFileAsync(db, entity, caller, User.IsInRole(RoleNames.SuperAdmin), cancellationToken))
+            return Forbid();
 
         entity.EditStateJson      = request.EditStateJson;
         entity.DateUpdated        = DateTime.UtcNow;
@@ -846,6 +867,10 @@ public sealed class UploadFileController : BenControllerBase
         var parent = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (parent is null) return NotFound();
+        // A version hangs off its parent (ParentFileId), so making one is changing the parent -
+        // the same rule as Replace. Without it anybody could attach "-edited" copies to any file id.
+        if (!await FileAudienceAccess.CanManageFileAsync(db, parent, userId, User.IsInRole(RoleNames.SuperAdmin), cancellationToken))
+            return Forbid();
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);

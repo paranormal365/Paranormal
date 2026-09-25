@@ -504,6 +504,14 @@ screen, with the photo fitted to the space and its real size shown at the bottom
 **Save as New Version** keeps the original untouched and saves the edited photo beside it at the
 photo's full size. A JPEG stays a JPEG.
 
+**Save State** keeps your work without making a new photo: your marks, the last adjustment or
+filter, and how the photo was turned. The next time you open that photo in the editor, it comes back
+as you left it. The photo itself is not changed.
+
+Only the person who owns a photo can save work on it or save a new version. For a photo that belongs
+to a group, that is the group's owners and administrators. Site administrators can too. Anyone else
+who opens the editor is told the edit wasn't saved.
+
 ## Editing your public pages
 
 *The CMS editor has a built-in walkthrough — the **?** button beside New Page runs it any

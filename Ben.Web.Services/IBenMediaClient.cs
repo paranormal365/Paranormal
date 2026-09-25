@@ -265,6 +265,8 @@ public interface IBenMediaClient
     Task<EditorHandoffCode?> GetEditorHandoffCodeAsync(CancellationToken token = default);
 
     // ── Image editor ────────────────────────────────────────────────────────
+    /// <summary>The editor's saved work on a photo, or null when there is none or the caller may not change it.</summary>
+    Task<string?> GetImageEditStateAsync(Guid fileId, CancellationToken token = default);
     Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default);
     Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default);
 }

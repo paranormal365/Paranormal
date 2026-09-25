@@ -243,6 +243,8 @@ public sealed partial class BenAdminClientAdapter
         => _api.PostAsync<object, EditorHandoffCode>("/api/auth/editor-handoff", new { }, token);
 
     // ── Image editor ────────────────────────────────────────────────────────
+    public async Task<string?> GetImageEditStateAsync(Guid fileId, CancellationToken token = default)
+        => (await _api.GetAsync<ImageEditStateRecord>($"/api/upload-files/{fileId}/edit-state", token))?.EditStateJson;
     public Task<UploadFileRecord?> SaveImageEditStateAsync(Guid fileId, string? editStateJson, CancellationToken token = default)
         => _api.PutAsync<object, UploadFileRecord>($"/api/upload-files/{fileId}/edit-state", new { EditStateJson = editStateJson }, token);
     public Task<UploadFileRecord?> SaveImageAsNewVersionAsync(Guid parentFileId, byte[] imageBytes, string format, CancellationToken token = default)

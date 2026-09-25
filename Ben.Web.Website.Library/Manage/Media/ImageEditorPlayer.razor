@@ -191,7 +191,13 @@
     <FooterContent>
         @if (_imageSize is { } size)
         {
-            <span class="small text-muted me-auto">@size.Width × @size.Height pixels · saved at this size</span>
+            <span class="small text-muted me-auto">
+                @size.Width × @size.Height pixels · saved at this size
+                @if (_restored)
+                {
+                    <span data-testid="image-editor-restored"> · your saved work was reopened</span>
+                }
+            </span>
         }
         @* These were WindowActions on the Telerik window — buttons in its title bar — and the
            conversion to a Bootstrap modal dropped them, leaving both save handlers with nothing
@@ -200,7 +206,8 @@
            belong and where they are visible rather than hidden in a title bar. *@
         @if (_isDirty)
         {
-            <button type="button" class="btn btn-outline-primary" @onclick="SaveEditStateAsync" disabled="@_saving">
+            <button type="button" class="btn btn-outline-primary" @onclick="SaveEditStateAsync" disabled="@_saving"
+                    title="Keep your marks and adjustments on this photo, to carry on next time. The photo itself is not changed.">
                 <BenIcon Name="save" Class="me-1" />Save State
             </button>
             <button type="button" class="btn btn-primary" @onclick="SaveAsNewVersionAsync" disabled="@_saving">
@@ -241,6 +248,7 @@
     private LoadState _load = LoadState.Loading;
     private int _zoomPct = 100;
     private (int Width, int Height)? _imageSize;
+    private bool _restored;
 
     /// <summary>
     /// The tools, each with a name and a sentence on how to use it. The toolbar used to be eight
@@ -308,6 +316,7 @@
         _preset = "none";
         _gridOn = false;
         _layers = [];
+        _restored = false;
         _show = true;
         StateHasChanged();
         await Task.Yield();
@@ -326,7 +335,9 @@
         // directly and this process never holds a copy of it. An image being edited is a full-
         // size photograph, which made this one of the more expensive instances of that pattern.
         var imageUrl = ImageUrl ?? MediaUrls.Download(UploadFileId);
-        var editState = (string?)null;
+        // What "Save State" kept last time, so the photo reopens where it was left. Null for a
+        // photo nobody has saved work on, and for one this person may not change.
+        var editState = await AdminClient.GetImageEditStateAsync(UploadFileId);
 
         await _module.InvokeVoidAsync("init", _containerId, imageUrl, editState, _dotNetRef);
     }
@@ -471,6 +482,12 @@
                 Toasts.Success("Edit state saved.");
                 await OnSaved.InvokeAsync(result);
             }
+            else
+            {
+                // The server refuses anybody who may not change this photo (09/25/2026); saying
+                // nothing left the button looking broken.
+                Toasts.Error(NotSaved);
+            }
         }
         finally { _saving = false; }
     }
@@ -493,9 +510,19 @@
                 Toasts.Success("Saved as new version.");
                 await OnSaved.InvokeAsync(result);
             }
+            else
+            {
+                // The server refuses anybody who may not change this photo (09/25/2026); saying
+                // nothing left the button looking broken.
+                Toasts.Error(NotSaved);
+            }
         }
         finally { _saving = false; }
     }
+
+    private const string NotSaved =
+        "The edit wasn't saved. A photo can only be changed by its owner, by the owners and "
+        + "administrators of the group it belongs to, or by a site administrator.";
 
     /// <summary>
     /// Bytes from the editor through a stream, not a return value: a return value is one SignalR
@@ -525,6 +552,23 @@
         _imageSize = (width, height);
         StateHasChanged();
     }
+
+    /// <summary>Saved work was reopened: put the sliders and switches back where they were.</summary>
+    [JSInvokable]
+    public async Task OnStateRestored(RestoredState state)
+    {
+        _brightness = state.Brightness;
+        _contrast   = state.Contrast;
+        _saturation = state.Saturation;
+        _blur       = state.Blur;
+        _preset     = string.IsNullOrEmpty(state.Preset) ? "none" : state.Preset;
+        _gridOn     = state.Grid;
+        _restored   = true;
+        _isDirty    = false;
+        await RefreshLayersAsync();
+    }
+
+    public sealed record RestoredState(int Brightness, int Contrast, int Saturation, int Blur, string? Preset, bool Grid);
 
     [JSInvokable]
     public void OnImageFailed()

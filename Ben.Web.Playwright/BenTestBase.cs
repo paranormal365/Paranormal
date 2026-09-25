@@ -1585,11 +1585,12 @@ public abstract class BenTestBase : PageTest
 
     /// <summary>
     /// Uploads the room photo fixture under a unique name to the signed-in SuperAdmin's own files,
-    /// then presses that file's Edit image button. Shared by ImageEditorTests and the help capture.
+    /// then presses that file's Edit image button. Returns the name it was uploaded under. Shared by
+    /// ImageEditorTests and the help capture.
     /// </summary>
     /// <param name="fileName">Unique by default, so the test finds its own upload; the help capture
     /// passes a readable one because the name is the dialog's title.</param>
-    protected async Task OpenPhotoEditorOnAFreshUploadAsync(string? fileName = null)
+    protected async Task<string> OpenPhotoEditorOnAFreshUploadAsync(string? fileName = null)
     {
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await WaitForTheCircuitAsync();
@@ -1635,6 +1636,7 @@ public abstract class BenTestBase : PageTest
         }
         await Expect(row).ToBeVisibleAsync(new() { Timeout = 5_000 });
         await row.Locator("button[title='Edit image']").ClickAsync();
+        return name;
     }
 
 }

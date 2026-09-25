@@ -446,6 +446,125 @@ public class UploadFileControllerTests
         Assert.IsType<ForbidResult>(result.Result);
     }
 
+    // ── The photo editor's two saves ─────────────────────────────────────────────
+    // Both looked the file up by id and wrote for any signed-in caller: Save State put editor JSON
+    // on anybody's file, and Save as New Version hung "-edited" copies off anybody's file id. They
+    // now answer to the same rule as Replace (09/25/2026).
+
+    private static async Task<Guid> SeedPhotoAsync(IDbContextFactory<BenDataContext> factory, Guid ownerId)
+    {
+        var typeId = await SeedFileType(factory, allowAll: true);
+        var fileId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = fileId, UploadFileTypeId = typeId, AppUserId = ownerId,
+            FileName = "photo.jpg", StoredFileName = "p.jpg", ContentType = "image/jpeg",
+            FileSize = 100, StoragePath = "users/owner/p.jpg",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return fileId;
+    }
+
+    private static async Task<string?> EditStateOfAsync(IDbContextFactory<BenDataContext> factory, Guid fileId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return (await db.UploadFiles.AsNoTracking().SingleAsync(f => f.Id == fileId)).EditStateJson;
+    }
+
+    [Fact]
+    public async Task SaveEditState_by_someone_unrelated_is_refused_and_writes_nothing()
+    {
+        var factory = CreateFactory();
+        var fileId  = await SeedPhotoAsync(factory, ownerId: Guid.NewGuid());
+
+        var result = await BuildController(factory, Guid.NewGuid())
+            .SaveEditState(fileId, new SaveEditStateRequest("{\"objects\":[]}"), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Null(await EditStateOfAsync(factory, fileId));
+    }
+
+    [Theory]
+    [InlineData(false)] // the owner
+    [InlineData(true)]  // a SuperAdmin
+    public async Task SaveEditState_by_the_owner_or_a_SuperAdmin_is_kept(bool asSuperAdmin)
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedPhotoAsync(factory, ownerId);
+        var caller  = asSuperAdmin ? Guid.NewGuid() : ownerId;
+
+        var result = await BuildController(factory, caller, isSuperAdmin: asSuperAdmin)
+            .SaveEditState(fileId, new SaveEditStateRequest("{\"objects\":[]}"), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("{\"objects\":[]}", await EditStateOfAsync(factory, fileId));
+    }
+
+    [Fact]
+    public async Task GetEditState_is_refused_to_someone_unrelated()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedPhotoAsync(factory, ownerId);
+        await BuildController(factory, ownerId).SaveEditState(fileId, new SaveEditStateRequest("{\"benEditor\":2}"), default);
+
+        var result = await BuildController(factory, Guid.NewGuid()).GetEditState(fileId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetEditState_gives_the_owner_or_a_SuperAdmin_what_was_saved(bool asSuperAdmin)
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedPhotoAsync(factory, ownerId);
+        await BuildController(factory, ownerId).SaveEditState(fileId, new SaveEditStateRequest("{\"benEditor\":2}"), default);
+
+        var result = await BuildController(factory, asSuperAdmin ? Guid.NewGuid() : ownerId, isSuperAdmin: asSuperAdmin)
+            .GetEditState(fileId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("{\"benEditor\":2}", Assert.IsType<ImageEditStateRecord>(ok.Value).EditStateJson);
+    }
+
+    [Fact]
+    public async Task SaveAsVersion_of_someone_elses_file_is_refused_and_makes_nothing()
+    {
+        var factory = CreateFactory();
+        var fileId  = await SeedPhotoAsync(factory, ownerId: Guid.NewGuid());
+
+        var result = await BuildController(factory, Guid.NewGuid())
+            .SaveAsVersion(fileId, MakeFile("edited.jpg"), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveAsVersion_by_the_owner_or_a_SuperAdmin_makes_the_version(bool asSuperAdmin)
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedPhotoAsync(factory, ownerId);
+        var caller  = asSuperAdmin ? Guid.NewGuid() : ownerId;
+
+        var result = await BuildController(factory, caller, isSuperAdmin: asSuperAdmin)
+            .SaveAsVersion(fileId, MakeFile("edited.jpg"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId && f.IsEditedVersion));
+    }
+
     [Fact]
     public async Task Replace_ExtensionMismatch_ReturnsBadRequest()
     {

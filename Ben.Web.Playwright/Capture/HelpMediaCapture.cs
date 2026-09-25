@@ -2016,6 +2016,7 @@ public sealed class HelpMediaCapture : BenTestBase
 
         // One rectangle, so the shot shows a mark, the layer it made and the save buttons.
         await dialog.Locator("[data-tool='rect']").ClickAsync();
+        await Expect(dialog.GetByTestId("image-editor-hint")).ToContainTextAsync("rectangle");
         var box = (await dialog.Locator("canvas.upper-canvas").BoundingBoxAsync())!;
         await Page.Mouse.MoveAsync(box.X + box.Width * 0.42f, box.Y + box.Height * 0.30f);
         await Page.Mouse.DownAsync();

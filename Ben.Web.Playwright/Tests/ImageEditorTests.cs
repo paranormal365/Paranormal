@@ -80,6 +80,42 @@ public class ImageEditorTests : BenTestBase
             "The rectangle's corner should be where the drag began.");
     }
 
+    /// <summary>
+    /// "Save State" kept the work and nothing ever loaded it back (09/25/2026). Now a rectangle
+    /// saved, closed and reopened is there again, in the same place on the photo.
+    /// </summary>
+    [Test]
+    public async Task Saved_work_is_there_when_the_photo_is_reopened()
+    {
+        var name = await OpenPhotoEditorOnAFreshUploadAsync();
+        var dialog = Page.Locator(".modal-dialog.modal-fullscreen");
+        await Expect(dialog.GetByText("1600 × 1000 pixels")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        await dialog.Locator("[data-tool='rect']").ClickAsync();
+        await Expect(dialog.GetByTestId("image-editor-hint")).ToContainTextAsync("rectangle");
+        var box = (await dialog.Locator("canvas.upper-canvas").BoundingBoxAsync())!;
+        var startX = box.X + box.Width * 0.35f;
+        var startY = box.Y + box.Height * 0.35f;
+        await Page.Mouse.MoveAsync(startX, startY);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync(startX + 120, startY + 80, new() { Steps = 8 });
+        await Page.Mouse.UpAsync();
+        await Expect(dialog.GetByText("Layers (1)")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Save State" }).ClickAsync();
+        await Expect(Page.GetByText("Edit state saved.")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await dialog.Locator(".modal-footer").GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
+        await Expect(dialog).Not.ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await Page.Locator("tr", new() { HasTextString = name }).Locator("button[title='Edit image']").ClickAsync();
+        await Expect(dialog.GetByTestId("image-editor-restored")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(dialog.GetByText("Layers (1)")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        // Same fit, same place: the corner is still under the point where the drag began.
+        Assert.That(await RedNearAsync(dialog, startX, startY), Is.True,
+            "The reopened rectangle should be where it was drawn.");
+    }
+
     /// <summary>Whether the picture has a strongly red pixel within a few pixels of a page point.</summary>
     private static Task<bool> RedNearAsync(ILocator dialog, double pageX, double pageY)
         => dialog.Locator("canvas.lower-canvas").EvaluateAsync<bool>(@"(c, p) => {
