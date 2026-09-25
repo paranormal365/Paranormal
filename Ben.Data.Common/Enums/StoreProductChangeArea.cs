@@ -41,4 +41,7 @@ public enum StoreProductChangeArea
 
     /// <summary>Versions: a new one started, its label or policy changed, the old one replaced (P13).</summary>
     Versions = 12,
+
+    /// <summary>The page's extras: return and warranty words, the reviews switch, videos (P14).</summary>
+    Page = 13,
 }

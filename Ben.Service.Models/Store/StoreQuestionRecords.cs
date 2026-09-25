@@ -59,3 +59,17 @@ public sealed record StoreVersionInfo(
 
 /// <summary>The new version's id, for its editor.</summary>
 public sealed record StoreNewVersionRecord(Guid ProductId);
+
+// Store sellers, backlog 251, P14: page extras.
+
+/// <summary>A product's video, for its page and its editors.</summary>
+public sealed record StoreVideoRecord(Guid Id, Guid UploadFileId, string? Title, string ContentType, int SortOrder);
+
+/// <summary>A product's page extras, as its editors hold them.</summary>
+public sealed record StoreExtrasRecord(string? ReturnPolicyText, string? WarrantyText, bool ReviewsEnabled, IReadOnlyList<StoreVideoRecord> Videos);
+
+/// <summary>The store's save: the words, and the reviews switch.</summary>
+public sealed record SaveStoreExtrasRequest(string? ReturnPolicyText, string? WarrantyText, bool ReviewsEnabled);
+
+/// <summary>A seller's save: the words only — the reviews switch is the store's.</summary>
+public sealed record SaveSellerExtrasRequest(string? ReturnPolicyText, string? WarrantyText);

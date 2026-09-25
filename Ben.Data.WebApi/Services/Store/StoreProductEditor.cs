@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using System.Text.RegularExpressions;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
@@ -285,6 +286,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
             .Select(x => x.ThumbnailUploadFileId!.Value).ToListAsync(ct));
         pictures.AddRange(await db.StoreProductFiles.Where(x => x.ProductId == id && x.UploadFileId != null)
             .Select(x => x.UploadFileId!.Value).ToListAsync(ct));
+        pictures.AddRange(await db.StoreProductVideos.Where(x => x.ProductId == id).Select(x => x.UploadFileId).ToListAsync(ct));
 
         // Children first on the NoAction paths (a variant's choices point at values that also
         // cascade from the product; a picture's variant likewise), then the product takes the rest.
@@ -294,6 +296,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
             await db.StoreProductImages.Where(i => i.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProductSaleRequests.Where(r => r.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProductFiles.Where(f => f.ProductId == id).ExecuteDeleteAsync(ct);
+            await db.StoreProductVideos.Where(v => v.ProductId == id).ExecuteDeleteAsync(ct);
             await db.StoreProducts.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
             if (tx is not null) await tx.CommitAsync(ct);
         }
@@ -1192,6 +1195,75 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         StoreSupersededPolicy.Discontinue => "comes off sale straight away",
         _ => "stays on sale beside it",
     };
+
+    // ── page extras (P14) ────────────────────────────────────────────────────
+
+    private static readonly string[] VideoTypes = ["video/mp4", "video/webm", "video/quicktime"];
+
+    /// <summary>
+    /// An item's return and warranty words, and — for the store alone — whether its page takes
+    /// reviews (<paramref name="reviewsEnabled"/> null leaves the switch as it is: a seller's save).
+    /// </summary>
+    public static async Task<StoreEditRefusal?> SaveExtrasAsync(BenDataContext db, StoreProduct product, string? returnPolicy, string? warranty,
+        bool? reviewsEnabled, StoreEditActor actor, CancellationToken ct)
+    {
+        var (r, w) = (Trimmed(returnPolicy), Trimmed(warranty));
+        if (r?.Length > StoreProduct.MaxPolicyTextLength || w?.Length > StoreProduct.MaxPolicyTextLength)
+            return StoreEditRefusal.BadRequest($"Keep each to {StoreProduct.MaxPolicyTextLength} characters.");
+
+        var said = new List<string>();
+        if (r != product.ReturnPolicyText) said.Add(r is null ? "Removed its return words." : "Changed its return words.");
+        if (w != product.WarrantyText) said.Add(w is null ? "Removed its warranty." : "Changed its warranty.");
+        var reviewsChanged = reviewsEnabled is { } on && on != product.ReviewsEnabled;
+        if (reviewsChanged) said.Add(reviewsEnabled!.Value ? "Switched reviews on." : "Switched reviews off — its reviews and stars are hidden.");
+        if (said.Count == 0) return null;
+
+        (product.ReturnPolicyText, product.WarrantyText) = (r, w);
+        if (reviewsEnabled is { } enabled) product.ReviewsEnabled = enabled;
+        product.DateUpdated = DateTime.UtcNow;
+        StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Page, string.Join(" ", said), actor.UserId, actor.Role, product.DateUpdated.Value);
+        await db.SaveChangesAsync(ct);
+        // The stars on cards, sorts and filters come from the product's caches: switching reviews
+        // off must empty them, and on must fill them again.
+        if (reviewsChanged) await StoreRatingCaches.RecomputeAsync(db, product.Id, ct);
+        return null;
+    }
+
+    /// <summary>A video for the item's gallery: mp4, webm or mov, up to 95 MB, three at most.</summary>
+    public async Task<StoreEditRefusal?> AddVideoAsync(BenDataContext db, Guid productId, IFormFile file, string? title, StoreEditActor actor, CancellationToken ct)
+    {
+        if (file.Length <= 0) return StoreEditRefusal.BadRequest("There was no video in that upload.");
+        if (file.Length > StoreProductVideo.MaxBytes) return StoreEditRefusal.BadRequest("That video is too large — 95 MB at most.");
+        if (!VideoTypes.Contains(file.ContentType?.ToLowerInvariant()))
+            return StoreEditRefusal.BadRequest("A video is an mp4, webm or mov file.");
+        if (Trimmed(title)?.Length > StoreProductVideo.MaxTitleLength)
+            return StoreEditRefusal.BadRequest($"A video's title is {StoreProductVideo.MaxTitleLength} characters at most.");
+        var count = await db.StoreProductVideos.CountAsync(v => v.ProductId == productId, ct);
+        if (count >= StoreProductVideo.MaxPerProduct)
+            return StoreEditRefusal.BadRequest($"An item shows {StoreProductVideo.MaxPerProduct} videos at most — remove one first.");
+
+        var stored = await images.SaveVideoAsync(db, file, $"products/{productId:N}/videos", actor.UserId, ct);
+        var now = DateTime.UtcNow;
+        db.StoreProductVideos.Add(new StoreProductVideo
+        {
+            Id = Guid.NewGuid(), ProductId = productId, UploadFileId = stored.Id, Title = Trimmed(title), SortOrder = count,
+            DateCreated = now, CreatedByAppUserId = actor.UserId,
+        });
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Page, $"Added a video{(Trimmed(title) is { } t ? $", “{t}”" : "")}.", actor.UserId, actor.Role, now);
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    public async Task<StoreEditRefusal?> DeleteVideoAsync(BenDataContext db, Guid productId, Guid videoId, StoreEditActor actor, CancellationToken ct)
+    {
+        var video = await db.StoreProductVideos.FirstOrDefaultAsync(v => v.Id == videoId && v.ProductId == productId, ct);
+        if (video is null) return StoreEditRefusal.NotFound;
+        db.StoreProductVideos.Remove(video);
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Page, $"Removed a video{(video.Title is { } t ? $", “{t}”" : "")}.", actor.UserId, actor.Role, DateTime.UtcNow);
+        await db.SaveChangesAsync(ct);
+        await images.RemoveAsync(db, video.UploadFileId, ct);
+        return null;
+    }
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

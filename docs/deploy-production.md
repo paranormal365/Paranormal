@@ -369,7 +369,10 @@ database needs, in order, **before** the code is deployed:
    Cloudflare's 100 MB request cap; the API's request limit for that route is 100 MB. Then `StoreProductQuestions`
    (two new tables and StoreProducts.FaqEnabled, default on) and `StoreProductVersions` (six nullable/defaulted
    columns on StoreProducts, a filtered unique index and a self-referencing key). A new scheduled job,
-   `store-superseded-sweep`, takes a replaced version off sale once it has nothing on hand.
+   `store-superseded-sweep`, takes a replaced version off sale once it has nothing on hand. Then
+   `StoreProductPageExtras` (three columns on StoreProducts — ReviewsEnabled defaults on — and the
+   StoreProductVideos table). Product videos are stripped of metadata only where the API host has ffmpeg
+   (the same tool the case-media stripping uses); without it the original is served.
 2. Deploy `webapi` and `website`. `features.store` stays off until the checklist on
    `/admin/store/settings` reads **Ready to sell**.
 

@@ -397,4 +397,16 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<(StoreNewVersionRecord? Result, string? Error)> StartStoreProductVersionAsync(Guid productId, StartStoreVersionRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<StartStoreVersionRequest, StoreNewVersionRecord>(HttpMethod.Post, $"/api/admin/store/products/{productId}/new-version", request, token);
+
+    public Task<ItemResult<StoreExtrasRecord>> GetStoreProductExtrasAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StoreExtrasRecord>($"/api/admin/store/products/{productId}/extras", token);
+
+    public Task<(StoreExtrasRecord? Result, string? Error)> SaveStoreProductExtrasAsync(Guid productId, SaveStoreExtrasRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStoreExtrasRequest, StoreExtrasRecord>(HttpMethod.Put, $"/api/admin/store/products/{productId}/extras", request, token);
+
+    public Task<(StoreExtrasRecord? Result, string? Error)> AddStoreProductVideoAsync(Guid productId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<StoreExtrasRecord>($"/api/admin/store/products/{productId}/videos", content, token);
+
+    public Task<(StoreExtrasRecord? Result, string? Error)> DeleteStoreProductVideoAsync(Guid productId, Guid videoId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StoreExtrasRecord>(HttpMethod.Delete, $"/api/admin/store/products/{productId}/videos/{videoId}", new { }, token);
 }

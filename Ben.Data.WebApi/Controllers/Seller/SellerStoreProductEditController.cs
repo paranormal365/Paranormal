@@ -217,6 +217,52 @@ public sealed class SellerStoreProductEditController(
         return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
     }
 
+    // ── page extras (store sellers P14) ──────────────────────────────────────
+
+    [HttpGet("{id:guid}/extras")]
+    public async Task<ActionResult<StoreExtrasRecord>> Extras(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        return Ok(await StoreProductRecords.ExtrasAsync(db, id, ct));
+    }
+
+    /// <summary>The words only: whether the page takes reviews is the store's switch.</summary>
+    [HttpPut("{id:guid}/extras")]
+    public async Task<ActionResult<StoreExtrasRecord>> SaveExtras(Guid id, [FromBody] SaveSellerExtrasRequest request, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await MineAsync(db, id, ct);
+        if (product is null) return NotFound();
+        if (await StoreProductEditor.SaveExtrasAsync(db, product, request.ReturnPolicyText, request.WarrantyText, reviewsEnabled: null, me, ct) is { } refusal)
+            return this.Refused(refusal);
+        return Ok(await StoreProductRecords.ExtrasAsync(db, id, ct));
+    }
+
+    [HttpPost("{id:guid}/videos")]
+    [RequestSizeLimit(100_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
+    public async Task<ActionResult<StoreExtrasRecord>> AddVideo(Guid id, IFormFile? file, [FromForm] string? title, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (file is null || file.Length == 0) return BadRequest("There was no video in that upload.");
+        if (await _editor.AddVideoAsync(db, id, file, title, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.ExtrasAsync(db, id, ct));
+    }
+
+    [HttpDelete("{id:guid}/videos/{videoId:guid}")]
+    public async Task<ActionResult<StoreExtrasRecord>> DeleteVideo(Guid id, Guid videoId, CancellationToken ct)
+    {
+        var me = Seller;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!await Mine(db).AnyAsync(p => p.Id == id, ct)) return NotFound();
+        if (await _editor.DeleteVideoAsync(db, id, videoId, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.ExtrasAsync(db, id, ct));
+    }
+
     // ── versions (store sellers P13) ─────────────────────────────────────────
 
     [HttpGet("{id:guid}/version")]

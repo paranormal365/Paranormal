@@ -57,7 +57,7 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
 
 <div class="row g-4 mb-5">
     <div class="col-lg-7">
-        <StoreProductGallery Images="Product.Images" ProductName="@Product.Name" VariantId="@Chosen?.Id" />
+        <StoreProductGallery Images="Product.Images" Videos="@(Product.Videos ?? [])" ProductName="@Product.Name" VariantId="@Chosen?.Id" />
     </div>
     <div class="col-lg-5">
         <div class="ben-buybox">
@@ -67,7 +67,7 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
             {
                 <div class="small"><a class="ben-link-muted" href="@($"/store/p/{older.Slug}")" data-testid="product-older-version">Previous version: @VersionName(older)</a></div>
             }
-            @if (Product.Reviews.Count > 0)
+            @if (Product.ReviewsEnabled && Product.Reviews.Count > 0)
             {
                 <a class="ben-link-muted small" href="@($"/store/p/{Product.Slug}#reviews")"><StoreStars Rating="@Product.Reviews.Average" Count="@Product.Reviews.Count" /></a>
             }
@@ -143,8 +143,21 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
                     </details>
                     <details class="ben-accordion">
                         <summary>Returns</summary>
-                        <div><p class="mb-0">@(Product.ReturnsWindowDays > 0 ? $"Send it back within {Product.ReturnsWindowDays} days of delivery." : "Ask us about a return.")</p></div>
+                        <div>
+                            <p class="mb-0">@(Product.ReturnsWindowDays > 0 ? $"Send it back within {Product.ReturnsWindowDays} days of delivery." : "Ask us about a return.")</p>
+                            @if (Product.ReturnPolicyText is { } returns)
+                            {
+                                <p class="mb-0 mt-2" style="white-space:pre-line;" data-testid="product-return-words">@returns</p>
+                            }
+                        </div>
                     </details>
+                    @if (Product.WarrantyText is { } warranty)
+                    {
+                        <details class="ben-accordion" data-testid="product-warranty">
+                            <summary>Warranty</summary>
+                            <div><p class="mb-0" style="white-space:pre-line;">@warranty</p></div>
+                        </details>
+                    }
                     <details class="ben-accordion">
                         <summary>Need help?</summary>
                         <div>
@@ -203,8 +216,11 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
     <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalogue</a></p>
 }
 
-<StoreReviewsBlock ProductId="Product.Id" ProductSlug="@Product.Slug" ProductName="@Product.Name"
-                   Average="@Product.Reviews.Average" Count="@Product.Reviews.Count" Preview="@Product.IsPreview" />
+@if (Product.ReviewsEnabled)
+{
+    <StoreReviewsBlock ProductId="Product.Id" ProductSlug="@Product.Slug" ProductName="@Product.Name"
+                       Average="@Product.Reviews.Average" Count="@Product.Reviews.Count" Preview="@Product.IsPreview" />
+}
 
 <StoreFaqBlock ProductId="Product.Id" ProductName="@Product.Name" Faqs="@(Product.Faqs ?? [])" CanAsk="@(Product.CanAsk && !Product.IsPreview)" />
 

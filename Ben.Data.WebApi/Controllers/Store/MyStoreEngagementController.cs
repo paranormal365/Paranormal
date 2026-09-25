@@ -133,6 +133,7 @@ public sealed class MyStoreEngagementController(IDbContextFactory<BenDataContext
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (!await StoreCatalogue.LiveProducts(db).AnyAsync(p => p.Id == productId, ct)) return NotFound(StoreReviewSentences.NotOnSale);
+        if (!await db.StoreProducts.AnyAsync(p => p.Id == productId && p.ReviewsEnabled, ct)) return Conflict(StoreReviewSentences.ReviewsOff);
         await StoreGuestOrders.AttachAsync(db, me, ct);
         if (await BoughtOrderIdAsync(db, me, productId, ct) is not { } orderId)
             return StatusCode(StatusCodes.Status403Forbidden, StoreReviewSentences.OnlyBuyers);

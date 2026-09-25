@@ -11,14 +11,15 @@ namespace Ben.Data.WebApi.Services.Store;
 /// <remarks>
 /// Counts APPROVED reviews only — a review waiting for moderation, or one refused, has not been
 /// published and must not move the stars. Recomputed on every moderation verb and on delete, the
-/// only paths that change what is approved.
+/// only paths that change what is approved — and on the store's reviews switch (store sellers P14):
+/// an item with reviews off has no stars anywhere.
 /// </remarks>
 public static class StoreRatingCaches
 {
     public static async Task RecomputeAsync(BenDataContext db, Guid productId, CancellationToken ct = default)
     {
         var ratings = await db.StoreReviews.AsNoTracking()
-            .Where(r => r.ProductId == productId && r.Status == StoreReviewStatus.Approved)
+            .Where(r => r.ProductId == productId && r.Status == StoreReviewStatus.Approved && r.Product.ReviewsEnabled)
             .Select(r => r.Rating)
             .ToListAsync(ct);
 

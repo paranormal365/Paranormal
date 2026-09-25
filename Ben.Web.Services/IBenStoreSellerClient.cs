@@ -127,4 +127,14 @@ public interface IBenStoreSellerClient
     Task<(StoreVersionInfo? Result, string? Error)> SaveSellerItemVersionAsync(Guid productId, SaveStoreVersionRequest request, CancellationToken token = default);
 
     Task<(StoreNewVersionRecord? Result, string? Error)> StartSellerItemVersionAsync(Guid productId, StartStoreVersionRequest request, CancellationToken token = default);
+
+    // ── page extras (P14) ────────────────────────────────────────────────────
+
+    Task<ItemResult<StoreExtrasRecord>> GetSellerItemExtrasAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StoreExtrasRecord? Result, string? Error)> SaveSellerItemExtrasAsync(Guid productId, SaveSellerExtrasRequest request, CancellationToken token = default);
+
+    Task<(StoreExtrasRecord? Result, string? Error)> AddSellerItemVideoAsync(Guid productId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(StoreExtrasRecord? Result, string? Error)> DeleteSellerItemVideoAsync(Guid productId, Guid videoId, CancellationToken token = default);
 }

@@ -42,6 +42,7 @@ public static class StoreProductCopier
             SellerAppUserId = plan.SellerAppUserId,
             PreviousVersionProductId = plan.PreviousVersionProductId, VersionLabel = plan.VersionLabel, SupersededPolicy = plan.Policy,
             FaqEnabled = source.FaqEnabled,
+            ReviewsEnabled = source.ReviewsEnabled, ReturnPolicyText = source.ReturnPolicyText, WarrantyText = source.WarrantyText,
             OtherCostPerUnit = plan.Everything ? source.OtherCostPerUnit : 0m, OtherCostNote = plan.Everything ? source.OtherCostNote : null,
             DateCreated = now, CreatedByAppUserId = userId,
         };
@@ -124,6 +125,12 @@ public static class StoreProductCopier
             db.StoreProductFaqs.Add(new StoreProductFaq
             {
                 Id = Guid.NewGuid(), ProductId = copy.Id, Question = faq.Question, Answer = faq.Answer, SortOrder = faq.SortOrder,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+        foreach (var video in await db.StoreProductVideos.AsNoTracking().Where(x => x.ProductId == sourceId).ToListAsync(ct))
+            db.StoreProductVideos.Add(new StoreProductVideo
+            {
+                Id = Guid.NewGuid(), ProductId = copy.Id, UploadFileId = video.UploadFileId, Title = video.Title, SortOrder = video.SortOrder,
                 DateCreated = now, CreatedByAppUserId = userId,
             });
         foreach (var file in await db.StoreProductFiles.AsNoTracking().Where(x => x.ProductId == sourceId).ToListAsync(ct))

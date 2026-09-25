@@ -212,7 +212,8 @@ On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for
    earnings and payouts), `StoreProductFiles` (products' manuals and downloads; the "Store Product File"
    upload type is added by the API's seeder when it starts), `StoreProductQuestions` (products' FAQs and
    shoppers' questions; every existing product's FAQ switch starts on), `StoreProductVersions` (versions: six
-   columns on StoreProducts and a unique self-reference).
+   columns on StoreProducts and a unique self-reference), `StoreProductPageExtras` (the reviews switch — on for
+   every existing product — return and warranty words, and product videos).
    `dotnet ef database update` applies them all.
 2. Deploy both sites. The store is still dark.
 3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count

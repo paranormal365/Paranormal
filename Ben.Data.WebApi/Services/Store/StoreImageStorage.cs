@@ -2,6 +2,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Services.Store;
@@ -168,6 +169,32 @@ public sealed class StoreImageStorage(
         db.UploadFiles.Add(file);
         return file;
     }
+
+    /// <summary>
+    /// Files a product's video (store sellers P14): the original kept, and a copy with its metadata
+    /// stripped where the host can — the copy is what's served. Ownerless and not public: the video
+    /// door serves it only while a product holds it. Unsaved, like <see cref="SaveAsync"/>.
+    /// </summary>
+    public async Task<UploadFile> SaveVideoAsync(BenDataContext db, IFormFile file, string folder, Guid adminId, CancellationToken ct)
+    {
+        var id = Guid.NewGuid();
+        var extension = Path.GetExtension(Path.GetFileName(file.FileName)).ToLowerInvariant();
+        var storedName = $"{id}{(extension is ".mp4" or ".webm" or ".mov" ? extension : ".mp4")}";
+        var path = $"store/{folder}/{storedName}";
+        var ingested = await ingest.IngestAsync(file, path, id, ct, stripAudioVideo: true);
+        var row = new UploadFile
+        {
+            Id = id, UploadFileTypeId = UploadFileTypeSeeder.StoreProductFileTypeId, AppUserId = null, OwnerOrganizationId = null,
+            FileName = Path.GetFileName(file.FileName), StoredFileName = storedName, ContentType = file.ContentType,
+            FileSize = ingested.ServedFileSize, StoragePath = path, IsPublic = false, ExpiresAtUtc = null,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = adminId,
+        };
+        db.UploadFiles.Add(row);
+        return row;
+    }
+
+    /// <summary>The copy of a stored file that may be served — a video's stripped copy when there is one.</summary>
+    public Task<Stream> OpenServingAsync(string storagePath, CancellationToken ct) => storage.OpenReadAsync(ingest.ServingPathFor(storagePath), ct);
 
     /// <summary>A stored file's bytes, to stream to somebody already checked.</summary>
     public Task<Stream> OpenAsync(string storagePath, CancellationToken ct) => storage.OpenReadAsync(storagePath, ct);

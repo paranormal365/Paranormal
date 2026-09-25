@@ -67,4 +67,28 @@ namespace Ben.Data.Source.Entities
 
         public DateTime DateCreated { get; set; }
     }
+
+    /// <summary>
+    /// A video on a product's page (store sellers, backlog 251, P14): an uploaded file — mp4, webm or
+    /// mov — at most three to a product, shown in the gallery after the pictures. Its metadata is
+    /// stripped on the way in where the host can, and it's served only while a product holds it.
+    /// </summary>
+    public class StoreProductVideo
+    {
+        public const int MaxPerProduct = 3;
+        public const long MaxBytes = 95L * 1024 * 1024;
+        public const int MaxTitleLength = 200;
+
+        public Guid Id { get; set; }
+        public Guid ProductId { get; set; }
+        public Guid UploadFileId { get; set; }
+        public string? Title { get; set; }
+        public int SortOrder { get; set; }
+
+        public virtual StoreProduct Product { get; set; } = null!;
+        public virtual UploadFile UploadFile { get; set; } = null!;
+
+        public DateTime DateCreated { get; set; }
+        public Guid CreatedByAppUserId { get; set; }
+    }
 }

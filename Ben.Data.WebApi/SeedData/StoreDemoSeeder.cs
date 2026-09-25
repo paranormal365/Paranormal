@@ -278,6 +278,9 @@ internal static class StoreDemoSeeder
             });
         remPod.SellerAskPerUnit ??= HazelAsk;
         remPod.FirstOnSaleUtc ??= now;
+        // Her own words for the page (P14).
+        remPod.ReturnPolicyText ??= "Unused and in its box, please — each one is built to order.";
+        remPod.WarrantyText ??= "Repaired or replaced free for a year if the alarm or the lights fail.";
         // Her parts list (P4): a unit costs $34.50 to make — $12.50 + $0.499 + $18.00 + $3.50, rounded once.
         if (!await db.StoreProductParts.AnyAsync(x => x.ProductId == remPod.Id, ct))
         {

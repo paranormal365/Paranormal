@@ -1246,6 +1246,15 @@ It happens once; after that the choice is fixed. An old version taken off this w
 clears that. Each product has one newer version at most, and a product a newer version links back to
 can't be deleted.
 
+## The item's page
+
+A product's **Page** tab holds its own **returns** words (shown under the store's returns window),
+its **warranty**, and up to three **videos** (mp4, webm or mov, 95 MB each, served from a copy with
+the location and camera details removed where the host has ffmpeg; the door serves a file only while
+a product holds it). **Take and show reviews** is the store's alone — a seller can't change it. Off
+hides the item's reviews and its stars everywhere (cards, sorting, the rating filter) and nobody can
+write one; switching it back on brings them back.
+
 ## Paying sellers
 
 Payouts are made by hand: the store takes the whole payment for every order and pays its sellers

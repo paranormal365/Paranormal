@@ -129,6 +129,18 @@ it to go on sale as usual. Nothing happens to the old one until then, and you ca
 until that day; after it, it has happened. An old version that comes off sale keeps its page, which
 says it's no longer made and links to the new one.
 
+## The item's page
+
+The **Page** tab holds what the item's page says beyond its description:
+
+- **Returns** — anything particular to this item, shown under the store's returns window
+  ("Unused and in its box, please").
+- **Warranty** — shown in its own section when you give one.
+- **Videos** — up to three, mp4, webm or mov, 95 MB each. They play in the gallery after the
+  pictures. The location and camera details are removed from the copy shoppers get.
+
+Whether an item takes reviews is the store's choice; the tab says whether yours does.
+
 ## Sending packages
 
 **Each seller sends their own package.** When a paid order has your items in it you get an email and

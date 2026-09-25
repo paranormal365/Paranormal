@@ -1,0 +1,120 @@
+@inject IMediaUrlBuilder Urls
+
+@*
+    An item's page extras (store sellers, backlog 251, P14): its own words on returns (shown with the
+    store's returns window) and its warranty; up to three videos for the gallery; and — for the store
+    alone — whether the page takes reviews. Shared by both editors; each brings its own client.
+*@
+
+<h5>The item's page @Help</h5>
+
+@if (Saved is null)
+{
+    <div class="text-secondary small">Loading…</div>
+}
+else
+{
+    <div class="row g-3 mb-3" style="max-width:48rem;">
+        <div class="col-12">
+            <label class="form-label" for="extras-returns">Returns — anything particular to this item</label>
+            <textarea id="extras-returns" class="form-control" rows="3" maxlength="2000" placeholder="Shown under the store's returns window. Leave empty if there's nothing to add."
+                      @bind="_returns" @bind:event="oninput"></textarea>
+        </div>
+        <div class="col-12">
+            <label class="form-label" for="extras-warranty">Warranty</label>
+            <textarea id="extras-warranty" class="form-control" rows="3" maxlength="2000" placeholder="e.g. Repaired or replaced free for a year."
+                      @bind="_warranty" @bind:event="oninput"></textarea>
+        </div>
+        @if (CanSwitchReviews)
+        {
+            <div class="col-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="extras-reviews" @bind="_reviews" />
+                    <label class="form-check-label" for="extras-reviews">Take and show reviews</label>
+                </div>
+                <div class="form-text">Off hides this item's reviews and its stars everywhere, and nobody can write one. They come back when it's on again.</div>
+            </div>
+        }
+        else
+        {
+            <div class="col-12 small text-secondary" data-testid="extras-reviews-state">
+                Reviews are @(Saved.ReviewsEnabled ? "on" : "off") for this item — the store looks after that.
+            </div>
+        }
+        <div class="col-12">
+            <button type="button" class="btn btn-sm btn-primary" id="extras-save" disabled="@Busy" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+
+    <h6 class="mt-4">Videos</h6>
+    <p class="small text-secondary">Up to three — mp4, webm or mov, 95 MB each. They play in the gallery after the pictures. Location and camera details are removed.</p>
+    @if (Saved.Videos.Count > 0)
+    {
+        <div class="row g-3 mb-3">
+            @foreach (var v in Saved.Videos)
+            {
+                var x = v;
+                <div class="col-md-4" data-testid="extras-video">
+                    <video class="w-100 rounded border" controls preload="metadata" playsinline>
+                        <source src="@Urls.StoreVideo(x.UploadFileId)" type="@x.ContentType" />
+                    </video>
+                    <div class="d-flex justify-content-between align-items-center mt-1 small">
+                        <span>@(x.Title ?? "Untitled")</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-testid="extras-video-remove" disabled="@Busy" @onclick="@(() => OnRemoveVideo.InvokeAsync(x.Id))">Remove</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    @if (Saved.Videos.Count < 3)
+    {
+        <div class="row g-2 align-items-end" style="max-width:48rem;">
+            <div class="col-sm-5"><label class="form-label small" for="video-title">Title (optional)</label><input id="video-title" class="form-control form-control-sm" maxlength="200" @bind="_videoTitle" /></div>
+            <div class="col-sm-5"><label class="form-label small" for="video-input">Video</label><InputFile id="video-input" class="form-control form-control-sm" accept="video/mp4,video/webm,video/quicktime" OnChange="Chosen" /></div>
+            <div class="col-sm-2"><button type="button" class="btn btn-sm btn-primary w-100" id="video-upload" disabled="@(Busy || _chosen is null)" @onclick="UploadAsync">Add</button></div>
+        </div>
+    }
+    @if (Error is not null) { <div class="alert alert-danger py-2 mt-3" id="extras-refusal">@Error</div> }
+}
+
+@code {
+    /// <summary>The extras as last saved; a new one replaces the form.</summary>
+    [Parameter] public StoreExtrasRecord? Saved { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The store's editor only: a seller can't switch off their own item's reviews.</summary>
+    [Parameter] public bool CanSwitchReviews { get; set; }
+
+    [Parameter] public EventCallback<(string? Returns, string? Warranty, bool Reviews)> OnSave { get; set; }
+
+    /// <summary>Sends the chosen video; returns true when it went up, to clear the form.</summary>
+    [Parameter] public Func<IBrowserFile, string?, Task<bool>>? OnVideo { get; set; }
+
+    [Parameter] public EventCallback<Guid> OnRemoveVideo { get; set; }
+    [Parameter] public RenderFragment? Help { get; set; }
+
+    private string? _returns, _warranty, _videoTitle;
+    private bool _reviews = true;
+    private IBrowserFile? _chosen;
+    private StoreExtrasRecord? _adopted;
+
+    protected override void OnParametersSet()
+    {
+        if (Saved is null || ReferenceEquals(Saved, _adopted)) return;
+        var wordsChanged = _adopted is null || _adopted.ReturnPolicyText != Saved.ReturnPolicyText || _adopted.WarrantyText != Saved.WarrantyText
+                         || _adopted.ReviewsEnabled != Saved.ReviewsEnabled;
+        _adopted = Saved;
+        if (wordsChanged) (_returns, _warranty, _reviews) = (Saved.ReturnPolicyText, Saved.WarrantyText, Saved.ReviewsEnabled);
+    }
+
+    private void Chosen(InputFileChangeEventArgs e) => _chosen = e.File;
+
+    private Task SaveAsync() => OnSave.InvokeAsync((_returns, _warranty, _reviews));
+
+    private async Task UploadAsync()
+    {
+        if (_chosen is null || OnVideo is null) return;
+        if (await OnVideo(_chosen, _videoTitle)) (_chosen, _videoTitle) = (null, null);
+    }
+}

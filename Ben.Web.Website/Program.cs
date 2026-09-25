@@ -849,6 +849,18 @@ app.MapGet("/media/store-image/{fileId:guid}/thumb", async (
         accessToken: null, httpFactory, ctx, ct, cacheControl: "public, max-age=31536000, immutable");
 }).AllowAnonymous();
 
+// A store product's video (store sellers P14). Anonymous and not behind the switch, like the
+// pictures; the API serves only files a product's video holds. Ranges pass through for seeking.
+app.MapGet("/media/store-video/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/store-video/{fileId}",
+        accessToken: null, httpFactory, ctx, ct, cacheControl: "public, max-age=31536000, immutable");
+}).AllowAnonymous();
+
 // A product's file for the people who keep it (store sellers P11): the store's staff and the product's
 // seller, private files included. The ticket is required — the API answers 404 to anybody else.
 app.MapGet("/media/store-files/{fileId:guid}", async (

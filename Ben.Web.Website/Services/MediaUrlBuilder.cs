@@ -106,6 +106,8 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
 
     public string EventPhoto(Guid uploadFileId) => $"/media/event-photo/{uploadFileId}";
 
+    public string StoreVideo(Guid uploadFileId) => $"/media/store-video/{uploadFileId}";
+
     public string StoreProductFile(Guid fileId)
     {
         var cacheKey = $"store-file:{fileId}";

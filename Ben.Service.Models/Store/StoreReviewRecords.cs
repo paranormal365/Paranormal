@@ -41,6 +41,9 @@ public static class StoreReviewSentences
     public const string NeedsWords = "Say something about it — a review needs a few words.";
     public const string TooLong = "That's over 3,000 characters — trim it a little.";
     public const string OnlyBuyers = "Only somebody who has bought this can review it.";
+
+    /// <summary>The store has switched this item's reviews off (store sellers P14).</summary>
+    public const string ReviewsOff = "This item doesn't take reviews.";
     public const string NotOwnVote = "You can't vote for your own review.";
     public const string SignInToReview = "Sign in to review what you've bought.";
     public const string NotOnSale = "That product isn't in the store.";

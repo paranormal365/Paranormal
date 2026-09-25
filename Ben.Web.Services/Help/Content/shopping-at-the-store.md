@@ -243,6 +243,8 @@ can't be reviewed.
 
 **Bought as a guest? Sign up with the email you ordered with — the order attaches to your account and you can review.**
 
+Some items don't take reviews — the store has switched them off — and show none.
+
 ## Selling your own gear
 
 Some things in the store are made by members of the site. If you build equipment and would like to

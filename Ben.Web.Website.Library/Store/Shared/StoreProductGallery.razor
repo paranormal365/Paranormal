@@ -7,23 +7,38 @@
     hit, and the dialog's close button sits at the bottom where a thumb is.
 
     When the buyer picks a variant that has its own picture (the Camo box), that picture is shown.
+    Store sellers P14: the item's videos follow the pictures, each a slide with its own player.
 *@
 
-@if (Images.Count > 0)
+@if (Count > 0)
 {
-    var current = Images[Math.Clamp(_index, 0, Images.Count - 1)];
+    var at = Math.Clamp(_index, 0, Count - 1);
     <div class="ben-gallery" data-testid="store-gallery">
         <div class="position-relative">
-            <button type="button" class="ben-gallery__slide d-block w-100 ben-gallery__main" aria-label="See this picture full size" @onclick="@(() => _zoom = true)">
-                <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" data-testid="gallery-main" />
-            </button>
-            @if (Images.Count > 1)
+            @if (at < Images.Count)
             {
-                <button type="button" class="btn btn-light position-absolute top-50 start-0 translate-middle-y ms-2 rounded-circle ben-gallery__nav" aria-label="Previous picture" @onclick="@(() => Step(-1))"><BenIcon Name="chevron-left" /></button>
-                <button type="button" class="btn btn-light position-absolute top-50 end-0 translate-middle-y me-2 rounded-circle ben-gallery__nav" aria-label="Next picture" @onclick="@(() => Step(+1))"><BenIcon Name="chevron-right" /></button>
+                var current = Images[at];
+                <button type="button" class="ben-gallery__slide d-block w-100 ben-gallery__main" aria-label="See this picture full size" @onclick="@(() => _zoom = true)">
+                    <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" data-testid="gallery-main" />
+                </button>
+            }
+            else
+            {
+                var video = Videos[at - Images.Count];
+                <div class="ben-gallery__slide ben-gallery__main">
+                    <video class="w-100" controls preload="metadata" playsinline data-testid="gallery-video"
+                           aria-label="@(video.Title ?? $"A video of {ProductName}")">
+                        <source src="@MediaUrls.StoreVideo(video.UploadFileId)" type="@video.ContentType" />
+                    </video>
+                </div>
+            }
+            @if (Count > 1)
+            {
+                <button type="button" class="btn btn-light position-absolute top-50 start-0 translate-middle-y ms-2 rounded-circle ben-gallery__nav" aria-label="Previous" @onclick="@(() => Step(-1))"><BenIcon Name="chevron-left" /></button>
+                <button type="button" class="btn btn-light position-absolute top-50 end-0 translate-middle-y me-2 rounded-circle ben-gallery__nav" aria-label="Next" @onclick="@(() => Step(+1))"><BenIcon Name="chevron-right" /></button>
             }
         </div>
-        @if (Images.Count > 1)
+        @if (Count > 1)
         {
             <div class="ben-gallery__thumbs" role="list">
                 @for (var i = 0; i < Images.Count; i++)
@@ -35,24 +50,42 @@
                         <img src="@MediaUrls.StoreImage(Images[index].UploadFileId, thumbnail: true)" alt="" loading="lazy" />
                     </button>
                 }
+                @for (var v = 0; v < Videos.Count; v++)
+                {
+                    var index = Images.Count + v;
+                    var title = Videos[v].Title ?? $"Video {v + 1}";
+                    <button type="button" role="listitem" class="ben-gallery__thumb d-inline-flex align-items-center justify-content-center @(index == _index ? "active" : null)"
+                            aria-label="@($"Play {title}")" aria-current="@(index == _index ? "true" : null)" data-testid="gallery-video-thumb"
+                            @onclick="@(() => _index = index)">
+                        <BenIcon Name="play-circle" />
+                    </button>
+                }
             </div>
         }
     </div>
 
-    <BenModal @bind-Visible="_zoom" Title="@ProductName" Size="xl">
-        <ChildContent>
-            <div class="ben-gallery__zoom text-center">
-                <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" />
-            </div>
-        </ChildContent>
-        <FooterContent>
-            <button type="button" class="btn btn-secondary w-100" @onclick="@(() => _zoom = false)">Close</button>
-        </FooterContent>
-    </BenModal>
+    @if (at < Images.Count)
+    {
+        var current = Images[at];
+        <BenModal @bind-Visible="_zoom" Title="@ProductName" Size="xl">
+            <ChildContent>
+                <div class="ben-gallery__zoom text-center">
+                    <img src="@MediaUrls.StoreImage(current.UploadFileId)" alt="@(current.AltText ?? ProductName)" />
+                </div>
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="btn btn-secondary w-100" @onclick="@(() => _zoom = false)">Close</button>
+            </FooterContent>
+        </BenModal>
+    }
 }
 
 @code {
     [Parameter] public IReadOnlyList<StoreImageRecord> Images { get; set; } = [];
+
+    /// <summary>The item's videos (store sellers P14), after the pictures.</summary>
+    [Parameter] public IReadOnlyList<StoreVideoRecord> Videos { get; set; } = [];
+
     [Parameter] public string ProductName { get; set; } = "";
 
     /// <summary>The chosen variant; its own picture, when it has one, is shown.</summary>
@@ -62,6 +95,8 @@
     private bool _zoom;
     private Guid? _shownFor;
 
+    private int Count => Images.Count + Videos.Count;
+
     protected override void OnParametersSet()
     {
         if (VariantId == _shownFor) return;
@@ -70,5 +105,5 @@
         if (own.image is not null) _index = own.i;
     }
 
-    private void Step(int by) => _index = (_index + by + Images.Count) % Images.Count;
+    private void Step(int by) => _index = (_index + by + Count) % Count;
 }

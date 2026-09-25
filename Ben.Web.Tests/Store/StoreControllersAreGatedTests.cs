@@ -29,6 +29,9 @@ public sealed class StoreControllersAreGatedTests
         [nameof(PublicStoreImageController)] =
             "Pictures serve while the shop is dark: the catalogue is entered and previewed before anybody can see it, "
           + "and an order page shows what was bought whether the shop is open or not.",
+        ["PublicStoreVideoController"] =
+            "Videos play while the shop is dark, like the pictures: the editor's preview shows them before anybody can "
+          + "see the item, and the door serves only files a product's video holds (store sellers P14).",
         ["StoreProductFileController"] =
             "A product's files for the people who keep them — the store's staff and the item's seller — who work while the "
           + "shop is dark, like the editors that list these files (store sellers P11).",

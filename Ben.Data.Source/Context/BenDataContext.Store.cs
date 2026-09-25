@@ -381,6 +381,16 @@ namespace Ben.Data.Source.Context
             versioned.HasOne(e => e.PreviousVersion).WithMany()
                 .HasForeignKey(e => e.PreviousVersionProductId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // Store sellers P14: page extras. Videos cascade with their product; the file is NoAction —
+            // the editor removes it with the row, unless something else still holds it.
+            versioned.Property(e => e.ReturnPolicyText).HasMaxLength(StoreProduct.MaxPolicyTextLength);
+            versioned.Property(e => e.WarrantyText).HasMaxLength(StoreProduct.MaxPolicyTextLength);
+            var video = modelBuilder.Entity<StoreProductVideo>();
+            video.Property(e => e.Title).HasMaxLength(StoreProductVideo.MaxTitleLength);
+            video.HasIndex(e => new { e.ProductId, e.SortOrder });
+            video.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            video.HasOne(e => e.UploadFile).WithMany().HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+
             // Store sellers P10: what sellers are owed, and what they've been paid. Every person key is
             // NoAction: these are money records, kept when an account goes (its name is anonymised).
             var earning = modelBuilder.Entity<StoreSellerEarning>();

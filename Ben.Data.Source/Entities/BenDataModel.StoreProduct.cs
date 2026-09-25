@@ -122,6 +122,22 @@ namespace Ben.Data.Source.Entities
 
         public virtual StoreProduct? PreviousVersion { get; set; }
 
+        // ── page extras (store sellers P14) ──────────────────────────────────
+
+        public const int MaxPolicyTextLength = 2000;
+
+        /// <summary>
+        /// Whether the page takes and shows reviews. The store's switch alone (a seller can't turn off
+        /// the reviews of their own item); off hides the ones it has, and its stars everywhere.
+        /// </summary>
+        public bool ReviewsEnabled { get; set; } = true;
+
+        /// <summary>This item's own words on returns, shown with the store's returns window. Plain text.</summary>
+        public string? ReturnPolicyText { get; set; }
+
+        /// <summary>This item's warranty, when it has one. Plain text.</summary>
+        public string? WarrantyText { get; set; }
+
         public virtual StoreCategory Category { get; set; } = null!;
         public virtual AppUser? SellerAppUser { get; set; }
         public virtual EquipmentModel? EquipmentModel { get; set; }

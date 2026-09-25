@@ -96,6 +96,19 @@ public static class StoreProductRecords
                 f.ManualHtml != null, f.SortOrder, f.DateUpdated ?? f.DateCreated))
             .ToListAsync(ct);
 
+    /// <summary>A product's page extras as its editors hold them (P14).</summary>
+    public static async Task<StoreExtrasRecord?> ExtrasAsync(BenDataContext db, Guid productId, CancellationToken ct)
+    {
+        var p = await db.StoreProducts.AsNoTracking().Where(x => x.Id == productId)
+            .Select(x => new { x.ReturnPolicyText, x.WarrantyText, x.ReviewsEnabled }).FirstOrDefaultAsync(ct);
+        return p is null ? null : new StoreExtrasRecord(p.ReturnPolicyText, p.WarrantyText, p.ReviewsEnabled, await VideosAsync(db, productId, ct));
+    }
+
+    public static Task<List<StoreVideoRecord>> VideosAsync(BenDataContext db, Guid productId, CancellationToken ct)
+        => db.StoreProductVideos.AsNoTracking().Where(v => v.ProductId == productId).OrderBy(v => v.SortOrder).ThenBy(v => v.DateCreated)
+            .Select(v => new StoreVideoRecord(v.Id, v.UploadFileId, v.Title, v.UploadFile.ContentType ?? "video/mp4", v.SortOrder))
+            .ToListAsync(ct);
+
     /// <summary>A product's FAQ as its editor holds it (P12).</summary>
     public static async Task<StoreFaqsRecord?> FaqsAsync(BenDataContext db, Guid productId, CancellationToken ct)
     {

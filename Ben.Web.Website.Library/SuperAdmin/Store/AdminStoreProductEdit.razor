@@ -271,6 +271,16 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="Page" Id="page">
+                    <div class="pt-3">
+                        <StorePageExtrasPanel Saved="_extras.Item" Busy="_busy" Error="@_extrasError" CanSwitchReviews="true"
+                                              OnSave="@(x => SaveExtrasAsync(x.Returns, x.Warranty, x.Reviews))" OnVideo="AddVideoAsync" OnRemoveVideo="RemoveVideoAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="the-items-page" /></Help>
+                        </StorePageExtrasPanel>
+                        @if (_extras.Failed) { <div class="alert alert-danger py-2 mt-2">@(_extras.Reason ?? "The page extras couldn't be loaded just now.")</div> }
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
@@ -404,7 +414,7 @@
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
         _settings = await AdminClient.GetStoreSettingsAsync();
-        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "versions" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "files" or "faq" or "versions" or "page" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
     }
@@ -420,6 +430,7 @@
         if (_tab == "files") await LoadFilesAsync();
         if (_tab == "faq") await LoadFaqsAsync();
         if (_tab == "versions") await LoadVersionAsync();
+        if (_tab == "page") await LoadExtrasAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -822,4 +833,43 @@
         NavManager.NavigateTo($"/admin/store/products/{started.ProductId}/edit", forceLoad: true);
         return null;
     }
+
+    // ── page extras (store sellers P14) ──────────────────────────────────────
+
+    private ItemResult<StoreExtrasRecord> _extras;
+    private string? _extrasError;
+
+    private async Task LoadExtrasAsync() => _extras = await AdminClient.GetStoreProductExtrasAsync(ProductId);
+
+    private async Task<bool> ExtrasAnswerAsync(Task<(StoreExtrasRecord? Result, string? Error)> call, string failed, string done)
+    {
+        _busy = true; _extrasError = null;
+        try
+        {
+            var (saved, error) = await call;
+            if (saved is null) { _extrasError = error ?? failed; return false; }
+            _extras = ItemResult<StoreExtrasRecord>.Ok(saved);
+            Toasts.Success(done);
+            return true;
+        }
+        // The panel's video upload comes through a Func, which doesn't re-render this page by itself.
+        finally { _busy = false; StateHasChanged(); }
+    }
+
+    private Task SaveExtrasAsync(string? returns, string? warranty, bool reviews)
+        => ExtrasAnswerAsync(AdminClient.SaveStoreProductExtrasAsync(ProductId, new SaveStoreExtrasRequest(returns, warranty, reviews)), "The page couldn't be saved.", "Saved.");
+
+    private async Task<bool> AddVideoAsync(IBrowserFile file, string? title)
+    {
+        _extrasError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(file, new Dictionary<string, string?> { ["title"] = title }, StoreUploads.MaxFileBytes);
+            return await ExtrasAnswerAsync(AdminClient.AddStoreProductVideoAsync(ProductId, content), "The video couldn't be added.", "Video added.");
+        }
+        catch (IOException) { _extrasError = "That video is too large — 95 MB at most."; StateHasChanged(); return false; }
+    }
+
+    private Task RemoveVideoAsync(Guid videoId)
+        => ExtrasAnswerAsync(AdminClient.DeleteStoreProductVideoAsync(ProductId, videoId), "The video couldn't be removed.", "Video removed.");
 }

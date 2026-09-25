@@ -169,7 +169,7 @@ public sealed class PublicStoreController(
             .ToListAsync(ct);
         var specs = await db.StoreProductSpecs.AsNoTracking().Where(x => x.ProductId == e.Product.Id).OrderBy(x => x.SortOrder).ToListAsync(ct);
         var ratings = await db.StoreReviews.AsNoTracking()
-            .Where(r => r.ProductId == e.Product.Id && r.Status == StoreReviewStatus.Approved).Select(r => r.Rating).ToListAsync(ct);
+            .Where(r => r.ProductId == e.Product.Id && r.Status == StoreReviewStatus.Approved && r.Product.ReviewsEnabled).Select(r => r.Rating).ToListAsync(ct);
 
         StoreEquipmentLink? equipment = null;
         if (e.Product.EquipmentModelId is { } modelId)
@@ -209,7 +209,9 @@ public sealed class PublicStoreController(
             e.Product.DateUpdated ?? e.Product.DateCreated, IsPreview: !product.Live && !discontinued,
             e.Category.ParentCategory?.Name, e.Category.ParentCategory?.Slug,
             Faqs: faqs, CanAsk: product.Live,
-            VersionLabel: e.Product.VersionLabel, NewerVersion: newer, OlderVersion: older, Discontinued: discontinued));
+            VersionLabel: e.Product.VersionLabel, NewerVersion: newer, OlderVersion: older, Discontinued: discontinued,
+            ReviewsEnabled: e.Product.ReviewsEnabled, ReturnPolicyText: e.Product.ReturnPolicyText, WarrantyText: e.Product.WarrantyText,
+            Videos: await StoreProductRecords.VideosAsync(db, e.Product.Id, ct)));
     }
 
     /// <summary>Counts a look at a product, for "most popular". Always 204 — a hidden or missing product is not news to the caller.</summary>
@@ -228,7 +230,8 @@ public sealed class PublicStoreController(
 
         var me = await GetCurrentUserIdOrNullAcrossSchemesAsync();
         var key = StoreReviewSorts.Normalize(sort);
-        var approved = db.StoreReviews.AsNoTracking().Where(r => r.ProductId == productId && r.Status == StoreReviewStatus.Approved);
+        // Store sellers P14: an item with reviews switched off shows none.
+        var approved = db.StoreReviews.AsNoTracking().Where(r => r.ProductId == productId && r.Status == StoreReviewStatus.Approved && r.Product.ReviewsEnabled);
         var sorted = key switch
         {
             StoreReviewSorts.Newest => approved.OrderByDescending(r => r.DateCreated),

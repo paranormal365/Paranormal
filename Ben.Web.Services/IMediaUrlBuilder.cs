@@ -88,6 +88,9 @@ public interface IMediaUrlBuilder
     /// </summary>
     string StoreProductFile(Guid fileId);
 
+    /// <summary>A store product's video (store sellers P14). Anonymous, like the pictures.</summary>
+    string StoreVideo(Guid uploadFileId);
+
     /// <summary>
     /// A file a buyer downloads from their paid order (store sellers P11). The order's own link token
     /// travels as well, for a guest with no account; the API checks paid, not cancelled and not refunded.
