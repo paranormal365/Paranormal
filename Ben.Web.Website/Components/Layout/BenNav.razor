@@ -357,7 +357,9 @@
             // entry, like Moderation, because a seller cannot open Administration — and shown
             // while impersonating, so a SuperAdmin standing in for a seller sees what they see.
             // Each page joins this list in the phase that builds it (StoreLinksResolveTests).
-            if (IsSeller)
+            // Behind the store switch like every other way into the shop: until the store is
+            // switched on no menu may show it, a seller's included (Ben, 09/25; StoreMenusStayDarkTests).
+            if (IsSeller && Features.IsOn(SiteFeatures.Store))
             {
                 sections.Add(new Section(null, new[]
                 {

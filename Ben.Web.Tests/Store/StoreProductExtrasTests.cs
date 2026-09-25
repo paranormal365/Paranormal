@@ -183,6 +183,7 @@ public sealed class StoreProductExtrasTests : IAsyncLifetime
         Assert.Equal(video.UploadFileId, Assert.Single(Ok(await Page().Product(await SlugAsync(), null, default)).Videos!).UploadFileId);
 
         var served = Assert.IsType<FileStreamResult>(await VideoDoor().Get(video.UploadFileId, default));
+        await using var opened = served.FileStream;   // ASP.NET closes it after sending; a test must, or Windows cannot delete the folder
         Assert.True(served.EnableRangeProcessing);
         using var bytes = new MemoryStream();
         await served.FileStream.CopyToAsync(bytes);
