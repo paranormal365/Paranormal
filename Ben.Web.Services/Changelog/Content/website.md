@@ -16,6 +16,28 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-25
+
+- The IsHaunted store is built and waiting for its products: investigation gear from the site itself
+  and from members who make their own. It opens once its shelves are stocked, and this page will say
+  when.
+- On a phone, the account menu and the notification bell now open when tapped and stay open. Before,
+  the tap closed them again straight away — so on a phone, Sign Out did nothing.
+- Links in the emails the site sends open from your mail app again: choosing seats, event
+  invitations, your pass for the night, getting back into your account, and taking over an account
+  made for you.
+- Somebody invited to a case who has no account yet can accept again; the button to create the
+  account and accept had stopped doing anything.
+- After confirming a request for seats on a tour, the page now says you've asked for a place — the
+  tour still has to approve it — instead of telling you you're coming.
+- When an event is taken off the site, its organizers' letter says so plainly, gives the times in
+  the event's own time zone, and explains how to appeal and what happened to the event credit.
+- Codes handed out for a night are cleared a month after the night, rather than kept for good.
+- When sharing a file into a group, clicking a picture now chooses it. It used to open the picture
+  full size over the window, hiding the button that uses it.
+- In the video editor, the media panel's tabs and cards are the right size again, and the cards can
+  be clicked.
+
 ## 2026-09-22
 
 - Text across the site is easier to read in dark mode. Links, the coloured words used for status

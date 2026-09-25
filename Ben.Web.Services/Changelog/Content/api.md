@@ -18,6 +18,14 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-25
+
+- The service is ready to run the store: card payments and refunds go through Stripe, and sales tax
+  is worked out and filed through Stripe as well. The store itself is waiting for its products and is
+  not open yet.
+- Codes handed out for a night, and the passes they made, are deleted a month after the night instead
+  of being kept.
+
 ## 2026-09-21
 
 - An account created for somebody who did not ask for one now writes to them, naming who set it up
