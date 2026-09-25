@@ -204,6 +204,9 @@ internal static class StoreDemoSeeder
     /// <summary>What Hazel is paid for each REM pod on top of its cost, from her approved request.</summary>
     internal const decimal HazelAsk = 95m;
 
+    /// <summary>What one of Hazel's REM pods costs to make, from her seeded parts list.</summary>
+    internal const decimal HazelRemPodCost = 34.50m;
+
     /// <summary>
     /// Hazel Marsh (the roster's demo seller) makes two things: a hand-built REM pod on sale, and
     /// a pocket logger still a draft — so her workspace has one of each to show. Only when she is
@@ -233,23 +236,44 @@ internal static class StoreDemoSeeder
         var given = await db.StoreProducts
             .Where(p => (p.Id == SeededSellerProducts.RemPod || p.Id == SeededSellerProducts.EmfLogger) && p.SellerAppUserId == null)
             .Select(p => p.Id).ToListAsync(ct);
-        if (given.Count == 0) return;
-        await db.StoreProducts.Where(p => given.Contains(p.Id))
+        if (given.Count > 0) await db.StoreProducts.Where(p => given.Contains(p.Id))
             .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAppUserId, seller), ct);
         foreach (var id in given)
             StoreProductHistory.Record(db, id, StoreProductChangeArea.Seller, "Gave it to Hazel Marsh to sell.", ownerId, StoreChangeActor.Store, now.AddSeconds(1));
 
+        await db.SaveChangesAsync(ct);
+
         // The REM pod went on sale the way a seller's item does: Hazel asked, the store approved.
-        if (given.Contains(SeededSellerProducts.RemPod))
-        {
+        // Each piece is seeded on its own, so a database seeded before it existed still gets it.
+        var remPod = await db.StoreProducts.FirstOrDefaultAsync(p => p.Id == SeededSellerProducts.RemPod && p.SellerAppUserId == seller, ct);
+        if (remPod is null) return;
+        if (!await db.StoreProductSaleRequests.AnyAsync(r => r.ProductId == remPod.Id, ct))
             db.StoreProductSaleRequests.Add(new StoreProductSaleRequest
             {
-                Id = Id(95), ProductId = SeededSellerProducts.RemPod, SellerAppUserId = seller, SellerAskingPrice = HazelAsk,
+                Id = Id(95), ProductId = remPod.Id, SellerAppUserId = seller, SellerAskingPrice = HazelAsk,
                 SellerNote = "Built and tested by hand — three ready to ship.", Status = StoreSaleRequestStatus.Approved,
                 RequestedUtc = now, DecidedUtc = now.AddSeconds(1), DecidedByAppUserId = ownerId,
             });
-            await db.StoreProducts.Where(p => p.Id == SeededSellerProducts.RemPod)
-                .ExecuteUpdateAsync(u => u.SetProperty(p => p.SellerAskPerUnit, HazelAsk), ct);
+        remPod.SellerAskPerUnit ??= HazelAsk;
+        remPod.FirstOnSaleUtc ??= now;
+        // Her parts list (P4): a unit costs $34.50 to make — $12.50 + $0.499 + $18.00 + $3.50, rounded once.
+        if (!await db.StoreProductParts.AnyAsync(x => x.ProductId == remPod.Id, ct))
+        {
+            remPod.OtherCostPerUnit = 3.50m;
+            remPod.OtherCostNote = "Solder, heat-shrink and the box it ships in";
+            (string Name, StorePartPriceBasis Basis, decimal Price, int Pack, decimal Uses, int? OnHand)[] parts =
+            [
+                ("REM antenna kit", StorePartPriceBasis.PerPiece, 12.50m, 1, 1m, 7),
+                ("9V battery clip", StorePartPriceBasis.PerPack, 4.99m, 10, 1m, 23),
+                ("Weatherproof enclosure", StorePartPriceBasis.PerPiece, 18.00m, 1, 1m, 4),
+            ];
+            for (var i = 0; i < parts.Length; i++)
+                db.StoreProductParts.Add(new StoreProductPart
+                {
+                    Id = new Guid($"a1000000-0000-0000-0028-{700 + i:D12}"), ProductId = remPod.Id, Name = parts[i].Name,
+                    PriceBasis = parts[i].Basis, Price = parts[i].Price, PiecesPerPack = parts[i].Pack, QuantityPerUnit = parts[i].Uses,
+                    OnHand = parts[i].OnHand, SortOrder = i, DateCreated = now,
+                });
         }
         await db.SaveChangesAsync(ct);
     }

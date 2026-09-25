@@ -116,6 +116,27 @@ public class StoreSellerWorkspaceTests : BenTestBase
     }
 
     [Test]
+    [Description("Hazel's REM pod's Parts & cost tab says what a unit costs to make and how many she can build, and follows her typing.")]
+    public async Task The_parts_tab_says_what_a_unit_costs_to_make()
+    {
+        await LoginAsync(SellerEmail, SellerPassword);
+        await Page.GotoAsync($"{BaseUrl}/store/selling");
+        await WaitForTheCircuitAsync();
+        await Item("hand-built-rem-pod").Locator("[data-testid=seller-item-link]").ClickAsync();
+        await Page.WaitForURLAsync(new Regex(@"/store/selling/items/[0-9a-f-]{36}$"), new() { Timeout = 30_000 });
+        await Page.GotoAsync($"{Page.Url}?tab=parts");
+        await WaitForTheCircuitAsync();
+
+        await Expect(Page.Locator("[data-testid=part-row]")).ToHaveCountAsync(3, new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#parts-cost-basis")).ToHaveTextAsync("$34.50");
+        await Expect(Page.Locator("#parts-buildable")).ToHaveTextAsync("4 units");
+
+        // Worked out as she types, by the same arithmetic the save uses — nothing saved here.
+        await FillAndConfirmAsync("#parts-other", "4.5");
+        await Expect(Page.Locator("#parts-cost-basis")).ToHaveTextAsync("$35.50");
+    }
+
+    [Test]
     [Description("A member without the Seller role has no Selling entry and is sent home from the address.")]
     public async Task Somebody_who_does_not_sell_is_turned_away()
     {

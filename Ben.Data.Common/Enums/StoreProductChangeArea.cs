@@ -29,4 +29,7 @@ public enum StoreProductChangeArea
 
     /// <summary>Pictures added, removed, reordered or described.</summary>
     Pictures = 8,
+
+    /// <summary>The parts list and the "other" cost line — what a unit costs to make (P4).</summary>
+    Parts = 9,
 }

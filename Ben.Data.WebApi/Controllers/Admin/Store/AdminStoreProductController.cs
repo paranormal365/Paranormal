@@ -447,6 +447,49 @@ public sealed partial class AdminStoreProductController(
         return Ok(await StoreProductRecords.LoadAsync(db, id, ct));
     }
 
+    // ── parts and cost (store sellers P4) ────────────────────────────────────
+
+    [HttpGet("{id:guid}/parts")]
+    public async Task<ActionResult<StorePartsRecord>> Parts(Guid id, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await StoreProductRecords.PartsAsync(db, id, ct) is { } parts ? Ok(parts) : NotFound();
+    }
+
+    [HttpPut("{id:guid}/parts")]
+    public async Task<ActionResult<StorePartsRecord>> SaveParts(Guid id, [FromBody] SaveStorePartsRequest request, CancellationToken ct)
+    {
+        var me = Me;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var product = await db.StoreProducts.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (product is null) return NotFound();
+        if (await _editor.SavePartsAsync(db, product, request, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
+    }
+
+    [HttpPost("{id:guid}/parts/{partId:guid}/picture")]
+    [RequestSizeLimit(40_000_000)]
+    public async Task<ActionResult<StorePartsRecord>> SetPartPicture(Guid id, Guid partId, IFormFile? file, CancellationToken ct)
+    {
+        var me = Me;
+        if (file is null || file.Length == 0) return BadRequest("There was no picture in that upload.");
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        using var buffer = new MemoryStream();
+        await using (var stream = file.OpenReadStream()) await stream.CopyToAsync(buffer, ct);
+        if (await _editor.SetPartPictureAsync(db, id, partId, buffer.ToArray(), file.ContentType, file.FileName, me, ct) is { } refusal)
+            return this.Refused(refusal);
+        return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
+    }
+
+    [HttpDelete("{id:guid}/parts/{partId:guid}/picture")]
+    public async Task<ActionResult<StorePartsRecord>> RemovePartPicture(Guid id, Guid partId, CancellationToken ct)
+    {
+        var me = Me;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (await _editor.RemovePartPictureAsync(db, id, partId, me, ct) is { } refusal) return this.Refused(refusal);
+        return Ok(await StoreProductRecords.PartsAsync(db, id, ct));
+    }
+
     // ── plumbing ─────────────────────────────────────────────────────────────
 
     private async Task<ActionResult<StoreProductAdminRecord>> SwitchAsync(

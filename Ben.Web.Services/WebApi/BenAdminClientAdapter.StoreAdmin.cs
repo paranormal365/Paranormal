@@ -120,6 +120,24 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default)
         => _api.GetListAsync<StoreProductChangeRecord>($"/api/admin/store/products/{productId}/history", token);
 
+    // ── parts and cost (store sellers P4) ────────────────────────────────────
+
+    public Task<ItemResult<StorePartsRecord>> GetStoreProductPartsAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StorePartsRecord>($"/api/admin/store/products/{productId}/parts", token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> SaveStoreProductPartsAsync(
+        Guid productId, SaveStorePartsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStorePartsRequest, StorePartsRecord>(
+               HttpMethod.Put, $"/api/admin/store/products/{productId}/parts", request, token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> SetStorePartPictureAsync(
+        Guid productId, Guid partId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<StorePartsRecord>($"/api/admin/store/products/{productId}/parts/{partId}/picture", content, token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> RemoveStorePartPictureAsync(Guid productId, Guid partId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StorePartsRecord>(
+               HttpMethod.Delete, $"/api/admin/store/products/{productId}/parts/{partId}/picture", new { }, token);
+
     // ── sale requests (store sellers P3) ─────────────────────────────────────
 
     public Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default)

@@ -69,6 +69,8 @@ namespace Ben.Data.Source.Context
             product.Property(e => e.MinPrice).HasPrecision(18, 2);
             product.Property(e => e.MaxPrice).HasPrecision(18, 2);
             product.Property(e => e.SellerAskPerUnit).HasPrecision(18, 2);
+            product.Property(e => e.OtherCostPerUnit).HasPrecision(18, 4);
+            product.Property(e => e.OtherCostNote).HasMaxLength(300);
             product.Property(e => e.AverageRating).HasPrecision(3, 2);
             product.HasIndex(e => e.Slug).IsUnique();
             // The listing's four questions: a shelf in order, most popular, newest, cheapest.
@@ -372,6 +374,23 @@ namespace Ben.Data.Source.Context
             request.HasOne(e => e.DecidedByAppUser).WithMany()
                 .HasForeignKey(e => e.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             request.ToTable(t => t.HasCheckConstraint("CK_StoreProductSaleRequests_Ask", "[SellerAskingPrice] > 0"));
+
+            // Store sellers P4: what an item is built from. Goes with the item.
+            var part = modelBuilder.Entity<StoreProductPart>();
+            part.Property(e => e.Name).HasMaxLength(StoreProductPart.MaxNameLength);
+            part.Property(e => e.InfoUrl).HasMaxLength(StoreProductPart.MaxUrlLength);
+            part.Property(e => e.BuyUrl).HasMaxLength(StoreProductPart.MaxUrlLength);
+            part.Property(e => e.Price).HasPrecision(18, 4);
+            part.Property(e => e.QuantityPerUnit).HasPrecision(18, 4);
+            part.HasIndex(e => new { e.ProductId, e.SortOrder });
+            part.HasOne(e => e.Product).WithMany()
+                .HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Cascade);
+            part.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_StoreProductParts_Price", "[Price] >= 0");
+                t.HasCheckConstraint("CK_StoreProductParts_Pack", "[PiecesPerPack] >= 1");
+                t.HasCheckConstraint("CK_StoreProductParts_PerUnit", "[QuantityPerUnit] >= 0");
+            });
         }
 
         // ── M3: favourites, reviews and helpful votes ─────────────────────────────────────

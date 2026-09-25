@@ -147,6 +147,15 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="Parts &amp; cost" Id="parts">
+                    <div class="pt-3">
+                        <StorePartsEditor Saved="_parts.Item" Busy="_busy" Error="@_partsError" OnSave="SavePartsAsync"
+                                          OnPicture="@(x => PartPictureAsync(x.PartId, x.File))" OnRemovePicture="RemovePartPictureAsync">
+                            <Help><HelpLink Slug="selling-in-the-store" Anchor="parts-and-cost" /></Help>
+                        </StorePartsEditor>
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first — yours, and the store's.</p>
@@ -236,7 +245,7 @@
         if (!await User.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!User.IsSeller) { Nav.NavigateTo(SignInLink.ForRefusal(Nav, User)); return; }
         _categories = await Seller.GetSellerCategoriesAsync();
-        if (Tab is "details" or "variants" or "pictures" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
         StateHasChanged();
@@ -278,6 +287,7 @@
     private async Task TabChangedAsync()
     {
         if (_tab == "history") await LoadHistoryAsync();
+        if (_tab == "parts") await LoadPartsAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -451,5 +461,47 @@
             Nav.NavigateTo("/store/selling");
         }
         finally { _busy = false; }
+    }
+
+    // ── parts and cost (store sellers P4) ────────────────────────────────────
+
+    private ItemResult<StorePartsRecord> _parts;
+    private string? _partsError;
+
+    private async Task LoadPartsAsync() => _parts = await Seller.GetSellerItemPartsAsync(ProductId);
+
+    private async Task SavePartsAsync(SaveStorePartsRequest request)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            var (saved, error) = await Seller.SaveSellerItemPartsAsync(ProductId, request);
+            if (saved is null) { _partsError = error ?? "Saving failed."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+            Toasts.Success("Parts saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task PartPictureAsync(Guid partId, InputFileChangeEventArgs e)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(e.File);
+            var (saved, error) = await Seller.SetSellerPartPictureAsync(ProductId, partId, content);
+            if (saved is null) { _partsError = error ?? "The picture could not be added."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+        }
+        catch (IOException) { _partsError = StoreUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task RemovePartPictureAsync(Guid partId)
+    {
+        _partsError = null;
+        var (saved, error) = await Seller.RemoveSellerPartPictureAsync(ProductId, partId);
+        if (saved is null) { _partsError = error ?? "The picture could not be removed."; return; }
+        _parts = ItemResult<StorePartsRecord>.Ok(saved);
     }
 }

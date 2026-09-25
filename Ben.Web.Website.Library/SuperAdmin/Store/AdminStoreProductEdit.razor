@@ -205,6 +205,15 @@
                     </div>
                 </BenTab>
 
+                <BenTab Title="Parts &amp; cost" Id="parts">
+                    <div class="pt-3">
+                        <StorePartsEditor Saved="_parts.Item" Busy="_busy" Error="@_partsError" OnSave="SavePartsAsync"
+                                          OnPicture="@(x => PartPictureAsync(x.PartId, x.File))" OnRemovePicture="RemovePartPictureAsync">
+                            <Help><HelpLink Slug="site-administration" Anchor="parts-and-cost" /></Help>
+                        </StorePartsEditor>
+                    </div>
+                </BenTab>
+
                 <BenTab Title="History" Id="history">
                     <div class="pt-3">
                         <p class="text-secondary small">Every change to this item, newest first, and who made it — the store's staff or its seller.</p>
@@ -338,7 +347,7 @@
         _models = await AdminClient.GetAdminEquipmentModelsAsync();
         _sellers = await AdminClient.GetStoreSellersAsync();
         _settings = await AdminClient.GetStoreSettingsAsync();
-        if (Tab is "details" or "variants" or "pictures" or "history" or "preview") _tab = Tab;
+        if (Tab is "details" or "variants" or "pictures" or "parts" or "history" or "preview") _tab = Tab;
         await LoadAsync();
         await TabChangedAsync();
     }
@@ -350,6 +359,7 @@
     private async Task TabChangedAsync()
     {
         if (_tab == "history") await LoadHistoryAsync();
+        if (_tab == "parts") await LoadPartsAsync();
     }
 
     private async Task LoadHistoryAsync()
@@ -602,5 +612,47 @@
         var (saved, error) = await AdminClient.DeleteStoreProductImageAsync(ProductId, imageId);
         if (saved is null) { _pictureError = error ?? "The picture could not be removed."; return; }
         Adopt(saved, Drafts.None);
+    }
+
+    // ── parts and cost (store sellers P4) ────────────────────────────────────
+
+    private ItemResult<StorePartsRecord> _parts;
+    private string? _partsError;
+
+    private async Task LoadPartsAsync() => _parts = await AdminClient.GetStoreProductPartsAsync(ProductId);
+
+    private async Task SavePartsAsync(SaveStorePartsRequest request)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveStoreProductPartsAsync(ProductId, request);
+            if (saved is null) { _partsError = error ?? "Saving failed."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+            Toasts.Success("Parts saved.");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task PartPictureAsync(Guid partId, InputFileChangeEventArgs e)
+    {
+        _busy = true; _partsError = null;
+        try
+        {
+            using var content = await StoreUploads.ContentAsync(e.File);
+            var (saved, error) = await AdminClient.SetStorePartPictureAsync(ProductId, partId, content);
+            if (saved is null) { _partsError = error ?? "The picture could not be added."; return; }
+            _parts = ItemResult<StorePartsRecord>.Ok(saved);
+        }
+        catch (IOException) { _partsError = StoreUploads.TooLarge; }
+        finally { _busy = false; }
+    }
+
+    private async Task RemovePartPictureAsync(Guid partId)
+    {
+        _partsError = null;
+        var (saved, error) = await AdminClient.RemoveStorePartPictureAsync(ProductId, partId);
+        if (saved is null) { _partsError = error ?? "The picture could not be removed."; return; }
+        _parts = ItemResult<StorePartsRecord>.Ok(saved);
     }
 }

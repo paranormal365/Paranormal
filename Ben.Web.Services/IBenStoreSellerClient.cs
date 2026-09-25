@@ -67,4 +67,14 @@ public interface IBenStoreSellerClient
         Guid productId, Guid imageId, UpdateStoreImageRequest request, CancellationToken token = default);
 
     Task<(SellerItemRecord? Result, string? Error)> DeleteSellerItemImageAsync(Guid productId, Guid imageId, CancellationToken token = default);
+
+    // ── parts and cost (P4) ──────────────────────────────────────────────────
+
+    Task<ItemResult<StorePartsRecord>> GetSellerItemPartsAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> SaveSellerItemPartsAsync(Guid productId, SaveStorePartsRequest request, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> SetSellerPartPictureAsync(Guid productId, Guid partId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> RemoveSellerPartPictureAsync(Guid productId, Guid partId, CancellationToken token = default);
 }

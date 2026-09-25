@@ -1185,6 +1185,14 @@ requests** tile and a **Waiting** badge on the products list show when any are w
 records what they are paid. A seller can take their own item off sale at any time, and the
 SuperAdmins get a message when they do.
 
+## Parts and cost
+
+Every product's **Parts & cost** tab holds its parts list — each part's price per pack or per piece,
+how many a unit uses, links and a picture — and an **other costs** line. Together they make the
+product's **cost basis**, rounded to the cent once at the end. A seller keeps their own item's list;
+the store keeps the list for its own stock. A seller is paid cost basis plus their approved asking
+price for each unit sold. None of it is ever shown to shoppers.
+
 ## A product's history
 
 The **History** tab on a product lists every change to it, newest first: who made it, when, and

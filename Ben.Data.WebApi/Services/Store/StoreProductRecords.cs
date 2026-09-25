@@ -74,6 +74,21 @@ public static class StoreProductRecords
             item.SellerAskPerUnit, request);
     }
 
+    /// <summary>An item's parts and what a unit costs to make (P4). The seller's and the store's; never a shopper's.</summary>
+    public static async Task<StorePartsRecord?> PartsAsync(BenDataContext db, Guid productId, CancellationToken ct)
+    {
+        var product = await db.StoreProducts.AsNoTracking().Where(p => p.Id == productId)
+            .Select(p => new { p.OtherCostPerUnit, p.OtherCostNote, Edited = p.DateUpdated ?? p.DateCreated }).FirstOrDefaultAsync(ct);
+        if (product is null) return null;
+        var parts = await db.StoreProductParts.AsNoTracking().Where(x => x.ProductId == productId).OrderBy(x => x.SortOrder).ToListAsync(ct);
+        var records = parts.Select(x => new StorePartRecord(
+            x.Id, x.Name, x.PriceBasis, x.Price, x.PiecesPerPack, x.QuantityPerUnit, x.InfoUrl, x.BuyUrl, x.ThumbnailUploadFileId, x.OnHand,
+            x.SortOrder, StoreCostMath.PartCostPerUnit(x.PriceBasis, x.Price, x.PiecesPerPack, x.QuantityPerUnit))).ToList();
+        return new StorePartsRecord(productId, records, product.OtherCostPerUnit, product.OtherCostNote,
+            StoreCostMath.CostBasis(records.Select(r => r.CostPerUnit), product.OtherCostPerUnit),
+            StoreCostMath.Buildable(records.Select(r => (r.OnHand, r.QuantityPerUnit))), product.Edited);
+    }
+
     /// <summary>The requests <paramref name="query"/> selects, newest first, each with what its item still needs.</summary>
     public static async Task<List<StoreSaleRequestRecord>> RequestsAsync(
         BenDataContext db, IQueryable<StoreProductSaleRequest> query, CancellationToken ct)

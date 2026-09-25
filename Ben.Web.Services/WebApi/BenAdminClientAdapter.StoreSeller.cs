@@ -91,6 +91,22 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<UpdateStoreImageRequest, SellerItemRecord>(
                HttpMethod.Put, $"/api/seller/store/products/{productId}/images/{imageId}", request, token);
 
+    public Task<ItemResult<StorePartsRecord>> GetSellerItemPartsAsync(Guid productId, CancellationToken token = default)
+        => _api.GetItemAsync<StorePartsRecord>($"/api/seller/store/products/{productId}/parts", token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> SaveSellerItemPartsAsync(
+        Guid productId, SaveStorePartsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveStorePartsRequest, StorePartsRecord>(
+               HttpMethod.Put, $"/api/seller/store/products/{productId}/parts", request, token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> SetSellerPartPictureAsync(
+        Guid productId, Guid partId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<StorePartsRecord>($"/api/seller/store/products/{productId}/parts/{partId}/picture", content, token);
+
+    public Task<(StorePartsRecord? Result, string? Error)> RemoveSellerPartPictureAsync(Guid productId, Guid partId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StorePartsRecord>(
+               HttpMethod.Delete, $"/api/seller/store/products/{productId}/parts/{partId}/picture", new { }, token);
+
     public Task<(SellerItemRecord? Result, string? Error)> DeleteSellerItemImageAsync(
         Guid productId, Guid imageId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, SellerItemRecord>(

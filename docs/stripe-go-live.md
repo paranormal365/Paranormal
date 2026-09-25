@@ -203,7 +203,7 @@ On the deploy machine's secrets file (never in the repo — see `SECRETS.md` for
    in order: `StoreProductSaleCounters` (backfills each product's sold count and last sale from its
    orders), `StoreProductHistory` (the item history table; backfills a "Created it." line per product),
    `StoreSellerSaleRequests` (sellers' sale requests, and when each item first went on sale — backfilled
-   for everything on sale or sold).
+   for everything on sale or sold), `StoreProductParts` (parts lists and the "other" cost line).
    `dotnet ef database update` applies them all.
 2. Deploy both sites. The store is still dark.
 3. **Proxy.** The website forwards each buyer's address to the API (`X-Forwarded-For`) so rate limits count

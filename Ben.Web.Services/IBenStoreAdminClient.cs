@@ -86,6 +86,14 @@ public interface IBenStoreAdminClient
     /// <summary>An item's history, newest first, every line with names (store sellers P2).</summary>
     Task<LoadResult<StoreProductChangeRecord>> GetStoreProductHistoryAsync(Guid productId, CancellationToken token = default);
 
+    Task<ItemResult<StorePartsRecord>> GetStoreProductPartsAsync(Guid productId, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> SaveStoreProductPartsAsync(Guid productId, SaveStorePartsRequest request, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> SetStorePartPictureAsync(Guid productId, Guid partId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(StorePartsRecord? Result, string? Error)> RemoveStorePartPictureAsync(Guid productId, Guid partId, CancellationToken token = default);
+
     /// <summary>Sellers' requests to go on sale: the ones waiting, oldest first, or with <paramref name="decided"/> the answered ones.</summary>
     Task<LoadResult<StoreSaleRequestRecord>> GetStoreSaleRequestsAsync(bool decided = false, CancellationToken token = default);
 

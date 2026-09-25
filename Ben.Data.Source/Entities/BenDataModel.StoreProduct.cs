@@ -78,6 +78,15 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public decimal? SellerAskPerUnit { get; set; }
 
+        /// <summary>
+        /// The cost of a unit not in its parts list — glue, solder, packaging — added to the parts
+        /// for its cost basis (store sellers, backlog 251, P4). Never shown to shoppers.
+        /// </summary>
+        public decimal OtherCostPerUnit { get; set; }
+
+        /// <summary>What the "other" line covers, in the seller's words.</summary>
+        public string? OtherCostNote { get; set; }
+
         public virtual StoreCategory Category { get; set; } = null!;
         public virtual AppUser? SellerAppUser { get; set; }
         public virtual EquipmentModel? EquipmentModel { get; set; }

@@ -62,6 +62,23 @@ Add up to twelve. The first is the one on cards and in the cart; move them earli
 change the order. A picture can be tied to one variant, so choosing that colour shows that
 photograph. The camera details and location are removed from every picture.
 
+## Parts and cost
+
+The **Parts & cost** tab lists what one unit is built from. For each part give its price — for a
+whole pack (a bag of 100 resistors for $6.99) or for one piece — and how many pieces one unit uses
+(0.5 for half a sheet). Add where to buy it and a datasheet link if you like, a picture, and how
+many you have on hand.
+
+**Other costs a unit** covers what isn't worth listing part by part: solder, glue, the box it ships
+in.
+
+The total — **A unit costs to make** — is the item's cost basis. What you're paid for each one sold
+is its cost basis **plus** the asking price the store approved. Prices are kept to the hundredth of a
+cent and the total is rounded once, so a long list doesn't drift. If you've counted the parts on
+hand, the tab also says how many units you could build from them.
+
+Only you and the store see this tab; shoppers never do.
+
 ## Going on sale
 
 When an item is ready, press **Ask to put it on sale…** and say what you'd like to be paid for each

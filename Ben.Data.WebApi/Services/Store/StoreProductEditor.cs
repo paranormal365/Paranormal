@@ -274,6 +274,8 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
 
         var id = product.Id;
         var pictures = await db.StoreProductImages.Where(i => i.ProductId == id).Select(i => i.UploadFileId).ToListAsync(ct);
+        pictures.AddRange(await db.StoreProductParts.Where(x => x.ProductId == id && x.ThumbnailUploadFileId != null)
+            .Select(x => x.ThumbnailUploadFileId!.Value).ToListAsync(ct));
 
         // Children first on the NoAction paths (a variant's choices point at values that also
         // cascade from the product; a picture's variant likewise), then the product takes the rest.
@@ -789,6 +791,150 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Pictures, "Removed a picture.", actor.UserId, actor.Role, DateTime.UtcNow);
         await db.SaveChangesAsync(ct);
         await images.RemoveAsync(db, picture.UploadFileId, ct);
+        return null;
+    }
+
+    // ── parts and cost (P4) ──────────────────────────────────────────────────
+
+    public const int MaxParts = 100;
+
+    /// <summary>
+    /// Replaces an item's parts list and its "other" cost line. Parts missing from the list go, with
+    /// their pictures. The line it leaves says what a unit now costs to make.
+    /// </summary>
+    public async Task<StoreEditRefusal?> SavePartsAsync(
+        BenDataContext db, StoreProduct product, SaveStorePartsRequest request, StoreEditActor actor, CancellationToken ct)
+    {
+        if (Stale(product, request.ExpectedDateUpdated)) return StoreEditRefusal.Conflict(StaleEdit);
+        var wanted = request.Parts ?? [];
+        if (wanted.Count > MaxParts) return StoreEditRefusal.BadRequest($"A parts list is {MaxParts} parts at most.");
+        if (PartsProblem(wanted, request.OtherCostPerUnit, request.OtherCostNote) is { } problem) return StoreEditRefusal.BadRequest(problem);
+
+        var parts = await db.StoreProductParts.Where(x => x.ProductId == product.Id).ToListAsync(ct);
+        if (wanted.FirstOrDefault(w => w.Id is { } id && parts.All(x => x.Id != id)) is not null)
+            return StoreEditRefusal.BadRequest("One of those parts belongs to another item.");
+
+        var costWas = CostOf(parts, product.OtherCostPerUnit);
+        var listWas = PartsKey(parts.OrderBy(x => x.SortOrder).Select(x => (x.Name, x.PriceBasis, x.Price, x.PiecesPerPack, x.QuantityPerUnit, x.InfoUrl, x.BuyUrl)));
+        var countsWere = string.Join("|", parts.OrderBy(x => x.SortOrder).Select(x => x.OnHand));
+        var noteWas = product.OtherCostNote;
+
+        var now = DateTime.UtcNow;
+        var keep = wanted.Where(w => w.Id is not null).Select(w => w.Id!.Value).ToHashSet();
+        var leaving = parts.Where(x => !keep.Contains(x.Id)).ToList();
+        db.StoreProductParts.RemoveRange(leaving);
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var w = wanted[i];
+            var part = w.Id is { } id ? parts.Single(x => x.Id == id) : null;
+            if (part is null)
+            {
+                part = new StoreProductPart { Id = Guid.NewGuid(), ProductId = product.Id, DateCreated = now };
+                db.StoreProductParts.Add(part);
+            }
+            else part.DateUpdated = now;
+            part.Name = w.Name.Trim();
+            part.PriceBasis = w.PriceBasis;
+            part.Price = w.Price;
+            part.PiecesPerPack = w.PriceBasis == StorePartPriceBasis.PerPiece ? 1 : w.PiecesPerPack;
+            part.QuantityPerUnit = w.QuantityPerUnit;
+            part.InfoUrl = Trimmed(w.InfoUrl);
+            part.BuyUrl = Trimmed(w.BuyUrl);
+            part.OnHand = w.OnHand;
+            part.SortOrder = i;
+        }
+        product.OtherCostPerUnit = request.OtherCostPerUnit;
+        product.OtherCostNote = Trimmed(request.OtherCostNote);
+        product.DateUpdated = now;
+        product.UpdatedByAppUserId = actor.UserId;
+
+        var kept = parts.Where(x => keep.Contains(x.Id)).Concat(db.StoreProductParts.Local.Where(x => x.ProductId == product.Id && parts.All(p => p.Id != x.Id))).ToList();
+        var costNow = CostOf(kept, product.OtherCostPerUnit);
+        var listNow = PartsKey(wanted.Select(w => (w.Name.Trim(), w.PriceBasis, w.Price, w.PriceBasis == StorePartPriceBasis.PerPiece ? 1 : w.PiecesPerPack,
+            w.QuantityPerUnit, Trimmed(w.InfoUrl), Trimmed(w.BuyUrl))));
+        var countsNow = string.Join("|", wanted.Select(w => w.OnHand));
+
+        string? said = null;
+        if (costNow != costWas)
+            said = $"Changed the parts list — a unit now costs {StoreMoney.Format(costNow)} to make (was {StoreMoney.Format(costWas)}).";
+        else if (listNow != listWas || noteWas != product.OtherCostNote)
+            said = $"Changed the parts list; a unit still costs {StoreMoney.Format(costNow)} to make.";
+        else if (countsNow != countsWere)
+            said = "Counted the parts on hand.";
+        if (said is not null) StoreProductHistory.Record(db, product.Id, StoreProductChangeArea.Parts, said, actor.UserId, actor.Role, now);
+
+        await db.SaveChangesAsync(ct);
+        foreach (var file in leaving.Where(x => x.ThumbnailUploadFileId is not null)) await images.RemoveAsync(db, file.ThumbnailUploadFileId!.Value, ct);
+        return null;
+    }
+
+    private static decimal CostOf(IEnumerable<StoreProductPart> parts, decimal other)
+        => StoreCostMath.CostBasis(parts.Select(x => StoreCostMath.PartCostPerUnit(x.PriceBasis, x.Price, x.PiecesPerPack, x.QuantityPerUnit)), other);
+
+    private static string PartsKey(IEnumerable<(string, StorePartPriceBasis, decimal, int, decimal, string?, string?)> parts)
+        => string.Join("\n", parts.Select(x => x.ToString()));
+
+    private static string? PartsProblem(IReadOnlyList<SaveStorePartRequest> parts, decimal other, string? note)
+    {
+        static bool FourPlaces(decimal d) => d == Math.Round(d, 4);
+        foreach (var part in parts)
+        {
+            var name = part.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) return "Each part needs a name.";
+            if (name.Length > StoreProductPart.MaxNameLength) return $"A part's name is {StoreProductPart.MaxNameLength} characters at most.";
+            if (part.Price < 0m) return $"{name}: a price can't be negative.";
+            if (!FourPlaces(part.Price)) return $"{name}: a price goes to the hundredth of a cent at most — 0.0699.";
+            if (part.PriceBasis == StorePartPriceBasis.PerPack && part.PiecesPerPack < 1) return $"{name}: a pack holds at least one piece.";
+            if (part.QuantityPerUnit < 0m) return $"{name}: the number used in a unit can't be negative.";
+            if (!FourPlaces(part.QuantityPerUnit)) return $"{name}: the number used in a unit goes to four decimal places at most.";
+            if (part.OnHand is < 0) return $"{name}: the count on hand can't be negative.";
+            foreach (var url in new[] { part.InfoUrl, part.BuyUrl })
+            {
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                if (url.Trim().Length > StoreProductPart.MaxUrlLength) return $"{name}: a link is {StoreProductPart.MaxUrlLength} characters at most.";
+                if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                    return $"{name}: a link starts with https:// — {url.Trim()} doesn't.";
+            }
+        }
+        if (other < 0m) return "The other costs can't be negative.";
+        if (!FourPlaces(other)) return "The other costs go to the hundredth of a cent at most.";
+        if (note?.Trim().Length > 300) return "What the other costs cover is 300 characters at most.";
+        return null;
+    }
+
+    /// <summary>A part's picture — replacing the one it had.</summary>
+    public async Task<StoreEditRefusal?> SetPartPictureAsync(
+        BenDataContext db, Guid productId, Guid partId, byte[] bytes, string? contentType, string? fileName, StoreEditActor actor, CancellationToken ct)
+    {
+        var part = await db.StoreProductParts.FirstOrDefaultAsync(x => x.Id == partId && x.ProductId == productId, ct);
+        if (part is null) return StoreEditRefusal.NotFound;
+        if (bytes.Length == 0) return StoreEditRefusal.BadRequest("There was no picture in that upload.");
+
+        var (stored, refusal) = await images.SaveAsync(db, bytes, contentType, fileName, $"products/{productId:N}/parts", actor.UserId, ct);
+        if (refusal == StoreImageRefusal.NotAPicture) return StoreEditRefusal.BadRequest("A part's picture is a photograph — JPEG, PNG or similar.");
+        if (stored is null) return StoreEditRefusal.BadRequest("That picture could not be read.");
+
+        var old = part.ThumbnailUploadFileId;
+        part.ThumbnailUploadFileId = stored.Id;
+        part.DateUpdated = DateTime.UtcNow;
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Parts, $"Added a picture of {part.Name}.", actor.UserId, actor.Role, part.DateUpdated.Value);
+        await db.SaveChangesAsync(ct);
+        if (old is { } gone) await images.RemoveAsync(db, gone, ct);
+        return null;
+    }
+
+    public async Task<StoreEditRefusal?> RemovePartPictureAsync(
+        BenDataContext db, Guid productId, Guid partId, StoreEditActor actor, CancellationToken ct)
+    {
+        var part = await db.StoreProductParts.FirstOrDefaultAsync(x => x.Id == partId && x.ProductId == productId, ct);
+        if (part is null) return StoreEditRefusal.NotFound;
+        if (part.ThumbnailUploadFileId is not { } file) return null;
+
+        part.ThumbnailUploadFileId = null;
+        part.DateUpdated = DateTime.UtcNow;
+        StoreProductHistory.Record(db, productId, StoreProductChangeArea.Parts, $"Removed the picture of {part.Name}.", actor.UserId, actor.Role, part.DateUpdated.Value);
+        await db.SaveChangesAsync(ct);
+        await images.RemoveAsync(db, file, ct);
         return null;
     }
 
