@@ -11,6 +11,10 @@ If you make equipment and sell it through the store, you have a **Selling** sect
 It holds everything to do with your own items, and only yours: you never see anybody else's, and
 the store's administration stays with its administrators.
 
+The menu shows **Selling** once the store is open. Before that, the store may ask you to get your
+items ready early: the pages work at their own addresses — start at `/store/selling` — while the
+shop stays hidden from everybody else.
+
 ## Your items
 
 **Selling → My Items** lists every item you sell through the store, with:

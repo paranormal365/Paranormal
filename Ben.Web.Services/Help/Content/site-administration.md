@@ -1170,7 +1170,9 @@ for cards and the cart. A live product keeps at least one picture.
 ## Sellers and sale requests
 
 A member with the **Seller** role (given on their Site Roles tab) has a **Selling** section of their
-own. There they add items as hidden drafts and edit their words, pictures, options, variants and
+own. It is in their menu only while the store is switched on — like every other way into the shop —
+but its pages work at their addresses while it is off, so a seller you send to `/store/selling` can
+prepare their items before the store opens. There they add items as hidden drafts and edit their words, pictures, options, variants and
 stock — never the price, web address, placement, tax code or seller, and never another seller's
 item. A variant they add starts switched off and unpriced.
 

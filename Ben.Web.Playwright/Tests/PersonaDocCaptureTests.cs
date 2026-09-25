@@ -99,6 +99,7 @@ public class PersonaDocCaptureTests : BenTestBase
             case "viewer": await ViewerAsync(); break;
             case "owner": await OwnerAsync(); break;
             case "superadmin": await SuperAdminAsync(); break;
+            case "seller": await SellerAsync(); break;
             default: Assert.Fail($"Unknown persona '{Persona}'."); break;
         }
     }
@@ -124,6 +125,10 @@ public class PersonaDocCaptureTests : BenTestBase
         // Appended, not inserted: 18 and 19 belong to HostedEventPersonaWalk, and renumbering
         // anything here would orphan the old file into the document.
         await VisitAsync("1a-a-public-place", $"/places/{PlaceId}");
+        // The store (storefront and store sellers, 09/25): its front, and a member seller's item with
+        // its questions and answers. Photographed with the store switched on, as it will be when open.
+        await VisitAsync("1b-the-store", "/store");
+        await VisitAsync("1c-a-sellers-item", "/store/p/hand-built-rem-pod");
     }
 
     // ── Client ───────────────────────────────────────────────────────────────
@@ -157,6 +162,9 @@ public class PersonaDocCaptureTests : BenTestBase
         // The same place, signed in as a member: their groups' visits and cases beside what other
         // groups shared, and the buttons that start work here. 39 and 3a are the event walk's.
         await VisitAsync("3b-a-public-place", $"/places/{PlaceId}");
+        // The store from a buyer's seat: their orders (one of them in two packages) and their questions.
+        await VisitAsync("3c-my-orders", "/store/orders");
+        await VisitAsync("3d-my-questions", "/store/questions");
     }
 
     // ── Viewer ───────────────────────────────────────────────────────────────
@@ -213,5 +221,31 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("67-billing-ledger", "/admin/billing-ledger");
         await VisitAsync("68-referrals", "/admin/referrals");
         await VisitAsync("69-support-tickets", "/admin/support-tickets");
+        // The store's back office (storefront and store sellers). 6a to 6c are the event walk's.
+        await VisitAsync("6d-store-dashboard", "/admin/store");
+        await VisitAsync("6e-store-orders", "/admin/store/orders");
+        await VisitAsync("6f-sale-requests", "/admin/store/sale-requests");
+        await VisitAsync("6g-sellers", "/admin/store/sellers");
+        await VisitAsync("6h-store-settings", "/admin/store/settings");
+    }
+
+    // ── Seller (store sellers, backlog 251) ──────────────────────────────────
+
+    /// <summary>
+    /// A member who sells their own gear through the store — the demo seller, Hazel Marsh. An additive
+    /// site role: she is an ordinary member everywhere else, and the store's admin refuses her.
+    /// </summary>
+    private async Task SellerAsync()
+    {
+        await LoginAsync(SellerEmail, SellerPassword);
+        const string remPod = "/store/selling/items/a1000000-0000-0000-0000-000000000028";
+        await VisitAsync("70-my-items", "/store/selling");
+        await VisitAsync("71-an-item", remPod);
+        await VisitAsync("72-parts-and-cost", $"{remPod}?tab=parts");
+        await VisitAsync("73-files", $"{remPod}?tab=files");
+        await VisitAsync("74-my-packages", "/store/selling/packages");
+        await VisitAsync("75-my-earnings", "/store/selling/earnings");
+        await VisitAsync("76-questions", "/store/selling/questions");
+        await VisitAsync("77-refused-store-admin", "/admin/store/products");
     }
 }

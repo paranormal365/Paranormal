@@ -2053,6 +2053,9 @@ anything else here. Shoppers don't see who made an item.</p>
   <p>If you make equipment and sell it through the store, you have a <strong>Selling</strong> section in the menu.
 It holds everything to do with your own items, and only yours: you never see anybody else's, and
 the store's administration stays with its administrators.</p>
+<p>The menu shows <strong>Selling</strong> once the store is open. Before that, the store may ask you to get your
+items ready early: the pages work at their own addresses — start at <code>/store/selling</code> — while the
+shop stays hidden from everybody else.</p>
 <h2>Your items</h2>
 <p><strong>Selling → My Items</strong> lists every item you sell through the store, with:</p>
 <ul>
@@ -7259,7 +7262,9 @@ the camera details and location are removed — sized for a sharp product page, 
 for cards and the cart. A live product keeps at least one picture.</p>
 <h2>Sellers and sale requests</h2>
 <p>A member with the <strong>Seller</strong> role (given on their Site Roles tab) has a <strong>Selling</strong> section of their
-own. There they add items as hidden drafts and edit their words, pictures, options, variants and
+own. It is in their menu only while the store is switched on — like every other way into the shop —
+but its pages work at their addresses while it is off, so a seller you send to <code>/store/selling</code> can
+prepare their items before the store opens. There they add items as hidden drafts and edit their words, pictures, options, variants and
 stock — never the price, web address, placement, tax code or seller, and never another seller's
 item. A variant they add starts switched off and unpriced.</p>
 <p>A seller's item goes on sale only when they ask. <strong>Store → Sale Requests</strong> lists the requests

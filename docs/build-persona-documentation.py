@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds one developer document per website user type.
 
-Six documents, one per seat, each named for its user type:
+Seven documents, one per seat, each named for its user type:
 
     IsHaunted-Web-Visitor.pdf         nobody signed in
     IsHaunted-Web-Client.pdf          someone who asked a group for help
@@ -9,6 +9,7 @@ Six documents, one per seat, each named for its user type:
     IsHaunted-Web-Viewer.pdf          a member who may look and change nothing
     IsHaunted-Web-Owner.pdf           a group's owner or administrator
     IsHaunted-Web-SuperAdmin.pdf      runs the site
+    IsHaunted-Web-Seller.pdf          a member who sells their own gear through the store
 
 **One document per seat rather than one document with six chapters**, because the site is a
 different application from each of them and a reader only needs their own. The permission model is
@@ -16,7 +17,7 @@ not decoration here: an administrator passes every check by role, so a surface t
 everybody else looks perfect from that seat — which is exactly why each document is captured while
 signed in as that person rather than described from the code.
 
-    python3 docs/build-persona-documentation.py            # all six
+    python3 docs/build-persona-documentation.py            # all seven
     python3 docs/build-persona-documentation.py member     # just one
 
 Every screenshot is of simulated, seeded data, captured in dark mode at 1440x900.
@@ -110,6 +111,10 @@ identity — which is where the refusals below come from.</p>
                                  "what is left, and how to get in and around.",
             "19-picking-seats-without-an-account": "Seats picked with no account: the visitor is emailed a link "
                                                    "to hold them, and nothing is held until they open it.",
+            "1b-the-store": "The gear store's front (storefront). Nobody needs an account to buy. Hidden, menus "
+                            "and all, until the store is switched on — photographed switched on.",
+            "1c-a-sellers-item": "An item a member makes and sells (store sellers): it ships from them, and its "
+                                 "questions and answers sit after the reviews. Asking needs an account.",
         },
     },
     "client": {
@@ -165,6 +170,10 @@ account for exactly this reason.</p>
                                             "names — here, the door — whatever the member's seat in the group.",
             "3a-the-door-on-a-phone": "The door for tonight on a phone: who is expected, search by name or pass "
                                       "code, and walk-ups.",
+            "3c-my-orders": "Their store orders and where each has got to. An order with items from more than "
+                            "one sender comes as that many packages, each with its own tracking.",
+            "3d-my-questions": "Questions they asked about store items, and the answers — private to them "
+                               "unless copied into an item's FAQ, which never names them.",
         },
     },
     "viewer": {
@@ -244,11 +253,45 @@ rather than requiring somebody to read the database.</p>
             "67-billing-ledger": "The money trail, append-only.",
             "68-referrals": "Referral standings and what they earn.",
             "69-support-tickets": "The support queue.",
+            "6d-store-dashboard": "The store's back office: orders to pack and ship, reviews and sale requests "
+                                  "waiting, and what is running low. Works while the store is switched off.",
+            "6e-store-orders": "The order desk. Each seller's items travel as their own package, so an order can "
+                               "read Partially shipped.",
+            "6f-sale-requests": "Sellers asking for items to go on sale. The store sets the price, then approves.",
+            "6g-sellers": "What each seller has earned, what is ready to pay, and what has been paid. Payouts are "
+                          "made by hand outside the site and recorded here.",
+            "6h-store-settings": "The store's settings, and the checklist that must be empty before it opens.",
             "6a-events-dashboard": "Hosted events across every group: where they stand, credits, venues and "
                                    "appeals waiting.",
             "6b-every-event": "Every hosted event, with view and remove.",
             "6c-removing-an-event": "Removal says what it will do before it is done: off the site, guests told, "
                                     "credit returned, the organizer offered an appeal.",
+        },
+    },
+    "seller": {
+        "title": "The seller",
+        "who": "A member who makes equipment and sells it through the store.",
+        "intro": """
+<p>The seller is an ordinary member everywhere else; <b>Seller</b> is an additive site role, given on
+the person's Site Roles tab. It opens a <b>Selling</b> workspace — in the menu once the store is
+switched on — for their own items and nobody else's. Every seller endpoint starts from the caller's
+own items, and another seller's item answers 404 rather than 403.</p>
+
+<p>The split of powers is the design: a seller writes their words, pictures, options, stock, parts
+list, files, FAQ and versions, and asks for an item to go on sale; the store sets every price and
+approves. Each seller ships their own package with their own tracking, and is paid cost plus their
+approved asking price per unit, by hand, against an append-only earnings ledger.</p>
+""",
+        "notes": {
+            "70-my-items": "Their items and where each stands: draft, on sale, off sale. The price is shown, "
+                           "never editable.",
+            "71-an-item": "One item's editor. Every change lands in the item's history, marked as theirs.",
+            "72-parts-and-cost": "The parts list: what a unit costs to make. Never shown to shoppers.",
+            "73-files": "Manuals and firmware, each for buyers (downloadable from a paid order) or private.",
+            "74-my-packages": "Paid orders with their items in: the address, and Ship with carrier and tracking.",
+            "75-my-earnings": "Owed, ready to pay, paid — by item, order and year, for tax forms.",
+            "76-questions": "Shoppers' questions, with nobody's name on them. Answer, decline, or add to the FAQ.",
+            "77-refused-store-admin": "The store's own administration refuses a seller.",
         },
     },
 }
