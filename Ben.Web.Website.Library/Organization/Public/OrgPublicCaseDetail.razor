@@ -113,7 +113,7 @@ else
                     {
                         <div class="d-flex gap-3 mb-3">
                             <div class="flex-shrink-0 text-center" style="width:2rem;">
-                                <span class="@EntryIcon(entry.EntryType)" style="font-size:1.1rem;"></span>
+                                <BenIcon Name="@EntryIcon(entry.EntryType)" Class="d-inline-block" style="width:1.1rem;height:1.1rem;" />
                             </div>
                             <div class="flex-grow-1">
                                 <div class="d-flex gap-2 align-items-baseline mb-1">
@@ -239,11 +239,13 @@ else
         _                                      => "bg-secondary",
     };
 
+    // Sprite symbol ids. These were Bootstrap Icons classes, and the site never loads that font,
+    // so the timeline's icon column rendered empty.
     private static string EntryIcon(CaseTimelineEntryType t) => t switch
     {
-        CaseTimelineEntryType.Evidence         => "bi bi-camera",
-        CaseTimelineEntryType.InvestigatorNote => "bi bi-person-badge",
-        CaseTimelineEntryType.ResearchNote     => "bi bi-book",
-        _                                      => "bi bi-chat-left-text",
+        CaseTimelineEntryType.Evidence         => "camera",
+        CaseTimelineEntryType.InvestigatorNote => "user-check",
+        CaseTimelineEntryType.ResearchNote     => "book-open",
+        _                                      => "message-square",
     };
 }

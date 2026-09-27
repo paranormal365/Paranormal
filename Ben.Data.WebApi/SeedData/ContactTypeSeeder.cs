@@ -36,82 +36,82 @@ internal static class ContactTypeSeeder
 
     private static readonly (string Name, string Description, string Icon)[] OrgEmailTypes =
     [
-        ("General",  "The address people should write to first.",        "bi bi-envelope"),
-        ("Bookings", "Enquiries about investigations and events.",       "bi bi-calendar-check"),
-        ("Press",    "Media and interview requests.",                    "bi bi-megaphone"),
-        ("Other",    "Anything that doesn't fit the three above.",       "bi bi-envelope-plus"),
+        ("General",  "The address people should write to first.",        "fas fa-envelope"),
+        ("Bookings", "Enquiries about investigations and events.",       "fas fa-calendar-check"),
+        ("Press",    "Media and interview requests.",                    "fas fa-megaphone"),
+        ("Other",    "Anything that doesn't fit the three above.",       "fas fa-envelope-open-text"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] OrgPhoneTypes =
     [
-        ("Main",      "The number to ring first.",                       "bi bi-telephone"),
-        ("Mobile",    "A phone somebody carries on investigations.",     "bi bi-phone"),
-        ("Emergency", "For urgent contact during an investigation.",     "bi bi-telephone-forward"),
-        ("Other",     "Anything that doesn't fit the three above.",      "bi bi-telephone-plus"),
+        ("Main",      "The number to ring first.",                       "fas fa-phone"),
+        ("Mobile",    "A phone somebody carries on investigations.",     "fas fa-mobile"),
+        ("Emergency", "For urgent contact during an investigation.",     "fas fa-phone-arrow-right"),
+        ("Other",     "Anything that doesn't fit the three above.",      "fas fa-phone-plus"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] OrgAddressTypes =
     [
-        ("Headquarters", "Where the group is based.",                    "bi bi-building"),
-        ("Mailing",      "Where post should go, if that differs.",       "bi bi-mailbox"),
-        ("Storage",      "Where the group keeps its equipment.",         "bi bi-box-seam"),
-        ("Meeting",      "Where the group gathers.",                     "bi bi-people"),
-        ("Other",        "Anything that doesn't fit the four above.",    "bi bi-geo-alt"),
+        ("Headquarters", "Where the group is based.",                    "fas fa-building"),
+        ("Mailing",      "Where post should go, if that differs.",       "fas fa-mailbox"),
+        ("Storage",      "Where the group keeps its equipment.",         "fas fa-box-open"),
+        ("Meeting",      "Where the group gathers.",                     "fas fa-people"),
+        ("Other",        "Anything that doesn't fit the four above.",    "fas fa-location-dot"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] OrgLinkTypes =
     [
-        ("Website", "The group's own site.",                             "bi bi-globe"),
-        ("Social",  "A profile on a social network.",                    "bi bi-people"),
-        ("Video",   "A channel where the group posts footage.",          "bi bi-camera-video"),
-        ("Other",   "Anything that doesn't fit the three above.",        "bi bi-link-45deg"),
+        ("Website", "The group's own site.",                             "fas fa-globe"),
+        ("Social",  "A profile on a social network.",                    "fas fa-people"),
+        ("Video",   "A channel where the group posts footage.",          "fas fa-video"),
+        ("Other",   "Anything that doesn't fit the three above.",        "fas fa-link"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] OrgNoteTypes =
     [
-        ("General",   "Anything worth writing down about the group.",    "bi bi-sticky"),
-        ("Meeting",   "Notes from a group meeting.",                     "bi bi-journal-text"),
-        ("Equipment", "Notes about gear, its condition or its history.", "bi bi-tools"),
-        ("Admin",     "Internal administrative notes.",                  "bi bi-clipboard"),
+        ("General",   "Anything worth writing down about the group.",    "fas fa-note-sticky"),
+        ("Meeting",   "Notes from a group meeting.",                     "fas fa-book"),
+        ("Equipment", "Notes about gear, its condition or its history.", "fas fa-screwdriver-wrench"),
+        ("Admin",     "Internal administrative notes.",                  "fas fa-clipboard"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] UserNoteTypes =
     [
-        ("General",  "Anything worth writing down.",                     "bi bi-sticky"),
-        ("Contact",  "A record of speaking to somebody.",                "bi bi-chat-left-text"),
-        ("Research", "Background reading and findings.",                 "bi bi-search"),
-        ("Admin",    "Internal administrative notes.",                   "bi bi-clipboard"),
+        ("General",  "Anything worth writing down.",                     "fas fa-note-sticky"),
+        ("Contact",  "A record of speaking to somebody.",                "fas fa-message-lines"),
+        ("Research", "Background reading and findings.",                 "fas fa-magnifying-glass"),
+        ("Admin",    "Internal administrative notes.",                   "fas fa-clipboard"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] EmailTypes =
     [
-        ("Personal", "A private address you use day to day.",        "bi bi-house"),
-        ("Work",     "An address at your job or organization.",      "bi bi-briefcase"),
-        ("Other",    "Anything that doesn't fit the two above.",     "bi bi-envelope"),
+        ("Personal", "A private address you use day to day.",        "fas fa-house"),
+        ("Work",     "An address at your job or organization.",      "fas fa-briefcase"),
+        ("Other",    "Anything that doesn't fit the two above.",     "fas fa-envelope"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] PhoneTypes =
     [
-        ("Mobile", "A phone you carry, which can usually receive texts.", "bi bi-phone"),
-        ("Home",   "A landline at the place you live.",                   "bi bi-telephone"),
-        ("Work",   "A number at your job or organization.",               "bi bi-building"),
-        ("Other",  "Anything that doesn't fit the three above.",          "bi bi-telephone-plus"),
+        ("Mobile", "A phone you carry, which can usually receive texts.", "fas fa-mobile"),
+        ("Home",   "A landline at the place you live.",                   "fas fa-phone"),
+        ("Work",   "A number at your job or organization.",               "fas fa-building"),
+        ("Other",  "Anything that doesn't fit the three above.",          "fas fa-phone-plus"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] AddressTypes =
     [
-        ("Home",     "Where you live.",                            "bi bi-house-door"),
-        ("Work",     "Your job or organization's address.",        "bi bi-building"),
-        ("Mailing",  "Where post should go, if that differs.",     "bi bi-mailbox"),
-        ("Other",    "Anything that doesn't fit the three above.", "bi bi-geo-alt"),
+        ("Home",     "Where you live.",                            "fas fa-house-chimney"),
+        ("Work",     "Your job or organization's address.",        "fas fa-building"),
+        ("Mailing",  "Where post should go, if that differs.",     "fas fa-mailbox"),
+        ("Other",    "Anything that doesn't fit the three above.", "fas fa-location-dot"),
     ];
 
     private static readonly (string Name, string Description, string Icon)[] LinkTypes =
     [
-        ("Website",       "Your own site or blog.",                   "bi bi-globe"),
-        ("Social",        "A profile on a social network.",           "bi bi-people"),
-        ("Video Channel", "YouTube, Twitch, or anywhere you post video.", "bi bi-camera-video"),
-        ("Other",         "Anything that doesn't fit the three above.",   "bi bi-link-45deg"),
+        ("Website",       "Your own site or blog.",                   "fas fa-globe"),
+        ("Social",        "A profile on a social network.",           "fas fa-people"),
+        ("Video Channel", "YouTube, Twitch, or anywhere you post video.", "fas fa-video"),
+        ("Other",         "Anything that doesn't fit the three above.",   "fas fa-link"),
     ];
 
     internal static async Task SeedAsync(IServiceProvider services, IConfiguration config)

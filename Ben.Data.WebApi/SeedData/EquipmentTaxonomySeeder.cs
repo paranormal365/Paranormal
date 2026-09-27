@@ -27,22 +27,22 @@ internal static class EquipmentTaxonomySeeder
     private const string GenericBrandName = Ben.Data.Common.Constants.EquipmentCatalogNames.GenericBrand;
     private static readonly (string Name, string Description, string IconClass)[] _categories =
     [
-        ("Audio Recorder",           "Digital recorders used to capture EVP and ambient audio.", "bi bi-mic"),
-        ("Video Camera",             "Standard and night-vision video cameras.", "bi bi-camera-video"),
-        ("Still Camera",             "Photo cameras, including full-spectrum and infrared.", "bi bi-camera"),
-        ("EMF Meter",                "Electromagnetic field detectors.", "bi bi-broadcast"),
-        ("Thermal Imaging",          "Thermal/infrared cameras and imagers.", "bi bi-thermometer-half"),
-        ("Environmental Sensor",     "Temperature, humidity, and pressure sensors.", "bi bi-cloud-sun"),
-        ("Motion / Vibration Sensor", "Motion detectors and vibration sensors.", "bi bi-arrows-move"),
-        ("REM-Pod / Trigger Device", "Self-contained radiating electromagnetic field devices and other trigger objects.", "bi bi-lightning"),
-        ("Spirit Box",               "Radio-sweep devices used for real-time communication attempts.", "bi bi-soundwave"),
-        ("Lighting / IR Illuminator", "Flashlights, IR illuminators, and other supplemental lighting.", "bi bi-brightness-high"),
-        ("Communications",           "Two-way radios and other team communication gear.", "bi bi-walkie-talkie"),
-        ("Power & Batteries",        "Battery packs, chargers, and power distribution.", "bi bi-battery-charging"),
-        ("Tripods & Mounts",         "Tripods, mounts, and rigging for cameras and sensors.", "bi bi-camera-reels"),
-        ("Computers & Software",     "Laptops, tablets, and analysis software.", "bi bi-laptop"),
-        ("Protective / Utility",     "Flashlights, first-aid, and general field utility gear.", "bi bi-toolbox"),
-        ("Other",                    "Gear that doesn't fit an existing category yet.", "bi bi-question-circle"),
+        ("Audio Recorder",           "Digital recorders used to capture EVP and ambient audio.", "fas fa-microphone"),
+        ("Video Camera",             "Standard and night-vision video cameras.", "fas fa-video"),
+        ("Still Camera",             "Photo cameras, including full-spectrum and infrared.", "fas fa-camera"),
+        ("EMF Meter",                "Electromagnetic field detectors.", "fas fa-tower-broadcast"),
+        ("Thermal Imaging",          "Thermal/infrared cameras and imagers.", "fas fa-temperature-half"),
+        ("Environmental Sensor",     "Temperature, humidity, and pressure sensors.", "fas fa-cloud-sun"),
+        ("Motion / Vibration Sensor", "Motion detectors and vibration sensors.", "fas fa-arrows-up-down-left-right"),
+        ("REM-Pod / Trigger Device", "Self-contained radiating electromagnetic field devices and other trigger objects.", "fas fa-bolt"),
+        ("Spirit Box",               "Radio-sweep devices used for real-time communication attempts.", "fas fa-waveform-lines"),
+        ("Lighting / IR Illuminator", "Flashlights, IR illuminators, and other supplemental lighting.", "fas fa-sun-bright"),
+        ("Communications",           "Two-way radios and other team communication gear.", "fas fa-walkie-talkie"),
+        ("Power & Batteries",        "Battery packs, chargers, and power distribution.", "fas fa-battery-bolt"),
+        ("Tripods & Mounts",         "Tripods, mounts, and rigging for cameras and sensors.", "fas fa-camera-movie"),
+        ("Computers & Software",     "Laptops, tablets, and analysis software.", "fas fa-laptop"),
+        ("Protective / Utility",     "Flashlights, first-aid, and general field utility gear.", "fas fa-toolbox"),
+        ("Other",                    "Gear that doesn't fit an existing category yet.", "fas fa-circle-question"),
     ];
 
 
