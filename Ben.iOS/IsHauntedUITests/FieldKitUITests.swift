@@ -25,7 +25,7 @@ final class FieldKitUITests: XCTestCase {
 
     func testAStartedSessionSurvivesLeavingTheAppAndComingBack() throws {
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
 
         let label = app.textFields["session-label"]
         XCTAssertTrue(label.waitForExistence(timeout: 15))
@@ -63,7 +63,7 @@ final class FieldKitUITests: XCTestCase {
 
     func testStoppingASessionOpensItsReview() {
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -91,7 +91,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -131,7 +131,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -172,7 +172,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -196,7 +196,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -231,7 +231,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -263,7 +263,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -296,7 +296,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -336,7 +336,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -370,7 +370,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -410,7 +410,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -459,7 +459,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -511,7 +511,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -555,7 +555,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -611,7 +611,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.
@@ -660,7 +660,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
-        fresh.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.

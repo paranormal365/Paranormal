@@ -9,6 +9,23 @@ import XCTest
 /// honest on both devices.
 enum AppNavigator {
 
+    /// Presses Start a session, and answers the question it asks when another session is still
+    /// open.
+    ///
+    /// Since 2026-09-27 (Ben: "If they have recorded a session, just save it and ask if they want to
+    /// create a new one"), Start with a session still open asks first: save the recording one, or
+    /// replace the one never started. A suite that leaves a session open — any test that stops
+    /// half-way — used to walk straight into the next test's sheet; now every later test met the
+    /// question instead and failed at its first step. The helper takes the answer a person
+    /// starting over would take.
+    static func startNewSession(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        app.buttons["start-field-session"].tap()
+        let saveAndStart = app.buttons["save-and-start-new"]
+        if saveAndStart.waitForExistence(timeout: 3) {
+            saveAndStart.tap()
+        }
+    }
+
     /// Opens a top-level section by its visible name.
     @discardableResult
     static func openSection(_ name: String, in app: XCUIApplication,

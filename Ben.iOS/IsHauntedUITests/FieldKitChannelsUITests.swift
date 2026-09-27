@@ -24,7 +24,7 @@ final class FieldKitChannelsUITests: XCTestCase {
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 15))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         return app
     }

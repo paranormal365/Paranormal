@@ -38,7 +38,7 @@ final class SessionTrimUITests: XCTestCase {
         sleep(5)
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         // Item 215: the live screen opens pending. Nothing is logged until Start.

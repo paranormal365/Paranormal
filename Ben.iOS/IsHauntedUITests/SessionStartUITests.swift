@@ -23,7 +23,7 @@ final class SessionStartUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         return app
@@ -88,7 +88,7 @@ final class SessionStartUITests: XCTestCase {
         let before = app.buttons.matching(identifier: "field-session-row")
             .matching(NSPredicate(format: "label CONTAINS 'not started'")).count
 
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         XCTAssertTrue(app.buttons["start-recording"].waitForExistence(timeout: 15))

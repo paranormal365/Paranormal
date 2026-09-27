@@ -19,6 +19,8 @@ struct LogOccurrenceView: View {
     @State private var media: [MediaUpload] = []
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
+    /// A camera refused in Settings: said, with the way there, instead of a black camera screen.
+    @State private var refusedPermission: AppPermission?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -77,7 +79,7 @@ struct LogOccurrenceView: View {
                     .disabled(isSaving)
 
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button { showCamera = true } label: {
+                        Button { openCamera() } label: {
                             Label("Take a photo or video", systemImage: "camera")
                         }
                         .disabled(isSaving)
@@ -108,6 +110,7 @@ struct LogOccurrenceView: View {
             .onChange(of: pickerItems) { _, items in
                 Task { await stage(items) }
             }
+            .permissionRefusedAlert($refusedPermission)
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { media.append($0) }
             }
@@ -156,6 +159,18 @@ struct LogOccurrenceView: View {
             dismiss()
         case .failure(let error):
             errorMessage = error.message
+        }
+    }
+}
+
+extension LogOccurrenceView {
+    /// The camera, or — when it was refused in Settings — a sentence and the way there. iOS would
+    /// otherwise open a black camera screen that explains nothing (2026-09-27).
+    fileprivate func openCamera() {
+        if AppPermission.camera.isRefused {
+            refusedPermission = .camera
+        } else {
+            showCamera = true
         }
     }
 }

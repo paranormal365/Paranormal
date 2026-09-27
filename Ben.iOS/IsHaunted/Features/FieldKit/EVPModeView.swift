@@ -17,6 +17,7 @@ struct EVPModeView: View {
     @State private var draft = ""
     @State private var showingQuestionField = false
     @State private var blackout = false
+    @State private var refusedPermission: AppPermission?
 
     private var isWaiting: Bool { session.questionOpenedAt != nil }
 
@@ -61,6 +62,7 @@ struct EVPModeView: View {
             } message: {
                 Text("Optional — the mark is made either way.")
             }
+            .permissionRefusedAlert($refusedPermission)
             .fullScreenCover(isPresented: $blackout) {
                 BlackoutOverlay(session: session) { blackout = false }
             }
@@ -93,8 +95,18 @@ struct EVPModeView: View {
                     .font(.callout).foregroundStyle(Theme.warning)
                 Text("Questions will still be marked, but there'll be no audio here to play back.")
                     .font(.caption).foregroundStyle(Theme.fog)
+                // A refused microphone is said here too: this screen had no other way of showing
+                // why pressing the button did nothing (2026-09-27).
+                if let problem = session.recordingProblem {
+                    Label(problem, systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(Theme.danger)
+                }
                 Button("Start recording") {
-                    Task { await session.startRecording() }
+                    if AppPermission.microphone.isRefused {
+                        refusedPermission = .microphone
+                    } else {
+                        Task { await session.startRecording() }
+                    }
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("evp-start-recording")

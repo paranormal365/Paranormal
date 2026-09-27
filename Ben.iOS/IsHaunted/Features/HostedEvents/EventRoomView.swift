@@ -408,6 +408,8 @@ struct RoomComposerView: View {
     @State private var media: [MediaUpload] = []
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
+    /// A camera refused in Settings: said, with the way there, instead of a black camera screen.
+    @State private var refusedPermission: AppPermission?
     @State private var agree = false
     @State private var sendToHosts = false
     @State private var posting = false
@@ -459,7 +461,7 @@ struct RoomComposerView: View {
                         }
                         .disabled(posting)
                         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                            Button { showCamera = true } label: { Label("Take a photo or video", systemImage: "camera") }
+                            Button { openCamera() } label: { Label("Take a photo or video", systemImage: "camera") }
                                 .disabled(posting)
                         }
                     } footer: {
@@ -509,6 +511,7 @@ struct RoomComposerView: View {
                 }
             }
             .onChange(of: pickerItems) { _, items in Task { await stage(items) } }
+            .permissionRefusedAlert($refusedPermission)
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { media.append($0) }
             }
@@ -652,6 +655,18 @@ struct RoomComposerView: View {
         case .failed(let reason, _): reason ?? "That couldn't be sent just now. Nothing was lost — try again."
         case .sessionEnded: "Sign in again to post."
         case .rateLimited: "Too many at once — wait a moment and try again."
+        }
+    }
+}
+
+extension RoomComposerView {
+    /// The camera, or — when it was refused in Settings — a sentence and the way there. iOS would
+    /// otherwise open a black camera screen that explains nothing (2026-09-27).
+    fileprivate func openCamera() {
+        if AppPermission.camera.isRefused {
+            refusedPermission = .camera
+        } else {
+            showCamera = true
         }
     }
 }
