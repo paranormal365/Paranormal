@@ -344,7 +344,8 @@ public actor FieldSessionEngine {
 
         lastSceneEvent = sample.at
         await record(kind: .sceneMotion, at: sample.at,
-                     note: String(format: "Motion detected: %.0f%% of the view changed",
+                     // The mark's own title already says "Motion detected"; the note says how much.
+                     note: String(format: "%.0f%% of the view changed",
                                   sample.changedFraction * 100))
     }
 

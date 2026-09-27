@@ -102,10 +102,14 @@ private struct PermissionRefusedAlert: ViewModifier {
             presenting: refused
         ) { permission in
             Button("Open Settings") {
+                // Cleared BEFORE leaving for Settings. The app goes to the background while the
+                // alert is closing, the alert's own binding is never told, and every later refusal
+                // on the same screen was then swallowed without a word (found walking it, 2026-09-27).
+                refused = nil
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
             }
             .accessibilityIdentifier("open-settings-for-\(permission.rawValue)")
-            Button("Not now", role: .cancel) {}
+            Button("Not now", role: .cancel) { refused = nil }
         } message: { permission in
             Text("\(permission.why) Turn on \(permission.settingsName) for IsHaunted in Settings, then come back.")
         }

@@ -23,14 +23,22 @@ public struct MediaSegment: Sendable, Equatable, Identifiable {
 
     public var endsAt: Date { startedAt.addingTimeInterval(duration) }
 
+    /// How far BEFORE its first second a clip still counts as covering the playhead.
+    ///
+    /// The session's clock starts at Start and its sound recording a few milliseconds later, so
+    /// every review opened at 0:00 said "No recording at this moment" about a recording that began
+    /// there (found walking the review, 2026-09-27). Within a second, the clip is the answer; it is
+    /// played from its own start.
+    public static let leadTolerance: TimeInterval = 1
+
     public func covers(_ moment: Date) -> Bool {
-        moment >= startedAt && moment < endsAt
+        moment >= startedAt.addingTimeInterval(-Self.leadTolerance) && moment < endsAt
     }
 
-    /// How far into the file a given moment falls.
+    /// How far into the file a given moment falls — never before its start.
     public func offset(at moment: Date) -> TimeInterval? {
         guard covers(moment) else { return nil }
-        return moment.timeIntervalSince(startedAt)
+        return max(0, moment.timeIntervalSince(startedAt))
     }
 }
 

@@ -60,7 +60,6 @@ struct TestSessionBundleBuilder {
                                         policy: SamplingPolicy(heartbeatSeconds: 1, debounceSeconds: 3),
                                         channels: .default, now: clock.nowProvider)
         await engine.beginLogging()
-        await engine.setBaselines()
         await engine.setRoom("North room")
         await engine.setWatchForMotion(true)
         await engine.setRecording(filename: "media/audio-001.m4a", startedAt: start)
@@ -84,6 +83,8 @@ struct TestSessionBundleBuilder {
                                                         peakDbfs: -40))
             // Walking until 25 s, still afterwards.
             await engine.ingest(movement: DeviceMovementSample(at: now, magnitudeG: second < p.stillFrom ? 0.2 : 0.004))
+            // The base is set once the instruments have something to take it from, as a person does.
+            if second == 0 { await engine.setBaselines() }
 
             if let index = p.photos.firstIndex(of: second) {
                 await engine.noteCapture(kind: .photo, relativePath: "media/photo-00\(index + 1).jpg")

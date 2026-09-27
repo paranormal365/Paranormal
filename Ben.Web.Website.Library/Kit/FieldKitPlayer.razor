@@ -978,8 +978,10 @@
             .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
             .ToList();
 
+        // Captures are noted with a marker label (the format has nowhere else to put them), but they
+        // are not marks: photographs are in the strip and recordings on the stage, as on the phone.
         _markers = _readings
-            .Where(r => r.Marker is not null)
+            .Where(r => r.Marker is not null and not ("photo" or "video" or "audio"))
             .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room, r.Microtesla))
             .ToList();
 
@@ -1307,12 +1309,16 @@
             .Select(x => (Guid?)x.Id)
             .FirstOrDefault();
 
-    /// <summary>Every playable recording whose span contains the moment.</summary>
+    /// <summary>
+    /// Every playable recording whose span contains the moment — counting one that begins within a
+    /// second after it, as the phone does: the session's clock starts at Start and its sound a few
+    /// milliseconds later, and "No recording at this moment" at 0:00 was a claim about nothing.
+    /// </summary>
     private List<Guid> AllCovering(DateTime moment)
         => _session?.Files
             .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
             .Select(f => (f.Id, StartsAt: MediaStart(f)))
-            .Where(x => x.StartsAt is not null && x.StartsAt <= moment && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment.AddSeconds(1) && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
             .OrderByDescending(x => x.StartsAt)
             .Select(x => x.Id)
             .ToList() ?? [];

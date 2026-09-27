@@ -572,7 +572,8 @@ struct FieldSessionEngineTests {
         let events = try await log.readings().filter { $0.triggeredBy == .event }
         #expect(events.count == 1)
         #expect(events.first?.measurements?["marker"]?.value == .string("scene_motion"))
-        #expect(events.first?.note?.hasPrefix("Motion detected") == true)
+        #expect(events.first?.note == "30% of the view changed")
+        #expect(MarkerKind.sceneMotion.title == "Motion detected")
     }
 
     @Test func aPhoneBeingMovedDoesNotCountAsMotionInTheRoom() async throws {

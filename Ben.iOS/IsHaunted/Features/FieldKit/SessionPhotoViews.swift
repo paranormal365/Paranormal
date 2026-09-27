@@ -8,13 +8,16 @@ struct SessionPhotoTile: View {
     let url: URL
     let maxPixels: Int
     let contentMode: ContentMode
+    /// What shows around a picture that does not fill its frame — the card colour in a strip,
+    /// black when it is shown full size.
+    var background: Color = Theme.mist
 
     @State private var image: UIImage?
     @State private var missing = false
 
     var body: some View {
         ZStack {
-            Theme.mist
+            background
             if let image {
                 Image(uiImage: image)
                     .resizable()

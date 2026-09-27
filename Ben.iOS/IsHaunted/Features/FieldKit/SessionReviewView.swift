@@ -147,6 +147,8 @@ struct SessionReviewView: View {
         .overlay {
             if let photo = expandedPhoto { expandedPhotoView(photo) }
         }
+        // Full size means the whole screen: the bars go while a photograph is open.
+        .toolbar(expandedPhoto == nil ? .visible : .hidden, for: .navigationBar, .tabBar)
         .onDisappear {
             replay.pause()
             videoPlayer.pause()
@@ -348,7 +350,10 @@ struct SessionReviewView: View {
                                 photoThumbnail(photo).id(photo.id)
                             }
                         }
-                        .padding(4)   // room for the glow
+                        // Room for a thumbnail grown by 15% and its glow, or the first one is
+                        // cut off at the strip's edge while it is lit.
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 10)
                     }
                     // Keeps the photo the playhead last passed in view, so the glow is seen.
                     .onChange(of: ReplayPhotos.lastPassed(photos, at: replay.playhead)?.id) { _, id in
@@ -377,7 +382,11 @@ struct SessionReviewView: View {
                         // shrink back to.
                         Color.clear
                     } else {
+                        // Sized BEFORE it is clipped: a .fill image laid out on its own takes the
+                        // picture's width, and a frame on the container around it clips nothing —
+                        // the first build showed the three photos piled over one another.
                         SessionPhotoTile(url: url, maxPixels: 240, contentMode: .fill)
+                            .frame(width: 72, height: 72)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .matchedGeometryEffect(id: photo.id, in: photoSpace)
                     }
@@ -407,12 +416,11 @@ struct SessionReviewView: View {
     /// the strip and carries on playing if it was playing.
     private func expandedPhotoView(_ photo: CaptureMark) -> some View {
         ZStack {
-            Color.black.opacity(0.92).ignoresSafeArea()
+            Color.black.ignoresSafeArea()
             VStack(spacing: 12) {
                 SessionPhotoTile(url: store.files.fileURL(for: sessionId,
                                                           relativePath: photo.relativePath),
-                                 maxPixels: 2800, contentMode: .fit)
-                    .background(Color.clear)
+                                 maxPixels: 2800, contentMode: .fit, background: .clear)
                     .matchedGeometryEffect(id: photo.id, in: photoSpace)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Text(photoCaption(photo))

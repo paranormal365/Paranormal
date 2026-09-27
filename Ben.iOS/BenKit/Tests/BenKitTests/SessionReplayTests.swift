@@ -204,6 +204,16 @@ struct SessionReplayTests {
         #expect(replay.frame.motionDetected == nil)
     }
 
+    @Test func aRecordingThatBeganAMomentAfterStartIsTheOneAtZero() async throws {
+        // The clock starts at Start and the recorder a few milliseconds later.
+        let sound = MediaSegment(kind: .audio, relativePath: "media/audio-001.m4a",
+                                 startedAt: start.addingTimeInterval(0.02), duration: 60)
+        let replay = try await loaded([reading(0, emf: 48)], media: [sound])
+        replay.seek(to: start)
+        #expect(replay.frame.activeAudio?.segment.relativePath == "media/audio-001.m4a")
+        #expect(replay.frame.activeAudio?.offset == 0)
+    }
+
     // MARK: - Markers
 
     @Test func jumpingToAMarkerStartsJustBeforeItSoTheRunUpCanBeHeard() async throws {
