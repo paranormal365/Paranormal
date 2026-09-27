@@ -41,10 +41,16 @@ public interface IAvMetadataStripper
     bool CanStrip(string? contentType);
 
     /// <summary>
-    /// The stripped bytes, or null when stripping was not possible — in which case the caller
+    /// The stripped copy, or null when stripping was not possible — in which case the caller
     /// keeps the original.
     /// </summary>
-    Task<byte[]?> StripAsync(byte[] original, string fileName, CancellationToken ct);
+    /// <remarks>
+    /// Streams in and out, never byte arrays: a recording can be gigabytes, and the API runs under a
+    /// memory cap that one video held whole would blow straight through. The stream handed back is
+    /// positioned at the start, and the scratch file under it deletes itself when it is disposed —
+    /// so the caller must dispose it.
+    /// </remarks>
+    Task<Stream?> StripAsync(Stream original, string fileName, CancellationToken ct);
 }
 
 /// <inheritdoc />
@@ -67,7 +73,7 @@ public sealed class AvMetadataStripper : IAvMetadataStripper
         && (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
          || contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase));
 
-    public async Task<byte[]?> StripAsync(byte[] original, string fileName, CancellationToken ct)
+    public async Task<Stream?> StripAsync(Stream original, string fileName, CancellationToken ct)
     {
         if (!IsAvailable) return null;
 
@@ -79,10 +85,13 @@ public sealed class AvMetadataStripper : IAvMetadataStripper
         var scratch = Path.Combine(Path.GetTempPath(), $"ben-strip-{Guid.NewGuid():N}");
         var input   = scratch + ".in" + extension;
         var output  = scratch + ".out" + extension;
+        var handedOver = false;
 
         try
         {
-            await File.WriteAllBytesAsync(input, original, ct);
+            await using (var copy = new FileStream(input, FileMode.CreateNew, FileAccess.Write,
+                                                   FileShare.None, bufferSize: 81920, useAsync: true))
+                await original.CopyToAsync(copy, ct);
 
             var psi = new ProcessStartInfo(_options.FfmpegPath!)
             {
@@ -128,11 +137,15 @@ public sealed class AvMetadataStripper : IAvMetadataStripper
                 return null;
             }
 
-            if (!File.Exists(output)) return null;
-            var stripped = await File.ReadAllBytesAsync(output, ct);
+            // An empty result means the remux produced nothing usable.
+            if (!File.Exists(output) || new FileInfo(output).Length == 0) return null;
 
-            // An empty or absurdly small result means the remux produced nothing usable.
-            return stripped.Length > 0 ? stripped : null;
+            // Handed back as a stream over the output itself, which deletes the file when the
+            // caller disposes it — reading it into an array here is exactly what this avoids.
+            var stripped = new FileStream(output, FileMode.Open, FileAccess.Read, FileShare.None,
+                                          bufferSize: 81920, FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+            handedOver = true;
+            return stripped;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                      or System.ComponentModel.Win32Exception)
@@ -143,7 +156,7 @@ public sealed class AvMetadataStripper : IAvMetadataStripper
         finally
         {
             TryDelete(input);
-            TryDelete(output);
+            if (!handedOver) TryDelete(output);
         }
     }
 

@@ -80,7 +80,8 @@ public sealed class StoreProductExtrasTests : IAsyncLifetime
         var stripper = new Mock<IAvMetadataStripper>();
         stripper.Setup(s => s.IsAvailable).Returns(true);
         stripper.Setup(s => s.CanStrip(It.Is<string?>(t => t != null && t.StartsWith("video/")))).Returns(true);
-        stripper.Setup(s => s.StripAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(Clean);
+        stripper.Setup(s => s.StripAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new MemoryStream(Clean, writable: false));
         var disk = TestMedia.StorageOnDisk(_root);
         var ingest = new MediaIngestService(disk, new FileMetadataExtractorService(), new MediaSanitizationService(), stripper.Object,
             NullLogger<MediaIngestService>.Instance);

@@ -113,25 +113,28 @@ public sealed class CasePrivacyRetrofit
 
         try
         {
+            // Streamed, not read into an array: a case can hold hours of video, and this walks
+            // every file on it inside one request.
             await using var source = await _fileStorage.OpenReadAsync(storagePath, ct);
-            await using var buffer = new MemoryStream();
-            await source.CopyToAsync(buffer, ct);
-            var original = buffer.ToArray();
 
             if (_sanitizer.CanSanitize(file.ContentType))
             {
+                var original = await ImageBytes.ReadAsync(source, ct)
+                    ?? throw new UnreadableImageException("The picture is too large to process.");
                 var clean = _sanitizer.Sanitize(original);
                 await using var stream = new MemoryStream(clean, writable: false);
                 await _fileStorage.WriteAsync(imagePath, stream, ct);
                 return StripOutcome.Created;
             }
 
-            if (_avStripper.CanStrip(file.ContentType)
-                && await _avStripper.StripAsync(original, file.FileName, ct) is { } remuxed)
+            if (_avStripper.CanStrip(file.ContentType))
             {
-                await using var stream = new MemoryStream(remuxed, writable: false);
-                await _fileStorage.WriteAsync(avPath, stream, ct);
-                return StripOutcome.Created;
+                await using var remuxed = await _avStripper.StripAsync(source, file.FileName, ct);
+                if (remuxed is not null)
+                {
+                    await _fileStorage.WriteAsync(avPath, remuxed, ct);
+                    return StripOutcome.Created;
+                }
             }
 
             return StripOutcome.NotPossible;
