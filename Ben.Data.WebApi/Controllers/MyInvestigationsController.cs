@@ -37,6 +37,8 @@ public sealed class MyInvestigationsController : BenControllerBase
             // case would drop every case-less visit from this list without saying so.
             .Include(a => a.Investigation)
                 .ThenInclude(i => i.Organization)
+            .Include(a => a.Investigation)
+                .ThenInclude(i => i.Place)
             .OrderByDescending(a => a.Investigation.ScheduledDateTime)
             .ToListAsync(ct);
 
@@ -75,7 +77,11 @@ public sealed class MyInvestigationsController : BenControllerBase
             AssignedRole:      a.AssignedRole,
             Rsvp:              a.Rsvp,
             DidAttend:         a.DidAttend,
-            EvidenceDueDate:   a.Investigation.EvidenceDueDate)));
+            EvidenceDueDate:   a.Investigation.EvidenceDueDate,
+            PlaceId:           a.Investigation.PlaceId,
+            PlaceName:         a.Investigation.Place?.Name,
+            Latitude:          a.Investigation.Latitude,
+            Longitude:         a.Investigation.Longitude)));
     }
 
     /// <summary>
@@ -177,7 +183,16 @@ public sealed record MyInvestigationItem(
     string?             AssignedRole,
     RsvpStatus          Rsvp,
     bool?               DidAttend,
-    DateTime?           EvidenceDueDate);
+    DateTime?           EvidenceDueDate,
+    // Where it is, so the phone can offer the investigation happening where somebody is standing
+    // when they start a Field Kit session (Ben, 2026-09-27: "if there is an investigation at the
+    // location they should be able to just pick it from the dropdown list"). The attendee is on the
+    // roster, so the real point is theirs to have — the attended-visits map already hands it over.
+    // Trailing and optional, so an older client simply ignores them.
+    Guid?               PlaceId = null,
+    string?             PlaceName = null,
+    decimal?            Latitude = null,
+    decimal?            Longitude = null);
 
 public sealed record UpdateMyRsvpRequest(RsvpStatus Rsvp);
 
