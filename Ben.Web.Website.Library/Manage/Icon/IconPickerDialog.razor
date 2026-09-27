@@ -57,28 +57,6 @@
                     }
                 </BenTab>
 
-                <BenTab Id="bootstrap" Title="Bootstrap Icons">
-                    @if (_activeTabId == "bootstrap")
-                    {
-                        var list = FilteredBootstrap.ToList();
-                        if (list.Count == 0) { <div class="icon-picker-empty">No icons match "@_search"</div> }
-                        else
-                        {
-                            <div class="icon-picker-gallery">
-                                @foreach (var name in list)
-                                {
-                                    var cls = $"bi bi-{name}";
-                                    <button type="button" class="icon-picker-tile" title="@cls"
-                                            @onclick="@(async (e) => await SelectIconAsync(cls))">
-                                        <i class="bi bi-@name"></i>
-                                        <span>@name</span>
-                                    </button>
-                                }
-                            </div>
-                        }
-                    }
-                </BenTab>
-
                 <BenTab Id="fontawesome" Title="Font Awesome">
                     @if (_activeTabId == "fontawesome")
                     {
@@ -115,7 +93,6 @@
     /// <summary>
     /// Fires when the user clicks an icon.
     ///   Telerik   → "t:PropertyName"   e.g. "t:Home"
-    ///   Bootstrap → "bi bi-house"
     ///   FA        → "fas fa-home"
     /// </summary>
     [Parameter] public EventCallback<string> OnIconSelected { get; set; }
@@ -127,11 +104,6 @@
         string.IsNullOrWhiteSpace(_search)
             ? IconPickerData.TelerikIcons
             : IconPickerData.TelerikIcons.Where(i => i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
-
-    private IEnumerable<string> FilteredBootstrap =>
-        string.IsNullOrWhiteSpace(_search)
-            ? IconPickerData.BootstrapIcons
-            : IconPickerData.BootstrapIcons.Where(n => n.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     private IEnumerable<string> FilteredFontAwesome =>
         string.IsNullOrWhiteSpace(_search)
