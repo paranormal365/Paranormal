@@ -16,6 +16,15 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-27
+
+- A field session's playback page now plays the video with the session's sound beside it, shows the
+  photographs taken during the session in a strip that glows as playback reaches each one (click to
+  see it full size, click again to carry on), and shows *Motion detected* where the camera saw
+  movement while the phone was still — the same as the phone's review.
+- Videos in a field session now start where they were filmed. They used to be placed at the moment
+  recording stopped, after the stretch they showed.
+
 ## 2026-09-25
 
 - The IsHaunted store is built and waiting for its products: investigation gear from the site itself

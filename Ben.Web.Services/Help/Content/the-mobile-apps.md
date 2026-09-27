@@ -66,11 +66,19 @@ is still identified in that cellar.
 
 ### Your first session, start to finish
 
-1. Open **Field Kit** and tap **Start a session**.
-2. Give it a name in your own words — "back bedroom, north wall". This is what you will
-   recognise it by next week, so a room beats a timestamp.
-3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
-   attach the session to an investigation later.
+1. Open **Field Kit** and tap **Start a session**. If a session is still open, the app asks first:
+   one that is recording is **saved** — stopped and kept with your other sessions — and one that was
+   set up but never started is replaced, since nothing was recorded in it.
+2. **Where are you?** If the app may use your location, it fills this in for you: the name of a
+   known place within a quarter of a mile, or otherwise the street address the phone reads. Other
+   places close by sit underneath, one tap each. It is only a suggestion — change it to anything
+   you will recognise next week. If location has never been allowed, **Use my location** asks; if
+   it was turned off, type where you are, and **Open Settings** is beside it.
+3. If you are signed in and on an investigation, pick it. Investigations **here** and **today**
+   are listed first and labelled that way, and when exactly one is both, it is already chosen for
+   you. If you are not on one, leave it; you can attach the session to an investigation later.
+   If other people have published sessions recorded near here, the sheet says how many — tap it to
+   play what they found before you start.
 4. Under **What to record**, choose the channels: magnetic field, sound, video and location, each
    with what it costs in battery. Magnetic field, sound and location start on and **video starts
    off**, because video is the one that ends a night early. All four can be changed later while
@@ -84,7 +92,10 @@ is still identified in that cellar.
    buttons appear — none of them exist before Start, because a mark before the clock began
    would belong to no moment.
 8. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
-9. Tap **Stop** when you are done. The session opens for review straight away.
+9. Tap **Stop** when you are done. The session is saved and opens for review straight away, and
+   **Start another session** at the top of the review begins the next one, filled in the same way
+   — same place, same investigation, same channels. Back from the review goes to Field Kit, not to
+   the instruments of a session that is over.
 
 If the night turns out to be nothing before you ever press Start, tap **Discard** next to the
 Start button. The session is removed and the space comes back at once. A session that was
@@ -124,14 +135,36 @@ You choose them on the **New session** sheet before the session opens, and the s
 the running session's screen under *Recording* — switching one off tears it down rather than
 leaving it running quietly, which is the whole reason to switch video off at two in the morning.
 
-Video starts **off**. With it on, the camera stays on: a viewfinder to aim by on the running
-session's screen, and the sentry's eye for movement seen through it. It is not a recording — five
-hours of video is tens of gigabytes and a flat battery long before the night is over.
+Video starts **off**. With it on, the camera **records the whole session** at 720p from the moment
+you press Start until you press Stop, with a viewfinder to aim by on the running session's screen.
+It records picture only: the sound comes from the session's own audio recording, which keeps
+running underneath it, and the two play back together. Video is heavy — about **45 MB a minute**,
+so ten minutes is around 450 MB — and it is the channel that ends a night early, which is why it
+starts off. It records while the session's screen is open; leaving the screen or putting the app
+away closes the video there, and it starts again when you come back.
 
 The **Photo** button takes a photograph of whatever the camera sees, without leaving the app. With
 video on, the photo is taken there and then of what the viewfinder shows; with it off, a viewfinder
 opens so you can frame the shot and closes itself after. Photographs are always available whatever
-the channels say. Clips are not offered from a running session for now.
+the channels say.
+
+**Sound is recorded louder than the phone hears it.** The sound meter reads the microphone as it
+is, so its numbers stay honest; the recording is written with a steady boost, the same for the whole
+night, so a voice across the room can be heard back. It is a fixed boost rather than the phone's
+automatic level, which turns the hiss up in every quiet stretch — and that rising hiss is exactly
+the kind of sound that gets mistaken for a voice.
+
+### Watch for motion
+
+With video on, **Watch for motion** (under the viewfinder) has the camera look for movement in the
+frame **whenever the phone is still** — put down on a table, propped in a doorway — while the video
+keeps recording. Anything moving in view is marked *Motion detected* and **photographed there and
+then**, and the viewfinder lights up with the same sign for a few seconds. While the phone is being
+carried or turned it is not judged at all: a moving phone changes everything it sees, and that is
+the phone, not the room. It is on by default, and the app remembers if you turn it off.
+
+On the review, and in the website's player, the video is outlined and *Motion detected* shows for
+three seconds at each of those moments, and the photograph taken there glows in the strip.
 
 ### If you put the app away
 
@@ -139,7 +172,8 @@ A session **with sound on** carries on when you switch to another app, go to the
 lock the phone: the sound and every reading keep being recorded in your pocket, because recording
 sound is what keeps the app awake. With sound off nothing does — iOS pauses the app a few seconds
 after it leaves the screen, and the readings stop until you come back. The camera never carries on;
-iOS takes it from any app that is not on screen, and it comes back the moment you do. Either way the
+iOS takes it from any app that is not on screen, and it comes back the moment you do. The video
+recorded up to that moment is kept, and a new stretch begins when you are back. Either way the
 stretch you were away is marked on the review, *App put away* to *Back in the app*, with a line
 saying which of those happened, so nobody reading the session later mistakes a dark camera for a
 dead one. The session player on the website shades the same stretch.
@@ -207,6 +241,7 @@ for the magnetic field, sound, **the device itself being moved** (somebody knock
 and **movement seen through the camera**. Those last two answer different questions and the app
 spells out which is which. Camera motion is deliberately crude — it cannot tell a person from a
 curtain — so its sensitivity is adjustable and every trigger records how much of the view changed.
+Like Watch for motion, it only judges the camera while the phone is still.
 
 Arming is refused until the base levels the triggers measure against have been set, and the
 screen stays awake while watching so it can be read across a room.
@@ -232,6 +267,15 @@ A finished session plays back on the phone: one playhead moving the magnetic tra
 compass and whatever was being recorded at that second, with every mark listed to jump to. Marks
 land you a few seconds *before* the event so you hear what led up to it.
 
+The video plays **with the session's sound** beside it. Playback uses the phone's speaker at full
+volume, and it plays with the ring/silent switch on.
+
+Photographs taken during the session sit in a **strip of thumbnails** under the player. As playback
+passes the moment each was taken, its border glows and it grows a little for three seconds. **Tap a
+thumbnail** to pause and see the photograph at full size; tap it again and it goes back into the
+strip and playback carries on where it was. Photos taken indoors, with no position, are in the
+strip too — the map only shows the ones that had one.
+
 ![Reviewing a session — the trace, the map and what was marked](/help/media/the-mobile-apps/iphone-review.png)
 
 On an iPad the same screens use the extra width, putting the instruments beside the log while
@@ -246,9 +290,9 @@ visible at the same moment rather than one scroll apart.
 
 ### Battery, storage and a long night
 
-A session logging magnetic field and position costs very little. Audio adds a steady trickle;
-video is the one that will end a night early, which is why it is off unless you ask for it and
-why it records clips rather than running continuously.
+A session logging magnetic field and position costs very little. Audio adds a steady trickle —
+about a megabyte a minute. Video is the one that will end a night early: about 45 MB a minute of
+storage and a steady drain on the battery, which is why it is off unless you ask for it.
 
 The readings themselves are tiny — a five-hour session is a few megabytes of numbers. It is the
 recordings that fill a phone, and those are the only thing clearing a session removes.
@@ -268,6 +312,13 @@ carries on without it; readings simply have no position rather than a guessed on
 
 **A recording came back empty.** The app says so rather than listing it — usually another app had
 the microphone. Start it again.
+
+**Something you switched on says it isn't allowed.** iOS asks once for the camera, the microphone,
+your location and speech recognition, and never asks again after a no. When you turn on something
+that needs one of them, the app says which one is off and offers **Open Settings**, which goes
+straight to IsHaunted's page there. Turn it on and come back. The microphone in particular is
+checked before recording starts: without it a recording would be silent, so the app refuses and
+says why instead.
 
 **The app closed mid-session.** The session survives. It is listed as *interrupted*, with
 everything recorded up to that moment intact. Its end time is left unknown, because it is.
@@ -337,16 +388,17 @@ cites it. A session sent whole keeps its name.
 Your phone is never limited. It records for as long as the night needs, at whatever the camera
 gives, and it keeps every second of that afterwards. What is measured out is the **upload**.
 
-One upload carries **5 minutes of video** and **500 MB in total**. Readings, marks, photographs and
+One upload carries **10 minutes of video** and **600 MB in total**. Readings, marks, photographs and
 sound are not rationed by time — a whole night of instruments and audio goes in one send. Only
 video is, because a minute of video outweighs an hour of everything else.
 
 Above the Send button the screen says what this window weighs and how much video is in it. If it
 is over, there are two ways through, and the screen offers whichever one fits the problem:
 
-- **Too long?** Drag the handles in to make a clip of it, send that, then move the window along and
-  send the next. You can send as many times as it takes, and nothing already sent is changed by
-  sending more.
+- **Too long?** Tap **Send without the video** to send everything else — the readings, marks, sound
+  and photographs — in one go, with the video staying on the phone. Or drag the handles in to make a
+  clip of it, send that, then move the window along and send the next. You can send as many times
+  as it takes, and nothing already sent is changed by sending more.
 - **Too heavy?** Under **Send the video smaller** you can send the footage at 1080p or 720p, and at
   24 frames a second, with the size each choice would produce shown beside it. This changes only
   the copy that is sent; the recording on your phone stays exactly as it was filmed.
@@ -387,9 +439,23 @@ There are three ways in, and they all lead to the same place:
 ![An imported session on the review screen: the trace, the map, the marks, and where it came from](/help/media/the-mobile-apps/iphone-review-imported.png)
 
 A session that is **already on this phone** is not imported twice; the app says which one it is.
-Imported sessions show in the list with *shared with you*, *from the server* or *opened from a file*
-under the name, and the review screen's facts carry a **Source** line to match — so a night somebody
+Imported sessions show in the list with *shared with you*, *from the server*, *opened from a file*
+or *public archive* under the name, and the review screen's facts carry a **Source** line to match — so a night somebody
 handed you is never quietly attributed to you.
+
+### Finding sessions other people published
+
+**Find public sessions** on the Field Kit screen lists sessions other people have published to the
+public archive — **near you**, or at a place you **search for** by name or town ("waverly",
+"louisville"). Each row says where, when, who recorded it and what it holds. **Download** brings it
+to your phone, where it plays like any other session and is marked *public archive*. The New
+session sheet also says when public sessions were recorded near where you are standing.
+
+What you download is the archive's **public copy**. Its readings, marks, rooms and notes are the
+recorder's own, but every position is the place's **public point** — the same approximate one its
+page on the website shows — so the map shows the place rather than the path they walked. Photos and
+recordings come with it only once they have been approved for the archive. Location is needed only
+for *near you*; searching by name works with it off.
 
 ## Sharing what you found — the field archive
 

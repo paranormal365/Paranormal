@@ -445,6 +445,13 @@ first: where it was, who recorded it, how long it ran, and how much it holds. **
 **Play back** opens the session's own playback page, where the trace, the map and the recordings
 run together on one clock.
 
+The playback page works the same way as the phone's review screen. Under the controls, the
+**video** at the playhead plays with the session's **sound** beside it. The **photographs** taken
+during the night sit in a strip of thumbnails whose borders glow for three seconds as playback
+passes the moment each was taken; click one to pause and see it full size, and click again to carry
+on. Where the camera saw movement while the phone was still, the video is outlined and **Motion
+detected** shows for three seconds.
+
 A citation is a reference, never a copy. The session stays where it was uploaded and keeps its own
 per-file checksums, so what the client reads and what the instruments recorded cannot drift apart.
 Removing a citation removes the reference only — nothing is deleted.

@@ -18,6 +18,14 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-27
+
+- Published field sessions can be looked up near a point or by a place's name or town, and each can
+  be downloaded as a public copy of its session file: the readings and marks as recorded, every
+  position moved to the place's public point, and photos and recordings only once approved.
+- Your investigations list includes where each investigation is, so the app can offer the one you
+  are standing at.
+
 ## 2026-09-25
 
 - The service is ready to run the store: card payments and refunds go through Stripe, and sales tax
