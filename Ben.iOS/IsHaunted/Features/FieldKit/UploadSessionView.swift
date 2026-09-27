@@ -214,13 +214,8 @@ struct UploadSessionView: View {
                 .onChange(of: trim?.inPoint) { _, moment in if let moment { replay.pause(); replay.seek(to: moment) } }
                 .onChange(of: trim?.outPoint) { _, moment in if let moment { replay.pause(); replay.seek(to: moment) } }
 
-                if let source, let trimBinding = Binding($trim) {
-                    TrimPreview(replay: replay, source: source, range: trimBinding) { path in
-                        store.files.fileURL(for: sessionId, relativePath: path)
-                    }
-                    .disabled(busy)
-                }
-
+                // What the window now holds, and the way back, sit right under the handles: below
+                // the preview they were a screen further down, where a List had not even drawn them.
                 if !plan.isWholeSession {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("\(plan.readingCount) reading\(plan.readingCount == 1 ? "" : "s")"
@@ -245,6 +240,13 @@ struct UploadSessionView: View {
                         .font(.caption)
                         .disabled(busy)
                         .accessibilityIdentifier("trim-reset")
+                }
+
+                if let source, let trimBinding = Binding($trim) {
+                    TrimPreview(replay: replay, source: source, range: trimBinding) { path in
+                        store.files.fileURL(for: sessionId, relativePath: path)
+                    }
+                    .disabled(busy)
                 }
             } header: {
                 Text("What to send")

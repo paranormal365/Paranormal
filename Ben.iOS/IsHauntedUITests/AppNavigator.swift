@@ -20,7 +20,9 @@ enum AppNavigator {
     /// starting over would take.
     static func startNewSession(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
         app.buttons["start-field-session"].tap()
-        let saveAndStart = app.buttons["save-and-start-new"]
+        // firstMatch: a confirmation dialog draws its buttons twice in the element tree (its
+        // popover and its sheet form), and a bare query then refuses to tap an ambiguous match.
+        let saveAndStart = app.buttons["save-and-start-new"].firstMatch
         if saveAndStart.waitForExistence(timeout: 3) {
             saveAndStart.tap()
         }
