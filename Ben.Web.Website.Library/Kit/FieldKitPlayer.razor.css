@@ -1,0 +1,141 @@
+/*
+    The Field Kit player's stage, photo strip and motion sign (2026-09-27) — the web twin of the
+    phone's review screen. Colours come from Bootstrap's own variables so light and dark both work.
+*/
+
+.fk-stage {
+    position: relative;
+    margin-top: .75rem;
+    min-height: 120px;
+    border-radius: .5rem;
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    overflow: hidden;
+    transition: box-shadow .25s ease, border-color .25s ease;
+}
+
+.fk-stage-video {
+    display: block;
+    width: 100%;
+    max-height: 420px;
+    background: #000;
+}
+
+.fk-stage-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    min-height: 120px;
+}
+
+/* Motion the camera saw with the phone still: the video is outlined, as on the phone. */
+.fk-stage--motion {
+    border-color: var(--bs-warning);
+    box-shadow: 0 0 0 3px var(--bs-warning), 0 0 18px rgba(var(--bs-warning-rgb), .75);
+}
+
+.fk-motion-sign {
+    position: absolute;
+    top: .6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: .2rem .7rem;
+    border-radius: 999px;
+    background: var(--bs-warning);
+    color: #000;
+    font-size: .8rem;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(var(--bs-warning-rgb), .8);
+    animation: fk-pop .25s ease-out;
+}
+
+.fk-photo-strip {
+    display: flex;
+    gap: .6rem;
+    overflow-x: auto;
+    padding: .6rem .25rem .25rem;
+    margin-top: .5rem;
+}
+
+.fk-thumb {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .15rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+    transition: transform .3s ease;
+}
+
+.fk-thumb img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: .5rem;
+    border: 1px solid var(--bs-border-color);
+    transition: box-shadow .3s ease, border-color .3s ease;
+}
+
+.fk-thumb-time {
+    font-size: .7rem;
+    font-family: var(--bs-font-monospace);
+}
+
+/* As playback passes the moment it was taken: the border glows and it grows a little. */
+.fk-thumb--glow {
+    transform: scale(1.15);
+    color: var(--bs-info);
+}
+
+.fk-thumb--glow img {
+    border-color: var(--bs-info);
+    box-shadow: 0 0 0 3px var(--bs-info), 0 0 14px rgba(var(--bs-info-rgb), .9);
+}
+
+.fk-thumb:focus-visible img {
+    outline: 2px solid var(--bs-focus-ring-color, var(--bs-info));
+    outline-offset: 2px;
+}
+
+.fk-photo-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, .92);
+    cursor: zoom-out;
+    animation: fk-fade .2s ease-out;
+}
+
+.fk-photo-overlay img {
+    max-width: 100%;
+    max-height: calc(100vh - 6rem);
+    object-fit: contain;
+    border-radius: .5rem;
+    animation: fk-grow .3s ease-out;
+}
+
+.fk-photo-caption {
+    color: #fff;
+    font-size: .85rem;
+}
+
+@keyframes fk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fk-grow { from { transform: scale(.3); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+@keyframes fk-pop  { from { transform: translateX(-50%) scale(.6); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .fk-thumb, .fk-thumb img, .fk-stage { transition: none; }
+    .fk-photo-overlay, .fk-photo-overlay img, .fk-motion-sign { animation: none; }
+}
