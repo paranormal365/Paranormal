@@ -149,6 +149,45 @@ struct SessionReplayTests {
         #expect(replay.frame.activeMedia != nil)
     }
 
+    @Test func aVideoInsideTheSessionsSoundIsNotHiddenByIt() async throws {
+        // Ben, 2026-09-27: "Even when recording video, it doesn't play back." The sound recording
+        // starts at Start, so it began before any video and the old first-match rule picked it
+        // for every moment the video covered.
+        let sound = MediaSegment(kind: .audio, relativePath: "media/audio-001.m4a",
+                                 startedAt: start, duration: 600)
+        let video = MediaSegment(kind: .video, relativePath: "media/video-001.mov",
+                                 startedAt: start.addingTimeInterval(60), duration: 120)
+        let replay = try await loaded([reading(0, emf: 48)], media: [sound, video],
+                                      endedAt: start.addingTimeInterval(600))
+
+        replay.seek(to: start.addingTimeInterval(90))
+        #expect(replay.frame.activeVideo?.segment.relativePath == "media/video-001.mov")
+        #expect(replay.frame.activeVideo?.offset == 30)
+        // And the sound keeps playing underneath it.
+        #expect(replay.frame.activeAudio?.segment.relativePath == "media/audio-001.m4a")
+        #expect(replay.frame.activeAudio?.offset == 90)
+        #expect(replay.frame.activeMedia?.segment.kind == .video)
+
+        replay.seek(to: start.addingTimeInterval(200))
+        #expect(replay.frame.activeVideo == nil)
+        #expect(replay.frame.activeMedia?.segment.kind == .audio)
+    }
+
+    @Test func aFrameChangesWhenOnlyTheVideoUnderItChanges() async throws {
+        // The screen follows the media on frame CHANGES, so a video starting under an unchanged
+        // sound recording must count as one — or the player is never told to load it.
+        let sound = MediaSegment(kind: .audio, relativePath: "media/audio-001.m4a",
+                                 startedAt: start, duration: 600)
+        let video = MediaSegment(kind: .video, relativePath: "media/video-001.mov",
+                                 startedAt: start.addingTimeInterval(60), duration: 120)
+        let replay = try await loaded([reading(0, emf: 48)], media: [sound, video],
+                                      endedAt: start.addingTimeInterval(600))
+        replay.seek(to: start.addingTimeInterval(59))
+        let before = replay.frame
+        replay.seek(to: start.addingTimeInterval(61))
+        #expect(before != replay.frame)
+    }
+
     // MARK: - Markers
 
     @Test func jumpingToAMarkerStartsJustBeforeItSoTheRunUpCanBeHeard() async throws {

@@ -10,6 +10,8 @@ import BenKit
 /// runs from the in point and stops at the out point, with the recording following — so what is
 /// heard IS what will be sent, and nothing else.
 struct TrimPreview: View {
+    @Environment(AppDependencies.self) private var dependencies
+
     let replay: SessionReplay
     let source: ReplaySource
     @Binding var range: SessionTrimRange
@@ -69,7 +71,7 @@ struct TrimPreview: View {
                 .disabled(!replay.isLoaded)
                 .accessibilityIdentifier("trim-preview-play")
 
-                if replay.frame.activeMedia == nil, replay.isPlaying {
+                if replay.frame.activeAudio == nil, replay.frame.activeVideo == nil, replay.isPlaying {
                     Text("no recording here").font(.caption2).foregroundStyle(Theme.fog)
                 }
             }
@@ -97,8 +99,11 @@ struct TrimPreview: View {
 
     /// Keeps the recording on the playhead. The same rule as the review screen: the playhead is
     /// the clock, small drift is left alone, a real jump re-seeks.
+    ///
+    /// This is a preview of what will be HEARD, so the sound is followed first. A whole-session
+    /// video carries no sound of its own; the session's recording runs underneath it.
     private func followMedia(_ frame: ReplayFrame) {
-        guard let active = frame.activeMedia else {
+        guard let active = frame.activeAudio ?? frame.activeVideo else {
             if loadedMediaId != nil {
                 player.pause()
                 player.replaceCurrentItem(with: nil)
@@ -115,7 +120,10 @@ struct TrimPreview: View {
             player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
         }
         if replay.isPlaying {
-            if player.rate == 0 { player.play() }
+            if player.rate == 0 {
+                ReviewAudio.prepareForPlayback(sessionIsOpen: dependencies.fieldKit.active != nil)
+                player.play()
+            }
         } else if player.rate != 0 {
             player.pause()
         }

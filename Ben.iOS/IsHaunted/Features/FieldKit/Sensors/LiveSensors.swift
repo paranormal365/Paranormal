@@ -229,7 +229,31 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
         let target = file
         lock.unlock()
         guard let target else { return }
-        try? target.write(from: buffer)
+        try? target.write(from: Self.boosted(buffer))
+    }
+
+    /// A copy of the tap's buffer with `RecordingGain` applied, for the FILE only.
+    ///
+    /// Ben, 2026-09-27: recordings were "super quiet like the mic is turned way down". The
+    /// `.measurement` mode that keeps the meter honest also switches off the phone's own gain, so
+    /// the file is boosted here instead. A copy, never the tap's own buffer: the meter has already
+    /// read its levels from that one, and they stay the raw room.
+    private static func boosted(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        guard let source = buffer.floatChannelData,
+              let copy = AVAudioPCMBuffer(pcmFormat: buffer.format,
+                                          frameCapacity: buffer.frameLength),
+              let destination = copy.floatChannelData
+        else { return buffer }
+        copy.frameLength = buffer.frameLength
+        let frames = Int(buffer.frameLength)
+        // Interleaved float audio is one run of samples; deinterleaved is one run per channel.
+        let runs = buffer.format.isInterleaved ? 1 : Int(buffer.format.channelCount)
+        let perRun = buffer.format.isInterleaved ? frames * Int(buffer.format.channelCount) : frames
+        for run in 0..<runs {
+            destination[run].update(from: source[run], count: perRun)
+            RecordingGain.apply(to: destination[run], count: perRun)
+        }
+        return copy
     }
 
     /// Watches for the microphone being taken and handed back.
