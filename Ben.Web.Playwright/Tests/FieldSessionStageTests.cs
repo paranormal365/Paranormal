@@ -96,9 +96,10 @@ public class FieldSessionStageTests : BenTestBase
         var (chrome, page) = await OpenInChromeAsync(sessionId);
         try
         {
-            // 0:03 — before the video began. Its note says 0:12 (when it FINISHED); read as a start,
-            // the video would sit at 0:12–0:20, and this moment would show nothing but sound.
-            await ScrubToAsync(page, 3);
+            // 0:02.5 — before the video began (and outside the one second a clip is shown early,
+            // which covers the recorder starting a moment after the clock). Its note says 0:12,
+            // when it FINISHED; read as a start, the video would sit at 0:12–0:20.
+            await ScrubToAsync(page, 2.5);
             Assert.That(await VideoShownAsync(page), Is.False, "no video before 0:04");
             await Expect(page.Locator("[data-testid='media-stage']")).ToContainTextAsync("audio-001.m4a");
             // Drawn from the site's own sprite — an icon class from a font the site never loads drew nothing.
