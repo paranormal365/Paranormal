@@ -222,7 +222,8 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
                             <button class="btn btn-primary" @onclick="TogglePlay">
-                                <i class="bi @(_playing ? "bi-pause-fill" : "bi-play-fill")"></i>
+                                @* The site draws icons from its own sprite; the Bootstrap icon classes this used were never loaded, so the button showed no icon. *@
+                                <BenIcon Name="@(_playing ? "pause" : "play")" Class="me-1" />
                                 @(_playing ? "Pause" : "Play")
                             </button>
 
@@ -271,12 +272,12 @@
                                     <div class="fk-stage-empty">
                                         @if (ActiveAudio is { } sound)
                                         {
-                                            <i class="bi bi-soundwave fs-2 text-info"></i>
+                                            <BenIcon Name="volume-2" Class="fk-stage-icon text-info" />
                                             <span class="small text-muted font-monospace">@sound.RelativePath.Replace("media/", "")</span>
                                         }
                                         else
                                         {
-                                            <i class="bi bi-moon-stars fs-4 text-muted"></i>
+                                            <BenIcon Name="moon" Class="fk-stage-icon text-muted" />
                                             <span class="small text-muted" data-testid="stage-nothing">
                                                 @(_session.Files.Any(f => IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) || Photos.Count > 0
                                                     ? "No recording at this moment."
@@ -288,7 +289,7 @@
                                 @if (MotionShowing)
                                 {
                                     <div class="fk-motion-sign" data-testid="motion-detected">
-                                        <i class="bi bi-person-walking me-1"></i>Motion detected
+                                        <BenIcon Name="eye" Class="me-1" />Motion detected
                                     </div>
                                 }
                             </div>

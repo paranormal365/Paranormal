@@ -21,6 +21,12 @@
     background: #000;
 }
 
+.fk-stage-empty ::deep .fk-stage-icon,
+.fk-stage-empty .fk-stage-icon {
+    width: 2rem;
+    height: 2rem;
+}
+
 .fk-stage-empty {
     display: flex;
     flex-direction: column;
