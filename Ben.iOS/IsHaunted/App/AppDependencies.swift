@@ -29,6 +29,8 @@ final class AppDependencies {
     /// Getting an account and looking after it (Slice 8).
     let accountActions: AccountActions
     let archiveActions: ArchiveActions
+    /// Published sessions near a point or by a place's name, and their public copies.
+    let publicArchive: PublicArchiveClient
 
     /// The guest's own copy of what they offered at somebody's public event (2026-08-31).
     let evidenceActions: EvidenceActions
@@ -68,6 +70,7 @@ final class AppDependencies {
         self.imageLoader = AuthenticatedImageLoader(api: api)
         self.accountActions = AccountActions(api: api)
         self.archiveActions = ArchiveActions(api: api)
+        self.publicArchive = PublicArchiveClient(api: api)
         self.evidenceActions = EvidenceActions(api: api)
         self.surfaces = SurfacesStore(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)

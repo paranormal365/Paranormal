@@ -278,6 +278,8 @@ struct RootShell: View {
             InvestigationDetailView(investigationId: id)
         case .fieldSession(let id):
             LiveSessionView(sessionId: id)
+        case .publicFieldSessions:
+            PublicSessionsView()
         case .fieldSessionReview(let id):
             SessionReviewView(sessionId: id)
         default:

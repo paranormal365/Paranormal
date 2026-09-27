@@ -85,6 +85,18 @@ struct FieldKitHomeView: View {
                     Text("A session somebody sent you — by AirDrop, in a message, from Files — opens here and plays exactly as it did for them.")
                 }
 
+                // Ben, 2026-09-27: public .ben files "from nearby", and by "looking up locations".
+                Section {
+                    Button {
+                        router.push(.publicFieldSessions)
+                    } label: {
+                        Label("Find public sessions", systemImage: "square.stack.3d.down.right")
+                    }
+                    .accessibilityIdentifier("find-public-sessions")
+                } footer: {
+                    Text("Sessions other people published at public places — near you, or by searching a place or a town.")
+                }
+
             }
 
             let finished = store.sessions.filter { !$0.isOpen }
@@ -161,7 +173,10 @@ struct FieldKitHomeView: View {
         }
         .navigationTitle("Field Kit")
         .sheet(isPresented: $starting, onDismiss: { startingLike = nil }) {
-            StartSessionSheet(like: startingLike) { label, investigation, channels in
+            StartSessionSheet(like: startingLike, onBrowsePublic: {
+                starting = false
+                router.push(.publicFieldSessions)
+            }) { label, investigation, channels in
                 await start(label: label, investigation: investigation, channels: channels)
             }
             .environment(dependencies)
@@ -369,7 +384,9 @@ private struct SessionRow: View {
         }
         // A session that arrived as a .ben says so, and says which kind: another person's night
         // handed over, or this person's own pulled back from the server.
-        if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+        if summary.isPublicArchiveCopy {
+            parts.append("public archive")
+        } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
             parts.append("shared with you")
         } else if summary.isImported {
             // Your own night, back on this phone — from the server, or from a file you had kept.
@@ -387,10 +404,14 @@ private struct SessionRow: View {
     }
 }
 
-/// Where a session gets its name and, optionally, its investigation.
+/// Where a session gets its name, its investigation and what it records.
 ///
-/// The label is asked for first because it is the thing that makes a session findable a week
-/// later — "back bedroom, north wall" beats a timestamp every time.
+/// Ben, 2026-09-27: "it asks where you are when you start the session. If you use the map, you
+/// should be able to determine where they are and if they did not allow you to read their position,
+/// then you should ask where they are. Also, if there is an investigation at the location they
+/// should be able to just pick it from the dropdown list." So the phone answers "where" when it may
+/// — a known place close by, else Apple's address — and the box stays editable; the investigation
+/// happening here tonight is chosen for them; and sessions others published nearby are offered.
 private struct StartSessionSheet: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
@@ -398,40 +419,60 @@ private struct StartSessionSheet: View {
     /// The session this one follows, when started from a review or after saving another — its
     /// place, investigation and channels are where somebody is most likely to carry on.
     var like: FieldSessionSummary? = nil
+    /// "See them" on the nearby public sessions: closes this sheet and opens that screen.
+    var onBrowsePublic: () -> Void = {}
     var onStart: (String?, MyInvestigation?, CaptureChannels) async -> Void
 
     @State private var label = ""
-    /// What this session will record. Chosen HERE, not hunted for on the live screen: video was
-    /// off by default and its button only appears once the channel is on, so the camera was
-    /// effectively invisible to anyone who did not already know where to look.
+    /// Whether the label is still the phone's suggestion — replaced when a better one arrives, never
+    /// once somebody has typed their own.
+    @State private var labelIsSuggested = false
     @State private var channels: CaptureChannels = .default
     @State private var investigations: [MyInvestigation] = []
-    /// Selected by id, not by value — MyInvestigation is a server-shaped record and
-    /// making it Hashable to please a Picker would be the tail wagging the dog.
+    /// Selected by id, not by value — MyInvestigation is a server-shaped record and making it
+    /// Hashable to please a Picker would be the tail wagging the dog.
     @State private var chosenId: UUID?
     @State private var busy = false
+    @State private var locator = FieldLocator()
+    @State private var nearbyPlaces: [ArchivePlaceCandidate] = []
+    @State private var nearbyPublic: [PublicArchiveSession] = []
+    @State private var refusedPermission: AppPermission?
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Where are you? (back bedroom, north wall)", text: $label)
-                        .accessibilityIdentifier("session-label")
-                } footer: {
-                    Text("Your own words. This is what you'll recognise the session by later.")
-                }
+                whereSection
 
                 if !investigations.isEmpty {
                     Section {
                         Picker("Investigation", selection: $chosenId) {
                             Text("Not linked").tag(UUID?.none)
-                            ForEach(investigations) { investigation in
-                                Text(investigation.title)
+                            ForEach(orderedInvestigations) { investigation in
+                                Text(investigationLabel(investigation))
                                     .tag(UUID?.some(investigation.investigationId))
                             }
                         }
+                        .accessibilityIdentifier("start-investigation")
                     } footer: {
-                        Text("Optional — you can link this session to an investigation later, when you review it.")
+                        Text(chosenIsHere
+                             ? "Chosen because it's here, today. You can change it."
+                             : "Optional — you can link this session to an investigation later, when you review it.")
+                    }
+                }
+
+                if !nearbyPublic.isEmpty {
+                    Section {
+                        Button {
+                            onBrowsePublic()
+                        } label: {
+                            Label(nearbyPublic.count == 1
+                                  ? "1 public session was recorded near here"
+                                  : "\(nearbyPublic.count) public sessions were recorded near here",
+                                  systemImage: "square.stack.3d.down.right")
+                        }
+                        .accessibilityIdentifier("start-nearby-public")
+                    } footer: {
+                        Text("Play what others recorded here before you start. They download to this phone.")
                     }
                 }
 
@@ -440,6 +481,11 @@ private struct StartSessionSheet: View {
                         Toggle(isOn: Binding(
                             get: { channels.contains(channel) },
                             set: { isOn in
+                                // Refused before, so iOS will not ask again: say so and offer Settings.
+                                if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
+                                    refusedPermission = needed
+                                    return
+                                }
                                 if isOn { channels.insert(channel) } else { channels.remove(channel) }
                             })
                         ) {
@@ -483,20 +529,143 @@ private struct StartSessionSheet: View {
                     Button("Cancel") { dismiss() }.disabled(busy)
                 }
             }
+            .permissionRefusedAlert($refusedPermission)
             .task {
                 if let like {
                     label = like.locationLabel ?? ""
                     channels = like.channels
                     chosenId = like.investigationId
                 }
-                await loadInvestigations()
+                // Refused channels are not offered as if they will work: they start off.
+                for channel in CaptureChannels.orderedForDisplay {
+                    if let needed = AppPermission.needed(for: channel), needed.isRefused {
+                        channels.remove(channel)
+                    }
+                }
+                async let roster: Void = loadInvestigations()
+                async let place: Void = findWhere()
+                _ = await (roster, place)
             }
         }
         .interactiveDismissDisabled(busy)
     }
 
+    // MARK: - Where
+
+    @ViewBuilder
+    private var whereSection: some View {
+        Section {
+            TextField("Where are you? (Old Mill, back bedroom)", text: $label)
+                .onChange(of: label) { _, _ in labelIsSuggested = false }
+                .accessibilityIdentifier("session-label")
+
+            switch locator.access {
+            case .allowed:
+                if locator.isLocating {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Finding where you are…").font(.caption).foregroundStyle(Theme.fog)
+                    }
+                } else if nearbyPlaces.count > 1 {
+                    // Other known places close by, one tap each — the phone's first guess is not
+                    // always the building somebody is standing in.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack {
+                            ForEach(nearbyPlaces.prefix(5)) { place in
+                                Button(place.name ?? "Unnamed place") { useName(place.name) }
+                                    .buttonStyle(.bordered)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+            case .notAsked:
+                Button {
+                    Task {
+                        await locator.requestAccess()
+                        await findWhere()
+                    }
+                } label: {
+                    Label("Use my location", systemImage: "location")
+                }
+                .accessibilityIdentifier("start-use-location")
+            case .refused:
+                HStack {
+                    Text("Location is off for IsHaunted, so type where you are.")
+                        .font(.caption).foregroundStyle(Theme.fog)
+                    Spacer()
+                    OpenSettingsButton()
+                }
+            }
+        } footer: {
+            Text(whereFooter)
+        }
+    }
+
+    private var whereFooter: String {
+        if locator.access == .allowed, locator.point != nil, labelIsSuggested {
+            return "Filled in from where your phone is. Change it to anything you'll recognise later."
+        }
+        return "Your own words. This is what you'll recognise the session by later."
+    }
+
+    private func useName(_ name: String?) {
+        guard let name, !name.isEmpty else { return }
+        label = name
+        // Set after the text change, which clears the flag for anything typed.
+        Task { @MainActor in labelIsSuggested = true }
+    }
+
+    /// Where the phone is, and what that suggests: a name, nearby investigations, public sessions.
+    private func findWhere() async {
+        guard locator.access == .allowed, let point = await locator.locate() else { return }
+
+        async let places = dependencies.archiveActions.candidates(latitude: point.latitude,
+                                                                   longitude: point.longitude)
+        async let published = dependencies.publicArchive.nearby(latitude: point.latitude,
+                                                                longitude: point.longitude)
+        nearbyPlaces = (await places).sorted { $0.miles < $1.miles }
+        if case .ok(let rows) = await published { nearbyPublic = rows }
+
+        if label.trimmingCharacters(in: .whitespaces).isEmpty || labelIsSuggested {
+            useName(StartSuggestions.placeName(candidates: nearbyPlaces, address: locator.address))
+        }
+        preselectIfHere()
+    }
+
+    // MARK: - Investigations
+
+    private var orderedInvestigations: [MyInvestigation] {
+        StartSuggestions.order(investigations, latitude: locator.point?.latitude,
+                               longitude: locator.point?.longitude)
+    }
+
     private var chosenInvestigation: MyInvestigation? {
         investigations.first { $0.investigationId == chosenId }
+    }
+
+    private var chosenIsHere: Bool {
+        guard let chosen = chosenInvestigation else { return false }
+        return chosen.isHappeningToday()
+            && StartSuggestions.isHere(chosen, latitude: locator.point?.latitude,
+                                       longitude: locator.point?.longitude)
+    }
+
+    private func investigationLabel(_ item: MyInvestigation) -> String {
+        var suffix: [String] = []
+        if StartSuggestions.isHere(item, latitude: locator.point?.latitude, longitude: locator.point?.longitude) {
+            suffix.append("here")
+        }
+        if item.isHappeningToday() { suffix.append("today") }
+        return suffix.isEmpty ? item.title : "\(item.title) · \(suffix.joined(separator: ", "))"
+    }
+
+    private func preselectIfHere() {
+        guard chosenId == nil,
+              let here = StartSuggestions.preselect(investigations, latitude: locator.point?.latitude,
+                                                    longitude: locator.point?.longitude)
+        else { return }
+        chosenId = here.investigationId
     }
 
     /// Best-effort: no account, no signal, no investigations — none of which should stop
@@ -506,5 +675,6 @@ private struct StartSessionSheet: View {
         let store = InvestigationsStore(api: dependencies.api)
         await store.load()
         investigations = store.upcoming
+        preselectIfHere()
     }
 }

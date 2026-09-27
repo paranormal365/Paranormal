@@ -65,6 +65,10 @@ public struct SessionSeal: Codable, Sendable, Equatable {
 
     /// SHA-256 over the canonical rendering of `entries` — the one value a signature would cover.
     public var digest: String
+    /// True on the public copy the server hands out of a published session (2026-09-27): its
+    /// positions were moved to the place's public point, its device id removed, and it was sealed
+    /// again by the server rather than by the phone that recorded it. Nil on everything a phone seals.
+    public var publicArchiveCopy: Bool?
 
     public struct Entry: Codable, Sendable, Equatable {
         public var path: String
@@ -121,5 +125,6 @@ public struct SessionSeal: Codable, Sendable, Equatable {
         case deviceId = "device_id"
         case sessionId = "session_id"
         case sealedAt = "sealed_at"
+        case publicArchiveCopy = "public_archive_copy"
     }
 }

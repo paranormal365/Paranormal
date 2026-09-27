@@ -119,6 +119,8 @@ enum AppRoute: Hashable {
     case fieldKit
     case fieldSession(UUID)
     case fieldSessionReview(UUID)
+    /// Sessions other people published, near here or by a place's name (2026-09-27).
+    case publicFieldSessions
     /// Public events as a pushed screen, for the shell that has no Events tab.
     case eventsList
     case eventDetail(UUID)

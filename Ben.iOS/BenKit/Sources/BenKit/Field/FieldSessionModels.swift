@@ -130,6 +130,10 @@ public final class FieldSession {
     /// The account the seal named as having recorded it, when the bundle said.
     public var recordedByAccountId: UUID?
 
+    /// Downloaded from the public archive: somebody else's published night, with its positions at
+    /// the place's public point rather than where they walked. Optional, like every later attribute.
+    public var isPublicArchiveCopy: Bool?
+
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]
     @Relationship(deleteRule: .cascade, inverse: \FieldCapture.session)

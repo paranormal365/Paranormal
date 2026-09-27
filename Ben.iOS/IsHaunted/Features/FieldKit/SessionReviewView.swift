@@ -109,10 +109,13 @@ struct SessionReviewView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button {
-                        uploading = true
-                    } label: {
-                        Label("Send to the server", systemImage: "icloud.and.arrow.up")
+                    // Somebody else's published night is theirs to send, not this reader's.
+                    if summary?.isPublicArchiveCopy != true {
+                        Button {
+                            uploading = true
+                        } label: {
+                            Label("Send to the server", systemImage: "icloud.and.arrow.up")
+                        }
                     }
                     Button {
                         exporting = true
@@ -553,7 +556,11 @@ struct SessionReviewView: View {
                 // A session that arrived as a .ben plays exactly as one recorded here, and says
                 // so here — the seal's whole point is that a night is not quietly re-attributed
                 // to whoever happens to be holding the phone.
-                if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+                if summary.isPublicArchiveCopy {
+                    // Said, because its map is not a walked path: every position is the place's
+                    // public point, deliberately.
+                    LabeledContent("Source", value: "The public archive — positions are the place's public point")
+                } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
                     LabeledContent("Source", value: "Shared with you — recorded on another device")
                 } else if summary.isImported {
                     LabeledContent("Source", value: summary.serverSessionId != nil

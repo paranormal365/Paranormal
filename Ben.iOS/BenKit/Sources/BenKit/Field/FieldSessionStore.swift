@@ -385,6 +385,7 @@ public final class FieldSessionStore {
             row.importedAt = now()
             row.sourceDeviceId = opened.seal?.deviceId
             row.recordedByAccountId = opened.seal?.recordedByAccountId ?? facts.recordedByAccountId
+            row.isPublicArchiveCopy = opened.seal?.publicArchiveCopy == true ? true : nil
             if let serverSessionId {
                 row.serverSessionId = serverSessionId
                 row.uploadedAt = now()
