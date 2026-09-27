@@ -141,6 +141,63 @@ struct FieldSessionStoreTests {
         #expect(store.activeSessionId == nil)
     }
 
+    // MARK: Starting another (Ben, 2026-09-27)
+
+    @Test func aRecordingSessionIsSavedWhenANewOneIsAskedFor() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let id = try store.startSession(locationLabel: "Cellar")
+        await store.activate(id, channels: [.magnetic])
+        try await store.beginRecording(id)
+        await store.active?.mark(kind: .manual, note: "cold spot")
+
+        let outcome = try await store.closeOpenSession()
+
+        #expect(outcome == .saved(id))
+        let saved = try #require(store.summary(for: id))
+        #expect(saved.outcome == .ended)
+        #expect(saved.markerCount == 1)
+        #expect(store.activeSessionId == nil)
+        #expect(store.active == nil)
+    }
+
+    @Test func aSessionNeverStartedMakesWayWithoutLeavingAnEmptyRow() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let id = try store.startSession(locationLabel: "Attic")
+        await store.activate(id, channels: [.magnetic])
+
+        #expect(try await store.closeOpenSession() == .discarded(id))
+        #expect(store.summary(for: id) == nil)
+        #expect(!FileManager.default.fileExists(atPath: store.files.directory(for: id).path))
+    }
+
+    @Test func nothingOpenIsNothingToClose() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try await store.closeOpenSession() == .none)
+    }
+
+    @Test func switchingToAnotherSessionKeepsWhatTheFirstOneMarked() async throws {
+        // activate() used to END the running session without saving it: its marks never reached
+        // the database and the next launch called it interrupted.
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let first = try store.startSession(locationLabel: "Cellar")
+        await store.activate(first, channels: [.magnetic])
+        try await store.beginRecording(first)
+        await store.active?.mark(kind: .manual, note: "knock")
+
+        let second = try store.startSession(locationLabel: "Attic")
+        await store.activate(second, channels: [.magnetic])
+
+        #expect(try #require(store.summary(for: first)).markerCount == 1)
+        #expect(store.replayData(for: first)?.markers.first?.note == "knock")
+    }
+
     @Test func aSessionTheAppDiedDuringIsClosedAsInterruptedWithNoInventedEndTime() async throws {
         let (store, root) = try makeStore()
         defer { try? FileManager.default.removeItem(at: root) }

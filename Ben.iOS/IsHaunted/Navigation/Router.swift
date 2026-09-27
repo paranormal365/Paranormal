@@ -201,6 +201,29 @@ final class Router {
         paths[target] = path
     }
 
+    /// Swaps the screen on top for another, so Back skips the one that is finished with.
+    ///
+    /// Ben, 2026-09-27: "It is not super obvious what to do after you end a session and want to
+    /// start another one." Stop pushed the review ON TOP of the live screen, so Back led to the
+    /// instruments of a session that had ended. The review now takes the live screen's place.
+    func replaceTop(with route: AppRoute) {
+        var path = paths[selection] ?? NavigationPath()
+        if !path.isEmpty { path.removeLast() }
+        path.append(route)
+        paths[selection] = path
+    }
+
+    /// Set when "Start another session" is pressed on a review, holding the session it follows, so
+    /// Field Kit's front door opens the new-session sheet already filled in the same way. Cleared
+    /// by the screen that answers it.
+    var startAnotherSessionLike: UUID?
+
+    /// Back to Field Kit's front door, with the new-session sheet asked for.
+    func startAnotherSession(like previous: UUID) {
+        startAnotherSessionLike = previous
+        openArea(.fieldKit, pushing: .fieldKit)
+    }
+
     /// A deep link lands on the logically matching native screen.
     func open(_ link: DeepLink) {
         switch link {

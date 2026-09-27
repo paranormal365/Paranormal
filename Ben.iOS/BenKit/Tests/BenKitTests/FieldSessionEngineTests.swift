@@ -555,6 +555,80 @@ struct FieldSessionEngineTests {
         #expect(events.first?.note?.contains("31%") == true)
     }
 
+    // MARK: Watch for Motion (Ben, 2026-09-27)
+
+    @Test func watchForMotionMarksMovementInViewWithoutArmingTheSentry() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 3), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setWatchForMotion(true)
+        await engine.ingest(movement: DeviceMovementSample(at: start, magnitudeG: 0.004))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(2),
+                                                     changedFraction: 0.3))
+        await engine.stop()
+
+        let events = try await log.readings().filter { $0.triggeredBy == .event }
+        #expect(events.count == 1)
+        #expect(events.first?.measurements?["marker"]?.value == .string("scene_motion"))
+        #expect(events.first?.note?.hasPrefix("Motion detected") == true)
+    }
+
+    @Test func aPhoneBeingMovedDoesNotCountAsMotionInTheRoom() async throws {
+        // Carried or turned, every pixel in view changes. That is the phone, not the room.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 0), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.setWatchForMotion(true)
+        // Pushed.
+        await engine.ingest(movement: DeviceMovementSample(at: start, magnitudeG: 0.2))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(0.5), changedFraction: 0.6))
+        // Turned slowly: barely any acceleration, a lot of rotation.
+        await engine.ingest(movement: DeviceMovementSample(at: start.addingTimeInterval(5), magnitudeG: 0.01,
+                                                           rotationRadiansPerSecond: 0.8))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(5.5), changedFraction: 0.6))
+        // Put down: still for less than the settling time, the first frames compare with a moving view.
+        await engine.ingest(movement: DeviceMovementSample(at: start.addingTimeInterval(6), magnitudeG: 0.002))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(6), changedFraction: 0.6))
+
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+
+        // Settled: now the room is being watched.
+        await engine.ingest(movement: DeviceMovementSample(at: start.addingTimeInterval(7.5), magnitudeG: 0.002))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(7.5), changedFraction: 0.6))
+        await engine.stop()
+        #expect(try await log.readings().filter { $0.triggeredBy == .event }.count == 1)
+    }
+
+    @Test func movementInViewIsIgnoredWhenNobodyAskedForIt() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.ingest(scene: SceneMotionSample(at: start, changedFraction: 0.9))
+        await engine.setWatchForMotion(true)
+        await engine.setWatchForMotion(false)
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(10), changedFraction: 0.9))
+        await engine.stop()
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+    }
+
+    @Test func theArmedSentryAlsoWaitsForThePhoneToBeStill() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 0), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchSceneMotion: true, sceneMotionThreshold: 0.08))
+        await engine.ingest(movement: DeviceMovementSample(at: start, magnitudeG: 0.3))
+        await engine.ingest(scene: SceneMotionSample(at: start.addingTimeInterval(0.2), changedFraction: 0.5))
+        await engine.stop()
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+    }
+
     @Test func armingAgainForgetsWhatTheLastRoomWasDoing() async throws {
         let clock = ManualClock(start)
         let (engine, log, directory) = await makeEngine(

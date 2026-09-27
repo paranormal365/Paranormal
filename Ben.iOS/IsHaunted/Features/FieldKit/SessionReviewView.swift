@@ -10,6 +10,7 @@ import BenKit
 /// standing, which way they were facing, and what the microphone heard at that second.
 struct SessionReviewView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(Router.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     let sessionId: UUID
@@ -22,8 +23,11 @@ struct SessionReviewView: View {
     /// The sound.
     @State private var audioPlayer = AVPlayer()
     @State private var loadedAudioId: UUID?
-    /// A photograph opened full screen from the strip or the media pane.
-    @State private var openedPhoto: CaptureMark?
+    /// The photograph grown to full size from the strip, and whether playback was running when
+    /// it was tapped — so tapping it again carries on exactly as before.
+    @State private var expandedPhoto: CaptureMark?
+    @State private var resumeAfterPhoto = false
+    @Namespace private var photoSpace
     @State private var source: ReplaySource?
     /// The walked path, converted once after the replay loads — not on every tick.
     @State private var track: [CLLocationCoordinate2D] = []
@@ -35,6 +39,39 @@ struct SessionReviewView: View {
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
+
+    /// Recorded on this phone and ended in the last hour — the review somebody lands on straight
+    /// from Stop, which is where the next session is most likely wanted.
+    private var justEnded: Bool {
+        guard let summary, !summary.isImported, summary.outcome == .ended,
+              let ended = summary.endedAt else { return false }
+        return Date().timeIntervalSince(ended) < 3_600
+    }
+
+    /// Ben, 2026-09-27: "It is not super obvious what to do after you end a session and want to
+    /// start another one." Said at the top of the review, with the one button that does it.
+    private var nextSessionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Session saved", systemImage: "checkmark.circle.fill")
+                .font(.subheadline.bold())
+                .foregroundStyle(Theme.success)
+            Text("It's on this phone. Play it back here, or send it from the share menu when you're ready.")
+                .font(.caption).foregroundStyle(Theme.fog)
+            Button {
+                replay.pause()
+                router.startAnotherSession(like: sessionId)
+            } label: {
+                Label("Start another session", systemImage: "record.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.ecto)
+            .accessibilityIdentifier("start-another-session")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+    }
 
     var body: some View {
         Group {
@@ -104,10 +141,8 @@ struct SessionReviewView: View {
             PropertyPhotosView(sessionId: sessionId).environment(dependencies)
         }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
-        .fullScreenCover(item: $openedPhoto) { photo in
-            SessionPhotoViewer(url: store.files.fileURL(for: sessionId,
-                                                         relativePath: photo.relativePath),
-                               caption: photoCaption(photo))
+        .overlay {
+            if let photo = expandedPhoto { expandedPhotoView(photo) }
         }
         .onDisappear {
             replay.pause()
@@ -122,6 +157,7 @@ struct SessionReviewView: View {
     @ViewBuilder
     private var leftColumn: some View {
         VStack(spacing: 14) {
+            if justEnded { nextSessionCard }
             mediaPane
             photoStrip
             ReplayTransport(replay: replay)
@@ -236,9 +272,8 @@ struct SessionReviewView: View {
         }
     }
 
-    /// What was seen and heard at the playhead, in that order of preference: the video, a
-    /// photograph taken in the last few seconds, the sound — or a plain statement that nothing was
-    /// recorded at this moment.
+    /// What was seen and heard at the playhead: the video, else the sound — or a plain statement
+    /// that nothing was recorded at this moment. Photographs live in the strip under this.
     @ViewBuilder
     private var mediaPane: some View {
         ZStack {
@@ -248,17 +283,6 @@ struct SessionReviewView: View {
                 VideoPlayer(player: videoPlayer)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .accessibilityIdentifier("replay-video")
-            } else if let photo = photoAtPlayhead {
-                Button { openedPhoto = photo } label: {
-                    SessionPhotoTile(url: store.files.fileURL(for: sessionId,
-                                                              relativePath: photo.relativePath),
-                                     maxPixels: 1200, contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Photo taken \(photoCaption(photo)). Open it full screen.")
-                .accessibilityIdentifier("replay-photo")
             } else if let sound = replay.frame.activeAudio {
                 VStack(spacing: 6) {
                     Image(systemName: "waveform")
@@ -284,6 +308,21 @@ struct SessionReviewView: View {
             }
         }
         .frame(height: 220)
+        // Motion the camera saw while the phone was still: the video is outlined and the sign is
+        // up for a few seconds from the moment, exactly as it was on the live viewfinder.
+        .overlay {
+            if replay.frame.motionDetected != nil {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Theme.warning, lineWidth: 3)
+                    .shadow(color: Theme.warning.opacity(0.8), radius: 10)
+            }
+        }
+        .overlay(alignment: .top) {
+            if replay.frame.motionDetected != nil {
+                MotionDetectedSign().padding(.top, 10)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: replay.frame.motionDetected?.id)
         .accessibilityIdentifier("replay-media")
     }
 
@@ -321,28 +360,34 @@ struct SessionReviewView: View {
         }
     }
 
-    /// One thumbnail. Its border glows for a few seconds as playback passes the moment it was
-    /// taken (Ben, 2026-09-27), so a photo is noticed at the second it belongs to without the
-    /// picture taking over the player.
+    /// One thumbnail. As playback passes the moment it was taken its border glows and it grows a
+    /// little, for three seconds (Ben, 2026-09-27), so a photo is noticed at the second it belongs
+    /// to without taking the player over. Tapping it pauses playback and grows it to full size.
     private func photoThumbnail(_ photo: CaptureMark) -> some View {
         let glowing = ReplayPhotos.isGlowing(photo, at: replay.playhead)
-        return Button {
-            replay.pause()
-            replay.seek(to: photo.at)
-        } label: {
+        let url = store.files.fileURL(for: sessionId, relativePath: photo.relativePath)
+        return Button { expand(photo) } label: {
             VStack(spacing: 3) {
-                SessionPhotoTile(url: store.files.fileURL(for: sessionId,
-                                                          relativePath: photo.relativePath),
-                                 maxPixels: 240, contentMode: .fill)
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(glowing ? Theme.ecto : Theme.fog.opacity(0.3),
-                                    lineWidth: glowing ? 3 : 1)
+                ZStack {
+                    if expandedPhoto?.id == photo.id {
+                        // Its place in the strip is kept while it is out, so it has somewhere to
+                        // shrink back to.
+                        Color.clear
+                    } else {
+                        SessionPhotoTile(url: url, maxPixels: 240, contentMode: .fill)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .matchedGeometryEffect(id: photo.id, in: photoSpace)
                     }
-                    .shadow(color: glowing ? Theme.ecto.opacity(0.9) : .clear, radius: glowing ? 8 : 0)
-                    .animation(.easeInOut(duration: 0.35), value: glowing)
+                }
+                .frame(width: 72, height: 72)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(glowing ? Theme.ecto : Theme.fog.opacity(0.3),
+                                lineWidth: glowing ? 3 : 1)
+                }
+                .shadow(color: glowing ? Theme.ecto.opacity(0.9) : .clear, radius: glowing ? 8 : 0)
+                .scaleEffect(glowing ? 1.15 : 1)
+                .animation(.spring(duration: 0.35), value: glowing)
                 Text(SessionClock.elapsed(from: replay.timeline.startedAt, to: photo.at))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(glowing ? Theme.ecto : Theme.fog)
@@ -351,14 +396,53 @@ struct SessionReviewView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Photo at \(photoCaption(photo))")
         .accessibilityValue(glowing ? "taken now" : "")
+        .accessibilityHint("Pauses playback and shows it full size")
         .accessibilityIdentifier(glowing ? "replay-photo-thumbnail-glowing" : "replay-photo-thumbnail")
     }
 
-    private var photos: [CaptureMark] { ReplayPhotos.taken(source?.stills ?? []) }
-
-    private var photoAtPlayhead: CaptureMark? {
-        ReplayPhotos.onScreen(source?.stills ?? [], at: replay.playhead)
+    /// The tapped photograph at full size, over the whole screen. Tapping it again puts it back in
+    /// the strip and carries on playing if it was playing.
+    private func expandedPhotoView(_ photo: CaptureMark) -> some View {
+        ZStack {
+            Color.black.opacity(0.92).ignoresSafeArea()
+            VStack(spacing: 12) {
+                SessionPhotoTile(url: store.files.fileURL(for: sessionId,
+                                                          relativePath: photo.relativePath),
+                                 maxPixels: 2800, contentMode: .fit)
+                    .background(Color.clear)
+                    .matchedGeometryEffect(id: photo.id, in: photoSpace)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(photoCaption(photo))
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                Text(resumeAfterPhoto ? "Tap to keep playing" : "Tap to close")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(16)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { collapsePhoto() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Photo, \(photoCaption(photo))")
+        .accessibilityHint(resumeAfterPhoto ? "Closes it and carries on playing" : "Closes it")
+        .accessibilityIdentifier("replay-photo-expanded")
     }
+
+    private func expand(_ photo: CaptureMark) {
+        resumeAfterPhoto = replay.isPlaying
+        replay.pause()
+        withAnimation(.spring(duration: 0.4)) { expandedPhoto = photo }
+    }
+
+    private func collapsePhoto() {
+        withAnimation(.spring(duration: 0.4)) { expandedPhoto = nil }
+        if resumeAfterPhoto { replay.play() }
+        resumeAfterPhoto = false
+    }
+
+    private var photos: [CaptureMark] { ReplayPhotos.taken(source?.stills ?? []) }
 
     /// "00:12:40 into the session · Back bedroom" — when, and where if they said.
     private func photoCaption(_ photo: CaptureMark) -> String {

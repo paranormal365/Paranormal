@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which photograph the replay shows at a moment.
+/// Photographs in the replay.
 ///
 /// Ben, 2026-09-27: "the photo never shows either when you take it during a session. I would think
 /// it would display when playing back the session... even on the phone." A photo is an instant,
@@ -8,17 +8,11 @@ import Foundation
 /// only when it carried coordinates — which a photo taken indoors, where most of a night is spent,
 /// usually does not. So a photograph taken in the cellar appeared nowhere at all.
 ///
-/// Now the playhead passing the moment a photo was taken puts it on screen, and it stays for
-/// `holdSeconds` — long enough to be looked at at normal speed, short enough that it does not
-/// stand in for a stretch of the night it was not part of.
+/// Now they sit in a strip of thumbnails under the player. Ben, the same day: "the photos are in
+/// small thumbnails that get highlighted when they were taken during the .ben playback or their
+/// border glows a couple of seconds", and "maybe they grow a little for those three seconds".
 public enum ReplayPhotos {
-    public static let holdSeconds: TimeInterval = 8
-
-    /// How long a thumbnail's border glows after the playhead passes the moment it was taken.
-    ///
-    /// Ben, 2026-09-27: "the photos are in small thumbnails that get highlighted when they were
-    /// taken during the .ben playback or their border glows a couple of seconds". Shorter than the
-    /// hold: the glow marks the MOMENT, the big picture is for looking at it.
+    /// How long a thumbnail glows, and is grown, after the playhead passes its moment.
     public static let glowSeconds: TimeInterval = 3
 
     /// Whether this photograph's thumbnail glows at `moment`.
@@ -32,17 +26,8 @@ public enum ReplayPhotos {
         taken(stills).last { $0.at <= moment }
     }
 
-    /// The most recent photograph taken at or before `moment`, if it was taken within `hold`.
-    /// Anything that is not a photo — a clip whose length could not be read, pinned as a still —
-    /// is left out: it has no picture to show.
-    public static func onScreen(_ stills: [CaptureMark], at moment: Date,
-                                hold: TimeInterval = holdSeconds) -> CaptureMark? {
-        stills
-            .filter { $0.kind == .photo && $0.at <= moment && moment.timeIntervalSince($0.at) < hold }
-            .max { $0.at < $1.at }
-    }
-
-    /// Photographs only, in the order they were taken — the strip under the replay.
+    /// Photographs only, in the order they were taken — the strip. Anything else pinned as a still
+    /// (a clip whose length could not be read) has no picture to show.
     public static func taken(_ stills: [CaptureMark]) -> [CaptureMark] {
         stills.filter { $0.kind == .photo }.sorted { $0.at < $1.at }
     }

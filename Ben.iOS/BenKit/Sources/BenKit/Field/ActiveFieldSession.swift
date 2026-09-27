@@ -41,6 +41,13 @@ public final class ActiveFieldSession {
     public private(set) var sentry: SentryConfig?
     public var isArmed: Bool { sentry != nil }
 
+    /// Watch for Motion: the camera's view is watched for movement whenever the phone is still,
+    /// while it keeps recording. Only meaningful with the video channel on — the camera is off
+    /// otherwise.
+    public private(set) var watchForMotion = false
+    /// The last time Watch for Motion (or the sentry) saw something, for the live screen's sign.
+    public private(set) var lastMotionDetectedAt: Date?
+
     /// Set when a recording stopped for a reason nobody chose — a call, another app taking the
     /// microphone. Surfaced rather than swallowed: somebody who thinks they are recording and
     /// is not has lost the night.
@@ -130,6 +137,7 @@ public final class ActiveFieldSession {
                 switch event {
                 case .sample(let sample): self.sample = sample
                 case .marked(let marker):
+                    if marker.kind == .sceneMotion { self.lastMotionDetectedAt = marker.at }
                     // Guarded because `mark()` records its own result immediately — see there
                     // for why waiting for this stream is not safe.
                     if !self.markers.contains(where: { $0.id == marker.id }) {
@@ -238,6 +246,18 @@ public final class ActiveFieldSession {
         } else if !channels.contains(.audio), wasRecordingAudio {
             await stopRecording()
         }
+    }
+
+    // MARK: - Watch for Motion
+
+    public func setWatchForMotion(_ on: Bool) async {
+        watchForMotion = on
+        await engine.setWatchForMotion(on)
+    }
+
+    /// A frame's worth of change from the camera the live screen owns.
+    public func noteSceneMotion(_ sample: SceneMotionSample) async {
+        await engine.noteSceneMotion(sample)
     }
 
     // MARK: - The app being put away
@@ -439,12 +459,17 @@ public final class ActiveFieldSession {
 
     /// Records a file the camera just handed us. The file has ALREADY been moved into the
     /// session directory by the caller — this notes what it is and where it was taken.
+    ///
+    /// `startedAt` is when a clip BEGAN. A clip is noted when it ends, and it used to be stamped
+    /// with that moment — so the replay placed a video after the stretch it had filmed, and a
+    /// whole-session video would have started at the session's end. A photo is an instant and
+    /// passes nothing.
     public func noteCapture(kind: CaptureKind, relativePath: String, byteCount: Int64,
-                            durationSeconds: Double? = nil) async {
+                            durationSeconds: Double? = nil, startedAt: Date? = nil) async {
         await engine.noteCapture(kind: kind, relativePath: relativePath,
                                  durationSeconds: durationSeconds)
         captures.insert(CaptureRecord(
-            at: now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
+            at: startedAt ?? now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
             durationSeconds: durationSeconds,
             latitude: sample.position?.latitude, longitude: sample.position?.longitude,
             headingDegrees: sample.headingDegrees, room: room), at: 0)

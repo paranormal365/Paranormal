@@ -188,6 +188,22 @@ struct SessionReplayTests {
         #expect(before != replay.frame)
     }
 
+    @Test func motionDetectedShowsForAFewSecondsFromItsMoment() async throws {
+        let motion = FieldMarkerRecord(at: start.addingTimeInterval(20), kind: .sceneMotion)
+        let manual = FieldMarkerRecord(at: start.addingTimeInterval(40), kind: .manual)
+        let replay = try await loaded([reading(0, emf: 48)], markers: [motion, manual])
+
+        replay.seek(to: start.addingTimeInterval(19.9))
+        #expect(replay.frame.motionDetected == nil)
+        replay.seek(to: start.addingTimeInterval(21))
+        #expect(replay.frame.motionDetected?.id == motion.id)
+        replay.seek(to: start.addingTimeInterval(20 + ReplayMotion.signSeconds))
+        #expect(replay.frame.motionDetected == nil)
+        // Only motion raises the sign; an ordinary mark does not.
+        replay.seek(to: start.addingTimeInterval(40.5))
+        #expect(replay.frame.motionDetected == nil)
+    }
+
     // MARK: - Markers
 
     @Test func jumpingToAMarkerStartsJustBeforeItSoTheRunUpCanBeHeard() async throws {

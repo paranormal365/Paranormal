@@ -79,10 +79,15 @@ public struct DeviceMovementSample: Sendable, Equatable {
     /// User acceleration in g, gravity already removed — so a phone sitting still reads ~0
     /// however it is propped up.
     public var magnitudeG: Double
+    /// How fast the device is turning, in radians a second. Turning matters more than shoving to
+    /// anything that watches the camera: a phone panned slowly across a room barely accelerates,
+    /// and every pixel in its view changes.
+    public var rotationRadiansPerSecond: Double
 
-    public init(at: Date, magnitudeG: Double) {
+    public init(at: Date, magnitudeG: Double, rotationRadiansPerSecond: Double = 0) {
         self.at = at
         self.magnitudeG = magnitudeG
+        self.rotationRadiansPerSecond = rotationRadiansPerSecond
     }
 }
 

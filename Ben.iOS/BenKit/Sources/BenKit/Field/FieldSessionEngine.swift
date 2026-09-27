@@ -109,6 +109,34 @@ public actor FieldSessionEngine {
     /// The most a resting phone is taken to read of its own — a propped one is a few
     /// hundredths; anything past this on a first sample is movement, not a place to start from.
     private static let restingCeilingG = 0.05
+
+    // MARK: Watch for Motion state
+
+    /// Watching the camera's view for movement, whether or not the sentry is armed.
+    ///
+    /// Ben, 2026-09-27: "a 'Watch for Motion' setting which should make the camera look for motion
+    /// in frame when the phone is not moving", and "If it is recording and watch for motion is
+    /// turned on and the phone is not moving then it is watching for motion but still recording
+    /// video." Arming the sentry means nobody is holding the phone; this is for somebody who is —
+    /// who puts it down on a table for a minute, or props it in a doorway, and picks it up again.
+    private var watchForMotion = false
+    /// How much of the frame must change for Watch for Motion to mark it.
+    private var motionThreshold = SentryConfig.default.sceneMotionThreshold
+    /// The last moment the phone itself was moving. Nil until a movement sample says otherwise.
+    private var lastDeviceMovedAt: Date?
+    /// Whether any movement sample has arrived. A device with no motion sensor — a simulator — has
+    /// no way to say it is moving, and is treated as still rather than watching nothing for ever.
+    private var hasMovementReadings = false
+
+    /// Above either of these the phone is being moved, and every pixel in view changes with it.
+    /// A phone resting on a table reads a few thousandths of a g and a few hundredths of a radian a
+    /// second; one held in a hand, however steadily, reads well past both.
+    static let stillAccelerationG = 0.03
+    static let stillRotationRadiansPerSecond = 0.15
+    /// How long the phone must have been still before the camera's view is judged. The first
+    /// frames after it is put down are compared with frames taken while it was moving.
+    static let settleSeconds: TimeInterval = 1.5
+
     private var running = false
     /// Whether readings reach the log. Sensors run from `start()` so the gauge moves and a base
     /// level can be set; nothing is WRITTEN until `beginLogging()` — Start on the live screen
@@ -235,7 +263,40 @@ public actor FieldSessionEngine {
     public var isArmed: Bool { sentry != nil }
     public var sentryConfig: SentryConfig? { sentry }
 
+    /// Turns Watch for Motion on or off. The camera's frames only reach the engine while the video
+    /// channel is on; this decides whether they are judged.
+    public func setWatchForMotion(_ on: Bool, threshold: Double? = nil) {
+        watchForMotion = on
+        if let threshold { motionThreshold = threshold }
+        lastSceneEvent = nil
+        if running { restartSensorTasks() }
+    }
+
+    public var isWatchingForMotion: Bool { watchForMotion }
+
+    /// A frame's worth of change, handed in by whoever owns the camera. The camera belongs to the
+    /// live screen, not to the session, so its frames are pushed here rather than pulled from the
+    /// sensor suite — which never had a camera in it, so movement in view never fired at all.
+    public func noteSceneMotion(_ sample: SceneMotionSample) async {
+        await ingest(scene: sample)
+    }
+
+    /// Whether the phone has been still long enough for the camera's view to mean anything.
+    func isStill(at moment: Date) -> Bool {
+        guard hasMovementReadings else { return true }
+        guard let lastDeviceMovedAt else { return true }
+        return moment.timeIntervalSince(lastDeviceMovedAt) >= Self.settleSeconds
+    }
+
     func ingest(movement sample: DeviceMovementSample) async {
+        // Stillness first, and from the RAW reading: the knock floor below adapts to a phone being
+        // carried, which is exactly the state stillness has to recognise as moving.
+        hasMovementReadings = true
+        if sample.magnitudeG > Self.stillAccelerationG
+            || sample.rotationRadiansPerSecond > Self.stillRotationRadiansPerSecond {
+            lastDeviceMovedAt = sample.at
+        }
+
         // Learn the floor from the quiet moments rather than assuming zero. This used to be
         // `max(floor * 0.995, min(floor, sample))`, which from a floor of zero is zero for ever —
         // the floor never learned anything, and a phone propped against a wall, reading a steady
@@ -268,15 +329,22 @@ public actor FieldSessionEngine {
                      note: String(format: "the device was moved (%.2f g)", sample.magnitudeG))
     }
 
+    /// A frame's worth of change in the camera's view.
+    ///
+    /// Judged only while the phone is still. A phone being carried or turned changes every pixel
+    /// in its view, and before this the sentry would have marked that as movement in the room.
     func ingest(scene sample: SceneMotionSample) async {
-        guard let sentry, sentry.watchSceneMotion else { return }
-        guard sample.changedFraction >= sentry.sceneMotionThreshold,
+        let sentryThreshold = sentry?.watchSceneMotion == true ? sentry?.sceneMotionThreshold : nil
+        let watchThreshold = watchForMotion ? motionThreshold : nil
+        guard let threshold = [sentryThreshold, watchThreshold].compactMap({ $0 }).min() else { return }
+        guard isStill(at: sample.at) else { return }
+        guard sample.changedFraction >= threshold,
               passesDebounce(last: lastSceneEvent, at: sample.at)
         else { return }
 
         lastSceneEvent = sample.at
         await record(kind: .sceneMotion, at: sample.at,
-                     note: String(format: "%.0f%% of the view changed",
+                     note: String(format: "Motion detected: %.0f%% of the view changed",
                                   sample.changedFraction * 100))
     }
 
@@ -309,14 +377,16 @@ public actor FieldSessionEngine {
         }
         // Only while armed and only when asked for: an accelerometer stream running all night
         // for nothing is battery somebody wanted for the magnetometer.
-        if sentry?.watchDeviceMovement == true, let movement = sensors.deviceMovement,
-           movement.isAvailable {
+        // Watching the camera needs the accelerometer too: that is how it knows the phone is still.
+        let watchesScene = watchForMotion || sentry?.watchSceneMotion == true
+        if sentry?.watchDeviceMovement == true || watchesScene,
+           let movement = sensors.deviceMovement, movement.isAvailable {
             let stream = movement.movements(hz: 10)
             tasks.append(Task { [weak self] in
                 for await sample in stream { await self?.ingest(movement: sample) }
             })
         }
-        if sentry?.watchSceneMotion == true, let scene = sensors.sceneMotion, scene.isAvailable {
+        if watchesScene, let scene = sensors.sceneMotion, scene.isAvailable {
             let stream = scene.sceneMotion()
             tasks.append(Task { [weak self] in
                 for await sample in stream { await self?.ingest(scene: sample) }

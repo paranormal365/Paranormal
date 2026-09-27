@@ -52,11 +52,10 @@ public struct CaptureChannels: OptionSet, Sendable, Codable, Equatable {
         switch self {
         case .magnetic: "Barely touches the battery."
         case .audio: "Records sound and lets you mark EVP questions."
-        // The camera, not a recording: five hours of 1080p is tens of gigabytes and a flat
-        // battery long before the night is over. What the switch buys is a picture to aim by
-        // and the sentry's eye. Ben, 2026-09-17: the in-session button is a photo button "for
-        // now" — clips are not offered from a running session.
-        case .video: "Keeps the camera on: a viewfinder to aim by, and movement seen through it."
+        // Ben, 2026-09-27, chose to record the whole session: the switch used to buy only a
+        // viewfinder, and "even when recording video, it doesn't play back". 720p with no sound
+        // of its own (the session's recording carries that), so it costs what it says it costs.
+        case .video: "Records video for the whole session while this screen is open. Heavy on battery and storage."
         case .location: "Stamps where you were on every reading. Poor indoors."
         default: ""
         }

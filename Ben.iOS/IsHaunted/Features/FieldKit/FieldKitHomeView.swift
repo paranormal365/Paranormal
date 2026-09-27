@@ -13,6 +13,11 @@ struct FieldKitHomeView: View {
 
     @State private var starting = false
     @State private var errorMessage: String?
+    /// The session a new one follows, so the sheet opens with its place, investigation and
+    /// channels already chosen. Nil for a fresh start.
+    @State private var startingLike: FieldSessionSummary?
+    /// Asked when Start is pressed with a session still open — see `askToStart`.
+    @State private var confirmingNewSession = false
 
     /// Opening a `.ben` from the Files app — the door for a bundle somebody else handed over.
     @State private var choosingBundle = false
@@ -41,7 +46,7 @@ struct FieldKitHomeView: View {
             } else {
                 Section {
                     Button {
-                        starting = true
+                        askToStart()
                     } label: {
                         Label("Start a session", systemImage: "record.circle")
                             .font(.headline)
@@ -155,12 +160,32 @@ struct FieldKitHomeView: View {
             }
         }
         .navigationTitle("Field Kit")
-        .sheet(isPresented: $starting) {
-            StartSessionSheet { label, investigation, channels in
+        .sheet(isPresented: $starting, onDismiss: { startingLike = nil }) {
+            StartSessionSheet(like: startingLike) { label, investigation, channels in
                 await start(label: label, investigation: investigation, channels: channels)
             }
             .environment(dependencies)
         }
+        // Ben, 2026-09-27: "If they have recorded a session, just save it and ask if they want to
+        // create a new one when they hit the start button instead of making them deal with it
+        // immediately by having to delete it to start a new one."
+        .confirmationDialog(openSessionQuestion, isPresented: $confirmingNewSession,
+                            titleVisibility: .visible) {
+            Button(openSessionIsRecording ? "Save it and start a new one" : "Start a new one instead") {
+                Task { await closeOpenSessionThenStart() }
+            }
+            .accessibilityIdentifier("save-and-start-new")
+            if let open = openSession {
+                Button("Go back to it") { router.push(.fieldSession(open.id)) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(openSessionIsRecording
+                 ? "It stops recording and is kept with your other sessions, ready to play back or send."
+                 : "Nothing has been recorded in it yet, so there is nothing to keep.")
+        }
+        .onChange(of: router.startAnotherSessionLike) { _, _ in answerStartAnother() }
+        .onAppear { answerStartAnother() }
         .alert("Couldn't start the session",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -228,6 +253,48 @@ struct FieldKitHomeView: View {
         case .failure(let error):
             store.importProblem = error.message
         }
+    }
+
+    // MARK: - Starting
+
+    private var openSession: FieldSessionSummary? {
+        store.activeSessionId.flatMap { store.summary(for: $0) }.flatMap { $0.isOpen ? $0 : nil }
+    }
+
+    private var openSessionIsRecording: Bool { openSession?.isRecording == true }
+
+    private var openSessionQuestion: String {
+        guard let open = openSession else { return "Start a new session?" }
+        return open.isRecording
+            ? "“\(open.title)” is still recording"
+            : "“\(open.title)” is set up but not started"
+    }
+
+    /// Straight to the sheet, unless a session is still open — then it is asked about first.
+    private func askToStart() {
+        if openSession != nil {
+            confirmingNewSession = true
+        } else {
+            starting = true
+        }
+    }
+
+    private func closeOpenSessionThenStart() async {
+        do {
+            let closed = try await store.closeOpenSession()
+            if case .saved(let id) = closed { startingLike = store.summary(for: id) }
+            starting = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// "Start another session" on a review lands here: the sheet opens filled in like that one.
+    private func answerStartAnother() {
+        guard let previous = router.startAnotherSessionLike else { return }
+        router.startAnotherSessionLike = nil
+        startingLike = store.summary(for: previous)
+        askToStart()
     }
 
     private func start(label: String?, investigation: MyInvestigation?,
@@ -328,6 +395,9 @@ private struct StartSessionSheet: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
 
+    /// The session this one follows, when started from a review or after saving another — its
+    /// place, investigation and channels are where somebody is most likely to carry on.
+    var like: FieldSessionSummary? = nil
     var onStart: (String?, MyInvestigation?, CaptureChannels) async -> Void
 
     @State private var label = ""
@@ -413,7 +483,14 @@ private struct StartSessionSheet: View {
                     Button("Cancel") { dismiss() }.disabled(busy)
                 }
             }
-            .task { await loadInvestigations() }
+            .task {
+                if let like {
+                    label = like.locationLabel ?? ""
+                    channels = like.channels
+                    chosenId = like.investigationId
+                }
+                await loadInvestigations()
+            }
         }
         .interactiveDismissDisabled(busy)
     }

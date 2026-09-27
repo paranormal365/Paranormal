@@ -39,38 +39,3 @@ struct SessionPhotoTile: View {
         }
     }
 }
-
-/// One photograph, full screen, with when it was taken.
-struct SessionPhotoViewer: View {
-    @Environment(\.dismiss) private var dismiss
-    let url: URL
-    let caption: String
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-            // Big enough for an iPad Pro screen at 2×; the original stays untouched on disk.
-            SessionPhotoTile(url: url, maxPixels: 2800, contentMode: .fit)
-                .background(Color.black)
-                .ignoresSafeArea()
-            VStack(alignment: .trailing) {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .black.opacity(0.6))
-                }
-                .accessibilityLabel("Close")
-                .accessibilityIdentifier("close-session-photo")
-                Spacer()
-                Text(caption)
-                    .font(.caption)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.black.opacity(0.6), in: Capsule())
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(16)
-        }
-    }
-}

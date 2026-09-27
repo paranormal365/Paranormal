@@ -43,7 +43,7 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .evpQuestion: "Question asked"
         case .evpWaitEnd: "Stopped waiting"
         case .deviceMoved: "Device moved"
-        case .sceneMotion: "Movement seen"
+        case .sceneMotion: "Motion detected"
         case .appBackgrounded: "App put away"
         case .appReturned: "Back in the app"
         }

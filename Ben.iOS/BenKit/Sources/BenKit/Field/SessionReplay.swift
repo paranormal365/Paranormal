@@ -140,6 +140,8 @@ public struct ReplayFrame: Sendable, Equatable {
     public var activeMedia: (segment: MediaSegment, offset: TimeInterval)? { activeVideo ?? activeAudio }
     /// A marker within a second or so of the playhead, for highlighting as it passes.
     public var nearestMarker: FieldMarkerRecord?
+    /// The "Motion detected" mark whose sign is showing at this moment. See `ReplayMotion`.
+    public var motionDetected: FieldMarkerRecord?
     /// The room the operator said they were in at this moment, if they said.
     public var room: String?
 
@@ -155,6 +157,7 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.activeVideo?.segment.id == rhs.activeVideo?.segment.id
             && lhs.activeAudio?.segment.id == rhs.activeAudio?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
+            && lhs.motionDetected?.id == rhs.motionDetected?.id
             && lhs.room == rhs.room
     }
 
@@ -418,6 +421,7 @@ public final class SessionReplay {
         result.nearestMarker = timeline.markers.first {
             abs($0.at.timeIntervalSince(moment)) < 1.0
         }
+        result.motionDetected = ReplayMotion.showing(timeline.markers, at: moment)
         return result
     }
 

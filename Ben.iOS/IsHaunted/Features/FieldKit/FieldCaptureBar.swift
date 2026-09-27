@@ -55,7 +55,7 @@ struct FieldCaptureBar: View {
                     }
                 } label: {
                     Label(audioButtonTitle,
-                          systemImage: camera.isRecordingClip ? "video"
+                          systemImage: camera.isRecordingClipWithSound ? "video"
                                      : (session.recording == nil ? "mic" : "mic.slash"))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -65,7 +65,7 @@ struct FieldCaptureBar: View {
                 // While a clip holds the microphone there is nothing here to start or stop: the
                 // video is recording the sound, and pressing this would be two things fighting
                 // over one microphone — which is the whole bug this was built to end.
-                .disabled(camera.isRecordingClip)
+                .disabled(camera.isRecordingClipWithSound)
                 .accessibilityIdentifier("toggle-audio-recording")
             }
 
@@ -140,7 +140,7 @@ struct FieldCaptureBar: View {
     }
 
     private var audioButtonTitle: String {
-        if camera.isRecordingClip { return "On the clip" }
+        if camera.isRecordingClipWithSound { return "On the clip" }
         return session.recording == nil ? "Record" : "Stop audio"
     }
 
