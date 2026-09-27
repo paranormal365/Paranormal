@@ -52,6 +52,8 @@ public final class ActiveFieldSession {
     /// microphone. Surfaced rather than swallowed: somebody who thinks they are recording and
     /// is not has lost the night.
     public private(set) var recordingProblem: String?
+    /// True when that problem is a refused microphone — fixed in Settings, which the screen offers.
+    public private(set) var microphoneRefused = false
 
     /// Something worth knowing about the sound that is nobody's fault — the camera borrowing the microphone and
     /// handing it back. Kept apart from `recordingProblem` because a red warning about a thing that fixed itself
@@ -342,6 +344,7 @@ public final class ActiveFieldSession {
         guard !lentToTheClip else { return }
         guard recording == nil, let recorder = sensors.recorder else { return }
         recordingProblem = nil
+        microphoneRefused = false
         do {
             let (relative, url) = try files.nextMediaPath(
                 for: sessionId, kind: .audio, fileExtension: "m4a")
@@ -353,6 +356,7 @@ public final class ActiveFieldSession {
             // Said out loud. A recording somebody believes is running and is not is the worst
             // outcome this feature has.
             recordingProblem = error.localizedDescription
+            microphoneRefused = (error as? AudioRecordingError) == .microphoneRefused
         }
     }
 
@@ -475,7 +479,10 @@ public final class ActiveFieldSession {
             headingDegrees: sample.headingDegrees, room: room), at: 0)
     }
 
-    public func clearRecordingProblem() { recordingProblem = nil }
+    public func clearRecordingProblem() {
+        recordingProblem = nil
+        microphoneRefused = false
+    }
 
     // MARK: - EVP
 

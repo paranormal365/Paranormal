@@ -62,6 +62,9 @@ public extension AudioRecording {
 /// What went wrong with a recording, in words a person can act on.
 public enum AudioRecordingError: Error, LocalizedError, Equatable {
     case microphoneUnavailable
+    /// The person said no to the microphone. Distinct from `microphoneUnavailable` because the
+    /// answer is different: this one is fixed in Settings, and the screen offers to go there.
+    case microphoneRefused
     case couldNotStart(String)
     case interrupted
 
@@ -69,6 +72,8 @@ public enum AudioRecordingError: Error, LocalizedError, Equatable {
         switch self {
         case .microphoneUnavailable:
             "The microphone isn't available. Check the app's permission in Settings."
+        case .microphoneRefused:
+            "IsHaunted isn't allowed to use the microphone, so nothing would be recorded. Turn it on in Settings."
         case .couldNotStart(let reason):
             "Recording couldn't start: \(reason)"
         case .interrupted:

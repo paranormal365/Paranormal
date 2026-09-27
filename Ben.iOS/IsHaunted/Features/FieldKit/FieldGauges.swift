@@ -157,9 +157,10 @@ struct PositionReadout: View {
     var headingDegrees: Double?
     var relativeAltitudeMeters: Double?
     var isEnabled: Bool
-    /// Offered when location is off only because nobody has been asked yet — so "Record without
-    /// it" is a decision that can be changed, not a door that shuts. Nil when the answer is the
-    /// system's to change (denied in Settings) or the channel itself is switched off.
+    /// Offered when location is off only because it has not been allowed — asked the first time,
+    /// and after a no it says so and offers Settings (Ben, 2026-09-27: "Do the same with any
+    /// settings they don't have turned on but are trying to use"). Nil when the channel itself is
+    /// switched off.
     var onUseLocation: (() -> Void)?
 
     var body: some View {
@@ -175,7 +176,9 @@ struct PositionReadout: View {
             }
 
             if !isEnabled {
-                Text("Location is switched off for this session.")
+                Text(onUseLocation == nil
+                     ? "Location is switched off for this session."
+                     : "Location isn't allowed for IsHaunted yet.")
                     .font(.caption2).foregroundStyle(Theme.fog)
                 if let onUseLocation {
                     Button("Use location", action: onUseLocation)

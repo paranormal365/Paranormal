@@ -22,6 +22,7 @@ struct FieldCaptureBar: View {
     @State private var cameraWasRunning = false
     @State private var errorMessage: String?
     @State private var takingPhoto = false
+    @State private var refusedPermission: AppPermission?
 
     private var files: SessionFileStore { dependencies.fieldKit.files }
 
@@ -46,6 +47,10 @@ struct FieldCaptureBar: View {
                 photoButton
 
                 Button {
+                    if session.recording == nil, AppPermission.microphone.isRefused {
+                        refusedPermission = .microphone
+                        return
+                    }
                     Task {
                         if session.recording == nil {
                             await session.startRecording()
@@ -73,6 +78,7 @@ struct FieldCaptureBar: View {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.danger)
                     .accessibilityIdentifier("recording-problem")
+                if session.microphoneRefused { OpenSettingsButton() }
             }
 
             // The camera borrowing the microphone is worth saying and is nobody's fault, so it is a note rather than
@@ -132,6 +138,7 @@ struct FieldCaptureBar: View {
                                        await adopt(url, kind: kind, duration: duration)
                                    })
         }
+        .permissionRefusedAlert($refusedPermission)
         .alert("Couldn't take that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -160,7 +167,9 @@ struct FieldCaptureBar: View {
     /// is not, a photo-only viewfinder opens so the shot can be framed, and closes itself after.
     private var photoButton: some View {
         Button {
-            if camera.isRunning {
+            if AppPermission.camera.isRefused {
+                refusedPermission = .camera
+            } else if camera.isRunning {
                 Task { await snap() }
             } else {
                 cameraWasRunning = camera.isRunning

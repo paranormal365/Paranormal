@@ -411,6 +411,21 @@ struct UploadSessionView: View {
             Text(explanation(for: plan))
                 .font(.caption2)
                 .foregroundStyle(Theme.fog)
+
+            // A whole-session video (2026-09-27) nearly always runs past one upload's video, and
+            // the readings, marks, sound and photos must still be sendable in one go without
+            // hunting for the right tick box below. The video stays on the phone.
+            if plan.exceedsVideoAllowance {
+                Button {
+                    for capture in captures where capture.kind == .video { chosen.remove(capture.id) }
+                } label: {
+                    Label("Send without the video", systemImage: "video.slash")
+                }
+                .buttonStyle(.bordered)
+                .font(.caption)
+                .padding(.top, 2)
+                .accessibilityIdentifier("send-without-video")
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("upload-allowance")
@@ -426,9 +441,10 @@ struct UploadSessionView: View {
             // A length, and no amount of re-encoding shortens it. Saying "send it smaller" here
             // would send somebody through a slow export to the same refusal.
             return "One upload carries \(UploadAllowance.spokenVideo) of video, and this window has "
-                 + "\(Self.spoken(plan.videoSecondsOverAllowance)) more than that. Drag the handles in to "
-                 + "make a clip of it, send that, then move the window along and send the next. "
-                 + "The whole recording stays on the phone until you have sent all of it."
+                 + "\(Self.spoken(plan.videoSecondsOverAllowance)) more than that. Send the rest without "
+                 + "the video, or drag the handles in to make a clip of it, send that, then move the "
+                 + "window along and send the next. The whole recording stays on the phone until you "
+                 + "have sent all of it."
         }
         if !plan.fits(atVideoQuality: videoQuality) {
             // Weight, not length — and weight has a second way out that length does not.

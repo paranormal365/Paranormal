@@ -144,6 +144,19 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     }
 
     func beginRecording(to url: URL) async throws {
+        // Asked, or refused, BEFORE the engine starts. With the microphone refused AVAudioEngine
+        // does not fail: it delivers silence, and a night's recording is written full of it with
+        // nothing on screen to say so (found 2026-09-27).
+        switch AVAudioApplication.shared.recordPermission {
+        case .denied:
+            throw AudioRecordingError.microphoneRefused
+        case .undetermined:
+            guard await AVAudioApplication.requestRecordPermission() else {
+                throw AudioRecordingError.microphoneRefused
+            }
+        default:
+            break
+        }
         do {
             try configureSession()
             if !hasTap() {

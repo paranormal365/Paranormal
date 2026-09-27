@@ -23,6 +23,8 @@ struct LiveSessionView: View {
     @AppStorage("fieldkit.watch-for-motion") private var watchForMotionPreference = true
     /// Set while Stop is closing the video and the session, so it cannot be pressed twice.
     @State private var stopping = false
+    /// A permission somebody reached for and had refused — said, with the way to Settings.
+    @State private var refusedPermission: AppPermission?
     @State private var blackout = false
 
     /// Why Start refused, shown on the bar. Nil while nothing has refused.
@@ -65,6 +67,7 @@ struct LiveSessionView: View {
                                        onAllow: { await active?.requestLocation() })
             }
             .sheet(isPresented: $askingForNote) { noteComposer }
+            .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
             .alert("Couldn't stop the session",
                    isPresented: Binding(get: { errorMessage != nil },
@@ -302,6 +305,10 @@ struct LiveSessionView: View {
             Toggle(isOn: Binding(
                 get: { active.watchForMotion },
                 set: { on in
+                    if on, AppPermission.camera.isRefused {
+                        refusedPermission = .camera
+                        return
+                    }
                     watchForMotionPreference = on
                     Task { await active.setWatchForMotion(on) }
                 })
@@ -318,6 +325,7 @@ struct LiveSessionView: View {
             if let problem = camera.problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.warning)
+                if AppPermission.camera.isRefused { OpenSettingsButton() }
             }
             if let problem = video.problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
@@ -469,11 +477,20 @@ struct LiveSessionView: View {
                             relativeAltitudeMeters: active.sample.relativeAltitudeMeters,
                             isEnabled: active.channels.contains(.location)
                                 && active.locationAuthorization.canLocate,
-                            onUseLocation: active.channels.contains(.location)
-                                && active.locationAuthorization == .notDetermined
-                                ? { showingLocationExplainer = true } : nil)
+                            onUseLocation: locationAction(active))
                 .padding(12)
                 .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// What the position card's button does: ask the first time, and after a no, say so and offer
+    /// Settings — iOS never shows its question twice.
+    private func locationAction(_ active: ActiveFieldSession) -> (() -> Void)? {
+        guard active.channels.contains(.location) else { return nil }
+        switch active.locationAuthorization {
+        case .notDetermined: return { showingLocationExplainer = true }
+        case .denied, .restricted: return { refusedPermission = .location }
+        case .authorized: return nil
         }
     }
 
@@ -564,6 +581,12 @@ struct LiveSessionView: View {
                 Toggle(isOn: Binding(
                         get: { active.channels.contains(channel) },
                         set: { isOn in
+                            // Refused before, so iOS will not ask again: say so and offer
+                            // Settings, rather than a switch that turns on and records nothing.
+                            if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
+                                refusedPermission = needed
+                                return
+                            }
                             var channels = active.channels
                             if isOn { channels.insert(channel) } else { channels.remove(channel) }
                             Task { await active.setChannels(channels) }
