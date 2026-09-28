@@ -47,7 +47,11 @@
     top: .6rem;
     left: 50%;
     transform: translateX(-50%);
-    padding: .2rem .7rem;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+    padding: .25rem .8rem;
     border-radius: 999px;
     background: var(--bs-warning);
     color: #000;
@@ -57,11 +61,23 @@
     animation: fk-pop .25s ease-out;
 }
 
+/* The template draws its icons in a muted stroke; on the yellow sign that all but vanished. */
+.fk-motion-sign ::deep svg {
+    width: 1rem;
+    height: 1rem;
+    margin: 0 !important;
+    stroke: currentColor;
+    color: #000;
+    opacity: 1;
+}
+
 .fk-photo-strip {
     display: flex;
-    gap: .6rem;
+    /* Room for a thumbnail grown by 15% with its ring and glow, so it never covers its
+       neighbours or is clipped by the strip's own edge. */
+    gap: 1.1rem;
     overflow-x: auto;
-    padding: .6rem .25rem .25rem;
+    padding: 1rem .9rem .5rem;
     margin-top: .5rem;
 }
 
@@ -93,15 +109,18 @@
     font-family: var(--bs-font-monospace);
 }
 
-/* As playback passes the moment it was taken: the border glows and it grows a little. */
+/* As playback passes the moment it was taken: the border glows and it grows a little — in the
+   same green as the phone. The time under it stays at full contrast; a tinted label on a dark
+   page was unreadable. */
 .fk-thumb--glow {
     transform: scale(1.15);
-    color: var(--bs-info);
+    color: var(--bs-emphasis-color);
+    font-weight: 600;
 }
 
 .fk-thumb--glow img {
-    border-color: var(--bs-info);
-    box-shadow: 0 0 0 3px var(--bs-info), 0 0 14px rgba(var(--bs-info-rgb), .9);
+    border-color: var(--bs-success);
+    box-shadow: 0 0 0 3px var(--bs-success), 0 0 14px rgba(var(--bs-success-rgb), .9);
 }
 
 .fk-thumb:focus-visible img {

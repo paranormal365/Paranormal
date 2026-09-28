@@ -452,6 +452,8 @@ passes the moment each was taken; click one to pause and see it full size, and c
 on. Where the camera saw movement while the phone was still, the video is outlined and **Motion
 detected** shows for three seconds.
 
+![The playback page: the video with its sound, a photograph glowing in the strip, and Motion detected](/help/media/working-a-case/field-session-player.png)
+
 A citation is a reference, never a copy. The session stays where it was uploaded and keeps its own
 per-file checksums, so what the client reads and what the instruments recorded cannot drift apart.
 Removing a citation removes the reference only — nothing is deleted.

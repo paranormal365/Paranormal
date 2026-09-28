@@ -53,7 +53,7 @@ public class FieldSessionStageTests : BenTestBase
     }
 
     /// <summary>Signs in with the suite's browser, then opens the session in real Chrome as the same person.</summary>
-    private async Task<(IBrowser Browser, IPage Page)> OpenInChromeAsync(string sessionId)
+    private async Task<(IBrowser Browser, IPage Page)> OpenInChromeAsync(string sessionId, bool dark = false)
     {
         await LoginAsync(MemberEmail, MemberPassword);
         var state = await Context.StorageStateAsync();
@@ -61,7 +61,14 @@ public class FieldSessionStageTests : BenTestBase
         {
             Channel = "chrome", Headless = true, Args = ["--disable-audio-output", "--autoplay-policy=no-user-gesture-required"],
         });
-        var context = await chrome.NewContextAsync(new() { StorageState = state, ViewportSize = new() { Width = 1280, Height = 1100 } });
+        var context = await chrome.NewContextAsync(new()
+        {
+            StorageState = state, ViewportSize = new() { Width = 1280, Height = 1100 },
+            // The help screenshots are dark, like every other one on the site.
+            ColorScheme = dark ? ColorScheme.Dark : ColorScheme.Light, DeviceScaleFactor = dark ? 2 : 1,
+        });
+        if (dark)
+            await context.AddInitScriptAsync("try { localStorage.setItem('layoutSettings', JSON.stringify({ theme: 'dark' })); localStorage.setItem('ben-theme', 'dark'); } catch (e) {}");
         var page = await context.NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
         await Expect(page.GetByText("Stage check").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
@@ -175,6 +182,42 @@ public class FieldSessionStageTests : BenTestBase
             await page.Locator("[data-testid='photo-expanded']").ClickAsync();
             await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToBeVisibleAsync(new() { Timeout = 5_000 });
             await page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true }).ClickAsync();
+        }
+        finally
+        {
+            await chrome.CloseAsync();
+        }
+    }
+
+    /// <summary>
+    /// The playback page for the help (<c>working-a-case</c>): the video with its sound, a photo
+    /// glowing, and Motion detected — all at 0:08. Opt-in, like every other capture.
+    /// </summary>
+    [Test]
+    public async Task Capture_the_player_for_the_help()
+    {
+        if (Environment.GetEnvironmentVariable("BEN_CAPTURE") != "1")
+            Assert.Ignore("Set BEN_CAPTURE=1 to re-capture the help screenshots.");
+
+        var sessionId = await UploadAsync();
+        var (chrome, page) = await OpenInChromeAsync(sessionId, dark: true);
+        try
+        {
+            await ScrubToAsync(page, 8.6);
+            await Expect(page.Locator("[data-testid='motion-detected']")).ToBeVisibleAsync();
+            await Expect(page.Locator("[data-testid='photo-thumb-glowing']")).ToHaveCountAsync(1);
+            await page.EvaluateAsync("() => Promise.all([...document.images].map(i => i.decode().catch(() => {})))");
+            await page.EvaluateAsync("() => document.fonts.ready");
+
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root is not null && !File.Exists(Path.Combine(root.FullName, "Ben.slnx"))) root = root.Parent;
+            var target = Path.Combine(root!.FullName, "Ben.Web.Website", "wwwroot", "help", "media",
+                                      "working-a-case", "field-session-player.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            // The player card only: the transport, the stage and the strip.
+            await page.Locator("[data-testid='media-stage']").Locator("xpath=ancestor::div[contains(@class,'card')][1]")
+                      .ScreenshotAsync(new() { Path = target });
+            TestContext.Out.WriteLine("wrote " + target);
         }
         finally
         {
