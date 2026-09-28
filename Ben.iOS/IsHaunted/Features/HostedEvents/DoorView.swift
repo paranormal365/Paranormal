@@ -30,6 +30,7 @@ struct DoorView: View {
     @State private var refusedLater: [String] = []
     @State private var scanning = false
     @State private var capturedCode: String?
+    @State private var refusedPermission: AppPermission?
     @State private var lookingUp = false
     @State private var scanned: Reservation?
     @State private var opened: Reservation?
@@ -61,6 +62,7 @@ struct DoorView: View {
             }
         }
         .navigationTitle(door?.eventName ?? "The door")
+        .permissionRefusedAlert($refusedPermission)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let door, door.nights.count > 1 {
@@ -150,7 +152,9 @@ struct DoorView: View {
                         return
                     }
                     #endif
-                    if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                    if DataScannerViewController.isSupported, AppPermission.camera.isRefused {
+                        refusedPermission = .camera
+                    } else if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
                         note = nil
                         message = nil
                         scanned = nil

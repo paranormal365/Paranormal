@@ -213,17 +213,30 @@ struct SessionTrimTests {
         #expect(!plan.exceedsVideoAllowance)
     }
 
-    @Test func moreThanFiveMinutesOfVideoIsRefusedAndSaysByHowMuch() {
+    @Test func moreThanTenMinutesOfVideoIsRefusedAndSaysByHowMuch() {
         let clip = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
-                                  startedAt: at(10), duration: 8 * 60)
+                                  startedAt: at(10), duration: 13 * 60)
         let plan = SessionTrimPlan.plan(
             window: window(0, 60), startedAt: start, endedAt: at(60),
             readingTimes: [], markerTimes: [], media: [clip])
 
-        #expect(plan.videoSecondsSent == 8 * 60)
+        #expect(plan.videoSecondsSent == 13 * 60)
         #expect(plan.exceedsVideoAllowance)
         // The number the screen tells somebody to drag off, so it has to be the real shortfall.
         #expect(plan.videoSecondsOverAllowance == 3 * 60)
+    }
+
+    @Test func theAllowanceIsTenMinutesAndSixHundredMegabytes() {
+        // Ben, 2026-09-27. Pinned so a change to either number is a decision, not a drift.
+        #expect(UploadAllowance.videoSeconds == 600)
+        #expect(UploadAllowance.spokenVideo == "10 minutes")
+        #expect(UploadAllowance.maximumBytes == 600 * 1024 * 1024)
+        let tenMinutes = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
+                                        startedAt: at(0), duration: 10 * 60)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 60), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [tenMinutes])
+        #expect(!plan.exceedsVideoAllowance)
     }
 
     @Test func severalClipsAreAddedUpRatherThanJudgedOneByOne() {
@@ -360,12 +373,12 @@ struct SessionTrimTests {
     }
 
     @Test func tooLongIsNotSomethingQualityCanSolve() {
-        // Eight minutes is over the video allowance however small the picture is. The answer is
+        // Twelve minutes is over the video allowance however small the picture is. The answer is
         // clips, and the screen must not offer a re-encode that would still be refused.
         let plan = SessionTrimPlan.plan(
             window: window(0, 20), startedAt: start, endedAt: at(20),
-            readingTimes: [], markerTimes: [], media: [clip(8, height: 720, fps: 24,
-                                                           bytesPerSecond: 100_000)])
+            readingTimes: [], markerTimes: [], media: [clip(12, height: 720, fps: 24,
+                                                            bytesPerSecond: 100_000)])
 
         #expect(plan.exceedsVideoAllowance)
         #expect(!plan.exceedsSizeAllowance)

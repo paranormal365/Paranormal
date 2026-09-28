@@ -21,6 +21,8 @@ struct ComposerView: View {
     @State private var taxonomy: [ExperienceCategoryWithTypes] = []
     @State private var pickerItem: PhotosPickerItem?
     @State private var showCamera = false
+    /// A camera refused in Settings: said, with the way there, instead of a black camera screen.
+    @State private var refusedPermission: AppPermission?
     @State private var isPosting = false
     @State private var errorMessage: String?
     @FocusState private var bodyFocused: Bool
@@ -106,7 +108,7 @@ struct ComposerView: View {
 
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button {
-                            showCamera = true
+                            openCamera()
                         } label: {
                             Label("Take a photo or video", systemImage: "camera")
                         }
@@ -153,6 +155,7 @@ struct ComposerView: View {
             .onChange(of: pickerItem) { _, item in
                 Task { await stage(item) }
             }
+            .permissionRefusedAlert($refusedPermission)
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { staged in
                     media = staged
@@ -285,6 +288,18 @@ struct CameraPicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
+        }
+    }
+}
+
+extension ComposerView {
+    /// The camera, or — when it was refused in Settings — a sentence and the way there. iOS would
+    /// otherwise open a black camera screen that explains nothing (2026-09-27).
+    fileprivate func openCamera() {
+        if AppPermission.camera.isRefused {
+            refusedPermission = .camera
+        } else {
+            showCamera = true
         }
     }
 }

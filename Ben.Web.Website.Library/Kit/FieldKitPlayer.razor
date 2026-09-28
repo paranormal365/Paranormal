@@ -222,7 +222,8 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
                             <button class="btn btn-primary" @onclick="TogglePlay">
-                                <i class="bi @(_playing ? "bi-pause-fill" : "bi-play-fill")"></i>
+                                @* The site draws icons from its own sprite; the Bootstrap icon classes this used were never loaded, so the button showed no icon. *@
+                                <BenIcon Name="@(_playing ? "pause" : "play")" Class="me-1" />
                                 @(_playing ? "Pause" : "Play")
                             </button>
 
@@ -247,6 +248,71 @@
                         <input type="range" class="form-range" min="0" max="1000" step="1"
                                value="@ScrubPosition"
                                @oninput="OnScrub" aria-label="Position in the session" />
+
+                        @* ── What was seen and heard at the playhead (2026-09-27) ──────────
+                           The same as the phone's review: the video on a stage, the sound under
+                           it, photographs in a strip that glows as each one's moment passes, and
+                           "Motion detected" where the camera saw movement with the phone still.
+                           Every video element lives here, shown only while it covers the playhead,
+                           so an element — and the clock listener on it — survives the switch. *@
+                        @if (HasStage)
+                        {
+                            <div class="fk-stage @(MotionShowing && ActiveVideo is not null ? "fk-stage--motion" : "")"
+                                 data-testid="media-stage">
+                                @foreach (var file in _session.Files.Where(f => IsVideo(f.RelativePath) && !_undecodable.Contains(f.Id)))
+                                {
+                                    <video @key="file.Id" class="fk-stage-video" preload="metadata" playsinline
+                                           style="@(ActiveVideo == file.Id ? "" : "display:none")"
+                                           src="@FileUrl(file.Id)" data-testid="stage-video"
+                                           @ref="_mediaRefs[file.Id]"
+                                           @onerror="@(() => MarkUndecodable(file.Id))"></video>
+                                }
+                                @if (ActiveVideo is null)
+                                {
+                                    <div class="fk-stage-empty">
+                                        @if (ActiveAudio is { } sound)
+                                        {
+                                            <BenIcon Name="volume-2" Class="fk-stage-icon text-info" />
+                                            <span class="small text-muted font-monospace">@sound.RelativePath.Replace("media/", "")</span>
+                                        }
+                                        else
+                                        {
+                                            <BenIcon Name="moon" Class="fk-stage-icon text-muted" />
+                                            <span class="small text-muted" data-testid="stage-nothing">
+                                                @(_session.Files.Any(f => IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) || Photos.Count > 0
+                                                    ? "No recording at this moment."
+                                                    : "No sound, video or photos were recorded in this session.")
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                                @if (MotionShowing)
+                                {
+                                    <div class="fk-motion-sign" data-testid="motion-detected">
+                                        <BenIcon Name="eye" Class="me-1" />Motion detected
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (Photos.Count > 0)
+                        {
+                            <div class="fk-photo-strip" data-testid="photo-strip"
+                                 aria-label="Photos taken during the session">
+                                @foreach (var photo in Photos)
+                                {
+                                    var glowing = IsGlowing(photo.At);
+                                    <button type="button" @key="photo.File.Id"
+                                            class="fk-thumb @(glowing ? "fk-thumb--glow" : "")"
+                                            data-testid="@(glowing ? "photo-thumb-glowing" : "photo-thumb")"
+                                            title="Photo at @Elapsed(photo.At) — pauses and shows it full size"
+                                            @onclick="() => ExpandPhoto(photo)">
+                                        <img src="@FileUrl(photo.File.Id)" alt="Photo at @Elapsed(photo.At)" loading="lazy" />
+                                        <span class="fk-thumb-time">@Elapsed(photo.At)</span>
+                                    </button>
+                                }
+                            </div>
+                        }
 
                         <div class="row g-3 mt-1">
                             <div class="col-6 col-md-3">
@@ -442,6 +508,19 @@
                     </div>
                 </div>
 
+                @if (_expandedPhoto is { } shown)
+                {
+                    <div class="fk-photo-overlay" role="button" tabindex="0" data-testid="photo-expanded"
+                         aria-label="Photo at @Elapsed(shown.At). @(_resumeAfterPhoto ? "Click to keep playing." : "Click to close.")"
+                         @onclick="CollapsePhoto" @onkeydown="OnPhotoKey">
+                        <img src="@FileUrl(shown.File.Id)" alt="Photo at @Elapsed(shown.At)" />
+                        <div class="fk-photo-caption">
+                            @Elapsed(shown.At) into the session
+                            <span class="opacity-75"> · @(_resumeAfterPhoto ? "Click to keep playing" : "Click to close")</span>
+                        </div>
+                    </div>
+                }
+
                 @if (_session.Files.Count > 0)
                 {
                     <div class="card mt-3">
@@ -485,10 +564,8 @@
                                     }
                                     else if (IsVideo(file.RelativePath))
                                     {
-                                        <video controls preload="metadata" width="320"
-                                               class="ms-auto" src="@FileUrl(file.Id)"
-                                               @ref="_mediaRefs[file.Id]"
-                                               @onerror="@(() => MarkUndecodable(file.Id))"></video>
+                                        @* Plays on the stage above, on the session's clock. *@
+                                        <span class="ms-auto small text-muted">plays above, with the session</span>
                                     }
                                     else if (IsImage(file.RelativePath))
                                     {
@@ -853,8 +930,12 @@
 
                 // Where each recording sits in session time. The app stamps `audio_ref` on the
                 // reading it was taken at, with that reading's offset INTO the file, so the
-                // file began at (reading time − offset). Video and photos arrive as typed notes
-                // — "video: media/…" — on the reading they were taken at, which is their start.
+                // file began at (reading time − offset). Photos arrive as typed notes —
+                // "photo: media/…" — on the reading they were taken at. Video and audio notes do
+                // NOT mark a start: the phone writes them when the clip is FINISHED, so the clip
+                // began its length earlier (see MediaStart). Reading them as starts placed every
+                // video after the stretch it filmed (2026-09-27); the phone's own importer has
+                // always subtracted the length.
                 if (element.TryGetProperty("audio_ref", out var audioRef))
                 {
                     string? filename = null; double offset = 0;
@@ -868,9 +949,11 @@
                 }
                 if (reading.Note is { } typed)
                 {
-                    foreach (var prefix in new[] { "video: ", "audio: ", "photo: " })
+                    if (typed.StartsWith("photo: ", StringComparison.OrdinalIgnoreCase))
+                        _mediaStarts.TryAdd(NormalisePath(typed["photo: ".Length..].Trim()), reading.At);
+                    foreach (var prefix in new[] { "video: ", "audio: " })
                         if (typed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                            _mediaStarts.TryAdd(NormalisePath(typed[prefix.Length..].Trim()), reading.At);
+                            _mediaNoteEnds.TryAdd(NormalisePath(typed[prefix.Length..].Trim()), reading.At);
                 }
 
                 _readings.Add(reading);
@@ -895,8 +978,10 @@
             .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
             .ToList();
 
+        // Captures are noted with a marker label (the format has nowhere else to put them), but they
+        // are not marks: photographs are in the strip and recordings on the stage, as on the phone.
         _markers = _readings
-            .Where(r => r.Marker is not null)
+            .Where(r => r.Marker is not null and not ("photo" or "video" or "audio"))
             .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room, r.Microtesla))
             .ToList();
 
@@ -1047,7 +1132,7 @@
         "sentry_emf" => "Magnetic spike",
         "sentry_sound" => "Sound",
         "device_moved" => "Device moved",
-        "scene_motion" => "Movement seen",
+        "scene_motion" => "Motion detected",
         "app_backgrounded" => "App put away",
         "app_returned" => "Back in the app",
         "evp_question" => "Question asked",
@@ -1075,13 +1160,16 @@
         // Dragging the slider moves the recording too, so pressing Play resumes from here.
         if (wasFollowing is { } key && MediaStartOf(key) is { } startsAt)
             await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
+        // The stage shows the frame at the new moment, not the last one it played.
+        await FollowMediaAsync();
     }
 
-    private void JumpTo(DateTime moment)
+    private async Task JumpTo(DateTime moment)
     {
-        Pause();
+        await PauseAsync();
         // A moment BEFORE the mark, so what led up to it can be seen rather than starting at it.
         _playhead = moment.AddSeconds(-3) < _start ? _start : moment.AddSeconds(-3);
+        await FollowMediaAsync();
     }
 
     private async Task TogglePlay()
@@ -1098,7 +1186,15 @@
             // can actually be waited for. Two calls left a gap in which an element still loading
             // dropped the seek and started from zero — which is what reported the beginning back
             // as the playhead.
-            if (await PlayMediaFromAsync(key, (_playhead - startsAt).TotalSeconds)) return;
+            if (await PlayMediaFromAsync(key, (_playhead - startsAt).TotalSeconds))
+            {
+                // Named the clock BEFORE anything is followed, or its own play event — which can
+                // arrive after this — would find it in the followers and be ignored.
+                _clockKey = key;
+                _playing = true;
+                await FollowMediaAsync();
+                return;
+            }
         }
         else if (NextRecordingAfter(_playhead) is { } next && MediaStartOf(next) is { } nextStart)
         {
@@ -1108,7 +1204,13 @@
             // every clip has nowhere to go but forward. The half that was wrong, a playhead inside
             // or past a clip being dragged back to its start, stays gone (Ben, 2026-09-16).
             _playhead = nextStart;
-            if (await PlayMediaFromAsync(next, 0)) return;
+            if (await PlayMediaFromAsync(next, 0))
+            {
+                _clockKey = next;
+                _playing = true;
+                await FollowMediaAsync();
+                return;
+            }
         }
 
         _clockKey = null;
@@ -1130,6 +1232,7 @@
     {
         if (_clockKey is { } key) await PauseMediaAsync(key);
         Pause();
+        await FollowMediaAsync();
     }
 
     // ── The recording as the clock ────────────────────────────────────────────
@@ -1145,11 +1248,23 @@
 
     private static string NormalisePath(string path) => path.Replace('\\', '/').TrimStart('/');
 
-    /// <summary>A recording's start in session time: from its reference, else the session's start.</summary>
+    /// <summary>When each video or audio clip was noted — its END — keyed by normalised path.</summary>
+    private readonly Dictionary<string, DateTime> _mediaNoteEnds = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A recording's start in session time: from its reference; else its note's time less its
+    /// length, once the browser has said how long it is; else the session's start.
+    /// </summary>
     private DateTime? MediaStart(FieldSessionFileSummary file)
-        => _mediaStarts.TryGetValue(NormalisePath(file.RelativePath), out var at) ? at
-         : IsAudio(file.RelativePath) || IsVideo(file.RelativePath) ? _start
-         : null;
+    {
+        var path = NormalisePath(file.RelativePath);
+        if (_mediaStarts.TryGetValue(path, out var at)) return at;
+        if (_mediaNoteEnds.TryGetValue(path, out var noted))
+            return _mediaDurations.TryGetValue(file.Id, out var seconds) && seconds > 0
+                ? noted.AddSeconds(-seconds)
+                : noted;
+        return IsAudio(file.RelativePath) || IsVideo(file.RelativePath) ? _start : null;
+    }
 
     private DateTime? MediaStartOf(Guid fileId)
         => _session?.Files.FirstOrDefault(f => f.Id == fileId) is { } file ? MediaStart(file) : null;
@@ -1187,9 +1302,129 @@
             .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
             .Select(f => (f.Id, StartsAt: MediaStart(f)))
             .Where(x => x.StartsAt is not null && x.StartsAt <= moment && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
-            .OrderByDescending(x => x.StartsAt)
+            // The SOUND is the clock when there is sound (2026-09-27): a whole-session video has
+            // none of its own and plays beside the session's recording, following it.
+            .OrderByDescending(x => IsAudioFile(x.Id))
+            .ThenByDescending(x => x.StartsAt)
             .Select(x => (Guid?)x.Id)
             .FirstOrDefault();
+
+    /// <summary>
+    /// Every playable recording whose span contains the moment — counting one that begins within a
+    /// second after it, as the phone does: the session's clock starts at Start and its sound a few
+    /// milliseconds later, and "No recording at this moment" at 0:00 was a claim about nothing.
+    /// </summary>
+    private List<Guid> AllCovering(DateTime moment)
+        => _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (f.Id, StartsAt: MediaStart(f)))
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment.AddSeconds(1) && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
+            .OrderByDescending(x => x.StartsAt)
+            .Select(x => x.Id)
+            .ToList() ?? [];
+
+    private bool IsAudioFile(Guid id) => _session?.Files.FirstOrDefault(f => f.Id == id) is { } f && IsAudio(f.RelativePath);
+    private bool IsVideoFile(Guid id) => _session?.Files.FirstOrDefault(f => f.Id == id) is { } f && IsVideo(f.RelativePath);
+
+    /// <summary>The video on the stage at the playhead — the latest to have begun.</summary>
+    private Guid? ActiveVideo => AllCovering(_playhead).FirstOrDefault(IsVideoFile) is var id && id != Guid.Empty ? id : null;
+    /// <summary>The sound at the playhead.</summary>
+    private FieldSessionFileSummary? ActiveAudio
+        => AllCovering(_playhead).FirstOrDefault(IsAudioFile) is var id && id != Guid.Empty
+            ? _session!.Files.First(f => f.Id == id) : null;
+
+    // ── Media that FOLLOWS the clock (2026-09-27) ─────────────────────────────
+    //
+    // Ben: "Even when recording video, it doesn't play back." A whole-session video overlaps the
+    // session's own sound, and one element at a time was all this page played. The clock stays
+    // one recording — the sound, when there is sound — and anything else covering the playhead is
+    // kept on it: seeked when it drifts, played and paused with it, and a video muted while the
+    // sound plays beside it so nothing is heard twice. The phone's review does the same.
+
+    /// <summary>Recordings being kept on the clock, so their own play events are not mistaken for a new clock.</summary>
+    private readonly HashSet<Guid> _following = [];
+
+    private async Task FollowMediaAsync()
+    {
+        if (_media is null || _session is null) return;
+        var covering = AllCovering(_playhead);
+        var soundPlays = covering.Any(IsAudioFile);
+
+        foreach (var id in covering)
+        {
+            if (!_mediaRefs.TryGetValue(id, out var el) || MediaStartOf(id) is not { } startsAt) continue;
+            var muted = IsVideoFile(id) && soundPlays;
+            if (id == _clockKey)
+            {
+                try { await _media.InvokeVoidAsync("mute", el, muted); } catch (JSException) { }
+                continue;
+            }
+            _following.Add(id);      // before the call: its play event can arrive first
+            try
+            {
+                await _media.InvokeVoidAsync("follow", el, (_playhead - startsAt).TotalSeconds,
+                                             _playing, (double)_rate, muted);
+            }
+            catch (JSException) { }
+        }
+
+        foreach (var id in _following.Where(id => !covering.Contains(id)).ToList())
+        {
+            await PauseMediaAsync(id);
+            _following.Remove(id);
+        }
+    }
+
+    // ── Photographs, and motion, on the one timeline (2026-09-27) ─────────────
+
+    /// <summary>How long a thumbnail glows and is grown after its moment. Same as the phone.</summary>
+    private const double PhotoGlowSeconds = 3;
+    /// <summary>How long "Motion detected" stays up after the moment. Same as the phone.</summary>
+    private const double MotionSignSeconds = 3;
+
+    /// <summary>Photographs, in the order they were taken, with when.</summary>
+    private List<(FieldSessionFileSummary File, DateTime At)> Photos
+        => _session?.Files
+            .Where(f => IsImage(f.RelativePath) && !_undecodable.Contains(f.Id))
+            .Select(f => (File: f, At: _mediaStarts.TryGetValue(NormalisePath(f.RelativePath), out var at) ? at : (DateTime?)null))
+            .Where(x => x.At is not null)
+            .Select(x => (x.File, x.At!.Value))
+            .OrderBy(x => x.Item2)
+            .ToList() ?? [];
+
+    private bool IsGlowing(DateTime takenAt)
+        => takenAt <= _playhead && (_playhead - takenAt).TotalSeconds < PhotoGlowSeconds;
+
+    /// <summary>Whether the playhead is within a few seconds after motion the camera saw.</summary>
+    private bool MotionShowing
+        => _readings.Any(r => r.Marker == "scene_motion" && r.At <= _playhead
+                              && (_playhead - r.At).TotalSeconds < MotionSignSeconds);
+
+    private (FieldSessionFileSummary File, DateTime At)? _expandedPhoto;
+    private bool _resumeAfterPhoto;
+
+    /// <summary>
+    /// Tapping a thumbnail pauses the night and shows the photograph at full size; tapping it again
+    /// puts it back and carries on playing if it was (Ben, 2026-09-27).
+    /// </summary>
+    private async Task ExpandPhoto((FieldSessionFileSummary File, DateTime At) photo)
+    {
+        _resumeAfterPhoto = _playing;
+        await PauseAsync();
+        _expandedPhoto = photo;
+    }
+
+    private async Task CollapsePhoto()
+    {
+        _expandedPhoto = null;
+        if (_resumeAfterPhoto) await TogglePlay();
+        _resumeAfterPhoto = false;
+    }
+
+    private async Task OnPhotoKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Escape" or "Enter" or " ") await CollapsePhoto();
+    }
 
     /// <summary>The recording that begins soonest after this moment, when one does.</summary>
     /// <remarks>
@@ -1300,6 +1535,8 @@
     [JSInvokable]
     public void OnMediaPlay(Guid key, double seconds)
     {
+        // A recording being kept on the clock is not a new clock.
+        if (_following.Contains(key)) return;
         // Pressing play on the element itself, or the page's button: either way the recording
         // is now the clock, and the page's own ticker must not also advance the playhead.
         _ticker?.Cancel(); _ticker = null;
@@ -1316,7 +1553,7 @@
         var moment = startsAt.AddSeconds(seconds);
         _playhead = moment < _start ? _start : moment > _end ? _end : moment;
         AdvanceMap();
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () => { await FollowMediaAsync(); StateHasChanged(); });
     }
 
     [JSInvokable]
@@ -1393,7 +1630,7 @@
                 Pause();
             }
             AdvanceMap();
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(async () => { await FollowMediaAsync(); StateHasChanged(); });
         }
     }
 
@@ -1678,6 +1915,9 @@
 
     /// <summary>About six labels across the axis, whatever the session's length.</summary>
     private static int LabelStep(int points) => Math.Max(1, (int)Math.Ceiling(points / 6.0));
+
+    /// <summary>Whether the stage has anything to show: any audio, video or photo at all.</summary>
+    private bool HasStage => _session?.Files.Any(f => IsAudio(f.RelativePath) || IsVideo(f.RelativePath) || IsImage(f.RelativePath)) == true;
 
     private static bool IsAudio(string path) =>
         path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)

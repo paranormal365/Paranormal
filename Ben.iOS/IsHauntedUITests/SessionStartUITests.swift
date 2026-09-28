@@ -23,7 +23,7 @@ final class SessionStartUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         return app
@@ -74,21 +74,18 @@ final class SessionStartUITests: XCTestCase {
     }
 
     func testAPendingSessionCanBeDiscardedAndLeavesNothingBehind() throws {
-        // Counted BEFORE the session exists, on the home list, and compared after Discard. An
-        // earlier version asserted that no "not started" row existed afterwards — but other tests
-        // in the same run leave their own pending sessions behind, so that assertion was about
-        // the run's history, not about this discard.
+        // Since 2026-09-27 a new session REPLACES one set up and never started (Ben: "just save it
+        // and ask if they want to create a new one"), so whatever earlier tests left pending is
+        // gone by the time this one opens — and after the discard there is nothing pending at all.
+        // (This used to count the run's leftovers before and after; the new rule makes the stricter
+        // answer the right one.)
         let app = XCUIApplication()
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 15))
-        // The predicate is built where it is used rather than held in a local: Swift 6 treats an
-        // NSPredicate crossing the query boundary as a possible data race and refuses to compile.
-        let before = app.buttons.matching(identifier: "field-session-row")
-            .matching(NSPredicate(format: "label CONTAINS 'not started'")).count
 
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
         XCTAssertTrue(app.buttons["start-recording"].waitForExistence(timeout: 15))
@@ -102,9 +99,9 @@ final class SessionStartUITests: XCTestCase {
 
         // Back on the Field Kit home, and the discarded session is not in the list.
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 10))
-        let after = app.buttons.matching(identifier: "field-session-row")
+        let pending = app.buttons.matching(identifier: "field-session-row")
             .matching(NSPredicate(format: "label CONTAINS 'not started'")).count
-        XCTAssertEqual(after, before, "discarding must remove the session it was pressed on")
+        XCTAssertEqual(pending, 0, "discarding must remove the session it was pressed on")
     }
 
     func testAPendingSessionIsNeverReportedAsInterrupted() throws {

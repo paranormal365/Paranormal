@@ -50,8 +50,21 @@ public struct MyInvestigation: Sendable, Codable, Equatable, Identifiable {
     public var didAttend: Bool?
     /// When evidence from this investigation is due, for anyone who owes some.
     public var evidenceDueDate: Date?
+    /// Where it is (2026-09-27), so a Field Kit session started there can offer it first. Nil from
+    /// an older server, and for an investigation with no place or no coordinates.
+    public var placeId: UUID?
+    public var placeName: String?
+    public var latitude: Double?
+    public var longitude: Double?
 
     public var id: UUID { attendeeId }
+
+    /// Whether it is on now or later today — the one somebody starting a session is most likely at.
+    public func isHappeningToday(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard let start = scheduledDateTime else { return false }
+        if let end = endDateTime, start <= now, now <= end { return true }
+        return calendar.isDate(start, inSameDayAs: now)
+    }
 
     /// Still ahead of us — what a roster screen leads with.
     public func isUpcoming(now: Date = Date()) -> Bool {

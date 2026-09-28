@@ -101,3 +101,26 @@ export function seek(el, seconds) {
     }
     el.currentTime = Math.min(s, el.duration);
 }
+
+/**
+ * Keeps a second recording on the clock (2026-09-27): a whole-session video playing beside the
+ * session's sound. Seeks only when it has drifted, so it does not stutter four times a second.
+ */
+export async function follow(el, seconds, playing, r, muted) {
+    if (!el) return;
+    el.muted = !!muted;
+    el.playbackRate = r;
+    try {
+        await ready(el);
+        const target = Math.max(0, Math.min(seconds, el.duration || seconds));
+        if (!playing || Math.abs(el.currentTime - target) > 0.35) el.currentTime = target;
+        if (playing && el.paused) await el.play();
+        else if (!playing && !el.paused) el.pause();
+    } catch (e) {
+        // A follower that will not play is not worth stopping the clock over.
+    }
+}
+
+export function mute(el, muted) {
+    if (el) el.muted = !!muted;
+}

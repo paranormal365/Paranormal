@@ -330,6 +330,8 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBa
 // never signed in. Beside the one above because they are the same kind of cleanup and somebody
 // looking for one should find the other.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.MarkupFieldSanitizeBackfillService>();
+// Photos, videos and sound were counted as marks before 2026-09-27; this puts the stored counts right.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.FieldSessionMarkerRecountService>();
 // Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
 

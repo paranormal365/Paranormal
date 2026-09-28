@@ -17,6 +17,14 @@ struct LiveSessionView: View {
 
     @State private var showingSettings = false
     @State private var camera = FieldCameraSession()
+    /// Whole-session video and the camera's eye for Watch for Motion.
+    @State private var video = SessionVideoRecorder()
+    /// Remembered between sessions: somebody who turns it off does not want it back every night.
+    @AppStorage("fieldkit.watch-for-motion") private var watchForMotionPreference = true
+    /// Set while Stop is closing the video and the session, so it cannot be pressed twice.
+    @State private var stopping = false
+    /// A permission somebody reached for and had refused — said, with the way to Settings.
+    @State private var refusedPermission: AppPermission?
     @State private var blackout = false
 
     /// Why Start refused, shown on the bar. Nil while nothing has refused.
@@ -59,6 +67,7 @@ struct LiveSessionView: View {
                                        onAllow: { await active?.requestLocation() })
             }
             .sheet(isPresented: $askingForNote) { noteComposer }
+            .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
             .alert("Couldn't stop the session",
                    isPresented: Binding(get: { errorMessage != nil },
@@ -77,7 +86,25 @@ struct LiveSessionView: View {
             .fullScreenCover(isPresented: $showingEVP) { evpSheet }
             .onChange(of: blackout) { _, isDark in applyBlackout(isDark) }
             .onChange(of: store.active?.channels) { _, channels in
-                if channels?.contains(.video) == true { camera.start() } else { camera.stop() }
+                if channels?.contains(.video) == true {
+                    camera.start()
+                    syncVideo()
+                } else {
+                    // The clip is closed and filed BEFORE the camera goes, or it ends unfinished.
+                    Task {
+                        await finishVideo()
+                        camera.stop()
+                    }
+                }
+            }
+            .onChange(of: camera.isRunning) { _, _ in syncVideo() }
+            .onChange(of: store.active?.isRecording) { _, _ in syncVideo() }
+            .onChange(of: store.active?.lastMotionDetectedAt) { _, moment in
+                guard let moment, let active = store.active else { return }
+                Task {
+                    await video.motionDetected(at: moment, session: active, camera: camera,
+                                               files: store.files)
+                }
             }
             .onChange(of: store.active?.isArmed) { _, armed in
                 UIApplication.shared.isIdleTimerDisabled = armed == true || blackout
@@ -89,14 +116,25 @@ struct LiveSessionView: View {
             .onChange(of: scenePhase) { _, phase in
                 Task {
                     switch phase {
-                    case .background: await store.active?.appWentToBackground()
-                    case .active: await store.active?.appReturned()
+                    case .background:
+                        // iOS takes the camera as the app goes; the clip is closed and filed now,
+                        // while it still can be, and a new one starts on the way back.
+                        await finishVideo()
+                        await store.active?.appWentToBackground()
+                    case .active:
+                        await store.active?.appReturned()
+                        syncVideo()
                     default: break
                     }
                 }
             }
             .onDisappear {
-                camera.stop()
+                let video = video, camera = camera
+                Task {
+                    await finishVideo(video: video, camera: camera)
+                    video.stopFeeding()
+                    camera.stop()
+                }
                 applyBlackout(false)
                 UIApplication.shared.isIdleTimerDisabled = false
             }
@@ -175,7 +213,9 @@ struct LiveSessionView: View {
     private func bringUp() async {
         store.load()
         await store.activate(sessionId)
+        await store.active?.setWatchForMotion(watchForMotionPreference)
         if store.active?.channels.contains(.video) == true { camera.start() }
+        syncVideo()
         if store.active?.channels.contains(.location) == true,
            store.active?.locationAuthorization == .notDetermined,
            !locationExplained {
@@ -212,19 +252,85 @@ struct LiveSessionView: View {
                 CameraPreview(session: camera.session)
                     .frame(height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        // The frame lights up while the camera is seeing motion, as it does on
+                        // the replay.
+                        if let seen = active.lastMotionDetectedAt {
+                            TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Theme.warning,
+                                            lineWidth: context.date.timeIntervalSince(seen)
+                                                < ReplayMotion.signSeconds ? 3 : 0)
+                            }
+                        }
+                    }
 
-                if active.sentry?.watchSceneMotion == true {
-                    Label("watching", systemImage: "eye")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .foregroundStyle(Theme.warning)
-                        .padding(8)
+                VStack(alignment: .leading, spacing: 6) {
+                    if video.isRecording, let started = camera.clipStartedAt {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Label(SessionClock.elapsed(from: started, to: context.date),
+                                  systemImage: "record.circle")
+                                .font(.caption2.bold().monospacedDigit())
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(.black.opacity(0.55), in: Capsule())
+                                .foregroundStyle(Theme.danger)
+                        }
+                        .accessibilityIdentifier("video-recording")
+                    }
+                    if active.watchForMotion || active.sentry?.watchSceneMotion == true {
+                        Label("watching", systemImage: "eye")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .foregroundStyle(Theme.warning)
+                    }
+                }
+                .padding(8)
+
+                // "Motion detected" for a few seconds after the camera saw something with the
+                // phone still — the same sign the replay shows at that moment.
+                if let seen = active.lastMotionDetectedAt {
+                    TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                        if context.date.timeIntervalSince(seen) < ReplayMotion.signSeconds {
+                            MotionDetectedSign()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                                       alignment: .bottom)
+                                .padding(.bottom, 10)
+                        }
+                    }
                 }
             }
+            .frame(height: 200)
+
+            Toggle(isOn: Binding(
+                get: { active.watchForMotion },
+                set: { on in
+                    if on, AppPermission.camera.isRefused {
+                        refusedPermission = .camera
+                        return
+                    }
+                    watchForMotionPreference = on
+                    Task { await active.setWatchForMotion(on) }
+                })
+            ) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Label("Watch for motion", systemImage: "figure.walk.motion")
+                    Text("While the phone is still, movement in view is marked and photographed. The video keeps recording.")
+                        .font(.caption2).foregroundStyle(Theme.fog)
+                }
+            }
+            .tint(Theme.ecto)
+            .accessibilityIdentifier("watch-for-motion")
+
             if let problem = camera.problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.warning)
+                if AppPermission.camera.isRefused { OpenSettingsButton() }
+            }
+            if let problem = video.problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(Theme.warning)
+                    .accessibilityIdentifier("video-problem")
             }
         }
         .accessibilityIdentifier("camera-preview")
@@ -284,6 +390,7 @@ struct LiveSessionView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.danger)
+                .disabled(stopping)
                 .accessibilityIdentifier("stop-field-session")
             } else {
                 // Pending (item 215): set the room, the base level and the channels first, then
@@ -370,11 +477,20 @@ struct LiveSessionView: View {
                             relativeAltitudeMeters: active.sample.relativeAltitudeMeters,
                             isEnabled: active.channels.contains(.location)
                                 && active.locationAuthorization.canLocate,
-                            onUseLocation: active.channels.contains(.location)
-                                && active.locationAuthorization == .notDetermined
-                                ? { showingLocationExplainer = true } : nil)
+                            onUseLocation: locationAction(active))
                 .padding(12)
                 .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// What the position card's button does: ask the first time, and after a no, say so and offer
+    /// Settings — iOS never shows its question twice.
+    private func locationAction(_ active: ActiveFieldSession) -> (() -> Void)? {
+        guard active.channels.contains(.location) else { return nil }
+        switch active.locationAuthorization {
+        case .notDetermined: return { showingLocationExplainer = true }
+        case .denied, .restricted: return { refusedPermission = .location }
+        case .authorized: return nil
         }
     }
 
@@ -465,6 +581,12 @@ struct LiveSessionView: View {
                 Toggle(isOn: Binding(
                         get: { active.channels.contains(channel) },
                         set: { isOn in
+                            // Refused before, so iOS will not ask again: say so and offer
+                            // Settings, rather than a switch that turns on and records nothing.
+                            if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
+                                refusedPermission = needed
+                                return
+                            }
                             var channels = active.channels
                             if isOn { channels.insert(channel) } else { channels.remove(channel) }
                             Task { await active.setChannels(channels) }
@@ -522,14 +644,36 @@ struct LiveSessionView: View {
     }
 
     private func stop() {
+        guard !stopping else { return }
+        stopping = true
         Task {
+            defer { stopping = false }
+            // The video first: it is filed into the session, and the session only keeps what it
+            // holds when it ends.
+            await finishVideo()
             do {
                 try await store.endSession(sessionId)
-                router.push(.fieldSessionReview(sessionId))
+                // The review takes this screen's place — Back from it is Field Kit, not the
+                // instruments of a session that is over.
+                router.replaceTop(with: .fieldSessionReview(sessionId))
             } catch {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func syncVideo() {
+        guard let active = store.active, active.sessionId == sessionId else { return }
+        Task { await video.sync(session: active, camera: camera, files: store.files) }
+    }
+
+    private func finishVideo() async {
+        await finishVideo(video: video, camera: camera)
+    }
+
+    private func finishVideo(video: SessionVideoRecorder, camera: FieldCameraSession) async {
+        guard let active = store.active, active.sessionId == sessionId else { return }
+        await video.finish(session: active, camera: camera, files: store.files)
     }
 
     /// Throws away a session that never started. Nothing was logged, so nothing is lost; the

@@ -22,6 +22,7 @@ struct FieldCaptureBar: View {
     @State private var cameraWasRunning = false
     @State private var errorMessage: String?
     @State private var takingPhoto = false
+    @State private var refusedPermission: AppPermission?
 
     private var files: SessionFileStore { dependencies.fieldKit.files }
 
@@ -46,6 +47,10 @@ struct FieldCaptureBar: View {
                 photoButton
 
                 Button {
+                    if session.recording == nil, AppPermission.microphone.isRefused {
+                        refusedPermission = .microphone
+                        return
+                    }
                     Task {
                         if session.recording == nil {
                             await session.startRecording()
@@ -55,7 +60,7 @@ struct FieldCaptureBar: View {
                     }
                 } label: {
                     Label(audioButtonTitle,
-                          systemImage: camera.isRecordingClip ? "video"
+                          systemImage: camera.isRecordingClipWithSound ? "video"
                                      : (session.recording == nil ? "mic" : "mic.slash"))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -65,7 +70,7 @@ struct FieldCaptureBar: View {
                 // While a clip holds the microphone there is nothing here to start or stop: the
                 // video is recording the sound, and pressing this would be two things fighting
                 // over one microphone — which is the whole bug this was built to end.
-                .disabled(camera.isRecordingClip)
+                .disabled(camera.isRecordingClipWithSound)
                 .accessibilityIdentifier("toggle-audio-recording")
             }
 
@@ -73,6 +78,7 @@ struct FieldCaptureBar: View {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.danger)
                     .accessibilityIdentifier("recording-problem")
+                if session.microphoneRefused { OpenSettingsButton() }
             }
 
             // The camera borrowing the microphone is worth saying and is nobody's fault, so it is a note rather than
@@ -132,6 +138,7 @@ struct FieldCaptureBar: View {
                                        await adopt(url, kind: kind, duration: duration)
                                    })
         }
+        .permissionRefusedAlert($refusedPermission)
         .alert("Couldn't take that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -140,7 +147,7 @@ struct FieldCaptureBar: View {
     }
 
     private var audioButtonTitle: String {
-        if camera.isRecordingClip { return "On the clip" }
+        if camera.isRecordingClipWithSound { return "On the clip" }
         return session.recording == nil ? "Record" : "Stop audio"
     }
 
@@ -160,7 +167,9 @@ struct FieldCaptureBar: View {
     /// is not, a photo-only viewfinder opens so the shot can be framed, and closes itself after.
     private var photoButton: some View {
         Button {
-            if camera.isRunning {
+            if AppPermission.camera.isRefused {
+                refusedPermission = .camera
+            } else if camera.isRunning {
                 Task { await snap() }
             } else {
                 cameraWasRunning = camera.isRunning

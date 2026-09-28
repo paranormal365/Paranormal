@@ -43,7 +43,7 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .evpQuestion: "Question asked"
         case .evpWaitEnd: "Stopped waiting"
         case .deviceMoved: "Device moved"
-        case .sceneMotion: "Movement seen"
+        case .sceneMotion: "Motion detected"
         case .appBackgrounded: "App put away"
         case .appReturned: "Back in the app"
         }
@@ -129,6 +129,10 @@ public final class FieldSession {
 
     /// The account the seal named as having recorded it, when the bundle said.
     public var recordedByAccountId: UUID?
+
+    /// Downloaded from the public archive: somebody else's published night, with its positions at
+    /// the place's public point rather than where they walked. Optional, like every later attribute.
+    public var isPublicArchiveCopy: Bool?
 
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]

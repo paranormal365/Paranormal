@@ -99,7 +99,7 @@ final class FieldKitScreenshotTests: XCTestCase {
         settle(1)
 
         // ── A session, named for the place ────────────────────────────────
-        app.buttons["start-field-session"].tap()
+        AppNavigator.startNewSession(in: app)
         let field = app.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()

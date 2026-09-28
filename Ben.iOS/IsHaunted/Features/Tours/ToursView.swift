@@ -84,6 +84,9 @@ struct ToursView: View {
                 // Said out loud rather than left as a button that does nothing.
                 Text(refusal).font(.caption).foregroundStyle(Theme.warning)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if AppPermission.location.isRefused {
+                    OpenSettingsButton().frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding(.horizontal)

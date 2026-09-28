@@ -136,13 +136,21 @@ plays here exactly as it did for them; tapping such a file anywhere on the phone
 <b>On the server, not on this phone</b> lists this account's sessions that were sent from another
 device or cleared from this one, and Download brings a whole night back. An imported session is
 the same three things a local recording leaves behind (the readings log, the rows, the media), so
-nothing downstream knows the difference; only a Source line on the review says where it came from.</p>
+nothing downstream knows the difference; only a Source line on the review says where it came from.
+<b>Find public sessions</b> lists sessions other people published at public places — near the
+device, or at a place searched for by name or town — and downloads the archive's public copy, whose
+positions are all the place's public point rather than the path somebody walked.</p>
 """),
 
     ("Naming a session", "41-name-the-session", """
 <p>A session is named before it starts, not afterwards. The name is how it is found later, and
 asking at the end — when somebody is tired and packing up — is how recordings end up called
 "Session 4".</p>
+
+<p>The sheet fills the name in from where the device is — one of IsHaunted's places within a
+quarter of a mile, or else Apple's street address — with nearby places offered as chips. It only
+asks to be typed when location is off. An investigation happening at this place is listed first
+and chosen already, and the sheet says when public sessions were recorded near here.</p>
 """),
 
     ("The live session", "42-live-session", """
@@ -196,8 +204,16 @@ it is the thing to press when something happens and there is no time to type.</t
 window is findable later instead of being hunted through an hour of audio.</td>
 <td>"Is anyone here?" — the question is marked, the following silence is where to listen.</td></tr>
 
-<tr><td><b>Photo / Video</b></td><td>Capture into the session. Anything taken is stamped with where
+<tr><td><b>Photo</b></td><td>Capture into the session. Anything taken is stamped with where
 you were and which room you had named.</td><td>A photo of the stairs, filed to "Cellar stairs".</td></tr>
+
+<tr><td><b>Video</b></td><td>With the Video channel on, the camera records for the whole session
+while the screen is open, with the session's own sound recording beside it.</td>
+<td>Played back together, on one clock, in the review and on the website.</td></tr>
+
+<tr><td><b>Watch for motion</b></td><td>While the phone is still, movement in the camera's view is
+marked "Motion detected" and photographed — the video keeps recording.</td>
+<td>Propped on a stair: a shadow crosses the landing, and the moment is marked with a picture.</td></tr>
 
 <tr><td><b>Audio</b></td><td>Continuous recording for the session, which is what EVP markers point
 into.</td><td>Runs for the whole session unless switched off.</td></tr>
@@ -252,8 +268,9 @@ moment.</p>
 <p>The sentry watches while nobody is looking at the phone and marks the timeline by itself. Four
 triggers, each switched on separately: magnetic field and sound, measured as a departure from the
 base level; the device being moved, which is what matters when a tripod is disturbed; and movement
-in the camera's view. What it does when one fires is mark the timeline — it takes no clip, and the
-camera is there to be watched through rather than recorded from (2026-09-17).</p>
+in the camera's view. What it does when one fires is mark the timeline. Recording video is the Video
+channel's job, for the whole session; <b>Watch for motion</b> is separate from arming and works
+whenever the phone is still, marking and photographing what moved (2026-09-27).</p>
 
 <p>Arming is refused, in words, when it would be pointless — a magnetic threshold with no base
 level to measure against is not a threshold, and scene motion needs the camera switched on.</p>
@@ -296,9 +313,18 @@ night's work into something a client, a colleague or a stranger can actually ass
 """),
 
     ("Ending a session", "53-session-review", """
-<p>Stopping opens the review: what was captured, how long it ran, what was marked. From here the
-session can be sent to the server or exported — both as one sealed <code>.ben</code> file — attached
-to a case, or published to a public place's archive.</p>
+<p>Stopping opens the review: what was captured, how long it ran, what was marked. It says the
+session is saved on the phone and offers <b>Start another session</b>, with the same channels. The
+video plays with the session's sound; photographs sit in a strip under the player, and each glows
+and grows a little as playback passes the moment it was taken — tap one to pause and see it full
+size, tap again to carry on. From here the session can be sent to the server or exported — both as
+one sealed <code>.ben</code> file — attached to a case, or published to a public place's archive.</p>
+
+<p>Pressing <b>Start a session</b> while one is still open saves a recording one (or replaces one
+that never started) after asking, instead of making somebody deal with it first. The New session
+sheet fills in where you are — one of IsHaunted's places nearby, or else the street address — puts
+an investigation happening here first, and says when other people published sessions nearby. If a
+permission the app needs was refused, the switch says so and offers Settings.</p>
 """),
 
     ("Events", "60-events", """

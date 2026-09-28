@@ -48,12 +48,16 @@ public struct SessionWindow: Sendable, Equatable {
 /// package: video is one or two orders of magnitude heavier than everything else a session holds,
 /// and it goes up a phone's upstream connection into an account with a storage allowance.
 ///
-/// So the window decides. Send five minutes of video, move the window, send the next five. The
+/// So the window decides. Send ten minutes of video, move the window, send the next ten. The
 /// readings, marks, photographs and audio are not rationed — only video is, because only video
 /// is the problem.
 public enum UploadAllowance: Sendable {
     /// Video seconds permitted in a single upload.
-    public static let videoSeconds: TimeInterval = 5 * 60
+    ///
+    /// Ten minutes since 2026-09-27 (Ben: "lets change the cap to 10 minutes"), up from five, once
+    /// the whole session started recording video: about 450 MB of 720p, which is why the byte
+    /// ceiling below rose with it.
+    public static let videoSeconds: TimeInterval = 10 * 60
 
     /// Said the way a person reads it: "5 minutes".
     public static var spokenVideo: String {
@@ -73,7 +77,10 @@ public enum UploadAllowance: Sendable {
     /// quarter of somebody's whole allowance in a single upload — generous enough that an ordinary
     /// night never meets it, small enough that four careless ones cannot silently fill an account
     /// or park a phone on a home connection for an hour.
-    public static let maximumBytes: Int64 = 500 * 1024 * 1024
+    ///
+    /// 600 MB since 2026-09-27 (Ben: "raise it to 600mb"), up from 500, so ten minutes of video and
+    /// a night's sound and photographs still fit in one upload.
+    public static let maximumBytes: Int64 = 600 * 1024 * 1024
 
     public static var spokenSize: String {
         ByteCountFormatter.string(fromByteCount: maximumBytes, countStyle: .file)

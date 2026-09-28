@@ -1005,7 +1005,8 @@ public sealed record DeviceDataSummary(
             {
                 if (reading.TryGetProperty("measurements", out var measurements)
                     && measurements.ValueKind == JsonValueKind.Object
-                    && measurements.TryGetProperty("marker", out _))
+                    && measurements.TryGetProperty("marker", out var marker)
+                    && !IsCaptureNote(marker))
                 {
                     markerCount++;
                 }
@@ -1022,6 +1023,27 @@ public sealed record DeviceDataSummary(
                      ? endedAt.GetDateTime().ToUniversalTime() : null,
             ReadingCount: readingCount,
             MarkerCount: markerCount);
+    }
+
+    /// <summary>
+    /// A photo, video or audio clip being noted, rather than something somebody marked.
+    /// </summary>
+    /// <remarks>
+    /// Version 1 of the format has no home for a capture, so the phone notes one as a reading whose
+    /// marker label is the capture's kind. Counting those as marks made a session with three marks,
+    /// three photos, a video and its sound read "8 marked" on the website, the archive and the phone's
+    /// server list, while the phone itself said 3 (found walking the field-session arc, 2026-09-27).
+    /// </remarks>
+    public static bool IsCaptureNote(JsonElement marker)
+    {
+        var label = marker.ValueKind switch
+        {
+            JsonValueKind.String => marker.GetString(),
+            JsonValueKind.Object when marker.TryGetProperty("value", out var value)
+                                      && value.ValueKind == JsonValueKind.String => value.GetString(),
+            _ => null,
+        };
+        return label is "photo" or "video" or "audio";
     }
 }
 

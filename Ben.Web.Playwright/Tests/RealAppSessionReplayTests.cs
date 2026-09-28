@@ -60,7 +60,9 @@ public class RealAppSessionReplayTests : BenTestBase
         await Page.WaitForTimeoutAsync(3000);
         var audioTime = await Page.EvaluateAsync<double>("() => document.querySelector('audio').currentTime");
         Assert.That(audioTime, Is.GreaterThan(1.0), "the app's recording should actually be playing");
-        await Expect(Page.Locator("[data-testid='current-room']")).ToContainTextAsync("Cellar");
+        // The room the probe named, not a hard-coded one: any other session failed here for
+        // having been recorded somewhere else.
+        await Expect(Page.Locator("[data-testid='current-room']")).ToContainTextAsync(room);
 
         if (Environment.GetEnvironmentVariable("BEN_PROBE_SHOT") is { Length: > 0 } shot)
             await Page.ScreenshotAsync(new() { Path = shot, FullPage = true });

@@ -23,12 +23,20 @@ struct NoteComposerView: View {
     @State private var isListening = false
     @State private var canDictate = false
     @State private var problem: String?
+    @State private var refusedPermission: AppPermission?
     @State private var listener: Task<Void, Never>?
 
     private var dictation: DictationService? { dependencies.fieldKit.sensors().dictation }
 
     var body: some View {
         NavigationStack {
+            composer
+        }
+        .permissionRefusedAlert($refusedPermission)
+    }
+
+    private var composer: some View {
+        Group {
             Form {
                 Section {
                     Picker("How", selection: $kind) {
@@ -166,6 +174,9 @@ struct NoteComposerView: View {
                 for await update in try await dictation.start() {
                     text = update.text
                 }
+            } catch DictationError.permissionDenied {
+                // Speech recognition or the microphone was refused; say which, and offer Settings.
+                refusedPermission = AppPermission.speech.isRefused ? .speech : .microphone
             } catch {
                 problem = error.localizedDescription
             }

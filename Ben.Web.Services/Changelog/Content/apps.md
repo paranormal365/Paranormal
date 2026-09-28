@@ -16,6 +16,34 @@ known it is worth naming, because that is what somebody can check on their own p
 **Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
+## 2026-09-27
+
+- Sound recordings are louder. The microphone was recorded exactly as the sound meter reads it,
+  which left a voice across the room barely audible; recordings now carry a steady boost for the
+  whole night, while the meter keeps showing the room as it is.
+- Playback on the phone is at full speaker volume, and plays with the ring/silent switch on.
+- With **Video** on, a session now records video for the whole session, with its sound coming from
+  the session's own recording. Before, the switch only showed a viewfinder, so nothing played back.
+- The review plays video and sound together, and shows the photographs taken during the session in
+  a strip of thumbnails that glow as playback reaches them. Tap one to see it full size; tap again
+  to carry on. Photos taken indoors, with no position, used to appear nowhere.
+- A new **Watch for motion** setting: with video on and the phone still, movement in view is marked
+  *Motion detected* and photographed, and the review shows the sign at those moments. A phone being carried
+  or turned no longer counts as movement in the room.
+- After **Stop**, the review says the session is saved and offers **Start another session**, filled
+  in the same way. Starting a new session while one is still open saves the open one instead of
+  asking you to deal with it first. Switching from one session to another no longer loses the first
+  one's marks and photos.
+- The New session sheet fills in where you are from your location — a known place nearby, or the
+  street address — lists investigations here and today first, and picks the one happening here now.
+- The Field Kit screen has **Find public sessions**, which finds sessions other people published,
+  near you or by searching a place or town, and plays them on your phone.
+- When something needs a permission you turned off — the camera, the microphone, location, speech
+  recognition or notifications — the app says which one and offers **Open Settings**. A recording
+  with the microphone turned off used to be silent without saying so.
+- One upload now carries 10 minutes of video and 600 MB in total, and **Send without the video**
+  sends everything else in one go.
+
 ## 2026-09-17
 
 - The button in a running session is a **Photo** button. It takes a photograph of what the camera

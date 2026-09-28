@@ -22,6 +22,9 @@ struct EventDetailView: View {
     @State private var busy = false
     @State private var message: String?
     @State private var seats = 1
+    /// A reserved seat on a phone that refuses notifications: its reminders cannot arrive, and
+    /// that is said with the way to Settings rather than left for somebody to find out on the night.
+    @State private var remindersRefused = false
 
     private var signedIn: Bool { dependencies.session.me != nil }
 
@@ -130,6 +133,11 @@ struct EventDetailView: View {
                 } else {
                     Text("You've confirmed you've seen it.")
                         .font(.footnote).foregroundStyle(Theme.fog)
+                }
+                if remindersRefused {
+                    Text("Reminders for this walk can't arrive: notifications are off for IsHaunted.")
+                        .font(.footnote).foregroundStyle(Theme.warning)
+                    OpenSettingsButton()
                 }
 
             case .turnedDown:
@@ -302,6 +310,9 @@ struct EventDetailView: View {
     private func refreshReminders() async {
         guard let event else { return }
         await SeatReminders.schedule(for: event)
+        remindersRefused = event.mySeat?.status == .reserved
+            ? await AppPermission.notifications.isRefusedNow()
+            : false
     }
 }
 

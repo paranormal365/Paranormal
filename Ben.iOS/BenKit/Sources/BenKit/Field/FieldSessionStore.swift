@@ -92,7 +92,10 @@ public final class FieldSessionStore {
     public func activate(_ id: UUID, policy: SamplingPolicy = .default,
                          channels: CaptureChannels? = nil) async {
         guard active?.sessionId != id else { return }
-        await active?.end()
+        // Deactivated, not merely ended: ending stops the instruments, and only deactivating keeps
+        // what the session held. Switching straight from one session to another used to drop the
+        // first one's marks and captures on the floor.
+        await deactivate()
 
         guard let summary = summary(for: id) else { return }
         let channels = channels ?? summary.channels
@@ -382,6 +385,7 @@ public final class FieldSessionStore {
             row.importedAt = now()
             row.sourceDeviceId = opened.seal?.deviceId
             row.recordedByAccountId = opened.seal?.recordedByAccountId ?? facts.recordedByAccountId
+            row.isPublicArchiveCopy = opened.seal?.publicArchiveCopy == true ? true : nil
             if let serverSessionId {
                 row.serverSessionId = serverSessionId
                 row.uploadedAt = now()
@@ -605,6 +609,37 @@ public final class FieldSessionStore {
         try context.save()
         if activeSessionId == id { activeSessionId = nil }
         load()
+    }
+
+    /// What happened to the session that was open when a new one was asked for.
+    public enum OpenSessionOutcome: Sendable, Equatable {
+        /// Nothing was open.
+        case none
+        /// It was recording, so it was ended and kept — exactly as if Stop had been pressed.
+        case saved(UUID)
+        /// It was set up but never started, so it held nothing and was thrown away.
+        case discarded(UUID)
+    }
+
+    /// Makes way for a new session.
+    ///
+    /// Ben, 2026-09-27: "If they have recorded a session, just save it and ask if they want to
+    /// create a new one when they hit the start button instead of making them deal with it
+    /// immediately by having to delete it to start a new one." A recording session is saved; one
+    /// that never started holds nothing, so there is nothing to save and it goes.
+    @discardableResult
+    public func closeOpenSession() async throws -> OpenSessionOutcome {
+        guard let id = activeSessionId ?? active?.sessionId,
+              let summary = summary(for: id), summary.isOpen else { return .none }
+        if summary.isPending {
+            await deactivate()
+            try delete(id)
+            if activeSessionId == id { activeSessionId = nil }
+            load()
+            return .discarded(id)
+        }
+        try await endSession(id)
+        return .saved(id)
     }
 
     /// At launch: a session still marked `recording` means the app went away mid-session — the

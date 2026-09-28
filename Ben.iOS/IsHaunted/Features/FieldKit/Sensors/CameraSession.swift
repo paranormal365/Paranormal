@@ -87,6 +87,9 @@ final class FieldCameraSession {
     /// The clip being recorded now, and when it started, so the screen can count it up.
     private(set) var clipStartedAt: Date?
     var isRecordingClip: Bool { clipStartedAt != nil }
+    /// A clip that has the microphone. The whole-session video has none — the session's own
+    /// recording keeps the sound — so only this one stands the audio controls down.
+    var isRecordingClipWithSound: Bool { isRecordingClip && audioInput != nil }
 
     private let output = AVCaptureVideoDataOutput()
     private let photoOutput = AVCapturePhotoOutput()

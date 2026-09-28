@@ -10,13 +10,24 @@ import BenKit
 /// standing, which way they were facing, and what the microphone heard at that second.
 struct SessionReviewView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(Router.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     let sessionId: UUID
 
     @State private var replay = SessionReplay()
-    @State private var player = AVPlayer()
-    @State private var loadedMediaId: UUID?
+    /// The picture. A whole-session video carries no sound of its own, so it plays beside the
+    /// session's recording rather than instead of it — two players, one playhead.
+    @State private var videoPlayer = AVPlayer()
+    @State private var loadedVideoId: UUID?
+    /// The sound.
+    @State private var audioPlayer = AVPlayer()
+    @State private var loadedAudioId: UUID?
+    /// The photograph grown to full size from the strip, and whether playback was running when
+    /// it was tapped — so tapping it again carries on exactly as before.
+    @State private var expandedPhoto: CaptureMark?
+    @State private var resumeAfterPhoto = false
+    @Namespace private var photoSpace
     @State private var source: ReplaySource?
     /// The walked path, converted once after the replay loads — not on every tick.
     @State private var track: [CLLocationCoordinate2D] = []
@@ -28,6 +39,39 @@ struct SessionReviewView: View {
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
+
+    /// Recorded on this phone and ended in the last hour — the review somebody lands on straight
+    /// from Stop, which is where the next session is most likely wanted.
+    private var justEnded: Bool {
+        guard let summary, !summary.isImported, summary.outcome == .ended,
+              let ended = summary.endedAt else { return false }
+        return Date().timeIntervalSince(ended) < 3_600
+    }
+
+    /// Ben, 2026-09-27: "It is not super obvious what to do after you end a session and want to
+    /// start another one." Said at the top of the review, with the one button that does it.
+    private var nextSessionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Session saved", systemImage: "checkmark.circle.fill")
+                .font(.subheadline.bold())
+                .foregroundStyle(Theme.success)
+            Text("It's on this phone. Play it back here, or send it from the share menu when you're ready.")
+                .font(.caption).foregroundStyle(Theme.fog)
+            Button {
+                replay.pause()
+                router.startAnotherSession(like: sessionId)
+            } label: {
+                Label("Start another session", systemImage: "record.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.ecto)
+            .accessibilityIdentifier("start-another-session")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+    }
 
     var body: some View {
         Group {
@@ -65,10 +109,13 @@ struct SessionReviewView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button {
-                        uploading = true
-                    } label: {
-                        Label("Send to the server", systemImage: "icloud.and.arrow.up")
+                    // Somebody else's published night is theirs to send, not this reader's.
+                    if summary?.isPublicArchiveCopy != true {
+                        Button {
+                            uploading = true
+                        } label: {
+                            Label("Send to the server", systemImage: "icloud.and.arrow.up")
+                        }
                     }
                     Button {
                         exporting = true
@@ -97,9 +144,15 @@ struct SessionReviewView: View {
             PropertyPhotosView(sessionId: sessionId).environment(dependencies)
         }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
+        .overlay {
+            if let photo = expandedPhoto { expandedPhotoView(photo) }
+        }
+        // Full size means the whole screen: the bars go while a photograph is open.
+        .toolbar(expandedPhoto == nil ? .visible : .hidden, for: .navigationBar, .tabBar)
         .onDisappear {
             replay.pause()
-            player.pause()
+            videoPlayer.pause()
+            audioPlayer.pause()
         }
         .task { await load() }
     }
@@ -109,7 +162,9 @@ struct SessionReviewView: View {
     @ViewBuilder
     private var leftColumn: some View {
         VStack(spacing: 14) {
+            if justEnded { nextSessionCard }
             mediaPane
+            photoStrip
             ReplayTransport(replay: replay)
             instrumentsAtPlayhead
             archiveVerdict
@@ -222,24 +277,24 @@ struct SessionReviewView: View {
         }
     }
 
-    /// The video, or a plain statement that nothing was recorded at this moment.
+    /// What was seen and heard at the playhead: the video, else the sound — or a plain statement
+    /// that nothing was recorded at this moment. Photographs live in the strip under this.
     @ViewBuilder
     private var mediaPane: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12).fill(Theme.mist)
 
-            if let active = replay.frame.activeMedia {
-                if active.segment.kind == .video {
-                    VideoPlayer(player: player)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    VStack(spacing: 6) {
-                        Image(systemName: "waveform")
-                            .font(.largeTitle).foregroundStyle(Theme.ecto)
-                        Text(active.segment.relativePath
-                                .replacingOccurrences(of: "media/", with: ""))
-                            .font(.caption).foregroundStyle(Theme.fog)
-                    }
+            if replay.frame.activeVideo != nil {
+                VideoPlayer(player: videoPlayer)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("replay-video")
+            } else if let sound = replay.frame.activeAudio {
+                VStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.largeTitle).foregroundStyle(Theme.ecto)
+                    Text(sound.segment.relativePath
+                            .replacingOccurrences(of: "media/", with: ""))
+                        .font(.caption).foregroundStyle(Theme.fog)
                 }
             } else {
                 // Audio and video are clips, so most of a night has neither. Saying so beats
@@ -250,15 +305,164 @@ struct SessionReviewView: View {
                     // Ben, 2026-09-16: a session with ten seconds of video said "Nothing was recorded", because this
                     // asked about the timeline's clips and a video whose length could not be read never reaches it.
                     // The sentence now says only what it knows: no clip runs through the playhead.
-                    Text(replay.timeline.media.isEmpty
-                         ? "No sound or video was recorded in this session."
+                    Text(replay.timeline.media.isEmpty && photos.isEmpty
+                         ? "No sound, video or photos were recorded in this session."
                          : "No recording at this moment.")
                         .font(.caption).foregroundStyle(Theme.fog)
                 }
             }
         }
-        .frame(height: 200)
+        .frame(height: 220)
+        // Motion the camera saw while the phone was still: the video is outlined and the sign is
+        // up for a few seconds from the moment, exactly as it was on the live viewfinder.
+        .overlay {
+            if replay.frame.motionDetected != nil {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Theme.warning, lineWidth: 3)
+                    .shadow(color: Theme.warning.opacity(0.8), radius: 10)
+            }
+        }
+        .overlay(alignment: .top) {
+            if replay.frame.motionDetected != nil {
+                MotionDetectedSign().padding(.top, 10)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: replay.frame.motionDetected?.id)
         .accessibilityIdentifier("replay-media")
+    }
+
+    /// Every photograph taken during the session, in order. Tapping one moves the playhead to the
+    /// moment it was taken, so the readings and the sound around it are right there.
+    ///
+    /// Ben, 2026-09-27: "the photo never shows either when you take it during a session." They were
+    /// only map pins, and only when the phone had a position fix — so a photo taken indoors was
+    /// nowhere on this screen at all.
+    @ViewBuilder
+    private var photoStrip: some View {
+        if !photos.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(photos.count == 1 ? "1 photo" : "\(photos.count) photos")
+                    .font(.caption).foregroundStyle(Theme.fog)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        // Room for a thumbnail grown by 15% with its ring and glow — between
+                        // neighbours and at the strip's edges — or the lit one smears over the
+                        // photos beside it and its glow is cut off flat at the top.
+                        HStack(spacing: 18) {
+                            ForEach(photos) { photo in
+                                photoThumbnail(photo).id(photo.id)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 16)
+                    }
+                    // Keeps the photo the playhead last passed in view, so the glow is seen.
+                    .onChange(of: ReplayPhotos.lastPassed(photos, at: replay.playhead)?.id) { _, id in
+                        guard let id, replay.isPlaying else { return }
+                        withAnimation { proxy.scrollTo(id, anchor: .center) }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// One thumbnail. As playback passes the moment it was taken its border glows and it grows a
+    /// little, for three seconds (Ben, 2026-09-27), so a photo is noticed at the second it belongs
+    /// to without taking the player over. Tapping it pauses playback and grows it to full size.
+    private func photoThumbnail(_ photo: CaptureMark) -> some View {
+        let glowing = ReplayPhotos.isGlowing(photo, at: replay.playhead)
+        let url = store.files.fileURL(for: sessionId, relativePath: photo.relativePath)
+        return Button { expand(photo) } label: {
+            // Spaced for the grown thumbnail, which would otherwise sit on its own time.
+            VStack(spacing: 9) {
+                ZStack {
+                    if expandedPhoto?.id == photo.id {
+                        // Its place in the strip is kept while it is out, so it has somewhere to
+                        // shrink back to.
+                        Color.clear
+                    } else {
+                        // Sized BEFORE it is clipped: a .fill image laid out on its own takes the
+                        // picture's width, and a frame on the container around it clips nothing —
+                        // the first build showed the three photos piled over one another.
+                        SessionPhotoTile(url: url, maxPixels: 240, contentMode: .fill)
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .matchedGeometryEffect(id: photo.id, in: photoSpace)
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(glowing ? Theme.ecto : Theme.fog.opacity(0.3),
+                                lineWidth: glowing ? 3 : 1)
+                }
+                .shadow(color: glowing ? Theme.ecto.opacity(0.9) : .clear, radius: glowing ? 8 : 0)
+                .scaleEffect(glowing ? 1.15 : 1)
+                .animation(.spring(duration: 0.35), value: glowing)
+                // Full contrast while lit — green on the green glow could not be read.
+                Text(SessionClock.elapsed(from: replay.timeline.startedAt, to: photo.at))
+                    .font(.caption2.monospacedDigit().weight(glowing ? .semibold : .regular))
+                    .foregroundStyle(glowing ? Theme.bone : Theme.fog)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Photo at \(photoCaption(photo))")
+        .accessibilityValue(glowing ? "taken now" : "")
+        .accessibilityHint("Pauses playback and shows it full size")
+        .accessibilityIdentifier(glowing ? "replay-photo-thumbnail-glowing" : "replay-photo-thumbnail")
+    }
+
+    /// The tapped photograph at full size, over the whole screen. Tapping it again puts it back in
+    /// the strip and carries on playing if it was playing.
+    private func expandedPhotoView(_ photo: CaptureMark) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 12) {
+                SessionPhotoTile(url: store.files.fileURL(for: sessionId,
+                                                          relativePath: photo.relativePath),
+                                 maxPixels: 2800, contentMode: .fit, background: .clear)
+                    .matchedGeometryEffect(id: photo.id, in: photoSpace)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(photoCaption(photo))
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                Text(resumeAfterPhoto ? "Tap to keep playing" : "Tap to close")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(16)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { collapsePhoto() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Photo, \(photoCaption(photo))")
+        .accessibilityHint(resumeAfterPhoto ? "Closes it and carries on playing" : "Closes it")
+        .accessibilityIdentifier("replay-photo-expanded")
+    }
+
+    private func expand(_ photo: CaptureMark) {
+        resumeAfterPhoto = replay.isPlaying
+        replay.pause()
+        withAnimation(.spring(duration: 0.4)) { expandedPhoto = photo }
+    }
+
+    private func collapsePhoto() {
+        withAnimation(.spring(duration: 0.4)) { expandedPhoto = nil }
+        if resumeAfterPhoto { replay.play() }
+        resumeAfterPhoto = false
+    }
+
+    private var photos: [CaptureMark] { ReplayPhotos.taken(source?.stills ?? []) }
+
+    /// "00:12:40 into the session · Back bedroom" — when, and where if they said.
+    private func photoCaption(_ photo: CaptureMark) -> String {
+        let when = SessionClock.elapsed(from: replay.timeline.startedAt, to: photo.at) + " into the session"
+        guard let room = photo.room, !room.isEmpty else { return when }
+        return "\(when) · \(room)"
     }
 
     private var instrumentsAtPlayhead: some View {
@@ -363,7 +567,11 @@ struct SessionReviewView: View {
                 // A session that arrived as a .ben plays exactly as one recorded here, and says
                 // so here — the seal's whole point is that a night is not quietly re-attributed
                 // to whoever happens to be holding the phone.
-                if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+                if summary.isPublicArchiveCopy {
+                    // Said, because its map is not a walked path: every position is the place's
+                    // public point, deliberately.
+                    LabeledContent("Source", value: "The public archive — positions are the place's public point")
+                } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
                     LabeledContent("Source", value: "Shared with you — recorded on another device")
                 } else if summary.isImported {
                     LabeledContent("Source", value: summary.serverSessionId != nil
@@ -397,36 +605,50 @@ struct SessionReviewView: View {
         }
     }
 
-    /// Keeps the player on the playhead.
+    /// Keeps both players on the playhead.
     ///
-    /// The playhead is the clock, not the player — otherwise scrubbing the chart and scrubbing
+    /// The playhead is the clock, not a player — otherwise scrubbing the chart and scrubbing
     /// the video would fight each other. Small drift is left alone; a real jump re-seeks.
     private func followMedia(_ frame: ReplayFrame) {
-        guard let active = frame.activeMedia, let source else {
-            if loadedMediaId != nil {
+        guard let source else { return }
+        follow(videoPlayer, clip: frame.activeVideo, loaded: &loadedVideoId, source: source)
+        follow(audioPlayer, clip: frame.activeAudio, loaded: &loadedAudioId, source: source)
+        // An older clip filmed with its own sound plays it; a video with the session's recording
+        // running underneath it stays quiet, so nothing is heard twice.
+        videoPlayer.isMuted = frame.activeAudio != nil
+    }
+
+    private func follow(_ player: AVPlayer,
+                        clip: (segment: MediaSegment, offset: TimeInterval)?,
+                        loaded: inout UUID?, source: ReplaySource) {
+        guard let clip else {
+            if loaded != nil {
                 player.pause()
                 player.replaceCurrentItem(with: nil)
-                loadedMediaId = nil
+                loaded = nil
             }
             return
         }
 
-        if loadedMediaId != active.segment.id {
+        if loaded != clip.segment.id {
             let url = store.files.fileURL(for: source.sessionId,
-                                          relativePath: active.segment.relativePath)
+                                          relativePath: clip.segment.relativePath)
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
-            loadedMediaId = active.segment.id
+            loaded = clip.segment.id
         }
 
-        let target = CMTime(seconds: active.offset, preferredTimescale: 600)
-        let drift = abs(player.currentTime().seconds - active.offset)
+        let target = CMTime(seconds: clip.offset, preferredTimescale: 600)
+        let drift = abs(player.currentTime().seconds - clip.offset)
         if drift > 0.35 || !replay.isPlaying {
             player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
         }
 
         // Media follows the replay's own speed, so 8× review really is eight times through.
         if replay.isPlaying {
-            if player.rate == 0 { player.play() }
+            if player.rate == 0 {
+                ReviewAudio.prepareForPlayback(sessionIsOpen: store.active != nil)
+                player.play()
+            }
             player.rate = Float(min(replay.rate, 2))   // beyond 2x audio is not worth hearing
         } else if player.rate != 0 {
             player.pause()

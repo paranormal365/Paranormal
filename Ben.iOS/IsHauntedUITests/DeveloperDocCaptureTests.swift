@@ -175,11 +175,27 @@ final class DeveloperDocCaptureTests: XCTestCase {
             snap("40-fieldkit-home")
 
             if tap("start-field-session") || tapLabel("Start a session") {
+                // The sheet fills the place in from where the device is (2026-09-27); photograph it
+                // once it has, not while it says "Finding where you are…".
+                let label = app.textFields.matching(identifier: "session-label").firstMatch
+                let placeholder = label.waitForExistence(timeout: 8) ? (label.placeholderValue ?? "") : ""
+                for _ in 0..<20 {
+                    let value = label.value as? String ?? ""
+                    if !value.isEmpty, value != placeholder { break }
+                    settle(1)
+                }
                 settle(2)
                 snap("41-name-the-session")
 
-                let label = app.textFields.matching(identifier: "session-label").firstMatch
-                if label.waitForExistence(timeout: 8) { label.tap(); label.typeText("Cellar stairs") }
+                if label.exists {
+                    label.tap()
+                    // Typing appends, and the field now holds the suggestion.
+                    let filled = label.value as? String ?? ""
+                    if !filled.isEmpty, filled != placeholder {
+                        label.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: filled.count))
+                    }
+                    label.typeText("Cellar stairs")
+                }
                 settle(1)
 
                 if tap("confirm-start-session") || tapLabel("Open the session") {

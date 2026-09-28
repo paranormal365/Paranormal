@@ -23,6 +23,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var importedAt: Date?
     public var sourceDeviceId: String?
     public var recordedByAccountId: UUID?
+    /// Somebody else's published night from the public archive, positions at the place's public point.
+    public var isPublicArchiveCopy: Bool
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
@@ -30,7 +32,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                 serverSessionId: UUID? = nil, uploadedAt: Date? = nil,
                 channels: CaptureChannels = .default,
                 importedAt: Date? = nil, sourceDeviceId: String? = nil,
-                recordedByAccountId: UUID? = nil) {
+                recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -47,6 +49,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.importedAt = importedAt
         self.sourceDeviceId = sourceDeviceId
         self.recordedByAccountId = recordedByAccountId
+        self.isPublicArchiveCopy = isPublicArchiveCopy
     }
 
     init(_ session: FieldSession) {
@@ -65,7 +68,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   channels: session.channels,
                   importedAt: session.importedAt,
                   sourceDeviceId: session.sourceDeviceId,
-                  recordedByAccountId: session.recordedByAccountId)
+                  recordedByAccountId: session.recordedByAccountId,
+                  isPublicArchiveCopy: session.isPublicArchiveCopy == true)
     }
 
     /// Whether this session arrived as a `.ben` rather than being recorded on this device.

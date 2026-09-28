@@ -23,14 +23,22 @@ public struct MediaSegment: Sendable, Equatable, Identifiable {
 
     public var endsAt: Date { startedAt.addingTimeInterval(duration) }
 
+    /// How far BEFORE its first second a clip still counts as covering the playhead.
+    ///
+    /// The session's clock starts at Start and its sound recording a few milliseconds later, so
+    /// every review opened at 0:00 said "No recording at this moment" about a recording that began
+    /// there (found walking the review, 2026-09-27). Within a second, the clip is the answer; it is
+    /// played from its own start.
+    public static let leadTolerance: TimeInterval = 1
+
     public func covers(_ moment: Date) -> Bool {
-        moment >= startedAt && moment < endsAt
+        moment >= startedAt.addingTimeInterval(-Self.leadTolerance) && moment < endsAt
     }
 
-    /// How far into the file a given moment falls.
+    /// How far into the file a given moment falls — never before its start.
     public func offset(at moment: Date) -> TimeInterval? {
         guard covers(moment) else { return nil }
-        return moment.timeIntervalSince(startedAt)
+        return max(0, moment.timeIntervalSince(startedAt))
     }
 }
 
@@ -124,10 +132,24 @@ public struct ReplayFrame: Sendable, Equatable {
         if let courseDegrees { return .walking(courseDegrees) }
         return nil
     }
-    /// The clip covering this moment, and how far into it — nil when nothing was recorded here.
-    public var activeMedia: (segment: MediaSegment, offset: TimeInterval)?
+    /// The video covering this moment, and how far into it.
+    public var activeVideo: (segment: MediaSegment, offset: TimeInterval)?
+    /// The sound recording covering this moment, and how far into it.
+    ///
+    /// Kept apart from the video because the two now overlap. Ben, 2026-09-27: "Even when
+    /// recording video, it doesn't play back." One `activeMedia` took the FIRST clip covering the
+    /// playhead, and the session's sound recording starts at Start — so it began first, covered
+    /// every video recorded inside it, and the video never reached the screen. A whole-session
+    /// video carries no sound of its own, so both play: the picture from one, the sound from the
+    /// other.
+    public var activeAudio: (segment: MediaSegment, offset: TimeInterval)?
+    /// The clip covering this moment — the video when there is one, otherwise the sound. Nil when
+    /// nothing was recorded here.
+    public var activeMedia: (segment: MediaSegment, offset: TimeInterval)? { activeVideo ?? activeAudio }
     /// A marker within a second or so of the playhead, for highlighting as it passes.
     public var nearestMarker: FieldMarkerRecord?
+    /// The "Motion detected" mark whose sign is showing at this moment. See `ReplayMotion`.
+    public var motionDetected: FieldMarkerRecord?
     /// The room the operator said they were in at this moment, if they said.
     public var room: String?
 
@@ -140,8 +162,10 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.position == rhs.position
             && lhs.headingDegrees == rhs.headingDegrees
             && lhs.courseDegrees == rhs.courseDegrees
-            && lhs.activeMedia?.segment.id == rhs.activeMedia?.segment.id
+            && lhs.activeVideo?.segment.id == rhs.activeVideo?.segment.id
+            && lhs.activeAudio?.segment.id == rhs.activeAudio?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
+            && lhs.motionDetected?.id == rhs.motionDetected?.id
             && lhs.room == rhs.room
     }
 
@@ -393,12 +417,19 @@ public final class SessionReplay {
         }
 
         result.position = interpolatedPosition(at: moment)
-        result.activeMedia = timeline.media
-            .first(where: { $0.covers(moment) })
-            .flatMap { segment in segment.offset(at: moment).map { (segment, $0) } }
+        // The LATEST-starting clip of each kind wins where two of a kind overlap: it is the one
+        // somebody started most recently, and so the one they are most likely looking for.
+        func covering(_ kind: CaptureKind) -> (segment: MediaSegment, offset: TimeInterval)? {
+            timeline.media
+                .last(where: { $0.kind == kind && $0.covers(moment) })
+                .flatMap { segment in segment.offset(at: moment).map { (segment, $0) } }
+        }
+        result.activeVideo = covering(.video)
+        result.activeAudio = covering(.audio)
         result.nearestMarker = timeline.markers.first {
             abs($0.at.timeIntervalSince(moment)) < 1.0
         }
+        result.motionDetected = ReplayMotion.showing(timeline.markers, at: moment)
         return result
     }
 

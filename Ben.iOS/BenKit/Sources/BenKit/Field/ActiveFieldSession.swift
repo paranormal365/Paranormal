@@ -41,10 +41,19 @@ public final class ActiveFieldSession {
     public private(set) var sentry: SentryConfig?
     public var isArmed: Bool { sentry != nil }
 
+    /// Watch for Motion: the camera's view is watched for movement whenever the phone is still,
+    /// while it keeps recording. Only meaningful with the video channel on — the camera is off
+    /// otherwise.
+    public private(set) var watchForMotion = false
+    /// The last time Watch for Motion (or the sentry) saw something, for the live screen's sign.
+    public private(set) var lastMotionDetectedAt: Date?
+
     /// Set when a recording stopped for a reason nobody chose — a call, another app taking the
     /// microphone. Surfaced rather than swallowed: somebody who thinks they are recording and
     /// is not has lost the night.
     public private(set) var recordingProblem: String?
+    /// True when that problem is a refused microphone — fixed in Settings, which the screen offers.
+    public private(set) var microphoneRefused = false
 
     /// Something worth knowing about the sound that is nobody's fault — the camera borrowing the microphone and
     /// handing it back. Kept apart from `recordingProblem` because a red warning about a thing that fixed itself
@@ -130,6 +139,7 @@ public final class ActiveFieldSession {
                 switch event {
                 case .sample(let sample): self.sample = sample
                 case .marked(let marker):
+                    if marker.kind == .sceneMotion { self.lastMotionDetectedAt = marker.at }
                     // Guarded because `mark()` records its own result immediately — see there
                     // for why waiting for this stream is not safe.
                     if !self.markers.contains(where: { $0.id == marker.id }) {
@@ -240,6 +250,18 @@ public final class ActiveFieldSession {
         }
     }
 
+    // MARK: - Watch for Motion
+
+    public func setWatchForMotion(_ on: Bool) async {
+        watchForMotion = on
+        await engine.setWatchForMotion(on)
+    }
+
+    /// A frame's worth of change from the camera the live screen owns.
+    public func noteSceneMotion(_ sample: SceneMotionSample) async {
+        await engine.noteSceneMotion(sample)
+    }
+
     // MARK: - The app being put away
 
     /// A stretch the app spent in the background while this session ran.
@@ -322,6 +344,7 @@ public final class ActiveFieldSession {
         guard !lentToTheClip else { return }
         guard recording == nil, let recorder = sensors.recorder else { return }
         recordingProblem = nil
+        microphoneRefused = false
         do {
             let (relative, url) = try files.nextMediaPath(
                 for: sessionId, kind: .audio, fileExtension: "m4a")
@@ -333,6 +356,7 @@ public final class ActiveFieldSession {
             // Said out loud. A recording somebody believes is running and is not is the worst
             // outcome this feature has.
             recordingProblem = error.localizedDescription
+            microphoneRefused = (error as? AudioRecordingError) == .microphoneRefused
         }
     }
 
@@ -439,18 +463,26 @@ public final class ActiveFieldSession {
 
     /// Records a file the camera just handed us. The file has ALREADY been moved into the
     /// session directory by the caller — this notes what it is and where it was taken.
+    ///
+    /// `startedAt` is when a clip BEGAN. A clip is noted when it ends, and it used to be stamped
+    /// with that moment — so the replay placed a video after the stretch it had filmed, and a
+    /// whole-session video would have started at the session's end. A photo is an instant and
+    /// passes nothing.
     public func noteCapture(kind: CaptureKind, relativePath: String, byteCount: Int64,
-                            durationSeconds: Double? = nil) async {
+                            durationSeconds: Double? = nil, startedAt: Date? = nil) async {
         await engine.noteCapture(kind: kind, relativePath: relativePath,
                                  durationSeconds: durationSeconds)
         captures.insert(CaptureRecord(
-            at: now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
+            at: startedAt ?? now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
             durationSeconds: durationSeconds,
             latitude: sample.position?.latitude, longitude: sample.position?.longitude,
             headingDegrees: sample.headingDegrees, room: room), at: 0)
     }
 
-    public func clearRecordingProblem() { recordingProblem = nil }
+    public func clearRecordingProblem() {
+        recordingProblem = nil
+        microphoneRefused = false
+    }
 
     // MARK: - EVP
 
