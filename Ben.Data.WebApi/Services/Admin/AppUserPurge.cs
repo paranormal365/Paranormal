@@ -245,6 +245,8 @@ public sealed class AppUserPurge
 
             // ── what nobody else has a claim on ───────────────────────────────
             await db.SignInEvents.Where(e => e.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // The phones they could be pushed on (item 252): addresses for a person who is gone.
+            await db.PushDevices.Where(d => d.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserTourStates.Where(t => t.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserMessageTos.Where(m => m.ToAppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserFollows
@@ -449,7 +451,7 @@ public sealed class AppUserPurge
         // <paramref name="going"/>.
         var sweptEntities = new HashSet<string>(StringComparer.Ordinal)
         {
-            nameof(SignInEvent), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
+            nameof(SignInEvent), nameof(PushDevice), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),

@@ -108,6 +108,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FeedPostConsent> FeedPostConsents { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
         public virtual DbSet<UserBlock> UserBlocks { get; set; }
+        public virtual DbSet<PushDevice> PushDevices { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
@@ -3089,6 +3090,21 @@ namespace Ben.Data.Source.Context
             // The read path's one question, asked on every feed page: whom does this reader block?
             modelBuilder.Entity<UserBlock>()
                 .HasIndex(e => e.BlockerAppUserId);
+
+            // ── PushDevice (item 252) ────────────────────────────────────────
+            modelBuilder.Entity<PushDevice>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PushDevice>()
+                .Property(e => e.Token).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<PushDevice>()
+                .Property(e => e.AppVersion).HasMaxLength(32);
+            // One row per phone: a second sign-in on it takes the row over rather than adding one.
+            modelBuilder.Entity<PushDevice>()
+                .HasIndex(e => e.Token).IsUnique();
+            // A launch's one question: which phones does each of these people have?
+            modelBuilder.Entity<PushDevice>()
+                .HasIndex(e => e.AppUserId);
 
             // ── Publication ──────────────────────────────────────────────────
             modelBuilder.Entity<Publication>()

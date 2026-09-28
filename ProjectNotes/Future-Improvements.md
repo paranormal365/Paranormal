@@ -13565,7 +13565,7 @@ international buyers, these need answers.
 - **Fee model.** The Stripe fee is known only after the charge (from the balance transaction). A
   per-unit fee column is an estimate until then.
 
-## 252. Lead starts everybody's Field Kit from a push (QUEUED — NEXT after iOS time zones, 2026-09-28)
+## 252. Lead starts everybody's Field Kit from a push (IN PROGRESS — feature/lead-launch-252, plan in README-lead-launch-252.md)
 
 Ben, 09/28/2026: "check to see if the tour guide, event planner or group investigation lead is
 logged in and if they are, they should be able to send a push from the app to others logged in who
@@ -13607,9 +13607,16 @@ investigation lead etc.").
 ### Already exists
 
 - Field Kit's New session sheet takes a preselected investigation; the trimmer and the upload
-  allowance exist; the app registers for pushes; tours and events know who is registered.
+  allowance exist; tours and events know who is registered.
+- **Correction (mapped 09/28):** there is NO push anywhere — no APNs sender, token table or
+  endpoint, no `aps-environment`, no registration in the app. Seat reminders are local.
 
-### Decide before building
+### Decided (Ben, 09/28)
+
+Feed post public for public things, otherwise participants only; the button starts it when
+pressed; the upload cap stays 600 MB; the lead plus group managers may launch.
+
+### Decided by the platform
 
 - Whether a push can START a recording, or only open the sheet ready to start (iOS will not record
   in the background from a push, and starting a microphone unasked needs the person's tap).

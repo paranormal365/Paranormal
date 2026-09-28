@@ -319,6 +319,8 @@ public sealed class AccountClosureService
         db.UserRoles.RemoveRange(db.UserRoles.Where(r => r.UserId == userId));
         db.UserClaims.RemoveRange(db.UserClaims.Where(c => c.UserId == userId));
         db.UserTokens.RemoveRange(db.UserTokens.Where(t => t.UserId == userId));
+        // And no phone goes on being pushed for an account that is closed (item 252).
+        db.PushDevices.RemoveRange(db.PushDevices.Where(d => d.AppUserId == userId));
 
         await db.SaveChangesAsync(ct);
     }
