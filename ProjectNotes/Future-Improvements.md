@@ -13565,7 +13565,7 @@ international buyers, these need answers.
 - **Fee model.** The Stripe fee is known only after the charge (from the balance transaction). A
   per-unit fee column is an estimate until then.
 
-## 252. Lead starts everybody's Field Kit from a push (IN PROGRESS — feature/lead-launch-252, plan in README-lead-launch-252.md)
+## 252. Lead starts everybody's Field Kit from a push (CLOSED 2026-09-28 — feature/lead-launch-252; README-lead-launch-252.md)
 
 Ben, 09/28/2026: "check to see if the tour guide, event planner or group investigation lead is
 logged in and if they are, they should be able to send a push from the app to others logged in who
