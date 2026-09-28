@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Ben.Data.Common;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -14,15 +15,16 @@ using Xunit;
 namespace Ben.Web.Tests.Store;
 
 /// <summary>The store's bells (storefront S4.5): who hears of a paid order, and the hourly limit on configuration faults.</summary>
-[Collection("StoreAlerts")]   // the hourly limit is process-wide
 public sealed class StoreAlertsTests : IAsyncLifetime
 {
     private SqliteTestDb _sqlite = null!;
+    // This test's own hourly-limit record: the process-wide one is cleared and filled, on the real
+    // clock, by the other store tests running in parallel.
+    private readonly ConcurrentDictionary<string, DateTime> _hourlyLimits = new();
     private AppUser _admin = null!, _other = null!;
 
     public async Task InitializeAsync()
     {
-        StoreAlerts.ResetHourlyLimits();
         _sqlite = await SqliteTestDb.CreateAsync();
         await using var db = await _sqlite.NewContextAsync();
         _admin = StoreTestData.Person(db);
@@ -43,7 +45,7 @@ public sealed class StoreAlertsTests : IAsyncLifetime
         var site = Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://test.local" });
         return new StoreAlerts(_sqlite.Factory, new PlatformMessageService(_sqlite.Factory),
             new StoreOrderMailer(TestOutbox.WithoutMail(_sqlite.Factory), site), NullLogger<StoreAlerts>.Instance,
-            now is { } at ? new FixedClock(at) : null);
+            now is { } at ? new FixedClock(at) : null, _hourlyLimits);
     }
 
     private sealed class FixedClock(DateTime now) : TimeProvider
