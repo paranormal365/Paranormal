@@ -115,15 +115,12 @@ public sealed class MediaIngestService(
         IFormFile file, string storagePath, Guid uploadFileId, CancellationToken ct,
         bool stripAudioVideo = false)
     {
-        // Read once: the bytes are needed for extraction, for the original, and for sanitizing,
-        // and re-reading an IFormFile stream after it has been consumed is a familiar trap.
-        byte[] originalBytes;
-        await using (var source = file.OpenReadStream())
-        await using (var buffer = new MemoryStream())
-        {
-            await source.CopyToAsync(buffer, ct);
-            originalBytes = buffer.ToArray();
-        }
+        // The upload is NEVER held whole in memory. It used to be copied into a byte array, and
+        // uploads may be two gigabytes against a host that gives the API half of one — a single
+        // video would have taken the process down. Everything below reads the one seekable stream
+        // instead, rewinding between steps (re-opening an IFormFile after it has been consumed is
+        // the familiar trap this avoids).
+        await using var original = await OpenSeekableAsync(file, ct);
 
         // 1. Metadata comes off the ORIGINAL — after sanitizing there would be nothing left to
         //    read. READING IS UNCONDITIONAL AND UNGATED (Ben, 2026-08-24): every file of every
@@ -131,11 +128,11 @@ public sealed class MediaIngestService(
         //    REMOVAL of that metadata from audio and video, because removal costs a remux —
         //    knowing where a recording was made is free, hiding it from the served copy is the
         //    part with a price. Images are stripped for everyone regardless.
-        var metadata = metadataExtractor.Extract(uploadFileId, file.ContentType, originalBytes);
+        var metadata = metadataExtractor.Extract(uploadFileId, file.ContentType, original);
 
         // 2. The original is always kept, untouched. It is the evidence.
-        await using (var original = new MemoryStream(originalBytes, writable: false))
-            await fileStorage.WriteAsync(storagePath, original, ct);
+        original.Position = 0;
+        await fileStorage.WriteAsync(storagePath, original, ct);
 
         if (!sanitizer.CanSanitize(file.ContentType))
         {
@@ -143,21 +140,30 @@ public sealed class MediaIngestService(
             // plan includes it, the group has left it on, and the host has the tool. The metadata
             // was already read off the ORIGINAL above, so the record survives the strip — which is
             // the whole design: the group keeps the facts, the served file does not carry them.
-            if (stripAudioVideo && avStripper.CanStrip(file.ContentType)
-                && await avStripper.StripAsync(originalBytes, file.FileName, ct) is { } stripped)
+            if (stripAudioVideo && avStripper.CanStrip(file.ContentType))
             {
-                // The stripped copy sits beside the original under the sanitized name, so every
-                // serve path finds it through ServingPathFor exactly as it finds a cleaned image.
-                await using var clean = new MemoryStream(stripped, writable: false);
-                await fileStorage.WriteAsync(sanitizer.StrippedPathFor(storagePath), clean, ct);
-                return new IngestedMedia(metadata, stripped.LongLength, file.ContentType, WasSanitized: true);
+                original.Position = 0;
+                await using var stripped = await avStripper.StripAsync(original, file.FileName, ct);
+                if (stripped is not null)
+                {
+                    // The stripped copy sits beside the original under the sanitized name, so every
+                    // serve path finds it through ServingPathFor exactly as it finds a cleaned image.
+                    var strippedLength = stripped.Length;
+                    await fileStorage.WriteAsync(sanitizer.StrippedPathFor(storagePath), stripped, ct);
+                    return new IngestedMedia(metadata, strippedLength, file.ContentType, WasSanitized: true);
+                }
             }
 
             // Not stripped: SVG, a group whose plan or settings say no, or a host with no tool.
             return new IngestedMedia(metadata, file.Length, file.ContentType, WasSanitized: false);
         }
 
-        // 3. The sanitized copy — this is what every serve path returns.
+        // 3. The sanitized copy — this is what every serve path returns. A picture IS decoded in
+        //    memory, so this is the one place the bytes are read in, and only up to a cap.
+        original.Position = 0;
+        var originalBytes = await ImageBytes.ReadAsync(original, ct)
+            ?? throw new UnreadableImageException(
+                $"The picture is too large to process (over {ImageBytes.MaxBytes / (1024 * 1024)} MB).");
         var sanitized = sanitizer.Sanitize(originalBytes);
         await using (var clean = new MemoryStream(sanitized, writable: false))
             await fileStorage.WriteAsync(sanitizer.SanitizedPathFor(storagePath), clean, ct);
@@ -177,6 +183,36 @@ public sealed class MediaIngestService(
         }
 
         return new IngestedMedia(metadata, sanitized.LongLength, "image/jpeg", WasSanitized: true);
+    }
+
+    /// <summary>
+    /// The upload as one stream that can be rewound: the upload's own when it can seek, which is
+    /// the normal case (ASP.NET has already buffered a large form to a temporary file), otherwise a
+    /// scratch copy on disk that deletes itself when disposed. Disk, never memory.
+    /// </summary>
+    private static async Task<Stream> OpenSeekableAsync(IFormFile file, CancellationToken ct)
+    {
+        var upload = file.OpenReadStream();
+        if (upload.CanSeek) return upload;
+
+        await using (upload)
+        {
+            var scratch = new FileStream(
+                Path.Combine(Path.GetTempPath(), $"ben-ingest-{Guid.NewGuid():N}"),
+                FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, bufferSize: 81920,
+                FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+            try
+            {
+                await upload.CopyToAsync(scratch, ct);
+                scratch.Position = 0;
+                return scratch;
+            }
+            catch
+            {
+                await scratch.DisposeAsync();
+                throw;
+            }
+        }
     }
 
     public async Task<UploadFileMetadata?> DeriveMetadataAsync(
@@ -236,13 +272,12 @@ public sealed class MediaIngestService(
         // Generate from whatever we still have rather than making the caller care which.
         if (!fileStorage.Exists(storagePath)) return null;
 
-        byte[] sourceBytes;
+        // Only as much as a picture can be: this is asked of videos too, and reading a whole
+        // recording in just to find it will not decode is the memory problem the ingest fixed.
+        byte[]? sourceBytes;
         await using (var source = await fileStorage.OpenReadAsync(storagePath, ct))
-        await using (var buffer = new MemoryStream())
-        {
-            await source.CopyToAsync(buffer, ct);
-            sourceBytes = buffer.ToArray();
-        }
+            sourceBytes = await ImageBytes.ReadAsync(source, ct);
+        if (sourceBytes is null) return null;   // too large to be a picture — nothing to shrink
 
         byte[] thumbnail;
         try

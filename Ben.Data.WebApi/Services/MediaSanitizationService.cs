@@ -59,6 +59,46 @@ public interface IMediaSanitizationService
 /// <summary>Thrown when bytes offered as an image cannot be decoded.</summary>
 public sealed class UnreadableImageException(string message) : Exception(message);
 
+/// <summary>
+/// Reads a picture into memory for decoding, refusing anything too large to be one.
+/// </summary>
+/// <remarks>
+/// Skia decodes from memory, so a picture has to be held whole; a recording never does. The cap is
+/// what keeps a two-gigabyte file that merely CLAIMS to be image/jpeg from being pulled into a
+/// process that has half a gigabyte to live in. No real photo comes near it — a 200-megapixel phone
+/// shot is a few tens of megabytes.
+/// </remarks>
+public static class ImageBytes
+{
+    /// <summary>The largest file read in as a picture.</summary>
+    public const long MaxBytes = 100L * 1024 * 1024;
+
+    /// <summary>The picture's bytes, or null when there are more than <see cref="MaxBytes"/>.</summary>
+    public static async Task<byte[]?> ReadAsync(Stream source, CancellationToken ct)
+    {
+        if (source.CanSeek)
+        {
+            var remaining = source.Length - source.Position;
+            if (remaining > MaxBytes) return null;
+
+            var exact = new byte[remaining];
+            await source.ReadExactlyAsync(exact, ct);
+            return exact;
+        }
+
+        // No length to check up front, so the cap is enforced as it arrives.
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await source.ReadAsync(chunk, ct)) > 0)
+        {
+            if (buffer.Length + read > MaxBytes) return null;
+            buffer.Write(chunk, 0, read);
+        }
+        return buffer.ToArray();
+    }
+}
+
 /// <inheritdoc />
 public sealed class MediaSanitizationService : IMediaSanitizationService
 {
