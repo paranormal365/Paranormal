@@ -30,18 +30,14 @@
         @(_orgName ?? "your group") until you claim it.
     </p>
 
-    <BenListState TItem="FeedAttributionItem" Result="@_result" OnRetry="@LoadAsync" />
-
-    @if (!_result.Failed && _loaded)
-    {
-        @if (_items.Count == 0)
-        {
-            <div class="alert alert-light border">
-                Nothing yet. When somebody posts a video rendered from one of this group's
-                cases, it shows up here for your decision.
-            </div>
-        }
-
+    <BenListState TItem="FeedAttributionItem" Result="@_result" Loading="@_loading" OnRetry="@LoadAsync">
+    <Empty>
+        <div class="alert alert-light border">
+            Nothing yet. When somebody posts a video rendered from one of this group's
+            cases, it shows up here for your decision.
+        </div>
+    </Empty>
+    <ChildContent>
         @foreach (var item in _items)
         {
             <div class="card mb-2">
@@ -120,7 +116,8 @@
                 </div>
             </div>
         }
-    }
+    </ChildContent>
+    </BenListState>
 </div>
 
 @code {
@@ -128,7 +125,12 @@
 
     private LoadResult<FeedAttributionItem> _result;
     private List<FeedAttributionItem> _items = [];
-    private bool _loaded;
+
+    /// <summary>
+    /// True until the list has come back. A result nobody has fetched yet is empty, and without this the page told
+    /// the group "Nothing here yet" for as long as sign-in and the fetch took.
+    /// </summary>
+    private bool _loading = true;
     private string? _orgName;
     private Guid? _deciding;
     private string? _decideError;
@@ -143,9 +145,10 @@
 
     private async Task LoadAsync()
     {
-        _result = await AdminClient.GetFeedAttributionsAsync(OrgId);
-        _items = _result.Items.ToList();
-        _loaded = true;
+        _loading = true;
+        _result  = await AdminClient.GetFeedAttributionsAsync(OrgId);
+        _items   = _result.Items.ToList();
+        _loading = false;
         StateHasChanged();
     }
 
