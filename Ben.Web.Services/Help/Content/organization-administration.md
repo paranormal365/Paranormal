@@ -821,14 +821,27 @@ refused, because a reader clicks the word without reading the address.
 ### Which clock an event runs on
 
 Every event carries the zone it actually happens in, chosen on the scheduler under **Which clock**.
-It starts on your own zone, because whoever is scheduling is usually standing where it happens.
+It starts on your group's **home time zone** (see below), and the start and end you type are on
+that clock — the form says which, so eight in the evening is eight where the event is, wherever you
+happen to be scheduling from.
 
 ![The Which clock picker on the scheduler](help-media:organization-administration/event-clock.png)
 
 That clock is what the public sees, wherever in the world they are reading — an event at eight in
 Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
 and the reminder email all agree. A date under a tour takes the tour's clock unless you say
-otherwise. An event with no clock set is shown in UTC and says so.
+otherwise. Readers can switch **Local time · My time** to see it on their own clock instead.
+
+### Your group's home time zone
+
+**Settings → Home time zone** is the clock your group keeps. New cases, events and tours start on
+it, and anything without a zone of its own is read on it. It starts as Central time (Chicago).
+
+![The Home time zone setting](help-media:organization-administration/group-time-zone.png)
+
+A case or an investigation can have its own zone — a group works away from home — set on the case's
+edit page and in the investigation's schedule dialog; see
+[Working a Case](/help/working-a-case#whose-clock).
 
 ## Hosted events
 

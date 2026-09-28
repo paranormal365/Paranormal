@@ -10,13 +10,38 @@ tables, infrastructure and deployment, anybody's name, any group or case, and an
 only mean something to whoever wrote the code. If a line would help somebody attack the site or
 identify a person, it does not belong here.
 
-**Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
+**Shape:** `## yyyy-MM-dd · version` headings, newest first, each followed by `- ` lines. Nothing else is
 read. Add today's heading at the top when you ship something people can see.
+
+**Versions** (from 2026-09-28): each heading after the site went live carries the release number
+after a middle dot — `## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
+2.10.1); a day that adds something people can use moves the middle one (→ 2.11.0); a whole new part
+of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
+it carry no number.
 
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
-## 2026-09-27
+## 2026-09-28 · 2.11.0
+
+- Choose your time zone. Signing up asks, starting on your device's zone, and your profile can change
+  it or go back to following your device. Every date and time on the site is shown on your clock,
+  and Central time (Chicago) when nothing says otherwise.
+- A case, an investigation, an event or a tour can be read in its own local time or in yours:
+  **Local time · My time** sits beside the times, the site remembers which you chose, and every time
+  names its zone, with the other clock one hover away.
+- A group has a home time zone, in its settings. New cases, events and tours start on it; a case can
+  have its own on its edit page, and an investigation in its schedule dialog, where the times you type
+  are on the visit's clock rather than yours.
+- The calendar's event form now takes times on the event's own clock, and an event's sign-up deadline
+  no longer moves when the event is edited.
+- A number of pages showed times on the server's clock instead of yours, and a few showed them in UTC;
+  they now show them on yours.
+- Changes now carry a version number, from 1.0.0 when the site went live.
+- The feed attributions and upload pages no longer say there is nothing there while they are still
+  loading.
+
+## 2026-09-27 · 2.10.0
 
 - A field session's playback page now plays the video with the session's sound beside it, shows the
   photographs taken during the session in a strip that glows as playback reaches each one (click to
@@ -25,7 +50,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Videos in a field session now start where they were filmed. They used to be placed at the moment
   recording stopped, after the stretch they showed.
 
-## 2026-09-25
+## 2026-09-25 · 2.9.0
 
 - The IsHaunted store is built and waiting for its products: investigation gear from the site itself
   and from members who make their own. It opens once its shelves are stocked, and this page will say
@@ -47,7 +72,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - In the video editor, the media panel's tabs and cards are the right size again, and the cards can
   be clicked.
 
-## 2026-09-22
+## 2026-09-22 · 2.8.1
 
 - Text across the site is easier to read in dark mode. Links, the coloured words used for status
   and warnings, and the outline buttons were all too close to the background behind them; they now
@@ -87,7 +112,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - On a phone, the heading on a group's Investigations tab no longer sits against its Schedule
   button.
 
-## 2026-09-21
+## 2026-09-21 · 2.8.0
 
 - You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
   public location** is on the Places tab of what's near you. Until now a place only appeared as a
@@ -157,7 +182,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Your media library holds what you uploaded, once each. Profile pictures, the site's default
   avatars, and files whose contents have gone are no longer listed.
 
-## 2026-09-20
+## 2026-09-20 · 2.7.0
 
 - Administrators can write the site's emails. Pick a letter, pick a table and a column, and add a
   token like {AppUsers.DisplayName} that is filled in when the letter is written. Dates and times
@@ -175,7 +200,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   have already been cleared says so instead of showing an empty page, and the letter is drawn in
   a sealed frame that runs nothing.
 
-## 2026-09-19
+## 2026-09-19 · 2.6.0
 
 - Files you own can be deleted from the Media Library, not only from the upload page. If a
   group is using one, it still asks the two questions first — remove it everywhere, or hand
@@ -219,7 +244,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   kept its full width while the finished video was half as long, and the difference came out as
   black nobody had been warned about. Speed can also be undone.
 
-## 2026-09-18
+## 2026-09-18 · 2.5.0
 
 - New board now asks what to start from. Five choices: a blank board, a moodboard of coloured
   sections with a cluster of themes, a research plan with a four-square and a grid of four weeks, a
@@ -253,7 +278,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   target is published. If the target is deleted, the card says so when clicked rather than going
   anywhere, and if only the card you pointed at is gone, the board still opens.
 
-## 2026-09-17
+## 2026-09-17 · 2.4.0
 
 - Your two-week renewal notice now quotes the right number. A group billed quarterly or every six
   months was shown its price "per month", and a tour business was shown the price of one tour
@@ -359,7 +384,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   asking for what that kind of thing needs. Pick the kind while editing a card; changing it keeps what
   you typed. Until a card has a title, its heading says which kind it is rather than "Card".
 
-## 2026-09-16
+## 2026-09-16 · 2.3.0
 
 - A session's sound recordings no longer sit held out of a place's archive: the picture screener used to hold every audio file as an image that would not decode, so an archived night could show its readings but never its sound.
 - A field session that was sent from the app as one session file can now be added to a public place's archive, and its recordings play there like any other.
@@ -371,13 +396,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A board can reach for a file the case already has, instead of sending a second copy of a photograph you uploaded last week.
 - Recordings dropped on a board play where they sit — sound as a waveform, video in its own small screen at card size, resizable to whatever suits.
 
-## 2026-09-15
+## 2026-09-15 · 2.2.1
 
 - When a site role cannot be saved, the page now says exactly why instead of naming a SuperAdmin rule that may have nothing to do with it.
 - Dates and times are typed the way you write them, like 09/15/2026 8:00 PM. A date that does not exist, such as September 31, is refused with a sentence saying why, instead of quietly becoming a different day; the calendar button is still there.
 - When an administrator's new account is refused, the page now says exactly why instead of a general apology.
 
-## 2026-09-14
+## 2026-09-14 · 2.2.0
 
 - In every table, the line under a row now runs under its action buttons too.
 - Buttons in tables are icons now, so a row stays on one line. Hover over one to see what it does.
@@ -471,7 +496,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A photo whose thumbnail was interrupted while it was being made no longer shows as a blank square; the
   thumbnail is made again.
 
-## 2026-09-13
+## 2026-09-13 · 2.1.0
 
 - A guest who asks to stay with no room preference now sees "Waiting to be placed" for each night until the
   venue chooses a room, instead of "Just for the day". The booking board, door list, calendar file and
@@ -642,7 +667,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   properly on the account it just made you, so you can choose your own seats next time.
 - A new help page, **Going to an Event**, covers all of it.
 
-## 2026-09-12
+## 2026-09-12 · 2.0.0
 
 - Events have a **Menus** page: every night, and under it every sitting you serve — breakfast,
   lunch, dinner, snacks, a late supper. Dishes are typed one to a line with the course before a
@@ -767,7 +792,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The event page now links to the venue's rooms, so describing them is one click from the event
   that is going to offer them.
 
-## 2026-09-11
+## 2026-09-11 · 1.8.0
 
 - An investigation can now run across more than one day.
 - Ghost walking tours have their own kind of listing, with a reserved seat you can hold from your phone.
@@ -776,39 +801,39 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Fixed a pop-up opening behind the window that had asked for it.
 - Countdowns and timers now measure elapsed time rather than counting ticks, so they no longer run slow on a busy machine.
 
-## 2026-09-10
+## 2026-09-10 · 1.7.0
 
 - Maps across the site are now Apple Maps.
 - You can sign in to the website with your Apple Account.
 - Addresses are looked up as you type when adding a place.
 - Deleting your account now also revokes the Apple sign-in that was attached to it.
 
-## 2026-09-09
+## 2026-09-09 · 1.6.2
 
 - The home map shows the cases that are yours.
 - Maps load what is in view instead of everything at once.
 
-## 2026-09-08
+## 2026-09-08 · 1.6.1
 
 - The help pages and the product documentation were rebuilt against the current site.
 
-## 2026-09-06
+## 2026-09-06 · 1.6.0
 
 - Anyone can report a case from the public site.
 - An export that is missing its media now says so instead of producing a broken file.
 - A cancelled export stops immediately.
 - The administrator's user list keeps its actions on one line.
 
-## 2026-09-05
+## 2026-09-05 · 1.5.2
 
 - A pass of fixes across the video editor.
 
-## 2026-09-02
+## 2026-09-02 · 1.5.1
 
 - Fixed a save that appeared to hang when nothing had been typed.
 - Sessions that lost their owner are cleaned up, and the cleanup can be run selectively.
 
-## 2026-08-31
+## 2026-08-31 · 1.5.0
 
 - Groups can be deleted, properly, along with everything that belonged to them.
 - Field sessions published to a public place now say whether what was recorded was unusual.
@@ -817,34 +842,34 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Errors are written to a log an administrator can actually read.
 - Menus and buttons that never applied to you are no longer shown at all.
 
-## 2026-08-30
+## 2026-08-30 · 1.4.0
 
 - Subscriptions are live end to end, from checkout to seats.
 - The pricing page shows real, round numbers.
 - Field sessions recorded at a public place accumulate into that place's own archive.
 
-## 2026-08-27
+## 2026-08-27 · 1.3.0
 
 - A guide can sign somebody up on the spot, with no account and no phone.
 - Trial notices tell you where you are before anything is charged.
 
-## 2026-08-26
+## 2026-08-26 · 1.2.0
 
 - A request to investigate is reviewed and voted on, and the first group to accept takes it.
 - What each role may do is now decided in one place, so a menu no longer leads to a refusal.
 - Clients can see which groups are able to take their case before choosing one.
 - Large files upload in pieces, so a dropped connection no longer costs the whole upload.
 
-## 2026-08-25
+## 2026-08-25 · 1.1.1
 
 - Media previews stream instead of loading the whole file first.
 
-## 2026-08-24
+## 2026-08-24 · 1.1.0
 
 - The feed opened: posts, replies, likes and media, with moderation behind it.
 - Work at a private residence can be marked private, and addresses are held back accordingly.
 
-## 2026-08-23
+## 2026-08-23 · 1.0.0
 
 - Roles and permissions can be granted and taken away from a screen.
 - Groups can give their members titles.

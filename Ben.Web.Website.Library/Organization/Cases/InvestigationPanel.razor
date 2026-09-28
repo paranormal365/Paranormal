@@ -302,7 +302,7 @@
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-time-zone">Time zone</label>
                 <TimeZonePicker Id="investigationpanel-time-zone" @bind-Value="_form.TimeZoneId" AllowUnset="true"
-                                UnsetLabel="@($"Same as the case — {TimeZoneCatalog.Label(CaseZone)}")"
+                                UnsetLabel="@($"Same as the case: {TimeZoneCatalog.Label(CaseZone)}")"
                                 TestId="investigation-time-zone" />
                 <div class="form-text">The start and end are in @FormZoneLetters, the visit's local time.</div>
             </div>

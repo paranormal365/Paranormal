@@ -265,7 +265,7 @@
                                     <div class="col-12">
                                         <label class="form-label small" for="profile-time-zone">Time zone</label>
                                         <TimeZonePicker Id="profile-time-zone" @bind-Value="_timeZoneId" AllowUnset="true"
-                                                        UnsetLabel="@($"Use this device's time zone ({TimeZoneCatalog.Label(Ben.Data.Common.Helpers.Zones.IanaId(UserState.BrowserTimeZone))})")"
+                                                        UnsetLabel="@($"Use this device's time zone: {TimeZoneCatalog.Label(Ben.Data.Common.Helpers.Zones.IanaId(UserState.BrowserTimeZone))}")"
                                                         TestId="profile-time-zone" />
                                         <div class="form-text" style="font-size:.72rem;">
                                             Dates and times across the site show in this zone. A case, investigation,

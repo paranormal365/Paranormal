@@ -23,6 +23,21 @@ The page opens with your name and picture, then three tabs:
 Most visits here are to change one thing, which is why the sections are behind tabs rather than
 stacked down one page. The map in particular only loads when you open its tab.
 
+## Your time zone
+
+**Time zone**, on the About tab, is the clock the whole site shows dates and times on for you. It
+was set when you signed up; choose another from the list — the US zones come first, then every
+zone in the world by region — and press **Save**. Every page switches from the next thing it draws.
+
+![Choosing your time zone on your profile](/help/media/your-profile/profile-time-zone.png)
+
+Choose **Use this device's time zone** to go back to following whatever clock your phone or computer
+is on — useful if you travel and want the site to travel with you.
+
+A case, an investigation, an event or a tour also has a clock of its own: the place's. Those pages
+have a **Local time · My time** switch, so you can read them either way; see
+[Working a Case](/help/working-a-case#whose-clock) and [Getting Started](/help/getting-started).
+
 ## Sex
 
 Under your name sits an optional **Sex** field — Male, Female, or Unspecified, and it starts

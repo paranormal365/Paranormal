@@ -12,13 +12,32 @@ branches, servers or tables, infrastructure, deployment, anybody's name, any gro
 Nothing here should help somebody attack the service or identify a person. When a fix is
 security-related, say only that it was, and never the shape of it.
 
-**Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
+**Shape:** `## yyyy-MM-dd · version` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
+
+**Versions** (from 2026-09-28): each heading after the service went live carries the release
+number after a middle dot — `## 2026-09-28 · 2.8.0`. A day of fixes moves the last number (2.7.0 →
+2.7.1); a day that adds something moves the middle one (→ 2.8.0); a whole new part of the service
+moves the first (→ 3.0.0). The service went live as 1.0.0 with the 2026-08-22 release; the day
+before it carries no number.
 
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
-## 2026-09-27
+## 2026-09-28 · 2.8.0
+
+- People, groups, cases and investigations have time zones. Signing up and the profile take the
+  zone a person reads the site in; a group has a home zone that new cases, events and tours start
+  on; a case or an investigation can name its own, and otherwise reads on its case's or group's.
+  Every date is still stored in universal time, and cases, investigations and the lists that show
+  them now say which zone each one reads on, as new fields that older apps simply ignore.
+- New events and tours start on their group's home zone rather than always on Central time.
+- The emails a client gets about a visit give the visit's own local time with its zone. They gave
+  the time in UTC.
+- Uploads are written to storage as they arrive instead of being held whole in memory first, so a
+  large file no longer needs its full size in memory to be accepted.
+
+## 2026-09-27 · 2.7.0
 
 - Published field sessions can be looked up near a point or by a place's name or town, and each can
   be downloaded as a public copy of its session file: the readings and marks as recorded, every
@@ -26,7 +45,7 @@ belongs there; this is for the part underneath.
 - Your investigations list includes where each investigation is, so the app can offer the one you
   are standing at.
 
-## 2026-09-25
+## 2026-09-25 · 2.6.0
 
 - The service is ready to run the store: card payments and refunds go through Stripe, and sales tax
   is worked out and filed through Stripe as well. The store itself is waiting for its products and is
@@ -34,7 +53,7 @@ belongs there; this is for the part underneath.
 - Codes handed out for a night, and the passes they made, are deleted a month after the night instead
   of being kept.
 
-## 2026-09-21
+## 2026-09-21 · 2.5.0
 
 - An account created for somebody who did not ask for one now writes to them, naming who set it up
   and carrying a link that hands it over. The letter is essential and cannot be declined.
@@ -48,7 +67,7 @@ belongs there; this is for the part underneath.
   three that could before.
 - A group can be given a joining link, so its people can be let in without each having to apply.
 
-## 2026-09-19
+## 2026-09-19 · 2.4.2
 
 - The dashboard's three calls hold their answers for five minutes, keyed by the range asked
   for. "Registered and never arrived" looks at the last 90 days instead of every account
@@ -58,7 +77,7 @@ belongs there; this is for the part underneath.
   moment somebody signs in, so there was no obvious thing to record.
 - The users list can be asked when each account last signed in and how many times.
 
-## 2026-09-18
+## 2026-09-18 · 2.4.1
 
 - A board that links to another board is checked when it is published: the service refuses to publish
   one whose target has not been published, and says which. A picker that only offers published boards
@@ -66,7 +85,7 @@ belongs there; this is for the part underneath.
 - Reading a board by its published copy is now a request of its own, so following a link to another
   board never reaches its author's unpublished draft.
 
-## 2026-09-17
+## 2026-09-17 · 2.4.0
 
 - Money figures are worked out and filed more carefully. Several sums rounded a fraction of a cent
   the wrong way, or rounded each item before adding rather than once at the end, and one rounded
@@ -122,14 +141,14 @@ belongs there; this is for the part underneath.
 - A video, a recording or an image on a case can be asked for a byte range, so it plays and can be seeked in the page instead of only being downloadable. The same applies to a case's public page, a place's archive, an event's evidence and a group's files.
 - Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behaviour.
 
-## 2026-09-16
+## 2026-09-16 · 2.3.0
 
 - The public archive lists and serves recordings that live inside a session's single file, by the file row's id; publishing such a session is no longer refused, and its recordings are screened like any other before they show.
 - Research boards on a case have their own addresses: a group's boards, one board, and publishing one. A board nobody has published is not in the list for anybody but the person writing it.
 - The older research pages and their attachments have been removed, along with their addresses. Files those pages referred to are untouched: they are the case's files and stay on the case's Files tab.
 - The canvas is no longer behind a site switch. It answers signed-in callers wherever the service is running.
 
-## 2026-09-14
+## 2026-09-14 · 2.2.0
 
 - A client's list of cases now says which request each case was accepted from, as a new field that older apps ignore.
 - A group's Viewers are refused every change, with a sentence saying why, whatever roles or permissions they hold. The permissions a person has in a group now say whether they are a Viewer.
@@ -155,7 +174,7 @@ belongs there; this is for the part underneath.
 - A new site setting takes plans and member seats off sale. While it is off, starting a checkout for either is
   refused with a short sentence, and the public features answer says so.
 
-## 2026-09-13
+## 2026-09-13 · 2.1.0
 
 - SuperAdmin endpoints list every hosted event, return the events dashboard figures, show what removing an
   event would do, remove it, and answer appeals.
@@ -234,7 +253,7 @@ belongs there; this is for the part underneath.
 - The notification summary counts held places as waiting on a decision, includes event helpers who
   may decide, and has two new counts for holds that run out within a day.
 
-## 2026-09-12
+## 2026-09-12 · 2.0.0
 
 - What the kitchen needs for a hosted event can now be asked for one night at a time. A party with
   no night of its own — somebody who has the whole run — counts on every night of it, so no
@@ -280,28 +299,28 @@ belongs there; this is for the part underneath.
   universal clock.
 - A venue with an event at it can be merged into its duplicate, and the event follows.
 
-## 2026-09-11
+## 2026-09-11 · 1.8.0
 
 - Investigations can span several days, and everything scheduled against them understands that.
 - Tour seats can be reserved and released.
 
-## 2026-09-10
+## 2026-09-10 · 1.7.0
 
 - Signing in with an Apple Account is accepted from the website as well as the apps.
 - Addresses are resolved through Apple's own mapping service.
 - Deleting an account now also tells Apple to forget the sign-in that was attached to it.
 
-## 2026-09-06
+## 2026-09-06 · 1.6.0
 
 - Reports of a case can be submitted by people without an account.
 - An export that cannot find its media refuses rather than producing an incomplete file.
 
-## 2026-09-02
+## 2026-09-02 · 1.5.1
 
 - Recordings whose session no longer exists are cleaned up rather than left behind.
 - Fixed a save that never completed when the form was empty.
 
-## 2026-08-31
+## 2026-08-31 · 1.5.0
 
 - A free account holds 2 GB. What a subscription holds is set by its plan.
 - Deleting a group now removes everything that belonged to it, rather than leaving it stranded.
@@ -309,27 +328,27 @@ belongs there; this is for the part underneath.
 - Email delivery is recorded, so a message that never arrived can be told apart from one that was
   never sent.
 
-## 2026-08-30
+## 2026-08-30 · 1.4.0
 
 - Payments run through Stripe end to end.
 - Duplicate places can be found and merged into one.
 - Field sessions can be published to a public place archive.
 
-## 2026-08-27
+## 2026-08-27 · 1.3.0
 
 - Somebody can be signed up for a tour on the spot, with no account.
 
-## 2026-08-26
+## 2026-08-26 · 1.2.0
 
 - Large uploads are sent in pieces and resume rather than starting again.
 - What a role may do is decided once, for every door.
 
-## 2026-08-24
+## 2026-08-24 · 1.1.0
 
 - The feed, its ranking and its moderation queue.
 - Work at a private residence is marked as such, and locations are withheld accordingly.
 
-## 2026-08-22
+## 2026-08-22 · 1.0.0
 
 - Subscriptions, seats, and what happens when one lapses.
 

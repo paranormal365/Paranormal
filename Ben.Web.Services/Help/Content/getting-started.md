@@ -188,14 +188,26 @@ you can join a group.
 *The @name is checked as you type, so you find out it is taken before you fill in the rest.*
 
 **To create one on its own**, use the sign-in page — *New here? Create an account* — or go
-straight to `/signup`. You'll be asked for four things:
+straight to `/signup`. You'll be asked for five things:
 
 | | |
 |---|---|
 | **Your name** | What people see on your posts and your profile. Change it whenever you like. |
 | **Your @name** | How people mention you. **Chosen once and permanent** — see below. |
 | **Email** | Where we send the confirmation link. Never shown publicly. |
+| **Your time zone** | The clock dates and times are shown on. Already set to your device's; change it on your profile whenever you like. |
 | **Password** | At least 8 characters, with an upper-case letter, a lower-case letter and a digit. |
+
+### Your time zone
+
+Every date and time on the site is stored in one universal time and shown to you on your own
+clock. The sign-up form starts on the zone your device reports — most people only confirm it — and
+lists the US zones first, then every zone in the world by region.
+
+![Choosing your time zone when you sign up](/help/media/getting-started/signup-time-zone.png)
+
+If you never choose one, the site uses your device's zone, and Central time (Chicago) if your
+device does not say. Change it any time on [your profile](/help/your-profile#your-time-zone).
 
 ### Your @name
 
@@ -598,10 +610,12 @@ investigations and open meetings together, soonest first.
 *Grouped by the day, so the date is said once and each night under it only has to tell you what is
 different about it. The bar on the right is how full it is.*
 
-**Every time is the event's own.** A walk that starts at eight in Nashville reads as eight wherever
-in the world you are reading it, with the zone named beside it — so this page, the event's page, the
-email you are sent and the calendar file all agree. An event whose group has not said which zone it
-runs on is shown in UTC and says so.
+**Every time is the event's own — or yours, if you choose.** A walk that starts at eight in
+Nashville reads as eight wherever in the world you are reading it, with the zone named beside it —
+so this page, the event's page, the email you are sent and the calendar file all agree. Switch
+**Local time · My time** at the top of the list to read every event on your own clock instead; the
+site remembers the choice, and hovering over any time shows it on the other clock. An event whose
+group has not said which zone it runs on is shown on the group's home clock.
 
 ## Going to a group's public event
 
@@ -653,9 +667,10 @@ the tour will come back to you if room appears.
 Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
 night is on the tour's page for you to download.
 
-**Times are the event's own.** A walk that starts at eight in Nashville reads as eight wherever
-you are reading it, with the zone named beside it, so the page, the email and the calendar file
-all agree. An event whose group has not said which zone it runs on is shown in UTC and says so.
+**Times are the event's own — or yours, if you choose.** A walk that starts at eight in Nashville
+reads as eight wherever you are reading it, with the zone named beside it, so the page, the email
+and the calendar file all agree. **Local time · My time** on the page switches every time to your
+own clock, and the site remembers which you chose.
 
 At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
 YouTube and so on — if the business has added them.

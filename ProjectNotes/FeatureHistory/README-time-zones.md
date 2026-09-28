@@ -61,7 +61,50 @@ Branch `feature/time-zones`, from develop. Ben:
 
 **T4 — Help, change logs, screenshots, product PDF; tests throughout.**
 
+## What shipped
+
+- **T1 — data and API** (`90730110`): `TimeZoneId` on AppUsers, Organizations (default Chicago),
+  Cases and Investigations; `Zones` (Ben.Data.Common) checks, resolves and inherits; `ZoneChain`
+  fills a record's `EffectiveTimeZoneId`. Sign-up, the request wizard, `/api/me`, the profile, group
+  settings, cases, investigations and the investigation lists carry zones; tours, events and calendar
+  dates default to the group's zone.
+- **T2 — the viewer's zone** (`0cba5aed`): `IBenUserState.ViewerTimeZone` (chosen → browser →
+  Chicago) behind every viewer helper; sign-up, profile and wizard; 63 `.ToLocalTime()` calls and
+  four raw-UTC displays fixed; `ServerClockGuardTests`.
+- **T3 — the item's clock** (`c84334f8`): `BenTime`, `TimeZoneSwitch`, `TimeView`; case, visit,
+  group, event and tour pages; the visit dialog and the calendar's event form take times on the
+  item's own clock.
+- **T4 — help, change logs, screenshots, PDF**, and versions on the change log (below).
+
+## What testing found (and fixed)
+
+- Visit emails to clients printed times in UTC ("at 12:00 AM UTC" for a 7 PM visit).
+- The calendar loaded an event's sign-up deadline as raw UTC and saved it back through the viewer's
+  zone, moving it by the viewer's offset on every edit.
+- The group settings save dropped `StripMediaMetadataCanChoose`, greying the switch after each save.
+- The public change log printed its `**bold**` markers literally, in 28 places.
+- A mocking library does not run an interface's default members, so the viewer helpers now fall back
+  to the browser's zone rather than throwing.
+- Browser test: a New York case read from a Chicago browser, then on a Pacific profile; it fails
+  when the switch is broken (checked).
+
+## Versions on the change log (Ben, 2026-09-28)
+
+> Can we track releases in versioning? Go back to when it went live and call that 1.0.0. Minor
+> releases are like 1.0.1. Larger releases are 1.1.0. Huge and major releases are 2.0.0.
+
+- The date line carries the release: `## 2026-09-28 · 2.11.0`. `ChangelogService` reads it and
+  `/changes` shows "Version 2.11.0" beside the date.
+- **Website** went live as 1.0.0 on 08/23; hosted events (09/12) is 2.0.0; this branch is 2.11.0.
+- **Service** went live as 1.0.0 with the 08/22 release; hosted events is 2.0.0; this branch 2.8.0.
+- **iPhone and iPad** use the App Store numbers (1.0.0 → 1.0.3); changes since 1.0.3 are under
+  **1.1.0**, which is the number the next build should carry.
+- `ChangelogServiceTests` holds it: every release since go-live is numbered, 1.0.0 first, each one
+  exactly one patch, minor or major step after the last (apps: never backwards).
+
 ## Not in this branch
 
-- The iPhone/iPad app (next).
+- The iPhone/iPad app (next): the API already returns every zone it needs; the app ignores the new
+  fields until then.
+- Entra and Apple sign-ups do not ask for a zone; the browser's stands in until the profile says.
 - Guessing a zone from an address: named on purpose, as `HouseClock` explains.

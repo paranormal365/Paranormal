@@ -557,6 +557,25 @@ that finishes before anyone arrives.
 
 The same applies to **Propose Dates**, where you offer a client a choice of windows.
 
+## Whose clock
+
+A case happens somewhere, and so does every visit to it. Each has a **time zone** — the case's is
+set on its edit page, and a visit's in its schedule dialog. Left alone, a visit is on its case's
+clock, and a case is on your group's **home time zone** (set in the group's settings).
+
+When you schedule a visit, the start and end you type are on the visit's clock, and the dialog
+says which: book "8:00 PM" for a house in New York and it is eight in New York, even if you are in
+Chicago when you book it.
+
+**Local time · My time**, beside the investigations, switches what you read. *Local time* shows each
+visit on its own clock; *My time* shows everything on yours — the zone on your profile, or your
+device's if you have not chosen one. Every time carries its zone's letters, hovering over one shows
+it on the other clock, and the site remembers which you chose.
+
+![A New York visit read in its own time, with the switch beside it](/help/media/working-a-case/case-time-switch.png)
+
+Clients see the same switch on their case, and the emails they are sent give the visit's own time.
+
 ## Scheduling a visit with no case
 
 **Schedule an investigation** on the group's Investigations tab books a visit that belongs to no

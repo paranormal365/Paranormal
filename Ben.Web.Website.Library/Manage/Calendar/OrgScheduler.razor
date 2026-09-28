@@ -332,7 +332,7 @@
                 <select id="ev-zone" class="form-select"
                         @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? "")">
                     <option value="" selected="@(string.IsNullOrWhiteSpace(_form.TimeZoneId))">
-                        @(_form.TourId is null ? $"(The group's — {TimeZoneCatalog.Label(_groupZone ?? Ben.Data.Common.Constants.HouseClock.ZoneId)})" : "(The tour's)")
+                        @(_form.TourId is null ? $"(The group's: {TimeZoneCatalog.Label(_groupZone ?? Ben.Data.Common.Constants.HouseClock.ZoneId)})" : "(The tour's)")
                     </option>
                     @foreach (var zone in TimeZoneChoices.All)
                     {

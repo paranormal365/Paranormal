@@ -101,7 +101,7 @@
                         <div>
                             <label class="form-label fw-semibold" for="case-edit-time-zone">Time zone</label>
                             <TimeZonePicker Id="case-edit-time-zone" @bind-Value="_editTimeZoneId" AllowUnset="true"
-                                            UnsetLabel="@(_groupZoneHint is null ? "Same as the group" : $"Same as the group — {TimeZoneCatalog.Label(_groupZoneHint)}")"
+                                            UnsetLabel="@(_groupZoneHint is null ? "Same as the group" : $"Same as the group: {TimeZoneCatalog.Label(_groupZoneHint)}")"
                                             TestId="case-edit-time-zone" />
                             <div class="form-text">Where the case is. New investigations start on this clock.</div>
                         </div>
