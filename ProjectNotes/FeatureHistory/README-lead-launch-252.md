@@ -81,6 +81,25 @@ token registered when signed in and removed at sign-out; a tap opens the same li
 **L4 — The lead's button (app).** "Things I lead today" and a **Launch** button on an
 investigation, a tour date and an event door, with "Send to N people" before it goes.
 
+**L4b — Join by QR code, for somebody who is not registered.** Ben: "would the qr code scan also
+register someone to join the tour, event or investigation? maybe it sends a request to the leader
+and the leader has to confirm to have them join. maybe we require them to sign in in order to use it
+during event... whatever you think is more appropriate." What was chosen:
+
+- The lead's launch screen shows a **QR code** of the launch's website address
+  (`https://ishaunted.com/field-kit/launch/{id}`), claimed as a universal link so the phone's camera
+  opens the app; without the app, the page says how to get it.
+- **Already registered:** exactly the card — straight into the group's session.
+- **Not registered: sign in, then ask.** Joining the group's session means your sessions go to the
+  group, so it has to know who you are; Field Kit on its own still needs no account. Scanning sends
+  "wants to join" to the lead, who sees it on the launch screen and approves with one tap.
+- **Nobody waits to record.** Field Kit opens at once and records to the phone like any session;
+  the lead's yes is what lets those sessions go to the group and puts the card in their feed. A no
+  leaves them as the person's own sessions.
+- **What a yes registers:** a tour date — a reserved seat; a public event — an accepted attendee; an
+  investigation — a guest pass (the join-by-code mechanism that already exists). A **hosted event is
+  paid**, so a yes adds the person to this launch only and never makes a booking.
+
 **L5 — Sessions pile up (app + server).** Sessions tied to a tour date or event on the phone and in
 the `.ben` upload; each row says sent / not sent; the next window of a long session adds to the
 first rather than replacing it.
@@ -90,9 +109,14 @@ the group that ran it, and the feed shows the launch post on the website too.
 
 **L7 — Help, change logs, screenshots, PDF; tests throughout.**
 
-## Needs Ben (Apple Developer account)
+## The APNs key (09/28)
 
-An **APNs key**: Certificates, Identifiers & Profiles → Keys → + → *Apple Push Notifications
-service* → download the `.p8` once, note its Key ID. And the **Push Notifications** capability on
-the `com.ishaunted.ios` App ID (Xcode's automatic signing adds it with the entitlement). Until
-then everything is built and tested with a fake sender and `xcrun simctl push`.
+Ben made one key for **both** sandbox and production. Key ID `TVH4P55742`, team `5778H75249`; the
+`.p8` lives beside the other Apple keys in `~/.ishaunted/` (mode 600), named by
+`Apns:PrivateKeyPath` in the git-ignored `appsettings.Development.json` — never in the repository.
+`ApnsLiveTests` (opt-in: `BEN_APNS_TEAM_ID`, `BEN_APNS_KEY_ID`, `BEN_APNS_KEY_PATH`) asks Apple for
+real: both services accept it and refuse only the made-up phone; with a wrong key id both refuse
+the key (checked).
+
+**Production still needs** the same file on the server, readable by the app pool identity (see
+`PrivateKeyFile`), and `Apns:KeyId` / `Apns:PrivateKeyPath` in its settings — at deploy.
