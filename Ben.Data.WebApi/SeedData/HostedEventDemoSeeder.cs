@@ -1,6 +1,8 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Services.Events;
+using Ben.Data.WebApi.Services.Venues;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,6 +85,7 @@ internal static class HostedEventDemoSeeder
         await SeedTheVenueOnTheSiteAsync(db, host, owner.Id, now);
         await SeedRoomsEventAsync(db, host, owner.Id, now);
         await SeedSeatsEventAsync(db, host, owner.Id, now);
+        await PutThemOnThePublicSiteAsync(scope.ServiceProvider, db, owner.Id);
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
         await SeedWhatIsServedAsync(db, owner.Id, now);
         await SeedAPartyTheKitchenMustWorkAroundAsync(db, userManager, config, owner.Id, now);
@@ -532,8 +535,9 @@ internal static class HostedEventDemoSeeder
             DayPassCapacity = 20,
             DayPassPrice = 45m,
             ContactLine = "Call the hotel on (615) 555-0142 to settle up.",
-            // Draft on purpose: the point of the seed is a plan to arrange, and publishing it
-            // would spend one of the group's credits every time a database is built.
+            // Created as a draft, because that is what creating an event does. It is put live a
+            // few lines later by PutThemOnThePublicSiteAsync, which asks the entitlement and
+            // writes the umbrella row rather than setting this column and hoping.
             LifecycleState = HostedEventLifecycleState.Draft,
             VenueArrangement = HostedEventVenueArrangement.Self,
             DateCreated = now,
@@ -608,6 +612,7 @@ internal static class HostedEventDemoSeeder
             LayoutKind = HostedEventLayoutKind.Seats,
             DayPassCapacity = 0,
             ContactLine = "Tickets are settled at the door.",
+            // A draft here too, and put live the same way. See the weekend above.
             LifecycleState = HostedEventLifecycleState.Draft,
             VenueArrangement = HostedEventVenueArrangement.Self,
             // A theatre's seats are picked by the guest; the hotel's rooms are asked for and
@@ -654,6 +659,166 @@ internal static class HostedEventDemoSeeder
         Console.WriteLine(
             $"[HostedEventDemoSeeder] Created An Evening of Evidence: {order} seats in two "
             + "sections with a centre aisle.");
+    }
+
+    // ── and then live, the way a person would do it ──────────────────────────
+
+    /// <summary>Why the seeder's own credit exists, and the marker that stops it buying a second.</summary>
+    private const string GrantedForTheDemo =
+        "Seeded so the demo events can be published on a fresh database.";
+
+    /// <summary>
+    /// Puts the two seeded events on the public site, by the same route the publish button takes.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the seeder publishes at all.</b> Both events were created as drafts, on the
+    /// reasoning that the plan screens are what the seed is for. But a draft has no public page by
+    /// design — <see cref="HostedEventStates.OnThePublicSite"/> is Published, Live and Ended — so
+    /// every visitor-facing surface built on top of them had nothing to open. On the long-lived
+    /// test databases that was hidden, because earlier sessions had pressed publish by hand; a run
+    /// on a brand-new database failed eight fixtures on the precondition alone. A seeded state that
+    /// only works on databases somebody has already edited is the exact drift an isolated-database
+    /// harness exists to catch.</para>
+    ///
+    /// <para><b>Not a column poke.</b> Setting <c>LifecycleState</c> and walking away would leave
+    /// a shape no real publish produces: no <c>FirstPublishedUtc</c>, so the event would be charged
+    /// for the first time the day somebody unpublished and republished it; no entitlement asked,
+    /// so a deployment that does gate hosting would have seeded its way around its own rule; and no
+    /// umbrella calendar row, which is what carries the <c>/o/{org}/events/{slug}</c> address, the
+    /// share tags, the reminder and the sign-up. So this asks the same questions the endpoint asks,
+    /// in the same order, and writes the same three things.</para>
+    ///
+    /// <para><b>The money is seeded rather than skipped.</b> If the deployment's price list puts
+    /// this group on the credit path, a credit is granted first — the SuperAdmin grant shape, priced
+    /// at zero with a reason on it, because no money changed hands and a $99 sale that never
+    /// happened has no business in the ledger — and then spent by the ordinary path. Same reasoning
+    /// as <c>BillingDemoSeeder</c> opening its subscriptions through <c>PeriodOpener</c>: a seeded
+    /// row that did not come from the real code is a row that will quietly stop matching it.</para>
+    ///
+    /// <para><b>Idempotent and additive, on its own marker.</b> Only an event still in Draft that
+    /// has never been live is touched. A second run finds nothing. An event somebody unpublished by
+    /// hand while testing keeps its <c>FirstPublishedUtc</c> and is left alone, so the seeder never
+    /// undoes a state a person chose.</para>
+    /// </remarks>
+    private static async Task PutThemOnThePublicSiteAsync(
+        IServiceProvider scoped, BenDataContext db, Guid ownerId)
+    {
+        var drafts = await db.HostedEvents
+            .Include(e => e.Nights)
+            .Include(e => e.LayoutUnits)
+            .Where(e => (e.Id == RoomsEventId || e.Id == SeatsEventId)
+                     && e.LifecycleState == HostedEventLifecycleState.Draft
+                     && e.FirstPublishedUtc == null)
+            .OrderBy(e => e.StartsOn)
+            .ToListAsync();
+
+        if (drafts.Count == 0) return;
+
+        var entitlement = scoped.GetRequiredService<HostedEventEntitlement>();
+        var sync = scoped.GetRequiredService<HostedEventCalendarSync>();
+
+        var published = 0;
+        foreach (var hosted in drafts)
+        {
+            // The publish button's own checklist, read the same way the endpoint reads it: the
+            // first item that is not done is the refusal. A seeder that published past it would be
+            // seeding a state the site would not let anybody reach.
+            var venue = await VenueGrants.ForEventAsync(db, hosted, default);
+            if (HostedEventReadiness.Describe(hosted, venue).FirstOrDefault(i => !i.Done) is { } blocker)
+            {
+                Console.WriteLine(
+                    $"[HostedEventDemoSeeder] Left \"{hosted.Name}\" a draft — {blocker.Sentence}");
+                continue;
+            }
+
+            if (!await ThereIsSomethingToPublishAgainstAsync(db, entitlement, hosted, ownerId))
+                continue;
+
+            var (spent, refusal) = await entitlement.TakeForAsync(db, hosted, ownerId, default);
+            if (refusal is not null)
+            {
+                Console.WriteLine(
+                    $"[HostedEventDemoSeeder] Left \"{hosted.Name}\" a draft — {refusal}");
+                continue;
+            }
+
+            var now = DateTime.UtcNow;
+            hosted.FirstPublishedUtc = now;
+            hosted.LifecycleState = HostedEventLifecycleState.Published;
+            hosted.DateUpdated = now;
+            hosted.UpdatedByAppUserId = ownerId;
+
+            // The umbrella row, which is what every public surface actually resolves: the address,
+            // the share card, the reminder, the sign-up. It reads IsOnThePublicSite off the event,
+            // so it has to be written after the state above and not before.
+            await sync.SyncAsync(db, hosted, ownerId);
+
+            // One save per event, so a credit can never be spent without its event going live.
+            await db.SaveChangesAsync();
+            published++;
+
+            Console.WriteLine(
+                $"[HostedEventDemoSeeder] Put \"{hosted.Name}\" on the public site"
+                + (spent is null ? " on the group's plan." : " for one event credit."));
+        }
+
+        if (published == 0)
+            Console.WriteLine("[HostedEventDemoSeeder] Nothing was published; the demo events are still drafts.");
+    }
+
+    /// <summary>
+    /// Makes sure publishing has something to spend, granting one credit when it needs one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Asked before the take rather than instead of it: the take is what actually spends, in
+    /// the same save as the publish, and this only fills the pocket it reaches into.</para>
+    ///
+    /// <para><b>Only on the credit path, and only when the pocket is empty.</b> A group whose plan
+    /// includes hosting spends nothing and is handed nothing — a credit sitting beside a plan that
+    /// never uses it would be furniture that contradicts the group it belongs to. And a group that
+    /// already holds credits gets none: the seeder's job is to unblock its own two events, not to
+    /// top anybody up on every restart.</para>
+    /// </remarks>
+    private static async Task<bool> ThereIsSomethingToPublishAgainstAsync(
+        BenDataContext db, HostedEventEntitlement entitlement, HostedEvent hosted, Guid ownerId)
+    {
+        var verdict = await entitlement.DescribeAsync(db, hosted.OrganizationId, hosted.Id);
+
+        if (verdict.Kind is not HostedEventEntitlement.EntitlementKind.Credit)
+        {
+            // On a plan. Anything standing in the way is a cap somebody configured, and inventing
+            // room under it is not the seeder's to do — it says so and leaves the draft alone.
+            if (verdict.Refusal is not null)
+            {
+                Console.WriteLine(
+                    $"[HostedEventDemoSeeder] Left \"{hosted.Name}\" a draft — {verdict.Refusal}");
+                return false;
+            }
+            return true;
+        }
+
+        if (verdict.CreditsAvailable > 0) return true;
+
+        var now = DateTime.UtcNow;
+        db.EventCredits.Add(new EventCredit
+        {
+            Id                  = Guid.NewGuid(),
+            OwnerOrganizationId = hosted.OrganizationId,
+            // Zero and a reason, never a price: the grant path's shape. A $99 row here would put a
+            // sale nobody made into the money trail.
+            PriceAtPurchase     = 0m,
+            Currency            = "USD",
+            PurchasedUtc        = now,
+            ExpiresUtc          = now.Add(EventCredits.Life),
+            GrantedReason       = GrantedForTheDemo,
+            DateCreated         = now,
+            CreatedByAppUserId  = ownerId,
+        });
+        await db.SaveChangesAsync();
+
+        Console.WriteLine(
+            $"[HostedEventDemoSeeder] Granted one event credit so \"{hosted.Name}\" can be published.");
+        return true;
     }
 
     // ── small helpers ────────────────────────────────────────────────────────
