@@ -53,6 +53,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsModerator = me.IsModerator;
                 _tokenStore.IsSeller = me.IsSeller;
                 _tokenStore.UserId = me.UserId;
+                _tokenStore.SavedTimeZoneId = me.TimeZoneId;   // their clock, 2026-09-28
             }
         }
         catch { /* non-fatal — IsSuperAdmin stays false */ }
@@ -85,6 +86,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                 _tokenStore.IsAdmin = me.IsAdmin;
                 _tokenStore.IsModerator = me.IsModerator;
                 _tokenStore.IsSeller = me.IsSeller;
+                _tokenStore.SavedTimeZoneId = me.TimeZoneId;
             }
         }
         catch { /* non-fatal — the session still works, roles stay false */ }
@@ -121,6 +123,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
         _tokenStore.IsSeller = false;
+        _tokenStore.SavedTimeZoneId = null;
         _tokenStore.IsImpersonating = false;
         _tokenStore.OriginalAccessToken = null;
         _tokenStore.OriginalRefreshToken = null;
@@ -146,6 +149,17 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         ApplyTokenResponse(response);
         _tokenStore.UserEmail = targetUserEmail;
         _tokenStore.IsImpersonating = true;
+
+        // Their clock, not the SuperAdmin's (2026-09-28): impersonation exists to see the site as
+        // this person does, and every time on it reads in their zone.
+        _tokenStore.SavedTimeZoneId = null;
+        try
+        {
+            if (await _apiClient.GetAsync<MeResult>("/api/me", token) is { } me)
+                _tokenStore.SavedTimeZoneId = me.TimeZoneId;
+        }
+        catch { /* non-fatal — the browser's zone stands in */ }
+
         _tokenStore.NotifyStateChanged();
         return true;
     }
@@ -181,6 +195,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
         _tokenStore.IsAdmin = false;
         _tokenStore.IsModerator = false;
         _tokenStore.IsSeller = false;
+        _tokenStore.SavedTimeZoneId = null;   // the SuperAdmin's own, from /api/me below
 
         // Same reason as LoginAsync: the Identity API's opaque data-protected tokens
         // aren't JWTs, so JwtClaimsParser can't read IsSuperAdmin back out of the
@@ -200,6 +215,7 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
                     _tokenStore.IsModerator = me.IsModerator;
                     _tokenStore.IsSeller = me.IsSeller;
                     _tokenStore.UserId = me.UserId;
+                    _tokenStore.SavedTimeZoneId = me.TimeZoneId;
                 }
             }
             catch { rolesRestored = false; }

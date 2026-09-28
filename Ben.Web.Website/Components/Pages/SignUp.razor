@@ -5,6 +5,7 @@
 
 @inject IBenAdminClient AccountClient
 @inject NavigationManager NavManager
+@inject IBenUserState UserState
 
 <PageTitle>Create an account</PageTitle>
 
@@ -99,6 +100,14 @@
                         <ValidationMessage For="@(() => _form.Email)" class="text-danger small" />
                     </div>
 
+                    @* Ben, 2026-09-28: "When someone signs up for the site, I would like for them to select
+                       their timezone." Pre-chosen from the browser, so most people only confirm it. *@
+                    <div class="mb-3">
+                        <label class="form-label" for="signup-time-zone">Your time zone</label>
+                        <TimeZonePicker Id="signup-time-zone" @bind-Value="_timeZoneId" @bind-Value:after="() => _zoneTouched = true" TestId="signup-time-zone" />
+                        <div class="form-text">Dates and times on the site show in this zone. You can change it on your profile.</div>
+                    </div>
+
                     <div class="mb-4">
                         <label class="form-label" for="signup-password">Password</label>
                         <InputText id="signup-password" type="password" class="form-control" @bind-Value="_form.Password"
@@ -128,6 +137,22 @@
 
 @code {
     private readonly SignUpForm _form = new();
+
+    /// <summary>Starts as the browser's zone once MainLayout has read it; Chicago until then.</summary>
+    private string? _timeZoneId = Ben.Data.Common.Constants.HouseClock.ZoneId;
+    private bool _zoneTouched;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // The browser's zone arrives with AuthReady (MainLayout reads both in one pass).
+        await UserState.AuthReady;
+        if (!_zoneTouched)
+        {
+            _timeZoneId = Zones.IanaId(UserState.BrowserTimeZone);
+            StateHasChanged();
+        }
+    }
 
     private bool _busy;
     private bool _done;
@@ -311,7 +336,7 @@
         {
             var result = await AccountClient.RegisterAsync(
                 new RegisterAccount(_form.Email, _form.Password, _form.DisplayName, _form.Handle,
-                                    _form.FirstName, _form.LastName));
+                                    _form.FirstName, _form.LastName, _timeZoneId));
 
             if (result.Succeeded)
             {

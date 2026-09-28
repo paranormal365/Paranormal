@@ -6,6 +6,7 @@
 @inject IJSRuntime JSRuntime
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@inject IBenUserState UserState
 
 @*
    Every investigation the group has run, mapped and listed. The point of the screen is the two
@@ -368,7 +369,7 @@ else
                 {
                     <tr id="inv-row-@row.Id" class="@(row.Id == _focused ? "table-active" : null)">
                         <td class="text-nowrap">
-                            @row.ScheduledDateTime.ToLocalTime().ToDisplaySpan(row.EndDateTime?.ToLocalTime())
+                            @row.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(row.EndDateTime?.ToViewerLocalTime(UserState))
                         </td>
                         <td>
                             @row.Title

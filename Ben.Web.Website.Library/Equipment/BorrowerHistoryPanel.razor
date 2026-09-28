@@ -1,5 +1,6 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @* What past lenders said about the person asking for this loan — Ben's "so we know they are
    trustworthy and respectful with equipment". Scoped to the request being decided: you can read
@@ -35,7 +36,7 @@
                     <div class="d-flex justify-content-between">
                         <span class="fw-semibold">@entry.AuthorDisplayName</span>
                         <span class="text-secondary">
-                            @entry.ItemDisplayName · returned @entry.DateReturned.ToLocalTime().ToDisplayDate()
+                            @entry.ItemDisplayName · returned @entry.DateReturned.ToViewerLocalTime(UserState).ToDisplayDate()
                             @if (entry.Rating is int rating)
                             {
                                 <span class="badge bg-secondary ms-2">@rating/5</span>

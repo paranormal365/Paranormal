@@ -862,8 +862,8 @@
                 // The person scheduling is almost always in the zone the thing happens in, so
                 // their own is the right first guess — and it is a guess they can see and change,
                 // rather than a silent UTC nobody notices until a guest turns up an hour out.
-                TimeZoneId = TimeZoneChoices.All.Any(z => z.Id == UserState.BrowserTimeZone.Id)
-                    ? UserState.BrowserTimeZone.Id
+                TimeZoneId = TimeZoneChoices.All.Any(z => z.Id == UserState.ViewerTimeZone.Id)
+                    ? UserState.ViewerTimeZone.Id
                     : "",
             };
             ApplyTourDefaults();

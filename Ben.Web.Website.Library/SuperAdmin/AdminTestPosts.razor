@@ -100,9 +100,9 @@
                                        data-testid="test-post-check"
                                        checked="@_selected.Contains(row.Id)"
                                        @onchange="@(e => Toggle(row.Id, e.Value is true))"
-                                       aria-label="@($"Select the post from {row.DateCreated.ToLocalTime():MM/dd/yyyy}")" />
+                                       aria-label="@($"Select the post from {row.DateCreated.ToViewerLocalTime(UserState):MM/dd/yyyy}")" />
                             </td>
-                            <td class="text-nowrap">@row.DateCreated.ToLocalTime().ToString("MM/dd/yyyy HH:mm")</td>
+                            <td class="text-nowrap">@row.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy HH:mm")</td>
                             <td class="text-nowrap">
                                 @row.AuthorName
                                 <div class="small text-secondary">@row.AuthorEmail</div>

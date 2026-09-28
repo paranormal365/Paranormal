@@ -175,7 +175,7 @@
                         @foreach (var row in _attended)
                         {
                             <tr style="cursor:pointer;" @onclick="@(() => OpenById(row.InvestigationId))">
-                                <td class="text-nowrap">@row.ScheduledDateTime.ToLocalTime().ToDisplayDate()</td>
+                                <td class="text-nowrap">@row.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                                 <td>
                                     @row.Title
                                     @if (row.WasLead)

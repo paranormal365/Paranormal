@@ -224,4 +224,27 @@ public sealed class TimeZoneTests
         Assert.IsType<BadRequestObjectResult>((await settings.Update(orgId,
             new OrgSettingsRequest(false, false, TimeZoneId: "Mars/Olympus_Mons"), default)).Result);
     }
+
+    // ── The website's reader ────────────────────────────────────────────────────
+
+    [Fact]
+    public void A_reader_sees_their_chosen_clock_else_their_browsers_else_Chicagos()
+    {
+        var store = new Ben.Web.Services.WebApi.WebApiTokenStore();
+        Ben.Web.Services.IBenUserState reader = store;
+        Assert.Equal(HouseClock.ZoneId, Zones.IanaId(reader.ViewerTimeZone));   // was UTC
+
+        store.DetectedTimeZone = Zones.Find("America/Denver");
+        Assert.Equal("America/Denver", Zones.IanaId(reader.ViewerTimeZone));
+
+        store.SavedTimeZoneId = "America/New_York";
+        Assert.Equal("America/New_York", Zones.IanaId(reader.ViewerTimeZone));
+        // What the helpers every page uses actually convert through.
+        Assert.Equal(new DateTime(2026, 7, 4, 20, 0, 0),
+            Ben.Web.Services.DateTimeViewerExtensions.ToViewerLocalTime(new DateTime(2026, 7, 5, 0, 0, 0), reader));
+
+        store.SavedTimeZoneId = "Mars/Olympus_Mons";   // never stored; the browser's stands
+        Assert.Null(store.SavedTimeZoneId);
+        Assert.Equal("America/Denver", Zones.IanaId(reader.ViewerTimeZone));
+    }
 }

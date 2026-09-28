@@ -250,7 +250,7 @@
             return "This one didn't reach the numbers it needed and is not going ahead.";
 
         var by = Hosted.GoNoGoDeadlineUtc is { } deadline
-            ? $" {Hosted.OrganizationName} decides by {deadline.ToLocalTime():MM/dd/yyyy}."
+            ? $" {Hosted.OrganizationName} decides by {deadline.ToViewerLocalTime(UserState):MM/dd/yyyy}."
             : "";
 
         return $"This runs if at least {minimum} people come.{by} You'll be told either way.";

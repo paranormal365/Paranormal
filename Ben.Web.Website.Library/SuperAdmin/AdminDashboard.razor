@@ -635,7 +635,7 @@
     };
 
     /// <summary>Whose clock the histogram is drawn on, named so nobody has to guess.</summary>
-    private string TimeZoneLabel => UserState.BrowserTimeZone.StandardName;
+    private string TimeZoneLabel => UserState.ViewerTimeZone.StandardName;
 
     /// <summary>The method slug in the words a reader would use.</summary>
     private static string MethodLabel(string method) => method switch

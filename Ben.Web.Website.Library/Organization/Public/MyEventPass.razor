@@ -133,7 +133,7 @@
                            rendered nowhere (2026-09-17 audit). On a disputed arrival it is the
                            only record of who was on the door. *@
                         <div class="small text-secondary mt-3" id="pass-arrived">
-                            Scanned in at @arrived.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")@(
+                            Scanned in at @arrived.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")@(
                                 string.IsNullOrWhiteSpace(pass.Pass.CheckedInByName)
                                     ? "." : $" by {pass.Pass.CheckedInByName}.")
                         </div>

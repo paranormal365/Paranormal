@@ -4,6 +4,7 @@
 @using Ben.Service.Models.Support
 
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 <PageTitle>Your message — IsHaunted</PageTitle>
 
@@ -34,7 +35,7 @@
         </div>
         <p class="text-secondary small mb-4">
             Reference <span class="font-monospace">@_ticket.Reference</span>
-            · sent @_ticket.DateCreated.ToLocalTime().ToDisplayDateTime()
+            · sent @_ticket.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
         </p>
 
         <div class="card mb-3">
@@ -50,7 +51,7 @@
                 <div class="card-body">
                     <div class="text-secondary small mb-1">
                         @(reply.IsFromStaff ? (reply.AuthorDisplayName ?? "Support") : "You")
-                        · @reply.DateCreated.ToLocalTime().ToDisplayDateTime()
+                        · @reply.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                     </div>
                     <div style="white-space:pre-wrap;">@reply.Body</div>
                 </div>

@@ -112,7 +112,7 @@
                             @if (scan.AlreadyCheckedInUtc is { } when)
                             {
                                 <div class="small text-warning">
-                                    Already in since @when.ToLocalTime().ToString("h:mm tt").
+                                    Already in since @when.ToViewerLocalTime(UserState).ToString("h:mm tt").
                                 </div>
                             }
                         }
@@ -191,10 +191,10 @@
                             @if (them.ArrivedUtc is { } arrived)
                             {
                                 <div class="small text-success">
-                                    In since @arrived.ToLocalTime().ToString("h:mm tt")
+                                    In since @arrived.ToViewerLocalTime(UserState).ToString("h:mm tt")
                                     @if (them.LeftUtc is { } left)
                                     {
-                                        <text> · left @left.ToLocalTime().ToString("h:mm tt")</text>
+                                        <text> · left @left.ToViewerLocalTime(UserState).ToString("h:mm tt")</text>
                                     }
                                 </div>
                             }
@@ -289,7 +289,7 @@
                                             <span class="text-secondary"> · @name</span>
                                         }
                                         <span class="text-secondary small">
-                                            · @it.ArrivedUtc.ToLocalTime().ToString("h:mm tt")
+                                            · @it.ArrivedUtc.ToViewerLocalTime(UserState).ToString("h:mm tt")
                                         </span>
                                     </div>
                                     <button type="button" class="btn btn-sm btn-outline-danger"

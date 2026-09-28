@@ -1,0 +1,54 @@
+@*
+    A time zone picker: the US clocks first, then every zone by region (2026-09-28).
+
+    A plain select, like every other zone picker on the site: a TelerikDropDownList on the case
+    page once saved every entry as the default because neither binding form pushed the selection
+    back. A native select types-to-jump through a long list, and a phone draws its own wheel.
+*@
+<select class="form-select @CssClass" id="@Id" disabled="@Disabled" aria-label="@AriaLabel"
+        @onchange="OnChangeAsync" data-testid="@TestId">
+    @if (AllowUnset)
+    {
+        <option value="" selected="@string.IsNullOrEmpty(Value)">@UnsetLabel</option>
+    }
+    @if (!string.IsNullOrEmpty(Value) && !Known(Value))
+    {
+        @* A zone saved somewhere else (the app, an older list) still shows as chosen. *@
+        <option value="@Value" selected>@Value</option>
+    }
+    @foreach (var group in TimeZoneCatalog.Groups)
+    {
+        <optgroup label="@group.Name">
+            @foreach (var choice in group.Choices)
+            {
+                <option value="@choice.Id" selected="@(choice.Id == Value)">@choice.Label</option>
+            }
+        </optgroup>
+    }
+</select>
+
+@code {
+    /// <summary>The chosen IANA id; null or empty when <see cref="AllowUnset"/> and nothing is chosen.</summary>
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Offers an empty first option, e.g. "Use my device's time zone" or "Same as the group".</summary>
+    [Parameter] public bool AllowUnset { get; set; }
+    [Parameter] public string UnsetLabel { get; set; } = "Not set";
+
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? CssClass { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Time zone";
+    [Parameter] public string TestId { get; set; } = "time-zone-picker";
+
+    private static bool Known(string id) =>
+        TimeZoneCatalog.Groups.Any(g => g.Choices.Any(c => c.Id == id));
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        var chosen = e.Value?.ToString();
+        Value = string.IsNullOrEmpty(chosen) ? null : chosen;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

@@ -158,9 +158,9 @@
                 {
                     var tzId = await JS.InvokeAsync<string?>("benGetBrowserTimeZone");
                     if (!string.IsNullOrWhiteSpace(tzId) && TokenStore is WebApiTokenStore concreteStore)
-                        concreteStore.BrowserTimeZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+                        concreteStore.DetectedTimeZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
                 }
-                catch { /* JS interop unavailable, or an IANA id .NET's ICU doesn't recognize — fall back to UTC */ }
+                catch { /* JS interop unavailable, or an id .NET does not know — Chicago stands in (2026-09-28) */ }
             }
             finally
             {
@@ -170,8 +170,30 @@
             }
 
             await InvokeAsync(StateHasChanged);
+
+            // After AuthReady, never before it: a page waits on nothing extra, and the only thing
+            // a stale persisted zone costs is this one page reading in the old clock.
+            _ = RefreshSavedTimeZoneAsync();
         }
         await base.OnAfterRenderAsync(firstRender);
+    }
+
+    /// <summary>
+    /// Re-reads the person's chosen zone after a restored session, in case they changed it on
+    /// another device since this browser last saw them (2026-09-28).
+    /// </summary>
+    private async Task RefreshSavedTimeZoneAsync()
+    {
+        if (!TokenStore.IsAuthenticated || TokenStore.IsEntraSession) return;   // Entra asked already
+        try
+        {
+            var me = await WebApiClient.GetAsync<EntraMeResult>("/api/me");
+            if (me is null || me.UserId != TokenStore.UserId) return;
+            if (Ben.Data.Common.Helpers.Zones.Normalize(me.TimeZoneId) == TokenStore.SavedTimeZoneId) return;
+            TokenStore.SavedTimeZoneId = me.TimeZoneId;
+            await InvokeAsync(TokenStore.NotifyStateChanged);   // re-persists, and redraws the shell
+        }
+        catch { /* the persisted zone stands */ }
     }
 
     /// <summary>
@@ -217,6 +239,7 @@
                 TokenStore.UserId       = me.UserId;
                 TokenStore.IsSuperAdmin = me.IsSuperAdmin;
                 TokenStore.IsAdmin      = me.IsAdmin;
+                TokenStore.SavedTimeZoneId = me.TimeZoneId;   // their clock, 2026-09-28
                 // Use the local account email (consistent regardless of which Entra identity was used)
                 if (!string.IsNullOrEmpty(me.Email))
                     TokenStore.UserEmail = me.Email;
@@ -235,7 +258,8 @@
         catch { /* non-fatal — Entra token may be invalid or WebApi unreachable */ }
     }
 
-    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin);
+    private sealed record EntraMeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin,
+        string? TimeZoneId = null);
 
     // ── Auth persistence ──────────────────────────────────────────────────────
 
@@ -276,7 +300,8 @@
                     TokenStore.OriginalUserEmail,
                     TokenStore.OriginalUserDisplayName,
                     TokenStore.IsSeller,
-                    TokenStore.IsEntraSession
+                    TokenStore.IsEntraSession,
+                    TokenStore.SavedTimeZoneId
                 ));
             }
             else
@@ -312,6 +337,7 @@
                 TokenStore.OriginalUserDisplayName = state.OriginalUserDisplayName;
                 TokenStore.IsEntraSession = state.IsEntraSession;
                 TokenStore.IsSeller = state.IsSeller;
+                TokenStore.SavedTimeZoneId = state.SavedTimeZoneId;
                 // NotifyStateChanged would re-persist immediately — skip it here
                 // and just call StateHasChanged directly.
                 StateHasChanged();
@@ -360,7 +386,10 @@
         // Store sellers (backlog 251): the Selling workspace is in the menu only while this is
         // true, so it must survive a reload like IsModerator. Defaulted, same rule as above.
         bool IsSeller = false,
-        bool IsEntraSession = false
+        bool IsEntraSession = false,
+        // The zone the person chose (2026-09-28), so the first page after a reload already reads
+        // in it. Refreshed from /api/me straight after, in case it was changed on another device.
+        string? SavedTimeZoneId = null
     );
 
 }

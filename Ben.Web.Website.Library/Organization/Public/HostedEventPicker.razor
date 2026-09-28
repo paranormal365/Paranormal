@@ -7,6 +7,7 @@
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Kit.Plans
 @using Ben.Web.Website.Library.Manage.Icon
+@inject IBenUserState UserState
 
 @* A guest choosing their own places off the plan (item 235 phase 6).
 
@@ -33,7 +34,7 @@
             <div class="fw-semibold mb-1">Check your email</div>
             <div class="small">
                 We've sent a link to @_contact.Email. Press the button in it by
-                <strong>@emailed.PendingUntilUtc.ToLocalTime().ToString("h:mm tt")</strong> to hold
+                <strong>@emailed.PendingUntilUtc.ToViewerLocalTime(UserState).ToString("h:mm tt")</strong> to hold
                 @(emailed.Places.Count == 1 ? "this place" : $"these {emailed.Places.Count} places") —
                 until then nobody else can take them, and after that they go back.
             </div>

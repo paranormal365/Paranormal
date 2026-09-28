@@ -61,7 +61,7 @@
                         <tr>
                             <td>
                                 <div class="text-truncate" style="max-width:220px;">@row.EventTitle</div>
-                                <div class="text-secondary small">@row.DateCreated.ToLocalTime().ToDisplayDate()</div>
+                                <div class="text-secondary small">@row.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</div>
                             </td>
                             <td>
                                 @* Their own copy, whatever the verdict — the whole point of the page. *@

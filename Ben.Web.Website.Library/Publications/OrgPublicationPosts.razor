@@ -107,11 +107,11 @@
                                     <div class="small text-secondary">
                                         @if (post.PublishedUtc is { } published)
                                         {
-                                            <span>Published @published.ToLocalTime().ToString("MMM d, yyyy, HH:mm")</span>
+                                            <span>Published @published.ToViewerLocalTime(UserState).ToString("MMM d, yyyy, HH:mm")</span>
                                         }
                                         else
                                         {
-                                            <span>Written @post.DateCreated.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                            <span>Written @post.DateCreated.ToViewerLocalTime(UserState).ToString("MMM d, yyyy")</span>
                                         }
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(post.Excerpt))

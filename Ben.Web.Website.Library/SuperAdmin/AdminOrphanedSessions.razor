@@ -113,9 +113,9 @@
                                        data-testid="orphan-check"
                                        checked="@_selected.Contains(row.Id)"
                                        @onchange="@(e => Toggle(row.Id, e.Value is true))"
-                                       aria-label="@($"Select the session recorded {row.StartedAt.ToLocalTime():MM/dd/yyyy}")" />
+                                       aria-label="@($"Select the session recorded {row.StartedAt.ToViewerLocalTime(UserState):MM/dd/yyyy}")" />
                             </td>
-                            <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                            <td class="text-nowrap">@row.StartedAt.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</td>
                             <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
                             <td>@(string.IsNullOrWhiteSpace(row.RecordedByName) ? "—" : row.RecordedByName)</td>
                             <td class="text-end font-monospace">@row.ReadingCount</td>

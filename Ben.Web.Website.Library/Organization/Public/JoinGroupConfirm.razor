@@ -95,7 +95,7 @@
                 @if (invite.ExpiresUtc is { } until)
                 {
                     <p class="text-secondary small mt-3 mb-0" id="join-expires">
-                        This link stops working @until.ToLocalTime().ToString("MMMM d, yyyy").
+                        This link stops working @until.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy").
                     </p>
                 }
             </div>

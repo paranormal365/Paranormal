@@ -118,6 +118,7 @@ public sealed class StoreProductPreviewTests
         services.AddSingleton(new Mock<IBenAdminClient>().Object);
         var viewer = new Mock<IBenUserState>();
         viewer.Setup(v => v.BrowserTimeZone).Returns(TimeZoneInfo.Utc);
+        viewer.Setup(v => v.ViewerTimeZone).Returns(TimeZoneInfo.Utc);
         services.AddSingleton(viewer.Object);
         services.AddSingleton(new Mock<Microsoft.JSInterop.IJSRuntime>().Object);
     }

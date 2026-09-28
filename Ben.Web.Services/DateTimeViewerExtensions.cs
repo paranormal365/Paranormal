@@ -1,8 +1,9 @@
 namespace Ben.Web.Services;
 
 /// <summary>
-/// Converts between UTC (how every DateTime is stored) and the viewer's browser-resolved
-/// local time (<see cref="IBenUserState.BrowserTimeZone"/>). Replaces `.ToLocalTime()`, which
+/// Converts between UTC (how every DateTime is stored) and the viewer's own time
+/// (<see cref="IBenUserState.ViewerTimeZone"/>: the zone they chose, else their browser's, else
+/// America/Chicago). Replaces `.ToLocalTime()`, which
 /// under Blazor Server Interactive render mode converts to the SERVER's OS timezone, not the
 /// viewing browser's.
 /// </summary>
@@ -10,7 +11,7 @@ public static class DateTimeViewerExtensions
 {
     /// <summary>Converts a stored UTC value to the viewer's local wall-clock time.</summary>
     public static DateTime ToViewerLocalTime(this DateTime utc, IBenUserState userState) =>
-        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), userState.BrowserTimeZone);
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), ZoneOf(userState));
 
     /// <summary>
     /// Converts a viewer-local wall-clock value (e.g. from a picker bound to a viewer-local
@@ -20,12 +21,19 @@ public static class DateTimeViewerExtensions
     /// </summary>
     public static DateTime ToUtcFromViewerLocal(this DateTime viewerLocal, IBenUserState userState)
     {
-        var zone = userState.BrowserTimeZone;
+        var zone = ZoneOf(userState);
         var local = DateTime.SpecifyKind(viewerLocal, DateTimeKind.Unspecified);
         while (zone.IsInvalidTime(local))
             local = local.AddMinutes(1);
         return TimeZoneInfo.ConvertTimeToUtc(local, zone);
     }
+
+    /// <summary>
+    /// The viewer's zone; the browser's if an implementation answers null (a mocking library does
+    /// not run an interface's default members), so a page never throws for want of a clock.
+    /// </summary>
+    private static TimeZoneInfo ZoneOf(IBenUserState userState) =>
+        userState.ViewerTimeZone ?? userState.BrowserTimeZone ?? TimeZoneInfo.Utc;
 
     /// <summary>The current instant, expressed in the viewer's local wall-clock time.</summary>
     public static DateTime NowInViewerTimeZone(this IBenUserState userState) =>
@@ -79,7 +87,7 @@ public static class DateTimeViewerExtensions
     /// a great deal of machinery for a shape somebody reads to spot "most of this is overnight".
     /// </remarks>
     public static int UtcHourOffset(this IBenUserState userState) =>
-        (int)Math.Round(userState.BrowserTimeZone.GetUtcOffset(DateTime.UtcNow).TotalHours);
+        (int)Math.Round(ZoneOf(userState).GetUtcOffset(DateTime.UtcNow).TotalHours);
 
     // ── Display formats ──────────────────────────────────────────────────────
     // One place decides how a date looks, so pages cannot drift apart the way they had.

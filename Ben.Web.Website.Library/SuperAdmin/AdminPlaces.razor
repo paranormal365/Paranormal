@@ -146,7 +146,7 @@
                             <td class="text-end">@p.Investigations</td>
                             <td class="text-end">@p.Evidence</td>
                             <td class="text-secondary small">
-                                @p.DateCreated.ToLocalTime().ToDisplayDate()
+                                @p.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                                 @if (!string.IsNullOrWhiteSpace(p.AddedBy))
                                 {
                                     <div>by @p.AddedBy</div>

@@ -48,7 +48,7 @@
         <TelerikGrid Data="@_result.Items" TItem="BillingLedgerEntryRecord" Sortable="false" Pageable="true" PageSize="25">
             <GridColumns>
                 <GridColumn Title="Date" Width="100px">
-                    <Template>@(((BillingLedgerEntryRecord)context).DateCreated.ToString("MM/dd/yyyy"))</Template>
+                    <Template>@(((BillingLedgerEntryRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())</Template>
                 </GridColumn>
                 <GridColumn Title="Kind" Width="110px">
                     <Template>

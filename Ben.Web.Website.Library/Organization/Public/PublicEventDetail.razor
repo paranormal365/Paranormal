@@ -618,7 +618,7 @@ else
         {
             if (_event is null) return "";
 
-            var when  = _event.StartDateTime.ToLocalTime().ToDisplayDateTime();
+            var when  = _event.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime();
             var where = _event.Location.City is string city
                 ? $" in {city}{(_event.Location.State is string st ? $", {st}" : "")}"
                 : "";

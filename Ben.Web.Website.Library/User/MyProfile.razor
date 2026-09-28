@@ -5,6 +5,7 @@
 @inject IBenAdminClient AdminClient
 @inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject IBenUserState UserState
+@inject Ben.Web.Services.WebApi.IWebApiTokenStore TokenStore
 @inject NavigationManager NavManager
 
 <PageTitle>My Profile</PageTitle>
@@ -259,6 +260,18 @@
                                             when you have no photo — never shown or shared itself.
                                         </div>
                                     </div>
+                                    @* Ben, 2026-09-28: times on the site read in the zone somebody
+                                       chose; left unset, in their device's. *@
+                                    <div class="col-12">
+                                        <label class="form-label small" for="profile-time-zone">Time zone</label>
+                                        <TimeZonePicker Id="profile-time-zone" @bind-Value="_timeZoneId" AllowUnset="true"
+                                                        UnsetLabel="@($"Use this device's time zone ({TimeZoneCatalog.Label(Ben.Data.Common.Helpers.Zones.IanaId(UserState.BrowserTimeZone))})")"
+                                                        TestId="profile-time-zone" />
+                                        <div class="form-text" style="font-size:.72rem;">
+                                            Dates and times across the site show in this zone. A case, investigation,
+                                            event or tour can also be read in its own local time.
+                                        </div>
+                                    </div>
                                 </div>
 
                                 @if (_nameError is not null)
@@ -419,6 +432,7 @@
     private string _firstName   = string.Empty;
     private string _lastName    = string.Empty;
     private Ben.Data.Common.Enums.ClientGender _gender = Ben.Data.Common.Enums.ClientGender.NotProvided;
+    private string? _timeZoneId;
     private string? _nameError;
     private bool   _shareWithClients;
     private bool   _saving;
@@ -565,6 +579,7 @@
                 _firstName        = _profile.FirstName ?? string.Empty;
                 _lastName         = _profile.LastName ?? string.Empty;
                 _gender           = _profile.Gender;
+                _timeZoneId       = _profile.TimeZoneId;
                 _shareWithClients = _profile.SharePrivatePhotoWithClients;
                 await LoadPreviewsAsync();
                 await LoadMapAsync();
@@ -640,10 +655,18 @@
             var updated = await AdminClient.UpdateMyProfileAsync(
                 new UpdateMyProfileRequest(_displayName, SharePrivatePhotoWithClients: null,
                                            FirstName: _firstName, LastName: _lastName,
-                                           Gender: _gender));
-            if (updated is null) { _error = "Couldn't save your name."; return; }
+                                           Gender: _gender,
+                                           // Empty, not null: "use my device's" is a choice to save.
+                                           TimeZoneId: _timeZoneId ?? string.Empty));
+            if (updated is null) { _error = "Couldn't save your profile."; return; }
             _profile = updated;
             _saved = true;
+            // The whole site reads in the new clock from the next thing drawn, not the next sign-in.
+            if (TokenStore.SavedTimeZoneId != updated.TimeZoneId)
+            {
+                TokenStore.SavedTimeZoneId = updated.TimeZoneId;
+                TokenStore.NotifyStateChanged();
+            }
         }
         catch { _error = "Couldn't save your name."; }
         finally { _saving = false; }

@@ -7,6 +7,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IBenUserState UserState
 
 <PageTitle>@(_case?.Title ?? CaseRef) — @(_case?.OrgName ?? UrlName)</PageTitle>
 
@@ -193,8 +194,8 @@ else
                 // A published or haunted case usually carries no closing date and is nonetheless
                 // finished — "still being worked" under a conclusion would contradict the page it
                 // sits on. Status decides which sentence, the same rule the list's tiles use.
-                new("Opened", _case.DateCaseOpened.ToString("MM/dd/yyyy"),
-                    _case.DateCaseClosed is { } closed ? $"closed {closed:MM/dd/yyyy}"
+                new("Opened", _case.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate(),
+                    _case.DateCaseClosed is { } closed ? $"closed {closed.ToViewerLocalTime(UserState).ToDisplayDate()}"
                     : _case.Status <= CaseStatus.Summarized ? "still being worked"
                     : "no closing date"),
             };
