@@ -658,7 +658,7 @@ touches the database purely through Serilog's error sink.
 | `AppleSignInKeyId`, `AppleSignInKeyPath` | API `appsettings.json` (`Apple:*`) | Apple tokens are never revoked when an account is deleted |
 | `SqlConnectionString` | both packages' `appsettings.json` — **normally left null** | nothing; the Integrated Security default applies. Set it only to reach a different server, and note that a password put here does land on disk |
 | `AzureAd` | API `appsettings.json` | nothing — Entra sign-in stays off until `ClientId` is a real GUID |
-| `SeedSuperAdmin` | API `appsettings.json` | nothing, if the database already has its administrator |
+| `SeedSuperAdmin` | `Email`, `DisplayName`: API `appsettings.json`. `Password`: environment variable `SeedData__SuperAdmin__Password` on the API's app pool — never a file | the startup seeder skips itself entirely: no administrator on an empty database, and no new site role (Admin, Moderator, Seller, or one a later release adds) is ever created |
 
 The SMTP password is deliberately absent from every appsettings file in this repository and must
 stay that way. `Smtp__Password` — double underscore — is how .NET maps an environment variable onto

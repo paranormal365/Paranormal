@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Publishes and deploys IsHaunted.com - website, WebApi and WASM editor - to the local IIS box,
     and stages the sidecar downloads.
@@ -281,7 +281,7 @@ try {
 # the EF model builds, the database answers, and routing works. What it does NOT prove: anything
 # about IIS, the app pool identity, or the file copy - those are what the smoke checks after the
 # deploy are for. The two are not redundant; they fail at different things.
-function Test-StagedApi ([string]$outDir) {
+function Test-StagedApi ([string]$outDir, [string]$seedPassword) {
     $exe = Join-Path $outDir 'Ben.Data.WebApi.exe'
     if (-not (Test-Path $exe)) { throw "no Ben.Data.WebApi.exe in $outDir to test" }
 
@@ -299,8 +299,12 @@ function Test-StagedApi ([string]$outDir) {
     $err = Join-Path ([IO.Path]::GetTempPath()) "staged-api-$port.err"
     $previousUrls = $env:ASPNETCORE_URLS
     $previousEnv  = $env:ASPNETCORE_ENVIRONMENT
+    $previousSeed = $env:SeedData__SuperAdmin__Password
     $env:ASPNETCORE_URLS = "http://127.0.0.1:$port"
     $env:ASPNETCORE_ENVIRONMENT = 'Production'
+    # Given the way the pool will give it (section 5), so the staged run seeds exactly as the live
+    # one will. Without it SuperAdminSeeder skips itself here and its startup path goes untested.
+    if ($seedPassword) { $env:SeedData__SuperAdmin__Password = $seedPassword }
 
     $proc = $null
     try {
@@ -354,6 +358,7 @@ function Test-StagedApi ([string]$outDir) {
         }
         $env:ASPNETCORE_URLS = $previousUrls
         $env:ASPNETCORE_ENVIRONMENT = $previousEnv
+        $env:SeedData__SuperAdmin__Password = $previousSeed
         Remove-Item $log, $err -Force -ErrorAction SilentlyContinue
     }
 }
@@ -425,7 +430,7 @@ function Clear-AppOffline ([string]$dir) {
 # 0. One deploy at a time
 # =============================================================================
 # Staging the sidecar drop and publishing the apps both write into the same site folders, and a
-# second run starting while the first is mid-publish interleaves file copies — producing a site
+# second run starting while the first is mid-publish interleaves file copies - producing a site
 # that is neither the old build nor the new one, with nothing in any log saying so. A lock file
 # is enough: this is one machine, and the failure being prevented is a person running the script
 # twice, not a distributed race.
@@ -447,7 +452,7 @@ close that PowerShell window and try again; the lock is released when its proces
 }
 
 # No explicit release, and none is needed: the handle belongs to this process, so Windows drops it
-# when PowerShell exits — normally, on a throw, or if the window is closed. Wrapping the whole
+# when PowerShell exits - normally, on a throw, or if the window is closed. Wrapping the whole
 # script in try/finally would release it a few milliseconds earlier and would be a structural
 # change to a script that cannot be syntax-checked from the machine it is edited on.
 
@@ -488,8 +493,8 @@ $stripeSecret  = Get-JsonValue $secrets 'StripeSecretKey'
 $stripeWebhook = Get-JsonValue $secrets 'StripeWebhookSecret'
 $stripePublishable = Get-JsonValue $secrets 'StripePublishableKey'
 
-# The two Stripe values are indistinguishable to everything downstream — both are opaque strings
-# on an app pool — so the wrong one in the wrong slot fails silently, at the worst moment, in a
+# The two Stripe values are indistinguishable to everything downstream - both are opaque strings
+# on an app pool - so the wrong one in the wrong slot fails silently, at the worst moment, in a
 # way nothing explains. It has already happened once: a pk_live_ was pasted into
 # StripeWebhookSecret, which would have made every live webhook delivery answer 400 while
 # payments appeared to work. The prefixes are Stripe's own and are worth checking here, where
@@ -532,6 +537,13 @@ $entraClientId = Get-JsonValue $secrets 'AzureAd:ClientId'
 if ($entraClientId -and -not $entraSecret) {
     Write-Warn 'AzureAd:ClientId is set but AzureAd:ClientSecret is not. The website will offer Microsoft sign-in and then fail redeeming the code (AADSTS7000218), which looks like a broken button rather than a missing setting.'
 }
+
+# The super-admin seed password rides the same rail: the API pool's environment, never a deployed
+# file. It used to be merged into appsettings.json, where it sat in plain text beside the binaries.
+# It cannot simply be dropped once the account exists: SuperAdminSeeder returns before doing ANYTHING
+# when the password is blank - including creating the site roles (Admin, Moderator, Seller) and
+# repairing role lookup names - so a release that adds a role would quietly never get it.
+$seedPassword  = Get-JsonValue $secrets 'SeedSuperAdmin:Password'
 
 Write-Detail "repo    : $Repo"
 Write-Detail "apps    : $($Apps -join ', ')"
@@ -625,7 +637,7 @@ if ($Apps -contains 'webapi') {
         # and never reads AzureAd:Audience - it was carried here for a setting that does not exist.
         'SeedData:SuperAdmin:Email'       = (Get-JsonValue $secrets 'SeedSuperAdmin:Email')
         'SeedData:SuperAdmin:DisplayName' = (Get-JsonValue $secrets 'SeedSuperAdmin:DisplayName')
-        'SeedData:SuperAdmin:Password'    = (Get-JsonValue $secrets 'SeedSuperAdmin:Password')
+        # No Password here: it goes on the pool as SeedData__SuperAdmin__Password in section 5.
         'RateLimits:AuthPerMinute'        = (Get-JsonValue $secrets 'RateLimitAuthPerMinute')
         # Absolute path to ffmpeg.exe on the server. Without it video posts wait for a moderator
         # instead of being screened, and audio/video keeps its metadata - the app reports the
@@ -648,6 +660,14 @@ if ($Apps -contains 'webapi') {
         }
     }
 
+    # Removed explicitly, not merely left unwritten: -SkipBuild re-reads the STAGED appsettings.json,
+    # and a stage made by an older copy of this script still carries the password.
+    $superAdminCfg = Get-JsonValue $cfg 'SeedData:SuperAdmin'
+    if ((Test-JsonNode $superAdminCfg) -and ($superAdminCfg.PSObject.Properties.Name -contains 'Password')) {
+        $superAdminCfg.PSObject.Properties.Remove('Password')
+        Write-Detail 'SeedData:SuperAdmin:Password removed from appsettings.json (it goes on the pool)'
+    }
+
     Write-JsonFile $cfgPath $cfg
     Write-Detail 'merged into appsettings.json (loads in every environment)'
 
@@ -663,7 +683,7 @@ if ($Apps -contains 'webapi') {
     Set-WebConfigRequestLimit $webConfig 4294967295
     if ($StdoutLog) { Enable-WebConfigStdoutLog $webConfig $webapiOut }
 
-    Test-StagedApi $webapiOut
+    Test-StagedApi $webapiOut $seedPassword
 }
 
 # ---- Website ----------------------------------------------------------------
@@ -1102,7 +1122,7 @@ function Set-PoolEnv ([string]$pool, [string]$name, [string]$value) {
     # -ErrorAction SilentlyContinue rather than Stop-inside-try: with Stop, the cmdlet still
     # writes its complaint to the error stream on the way out, so a first deploy printed a red
     # "element not found" for every variable it was about to add correctly. Alarming, meaningless,
-    # and the thing an operator then learns to ignore — which is how a real error gets missed.
+    # and the thing an operator then learns to ignore - which is how a real error gets missed.
     Remove-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter `
         -Name '.' -AtElement @{ name = $name } -ErrorAction SilentlyContinue -ErrorVariable null
     Add-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter `
@@ -1116,6 +1136,11 @@ if (($Apps -contains 'webapi') -or ($Apps -contains 'website')) {
 
     if (($Apps -contains 'webapi') -and $smtpPassword) {
         Set-PoolEnv $WebApiPool 'Smtp__Password' $smtpPassword
+    }
+
+    # Read by SuperAdminSeeder at startup; see the note where $seedPassword is read in section 1.
+    if (($Apps -contains 'webapi') -and $seedPassword) {
+        Set-PoolEnv $WebApiPool 'SeedData__SuperAdmin__Password' $seedPassword
     }
 
     # Stripe's two secrets ride the same rail as the SMTP password: pool environment, never a

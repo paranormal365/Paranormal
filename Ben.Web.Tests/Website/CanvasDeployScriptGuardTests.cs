@@ -137,25 +137,24 @@ public sealed class CanvasDeployScriptGuardTests
     /// comment becomes a parse error rather than a typo (deploy-ishaunted.ps1 says so at the top).
     /// </summary>
     /// <remarks>
-    /// Checked as the property that actually matters. <c>setup-iis-ishaunted.ps1</c> has no BOM and
-    /// must be pure ASCII. <c>deploy-ishaunted.ps1</c> already carries a UTF-8 BOM and five em-dashes
-    /// in comments on the base commit, which 5.1 reads correctly because of the BOM — so for it the
-    /// rule is "a BOM, or pure ASCII", and everything the canvas added must be pure ASCII regardless.
+    /// Checked as the property that actually matters: both scripts are pure ASCII, no BOM needed.
+    /// <c>deploy-ishaunted.ps1</c> once carried a UTF-8 BOM and five em-dashes in comments, which 5.1
+    /// read correctly only because of the BOM - one editor save without it would have broken the
+    /// deploy. The em-dashes became hyphens and the BOM went on 2026-09-27, so the rule is now the
+    /// same for both files.
     /// </remarks>
     [Fact]
     public void Both_scripts_are_pure_ascii()
     {
         var root = RepoRoot();
 
-        var setup = File.ReadAllBytes(Path.Combine(root, "scripts/setup-iis-ishaunted.ps1"));
-        var setupOffending = setup.Select((b, i) => (b, i)).Where(x => x.b >= 0x80).Take(3).ToList();
-        Assert.True(setupOffending.Count == 0,
-            $"setup-iis-ishaunted.ps1 has no BOM and a non-ASCII byte at offset {setupOffending.FirstOrDefault().i}; PS 5.1 will misread it");
-
-        var deploy = File.ReadAllBytes(Path.Combine(root, "scripts/deploy-ishaunted.ps1"));
-        var hasBom = deploy.Length >= 3 && deploy[0] == 0xEF && deploy[1] == 0xBB && deploy[2] == 0xBF;
-        Assert.True(hasBom || deploy.All(b => b < 0x80),
-            "deploy-ishaunted.ps1 has no BOM and non-ASCII bytes; PS 5.1 will misread it");
+        foreach (var script in new[] { "scripts/setup-iis-ishaunted.ps1", "scripts/deploy-ishaunted.ps1" })
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(root, script));
+            var offending = bytes.Select((b, i) => (b, i)).Where(x => x.b >= 0x80).Take(3).ToList();
+            Assert.True(offending.Count == 0,
+                $"{script} has a non-ASCII byte at offset {offending.FirstOrDefault().i}; PS 5.1 reads a BOM-less .ps1 as ANSI and will misread it");
+        }
 
         var block = CanvasBlock();
         var nonAscii = block.Where(c => c >= 0x80).Take(5).ToArray();
