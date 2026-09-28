@@ -345,15 +345,16 @@ struct SessionReviewView: View {
                     .font(.caption).foregroundStyle(Theme.fog)
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        // Room for a thumbnail grown by 15% with its ring and glow — between
+                        // neighbours and at the strip's edges — or the lit one smears over the
+                        // photos beside it and its glow is cut off flat at the top.
+                        HStack(spacing: 18) {
                             ForEach(photos) { photo in
                                 photoThumbnail(photo).id(photo.id)
                             }
                         }
-                        // Room for a thumbnail grown by 15% and its glow, or the first one is
-                        // cut off at the strip's edge while it is lit.
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 16)
                     }
                     // Keeps the photo the playhead last passed in view, so the glow is seen.
                     .onChange(of: ReplayPhotos.lastPassed(photos, at: replay.playhead)?.id) { _, id in
@@ -375,7 +376,8 @@ struct SessionReviewView: View {
         let glowing = ReplayPhotos.isGlowing(photo, at: replay.playhead)
         let url = store.files.fileURL(for: sessionId, relativePath: photo.relativePath)
         return Button { expand(photo) } label: {
-            VStack(spacing: 3) {
+            // Spaced for the grown thumbnail, which would otherwise sit on its own time.
+            VStack(spacing: 9) {
                 ZStack {
                     if expandedPhoto?.id == photo.id {
                         // Its place in the strip is kept while it is out, so it has somewhere to
@@ -400,9 +402,10 @@ struct SessionReviewView: View {
                 .shadow(color: glowing ? Theme.ecto.opacity(0.9) : .clear, radius: glowing ? 8 : 0)
                 .scaleEffect(glowing ? 1.15 : 1)
                 .animation(.spring(duration: 0.35), value: glowing)
+                // Full contrast while lit — green on the green glow could not be read.
                 Text(SessionClock.elapsed(from: replay.timeline.startedAt, to: photo.at))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(glowing ? Theme.ecto : Theme.fog)
+                    .font(.caption2.monospacedDigit().weight(glowing ? .semibold : .regular))
+                    .foregroundStyle(glowing ? Theme.bone : Theme.fog)
             }
         }
         .buttonStyle(.plain)

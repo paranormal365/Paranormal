@@ -81,3 +81,77 @@ Then, as next steps in the same arc:
 
 A simulator has no camera and a Mac microphone. Loudness and whole-session video must be checked
 on Ben's iPhone before this ships; `RecordingGain.decibels` is the single number to adjust.
+
+## Later asks folded in (09/27/2026)
+
+- **Start with a session still open** saves a recording one and replaces an unstarted one, after
+  asking — Ben: "just save it and ask if they want to create a new one".
+- **Motion photos**: a detection while the phone is still also takes a photograph.
+- **Thumbnails grow a little while they glow; tapping one pauses and shows it full size, tapping
+  again carries on playing** — phone and web alike.
+- **Refused permissions** (camera, microphone, location, speech, notifications) say so and offer
+  Settings wherever something needs them.
+- **Upload allowance**: 10 minutes of video and 600 MB per upload (was 5 and 500), with **Send
+  without the video**.
+
+## What testing found (and fixed)
+
+Walked on the iPhone 17 Pro simulator, in real Chrome, and through the API, against a local server
+on `IsHauntedDb_e2e`, with a session written by the phone's own code
+(`TestSessionBundleBuilder.swift`; the short profile is the browser tests' fixture).
+
+- Photo thumbnails overlapped (a `.fill` image sized on a container that clips nothing); the lit
+  thumbnail was cut off at the strip's edge; the full-size photo sat on a grey card under the bars.
+- The server counted every photo, video and sound note as a mark ("8 marked" for 3). Fixed at the
+  door, in the web player's list, and for stored sessions by `FieldSessionMarkerRecountService`.
+- Every review opened at 0:00 said "No recording at this moment" — the recorder starts a few
+  milliseconds after the clock. A clip within a second of the playhead now covers it, phone and web.
+- After **Open Settings**, no permission prompt on that screen appeared again (the alert's state
+  was never cleared while the app went to the background).
+- EVP mode's Start recording failed silently with the microphone refused; three screens opened a
+  black system camera with the camera refused.
+- A refused microphone produced a silent recording with no warning (found while building).
+- The web player's icons, Play and Pause included, never drew: Bootstrap Icons classes on a site
+  that does not load that font. Nine other pages have the same problem — flagged separately.
+- Tests: the Field Kit UI suites cascaded from one unstarted session into the new save-and-start
+  question; `AppNavigator.startNewSession` answers it. `RealAppSessionReplayTests` had a hard-coded
+  room.
+
+Second pass (the trim suite against a local API, the iPad, and the help captures):
+
+- **Send screen**: the "what will be sent" summary and **Send the whole session** sat under the
+  preview, a screen below the handles — a List had not even drawn them. They are under the handles
+  now. The trim UI tests had only ever been skipped; run against a local API they caught it.
+- **iPad New session sheet**: **Open the session**, its only action, was below the fold of the form
+  sheet. It is page-sized on iPad now.
+- **iPad place name**: a name the phone filled in was sometimes footnoted "your own words" — a flag
+  set in a deferred task raced `onChange`. It is a comparison with the suggestion now.
+- **Phone photo strip**: the lit thumbnail covered its own time, the time was green on the green
+  glow, and the glow smeared over the photos beside it and was cut flat at the top.
+- **Web player, dark theme**: the lit photo's time was Bootstrap-info purple on a dark page, the eye
+  on Motion detected all but vanished and wrapped above the words, and a grown thumbnail covered its
+  neighbours. It glows the phone's green now.
+- **Server counts**: confirmed on a restarted API — the recount put both public copies' "8 marked"
+  back to 3.
+- Test harness: the new help capture photographed Daniel instead of James (a restored session
+  beats `-autoSignIn`); it signs out first now, and so does the existing Field Kit capture, which
+  had the same flaw. `AboutPrivacyUITests` needs a reset simulator keychain, like the captures.
+
+UI suites run on the iPhone 17 Pro Max against the local API: AboutPrivacy 2, DeleteAccount 3,
+FieldKitChannels 3, FieldKit 18, SessionStart 4, SessionTrim 3 — all pass. EverySurface,
+CaseMessages, LogOccurrence and CaseReports were not run: they take no API address, so they would
+sign in to whatever host the Dev build names.
+
+## Still to check on a real iPhone
+
+- **Loudness.** `RecordingGain.decibels` (18) is the one number to adjust.
+- **Whole-session video**: battery, heat and storage over a long session, and backgrounding.
+- **Open Settings** lands on the top of Settings in the simulator; on a device it should open
+  IsHaunted's own page.
+
+## Before the next App Store submission
+
+- The review notes said the app makes no geocoding call. It now asks Apple for the street address
+  of the phone's position on the New session sheet (and Tours already geocoded a typed place). The
+  notes need a line saying so; App Privacy already declares location for App Functionality.
+- The tour plan's own five-minute limit per recording still applies to groups on that plan.

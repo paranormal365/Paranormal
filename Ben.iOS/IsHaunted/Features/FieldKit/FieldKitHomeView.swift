@@ -180,6 +180,10 @@ struct FieldKitHomeView: View {
                 await start(label: label, investigation: investigation, channels: channels)
             }
             .environment(dependencies)
+            // On an iPad the default form sheet is shorter than the sheet, so Open the session —
+            // its only action — sat below the fold where nobody would look for it. A page-sized
+            // sheet shows it; on an iPhone this changes nothing.
+            .presentationSizing(.page)
         }
         // Ben, 2026-09-27: "If they have recorded a session, just save it and ask if they want to
         // create a new one when they hit the start button instead of making them deal with it
@@ -424,9 +428,12 @@ private struct StartSessionSheet: View {
     var onStart: (String?, MyInvestigation?, CaptureChannels) async -> Void
 
     @State private var label = ""
-    /// Whether the label is still the phone's suggestion — replaced when a better one arrives, never
-    /// once somebody has typed their own.
-    @State private var labelIsSuggested = false
+    /// The phone's last suggestion for the label. The label is still that suggestion — replaced when
+    /// a better one arrives, never once somebody has typed their own — while the two are equal. A
+    /// flag set in a deferred task and cleared by `onChange` raced on the iPad, and the footer then
+    /// called a name the phone filled in "your own words".
+    @State private var suggestedLabel: String?
+    private var labelIsSuggested: Bool { suggestedLabel != nil && label == suggestedLabel }
     @State private var channels: CaptureChannels = .default
     @State private var investigations: [MyInvestigation] = []
     /// Selected by id, not by value — MyInvestigation is a server-shaped record and making it
@@ -556,7 +563,6 @@ private struct StartSessionSheet: View {
     private var whereSection: some View {
         Section {
             TextField("Where are you? (Old Mill, back bedroom)", text: $label)
-                .onChange(of: label) { _, _ in labelIsSuggested = false }
                 .accessibilityIdentifier("session-label")
 
             switch locator.access {
@@ -611,9 +617,8 @@ private struct StartSessionSheet: View {
 
     private func useName(_ name: String?) {
         guard let name, !name.isEmpty else { return }
+        suggestedLabel = name
         label = name
-        // Set after the text change, which clears the flag for anything typed.
-        Task { @MainActor in labelIsSuggested = true }
     }
 
     /// Where the phone is, and what that suggests: a name, nearby investigations, public sessions.

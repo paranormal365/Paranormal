@@ -50,6 +50,25 @@ final class HelpMediaCaptureTests: XCTestCase {
         Thread.sleep(forTimeInterval: seconds)
     }
 
+    /// Relaunches signed in as somebody else, with scripted sensors.
+    ///
+    /// Signs the current account out first. `-autoSignIn` is a no-op over a restored session
+    /// (`SessionStore.signIn` returns unless signed out), so relaunching with James's credentials
+    /// after `setUp` signed Daniel in kept Daniel — and the Field Kit pictures were of an account
+    /// with nothing on the server, with no error anywhere (2026-09-27).
+    private func relaunch(as email: String, password: String) {
+        settle(4)   // let setUp's own sign-in land before undoing it
+        if AppNavigator.openSection("Profile", in: app, timeout: 20) {
+            let signOut = app.descendants(matching: .any)["Sign out"].firstMatch
+            for _ in 0..<4 where !signOut.exists { app.swipeUp() }
+            if signOut.exists { signOut.tap(); settle(3) }
+        }
+        app.terminate()
+        app.launchArguments = apiArguments + ["-fieldKitFakeSensors", "-autoSignIn", "\(email):\(password)"]
+        app.launch()
+        settle(6)
+    }
+
     /// My evidence — the guest's own copy of what they photographed at somebody's public event.
     ///
     /// Daniel is the account on purpose: he belongs to no group and has a confirmed attendance at
@@ -129,12 +148,8 @@ final class HelpMediaCaptureTests: XCTestCase {
     func testCaptureFieldKitBundles() {
         let email = ProcessInfo.processInfo.environment["BEN_MEMBER_EMAIL"] ?? "james.thornton@benco.dev"
         let password = TestSecrets.required("BEN_MEMBER_PASSWORD")
-        settle(4)
-        app.terminate()
         // Scripted sensors: a simulator has no magnetometer, and the Field Kit refuses to open without one.
-        app.launchArguments = apiArguments + ["-fieldKitFakeSensors", "-autoSignIn", "\(email):\(password)"]
-        app.launch()
-        settle(6)
+        relaunch(as: email, password: password)
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app), "Could not reach the Field Kit.")
         settle(3)
@@ -157,6 +172,76 @@ final class HelpMediaCaptureTests: XCTestCase {
         }
         settle(1)
         snap("iphone-review-imported")
+    }
+
+    /// The New session sheet, Public sessions, and a review at the moment a photograph glows and the
+    /// camera saw motion (2026-09-27).
+    ///
+    /// James again, for the same reason as above — and because the review is his own "Stage check"
+    /// sent up by the browser tests, the one session on the stack with a video, its sound, three
+    /// photographs and a Motion detected mark at 0:08. Set the simulator's location near the seeded
+    /// places first (`xcrun simctl location <udid> set 36.1627,-86.7816`), or the sheet has no place
+    /// to offer and the public list is empty. Runs on either device; the names follow it.
+    func testCaptureStartAndPublicAndReview() throws {
+        let email = ProcessInfo.processInfo.environment["BEN_MEMBER_EMAIL"] ?? "james.thornton@benco.dev"
+        let password = TestSecrets.required("BEN_MEMBER_PASSWORD")
+        let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        relaunch(as: email, password: password)
+
+        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app), "Could not reach the Field Kit.")
+        settle(2)
+        AppNavigator.startNewSession(in: app)
+        XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
+        // The place and the nearby count arrive after the sheet does — a first launch's position
+        // takes a while, and the first capture was of "Finding where you are…".
+        let label = app.textFields["session-label"].firstMatch
+        let placeholder = label.placeholderValue ?? ""
+        for _ in 0..<30 {
+            let value = label.value as? String ?? ""
+            if !value.isEmpty, value != placeholder { break }
+            settle(1)
+        }
+        settle(2)
+        snap("\(device)-new-session")
+        app.buttons["Cancel"].firstMatch.tap()
+        settle(1)
+
+        let find = app.buttons["find-public-sessions"].firstMatch
+        XCTAssertTrue(find.waitForExistence(timeout: 10), "Find public sessions should be on the Field Kit.")
+        find.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["public-session-row"].firstMatch.waitForExistence(timeout: 20),
+                      "Public sessions near the simulator's location should be listed.")
+        settle(2)
+        snap("\(device)-public-sessions")
+        app.navigationBars.buttons.firstMatch.tap()
+        settle(2)
+
+        // Downloaded by an earlier run, it is in the phone's own list instead of the server's.
+        let download = app.buttons.matching(NSPredicate(format: "label == %@", "Download Stage check to this phone")).firstMatch
+        let onThePhone = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Stage check")).firstMatch
+        // A List draws rows only near the screen, and a simulator that has run the suite holds a long list.
+        _ = download.waitForExistence(timeout: 8)
+        for _ in 0..<12 where !(download.exists && download.isHittable) && !(onThePhone.exists && onThePhone.isHittable) {
+            app.swipeUp()
+        }
+        if download.exists {
+            download.tap()
+        } else if onThePhone.exists {
+            onThePhone.tap()
+        } else {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "field-kit-without-stage-check"
+            tree.lifetime = .keepAlways
+            add(tree)
+            throw XCTSkip("no \"Stage check\" on the server or the phone for this account — run the browser FieldSessionStageTests first")
+        }
+        let scrubber = app.sliders["replay-scrubber"].firstMatch
+        XCTAssertTrue(scrubber.waitForExistence(timeout: 30), "The downloaded session should open on its review.")
+        settle(3)
+        // 0:08.6 of 0:18: the second photograph is lit and Motion detected is showing.
+        scrubber.adjust(toNormalizedSliderPosition: 8.6 / 18)
+        settle(1)
+        snap("\(device)-review")
     }
 
     /// During the event: the event's own screen, its programme, a menu and the room (item 235 phase 14b).

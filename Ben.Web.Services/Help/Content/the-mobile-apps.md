@@ -79,6 +79,9 @@ is still identified in that cellar.
    you. If you are not on one, leave it; you can attach the session to an investigation later.
    If other people have published sessions recorded near here, the sheet says how many — tap it to
    play what they found before you start.
+
+   ![The New session sheet, filled in from where the phone is](/help/media/the-mobile-apps/iphone-new-session.png)
+
 4. Under **What to record**, choose the channels: magnetic field, sound, video and location, each
    with what it costs in battery. Magnetic field, sound and location start on and **video starts
    off**, because video is the one that ends a night early. All four can be changed later while
@@ -276,7 +279,7 @@ thumbnail** to pause and see the photograph at full size; tap it again and it go
 strip and playback carries on where it was. Photos taken indoors, with no position, are in the
 strip too — the map only shows the ones that had one.
 
-![Reviewing a session — the trace, the map and what was marked](/help/media/the-mobile-apps/iphone-review.png)
+![Reviewing a session — the video with its sound, a photograph glowing in the strip, and Motion detected](/help/media/the-mobile-apps/iphone-review.png)
 
 On an iPad the same screens use the extra width, putting the instruments beside the log while
 recording and the trace beside the map while reviewing.
@@ -450,6 +453,8 @@ public archive — **near you**, or at a place you **search for** by name or tow
 "louisville"). Each row says where, when, who recorded it and what it holds. **Download** brings it
 to your phone, where it plays like any other session and is marked *public archive*. The New
 session sheet also says when public sessions were recorded near where you are standing.
+
+![Public sessions recorded near where the phone is](/help/media/the-mobile-apps/iphone-public-sessions.png)
 
 What you download is the archive's **public copy**. Its readings, marks, rooms and notes are the
 recorder's own, but every position is the place's **public point** — the same approximate one its
