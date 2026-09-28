@@ -19,7 +19,7 @@ struct DoorDutiesView: View {
                 List {
                     if let savedAt {
                         Section {
-                            Label("No signal — this is the list kept on this phone at \(savedAt.formatted(date: .omitted, time: .shortened)).",
+                            Label("No signal — this is the list kept on this phone at \(savedAt.readerFormatted(date: .omitted, time: .shortened)).",
                                   systemImage: "wifi.slash")
                                 .font(.footnote).foregroundStyle(Theme.warning)
                         }

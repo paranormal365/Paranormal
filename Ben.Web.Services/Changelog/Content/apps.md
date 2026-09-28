@@ -22,6 +22,25 @@ on somebody's own phone. Several days can share a number, because one build carr
 work. A change not yet on the App Store is listed under the number the next build will have. Fixes
 move the last number, new things the middle one, a whole new part of the app the first.
 
+## 2026-09-28 · 1.1.0
+
+- Times in the app are shown on the clock of wherever the phone is, and follow it when it crosses
+  into another time zone. Every time is still stored in universal time; the zone chosen on the
+  website sets only the website's clock.
+- Events, tours, investigations and your case's visits have a **Local time · My time** switch.
+  **My time** — where you are — is where it starts; **Local time** reads them on the clock of the
+  place they happen. The app remembers which you chose, and when the two are the same it says so
+  instead.
+- Times recorded in Field Kit — the session list, the review, the instrument panel and the capture
+  bar — read on the phone's clock, and a session file still carries universal time and the zone the
+  phone was in when it recorded.
+- Your case now lists the group's **visits**, with when each one is, where, and the last moment to
+  cancel it. They were sent to the phone but never shown.
+- An event whose organiser never named its zone reads in Central time, as it does on the website,
+  rather than in UTC.
+- Signing up on the phone records the phone's time zone as the website's clock for you, until you
+  choose another there.
+
 ## 2026-09-27 · 1.1.0
 
 - Sound recordings are louder. The microphone was recorded exactly as the sound meter reads it,

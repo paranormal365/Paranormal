@@ -115,7 +115,7 @@ struct PublicSessionsView: View {
                 if !row.whereLine.isEmpty {
                     Text(row.whereLine).font(.caption).foregroundStyle(Theme.fog)
                 }
-                Text("\(row.startedAt.formatted(date: .abbreviated, time: .shortened)) · by \(row.recordedBy)")
+                Text("\(row.startedAt.readerFormatted(date: .abbreviated, time: .shortened)) · by \(row.recordedBy)")
                     .font(.caption).foregroundStyle(Theme.fog)
                 Text(counts(row)).font(.caption2).foregroundStyle(Theme.fog)
             }
@@ -136,7 +136,7 @@ struct PublicSessionsView: View {
                     Image(systemName: "arrow.down.circle").font(.title3)
                 }
                 .disabled(downloading != nil)
-                .accessibilityLabel("Download \(row.placeTitle), \(row.startedAt.formatted(date: .abbreviated, time: .omitted))")
+                .accessibilityLabel("Download \(row.placeTitle), \(row.startedAt.readerFormatted(date: .abbreviated, time: .omitted))")
                 .accessibilityIdentifier("download-public-session")
             }
         }

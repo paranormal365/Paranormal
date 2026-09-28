@@ -115,7 +115,7 @@ struct EventRoomView: View {
         List {
             if let roomSavedAt {
                 Section {
-                    Label("No signal — this is the room as it was at \(roomSavedAt.formatted(date: .omitted, time: .shortened)). Anything you post is kept on this phone and sent when there's signal.",
+                    Label("No signal — this is the room as it was at \(roomSavedAt.readerFormatted(date: .omitted, time: .shortened)). Anything you post is kept on this phone and sent when there's signal.",
                           systemImage: "wifi.slash")
                         .font(.footnote).foregroundStyle(Theme.warning)
                 }
@@ -237,7 +237,7 @@ struct EventRoomView: View {
                 .foregroundStyle(Theme.ecto)
             VStack(alignment: .leading, spacing: 2) {
                 Text(post.body.isEmpty ? (post.isVideo ? "A video" : "A photo") : post.body).lineLimit(2)
-                Text(post.createdUtc.formatted(date: .omitted, time: .shortened)
+                Text(post.createdUtc.readerFormatted(date: .omitted, time: .shortened)
                      + (post.byteCount > 0 ? " · \(ByteCountFormatter.string(fromByteCount: post.byteCount, countStyle: .file))" : ""))
                     .font(.caption).foregroundStyle(Theme.fog)
             }

@@ -118,6 +118,7 @@ struct TourDetailView: View {
     private func dates(_ tour: PublicTourRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Nights coming up").font(.headline).foregroundStyle(Theme.bone)
+            TimeZoneSwitch(zoneId: tour.timeZoneId)
 
             if let dates = tour.upcomingDates, !dates.isEmpty {
                 ForEach(dates) { date in
@@ -125,7 +126,7 @@ struct TourDetailView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 // The walk's own clock, not this phone's.
-                                Text(EventClock.dayAndTime(date.startDateTime, date.timeZoneId))
+                                PlaceTime(utc: date.startDateTime, zoneId: date.timeZoneId ?? tour.timeZoneId)
                                     .font(.body).foregroundStyle(Theme.bone)
                                 if let left = date.spacesLeft {
                                     Text(date.isFull ? "Full" : "\(left) place\(left == 1 ? "" : "s") left")

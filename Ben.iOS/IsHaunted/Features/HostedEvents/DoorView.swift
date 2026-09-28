@@ -209,7 +209,7 @@ struct DoorView: View {
 
             if let savedAt {
                 Section {
-                    Label("No signal — this is the list kept on this phone at \(savedAt.formatted(date: .omitted, time: .shortened)). Everyone you check in is kept and sent when there's signal.",
+                    Label("No signal — this is the list kept on this phone at \(savedAt.readerFormatted(date: .omitted, time: .shortened)). Everyone you check in is kept and sent when there's signal.",
                           systemImage: "wifi.slash")
                         .font(.footnote).foregroundStyle(Theme.warning)
                 }
@@ -316,7 +316,7 @@ struct DoorView: View {
             VStack(alignment: .leading, spacing: 2) {
                 partyDetails(party)
                 if let arrived = party.arrivedUtc {
-                    Text("In since \(arrived.formatted(date: .omitted, time: .shortened))"
+                    Text("In since \(arrived.readerFormatted(date: .omitted, time: .shortened))"
                          + (party.peopleIn.map { " · \($0) of \(party.partySize)" } ?? ""))
                         .font(.caption).foregroundStyle(Theme.success)
                 }

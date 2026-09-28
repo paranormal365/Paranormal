@@ -368,7 +368,7 @@ struct UploadSessionView: View {
             .accessibilityIdentifier("send-session")
         } footer: {
             if let uploadedAt = summary?.uploadedAt {
-                Text("Last sent \(uploadedAt.formatted(date: .abbreviated, time: .shortened)).")
+                Text("Last sent \(uploadedAt.readerFormatted(date: .abbreviated, time: .shortened)).")
             }
         }
     }
@@ -771,7 +771,7 @@ struct UploadSessionView: View {
         case .sending: return "sending…"
         case .sent: return "sent"
         case .failed(let reason): return reason
-        default: return capture.at.formatted(date: .omitted, time: .standard)
+        default: return capture.at.readerFormatted(date: .omitted, time: .standard)
         }
     }
 

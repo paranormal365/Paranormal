@@ -56,6 +56,8 @@ public struct MyInvestigation: Sendable, Codable, Equatable, Identifiable {
     public var placeName: String?
     public var latitude: Double?
     public var longitude: Double?
+    /// The clock the visit happens on — its own, its case's or its group's (2026-09-28).
+    public var timeZoneId: String?
 
     public var id: UUID { attendeeId }
 

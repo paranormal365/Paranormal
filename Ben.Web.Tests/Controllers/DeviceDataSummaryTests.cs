@@ -37,4 +37,24 @@ public sealed class DeviceDataSummaryTests
             "evp_question", "evp_wait_end", "app_backgrounded", "app_returned"));
         Assert.Equal(9, summary.MarkerCount);
     }
+
+    [Fact]
+    public void A_sessions_times_are_stored_as_the_UTC_instant_whatever_clock_they_were_written_on()
+    {
+        // Ben, 2026-09-28: "saves in utc ... make sure this tracks with the .ben file here and on the
+        // server". The phone writes Z; another device may write an offset. Either way the row holds
+        // the same instant in UTC, never the server's own clock.
+        const string zulu = "{\"format_version\":\"1.0.0\",\"device\":{\"model\":\"iPhone16,2\"},"
+            + "\"session\":{\"started_at\":\"2026-09-27T21:00:00Z\",\"ended_at\":\"2026-09-27T22:30:00Z\"},\"readings\":[]}";
+        const string offset = "{\"format_version\":\"1.0.0\",\"device\":{\"model\":\"iPhone16,2\"},"
+            + "\"session\":{\"started_at\":\"2026-09-27T16:00:00-05:00\",\"ended_at\":\"2026-09-27T17:30:00-05:00\"},\"readings\":[]}";
+
+        foreach (var doc in new[] { zulu, offset })
+        {
+            var summary = DeviceDataSummary.Read(doc);
+            Assert.Equal(DateTimeKind.Utc, summary.StartedAt.Kind);
+            Assert.Equal(new DateTime(2026, 9, 27, 21, 0, 0, DateTimeKind.Utc), summary.StartedAt);
+            Assert.Equal(new DateTime(2026, 9, 27, 22, 30, 0, DateTimeKind.Utc), summary.EndedAt);
+        }
+    }
 }

@@ -43,6 +43,27 @@ struct CasesTests {
         #expect(detail.dateCaseClosed != nil)
     }
 
+    @Test func aClientsVisitsDecodeWithTheirOwnClock() async throws {
+        // Captured from the API with visits on it (2026-09-28). The model named fields the server
+        // has never sent — `investigationId`, `scheduledStart` — so no visit's date ever decoded,
+        // and the older fixture's empty list could not notice.
+        let data = try Fixtures.data("my-case-detail-with-visits", in: Bundle.module)
+        let store = Self.detailStore(MockTransport(status: 200, body: data))
+        await store.load()
+
+        let detail = try #require(store.detail)
+        #expect(detail.timeZoneId == "America/Chicago")
+        let visit = try #require(detail.investigations.first)
+        #expect(!visit.title.isEmpty)
+        #expect(visit.timeZoneId == "America/Chicago")
+        #expect(visit.endDateTime != nil)
+        // The server writes no zone on its instants; they are UTC by contract, and read as such.
+        // 20:13 UTC on 09/16 is 3:13 PM in Chicago.
+        let chicago = Calendar(identifier: .gregorian).dateComponents(
+            in: TimeZone(identifier: "America/Chicago")!, from: visit.scheduledDateTime)
+        #expect(chicago.hour == 15 && chicago.minute == 13)
+    }
+
     @Test func theTimelineIsOrderedByWhenThingsHappened() throws {
         // Not by when they were typed: somebody logging three months of experiences in one
         // sitting must not have them read as all happening that evening.

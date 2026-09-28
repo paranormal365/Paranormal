@@ -73,7 +73,7 @@ struct GroupCaseView: View {
                     }
                     if let opened = record.dateCaseOpened {
                         LabeledContent("Opened",
-                                       value: opened.formatted(date: .abbreviated, time: .omitted))
+                                       value: opened.readerFormatted(date: .abbreviated, time: .omitted))
                     }
                 } footer: {
                     Text("Read-only on the phone. Adding to a case is done on the website.")
@@ -108,7 +108,7 @@ struct GroupCaseView: View {
                             Text(entry.entryType.label)
                                 .font(.caption2).foregroundStyle(Theme.haunt)
                             Spacer()
-                            Text(entry.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                            Text(entry.occurredAt.readerFormatted(date: .abbreviated, time: .shortened))
                                 .font(.caption2).foregroundStyle(Theme.fog)
                         }
                         if let title = entry.title, !title.isEmpty {
@@ -182,7 +182,7 @@ struct GroupCaseView: View {
                                 .font(.caption2)
                                 .foregroundStyle(message.isFromTheGroup ? Theme.haunt : Theme.ecto)
                             Spacer()
-                            Text(message.dateCreated.formatted(date: .abbreviated,
+                            Text(message.dateCreated.readerFormatted(date: .abbreviated,
                                                                time: .shortened))
                                 .font(.caption2).foregroundStyle(Theme.fog)
                         }

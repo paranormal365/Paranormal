@@ -102,7 +102,7 @@ struct SessionClock: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(context.date, format: .dateTime.hour().minute().second())
+                    Text(context.date, format: ReaderClock.dateTime.hour().minute().second())
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         // One line, shrinking before it wraps. In the iPad's two-column layout
@@ -111,7 +111,7 @@ struct SessionClock: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .foregroundStyle(Theme.bone)
-                    Text(context.date, format: .dateTime.weekday(.abbreviated)
+                    Text(context.date, format: ReaderClock.dateTime.weekday(.abbreviated)
                             .month(.abbreviated).day())
                         .font(.caption2)
                         .foregroundStyle(Theme.fog)

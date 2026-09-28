@@ -45,7 +45,7 @@ struct ReadingsChart: View {
                     AxisValueLabel {
                         Text(timeline.duration < 600
                              ? SessionClock.elapsed(from: timeline.startedAt, to: date)
-                             : date.formatted(.dateTime.hour().minute()))
+                             : date.formatted(ReaderClock.dateTime.hour().minute()))
                             .font(.caption2)
                     }
                 }
@@ -261,7 +261,7 @@ struct ReplayTransport: View {
             HStack {
                 Text(elapsedText).font(.caption.monospacedDigit()).foregroundStyle(Theme.fog)
                 Spacer()
-                Text(replay.playhead, format: .dateTime.hour().minute().second())
+                Text(replay.playhead, format: ReaderClock.dateTime.hour().minute().second())
                     .font(.caption.monospacedDigit()).foregroundStyle(Theme.bone)
                 Spacer()
                 Text(totalText).font(.caption.monospacedDigit()).foregroundStyle(Theme.fog)

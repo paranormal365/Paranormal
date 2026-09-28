@@ -205,7 +205,7 @@ private struct MessageBubble: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(message.isMine ? Theme.ecto.opacity(0.22) : Theme.mist,
                                 in: RoundedRectangle(cornerRadius: 14))
-                Text(message.dateCreated.formatted(date: .abbreviated, time: .shortened))
+                Text(message.dateCreated.readerFormatted(date: .abbreviated, time: .shortened))
                     .font(.caption2).foregroundStyle(Theme.fog)
             }
             if !message.isMine { Spacer(minLength: 48) }

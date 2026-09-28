@@ -60,7 +60,7 @@ struct ReservationCheckInView: View {
 
                 if let arrived = party.arrivedUtc, party.leftUtc == nil {
                     Section {
-                        Label("Already checked in tonight at \(arrived.formatted(date: .omitted, time: .shortened))"
+                        Label("Already checked in tonight at \(arrived.readerFormatted(date: .omitted, time: .shortened))"
                               + (party.peopleIn.map { " — \($0) of \(party.partySize)" } ?? ""),
                               systemImage: "checkmark.circle.fill")
                             .foregroundStyle(Theme.success)

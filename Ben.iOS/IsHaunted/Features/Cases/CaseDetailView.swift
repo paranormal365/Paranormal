@@ -123,9 +123,9 @@ struct CaseDetailView: View {
                 .padding(.vertical, 4)
 
                 LabeledContent("Opened", value: detail.dateCaseOpened
-                    .formatted(date: .abbreviated, time: .omitted))
+                    .readerFormatted(date: .abbreviated, time: .omitted))
                 if let closed = detail.dateCaseClosed {
-                    LabeledContent("Closed", value: closed.formatted(date: .abbreviated, time: .omitted))
+                    LabeledContent("Closed", value: closed.readerFormatted(date: .abbreviated, time: .omitted))
                 }
                 if let manager = detail.caseManagerDisplayName {
                     LabeledContent("Case manager", value: manager)
@@ -150,6 +150,35 @@ struct CaseDetailView: View {
                         }
                         .padding(.vertical, 2)
                     }
+                }
+            }
+
+            // The group's visits to the case (2026-09-28). The phone never showed them: its model
+            // expected field names the server does not send, so no visit ever decoded.
+            if !detail.investigations.isEmpty {
+                Section {
+                    TimeZoneSwitch(zoneId: detail.timeZoneId)
+                    ForEach(detail.investigations.sorted { $0.scheduledDateTime < $1.scheduledDateTime }) { visit in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(visit.title).font(.subheadline.weight(.medium))
+                            PlaceTime(utc: visit.scheduledDateTime, zoneId: visit.timeZoneId ?? detail.timeZoneId)
+                                .font(.caption).foregroundStyle(Theme.fog)
+                                .accessibilityIdentifier("visit-when")
+                            if let location = visit.location, !location.isEmpty {
+                                Text(location).font(.caption).foregroundStyle(Theme.fog)
+                            }
+                            if let deadline = visit.cancellationDeadlineUtc, deadline > Date() {
+                                HStack(spacing: 4) {
+                                    Text("Cancel by")
+                                    PlaceTime(utc: deadline, zoneId: visit.timeZoneId ?? detail.timeZoneId)
+                                }
+                                .font(.caption2).foregroundStyle(Theme.fog)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("Visits")
                 }
             }
 
@@ -194,7 +223,7 @@ struct OccurrenceRow: View {
                     .font(.caption.weight(.medium))
                 Spacer()
                 Text((entry.eventDateTime ?? entry.dateCreated)
-                    .formatted(date: .abbreviated, time: .shortened))
+                    .readerFormatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
             }
             .foregroundStyle(entry.fromInvestigators ? Theme.ecto : Theme.fog)

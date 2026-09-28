@@ -57,8 +57,9 @@ struct InvestigationDetailView: View {
                 }
                 LabeledContent("Group", value: investigation.orgName)
                 if let start = investigation.scheduledDateTime {
-                    LabeledContent("When",
-                                   value: start.formatted(date: .abbreviated, time: .shortened))
+                    LabeledContent("When") { PlaceTime(utc: start, zoneId: investigation.timeZoneId) }
+                        .accessibilityIdentifier("investigation-when")
+                    TimeZoneSwitch(zoneId: investigation.timeZoneId)
                 }
                 if let location = investigation.location, !location.isEmpty {
                     LabeledContent("Where", value: location)
@@ -68,7 +69,7 @@ struct InvestigationDetailView: View {
                 }
                 if let due = investigation.evidenceDueDate {
                     LabeledContent("Evidence due",
-                                   value: due.formatted(date: .abbreviated, time: .omitted))
+                                   value: due.readerFormatted(date: .abbreviated, time: .omitted))
                 }
             }
 
@@ -129,7 +130,7 @@ struct InvestigationDetailView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(summary.title).foregroundStyle(Theme.bone)
-                                    Text(summary.startedAt.formatted(date: .abbreviated,
+                                    Text(summary.startedAt.readerFormatted(date: .abbreviated,
                                                                      time: .shortened))
                                         .font(.caption).foregroundStyle(Theme.fog)
                                 }

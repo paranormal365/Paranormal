@@ -98,9 +98,11 @@ struct EventDetailView: View {
             Text(event.title).font(.title2.weight(.semibold)).foregroundStyle(Theme.bone)
             Text(event.organizationName).font(.subheadline).foregroundStyle(Theme.fog)
 
-            // The clock of the PLACE, not this phone's — see EventClock.
-            Label(EventClock.dayAndTime(event.startDateTime, event.timeZoneId), systemImage: "clock")
+            // The clock of the PLACE by default, or the reader's with the switch (2026-09-28).
+            Label { PlaceTime(utc: event.startDateTime, zoneId: event.timeZoneId) } icon: { Image(systemName: "clock") }
                 .font(.callout).foregroundStyle(Theme.fog)
+                .accessibilityIdentifier("event-start")
+            TimeZoneSwitch(zoneId: event.timeZoneId)
 
             if let capacity = event.attendeeCapacity {
                 Text("\(event.attendingCount) of \(capacity) places taken")

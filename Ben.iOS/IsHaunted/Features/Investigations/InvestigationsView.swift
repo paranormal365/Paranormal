@@ -71,6 +71,9 @@ struct InvestigationsView: View {
 
     private func list(_ store: InvestigationsStore) -> some View {
         List {
+            // Each visit on its own clock, or all on the reader's (2026-09-28).
+            TimeZoneSwitch(zoneId: nil)
+                .listRowBackground(Color.clear)
             if !store.upcoming.isEmpty {
                 Section("Coming up") {
                     ForEach(store.upcoming) { investigation in
@@ -136,9 +139,10 @@ struct InvestigationRow: View {
                 }
             }
             if let start = investigation.scheduledDateTime {
-                Label(start.formatted(date: .abbreviated, time: .shortened),
-                      systemImage: "calendar")
+                // The visit's own clock, or the reader's with the switch (2026-09-28).
+                Label { PlaceTime(utc: start, zoneId: investigation.timeZoneId) } icon: { Image(systemName: "calendar") }
                     .font(.caption).foregroundStyle(Theme.fog)
+                    .accessibilityIdentifier("investigation-when")
             }
             if let caseTitle = investigation.caseTitle {
                 Text("\(investigation.caseReference ?? "") \(caseTitle)")
@@ -157,7 +161,7 @@ struct InvestigationRow: View {
                     .font(.caption).foregroundStyle(Theme.fog)
             }
             if let due = investigation.evidenceDueDate {
-                Label("Evidence due \(due.formatted(date: .abbreviated, time: .omitted))",
+                Label("Evidence due \(due.readerFormatted(date: .abbreviated, time: .omitted))",
                       systemImage: "tray.and.arrow.up")
                     .font(.caption).foregroundStyle(Theme.warning)
             }

@@ -81,7 +81,8 @@ struct MyEventsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(sessions, id: \.sessionId) { session in
                         HStack(spacing: 4) {
-                            Text(session.startsAtUtc.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
+                            // The event's clock, or the reader's with the switch (2026-09-28).
+                            PlaceTime(utc: session.startsAtUtc, zoneId: booking.timeZoneId)
                             Text("· \(session.title)")
                             if session.waiting { Text("· waiting list").foregroundStyle(Theme.warning) }
                             if session.calledOff { Text("· called off").foregroundStyle(Theme.fog) }

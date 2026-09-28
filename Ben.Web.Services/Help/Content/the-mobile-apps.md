@@ -41,10 +41,10 @@ show them to you again.
 | **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
 | **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
 | **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
-| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
+| **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is listed, and the group's **visits** to your case show when each one is, where, and the last moment to cancel it. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
-| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times read **where you are**, with the zone named beside them, and **Local time** switches to the clock of the place the night happens in — a Nashville walk's 3:08 PM CDT (see *Times and time zones*, below). An event whose organiser never said which zone it is in reads in Central time and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -53,6 +53,28 @@ Anything the app cannot do yet says so plainly rather than showing you an empty 
 with no screen behind it yet is still listed on Notifications — it just isn't tappable, rather
 than pretending to lead somewhere.
 
+
+## Times and time zones
+
+Every date is stored in universal time and shown on a clock you can read, with its zone beside it —
+7:00 PM CDT, never a bare 7:00.
+
+**The app shows the time where you are.** Its clock is the phone's, and the phone sets that from
+where it is — so land in Denver and the app reads Denver time, with nothing to change. (That is the
+phone's **Settings → General → Date & Time → Set Automatically**, which is on unless somebody turned
+it off.) The time zone on your website profile is the website's clock; it does not move the app's.
+
+**The place's clock.** An event, a tour, an investigation and a visit to your case each have a
+clock of their own: the time where they happen. Their screens carry a **Local time · My time**
+switch. **My time** — where you are — is where it starts; **Local time** reads them as the people
+there will. The app remembers which you chose. When the place's zone and yours are the same it says
+so instead of offering a switch that would change nothing.
+
+![A case's visits, with the time they happen](/help/media/the-mobile-apps/iphone-case-visits.png)
+
+**Field Kit sessions** read on the phone's clock. A session file records universal time and the
+zone the phone was in when it recorded, so it plays back at the right moments on any phone and on
+the website, wherever the person opening it is.
 
 ## Field Kit — the phone as an instrument
 

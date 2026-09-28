@@ -63,6 +63,12 @@ struct EventsView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                // Each night on its own clock, or all on the reader's (2026-09-28).
+                .safeAreaInset(edge: .top) {
+                    TimeZoneSwitch(zoneId: nil)
+                        .padding(.horizontal).padding(.vertical, 6)
+                        .background(.bar)
+                }
             }
         }
         .navigationTitle("Events")
@@ -140,7 +146,7 @@ struct EventRow: View {
                 // The clock of the PLACE, not this phone's. A walk in Nashville starts at 3:08 PM
                 // CDT whether it is read in Nashville, Tokyo or London — see EventClock, and the
                 // same rule on the website.
-                Text(EventClock.dayAndTime(event.startDateTime, event.timeZoneId))
+                PlaceTime(utc: event.startDateTime, zoneId: event.timeZoneId)
                 if let place = event.placeLabel, !event.isOnline {
                     Text("· \(place)")
                 }

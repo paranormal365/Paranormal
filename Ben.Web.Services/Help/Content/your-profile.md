@@ -34,6 +34,9 @@ zone in the world by region — and press **Save**. Every page switches from the
 Choose **Use this device's time zone** to go back to following whatever clock your phone or computer
 is on — useful if you travel and want the site to travel with you.
 
+This is the website's clock. The iPhone and iPad app always shows the time where the phone is; see
+[The iPhone and iPad Apps](/help/the-mobile-apps).
+
 A case, an investigation, an event or a tour also has a clock of its own: the place's. Those pages
 have a **Local time · My time** switch, so you can read them either way; see
 [Working a Case](/help/working-a-case#whose-clock) and [Getting Started](/help/getting-started).

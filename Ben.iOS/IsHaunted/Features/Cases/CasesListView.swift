@@ -102,7 +102,7 @@ struct CaseSummaryRow: View {
             .foregroundStyle(Theme.fog)
 
             if let next = summary.nextInvestigationDate {
-                Label(next.formatted(date: .abbreviated, time: .shortened),
+                Label(next.readerFormatted(date: .abbreviated, time: .shortened),
                       systemImage: "calendar")
                     .font(.caption)
                     .foregroundStyle(Theme.ecto)

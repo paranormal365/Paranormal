@@ -79,6 +79,8 @@ public struct MyHostedEventBooking: Sendable, Codable, Equatable, Identifiable {
     public var sessions: [MySessionLine]?
     public var mayReview: Bool?
     public var hasReviewed: Bool?
+    /// The event's own clock (2026-09-28); nil from an older server.
+    public var timeZoneId: String?
 }
 
 /// The ticket. The token is what the QR code carries; `imageUrl` draws the same code on the server.
