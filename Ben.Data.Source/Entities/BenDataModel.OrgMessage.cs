@@ -80,6 +80,15 @@ namespace Ben.Data.Source.Entities
         public DateTime? ScheduledForUtc { get; set; }
 
         /// <summary>
+        /// When a post stops being shown (item 252): a launch's "the hunt is starting" goes six
+        /// hours after the thing ends. Null for every ordinary post, which never expires.
+        /// </summary>
+        public DateTime? ExpiresUtc { get; set; }
+
+        /// <summary>The launch this post announces (item 252); its card offers to start a session.</summary>
+        public Guid? FieldLaunchId { get; set; }
+
+        /// <summary>
         /// Where this was written, when the author chose to say so.
         /// </summary>
         /// <remarks>

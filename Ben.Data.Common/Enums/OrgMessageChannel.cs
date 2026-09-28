@@ -65,4 +65,12 @@ public enum OrgMessageChannel
     /// wants to discuss a request has nowhere to do it that is attached to the request.</para>
     /// </remarks>
     EventStaffRoom = 6,
+
+    /// <summary>
+    /// "The hunt is starting" for a launch that is NOT public (item 252): the same card as a feed
+    /// post, shown in the feed only to the people it was sent to. A channel of its own rather than a
+    /// PublicFeed post with a filter, so that no public read path — the post page, a profile, a
+    /// hashtag, a like — can show it by forgetting to ask who is reading.
+    /// </summary>
+    FieldLaunchNotice = 7,
 }

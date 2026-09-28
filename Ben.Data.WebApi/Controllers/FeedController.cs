@@ -1011,7 +1011,9 @@ public sealed class FeedController : BenControllerBase
                       // Asked here rather than released by a job: a job is a second mechanism that
                       // can fall behind, and the moment it did every scheduled post would be late
                       // by however long it was down.
-                      && (m.ScheduledForUtc == null || m.ScheduledForUtc <= DateTime.UtcNow));
+                      && (m.ScheduledForUtc == null || m.ScheduledForUtc <= DateTime.UtcNow)
+                      // A launch's card goes six hours after the thing ends (item 252).
+                      && (m.ExpiresUtc == null || m.ExpiresUtc > DateTime.UtcNow));
 
     /// <summary>
     /// The same set, plus this reader's own posts that are still waiting for their hour.
@@ -1023,14 +1025,26 @@ public sealed class FeedController : BenControllerBase
     /// what everybody else gets.
     /// </remarks>
     private static IQueryable<OrgMessage> VisibleOrMineAwaiting(BenDataContext db, Guid userId)
-        => userId == Guid.Empty
-            ? VisiblePosts(db)
-            : db.OrgMessages.AsNoTracking()
-                 .Where(m => m.ChannelType == OrgMessageChannel.PublicFeed
-                          && m.HiddenUtc == null
-                          && (m.ScheduledForUtc == null
-                           || m.ScheduledForUtc <= DateTime.UtcNow
-                           || m.AuthorAppUserId == userId));
+    {
+        if (userId == Guid.Empty) return VisiblePosts(db);
+
+        // A private launch's card (item 252) is for the people it was sent to and the lead who
+        // sent it. Its own channel, so no public read path can show it; here, and only here, it is
+        // added back for them.
+        var myLaunches = db.FieldLaunchRecipients.AsNoTracking()
+            .Where(r => r.AppUserId == userId)
+            .Select(r => (Guid?)r.FieldLaunchId);
+
+        return db.OrgMessages.AsNoTracking()
+             .Where(m => m.HiddenUtc == null
+                      && (m.ExpiresUtc == null || m.ExpiresUtc > DateTime.UtcNow)
+                      && ((m.ChannelType == OrgMessageChannel.PublicFeed
+                           && (m.ScheduledForUtc == null
+                            || m.ScheduledForUtc <= DateTime.UtcNow
+                            || m.AuthorAppUserId == userId))
+                       || (m.ChannelType == OrgMessageChannel.FieldLaunchNotice
+                           && (m.AuthorAppUserId == userId || myLaunches.Contains(m.FieldLaunchId)))));
+    }
 
     /// <summary>
     /// Removes posts whose author this reader has blocked (App Review 1.2).
@@ -1288,6 +1302,15 @@ public sealed class FeedController : BenControllerBase
                 pollRecords[poll.OrgMessageId] = record;
         }
 
+        // The launches the page's cards announce (item 252), in one lookup.
+        var launchIds = posts.Where(p => p.FieldLaunchId is not null).Select(p => p.FieldLaunchId!.Value).Distinct().ToList();
+        var launches = launchIds.Count == 0
+            ? []
+            : await db.FieldLaunches.AsNoTracking()
+                .Where(l => launchIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.Title, l.ExpiresUtc })
+                .ToDictionaryAsync(l => l.Id, l => (l.Title, l.ExpiresUtc), ct);
+
         return posts.Select(p => new FeedPostRecord(
             p.Id,
             p.AuthorAppUserId,
@@ -1349,7 +1372,11 @@ public sealed class FeedController : BenControllerBase
                 : null,
             // AUTHOR-ONLY, and only while it is still in the future: an unreleased post is one
             // only its author can see at all, and they need to see that they scheduled it.
-            readerId != Guid.Empty && p.AuthorAppUserId == readerId ? p.ScheduledForUtc : null))
+            readerId != Guid.Empty && p.AuthorAppUserId == readerId ? p.ScheduledForUtc : null,
+            p.FieldLaunchId is { } launchId && launches.TryGetValue(launchId, out var launch)
+                ? new Ben.Service.Models.FieldLaunches.FeedLaunchCard(
+                    launchId, launch.Title, Services.FieldLaunches.FieldLaunchService.AppLink(launchId), launch.ExpiresUtc)
+                : null))
             .ToList();
     }
 

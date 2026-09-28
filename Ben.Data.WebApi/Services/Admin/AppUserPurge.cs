@@ -247,6 +247,8 @@ public sealed class AppUserPurge
             await db.SignInEvents.Where(e => e.AppUserId == userId).ExecuteDeleteAsync(ct);
             // The phones they could be pushed on (item 252): addresses for a person who is gone.
             await db.PushDevices.Where(d => d.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // And which launches they were sent: a list of where a person was going to be.
+            await db.FieldLaunchRecipients.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserTourStates.Where(t => t.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserMessageTos.Where(m => m.ToAppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserFollows

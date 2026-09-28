@@ -491,6 +491,16 @@ public sealed class OrganizationPurge
                 .ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
+            // The group's launches (item 252). Their cards are posts people may have replied to or
+            // liked, so they are ended now — expired and unlinked — rather than deleted from under
+            // those; the launches themselves, and who they went to, go.
+            var launchIds = db.FieldLaunches.Where(x => x.OrganizationId == organizationId).Select(x => (Guid?)x.Id);
+            var endedAt = DateTime.UtcNow;
+            await db.OrgMessages.Where(x => x.FieldLaunchId != null && launchIds.Contains(x.FieldLaunchId))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ExpiresUtc, endedAt).SetProperty(x => x.FieldLaunchId, (Guid?)null), ct);
+            await db.FieldLaunchRecipients.Where(x => launchIds.Contains(x.FieldLaunchId)).ExecuteDeleteAsync(ct);
+            await db.FieldLaunches.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+
             // The outbox is CLEARED of its link, never emptied (item 239). A queued letter is not
             // the group's property — it is a letter to a person, and the most important one a
             // purge can produce is the one telling somebody the group they belonged to is gone.

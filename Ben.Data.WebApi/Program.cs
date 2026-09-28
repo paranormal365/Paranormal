@@ -338,6 +338,7 @@ builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Push.IPushSender, Ben.Da
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Push.PushNotifier>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldLaunches.FieldLaunchService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
 // Cleans message bodies written before sending sanitised them (2026-09-04). Idempotent: after the
