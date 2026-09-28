@@ -93,7 +93,10 @@ public struct FieldUploadClient: Sendable {
                              deviceSessionId: UUID,
                              investigationId: UUID?,
                              recordedByAppUserId: UUID?,
-                             recordedByName: String?) async -> Result<ServerSession, FeedActionError> {
+                             recordedByName: String?,
+                             orgCalendarEventId: UUID? = nil,
+                             hostedEventId: UUID? = nil,
+                             fieldLaunchId: UUID? = nil) async -> Result<ServerSession, FeedActionError> {
         var parts: [MultipartBody.Part] = [
             .file("file", filename: url.lastPathComponent,
                   contentType: DeviceDataExporter.contentType, url: url),
@@ -101,6 +104,11 @@ public struct FieldUploadClient: Sendable {
         ]
         // Omitted rather than sent empty: no investigation is an ordinary state, not a blank.
         if let investigationId { parts.append(.field("investigationId", investigationId.uuidString)) }
+        // Item 252: a tour date or event, a hosted event, or the lead's launch it was joined from —
+        // for a launch the server works out the rest, whenever it is sent.
+        if let orgCalendarEventId { parts.append(.field("orgCalendarEventId", orgCalendarEventId.uuidString)) }
+        if let hostedEventId { parts.append(.field("hostedEventId", hostedEventId.uuidString)) }
+        if let fieldLaunchId { parts.append(.field("fieldLaunchId", fieldLaunchId.uuidString)) }
         if let recordedByAppUserId {
             parts.append(.field("recordedByAppUserId", recordedByAppUserId.uuidString))
         }

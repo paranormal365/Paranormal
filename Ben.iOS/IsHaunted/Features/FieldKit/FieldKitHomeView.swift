@@ -444,9 +444,20 @@ private struct SessionRow: View {
                 if let investigation = summary.investigationTitle, !investigation.isEmpty,
                    investigation != summary.title {
                     Text(investigation).font(.caption2).foregroundStyle(Theme.haunt)
+                } else if let event = summary.eventTitle, !event.isEmpty, event != summary.title {
+                    // A group's night it was joined from (item 252).
+                    Text(event).font(.caption2).foregroundStyle(Theme.haunt)
                 }
             }
             Spacer()
+            // Sessions pile up, to be sent whenever (item 252, Ben: "They can choose to submit them
+            // later"), so the list says which are still only on this phone.
+            if !summary.isOpen && !summary.isImported {
+                Text(summary.isUploaded ? "Sent" : "Not sent")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(summary.isUploaded ? Theme.success : Theme.fog)
+                    .accessibilityIdentifier(summary.isUploaded ? "session-sent" : "session-not-sent")
+            }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.fog)
         }
         .padding(.vertical, 2)

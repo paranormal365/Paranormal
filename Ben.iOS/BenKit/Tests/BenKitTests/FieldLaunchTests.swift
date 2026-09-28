@@ -133,3 +133,46 @@ struct FieldLaunchTests {
         #expect(try #require(store.summary(for: id)).title == "Saturday walk")
     }
 }
+
+/// Sending a joined session, and a long one in parts (item 252).
+@Suite("Field launches — sending what was recorded")
+struct FieldLaunchSendingTests {
+
+    @Test func eachPartOfASessionHasItsOwnIdAndTheSamePartKeepsIt() {
+        let session = UUID()
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let first = SessionWindow(start: start, end: start.addingTimeInterval(600))
+        let second = SessionWindow(start: start.addingTimeInterval(600), end: start.addingTimeInterval(1200))
+
+        #expect(first.uploadId(for: session) != second.uploadId(for: session))      // the next ten minutes is its own
+        #expect(first.uploadId(for: session) != session)
+        #expect(first.uploadId(for: session) == first.uploadId(for: session))       // a retry replaces only itself
+        // A handle nudged by a fraction of a second is the same part, not a new one.
+        let nudged = SessionWindow(start: start.addingTimeInterval(0.2), end: start.addingTimeInterval(600.3))
+        #expect(nudged.uploadId(for: session) == first.uploadId(for: session))
+        #expect(first.uploadId(for: UUID()) != first.uploadId(for: session))         // another session's is its own
+    }
+
+    @Test func aJoinedSessionIsSentWithItsLaunchAndNoInvestigation() async throws {
+        let transport = MockTransport(status: 200, body: Data("""
+        {"id":"\(UUID().uuidString.lowercased())","investigationId":null,
+         "deviceSessionId":"\(UUID().uuidString.lowercased())","readingCount":3,
+         "markerCount":0,"recordedByName":null,"files":[]}
+        """.utf8))
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        let client = FieldUploadClient(api: APIClient(environment: { .dev }, transport: transport, tokens: tokens))
+        let bundle = FileManager.default.temporaryDirectory.appendingPathComponent("launch-\(UUID().uuidString).ben")
+        try Data("PK".utf8).write(to: bundle)
+        defer { try? FileManager.default.removeItem(at: bundle) }
+        let launch = UUID()
+
+        _ = await client.submitBundle(at: bundle, deviceSessionId: UUID(), investigationId: nil,
+                                      recordedByAppUserId: nil, recordedByName: nil, fieldLaunchId: launch)
+
+        let body = String(decoding: transport.requests.first?.httpBody ?? Data(), as: UTF8.self)
+        #expect(body.contains("name=\"fieldLaunchId\""))
+        #expect(body.contains(launch.uuidString))
+        #expect(!body.contains("name=\"investigationId\""))
+        #expect(!body.contains("name=\"orgCalendarEventId\""))
+    }
+}

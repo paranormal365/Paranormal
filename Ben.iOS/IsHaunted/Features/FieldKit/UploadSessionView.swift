@@ -16,6 +16,9 @@ struct UploadSessionView: View {
 
     @State private var investigations: [MyInvestigation] = []
     @State private var chosenInvestigationId: UUID?
+    /// Joined from a lead's launch, or recorded at a tour date or event (item 252): send it there.
+    /// On unless the person turns it off — the way out when they are not registered for it.
+    @State private var sendToEvent = true
     @State private var captures: [CaptureMark] = []
     @State private var chosen: Set<UUID> = []
     @State private var progress: [UUID: FileState] = [:]
@@ -91,8 +94,35 @@ struct UploadSessionView: View {
 
     // MARK: - Sections
 
+    /// What a joined session belongs to, when it belongs to a group's night (item 252): its name.
+    /// Nil for an ordinary session, which keeps the investigation picker.
+    private var joinedTitle: String? {
+        guard let summary else { return nil }
+        if summary.fieldLaunchId != nil { return summary.eventTitle ?? summary.investigationTitle ?? summary.title }
+        if summary.orgCalendarEventId != nil || summary.hostedEventId != nil { return summary.eventTitle ?? summary.title }
+        return nil
+    }
+
     @ViewBuilder
     private var destinationSection: some View {
+        if let joinedTitle {
+            Section {
+                Toggle("Send to \(joinedTitle)", isOn: $sendToEvent)
+                    .accessibilityIdentifier("upload-send-to-event")
+            } header: {
+                Text("Where it belongs")
+            } footer: {
+                Text(sendToEvent
+                     ? "The group that ran it will see it. You can send it now, or days from now — it stays on this phone until you do."
+                     : "Kept against your account only.")
+            }
+        } else {
+            investigationSection
+        }
+    }
+
+    @ViewBuilder
+    private var investigationSection: some View {
         Section {
             Picker("Investigation", selection: $chosenInvestigationId) {
                 Text("Just my own").tag(UUID?.none)
@@ -477,7 +507,7 @@ struct UploadSessionView: View {
     /// group's work reaches a place page through the investigation it belongs to.
     @ViewBuilder
     private var archiveSection: some View {
-        if summary?.isUploaded == true, chosenInvestigationId == nil,
+        if summary?.isUploaded == true, chosenInvestigationId == nil, !(joinedTitle != nil && sendToEvent),
            let serverId = summary?.serverSessionId {
             Section {
                 Button {
@@ -657,14 +687,22 @@ struct UploadSessionView: View {
                 to: scratch,
                 document: document)
 
+            // Where it goes (item 252). A session joined from a launch sends the launch, and the
+            // server works out the rest; one recorded at a tour date or event sends that.
+            let toEvent = joinedTitle != nil && sendToEvent
+            let launchId = toEvent ? summary?.fieldLaunchId : nil
             let result = await dependencies.fieldUpload.submitBundle(
                 at: bundle.url,
-                deviceSessionId: sessionId,
-                investigationId: chosenInvestigationId,
+                // Each part of a long session under its own id — see SessionWindow.uploadId.
+                deviceSessionId: window.map { $0.uploadId(for: sessionId) } ?? sessionId,
+                investigationId: joinedTitle != nil ? nil : chosenInvestigationId,
                 recordedByAppUserId: me?.userId,
                 // The server resolves the name from the account — the app knows who signed in,
                 // not what everyone else calls them.
-                recordedByName: nil)
+                recordedByName: nil,
+                orgCalendarEventId: toEvent && launchId == nil ? summary?.orgCalendarEventId : nil,
+                hostedEventId: toEvent && launchId == nil ? summary?.hostedEventId : nil,
+                fieldLaunchId: launchId)
 
             guard case .success(let server) = result else {
                 if case .failure(let error) = result { errorMessage = error.message }
