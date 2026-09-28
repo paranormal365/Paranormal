@@ -59,6 +59,9 @@ public struct FeedPostRecord: Sendable, Codable, Equatable, Identifiable {
     public var attributedOrgUrlName: String?
     public var groupVerified: Bool
     public var moderatorReviewed: Bool
+    /// "The group's session is starting" (item 252): the launch this card announces, joined with
+    /// its `appLink`. Nil for every ordinary post, and for anything an older server sends.
+    public var launch: FeedLaunchCard?
 }
 
 /// A page of the feed. `nextCursor` is opaque — pass it back unchanged, never construct one.

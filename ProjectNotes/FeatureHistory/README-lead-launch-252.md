@@ -21,6 +21,14 @@ app's **1.1.0**. Ben:
 
 ## Decisions (Ben, 09/28/2026)
 
+0. **Nobody is forced into a session** (Ben, later the same day): "Maybe instead of forcing their
+   phone into a session, the launch button posts the link in the feed where they can click to join
+   the group's session... Clicking the link would open the Field Kit into a session where they don't
+   have to complete picking the location before the session." / "Instead of forcing them to join."
+   The card's **Join** (and the push, which only says it is starting) opens Field Kit straight into
+   a session already set to the event, tour or investigation and its place; recording starts when
+   they press Start. **A push goes out as well** (Ben chose "feed link + push").
+
 1. **Feed post audience:** public when the thing is public (a public tour date, public event,
    public investigation); otherwise only the people it was sent to, and the lead.
 2. **Timing:** the button starts the hunt when it is pressed. No scheduling in advance.
@@ -65,10 +73,10 @@ device; `GET api/field-launches/mine` lists live ones. The feed post: `OrgMessag
 launch's people. Uploads accept an `orgCalendarEventId` / `hostedEventId` target, with a rule for
 who may attach.
 
-**L3 — The app receives it.** Push entitlement and delegate, token registered on sign-in and removed
-on sign-out, a Field Kit deep link (`ishaunted://field-kit/launch/{id}`) from a push tap or the
-feed post: the live session opens pending (item 215), already attached to the thing, and Start is
-the person's tap — iOS will not start a microphone from a push.
+**L3 — Joining, in the app.** The feed card's **Join**, a "Happening now" list in Field Kit, and a
+Field Kit link (`ishaunted://field-kit/launch/{id}`) all open the live session pending (item 215),
+already set to the thing and its place — no New session sheet. Push: entitlement and delegate,
+token registered when signed in and removed at sign-out; a tap opens the same link.
 
 **L4 — The lead's button (app).** "Things I lead today" and a **Launch** button on an
 investigation, a tour date and an event door, with "Send to N people" before it goes.

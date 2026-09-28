@@ -1,0 +1,45 @@
+{
+  "posts": [
+    {
+      "id": "1a2098be-fd93-4fad-8c17-45da50b58ceb",
+      "authorAppUserId": "498d17df-03ff-4585-c609-08df10411452",
+      "authorDisplayName": "AverageBen",
+      "parentMessageId": null,
+      "body": "Evening visit is starting now. Tap Join to open the group's session in Field Kit \u2014 nothing records until you press Start, and every session you take stays on your phone until you send it.",
+      "dateCreated": "2026-09-28T18:29:15.964347",
+      "replyCount": 0,
+      "mentions": [],
+      "hashtags": [],
+      "authorIsFollowedByCurrentUser": false,
+      "isOwnPost": true,
+      "reportedByCurrentUser": false,
+      "likeCount": 0,
+      "likedByCurrentUser": false,
+      "hasMedia": false,
+      "mediaAwaitingReview": false,
+      "mediaKind": 0,
+      "experienceTypeId": null,
+      "experienceTypeName": null,
+      "categoryMatchDegraded": false,
+      "attributedOrgName": null,
+      "attributedOrgUrlName": null,
+      "groupVerified": false,
+      "moderatorReviewed": false,
+      "poll": null,
+      "postedLatitude": null,
+      "postedLongitude": null,
+      "postedPlaceName": null,
+      "placeId": null,
+      "aboutPlaceName": null,
+      "scheduledForUtc": null,
+      "launch": {
+        "launchId": "be32705c-03e2-4163-8d40-1ad3c7bf6b88",
+        "title": "Evening visit",
+        "appLink": "ishaunted://field-kit/launch/be32705c-03e2-4163-8d40-1ad3c7bf6b88",
+        "expiresUtc": "2026-09-29T03:59:00"
+      }
+    }
+  ],
+  "nextCursor": null,
+  "canPost": true
+}

@@ -453,7 +453,7 @@ public sealed class AppUserPurge
         // <paramref name="going"/>.
         var sweptEntities = new HashSet<string>(StringComparer.Ordinal)
         {
-            nameof(SignInEvent), nameof(PushDevice), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
+            nameof(SignInEvent), nameof(PushDevice), nameof(FieldLaunchRecipient), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),

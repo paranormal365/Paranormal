@@ -51,8 +51,7 @@ public sealed class FieldLaunchServiceTests
     /// <summary>A group, its people, a tour date, a private investigation and a hosted event — all tonight.</summary>
     private sealed class World
     {
-        public readonly IDbContextFactory<BenDataContext> Db =
-            new SimpleFactory(new DbContextOptionsBuilder<BenDataContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        public readonly IDbContextFactory<BenDataContext> Db;
         public readonly Clock Clock;
         public readonly FakeSender Sender = new();
         public readonly Mock<IOrganizationSecurityService> Security = new();
@@ -76,7 +75,13 @@ public sealed class FieldLaunchServiceTests
         public readonly Guid Investigation = Guid.NewGuid();
         public readonly Guid Hosted = Guid.NewGuid();
 
-        public World(DateTime now) { Clock = new Clock(now); }
+        public readonly Guid Tour = Guid.NewGuid();
+
+        public World(DateTime now, IDbContextFactory<BenDataContext>? db = null)
+        {
+            Clock = new Clock(now);
+            Db = db ?? new SimpleFactory(new DbContextOptionsBuilder<BenDataContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        }
 
         public FieldLaunchService Service(TimeProvider? clock = null) => new(
             Db, Security.Object, new HostedEventAccess(Security.Object, Db),
@@ -123,10 +128,15 @@ public sealed class FieldLaunchServiceTests
             });
 
             // The tour date, with a guide, a reserved seat and a seat only asked for.
+            db.Tours.Add(new Tour
+            {
+                Id = Tour, OrganizationId = Org, Name = "Nashville Ghost Walk", UrlName = "ghost-walk",
+                TimeZoneId = "America/Chicago", DateCreated = now, CreatedByAppUserId = Owner,
+            });
             db.OrgCalendarEvents.Add(new OrgCalendarEvent
             {
                 Id = TourDate, OrganizationId = Org, Title = "Saturday walk", Location = "Printers Alley",
-                StartDateTime = starts, EndDateTime = starts.AddHours(2), IsPublic = tourPublic, TourId = Guid.NewGuid(),
+                StartDateTime = starts, EndDateTime = starts.AddHours(2), IsPublic = tourPublic, TourId = Tour,
                 DateCreated = now, CreatedByAppUserId = Owner,
             });
             db.OrgCalendarEventGuides.Add(new OrgCalendarEventGuide
@@ -230,6 +240,36 @@ public sealed class FieldLaunchServiceTests
 
     private sealed record LaunchOutcomeRecordOf(Ben.Service.Models.FieldLaunches.LaunchOutcomeRecord Outcome);
 
+    // ── Against a real database ──────────────────────────────────────────────
+
+    /// <summary>
+    /// The launch, written to a database that enforces its keys. The in-memory store does not, and
+    /// the first launch against SQL Server was refused for a post missing its creator.
+    /// </summary>
+    [Fact]
+    public async Task ALaunchIsWrittenToARealDatabaseAndItsCardReadsBack()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var w = new World(Tonight, sqlite.Factory);
+        // The world is seeded with the keys off — a tour's start address, a place's owner and the
+        // rest are not what this is about — and the keys go back on for everything the launch writes.
+        await using (var db = await sqlite.NewContextAsync()) await db.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = OFF;");
+        await w.SeedAsync(starts: Tonight.AddMinutes(30));
+        await using (var db = await sqlite.NewContextAsync()) await db.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = ON;");
+        var service = w.Service();
+
+        var tour = Launched(await service.LaunchAsync(w.Guide, false, FieldLaunchTarget.CalendarEvent, w.TourDate, default)).Outcome;
+        var visit = Launched(await service.LaunchAsync(w.Lead, false, FieldLaunchTarget.Investigation, w.Investigation, default)).Outcome;
+        Launched(await service.LaunchAsync(w.DoorStaff, false, FieldLaunchTarget.HostedEvent, w.Hosted, default));
+
+        Assert.Equal("Nashville Ghost Walk: Saturday walk", tour.Launch.Title);
+        Assert.Single(await service.MineAsync(w.Investigator, default));
+        Assert.NotNull(await service.ReadAsync(visit.Launch.Id, w.Investigator, false, default));
+        // The owner: the tour date and the visit. (The hosted event is the permission service's to
+        // grant, and this world's grants nothing — its door staff launched it above.)
+        Assert.Equal(["event", "investigation"], (await service.LaunchableAsync(w.Owner, default)).Select(l => l.Target).Order());
+    }
+
     // ── Who it reaches ───────────────────────────────────────────────────────
 
     [Fact]
@@ -243,7 +283,7 @@ public sealed class FieldLaunchServiceTests
         Assert.Equal([w.TokenOf(w.Guest)], w.PushedTo());
         Assert.Equal((1, 1, 1, true), (outcome.People, outcome.PeopleWithTheApp, outcome.PhonesReached, outcome.PushConfigured));
         var push = w.Sender.Sent.Single().Message;
-        Assert.Equal("Saturday walk is starting", push.Title);
+        Assert.Equal("Nashville Ghost Walk: Saturday walk is starting", push.Title);
         Assert.Equal(FieldLaunchService.AppLink(outcome.Launch.Id), push.Data["link"]);
         Assert.Equal(w.TourDate, outcome.Launch.OrgCalendarEventId);
         Assert.Equal("Printers Alley", outcome.Launch.LocationLabel);

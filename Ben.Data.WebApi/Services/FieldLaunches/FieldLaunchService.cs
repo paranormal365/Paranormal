@@ -217,6 +217,7 @@ public sealed class FieldLaunchService
             DateCreated = now,
             ExpiresUtc = expires,
             FieldLaunchId = launch.Id,
+            CreatedByAppUserId = userId,
         };
         launch.FeedPostId = post.Id;
 
@@ -227,7 +228,7 @@ public sealed class FieldLaunchService
         var launcherName = await NameAsync(db, userId, ct);
         var fanOut = await _push.SendAsync(recipients, new PushMessage(
             Title: $"{candidate.Title} is starting",
-            Body: $"{launcherName} started the hunt. Tap to open Field Kit.",
+            Body: $"{launcherName} started the group's session. Tap to join it in Field Kit.",
             Data: new Dictionary<string, string> { ["link"] = AppLink(launch.Id), ["launchId"] = launch.Id.ToString() },
             CollapseId: $"launch-{launch.Id:N}",
             ExpiresAt: new DateTimeOffset(DateTime.SpecifyKind(expires, DateTimeKind.Utc))), ct);
@@ -243,7 +244,7 @@ public sealed class FieldLaunchService
 
     /// <summary>What the card says. Plain text, like every feed post.</summary>
     public static string CardText(string title) =>
-        Clip($"{title} is starting now. Open Field Kit to record it — every session you take is kept on your phone until you send it.", 1000);
+        Clip($"{title} is starting now. Tap Join to open the group's session in Field Kit — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
 
     // ── Reading launches ─────────────────────────────────────────────────────
 

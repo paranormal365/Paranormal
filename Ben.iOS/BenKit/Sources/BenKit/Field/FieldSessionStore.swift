@@ -548,7 +548,11 @@ public final class FieldSessionStore {
                              investigationId: UUID? = nil,
                              investigationTitle: String? = nil,
                              batteryPercent: Double? = nil,
-                             channels: CaptureChannels = .default) throws -> UUID {
+                             channels: CaptureChannels = .default,
+                             orgCalendarEventId: UUID? = nil,
+                             hostedEventId: UUID? = nil,
+                             eventTitle: String? = nil,
+                             fieldLaunchId: UUID? = nil) throws -> UUID {
         guard let context else { throw FieldSessionError.unavailable }
 
         let id = UUID()
@@ -563,12 +567,32 @@ public final class FieldSessionStore {
             batteryPercentAtStart: batteryPercent,
             deviceModel: deviceModel,
             channels: channels)
+        session.orgCalendarEventId = orgCalendarEventId
+        session.hostedEventId = hostedEventId
+        session.eventTitle = eventTitle?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        session.fieldLaunchId = fieldLaunchId
         context.insert(session)
         try context.save()
 
         activeSessionId = id
         load()
         return id
+    }
+
+    /// Joins a lead's launch (item 252): a session already set to the investigation, tour date or
+    /// event and its place, so there is nothing to choose. It opens pending, like every session —
+    /// Ben, 2026-09-28: "instead of forcing them to join" — and records from the person's Start.
+    @discardableResult
+    public func startSession(joining launch: FieldLaunchRecord, channels: CaptureChannels = .default) throws -> UUID {
+        try startSession(
+            locationLabel: launch.locationLabel ?? launch.title,
+            investigationId: launch.investigationId,
+            investigationTitle: launch.investigationId == nil ? nil : launch.title,
+            channels: channels,
+            orgCalendarEventId: launch.orgCalendarEventId,
+            hostedEventId: launch.hostedEventId,
+            eventTitle: launch.investigationId == nil ? launch.title : nil,
+            fieldLaunchId: launch.id)
     }
 
     /// Start, pressed on the live screen: the moment the session's clock begins.
