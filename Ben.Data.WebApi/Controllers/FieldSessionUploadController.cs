@@ -164,6 +164,13 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
               + "record of that night rather than to your phone's history. Ask the group if it "
               + "should be removed.");
         }
+        // Item 252: sent to a tour date or an event, it is that group's record of the night too.
+        if (session.OrgCalendarEventId is not null || session.HostedEventId is not null)
+        {
+            return Conflict(
+                "This session was sent to a group's tour or event, so it belongs to their record of "
+              + "that night rather than to your phone's history. Ask the group if it should be removed.");
+        }
 
         if (await db.CaseReportSectionFieldSessions.AsNoTracking()
                 .AnyAsync(c => c.FieldSessionUploadId == sessionId, ct))

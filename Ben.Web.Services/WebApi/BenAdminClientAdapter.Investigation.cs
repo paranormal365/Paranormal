@@ -152,6 +152,14 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetListAsync<FieldSessionSummaryRecord>(
             $"/api/field-sessions/for-investigation/{investigationId}", token);
 
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetEventFieldSessionsAsync(
+        Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>($"/api/field-sessions/for-event/{eventId}", token);
+
+    public Task<LoadResult<FieldSessionSummaryRecord>> GetHostedEventFieldSessionsAsync(
+        Guid hostedEventId, CancellationToken token = default)
+        => _api.GetListAsync<FieldSessionSummaryRecord>($"/api/field-sessions/for-hosted-event/{hostedEventId}", token);
+
     /// <summary>One session, with its document — the readings as the device wrote them.</summary>
     public Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
         Guid sessionId, CancellationToken token = default)

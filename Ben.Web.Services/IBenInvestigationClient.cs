@@ -120,6 +120,14 @@ public interface IBenInvestigationClient
     Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
         Guid investigationId, CancellationToken token = default);
 
+    /// <summary>What guests sent up at one tour date or calendar event — for the group's team (item 252).</summary>
+    Task<LoadResult<FieldSessionSummaryRecord>> GetEventFieldSessionsAsync(
+        Guid eventId, CancellationToken token = default);
+
+    /// <summary>What guests sent up at one hosted event — for the group and its staff (item 252).</summary>
+    Task<LoadResult<FieldSessionSummaryRecord>> GetHostedEventFieldSessionsAsync(
+        Guid hostedEventId, CancellationToken token = default);
+
     /// <summary>
     /// One session, with the document the device wrote.
     /// </summary>

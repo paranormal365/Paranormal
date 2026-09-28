@@ -1645,7 +1645,14 @@ public sealed record FieldSessionSummaryRecord(
     IReadOnlyList<FieldSessionFileSummary> Files,
     /// <summary>Set once this session has been published to a place's archive (item 218): the
     /// screen needs it to know whether deleting is retraction, which is part of a paid plan.</summary>
-    DateTime? PublishedAtUtc = null);
+    DateTime? PublishedAtUtc = null,
+    /// <summary>Sent to a group's tour date or event, or hosted event (item 252) — the group's, like an investigation's.</summary>
+    Guid? OrgCalendarEventId = null,
+    Guid? HostedEventId = null)
+{
+    /// <summary>Whether it belongs to a group's record rather than to the person alone.</summary>
+    public bool IsGroupWork => InvestigationId is not null || OrgCalendarEventId is not null || HostedEventId is not null;
+}
 
 /// <summary>One session reduced to a pin, for the map on My Field Sessions.</summary>
 public sealed record FieldSessionMapPoint(
