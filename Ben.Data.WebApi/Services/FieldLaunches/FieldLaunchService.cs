@@ -248,7 +248,9 @@ public sealed class FieldLaunchService
 
     /// <summary>What the card says. Plain text, like every feed post.</summary>
     public static string CardText(string title) =>
-        Clip($"{title} is starting now. Tap Join to open the group's session in Field Kit — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
+        // Read on the phone (under a Join button) and on the website (beside "Open in the app"),
+        // so it names where to join rather than a button only one of them has.
+        Clip($"{title} is starting now. Join the group's session from Field Kit in the IsHaunted app — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
 
     // ── Reading launches ─────────────────────────────────────────────────────
 

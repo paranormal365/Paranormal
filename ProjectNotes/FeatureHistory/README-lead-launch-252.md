@@ -139,6 +139,40 @@ the group that ran it, and the feed shows the launch post on the website too.
 - With launches listed, the session in progress and the lead's button were pushed off screen; the
   order is now: Start, the open session, Launch, Happening now.
 
+## The role-play (09/28)
+
+Ben: "Run from start to end as Leader of a Tour and a guest of the tour... as the planner of an
+event.. a host of an event and guest of an event. Verify all are working as expected and test it
+as a user would use the app and website in conjunction together."
+
+Played on three simulators at once — **James Thornton** (BenCo member: the tour's guide and the
+event's host at the door) on an iPad, **Daniel Park** (guest) on an iPhone, **Wren Ashby** (a solo
+investigator, not in BenCo: the walk-up) on another iPhone — with **Sarah Mitchell** (BenCo
+administrator: the planner) on the website in a real browser (Playwright). Tonight's tour, its
+date and a live hosted event were made through the API as Sarah (`roleplay_setup.py`, scratchpad);
+every item-252 step was done in the app or on the site.
+
+1. Web, Sarah: approves Daniel's seat on the tour date; confirms his booking at the event.
+2. iPhone, Daniel: opens his seat; the reminders ask for notifications; allowed.
+3. iPad, James: Field Kit → Launch a session → the tour date → Launch. Daniel's phone, on its home
+   screen, gets "…is starting — James Thornton started the group's session"; the tap joins; he
+   records, stops, sends — to the tour date, nothing chosen.
+4. iPhone, Wren scans James's code at the PUBLIC tour: straight in (a public launch asks nobody's
+   leave), records, sends.
+5. A private BenCo members' hunt, launched by James: Wren scans, signs in, asks; James's iPad is
+   told "Wren Ashby wants to join"; he opens it and taps Let in; Wren is told "You're in" and sends
+   the session she recorded while waiting.
+6. iPad, James as host launches the hosted event; Daniel joins from the feed card, records, sends.
+7. Web: Daniel sees the launch card in the web feed; James finds both sessions on the tour date's
+   page and plays one back; Sarah finds Daniel's on the event's page; Daniel's own list marks the
+   tour's session as the group's, with no Delete.
+
+**Found by it:** on an iPad a link or a notification into a page below a section's front screen
+stopped at the front screen (the split view kept the previous section's stack) — so a lead on an
+iPad could not reach "wants to join" from the notification; each section's stack now has its own
+identity. And the card said "Tap Join", which the website does not have — it now says where to
+join. (Also: the website host must be restarted after a build, or it serves the old pages.)
+
 ## The APNs key (09/28)
 
 Ben made one key for **both** sandbox and production. Key ID `TVH4P55742`, team `5778H75249`; the
