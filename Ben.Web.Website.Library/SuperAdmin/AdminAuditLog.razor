@@ -66,7 +66,7 @@
                         Clear
                     </button>
                     <span class="text-secondary small ms-2">
-                        Dates are your local calendar days (@UserState.BrowserTimeZone.Id).
+                        Dates are your local calendar days (@UserState.ViewerTimeZone.Id).
                     </span>
                 </div>
             </div>
@@ -414,7 +414,7 @@
         var wall = DateTime.SpecifyKind(endOfDay ? day.AddDays(1).AddTicks(-1) : day,
                                         DateTimeKind.Unspecified);
 
-        var tz = UserState.BrowserTimeZone;
+        var tz = UserState.ViewerTimeZone;
         // Spring-forward can make local midnight itself a non-existent instant; step past the gap.
         if (tz.IsInvalidTime(wall)) wall = wall.AddHours(1);
 

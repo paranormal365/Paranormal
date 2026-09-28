@@ -1,6 +1,7 @@
 @page "/o/{UrlName}/investigations/{InvestigationSlug}"
 @namespace Ben.Web.Website.Library.Organization.Public
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 <PageTitle>@(_inv?.Title ?? "Investigation") — @(_inv?.OrganizationName ?? UrlName)</PageTitle>
 
@@ -42,8 +43,8 @@ else
         <p class="text-secondary mb-4">
             @* A date on its own is right for an evening or an overnight, and wrong for a week —
                so the second date appears only when the visit really does span days. *@
-            @_inv.ScheduledDateTime.ToLocalTime().ToDisplayDate()@if (Ben.Web.Services.InvestigationWindow.NeedsMultiDay(_inv.ScheduledDateTime.ToLocalTime(), _inv.EndDateTime?.ToLocalTime()))
-            {<text> – @_inv.EndDateTime!.Value.ToLocalTime().ToDisplayDate()</text>}
+            @PlaceTime(_inv.ScheduledDateTime).ToDisplayDate()@if (Ben.Web.Services.InvestigationWindow.NeedsMultiDay(PlaceTime(_inv.ScheduledDateTime), (_inv.EndDateTime is { } endUtc ? PlaceTime(endUtc) : (DateTime?)null)))
+            {<text> – @PlaceTime(_inv.EndDateTime!.Value).ToDisplayDate()</text>}
             · investigated by <a href="@($"/o/{_inv.OrganizationUrlName}")">@_inv.OrganizationName</a>
         </p>
 
@@ -98,7 +99,7 @@ else
         {
             if (_inv is null) return "";
 
-            var when  = _inv.ScheduledDateTime.ToLocalTime().ToDisplayDate();
+            var when  = PlaceTime(_inv.ScheduledDateTime).ToDisplayDate();
             var where = _inv.City is string city
                 ? $" in {city}{(_inv.State is string st ? $", {st}" : "")}"
                 : "";
@@ -115,4 +116,11 @@ else
         _inv     = await AdminClient.GetPublishedInvestigationAsync(UrlName, InvestigationSlug);
         _loading = false;
     }
+
+    /// <summary>
+    /// The day it happened where it happened (2026-09-28): a visit that ran late on the 14th in
+    /// Tennessee is the 14th to a reader in London too.
+    /// </summary>
+    private DateTime PlaceTime(DateTime utc) =>
+        Ben.Data.Common.Helpers.Zones.ToZone(utc, Ben.Data.Common.Helpers.Zones.Find(_inv?.TimeZoneId));
 }

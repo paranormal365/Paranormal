@@ -7,7 +7,10 @@ public class InvestigationProfile : Profile
     public InvestigationProfile()
     {
         CreateMap<Investigation, InvestigationRecord>()
-            .ForMember(d => d.AttendeeCount, o => o.MapFrom(s => s.Attendees.Count));
+            .ForMember(d => d.AttendeeCount, o => o.MapFrom(s => s.Attendees.Count))
+            // Filled by ZoneChain, which looks the case's and group's zones up itself.
+            .ForMember(d => d.CaseTimeZoneId, o => o.Ignore())
+            .ForMember(d => d.EffectiveTimeZoneId, o => o.Ignore());
     }
 }
 

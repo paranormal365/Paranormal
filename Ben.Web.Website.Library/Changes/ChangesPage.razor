@@ -56,7 +56,14 @@
             <div class="card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     @* US format sitewide. *@
-                    <span class="fw-semibold">@day.Date.ToString("MM/dd/yyyy")</span>
+                    <span class="fw-semibold">
+                        @day.Date.ToString("MM/dd/yyyy")
+                        @* The release, from go-live on (Ben, 2026-09-28). *@
+                        @if (day.Version is { } version)
+                        {
+                            <span class="text-secondary fw-normal ms-2" data-testid="change-version">Version @version</span>
+                        }
+                    </span>
                     @* The product is named on every row, not only in the filter: on the combined
                        list a change to the apps and a change to the website look identical
                        otherwise, and one of them may be a fortnight from anybody's phone. *@
@@ -65,7 +72,8 @@
                 <ul class="list-group list-group-flush">
                     @foreach (var entry in day.Entries)
                     {
-                        <li class="list-group-item">@entry</li>
+                        @* Encoded, then only **bold**, *italic* and `code` become tags. *@
+                        <li class="list-group-item">@((MarkupString)Ben.Web.Services.Changelog.ChangelogText.ToHtml(entry))</li>
                     }
                 </ul>
             </div>

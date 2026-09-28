@@ -117,6 +117,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int?>("StorageWarningBand")
                         .HasColumnType("int");
 
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -568,6 +572,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("StreetAddress2")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Title")
                         .HasMaxLength(256)
@@ -5308,6 +5316,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -6713,6 +6725,13 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<bool>("StripMediaMetadata")
                         .HasColumnType("bit");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("America/Chicago");
 
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");

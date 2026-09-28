@@ -1,3 +1,5 @@
+using Ben.Data.Common.Constants;
+using Ben.Data.Common.Helpers;
 using Ben.Web.Services;
 
 namespace Ben.Web.Services.WebApi;
@@ -29,7 +31,32 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
 
     public bool IsEntraSession { get; set; }
 
-    public TimeZoneInfo BrowserTimeZone { get; set; } = TimeZoneInfo.Utc;
+    /// <summary>The browser's own zone, once MainLayout has read it; null until then or if it could not be.</summary>
+    public TimeZoneInfo? DetectedTimeZone { get; set; }
+
+    /// <summary>
+    /// The browser's zone, or America/Chicago when the browser has not said (Ben, 2026-09-28: "Use
+    /// the Chicago/America as the default"). It was UTC, which no reader on this site keeps.
+    /// </summary>
+    public TimeZoneInfo BrowserTimeZone => DetectedTimeZone ?? HouseZone;
+
+    /// <summary>The zone this person chose on their profile or at sign-up; null when they never chose.</summary>
+    public string? SavedTimeZoneId
+    {
+        get => _savedTimeZoneId;
+        set
+        {
+            _savedTimeZoneId = Zones.Normalize(value);
+            _savedTimeZone = _savedTimeZoneId is { } id ? Zones.Find(id) : null;
+        }
+    }
+    private string? _savedTimeZoneId;
+    private TimeZoneInfo? _savedTimeZone;
+
+    /// <summary>Their choice, else the browser's, else Chicago — see <see cref="IBenUserState.ViewerTimeZone"/>.</summary>
+    public TimeZoneInfo ViewerTimeZone => _savedTimeZone ?? BrowserTimeZone;
+
+    private static readonly TimeZoneInfo HouseZone = Zones.Find(HouseClock.ZoneId);
 
     // IBenUserState (computed)
     bool IBenUserState.IsAuthenticated => !string.IsNullOrWhiteSpace(AccessToken);

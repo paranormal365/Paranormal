@@ -1,0 +1,64 @@
+@*
+    "Local time · My time" — which clock the times on this page read on (Ben, 2026-09-28: "You can
+    see the event and tour time in the event or tour timezone or the user's timezone"). Remembered
+    across the site by TimeView. When the reader's clock and the place's are the same, there is
+    nothing to switch, and it says so instead of offering two buttons that do the same thing.
+*@
+@using Ben.Data.Common.Helpers
+@inject IBenUserState UserState
+@inject TimeView View
+@implements IDisposable
+
+@if (Same)
+{
+    <span class="small text-secondary" data-testid="time-zone-same">
+        <BenIcon Name="clock" Class="me-1" />Times are @PlaceLetters, your time too
+    </span>
+}
+else
+{
+    <div class="btn-group btn-group-sm ben-time-switch" role="group" aria-label="Show times in" data-testid="time-zone-switch">
+        <button type="button" class="btn @(View.InMyTime ? "btn-outline-secondary" : "btn-secondary")"
+                aria-pressed="@((!View.InMyTime).ToString().ToLowerInvariant())"
+                title="@(ZoneId is null ? $"Each {Noun} in its own time" : $"The {Noun}'s own time, {Zones.IanaId(Place)}")"
+                data-testid="time-zone-local" @onclick="() => View.SetAsync(false)">
+            @(ZoneId is null ? "Local time" : $"Local time ({PlaceLetters})")
+        </button>
+        <button type="button" class="btn @(View.InMyTime ? "btn-secondary" : "btn-outline-secondary")"
+                aria-pressed="@View.InMyTime.ToString().ToLowerInvariant()"
+                title="@($"Your time, {Zones.IanaId(UserState.ViewerTimeZone)}")"
+                data-testid="time-zone-mine" @onclick="() => View.SetAsync(true)">
+            My time (@MyLetters)
+        </button>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The item's own zone (IANA); null for a list whose rows keep different clocks — then the
+    /// switch names no zone and each time carries its own letters.
+    /// </summary>
+    [Parameter] public string? ZoneId { get; set; }
+
+    /// <summary>"event", "tour", "case", "investigation" — for the tooltip.</summary>
+    [Parameter] public string Noun { get; set; } = "place";
+
+    private TimeZoneInfo Place => Zones.Find(ZoneId);
+    private string PlaceLetters => Zones.Abbreviation(Place, DateTime.UtcNow);
+    private string MyLetters => Zones.Abbreviation(UserState.ViewerTimeZone, DateTime.UtcNow);
+    private bool Same => ZoneId is not null && Zones.IanaId(Place) == Zones.IanaId(UserState.ViewerTimeZone);
+
+    protected override void OnInitialized() => View.Changed += Redraw;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.AuthReady;
+        await View.EnsureLoadedAsync();
+        StateHasChanged();
+    }
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => View.Changed -= Redraw;
+}

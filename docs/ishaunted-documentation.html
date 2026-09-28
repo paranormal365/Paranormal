@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>20 documents &middot; 6 sections</div>
-      <div>27 September 2026</div>
+      <div>28 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -311,7 +311,7 @@ you can join a group.</p>
 <p><img alt="The sign-up form" src="../Ben.Web.Website/wwwroot/help/media/getting-started/signup.png" />
 <em>The @name is checked as you type, so you find out it is taken before you fill in the rest.</em></p>
 <p><strong>To create one on its own</strong>, use the sign-in page — <em>New here? Create an account</em> — or go
-straight to <code>/signup</code>. You'll be asked for four things:</p>
+straight to <code>/signup</code>. You'll be asked for five things:</p>
 <table>
 <thead>
 <tr>
@@ -333,11 +333,22 @@ straight to <code>/signup</code>. You'll be asked for four things:</p>
 <td>Where we send the confirmation link. Never shown publicly.</td>
 </tr>
 <tr>
+<td><strong>Your time zone</strong></td>
+<td>The clock dates and times are shown on. Already set to your device's; change it on your profile whenever you like.</td>
+</tr>
+<tr>
 <td><strong>Password</strong></td>
 <td>At least 8 characters, with an upper-case letter, a lower-case letter and a digit.</td>
 </tr>
 </tbody>
 </table>
+<h3>Your time zone</h3>
+<p>Every date and time on the site is stored in one universal time and shown to you on your own
+clock. The sign-up form starts on the zone your device reports — most people only confirm it — and
+lists the US zones first, then every zone in the world by region.</p>
+<p><img alt="Choosing your time zone when you sign up" src="../Ben.Web.Website/wwwroot/help/media/getting-started/signup-time-zone.png" /></p>
+<p>If you never choose one, the site uses your device's zone, and Central time (Chicago) if your
+device does not say. Change it any time on <a href="/help/your-profile#your-time-zone">your profile</a>.</p>
 <h3>Your @name</h3>
 <p>Your <strong>@name</strong> is your handle — <code>@sarahmitchell</code> — and it is how somebody writes to you or about
 you. Letters, numbers and underscores only, and it has to be one nobody else has taken; the page
@@ -707,10 +718,12 @@ investigations and open meetings together, soonest first.</p>
 <p><img alt="What's on, grouped by the night each event happens" src="../Ben.Web.Website/wwwroot/help/media/getting-started/whats-on.png" />
 <em>Grouped by the day, so the date is said once and each night under it only has to tell you what is
 different about it. The bar on the right is how full it is.</em></p>
-<p><strong>Every time is the event's own.</strong> A walk that starts at eight in Nashville reads as eight wherever
-in the world you are reading it, with the zone named beside it — so this page, the event's page, the
-email you are sent and the calendar file all agree. An event whose group has not said which zone it
-runs on is shown in UTC and says so.</p>
+<p><strong>Every time is the event's own — or yours, if you choose.</strong> A walk that starts at eight in
+Nashville reads as eight wherever in the world you are reading it, with the zone named beside it —
+so this page, the event's page, the email you are sent and the calendar file all agree. Switch
+<strong>Local time · My time</strong> at the top of the list to read every event on your own clock instead; the
+site remembers the choice, and hovering over any time shows it on the other clock. An event whose
+group has not said which zone it runs on is shown on the group's home clock.</p>
 <h2>Going to a group's public event</h2>
 <p>Public events are open to anyone — you'll find them on a group's page and under <strong>Join a Group</strong>.
 Say you're coming with your email address, click the link we send, and you're on the list (that
@@ -746,9 +759,10 @@ your place is held either way — and it simply lets them know you are expecting
 the tour will come back to you if room appears.</p>
 <p>Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
 night is on the tour's page for you to download.</p>
-<p><strong>Times are the event's own.</strong> A walk that starts at eight in Nashville reads as eight wherever
-you are reading it, with the zone named beside it, so the page, the email and the calendar file
-all agree. An event whose group has not said which zone it runs on is shown in UTC and says so.</p>
+<p><strong>Times are the event's own — or yours, if you choose.</strong> A walk that starts at eight in Nashville
+reads as eight wherever you are reading it, with the zone named beside it, so the page, the email
+and the calendar file all agree. <strong>Local time · My time</strong> on the page switches every time to your
+own clock, and the site remembers which you chose.</p>
 <p>At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
 YouTube and so on — if the business has added them.</p>
 </section>
@@ -2421,8 +2435,9 @@ request, and you hear their answer either way. Until they do, you can withdraw t
 <h2>You'll hear by email</h2>
 <p>When your case changes status — accepted, active, being written up, closed — or when the group
 schedules, moves or cancels a visit, an email goes to your confirmed address saying the same thing
-your case page says, with a button that opens the case. Times in the email are given in UTC; the
-page shows them in your own time zone. If your address isn't confirmed yet, no mail is sent until
+your case page says, with a button that opens the case. Times in the email are the visit's own —
+the time where it happens, with the zone named, such as "8:00 PM CDT". On the case page, <strong>Local
+time · My time</strong> beside the investigations switches them to your own clock. If your address isn't confirmed yet, no mail is sent until
 it is.</p>
 </section>
 <section class="doc" id="working-a-case">
@@ -2994,6 +3009,19 @@ so nobody mistakes a week on site for an evening.</p>
 <p>The end may not come before the start. Say so and the form refuses rather than booking a visit
 that finishes before anyone arrives.</p>
 <p>The same applies to <strong>Propose Dates</strong>, where you offer a client a choice of windows.</p>
+<h2>Whose clock</h2>
+<p>A case happens somewhere, and so does every visit to it. Each has a <strong>time zone</strong> — the case's is
+set on its edit page, and a visit's in its schedule dialog. Left alone, a visit is on its case's
+clock, and a case is on your group's <strong>home time zone</strong> (set in the group's settings).</p>
+<p>When you schedule a visit, the start and end you type are on the visit's clock, and the dialog
+says which: book "8:00 PM" for a house in New York and it is eight in New York, even if you are in
+Chicago when you book it.</p>
+<p><strong>Local time · My time</strong>, beside the investigations, switches what you read. <em>Local time</em> shows each
+visit on its own clock; <em>My time</em> shows everything on yours — the zone on your profile, or your
+device's if you have not chosen one. Every time carries its zone's letters, hovering over one shows
+it on the other clock, and the site remembers which you chose.</p>
+<p><img alt="A New York visit read in its own time, with the switch beside it" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/case-time-switch.png" /></p>
+<p>Clients see the same switch on their case, and the emails they are sent give the visit's own time.</p>
 <h2>Scheduling a visit with no case</h2>
 <p><strong>Schedule an investigation</strong> on the group's Investigations tab books a visit that belongs to no
 client case — a landmark, a public building, or the group's own outing. Everything else about it
@@ -3350,6 +3378,16 @@ Your sign-in address is not changed here and is never shown publicly.</p>
 </ul>
 <p>Most visits here are to change one thing, which is why the sections are behind tabs rather than
 stacked down one page. The map in particular only loads when you open its tab.</p>
+<h2>Your time zone</h2>
+<p><strong>Time zone</strong>, on the About tab, is the clock the whole site shows dates and times on for you. It
+was set when you signed up; choose another from the list — the US zones come first, then every
+zone in the world by region — and press <strong>Save</strong>. Every page switches from the next thing it draws.</p>
+<p><img alt="Choosing your time zone on your profile" src="../Ben.Web.Website/wwwroot/help/media/your-profile/profile-time-zone.png" /></p>
+<p>Choose <strong>Use this device's time zone</strong> to go back to following whatever clock your phone or computer
+is on — useful if you travel and want the site to travel with you.</p>
+<p>A case, an investigation, an event or a tour also has a clock of its own: the place's. Those pages
+have a <strong>Local time · My time</strong> switch, so you can read them either way; see
+<a href="/help/working-a-case#whose-clock">Working a Case</a> and <a href="/help/getting-started">Getting Started</a>.</p>
 <h2>Sex</h2>
 <p>Under your name sits an optional <strong>Sex</strong> field — Male, Female, or Unspecified, and it starts
 blank. It exists for exactly one thing: when you have no photo, the site shows a placeholder
@@ -5244,12 +5282,21 @@ Each link has to point at that service's own site — an Instagram link that ope
 refused, because a reader clicks the word without reading the address.</p>
 <h3>Which clock an event runs on</h3>
 <p>Every event carries the zone it actually happens in, chosen on the scheduler under <strong>Which clock</strong>.
-It starts on your own zone, because whoever is scheduling is usually standing where it happens.</p>
+It starts on your group's <strong>home time zone</strong> (see below), and the start and end you type are on
+that clock — the form says which, so eight in the evening is eight where the event is, wherever you
+happen to be scheduling from.</p>
 <p><img alt="The Which clock picker on the scheduler" src="../Ben.Web.Services/Help/Media/organization-administration/event-clock.png" /></p>
 <p>That clock is what the public sees, wherever in the world they are reading — an event at eight in
 Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
 and the reminder email all agree. A date under a tour takes the tour's clock unless you say
-otherwise. An event with no clock set is shown in UTC and says so.</p>
+otherwise. Readers can switch <strong>Local time · My time</strong> to see it on their own clock instead.</p>
+<h3>Your group's home time zone</h3>
+<p><strong>Settings → Home time zone</strong> is the clock your group keeps. New cases, events and tours start on
+it, and anything without a zone of its own is read on it. It starts as Central time (Chicago).</p>
+<p><img alt="The Home time zone setting" src="../Ben.Web.Services/Help/Media/organization-administration/group-time-zone.png" /></p>
+<p>A case or an investigation can have its own zone — a group works away from home — set on the case's
+edit page and in the investigation's schedule dialog; see
+<a href="/help/working-a-case#whose-clock">Working a Case</a>.</p>
 <h2>Hosted events</h2>
 <p>An <strong>event</strong> is something you put on over one or more dates: a weekend at a hotel, a run of
 performances, an evening with a talk and supper. It is not a ghost-hunting thing — a retreat, a

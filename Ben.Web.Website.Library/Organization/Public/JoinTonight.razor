@@ -62,7 +62,7 @@
                     @if (invite.ScheduledUtc is { } when)
                     {
                         <div class="text-secondary small">
-                            @when.ToLocalTime().ToString("dddd, MMMM d — h:mm tt")
+                            <BenTime Utc="@when" ZoneId="@invite.TimeZoneId" TestId="tonight-when" />
                         </div>
                     }
                 </div>

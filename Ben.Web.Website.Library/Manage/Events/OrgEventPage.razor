@@ -822,7 +822,7 @@
                                                 : "You called this one off for want of numbers.")
                                             @if (ev.GoNoGoDecidedUtc is { } decided)
                                             {
-                                                <text> Decided @decided.ToLocalTime().ToString("MM/dd/yyyy").</text>
+                                                <text> Decided @decided.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy").</text>
                                             }
                                         </p>
                                     }

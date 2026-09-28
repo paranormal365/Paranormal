@@ -76,6 +76,7 @@ request, and you hear their answer either way. Until they do, you can withdraw t
 
 When your case changes status — accepted, active, being written up, closed — or when the group
 schedules, moves or cancels a visit, an email goes to your confirmed address saying the same thing
-your case page says, with a button that opens the case. Times in the email are given in UTC; the
-page shows them in your own time zone. If your address isn't confirmed yet, no mail is sent until
+your case page says, with a button that opens the case. Times in the email are the visit's own —
+the time where it happens, with the zone named, such as "8:00 PM CDT". On the case page, **Local
+time · My time** beside the investigations switches them to your own clock. If your address isn't confirmed yet, no mail is sent until
 it is.

@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 using Ben.Data.Common;
 using Ben.Data.Common.Mail;
 using Ben.Data.WebApi.Services.Mail;
@@ -53,33 +54,37 @@ public sealed class ClientStatusMailer
     }
 
     /// <summary>A visit has been put on the calendar for the case.</summary>
-    public Task VisitScheduledAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
-        => VisitAsync(db, c, visit, "scheduled", "A visit is scheduled for your case",
+    public async Task VisitScheduledAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
+        => await VisitAsync(db, c, visit, await VisitZoneAsync(db, c, visit, ct), "scheduled", "A visit is scheduled for your case",
             $"<p>The group has scheduled a visit for your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}).</p>", ct,
             MailKinds.VisitScheduled.Key);
 
     /// <summary>A scheduled visit moved to another time.</summary>
-    public Task VisitRescheduledAsync(BenDataContext db, Case c, Investigation visit, DateTime previouslyAt, CancellationToken ct)
-        => VisitAsync(db, c, visit, "rescheduled", "A visit to your case has been rescheduled",
+    public async Task VisitRescheduledAsync(BenDataContext db, Case c, Investigation visit, DateTime previouslyAt, CancellationToken ct)
+    {
+        var zone = await VisitZoneAsync(db, c, visit, ct);
+        await VisitAsync(db, c, visit, zone, "rescheduled", "A visit to your case has been rescheduled",
             $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) that was set for "
-            + $"{When(previouslyAt)} has moved.</p>", ct,
+            + $"{When(previouslyAt, zone)} has moved.</p>", ct,
             MailKinds.VisitRescheduled.Key);
+    }
 
     /// <summary>A scheduled visit will not happen.</summary>
     public async Task VisitCancelledAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
     {
+        var zone = await VisitZoneAsync(db, c, visit, ct);
         var body = $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) "
-                 + $"that was set for {When(visit.ScheduledDateTime)} has been cancelled. The group will be in touch about what happens next.</p>";
+                 + $"that was set for {When(visit.ScheduledDateTime, zone)} has been cancelled. The group will be in touch about what happens next.</p>";
         await SendToClientsAsync(db, c, "visit cancelled", $"A visit to your case {Reference(c)} was cancelled", "A visit was cancelled", body, ct,
             MailKinds.VisitCancelled.Key, visit);
     }
 
-    private async Task VisitAsync(BenDataContext db, Case c, Investigation visit, string kind, string title, string lead, CancellationToken ct,
-                                  string? mailKind = null)
+    private async Task VisitAsync(BenDataContext db, Case c, Investigation visit, TimeZoneInfo zone, string kind, string title, string lead,
+                                  CancellationToken ct, string? mailKind = null)
     {
         var body = lead
-                 + $"<p><strong>{When(visit.ScheduledDateTime)}</strong>"
-                 + (visit.EndDateTime is { } end ? $" until {When(end)}" : "")
+                 + $"<p><strong>{When(visit.ScheduledDateTime, zone)}</strong>"
+                 + (visit.EndDateTime is { } end ? $" until {When(end, zone)}" : "")
                  + (string.IsNullOrWhiteSpace(visit.Location) ? "" : $"<br/>{WebUtility.HtmlEncode(visit.Location)}")
                  + "</p><p>Open your case to see it in your own time zone and to message the group.</p>";
         await SendToClientsAsync(db, c, $"visit {kind}", $"{title}: {Reference(c)}", title, body, ct, mailKind, visit);
@@ -163,5 +168,18 @@ public sealed class ClientStatusMailer
     }
 
     private static string Reference(Case c) => $"#{c.CaseYear}-{c.OrgCaseNumber:000}";
-    private static string When(DateTime utc) => $"{utc:dddd, MMMM d, yyyy 'at' h:mm tt} UTC";
+    /// <summary>
+    /// The visit's time on its own clock, with that clock's letters (2026-09-28). It said UTC, so a
+    /// client in Tennessee was told their seven o'clock visit was "at 12:00 AM UTC" the next day.
+    /// </summary>
+    private static string When(DateTime utc, TimeZoneInfo zone) =>
+        $"{Zones.ToZone(utc, zone):dddd, MMMM d, yyyy 'at' h:mm tt} {Zones.Abbreviation(zone, utc)}";
+
+    /// <summary>The visit's own zone, else its case's, else its group's.</summary>
+    private static async Task<TimeZoneInfo> VisitZoneAsync(BenDataContext db, Case c, Investigation visit, CancellationToken ct)
+    {
+        var group = await db.Organizations.AsNoTracking().Where(o => o.Id == c.OrganizationId)
+            .Select(o => o.TimeZoneId).FirstOrDefaultAsync(ct);
+        return Zones.Find(visit.TimeZoneId, c.TimeZoneId, group);
+    }
 }

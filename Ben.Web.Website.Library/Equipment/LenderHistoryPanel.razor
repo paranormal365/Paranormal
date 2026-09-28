@@ -1,5 +1,6 @@
 @namespace Ben.Web.Website.Library.Equipment
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @* What past borrowers said about whoever lends this piece, shown at the point of deciding whether
    to ask. Unattributed, unlike the lender-facing direction — a borrower saying a lender was
@@ -31,7 +32,7 @@
             {
                 <div class="border-bottom py-2 small">
                     <div class="d-flex justify-content-between">
-                        <span class="text-secondary">@entry.DateCreated.ToLocalTime().ToDisplayDate()</span>
+                        <span class="text-secondary">@entry.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</span>
                         @if (entry.Rating is int rating)
                         {
                             <span class="badge bg-secondary">@rating/5</span>

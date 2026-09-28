@@ -34,6 +34,18 @@ namespace Ben.Data.Source.Entities
         public DateTime? DateConfirmationSent { get; set; }
 
         /// <summary>
+        /// The time zone this person reads the site in, as an IANA id; null until they choose.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-28: "When someone signs up for the site, I would like for them to select
+        /// their timezone." Null is meaningful — the website then uses the browser's zone, and
+        /// America/Chicago when the browser gives none — so an account that never chose is not
+        /// silently pinned to Chicago from a phone in Phoenix. Times are still stored as UTC; this
+        /// only decides how they read.
+        /// </remarks>
+        public string? TimeZoneId { get; set; }
+
+        /// <summary>
         /// Whether <c>Email</c> is an address this person chose and can read.
         /// </summary>
         /// <remarks>

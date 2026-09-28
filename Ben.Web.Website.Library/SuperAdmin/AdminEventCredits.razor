@@ -54,7 +54,7 @@
         <TelerikGrid Data="@_result.Items" TItem="AdminEventCreditRecord" Sortable="false" Pageable="true" PageSize="25">
             <GridColumns>
                 <GridColumn Title="Bought" Width="105px">
-                    <Template>@(((AdminEventCreditRecord)context).PurchasedUtc.ToString("MM/dd/yyyy"))</Template>
+                    <Template>@(((AdminEventCreditRecord)context).PurchasedUtc.ToViewerLocalTime(UserState).ToDisplayDate())</Template>
                 </GridColumn>
                 <GridColumn Title="Holder">
                     <Template>@(((AdminEventCreditRecord)context).OwnerName)</Template>
@@ -71,7 +71,7 @@
                 <GridColumn Title="Good until" Width="115px">
                     <Template>
                         @{ var c = (AdminEventCreditRecord)context; }
-                        @c.ExpiresUtc.ToString("MM/dd/yyyy")
+                        @c.ExpiresUtc.ToViewerLocalTime(UserState).ToDisplayDate()
                         @if (c.ExpiryWarningSentUtc is not null)
                         {
                             <BenIcon Name="mail" Class="ms-1 text-secondary" Title="The holder has been warned" />

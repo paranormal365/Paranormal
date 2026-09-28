@@ -97,7 +97,7 @@
                     </button>
                     <button type="button" class="btn btn-outline-secondary" @onclick="ClearFiltersAsync">Clear</button>
                     <span class="text-secondary small ms-2">
-                        Dates are your local calendar days (@UserState.BrowserTimeZone.Id).
+                        Dates are your local calendar days (@UserState.ViewerTimeZone.Id).
                     </span>
                 </div>
             </div>
@@ -305,7 +305,7 @@
         if (local is null) return null;
         var day = endOfDay ? local.Value.Date.AddDays(1).AddTicks(-1) : local.Value.Date;
         return TimeZoneInfo.ConvertTimeToUtc(
-            DateTime.SpecifyKind(day, DateTimeKind.Unspecified), UserState.BrowserTimeZone);
+            DateTime.SpecifyKind(day, DateTimeKind.Unspecified), UserState.ViewerTimeZone);
     }
 
     private static string Truncate(string? value, int max)

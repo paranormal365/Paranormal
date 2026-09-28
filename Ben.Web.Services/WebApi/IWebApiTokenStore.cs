@@ -23,6 +23,12 @@ public interface IWebApiTokenStore : ITokenStore
     bool IsEntraSession { get; set; }
 
     /// <summary>
+    /// The IANA zone the signed-in person chose (from <c>/api/me</c>), or null. Cleared with the
+    /// session; set again on every sign-in, restore and impersonation change (2026-09-28).
+    /// </summary>
+    string? SavedTimeZoneId { get; set; }
+
+    /// <summary>
     /// Completes once this circuit has finished resolving auth state for the current page
     /// load (see <see cref="Ben.Web.Services.IBenUserState.AuthReady"/> for why this
     /// matters). Signalled once by <c>MainLayout</c> via <see cref="SignalAuthReady"/> after

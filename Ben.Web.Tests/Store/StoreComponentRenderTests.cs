@@ -141,6 +141,7 @@ public sealed class StoreComponentRenderTests
     {
         var viewer = new Moq.Mock<Ben.Web.Services.IBenUserState>();
         viewer.SetupGet(u => u.BrowserTimeZone).Returns(TimeZoneInfo.Utc);
+        viewer.SetupGet(u => u.ViewerTimeZone).Returns(TimeZoneInfo.Utc);
         void Utc(IServiceCollection c) => c.AddSingleton(viewer.Object);
         var paid = await RenderAsync<Ben.Web.Website.Library.Store.Orders.StoreInvoiceSheet>(new() { ["Invoice"] = Invoice(0m) }, Utc);
         var refunded = await RenderAsync<Ben.Web.Website.Library.Store.Orders.StoreInvoiceSheet>(new() { ["Invoice"] = Invoice(26.76m) }, Utc);

@@ -841,7 +841,9 @@
             OrganizationIds: _selectedOrgIds.ToList(),
             Name:            _accountName.Trim(),
             Email:           _accountEmail.Trim(),
-            Password:        _accountPassword));
+            Password:        _accountPassword,
+            // No room for another question here: the browser's zone, changeable on the profile.
+            TimeZoneId:      Ben.Data.Common.Helpers.Zones.IanaId(UserState.BrowserTimeZone)));
 
         if (!outcome.Succeeded)
         {

@@ -253,7 +253,9 @@
 
     private string WhenText => _event is null
         ? ""
-        : _event.StartDateTime.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt");
+        // The walk's own clock, with its letters — the time guests were sold (2026-09-28).
+        : $"{Ben.Data.Common.Helpers.Zones.ToZone(_event.StartDateTime, Ben.Data.Common.Helpers.Zones.Find(_event.TimeZoneId)):MM/dd/yyyy hh:mm tt} "
+          + Ben.Data.Common.Helpers.Zones.Abbreviation(Ben.Data.Common.Helpers.Zones.Find(_event.TimeZoneId), _event.StartDateTime);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

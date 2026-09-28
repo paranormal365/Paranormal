@@ -8,6 +8,8 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 @inject IMediaUrlBuilder MediaUrls
+@inject TimeView View
+@implements IDisposable
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
@@ -95,6 +97,11 @@ else
                     </div>
                 }
                 <h1 class="event-head__title">@_event.Title</h1>
+                @if (!_event.IsAllDay)
+                {
+                    @* The night's clock, or the reader's own (2026-09-28). *@
+                    <div class="mb-2"><TimeZoneSwitch ZoneId="@_event.TimeZoneId" Noun="event" /></div>
+                }
                 <div class="event-head__by">
                     Hosted by
                     <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
@@ -618,7 +625,9 @@ else
         {
             if (_event is null) return "";
 
-            var when  = _event.StartDateTime.ToLocalTime().ToDisplayDateTime();
+            // A share preview is read by other people, so it is always the night's own clock.
+            var (placeWhen, placeZone) = EventClock.InPlaceTime(_event.StartDateTime, _event.TimeZoneId);
+            var when  = $"{placeWhen.ToDisplayDateTime()} {placeZone}";
             var where = _event.Location.City is string city
                 ? $" in {city}{(_event.Location.State is string st ? $", {st}" : "")}"
                 : "";
@@ -694,11 +703,14 @@ else
     /// reader is sitting, and would disagree with the guest mail, the calendar file and the
     /// ticket. Only a tour records a zone today; anything else reads in UTC and says so.
     /// </remarks>
-    private DateTime Local(DateTime utc) => EventClock.At(utc, _event?.TimeZoneId);
+    /// <summary>On the night's clock, or the reader's when they chose it with the switch (2026-09-28).</summary>
+    private DateTime Local(DateTime utc) =>
+        View.InMyTime ? utc.ToViewerLocalTime(UserState) : EventClock.At(utc, _event?.TimeZoneId);
 
     /// <summary>The name of that clock, for the one place on the page that spells it out.</summary>
-    private string Zone => EventClock.InPlaceTime(
-        _event?.StartDateTime ?? DateTime.UtcNow, _event?.TimeZoneId).Zone;
+    private string Zone => View.InMyTime
+        ? Ben.Data.Common.Helpers.Zones.Abbreviation(UserState.ViewerTimeZone, _event?.StartDateTime ?? DateTime.UtcNow)
+        : EventClock.InPlaceTime(_event?.StartDateTime ?? DateTime.UtcNow, _event?.TimeZoneId).Zone;
 
     /// <summary>
     /// The rail under the banner: when it starts, how long it runs, and how full it is. Built here
@@ -832,11 +844,20 @@ else
     /// authentication, so there is no auth state to wait for. Whether to offer the RSVP button does
     /// need it, and that stays in the after-render pass below.</para>
     /// </remarks>
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        View.Changed += RedrawForClock;
+        await LoadAsync();
+    }
+
+    private void RedrawForClock() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => View.Changed -= RedrawForClock;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await View.EnsureLoadedAsync();
 
         // Public page: not being signed in is the ordinary case, not a reason to bail.
         if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive))

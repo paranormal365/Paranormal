@@ -136,7 +136,10 @@ public sealed class ClientStatusMailerTests
         await mailer.VisitScheduledAsync(db, c, visit, default);
 
         Assert.Equal("A visit is scheduled for your case: #2026-003", subject);
-        Assert.Contains("Sunday, October 25, 2026 at 1:00 AM UTC", body);
+        // On the visit's own clock (2026-09-28) — here the group's, the house default. It said UTC,
+        // which told a client in Tennessee their Saturday evening visit was on Sunday morning.
+        Assert.Contains("Saturday, October 24, 2026 at 8:00 PM CDT", body);
+        Assert.DoesNotContain("UTC", body);
         Assert.Contains("The cellar", body);
     }
 

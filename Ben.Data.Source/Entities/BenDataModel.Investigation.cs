@@ -88,6 +88,14 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>When the coordinates were last resolved.</summary>
         public DateTime? DateGeocoded { get; set; }
+
+        /// <summary>
+        /// The clock this visit happens on, as an IANA id; null reads in its case's, then its
+        /// group's. Ben, 2026-09-28: members "can see the local time for an investigation or their
+        /// time". <see cref="ScheduledDateTime"/> and <see cref="EndDateTime"/> stay UTC.
+        /// </summary>
+        public string? TimeZoneId { get; set; }
+
         public DateTime ScheduledDateTime { get; set; }
         public DateTime? EndDateTime { get; set; }
         public InvestigationStatus Status { get; set; } = InvestigationStatus.Scheduled;

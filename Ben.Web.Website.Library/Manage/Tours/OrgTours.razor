@@ -172,9 +172,11 @@
                             </td>
                             <td class="small">@tour.StartAddressLabel</td>
                             <td class="small">
-                                @(tour.NextDateStartUtc is { } next
-                                    ? next.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")
-                                    : "—")
+                                @if (tour.NextDateStartUtc is { } next)
+                                {
+                                    <BenTime Utc="@next" ZoneId="@tour.TimeZoneId" TestId="tour-next" />
+                                }
+                                else { <text>—</text> }
                             </td>
                             <td class="text-end">@tour.TotalDateCount</td>
                             <td class="small">

@@ -99,7 +99,7 @@
                                         else { <span class="text-secondary">0</span> }
                                     </td>
                                     <td class="text-end">@place.TotalAttached</td>
-                                    <td class="small text-secondary text-nowrap">@place.DateCreated.ToLocalTime().ToDisplayDate()</td>
+                                    <td class="small text-secondary text-nowrap">@place.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                                 </tr>
                             }
                             </tbody>

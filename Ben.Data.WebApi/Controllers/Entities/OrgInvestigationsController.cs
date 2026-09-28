@@ -1,3 +1,5 @@
+using Ben.Data.WebApi.Services;
+using Ben.Data.Common.Helpers;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Entities;
@@ -83,6 +85,8 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 CaseNumber = i.Case == null ? (int?)null : i.Case.OrgCaseNumber,
                 CaseTitle = i.Case == null ? null : i.Case.Title,
                 AttendeeCount = i.Attendees.Count,
+                // Its own clock, else its case's, else the group's (2026-09-28).
+                Zone = i.TimeZoneId ?? (i.Case == null ? null : i.Case.TimeZoneId) ?? i.Organization.TimeZoneId,
             })
             .OrderByDescending(i => i.ScheduledDateTime)
             .ToListAsync(ct);
@@ -120,7 +124,8 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 AttendeeCount: i.AttendeeCount,
                 CanEditRecord: f.CanEditRecord,
                 CanCompleteMyFindings: f.CanCompleteMyFindings,
-                PlaceKind: i.Place?.Kind);
+                PlaceKind: i.Place?.Kind,
+                TimeZoneId: Zones.Effective(i.Zone));
         }));
     }
 
@@ -200,7 +205,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
 
         // Matched on id and org together, so another organization's investigation is invisible
         // rather than merely forbidden.
-        return inv is null ? NotFound() : Ok(_mapper.Map<InvestigationRecord>(inv));
+        return inv is null ? NotFound() : Ok(await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(inv), ct));
     }
 
     /// <summary>
@@ -243,6 +248,13 @@ public sealed class OrgInvestigationsController : BenControllerBase
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        // The visit's own clock (2026-09-28); left out, it reads on its case's, else the group's.
+        if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
+        {
+            if (Zones.Normalize(request.TimeZoneId) is not { } visitZone)
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+            entity.TimeZoneId = visitZone;
+        }
         db.Investigations.Add(entity);
 
         var placement = await InvestigationPlacement.ApplyAsync(
@@ -281,6 +293,9 @@ public sealed class OrgInvestigationsController : BenControllerBase
             EndDateTime = entity.EndDateTime ?? entity.ScheduledDateTime.AddHours(2),
             IsAllDay = false,
             IsPublic = false,
+            // On the visit's clock, so the calendar and the visit never disagree about what time
+            // "8 PM" is (2026-09-28).
+            TimeZoneId = entity.TimeZoneId ?? await ZoneChain.ForNewAsync(db, orgId, request.CaseId, ct),
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
@@ -297,7 +312,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
             .FirstAsync(i => i.Id == entity.Id, ct);
 
         return CreatedAtAction(nameof(GetById), new { orgId, id = entity.Id },
-            _mapper.Map<InvestigationRecord>(loaded));
+            await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(loaded), ct));
     }
 
     // ── Arrival ───────────────────────────────────────────────────────────────
@@ -899,7 +914,9 @@ public sealed record OrgInvestigationRow(
     bool CanCompleteMyFindings,
     // Null when the visit has no place at all. The map draws a known landmark differently and
     // leaves everything else exactly as it was — an unknown is not a private residence.
-    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null,
+    // The clock the visit happens on: its own, its case's, or its group's (2026-09-28).
+    string? TimeZoneId = null);
 
 /// <summary>One investigation as a map needs it, and nothing else.</summary>
 public sealed record OrgInvestigationMapPoint(
@@ -999,4 +1016,6 @@ public sealed record CreateOrgInvestigationRequest(
     Guid? CaseId = null,
     Guid? PlaceId = null,
     NewPlaceRequest? NewPlace = null,
-    InvestigationVisibility? Visibility = null);
+    InvestigationVisibility? Visibility = null,
+    // The visit's own clock (IANA); null reads on its case's, or the group's (2026-09-28).
+    string? TimeZoneId = null);

@@ -3827,4 +3827,63 @@ public sealed class HelpMediaCapture : BenTestBase
                 "No letter with a body on this database, so reading-a-letter.png was not taken.");
         }
     }
+
+    [Test]
+    [Description("getting-started, your-profile, working-a-case and organization-administration: time zones (2026-09-28).")]
+    public async Task Capture_TimeZones()
+    {
+        // Sign-up asks, pre-chosen from the browser.
+        await LogoutAsync();
+        await GoAsync("/signup");
+        await ShootAsync("getting-started", "signup-time-zone.png",
+            selector: "div.mb-3:has(#signup-time-zone)", proves: "Your time zone",
+            around: new(Left: 12, Top: 12, Right: 12, Bottom: 12));
+
+        // A case in New York with an evening visit, read by a member elsewhere.
+        var orgId = await OrgIdBySlugAsync("benco");
+        var title = "Winfield house (sample)";
+        using var api = await Ben.Web.Playwright.Tests.StoreTestApi.OpenAsync();
+        var created = await api.SendAsync(HttpMethod.Post, $"/api/organizations/{orgId}/cases", new
+        {
+            title, description = (string?)null, streetAddress1 = "14 Grove Street", streetAddress2 = (string?)null,
+            city = "Brooklyn", state = "NY", zipCode = "11201", country = "US", latitude = (decimal?)null,
+            longitude = (decimal?)null, timeZoneId = "America/New_York",
+        });
+        var caseId = created.GetProperty("id").GetString()!;
+        try
+        {
+            var visitUtc = DateTime.UtcNow.Date.AddDays(11);   // midnight UTC: the evening before in New York
+            await api.SendAsync(HttpMethod.Post, $"/api/organizations/{orgId}/cases/{caseId}/investigations", new
+            {
+                title = "Evening walkthrough", description = (string?)null, location = "Front parlour",
+                scheduledDateTime = visitUtc, endDateTime = visitUtc.AddHours(3), status = 0,
+                notes = (string?)null, orgCalendarEventId = (Guid?)null,
+            });
+
+            await LoginAsync(MemberEmail, MemberPassword);
+            await GoAsync($"/profile");
+            await ShootAsync("your-profile", "profile-time-zone.png",
+                selector: "div.col-12:has(#profile-time-zone)", proves: "Time zone",
+                around: new(Left: 12, Top: 12, Right: 12, Bottom: 12));
+
+            await GoAsync($"/organizations/{orgId}/cases/{caseId}?tab=investigations");
+            await Expect(Page.Locator("[data-testid='investigation-when']").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            // The switch and the visit it changes, together: the card, with the row above it.
+            await ShootAsync("working-a-case", "case-time-switch.png",
+                selector: ".card:has([data-testid='investigation-when'])", proves: "Local time",
+                around: new(Left: 16, Top: 64, Right: 16, Bottom: 16));
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}?tab=settings");
+            await Expect(Page.Locator("#set-time-zone")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await Page.Locator("#set-time-zone").ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "group-time-zone.png", gated: true,
+                selector: "div.col-12:has(#set-time-zone)", proves: "Home time zone",
+                around: new(Left: 12, Top: 12, Bottom: 12));
+        }
+        finally
+        {
+            await api.TrySendAsync(HttpMethod.Delete, $"/api/admin/cases/{caseId}/purge", new { confirmTitle = title });
+        }
+    }
 }

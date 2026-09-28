@@ -255,4 +255,81 @@ public sealed class ChangelogServiceTests
 
         Assert.Equal(_changelog.Days()[0].Date, _changelog.LastChanged());
     }
+
+    // ── Versions (Ben, 2026-09-28) ──────────────────────────────────────────────
+    // "Go back to when it went live and call that 1.0.0. Minor releases are like 1.0.1. Larger
+    // releases are 1.1.0. Huge and major releases are 2.0.0."
+
+    [Fact]
+    public void A_version_is_read_off_the_date_line_and_only_a_whole_one()
+    {
+        const string md = "# x\n\n## 2026-09-28 · 2.11.0\n\n- New.\n\n## 2026-09-27\n\n- Old.\n\n## 2026-09-26 · 2.1\n\n- Half a number.\n";
+        var days = ChangelogService.Parse(ChangelogStream.Website, md).ToList();
+        Assert.Equal(new DateOnly(2026, 9, 28), days[0].Date);
+        Assert.Equal("2.11.0", days[0].Version);
+        Assert.Null(days[1].Version);
+        Assert.Null(days[2].Version);
+    }
+
+    [Theory]
+    [InlineData("1.0.0", "1.0.1", true)]
+    [InlineData("1.0.1", "1.1.0", true)]
+    [InlineData("1.9.3", "2.0.0", true)]
+    [InlineData("1.0.0", "1.0.2", false)]   // a skipped number
+    [InlineData("1.1.4", "1.2.4", false)]   // a minor bump resets the patch
+    [InlineData("2.0.0", "1.9.9", false)]
+    public void Each_release_is_one_step_on(string from, string to, bool oneStep)
+    {
+        Assert.True(ReleaseVersion.TryParse(from, out var a));
+        Assert.True(ReleaseVersion.TryParse(to, out var b));
+        Assert.Equal(oneStep, a.IsNextStep(b));
+    }
+
+    [Theory]
+    [InlineData(ChangelogStream.Website, "2026-08-23")]
+    [InlineData(ChangelogStream.Api, "2026-08-22")]
+    public void From_going_live_every_release_is_numbered_one_step_after_the_last(ChangelogStream stream, string liveOn)
+    {
+        var live = DateOnly.Parse(liveOn, System.Globalization.CultureInfo.InvariantCulture);
+        var released = _changelog.Days(stream).Where(d => d.Date >= live).OrderBy(d => d.Date).ToList();
+        Assert.NotEmpty(released);
+
+        Assert.All(released, d => Assert.True(d.Version is not null, $"{stream} {d.Date} has no version on its date line"));
+        Assert.Equal("1.0.0", released[0].Version);
+        Assert.All(_changelog.Days(stream).Where(d => d.Date < live), d => Assert.Null(d.Version));
+
+        for (var n = 1; n < released.Count; n++)
+        {
+            ReleaseVersion.TryParse(released[n - 1].Version, out var before);
+            ReleaseVersion.TryParse(released[n].Version, out var after);
+            Assert.True(before.IsNextStep(after),
+                $"{stream} {released[n].Date}: {after} is not one step after {before} — a fix is the next patch, " +
+                "something new the next minor, a new part of the product the next major");
+        }
+    }
+
+    [Fact]
+    public void The_apps_carry_the_App_Store_number_and_it_never_goes_backwards()
+    {
+        var released = _changelog.Days(ChangelogStream.Apps).Where(d => d.Version is not null).OrderBy(d => d.Date).ToList();
+        Assert.Equal("1.0.0", released[0].Version);
+        for (var n = 1; n < released.Count; n++)
+        {
+            ReleaseVersion.TryParse(released[n - 1].Version, out var before);
+            ReleaseVersion.TryParse(released[n].Version, out var after);
+            // One build carries several days, so a number may repeat; it may not go back.
+            Assert.True(after == before || before.IsNextStep(after),
+                $"apps {released[n].Date}: {after} after {before}");
+        }
+    }
+
+    [Fact]
+    public void An_entry_draws_its_bold_and_italics_and_never_markup_of_its_own()
+    {
+        Assert.Equal("Press <strong>Local time &#183; My time</strong> to see <em>your</em> clock in <code>/changes</code>.",
+            ChangelogText.ToHtml("Press **Local time · My time** to see *your* clock in `/changes`."));
+        Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt; <strong>still bold</strong>",
+            ChangelogText.ToHtml("<script>alert(1)</script> **still bold**"));
+        Assert.Equal("3 * 4 = 12", ChangelogText.ToHtml("3 * 4 = 12"));
+    }
 }

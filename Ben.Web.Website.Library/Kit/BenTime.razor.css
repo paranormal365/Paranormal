@@ -1,0 +1,5 @@
+/* One instant with its clock's letters (2026-09-28). Figures line up down a list, and the time
+   never breaks away from the letters that say whose time it is. */
+.ben-time {
+    font-variant-numeric: tabular-nums;
+}

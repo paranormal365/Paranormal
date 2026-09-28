@@ -46,11 +46,12 @@ public class CaseControllerTests
                     // Mirrors CaseProfile exactly: the name comes off the NAVIGATION, not the id.
                     // That is what makes the W-A9 test below mean anything — the controller has to
                     // have loaded the navigation for a name to appear here, which is the bug.
-                    CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName }
+                    CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName,
+                    TimeZoneId = c.TimeZoneId }
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
-                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName })
+                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName, TimeZoneId = c.TimeZoneId })
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
@@ -1256,5 +1257,64 @@ public class CaseControllerTests
 
         // Another org this caller does not belong to is refused before the case is looked at.
         Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    // ── Time zones (2026-09-28) ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_case_named_on_its_own_clock_reads_on_it()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var created = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId,
+            MakeCreateRequest() with { TimeZoneId = "America/Denver" }, default)).Result!).Value!;
+
+        Assert.Equal("America/Denver", created.TimeZoneId);
+        Assert.Equal("America/Denver", created.EffectiveTimeZoneId);
+        var ok = Assert.IsType<OkObjectResult>((await ctrl.GetById(orgId, created.Id, default)).Result);
+        Assert.Equal("America/Denver", ((CaseRecord)ok.Value!).EffectiveTimeZoneId);
+    }
+
+    [Fact]
+    public async Task A_case_that_names_no_clock_reads_on_its_groups_not_Chicagos()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            (await db.Organizations.SingleAsync(o => o.Id == orgId)).TimeZoneId = "America/New_York";
+            await db.SaveChangesAsync();
+        }
+        var ctrl = Build(factory, userId);
+        var created = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!;
+
+        Assert.Null(created.TimeZoneId);
+        Assert.Equal("America/New_York", created.EffectiveTimeZoneId);
+        var list = (IEnumerable<CaseRecord>)((OkObjectResult)(await ctrl.GetAll(orgId, default)).Result!).Value!;
+        Assert.Equal("America/New_York", Assert.Single(list).EffectiveTimeZoneId);
+    }
+
+    [Fact]
+    public async Task Editing_a_case_sets_its_clock_empty_returns_it_to_the_group_and_nonsense_is_refused()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var created = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!;
+        var edit = new UpdateCaseRequest("Test Case", null, CaseStatus.Accepted, null, true, null);
+
+        var set = (CaseRecord)((OkObjectResult)(await ctrl.Update(orgId, created.Id,
+            edit with { TimeZoneId = "America/Los_Angeles" }, default)).Result!).Value!;
+        Assert.Equal("America/Los_Angeles", set.EffectiveTimeZoneId);
+
+        // Null says nothing about the clock, so it stays.
+        var untouched = (CaseRecord)((OkObjectResult)(await ctrl.Update(orgId, created.Id, edit, default)).Result!).Value!;
+        Assert.Equal("America/Los_Angeles", untouched.TimeZoneId);
+
+        Assert.IsType<BadRequestObjectResult>((await ctrl.Update(orgId, created.Id,
+            edit with { TimeZoneId = "Mars/Olympus_Mons" }, default)).Result);
+
+        var cleared = (CaseRecord)((OkObjectResult)(await ctrl.Update(orgId, created.Id,
+            edit with { TimeZoneId = "" }, default)).Result!).Value!;
+        Assert.Null(cleared.TimeZoneId);
+        Assert.Equal(HouseClock.ZoneId, cleared.EffectiveTimeZoneId);
     }
 }

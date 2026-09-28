@@ -2,6 +2,7 @@
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IBenUserState UserState
 
 @*
     How a group's own people get in.
@@ -48,7 +49,7 @@
             </div>
 
             <p class="text-secondary small mb-3" id="invite-expires">
-                It stops working @(_link.ExpiresUtc is { } until ? until.ToLocalTime().ToString("MMMM d, yyyy") : "in a fortnight").
+                It stops working @(_link.ExpiresUtc is { } until ? until.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy") : "in a fortnight").
             </p>
 
             <div class="d-flex flex-wrap gap-2">

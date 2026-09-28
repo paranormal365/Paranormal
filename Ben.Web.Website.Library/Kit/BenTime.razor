@@ -1,0 +1,87 @@
+@*
+    One instant of a case, investigation, event or tour, on the clock the reader chose with the
+    TimeZoneSwitch — the place's or their own — and always with that clock's letters, so nobody
+    has to guess whose seven o'clock it is. The other clock is in the title, one hover away
+    (Ben, 2026-09-28).
+*@
+@using Ben.Data.Common.Helpers
+@inject IBenUserState UserState
+@inject TimeView View
+@implements IDisposable
+
+<span class="ben-time" title="@Other" data-testid="@TestId">@if (LettersClass is null)
+    {@($"{Shown.Text}{(Shown.Letters.Length > 0 ? " " : "")}{Shown.Letters}")}
+    else
+    {@Shown.Text<span class="@LettersClass">@Shown.Letters</span>}</span>
+
+@code {
+    public enum Shape { DateTime, Date, Time, Span, TimeSpan, LongDate }
+
+    /// <summary>The instant, as stored: UTC.</summary>
+    [Parameter, EditorRequired] public DateTime Utc { get; set; }
+
+    /// <summary>For <see cref="Shape.Span"/>: when it ends, UTC.</summary>
+    [Parameter] public DateTime? EndUtc { get; set; }
+
+    /// <summary>The item's own zone (IANA). Missing, the house clock — the same rule as <c>Zones.Effective</c>.</summary>
+    [Parameter] public string? ZoneId { get; set; }
+
+    [Parameter] public Shape Format { get; set; } = Shape.DateTime;
+
+    /// <summary>Reads on the item's clock whatever the switch says — a door's "doors open", say.</summary>
+    [Parameter] public bool AlwaysLocal { get; set; }
+
+    [Parameter] public string TestId { get; set; } = "ben-time";
+
+    /// <summary>Draws the zone letters in their own span with this class, for a layout that styles them.</summary>
+    [Parameter] public string? LettersClass { get; set; }
+
+    private TimeZoneInfo Place => Zones.Find(ZoneId);
+    private bool Mine => View.InMyTime && !AlwaysLocal;
+
+    private (string Text, string Letters) Shown => Render(Mine ? UserState.ViewerTimeZone : Place);
+
+    private string? Other
+    {
+        get
+        {
+            var other = Mine ? Place : UserState.ViewerTimeZone;
+            if (Zones.IanaId(other) == Zones.IanaId(Mine ? UserState.ViewerTimeZone : Place)) return null;
+            var (text, letters) = Render(other);
+            return Mine ? $"{text} {letters} local time" : $"{text} {letters} your time";
+        }
+    }
+
+    /// <summary>The time on <paramref name="zone"/>'s clock, and that clock's letters (none for a bare date).</summary>
+    private (string Text, string Letters) Render(TimeZoneInfo zone)
+    {
+        var start = Zones.ToZone(Utc, zone);
+        var letters = Zones.Abbreviation(zone, Utc);
+        return Format switch
+        {
+            Shape.Date     => (start.ToDisplayDate(), ""),
+            Shape.LongDate => (start.ToString(DateTimeViewerExtensions.LongDatePattern), ""),
+            Shape.Time     => (start.ToDisplayTime(), letters),
+            Shape.Span     => (start.ToDisplaySpan(EndUtc is { } end ? Zones.ToZone(end, zone) : null), letters),
+            // Under a heading that already names the night: "07:00 PM – 08:30 PM CDT".
+            Shape.TimeSpan => (EndUtc is { } fin
+                ? $"{start.ToDisplayTime()} – {Zones.ToZone(fin, zone).ToDisplayTime()}"
+                : start.ToDisplayTime(), letters),
+            _              => (start.ToDisplayDateTime(), letters),
+        };
+    }
+
+    protected override void OnInitialized() => View.Changed += Redraw;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.AuthReady;     // the reader's zone arrives with it
+        await View.EnsureLoadedAsync();
+        StateHasChanged();
+    }
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => View.Changed -= Redraw;
+}

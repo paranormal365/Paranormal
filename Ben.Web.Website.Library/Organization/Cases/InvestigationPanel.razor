@@ -4,6 +4,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Shared
+@using Ben.Data.Common.Helpers
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 
@@ -23,8 +24,10 @@
     </details>
     <hr class="my-2" />
 
-    <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <span class="fw-semibold">Investigations (@(_investigations?.Count ?? 0))</span>
+        @* Ben, 2026-09-28: the visit's local time, or the reader's own. *@
+        <TimeZoneSwitch ZoneId="@CaseZone" Noun="case" />
         @* IH-03 step 2: answers to the same Investigations.Create grant the server checks. *@
         @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
                          Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
@@ -59,7 +62,8 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @(i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState)))
+                                <BenTime Utc="@i.ScheduledDateTime" EndUtc="@i.EndDateTime" ZoneId="@i.EffectiveTimeZoneId"
+                                         Format="BenTime.Shape.Span" TestId="investigation-when" />
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -293,6 +297,15 @@
                tab; and its single masked input rebuilds the whole date when a segment is stepped
                while the value is incomplete — type 09, press Up on the day, and the month you just
                typed becomes 10. A calendar that closes on the day you click has neither problem. *@
+            @* The visit's own clock (2026-09-28). The times below are typed on it — seven in the
+               evening where the house is, whoever is scheduling and wherever they are. *@
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="investigationpanel-time-zone">Time zone</label>
+                <TimeZonePicker Id="investigationpanel-time-zone" @bind-Value="_form.TimeZoneId" AllowUnset="true"
+                                UnsetLabel="@($"Same as the case: {TimeZoneCatalog.Label(CaseZone)}")"
+                                TestId="investigation-time-zone" />
+                <div class="form-text">The start and end are in @FormZoneLetters, the visit's local time.</div>
+            </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
                 <div class="d-flex gap-2">
@@ -431,6 +444,13 @@
 @code {
     [Parameter] public Guid OrgId  { get; set; }
     [Parameter] public Guid CaseId { get; set; }
+
+    /// <summary>The case's effective zone (its own, else its group's): where a new visit happens.</summary>
+    [Parameter] public string? CaseTimeZoneId { get; set; }
+
+    private string CaseZone => Zones.Effective(CaseTimeZoneId);
+    private TimeZoneInfo FormZone => Zones.Find(_form.TimeZoneId, CaseZone);
+    private string FormZoneLetters => Zones.Abbreviation(FormZone, Zones.ToUtc(_form.ScheduledDateTime, FormZone));
 
     private List<InvestigationRecord>? _investigations;
     private string? _error;
@@ -701,7 +721,8 @@
     private void OpenAdd()
     {
         _editInv = null;
-        _form = new InvForm { ScheduledDateTime = UserState.NowInViewerTimeZone().AddDays(7) };
+        // A week from now on the case's clock, where the visit will happen.
+        _form = new InvForm { ScheduledDateTime = Zones.ToZone(DateTime.UtcNow, Zones.Find(CaseZone)).AddDays(7) };
         _dialogError = null;
         _showDialog = true;
     }
@@ -709,8 +730,10 @@
     private void OpenEdit(InvestigationRecord inv)
     {
         _editInv = inv;
-        var start = inv.ScheduledDateTime.ToViewerLocalTime(UserState);
-        var end   = inv.EndDateTime?.ToViewerLocalTime(UserState);
+        // Edited on the visit's own clock — the one its times were scheduled on.
+        var zone  = Zones.Find(inv.EffectiveTimeZoneId);
+        var start = Zones.ToZone(inv.ScheduledDateTime, zone);
+        DateTime? end = inv.EndDateTime is { } e ? Zones.ToZone(e, zone) : null;
 
         var multiDay = InvestigationWindow.NeedsMultiDay(start, end);
 
@@ -725,8 +748,9 @@
             EndTime           = multiDay ? null : end,
             Status            = inv.Status,
             Notes             = inv.Notes ?? "",
-            EvidenceDueDate   = inv.EvidenceDueDate?.ToViewerLocalTime(UserState),
+            EvidenceDueDate   = inv.EvidenceDueDate is { } due ? Zones.ToZone(due, zone) : null,
             Visibility        = inv.Visibility,
+            TimeZoneId        = inv.TimeZoneId,
         };
         _dialogError = null;
         _showDialog = true;
@@ -779,13 +803,15 @@
                 Title:             _form.Title.Trim(),
                 Description:       string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:          string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
-                ScheduledDateTime: _form.ScheduledDateTime.ToUtcFromViewerLocal(UserState),
-                EndDateTime:       EffectiveEnd()?.ToUtcFromViewerLocal(UserState),
+                ScheduledDateTime: Zones.ToUtc(_form.ScheduledDateTime, FormZone),
+                EndDateTime:       EffectiveEnd() is { } end ? Zones.ToUtc(end, FormZone) : null,
                 Status:            _form.Status,
                 Notes:             string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim(),
                 OrgCalendarEventId: null,
-                EvidenceDueDate:   _form.EvidenceDueDate?.ToUtcFromViewerLocal(UserState),
-                Visibility:        _form.Visibility);
+                EvidenceDueDate:   _form.EvidenceDueDate is { } due ? Zones.ToUtc(due, FormZone) : null,
+                Visibility:        _form.Visibility,
+                // Unset means "the case's": null on create, empty on an edit (which clears an own zone).
+                TimeZoneId:        _form.TimeZoneId ?? (_editInv is null ? null : string.Empty));
 
             var (result, error) = _editInv is null
                 ? await AdminClient.CreateInvestigationAsync(OrgId, CaseId, req)
@@ -893,6 +919,9 @@
         public string             Notes             { get; set; } = "";
         public DateTime?          EvidenceDueDate   { get; set; }
         public InvestigationVisibility Visibility     { get; set; } = InvestigationVisibility.GroupOnly;
+
+        /// <summary>The visit's own zone; null reads on the case's.</summary>
+        public string?            TimeZoneId        { get; set; }
     }
 
     private record StatusOption(InvestigationStatus Value, string Label);

@@ -179,7 +179,7 @@
                     @foreach (var row in _rows)
                     {
                         <tr data-testid="session-row">
-                            <td class="text-nowrap">@row.StartedAt.ToLocalTime().ToDisplayDate()</td>
+                            <td class="text-nowrap">@row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                             <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
                             <td class="text-end font-monospace">@row.ReadingCount.ToString("N0")</td>
                             <td class="text-end">
@@ -233,7 +233,7 @@
     {
         <p class="mb-2">
             Delete the session recorded on
-            <strong>@pending.StartedAt.ToLocalTime().ToDisplayDate()</strong>@(string.IsNullOrWhiteSpace(pending.LocationLabel) ? "" : $" at {pending.LocationLabel}")?
+            <strong>@pending.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</strong>@(string.IsNullOrWhiteSpace(pending.LocationLabel) ? "" : $" at {pending.LocationLabel}")?
         </p>
         <p class="text-secondary small mb-0">
             Its @pending.ReadingCount.ToString("N0") reading@(pending.ReadingCount == 1 ? "" : "s"),

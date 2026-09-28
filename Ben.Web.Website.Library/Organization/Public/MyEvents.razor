@@ -70,7 +70,7 @@
                                     @foreach (var session in sessions)
                                     {
                                         <li class="@(session.CalledOff ? "text-decoration-line-through text-secondary" : "")">
-                                            @session.StartsAtUtc.ToViewerLocalTime(UserState).ToString("ddd h:mm tt")
+                                            <BenTime Utc="@session.StartsAtUtc" ZoneId="@mine.TimeZoneId" TestId="session-time" />
                                             · @session.Title
                                             @if (session.Where is { Length: > 0 } where) { <text> · @where</text> }
                                             @if (session.Waiting) { <span class="badge text-bg-warning ms-1">Waiting list</span> }

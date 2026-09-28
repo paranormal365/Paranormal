@@ -257,7 +257,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             invite.OrgCalendarEvent.Organization.UrlName,
             invite.OrgCalendarEvent.UrlName,
             invite.OrgCalendarEvent.StartDateTime,
-            invite.Email));
+            invite.Email,
+            invite.OrgCalendarEvent.TimeZoneId));
     }
 
     /// <summary>
@@ -454,7 +455,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             // a password to them reads as a warning that something is wrong with their account.
             AccountHasNoPassword: !await _users.HasPasswordAsync(user),
             // A tour date's seat waits for the business (item 234); a hosted event says so its own way.
-            AwaitsApproval: isTour));
+            AwaitsApproval: isTour,
+            TimeZoneId: ev.TimeZoneId));
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────

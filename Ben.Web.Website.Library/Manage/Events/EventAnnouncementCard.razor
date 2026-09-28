@@ -6,6 +6,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Manage.Icon
+@inject IBenUserState UserState
 
 @* Writing to everybody coming (item 235 phase 17a, audit finding A4).
 
@@ -124,7 +125,7 @@
                         <li class="list-group-item">
                             <div class="fw-semibold">@letter.Subject</div>
                             <div class="small text-secondary">
-                                @letter.SentUtc.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") · @letter.SentByName ·
+                                @letter.SentUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") · @letter.SentByName ·
                                 to @Parties(letter.Recipients)@(letter.NightDate is { } d ? $" there on {d:ddd MM/dd}" : "")
                                 @(letter.IncludeUnconfirmed ? " (and people still waiting)" : "")
                                 · @letter.Emailed emailed

@@ -126,7 +126,8 @@ public sealed class TourController : OrgCmsControllerBase
             StartOrganizationAddressId = request.StartOrganizationAddressId,
             DurationMinutes = request.DurationMinutes,
             DefaultCapacity = request.DefaultCapacity,
-            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : HouseClock.ZoneId,
+            // Left out, a tour runs on its group's home clock (2026-09-28).
+            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : org.TimeZoneId,
             AllowReviews = request.AllowReviews,
             IsBookable = request.IsBookable,
             ContactLine = Trimmed(request.ContactLine),

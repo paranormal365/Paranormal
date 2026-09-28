@@ -534,7 +534,7 @@
                     // the zone of the machine in the rack, which is nobody's 8pm.
                     scheduledForUtc: _scheduledFor is { } when
                         ? TimeZoneInfo.ConvertTimeToUtc(
-                            DateTime.SpecifyKind(when, DateTimeKind.Unspecified), UserState.BrowserTimeZone)
+                            DateTime.SpecifyKind(when, DateTimeKind.Unspecified), UserState.ViewerTimeZone)
                         : null,
                     postedLatitude: _placeLatitude,
                     postedLongitude: _placeLongitude,

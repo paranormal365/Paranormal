@@ -71,4 +71,18 @@ public interface IBenUserState
     /// <see cref="AuthReady"/> before reading this, exactly as they already do for auth state.
     /// </summary>
     TimeZoneInfo BrowserTimeZone { get; }
+
+    /// <summary>
+    /// The zone this person reads the site in: the one they chose (their profile, 2026-09-28), else
+    /// the browser's, else America/Chicago. Every viewer-time helper converts through this — use it,
+    /// not <see cref="BrowserTimeZone"/>, for anything a person reads.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted here so a test double that only knows the browser's zone still compiles and reads
+    /// as it always did.
+    /// </remarks>
+    TimeZoneInfo ViewerTimeZone => BrowserTimeZone;
+
+    /// <summary>The IANA zone this person chose, or null when they never did.</summary>
+    string? SavedTimeZoneId => null;
 }

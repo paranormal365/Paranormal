@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Source.Context;
@@ -90,6 +91,7 @@ public sealed class MyProfileController : BenControllerBase
             AnyOrgAllowsPrivatePhotoSharing = anyOrgAllows,
             BelongsToAnyOrganization        = belongsToAnyOrg,
             Gender                          = user.Gender ?? Ben.Data.Common.Enums.ClientGender.NotProvided,
+            TimeZoneId                      = user.TimeZoneId,
         });
     }
 
@@ -149,6 +151,19 @@ public sealed class MyProfileController : BenControllerBase
         // actually says so, never as a side effect of editing something else on the page.
         if (request.SharePrivatePhotoWithClients is { } share)
             user.SharePrivatePhotoWithClients = share;
+
+        // The zone this person reads the site in (2026-09-28). Null leaves it alone; empty clears it,
+        // which means "use my device's clock" — a real choice, not an error. An id the platform does
+        // not know is refused rather than silently kept, so what the profile shows is what is saved.
+        if (request.TimeZoneId is not null)
+        {
+            if (request.TimeZoneId.Trim().Length == 0)
+                user.TimeZoneId = null;
+            else if (Zones.Normalize(request.TimeZoneId) is { } zone)
+                user.TimeZoneId = zone;
+            else
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+        }
 
         // Same null-means-untouched rule. Self-declared and optional; NotProvided is a real
         // choice, stored as null so "never asked" and "prefers not to say" read identically —

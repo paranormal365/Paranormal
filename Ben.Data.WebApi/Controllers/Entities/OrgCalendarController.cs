@@ -254,7 +254,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             return BadRequest(tourRefusal);
 
         await ApplyTourDefaultsAsync(db, entity, request, ct);
-        StampHouseClock(entity);
+        await StampHomeClockAsync(db, entity, ct);
 
         await EnsurePublicSlugAsync(db, entity, ct);
 
@@ -417,9 +417,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
     ///
     /// <para>On update as well as create, because the rows that already exist with no zone are
     /// fixed the next time somebody edits them rather than waiting on a backfill.</para>
+    ///
+    /// <para><b>The group's clock, not the house's</b> (2026-09-28): groups now name a home zone,
+    /// and a date tied to a case reads on the case's. Chicago is still the answer when nothing
+    /// else speaks — <see cref="ZoneChain.ForNewAsync"/> falls back to it.</para>
     /// </remarks>
-    private static void StampHouseClock(OrgCalendarEvent entity)
-        => entity.TimeZoneId ??= HouseClock.ZoneId;
+    private static async Task StampHomeClockAsync(BenDataContext db, OrgCalendarEvent entity, CancellationToken ct)
+        => entity.TimeZoneId ??= await ZoneChain.ForNewAsync(db, entity.OrganizationId, entity.CaseId, ct);
 
     /// <summary>Sets who leads a date, or the refusal naming who cannot.</summary>
     private static async Task<string?> SetGuidesAsync(
@@ -580,7 +584,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         // The same tour defaults as on create, or a date that was edited would lose the clock it
         // was scheduled with the moment somebody changed its title.
         await ApplyTourDefaultsAsync(db, entity, request, ct);
-        StampHouseClock(entity);
+        await StampHomeClockAsync(db, entity, ct);
 
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;

@@ -48,7 +48,7 @@ public sealed class MeController : BenControllerBase
                 var isSeller = await _userManager.IsInRoleAsync(linkedUser, RoleNames.Seller);
                 return Ok(new MeResponse(
                     linkedUser.Id, linkedUser.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    linkedUser.EmailKind, linkedUser.EmailConfirmed, isSeller));
+                    linkedUser.EmailKind, linkedUser.EmailConfirmed, isSeller, linkedUser.TimeZoneId));
             }
         }
 
@@ -65,7 +65,7 @@ public sealed class MeController : BenControllerBase
                 var isSeller = await _userManager.IsInRoleAsync(user, RoleNames.Seller);
                 return Ok(new MeResponse(
                     user.Id, user.Email ?? string.Empty, isSuperAdmin, isAdmin, isModerator,
-                    user.EmailKind, user.EmailConfirmed, isSeller));
+                    user.EmailKind, user.EmailConfirmed, isSeller, user.TimeZoneId));
             }
         }
         catch (FormatException)
@@ -108,6 +108,11 @@ public sealed class MeController : BenControllerBase
 /// created from a provider's unverified address claim, which may use the site through that provider
 /// but cannot reset a password or be written to until the address is confirmed.
 /// </param>
+/// <param name="TimeZoneId">
+/// The IANA zone this person chose to read the site in, or null when they never chose — the client
+/// then uses the device's own (2026-09-28).
+/// </param>
 public record MeResponse(
     Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false,
-    EmailAddressKind EmailKind = EmailAddressKind.Ordinary, bool EmailConfirmed = true, bool IsSeller = false);
+    EmailAddressKind EmailKind = EmailAddressKind.Ordinary, bool EmailConfirmed = true, bool IsSeller = false,
+    string? TimeZoneId = null);

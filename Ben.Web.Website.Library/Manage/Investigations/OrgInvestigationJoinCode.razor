@@ -87,7 +87,7 @@
                 </div>
 
                 <div class="text-secondary small mt-3">
-                    Stops working @_code.ExpiresUtc.ToLocalTime().ToString("h:mm tt on M/d/yyyy")
+                    Stops working @_code.ExpiresUtc.ToViewerLocalTime(UserState).ToString("h:mm tt on M/d/yyyy")
                 </div>
             </div>
         </div>
@@ -137,7 +137,7 @@
                         {
                             <tr class="@(holder.RevokedUtc is null ? null : "opacity-50")">
                                 <td>@holder.Name</td>
-                                <td>@holder.IssuedUtc.ToLocalTime().ToString("h:mm tt")</td>
+                                <td>@holder.IssuedUtc.ToViewerLocalTime(UserState).ToString("h:mm tt")</td>
                                 <td class="text-center">@holder.Sessions</td>
                                 <td class="text-end text-nowrap">
                                     @if (holder.RevokedUtc is null)

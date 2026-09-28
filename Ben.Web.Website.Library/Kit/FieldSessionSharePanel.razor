@@ -5,6 +5,7 @@
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 @using Microsoft.JSInterop
+@inject IBenUserState UserState
 
 @*
     Sharing this session with somebody who has no account (item 207).
@@ -147,7 +148,7 @@
                                             }
                                         </td>
                                         <td class="small">@(string.IsNullOrWhiteSpace(link.Note) ? "—" : link.Note)</td>
-                                        <td class="small">@link.ExpiresUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                                        <td class="small">@link.ExpiresUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</td>
                                         <td class="small">
                                             @if (link.ViewCount == 0)
                                             {
@@ -158,7 +159,7 @@
                                                 <text>@link.ViewCount time@(link.ViewCount == 1 ? "" : "s")</text>
                                                 @if (link.LastViewedUtc is { } last)
                                                 {
-                                                    <div class="text-secondary">last @last.ToLocalTime().ToString("MM/dd/yyyy")</div>
+                                                    <div class="text-secondary">last @last.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</div>
                                                 }
                                             }
                                         </td>

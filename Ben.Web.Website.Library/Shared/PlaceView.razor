@@ -462,7 +462,7 @@
                         @foreach (var fs in _sessions)
                         {
                             <tr>
-                                <td class="text-nowrap">@fs.StartedAt.ToLocalTime().ToDisplayDate()</td>
+                                <td class="text-nowrap">@fs.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                                 <td><UserNameLink AppUserId="@fs.ContributorAppUserId" DisplayName="@fs.ContributorName" /></td>
                                 <td>@(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "—" : fs.LocationLabel)</td>
                                 <td class="text-end">@fs.ReadingCount.ToString("N0")</td>
@@ -597,7 +597,7 @@
                                 @* The operator's name, on a page they did not have to buy an ad
                                    on — the tour that ran the walk earned the credit. *@
                                 <a href="/organizations/@ev.OrganizationId">@ev.OrganizationName</a>
-                                · @ev.EventStartedAt.ToLocalTime().ToDisplayDate()
+                                · @ev.EventStartedAt.ToViewerLocalTime(UserState).ToDisplayDate()
                             </div>
                             <div class="text-secondary" style="font-size:.75rem;">
                                 by <UserNameLink AppUserId="@ev.ContributorAppUserId" DisplayName="@ev.ContributorName" />
@@ -884,7 +884,7 @@
                                     <div class="small">@item.Caption</div>
                                 }
                                 <div class="text-secondary" style="font-size:.75rem;">
-                                    by @item.AddedBy · @item.AddedUtc.ToLocalTime().ToDisplayDate()
+                                    by @item.AddedBy · @item.AddedUtc.ToViewerLocalTime(UserState).ToDisplayDate()
                                 </div>
                                 @* The site's one vote widget, not a second set of buttons. It
                                    posts to api/evidence-votes, which is keyed on the FILE — so a
@@ -930,7 +930,7 @@
                             @foreach (var row in _publicRows)
                             {
                                 <tr>
-                                    <td class="text-nowrap">@row.ScheduledDateTime.ToLocalTime().ToDisplayDate()</td>
+                                    <td class="text-nowrap">@row.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                                     <td>
                                         @if (row.UrlName is string invSlug)
                                         {
@@ -1323,7 +1323,7 @@
                 @foreach (var row in rows)
                 {
                     <tr>
-                        <td class="text-nowrap">@row.ScheduledDateTime.ToLocalTime().ToDisplayDate()</td>
+                        <td class="text-nowrap">@row.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                         <td>@row.Title</td>
                         <td>@row.OrganizationName</td>
                         @if (showVisibility)

@@ -62,7 +62,9 @@ public sealed record InvestigationCodeInvitation(
     string? InvestigationTitle,
     string? OrganizationName,
     DateTime? ScheduledUtc,
-    DateTime? ExpiresUtc);
+    DateTime? ExpiresUtc,
+    // The visit's own clock (2026-09-28): tonight is tonight where the house is.
+    string? TimeZoneId = null);
 
 /// <summary>What a guest is told after they scan or type a code while signed in.</summary>
 public sealed record InvestigationCodeRedemption(

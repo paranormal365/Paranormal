@@ -2,6 +2,7 @@
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
@@ -30,7 +31,7 @@
                 <h3 class="mb-3">You've asked for a place</h3>
                 <p class="mb-1"><strong>@hosted.Title</strong></p>
                 <p class="text-secondary mb-1">
-                    @hosted.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    <BenTime Utc="@hosted.StartDateTime" ZoneId="@hosted.TimeZoneId" TestId="event-start" />
                     · @hosted.OrganizationName
                 </p>
                 <p class="text-secondary mb-4">
@@ -88,7 +89,7 @@
                 <h3 class="mb-3">You've asked for a place</h3>
                 <p class="mb-1"><strong>@tour.Title</strong></p>
                 <p class="text-secondary mb-1">
-                    @tour.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    <BenTime Utc="@tour.StartDateTime" ZoneId="@tour.TimeZoneId" TestId="event-start" />
                     · @tour.OrganizationName
                 </p>
                 <p class="text-secondary mb-4">
@@ -132,7 +133,7 @@
                 <h3 class="mb-3">You're coming</h3>
                 <p class="mb-1"><strong>@_confirmed.Title</strong></p>
                 <p class="text-secondary mb-4">
-                    @_confirmed.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    <BenTime Utc="@_confirmed.StartDateTime" ZoneId="@_confirmed.TimeZoneId" TestId="event-start" />
                     · @_confirmed.OrganizationName
                 </p>
 
@@ -161,7 +162,7 @@
                 <h3 class="mb-3">Confirm you're coming</h3>
                 <p class="mb-1"><strong>@_invite.Title</strong></p>
                 <p class="text-secondary mb-4">
-                    @_invite.StartDateTime.ToLocalTime().ToDisplayDateTime()
+                    <BenTime Utc="@_invite.StartDateTime" ZoneId="@_invite.TimeZoneId" TestId="event-start" />
                     · @_invite.OrganizationName
                 </p>
 

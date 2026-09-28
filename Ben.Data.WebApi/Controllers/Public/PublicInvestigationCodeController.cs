@@ -94,15 +94,19 @@ public sealed class PublicInvestigationCodeController : BenControllerBase
             return Ok(new InvestigationCodeInvitation(false, no, null, null, null, null, null));
 
         var investigation = found!.Investigation!;
-        var orgName = await db.Organizations.AsNoTracking()
+        var org = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == found.OrganizationId)
-            .Select(o => o.Name)
+            .Select(o => new { o.Name, o.TimeZoneId })
             .FirstOrDefaultAsync(ct);
+        var caseZone = investigation.CaseId is { } caseId
+            ? await db.Cases.AsNoTracking().Where(c => c.Id == caseId).Select(c => c.TimeZoneId).FirstOrDefaultAsync(ct)
+            : null;
 
         return Ok(new InvestigationCodeInvitation(
             true, null, investigation.Id,
             await TitleForAStrangerAsync(db, investigation.CaseId, investigation.Title, ct),
-            orgName, investigation.ScheduledDateTime, found.ExpiresUtc));
+            org?.Name, investigation.ScheduledDateTime, found.ExpiresUtc,
+            Ben.Data.Common.Helpers.Zones.Effective(investigation.TimeZoneId, caseZone, org?.TimeZoneId)));
     }
 
     /// <summary>

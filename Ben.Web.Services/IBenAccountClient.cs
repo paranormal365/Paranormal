@@ -67,7 +67,9 @@ public sealed record HandleAvailability(string Handle, bool Available, string? R
 
 public sealed record RegisterAccount(
     string Email, string Password, string DisplayName, string Handle,
-    string FirstName, string LastName);
+    string FirstName, string LastName,
+    // The IANA zone the person chose on the sign-up page (2026-09-28).
+    string? TimeZoneId = null);
 
 /// <param name="Field">Which field to point at, when the server could say. Null for a general message.</param>
 public sealed record RegisterOutcome(bool Succeeded, string Message, string? Field);

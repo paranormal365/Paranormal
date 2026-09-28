@@ -34,6 +34,17 @@ namespace Ben.Data.Source.Entities
         public bool StripMediaMetadata { get; set; } = true;
 
         /// <summary>
+        /// The group's home clock, as an IANA id: new cases, events and tours start on it.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-28. A case or investigation can name its own zone (a group works away from
+        /// home); when it does not, it reads in this one. Never inferred from the group's address —
+        /// see <see cref="Ben.Data.Common.Constants.HouseClock"/> for why a guess that moves with an
+        /// address edit is worse than a named choice.
+        /// </remarks>
+        public string TimeZoneId { get; set; } = Ben.Data.Common.Constants.HouseClock.ZoneId;
+
+        /// <summary>
         /// The secret in the group's invitation link, or null when there is no live invitation.
         /// </summary>
         /// <remarks>

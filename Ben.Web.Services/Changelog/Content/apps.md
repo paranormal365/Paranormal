@@ -13,10 +13,16 @@ code.
 when App Review says so, which is usually later and never predictable. Where a version number is
 known it is worth naming, because that is what somebody can check on their own phone.
 
-**Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
+**Shape:** `## yyyy-MM-dd · version` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
-## 2026-09-27
+**Versions** (from 2026-09-28): each heading carries the App Store version that brought the change
+to phones, after a middle dot — `## 2026-09-16 · 1.0.3` — so it matches Settings → General → About
+on somebody's own phone. Several days can share a number, because one build carries a fortnight of
+work. A change not yet on the App Store is listed under the number the next build will have. Fixes
+move the last number, new things the middle one, a whole new part of the app the first.
+
+## 2026-09-27 · 1.1.0
 
 - Sound recordings are louder. The microphone was recorded exactly as the sound meter reads it,
   which left a voice across the room barely audible; recordings now carry a steady boost for the
@@ -44,7 +50,7 @@ read.
 - One upload now carries 10 minutes of video and 600 MB in total, and **Send without the video**
   sends everything else in one go.
 
-## 2026-09-17
+## 2026-09-17 · 1.1.0
 
 - The button in a running session is a **Photo** button. It takes a photograph of what the camera
   sees — there and then when the camera is already on, or from a viewfinder that opens and closes
@@ -59,7 +65,7 @@ read.
 - A photograph that the camera never delivers is given up on after a few seconds with a sentence,
   instead of leaving the button stuck on "Taking…".
 
-## 2026-09-16
+## 2026-09-16 · 1.0.3
 
 - A session somebody sends you as a `.ben` file — by AirDrop, in a message, from Files — opens in the
   app and plays exactly as it did for them: the same trace, map, marks and recordings, with a line on
@@ -91,7 +97,7 @@ read.
 - A session too big to go in one file (more than 4 GB of recordings) says so before exporting or
   sending, instead of writing a file that cannot be opened.
 
-## 2026-09-13
+## 2026-09-13 · 1.0.3
 
 - On What I'm going to, Pass now opens your pass. It had opened the event's screen, so the pass could only be
   reached from there.
@@ -124,7 +130,7 @@ read.
   photo notice the first time, send a photo to the organizers, take your own posts down and report
   somebody else's.
 
-## 2026-09-12
+## 2026-09-12 · 1.0.3
 
 - Sign in with Apple now works. It was returning to the sign-in screen without explanation when
   an Apple Account had no account here yet; it now asks for a display name and an @name, or offers
@@ -135,7 +141,7 @@ read.
 - Before sending a session, the app says how much it weighs and how much video is in it. Where a
   window is too heavy, it offers to send the video at a smaller size rather than simply refusing.
 
-## 2026-09-04
+## 2026-09-04 · 1.0.2
 
 - A recording can be trimmed on the phone before it is sent, so only the part that mattered
   leaves the device.
@@ -143,12 +149,12 @@ read.
   the moment it is created.
 - Links to the site open in the app.
 
-## 2026-08-31
+## 2026-08-31 · 1.0.1
 
 - The app shows only what applies to you.
 - A published session says whether what it recorded was unusual for that place.
 
-## 2026-08-30
+## 2026-08-30 · 1.0.0
 
 - Version 1.0 submitted to the App Store.
 

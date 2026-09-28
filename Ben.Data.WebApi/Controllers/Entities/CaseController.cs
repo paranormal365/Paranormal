@@ -151,7 +151,7 @@ public sealed class CaseController : BenControllerBase
             .Where(c => c.OrganizationId == orgId)
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseRecord>>(cases));
+        return Ok(await ZoneChain.FillAsync(db, _mapper.Map<IEnumerable<CaseRecord>>(cases), ct));
     }
 
     [HttpGet("{caseId:guid}")]
@@ -166,7 +166,7 @@ public sealed class CaseController : BenControllerBase
             // answers null and the page draws a blank where a name belongs (W-A9).
             .Include(x => x.Place)
             .FirstOrDefaultAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct);
-        return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
+        return c is null ? NotFound() : Ok(await ZoneChain.FillAsync(db, _mapper.Map<CaseRecord>(c), ct));
     }
 
     /// <summary>
@@ -406,6 +406,14 @@ public sealed class CaseController : BenControllerBase
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        // The case's own clock (2026-09-28). Left out, it reads on the group's; checked before the
+        // case number is taken, so a refusal costs nothing.
+        if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
+        {
+            if (Zones.Normalize(request.TimeZoneId) is not { } caseZone)
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+            entity.TimeZoneId = caseZone;
+        }
         var (yr, num) = await AssignCaseNumberAsync(db, orgId, entity.DateCaseOpened, ct);
         entity.CaseYear     = yr;
         entity.OrgCaseNumber = num;
@@ -429,7 +437,7 @@ public sealed class CaseController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = entity.Id },
-            _mapper.Map<CaseRecord>(entity));
+            await ZoneChain.FillAsync(db, _mapper.Map<CaseRecord>(entity), ct));
     }
 
     /// <summary>
@@ -678,7 +686,7 @@ public sealed class CaseController : BenControllerBase
             clientReq.AppUserId, newCase.Id, acceptingOrgName, contactName, userId, ct);
 
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = newCase.Id },
-            _mapper.Map<CaseRecord>(newCase));
+            await ZoneChain.FillAsync(db, _mapper.Map<CaseRecord>(newCase), ct));
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -735,6 +743,16 @@ public sealed class CaseController : BenControllerBase
         if (request.IsPublic && !entity.IsPublic) entity.WasPublicBeforeLapse = null;
         entity.IsPublic             = request.IsPublic;
         entity.CaseManagerAppUserId = request.CaseManagerAppUserId;
+        // The case's clock (2026-09-28): null leaves it, empty returns it to the group's.
+        if (request.TimeZoneId is not null)
+        {
+            if (request.TimeZoneId.Trim().Length == 0)
+                entity.TimeZoneId = null;
+            else if (Zones.Normalize(request.TimeZoneId) is { } caseZone)
+                entity.TimeZoneId = caseZone;
+            else
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+        }
         // Set on the way out, cleared on the way back in — see CaseClosureDate. This line used
         // only ever to SET it, so reopening a case left it claiming to be closed.
         entity.DateCaseClosed = CaseClosureDate.After(request.Status, entity.DateCaseClosed, DateTime.UtcNow);
@@ -756,7 +774,7 @@ public sealed class CaseController : BenControllerBase
         // which is what made it look like the save had failed. Reloaded with the navigation so
         // the answer says who it is.
         await db.Entry(entity).Reference(c => c.CaseManagerAppUser).LoadAsync(ct);
-        return Ok(_mapper.Map<CaseRecord>(entity));
+        return Ok(await ZoneChain.FillAsync(db, _mapper.Map<CaseRecord>(entity), ct));
     }
 
     /// <summary>
@@ -1079,7 +1097,9 @@ public sealed record CreateCaseRequest(
     // residence designates the case private-lane work permanently, and a public location is what
     // makes an unpaid account's case public. The New Case page requires it.
     Guid? PlaceId = null,
-    Services.Places.NewPlaceRequest? NewPlace = null);
+    Services.Places.NewPlaceRequest? NewPlace = null,
+    // The case's own clock (IANA), 2026-09-28. Null reads on the group's.
+    string? TimeZoneId = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
@@ -1093,7 +1113,9 @@ public sealed record UpdateCaseRequest(
     bool IsPublic,
     Guid? CaseManagerAppUserId,
     // Item 184: null = leave the designation alone (what every pre-184 caller sends).
-    bool? IsPrivateEngagement = null);
+    bool? IsPrivateEngagement = null,
+    // 2026-09-28: null leaves the case's clock alone; empty returns it to the group's.
+    string? TimeZoneId = null);
 
 public sealed record UpsertTimelineEntryRequest(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
