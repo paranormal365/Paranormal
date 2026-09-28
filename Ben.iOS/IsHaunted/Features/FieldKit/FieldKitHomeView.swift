@@ -433,6 +433,9 @@ private struct StartSessionSheet: View {
     /// flag set in a deferred task and cleared by `onChange` raced on the iPad, and the footer then
     /// called a name the phone filled in "your own words".
     @State private var suggestedLabel: String?
+    /// How the last attempt to say where the phone is went, so a miss is said rather than blank.
+    private enum WhereOutcome { case named, noName, noFix }
+    @State private var whereOutcome: WhereOutcome?
     private var labelIsSuggested: Bool { suggestedLabel != nil && label == suggestedLabel }
     @State private var channels: CaptureChannels = .default
     @State private var investigations: [MyInvestigation] = []
@@ -572,6 +575,19 @@ private struct StartSessionSheet: View {
                         ProgressView()
                         Text("Finding where you are…").font(.caption).foregroundStyle(Theme.fog)
                     }
+                } else if whereOutcome == .noFix {
+                    // Said, not left blank: an empty field with no word about why looked broken.
+                    HStack {
+                        Text("Couldn't find where you are — type it, or try again.")
+                            .font(.caption).foregroundStyle(Theme.fog)
+                        Spacer()
+                        Button("Try again") { Task { await findWhere() } }
+                            .font(.caption)
+                            .accessibilityIdentifier("start-locate-again")
+                    }
+                } else if whereOutcome == .noName, label.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text("Nothing nearby to name this spot by — type where you are.")
+                        .font(.caption).foregroundStyle(Theme.fog)
                 } else if nearbyPlaces.count > 1 {
                     // Other known places close by, one tap each — the phone's first guess is not
                     // always the building somebody is standing in.
@@ -623,7 +639,12 @@ private struct StartSessionSheet: View {
 
     /// Where the phone is, and what that suggests: a name, nearby investigations, public sessions.
     private func findWhere() async {
-        guard locator.access == .allowed, let point = await locator.locate() else { return }
+        guard locator.access == .allowed else { return }
+        whereOutcome = nil
+        guard let point = await locator.locate() else {
+            whereOutcome = .noFix
+            return
+        }
 
         async let places = dependencies.archiveActions.candidates(latitude: point.latitude,
                                                                    longitude: point.longitude)
@@ -632,8 +653,10 @@ private struct StartSessionSheet: View {
         nearbyPlaces = (await places).sorted { $0.miles < $1.miles }
         if case .ok(let rows) = await published { nearbyPublic = rows }
 
+        let name = StartSuggestions.placeName(candidates: nearbyPlaces, address: locator.address)
+        whereOutcome = name == nil ? .noName : .named
         if label.trimmingCharacters(in: .whitespaces).isEmpty || labelIsSuggested {
-            useName(StartSuggestions.placeName(candidates: nearbyPlaces, address: locator.address))
+            useName(name)
         }
         preselectIfHere()
     }

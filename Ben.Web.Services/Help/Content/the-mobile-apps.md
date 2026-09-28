@@ -73,7 +73,9 @@ is still identified in that cellar.
    known place within a quarter of a mile, or otherwise the street address the phone reads. Other
    places close by sit underneath, one tap each. It is only a suggestion — change it to anything
    you will recognise next week. If location has never been allowed, **Use my location** asks; if
-   it was turned off, type where you are, and **Open Settings** is beside it.
+   it was turned off, type where you are, and **Open Settings** is beside it. Indoors the phone
+   sometimes cannot get a position at all; the sheet says so after a few seconds, and **Try again**
+   asks once more.
 3. If you are signed in and on an investigation, pick it. Investigations **here** and **today**
    are listed first and labelled that way, and when exactly one is both, it is already chosen for
    you. If you are not on one, leave it; you can attach the session to an investigation later.

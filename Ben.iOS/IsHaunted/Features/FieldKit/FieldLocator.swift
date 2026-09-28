@@ -52,9 +52,12 @@ final class FieldLocator: NSObject, CLLocationManagerDelegate {
         isLocating = true
         defer { isLocating = false }
 
-        let fix = await withCheckedContinuation { continuation in
-            waitingForFix = continuation
-            manager.requestLocation()
+        // Once more on a miss: the first fix after launch often fails as "location unknown" and
+        // the next one lands. A sheet that silently gave up on that was a blank "where are you?".
+        var fix = await requestFix()
+        if fix == nil {
+            try? await Task.sleep(for: .seconds(1))
+            fix = await requestFix()
         }
         point = fix
         if let fix {
@@ -65,6 +68,24 @@ final class FieldLocator: NSObject, CLLocationManagerDelegate {
         }
         return fix
     }
+
+    /// One fix, or nil after `fixDeadline`. `requestLocation` can take far longer than that to give
+    /// up with nothing to go on, and a spinner that never ends is as silent as a blank.
+    private func requestFix() async -> CLLocationCoordinate2D? {
+        let deadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.fixDeadline)
+            guard !Task.isCancelled, let self else { return }
+            self.waitingForFix?.resume(returning: nil)
+            self.waitingForFix = nil
+        }
+        defer { deadline.cancel() }
+        return await withCheckedContinuation { continuation in
+            waitingForFix = continuation
+            manager.requestLocation()
+        }
+    }
+
+    static let fixDeadline: Duration = .seconds(6)
 
     /// "1204 Elm St, Nashville", or the best part of it there is.
     private static func describe(_ placemark: CLPlacemark) -> String? {

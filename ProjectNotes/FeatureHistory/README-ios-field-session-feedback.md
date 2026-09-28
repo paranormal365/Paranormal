@@ -133,6 +133,15 @@ Second pass (the trim suite against a local API, the iPad, and the help captures
   neighbours. It glows the phone's green now.
 - **Server counts**: confirmed on a restarted API — the recount put both public copies' "8 marked"
   back to 3.
+- **"Where are you?" with no position**: when the phone could not get a fix, the sheet showed a
+  blank field and nothing else — or, with no location at all, "Finding where you are…" for as long
+  as Core Location took to give up. Each try now has a six-second deadline and is made twice; a miss
+  says "Couldn't find where you are — type it, or try again" with **Try again**, and a fix with
+  nothing to name it by says so too. Proved with the simulator's location cleared, then set and
+  Try again.
+- **iPhone and iPad guides** (`docs/IsHaunted-iOS-*.pdf`, and the site's copy, which is the App Store
+  Marketing URL): the Field Kit frames 40–53 recaptured on both devices, and the text no longer says
+  the camera "takes no clip".
 - Test harness: the new help capture photographed Daniel instead of James (a restored session
   beats `-autoSignIn`); it signs out first now, and so does the existing Field Kit capture, which
   had the same flaw. `AboutPrivacyUITests` needs a reset simulator keychain, like the captures.
