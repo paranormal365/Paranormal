@@ -80,7 +80,7 @@ public sealed class AccountCreationService : IConfirmationSender
     /// </remarks>
     public async Task<Outcome> CreateUnconfirmedAsync(
         string email, string password, string displayName,
-        string? firstName, string? lastName, string? handle, CancellationToken ct)
+        string? firstName, string? lastName, string? handle, string? timeZoneId, CancellationToken ct)
     {
         var chosen = handle is null
             ? await _handles.AllocateAsync(displayName, email, ct)
@@ -97,6 +97,9 @@ public sealed class AccountCreationService : IConfirmationSender
             FirstName          = string.IsNullOrWhiteSpace(firstName) ? null : firstName.Trim(),
             LastName           = string.IsNullOrWhiteSpace(lastName) ? null : lastName.Trim(),
             Handle             = chosen,
+            // Whatever the sign-up page chose (2026-09-28); an unknown id is dropped, not refused —
+            // the account matters more than the clock, and the browser's zone stands in.
+            TimeZoneId         = Zones.Normalize(timeZoneId),
             EmailConfirmed     = false,
             DateCreated        = DateTime.UtcNow,
         };

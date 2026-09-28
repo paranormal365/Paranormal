@@ -22,7 +22,9 @@ public sealed record MeResponse(
     bool IsModerator = false,
     EmailAddressKind EmailKind = EmailAddressKind.Ordinary,
     bool EmailConfirmed = true,
-    bool IsSeller = false)
+    bool IsSeller = false,
+    // The zone the person chose to read the site in; null means "use the device's" (2026-09-28).
+    string? TimeZoneId = null)
 {
     /// <summary>Whether this address is one the person chose and reads as their own.</summary>
     /// <remarks>

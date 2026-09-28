@@ -138,7 +138,7 @@ public sealed class PublicClientRequestController : ControllerBase
 
         var (first, last) = SplitName(displayName);
         var outcome = await _accounts.CreateUnconfirmedAsync(
-            email, request.Password, displayName, first, last, handle: null, ct);
+            email, request.Password, displayName, first, last, handle: null, request.TimeZoneId, ct);
         if (!outcome.Succeeded)
         {
             // Only a race can land here: the password passed the same validators above, and the
@@ -312,7 +312,10 @@ public sealed record AnonymousClientRequestSubmission(
     IList<Guid> OrganizationIds,
     string Name,
     string Email,
-    string Password);
+    string Password,
+    // The browser's zone, so an account made by the wizard reads in the person's own clock
+    // (2026-09-28). Optional: an older page leaves it out and the account inherits the default.
+    string? TimeZoneId = null);
 
 /// <param name="Field">Which input to point at, when the server could say. Null for a general message.</param>
 public sealed record AnonymousSubmitResponse(bool Succeeded, string Message, string? Field);

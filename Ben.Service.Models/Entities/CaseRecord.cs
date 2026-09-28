@@ -49,6 +49,15 @@ public record CaseRecord
 
     /// <summary>Item 184 Phase D: true when a lapse unpublished this case; the republish banner's switch.</summary>
     public bool? WasPublicBeforeLapse { get; init; }
+    /// <summary>The case's own clock (IANA), or null when it reads on its group's (2026-09-28).</summary>
+    public string? TimeZoneId { get; init; }
+
+    /// <summary>
+    /// The clock the case actually reads on: its own, else its group's. Filled by the API; a client
+    /// that renders the case's local time uses this, never <see cref="TimeZoneId"/> alone.
+    /// </summary>
+    public string EffectiveTimeZoneId { get; init; } = Ben.Data.Common.Constants.HouseClock.ZoneId;
+
     public DateTime DateCaseOpened { get; init; }
     public DateTime? DateCaseClosed { get; init; }
     public DateTime DateCreated { get; init; }

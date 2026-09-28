@@ -1,3 +1,5 @@
+using Ben.Data.Common.Constants;
+using Ben.Data.Common.Helpers;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.WebApi.Controllers.Cms;
@@ -38,7 +40,7 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
         return Ok(new OrgSettingsResponse(
             org.ShowAddressMap, org.ShowAddressDirections,
             org.StripMediaMetadata, decision.Strips, decision.Reason, decision.NeedsUpgrade,
-            decision.CanChoose));
+            decision.CanChoose, org.TimeZoneId));
     }
 
     [HttpPut]
@@ -60,13 +62,22 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
         // expressed still there rather than silently reset to the default — and the effective
         // answer is computed on read, so storing it can never contradict the plan.
         org.StripMediaMetadata    = request.StripMediaMetadata;
+        // The group's home clock (2026-09-28). Null leaves it alone, so a client that has never
+        // heard of it cannot reset it; an id the platform does not know is refused, not kept.
+        if (request.TimeZoneId is not null)
+        {
+            if (Zones.Normalize(request.TimeZoneId) is not { } zone)
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+            org.TimeZoneId = zone;
+        }
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(Organization), orgId, before, org, userId.Value, AppSources.WebApi));
 
         var decision = await MediaStrippingPolicy.ForOrganizationAsync(db, _avStripper, orgId, ct);
         return Ok(new OrgSettingsResponse(
             org.ShowAddressMap, org.ShowAddressDirections,
-            org.StripMediaMetadata, decision.Strips, decision.Reason, decision.NeedsUpgrade));
+            org.StripMediaMetadata, decision.Strips, decision.Reason, decision.NeedsUpgrade,
+            decision.CanChoose, org.TimeZoneId));
     }
 }
 
@@ -77,11 +88,14 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
 /// <param name="StripMediaMetadataReason">Why not, when it is not. Null when it is in effect.</param>
 /// <param name="StripMediaMetadataNeedsUpgrade">True when the plan is the only thing in the way.</param>
 /// <param name="StripMediaMetadataCanChoose">Whether the group may change the preference at all.</param>
+/// <param name="TimeZoneId">The group's home clock (IANA); new cases, events and tours start on it.</param>
 public sealed record OrgSettingsResponse(
     bool ShowAddressMap, bool ShowAddressDirections,
     bool StripMediaMetadata = true, bool StripMediaMetadataInEffect = false,
     string? StripMediaMetadataReason = null, bool StripMediaMetadataNeedsUpgrade = false,
-    bool StripMediaMetadataCanChoose = false);
+    bool StripMediaMetadataCanChoose = false, string TimeZoneId = HouseClock.ZoneId);
 
+/// <param name="TimeZoneId">An IANA zone; null leaves the group's alone.</param>
 public sealed record OrgSettingsRequest(
-    bool ShowAddressMap, bool ShowAddressDirections, bool StripMediaMetadata = true);
+    bool ShowAddressMap, bool ShowAddressDirections, bool StripMediaMetadata = true,
+    string? TimeZoneId = null);

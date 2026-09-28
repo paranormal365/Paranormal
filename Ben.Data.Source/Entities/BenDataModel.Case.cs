@@ -27,6 +27,12 @@ namespace Ben.Data.Source.Entities
         public string? UrlName { get; set; }
 
         /// <summary>
+        /// The clock this case happens on, as an IANA id; null reads in the group's
+        /// (<see cref="Organization.TimeZoneId"/>). Ben, 2026-09-28.
+        /// </summary>
+        public string? TimeZoneId { get; set; }
+
+        /// <summary>
         /// The physical location this case concerns, once one has been resolved.
         /// </summary>
         /// <remarks>

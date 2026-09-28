@@ -30,6 +30,18 @@ public record InvestigationRecord
     public string? Location { get; init; }
     public DateTime ScheduledDateTime { get; init; }
     public DateTime? EndDateTime { get; init; }
+
+    /// <summary>The visit's own clock (IANA), or null when it reads on its case's (2026-09-28).</summary>
+    public string? TimeZoneId { get; init; }
+
+    /// <summary>Its case's own clock, when it has a case that names one — what "inherit" means here.</summary>
+    public string? CaseTimeZoneId { get; init; }
+
+    /// <summary>
+    /// The clock the visit actually happens on: its own, else its case's, else its group's. Filled by
+    /// the API; the times above are UTC and render in this zone as "local time".
+    /// </summary>
+    public string EffectiveTimeZoneId { get; init; } = Ben.Data.Common.Constants.HouseClock.ZoneId;
     public InvestigationStatus Status { get; init; }
     public string? Notes { get; init; }
     public int AttendeeCount { get; init; }

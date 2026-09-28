@@ -28,6 +28,12 @@ public record AppUserPhotoRecord
 public record MyProfileRecord
 {
     public Guid AppUserId { get; init; }
+
+    /// <summary>
+    /// The IANA zone this person reads the site in, or null when they have not chosen one and the
+    /// device's own is used (2026-09-28).
+    /// </summary>
+    public string? TimeZoneId { get; init; }
     public string? DisplayName { get; init; }
 
     /// <summary>Legal first name. Required — the profile refuses to save it empty.</summary>
@@ -115,12 +121,16 @@ public record MyProfileRecord
 /// <param name="FirstName">Null leaves it unchanged; empty or whitespace is refused.</param>
 /// <param name="LastName">Same.</param>
 /// <param name="Gender">Null leaves it unchanged; NotProvided is a real choice that clears it.</param>
+/// <param name="TimeZoneId">
+/// An IANA zone. Null leaves it unchanged; empty clears it, so the site uses the device's clock.
+/// </param>
 public sealed record UpdateMyProfileRequest(
     string? DisplayName,
     bool? SharePrivatePhotoWithClients = null,
     string? FirstName = null,
     string? LastName = null,
-    Ben.Data.Common.Enums.ClientGender? Gender = null);
+    Ben.Data.Common.Enums.ClientGender? Gender = null,
+    string? TimeZoneId = null);
 
 /// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
 /// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>

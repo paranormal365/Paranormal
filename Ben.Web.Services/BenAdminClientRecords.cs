@@ -536,7 +536,9 @@ public sealed record OrgInvestigationRow(
     bool CanCompleteMyFindings,
     // Null when the visit has no place at all. The map draws a known landmark differently and
     // leaves everything else exactly as it was — an unknown is not a private residence.
-    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null);
+    Ben.Data.Common.Enums.PlaceKind? PlaceKind = null,
+    // The clock the visit happens on: its own, its case's, or its group's (2026-09-28).
+    string? TimeZoneId = null);
 
 /// <summary>
 /// A place being created inline with the investigation held there, so scheduling a visit to
@@ -598,7 +600,9 @@ public sealed record CreateOrgInvestigationRequest(
     Guid? CaseId = null,
     Guid? PlaceId = null,
     NewPlaceRequest? NewPlace = null,
-    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null,
+    // The visit's own clock (IANA); null reads on its case's, or the group's (2026-09-28).
+    string? TimeZoneId = null);
 
 // ── My contact info request/response records ──────────────────────────────────
 // Mirrors of the WebApi records in MyContactInfoController.cs / PublicEmailValidationController.cs
@@ -865,10 +869,13 @@ public sealed record OrgSettingsResponse(
     // Item 181: the group's preference, plus whether it is actually in effect and why not.
     bool StripMediaMetadata = true, bool StripMediaMetadataInEffect = false,
     string? StripMediaMetadataReason = null, bool StripMediaMetadataNeedsUpgrade = false,
-    bool StripMediaMetadataCanChoose = false);
+    bool StripMediaMetadataCanChoose = false,
+    // The group's home clock (2026-09-28).
+    string TimeZoneId = Ben.Data.Common.Constants.HouseClock.ZoneId);
 
 public sealed record OrgSettingsRequest(
-    bool ShowAddressMap, bool ShowAddressDirections, bool StripMediaMetadata = true);
+    bool ShowAddressMap, bool ShowAddressDirections, bool StripMediaMetadata = true,
+    string? TimeZoneId = null);
 public sealed record AddAddressMemberAccessRequest(Guid OrganizationUserMembershipId);
 
 // ── Experience Taxonomy request records ──────────────────────────────────────
@@ -1101,7 +1108,10 @@ public sealed record UpsertInvestigationRequest(
     NewPlaceRequest? NewPlace = null,
     // Null means "leave the sharing scope alone" — defaulted from the place on create, untouched
     // on an edit that says nothing about it.
-    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null,
+    // The visit's own clock (IANA), 2026-09-28. Create: null reads on the case's. Update: null
+    // leaves it alone; empty returns it to the case's.
+    string? TimeZoneId = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 
@@ -1183,7 +1193,9 @@ public sealed record CreateCaseRequest(
     /// "public location or private residence" answer, which decides whether the case is private-lane
     /// work and, on an unpaid account, whether it is public.
     /// </summary>
-    NewPlaceRequest? NewPlace = null);
+    NewPlaceRequest? NewPlace = null,
+    /// <summary>The case's own clock (IANA); null reads on the group's (2026-09-28).</summary>
+    string? TimeZoneId = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
@@ -1197,7 +1209,9 @@ public sealed record UpdateCaseRequest(
     bool IsPublic,
     Guid? CaseManagerAppUserId,
     // Item 184: null = leave the private-engagement designation unchanged.
-    bool? IsPrivateEngagement = null);
+    bool? IsPrivateEngagement = null,
+    // 2026-09-28: null leaves the case's clock alone; empty returns it to the group's.
+    string? TimeZoneId = null);
 
 public sealed record UpsertTimelineEntryRequest(
     Ben.Data.Common.Enums.CaseTimelineEntryType EntryType,
@@ -1241,7 +1255,10 @@ public sealed record AnonymousClientRequestSubmission(
     IList<Guid> OrganizationIds,
     string Name,
     string Email,
-    string Password);
+    string Password,
+    // The browser's zone, so an account made by the wizard reads in the person's own clock
+    // (2026-09-28). Optional: an older page leaves it out and the account inherits the default.
+    string? TimeZoneId = null);
 
 /// <param name="Field">Which input to point at, when the server could say. Null for a general message.</param>
 public sealed record AnonymousSubmitOutcome(bool Succeeded, string Message, string? Field);
@@ -1279,7 +1296,9 @@ public sealed record ClientCaseDetail(
     /// The description with its formatting. <c>Description</c> beside it is the plain rendering the
     /// shipped iPhone app draws, and must stay that way until its next build (2026-09-20).
     /// </param>
-    string?   DescriptionHtml = null);
+    string?   DescriptionHtml = null,
+    // The clock the case reads on — its own, else its group's (2026-09-28).
+    string?   TimeZoneId = null);
 
 /// <summary>Someone the client can talk to about their case. <c>IsFallback</c> marks the case
 /// manager standing in because the group set no explicit contact.</summary>
@@ -1460,7 +1479,9 @@ public sealed record ClientCaseInvestigation(
     string?    Location,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     DateTime?  EvidenceDueDate = null,
-    DateTime?  CancellationDeadlineUtc = null);
+    DateTime?  CancellationDeadlineUtc = null,
+    // The clock the visit happens on: its own, else its case's (2026-09-28).
+    string?    TimeZoneId = null);
 
 /// <param name="ExperienceTypeIds">
 /// Optional tags from the shared experience taxonomy. Investigators already filter and read these
@@ -1508,7 +1529,14 @@ public sealed record MyInvestigationItem(
     string?                            AssignedRole,
     Ben.Data.Common.Enums.RsvpStatus   Rsvp,
     bool?                              DidAttend,
-    DateTime?                          EvidenceDueDate);
+    DateTime?                          EvidenceDueDate,
+    // Mirrors the API's trailing optionals; the website reads only the zone (2026-09-28).
+    Guid?                              PlaceId = null,
+    string?                            PlaceName = null,
+    decimal?                           Latitude = null,
+    decimal?                           Longitude = null,
+    // The clock the visit happens on: its own, its case's, or its group's.
+    string?                            TimeZoneId = null);
 
 // ── Investigation Scheduling records ─────────────────────────────────────────
 public sealed record CreateProposalRequest(string? Notes, IReadOnlyList<SlotInput> Slots);

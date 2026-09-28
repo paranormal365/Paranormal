@@ -1,4 +1,6 @@
-﻿using Ben.Data.Source.Entities;
+﻿using Ben.Data.Common.Constants;
+using Ben.Data.Common.Helpers;
+using Ben.Data.Source.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -286,6 +288,14 @@ namespace Ben.Data.Source.Context
             // is a little on every account created, which is the right way round: accounts are
             // made rarely and counted often.
             modelBuilder.Entity<AppUser>().HasIndex(e => e.DateCreated);
+
+            // Time zones (2026-09-28): IANA ids, one width everywhere. A group's has a database
+            // default so every existing group reads on the house clock the day the column arrives.
+            modelBuilder.Entity<AppUser>().Property(e => e.TimeZoneId).HasMaxLength(Zones.MaxLength);
+            modelBuilder.Entity<Organization>().Property(e => e.TimeZoneId)
+                .HasMaxLength(Zones.MaxLength).HasDefaultValue(HouseClock.ZoneId);
+            modelBuilder.Entity<Case>().Property(e => e.TimeZoneId).HasMaxLength(Zones.MaxLength);
+            modelBuilder.Entity<Investigation>().Property(e => e.TimeZoneId).HasMaxLength(Zones.MaxLength);
 
             // ── UserAddressType ──────────────────────────────────────────────
             modelBuilder.Entity<UserAddressType>()

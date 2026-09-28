@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Text;
 using AutoMapper;
 using Ben.Data.Common.Enums;
@@ -204,6 +205,12 @@ public sealed class MyCaseController : BenControllerBase
         if (c.Latitude.HasValue && c.Longitude.HasValue && orgAddr?.Latitude != null && orgAddr.Longitude != null)
             distMiles = HaversineDistanceMiles((double)c.Latitude, (double)c.Longitude, (double)orgAddr.Latitude, (double)orgAddr.Longitude);
 
+        // The case's clock and each visit's, so a client can read a visit in the place's time or
+        // their own (2026-09-28): the visit's own zone, else the case's, else the group's.
+        var groupZone = await db.Organizations.AsNoTracking().Where(o => o.Id == c.OrganizationId)
+            .Select(o => o.TimeZoneId).FirstOrDefaultAsync(ct);
+        var caseZone = Zones.Effective(c.TimeZoneId, groupZone);
+
         var invItems = investigations.Select(i => new ClientCaseInvestigation(
             Id:                     i.Id,
             Title:                  i.Title,
@@ -214,7 +221,8 @@ public sealed class MyCaseController : BenControllerBase
             EvidenceDueDate:        i.EvidenceDueDate,
             CancellationDeadlineUtc: i.Status == InvestigationStatus.Scheduled
                 ? Ben.Data.Common.Helpers.InvestigationCancellationHelper.CancellationDeadlineUtc(i.ScheduledDateTime, distMiles)
-                : null)).ToList();
+                : null,
+            TimeZoneId: Zones.Effective(i.TimeZoneId, caseZone))).ToList();
 
         return Ok(new ClientCaseDetail(
             CaseId:                  c.Id,
@@ -232,7 +240,8 @@ public sealed class MyCaseController : BenControllerBase
             Investigations:          invItems,
             UnreadMessageCount:      unreadCount,
             IsPrimaryClient:         c.ClientRequest?.AppUserId == userId,
-            Contacts: await Entities.CaseContactController.ResolveAsync(db, c.OrganizationId, caseId, ct)));
+            Contacts: await Entities.CaseContactController.ResolveAsync(db, c.OrganizationId, caseId, ct),
+            TimeZoneId:              caseZone));
     }
 
     /// <summary>
@@ -1481,7 +1490,9 @@ public sealed record ClientCaseDetail(
     /// The same words with their formatting, for the website. Trailing and optional so the shipped
     /// app — which has never heard of it — decodes this response exactly as before.
     /// </param>
-    string?   DescriptionHtml = null);
+    string?   DescriptionHtml = null,
+    // The clock the case reads on — its own, else its group's (2026-09-28).
+    string?   TimeZoneId = null);
 
 public sealed record ClientCaseOccurrence(
     Guid      Id,
@@ -1515,7 +1526,9 @@ public sealed record ClientCaseInvestigation(
     string?    Location,
     Ben.Data.Common.Enums.InvestigationStatus Status,
     DateTime?  EvidenceDueDate = null,
-    DateTime?  CancellationDeadlineUtc = null);
+    DateTime?  CancellationDeadlineUtc = null,
+    // The clock the visit happens on: its own, else its case's (2026-09-28).
+    string?    TimeZoneId = null);
 
 // ExperienceTypeIds: optional tags from the shared experience taxonomy. Investigators already
 // read and filter these on the org timeline; letting the client set them means the person who was

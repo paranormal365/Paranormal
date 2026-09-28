@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -74,7 +75,7 @@ public sealed class InvestigationController : BenControllerBase
         var records = _mapper.Map<IEnumerable<InvestigationRecord>>(list)
             .Select(r => r with { CanEditRecord = flags[r.Id].CanEditRecord });
 
-        return Ok(records);
+        return Ok(await ZoneChain.FillAsync(db, records, ct));
     }
 
     [HttpGet("{id:guid}")]
@@ -89,10 +90,10 @@ public sealed class InvestigationController : BenControllerBase
             .FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
         if (inv is null) return NotFound();
 
-        return Ok(_mapper.Map<InvestigationRecord>(inv) with
+        return Ok(await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(inv) with
         {
             CanEditRecord = await CanManageAsync(id, ct),
-        });
+        }, ct));
     }
 
     /// <summary>
@@ -147,6 +148,13 @@ public sealed class InvestigationController : BenControllerBase
             DateCreated         = DateTime.UtcNow,
             CreatedByAppUserId  = userId,
         };
+        // The visit's own clock (2026-09-28); left out, it reads on its case's.
+        if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
+        {
+            if (Zones.Normalize(request.TimeZoneId) is not { } visitZone)
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+            entity.TimeZoneId = visitZone;
+        }
         db.Investigations.Add(entity);
 
         // Inherits the case's place unless the caller named another. This is what finally writes
@@ -207,7 +215,7 @@ public sealed class InvestigationController : BenControllerBase
         // The creator can always manage what they just scheduled — one of the five rules, so this
         // needs no second query either.
         return CreatedAtAction(nameof(GetById), new { orgId, caseId, id = entity.Id },
-            _mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true });
+            await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true }, ct));
     }
 
     [HttpPut("{id:guid}")]
@@ -238,6 +246,16 @@ public sealed class InvestigationController : BenControllerBase
         entity.Status              = request.Status;
         entity.Notes               = CaseController.CleanDescription(request.Notes, _sanitizer);
         entity.EvidenceDueDate     = request.EvidenceDueDate;
+        // 2026-09-28: null leaves the visit's clock alone; empty returns it to the case's.
+        if (request.TimeZoneId is not null)
+        {
+            if (request.TimeZoneId.Trim().Length == 0)
+                entity.TimeZoneId = null;
+            else if (Zones.Normalize(request.TimeZoneId) is { } visitZone)
+                entity.TimeZoneId = visitZone;
+            else
+                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+        }
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
 
@@ -275,7 +293,7 @@ public sealed class InvestigationController : BenControllerBase
 
         // True by construction rather than by another query: this endpoint already refused
         // everyone who cannot manage it, several lines above.
-        return Ok(_mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true });
+        return Ok(await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(loaded) with { CanEditRecord = true }, ct));
     }
 
     [HttpDelete("{id:guid}")]
@@ -722,7 +740,10 @@ public sealed record UpsertInvestigationRequest(
     Guid? PlaceId = null,
     NewPlaceRequest? NewPlace = null,
     // Null means "leave it alone": defaulted from the place on create, untouched on update.
-    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null,
+    // The visit's own clock (IANA), 2026-09-28. On create, null reads on the case's; on update,
+    // null leaves it alone and empty returns it to the case's.
+    string? TimeZoneId = null);
 
 public sealed record AddInvestigationAttendeeRequest(Guid AppUserId, string? AssignedRole);
 /// <summary>

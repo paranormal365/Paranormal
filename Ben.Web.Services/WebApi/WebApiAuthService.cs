@@ -235,5 +235,6 @@ public sealed class WebApiAuthService : IWebApiAuthService, Ben.Data.WebApi.Clie
 }
 
 /// <summary>Matches the JSON shape of MeResponse in Ben.Data.WebApi.</summary>
-internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false, bool IsSeller = false);
+internal sealed record MeResult(Guid UserId, string Email, bool IsSuperAdmin, bool IsAdmin, bool IsModerator = false, bool IsSeller = false,
+    string? TimeZoneId = null);
 

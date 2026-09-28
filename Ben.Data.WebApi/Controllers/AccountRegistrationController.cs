@@ -122,7 +122,8 @@ public sealed class AccountRegistrationController : ControllerBase
         }
 
         var outcome = await _accounts.CreateUnconfirmedAsync(
-            email, request.Password, displayName, request.FirstName, request.LastName, request.Handle, ct);
+            email, request.Password, displayName, request.FirstName, request.LastName, request.Handle,
+            request.TimeZoneId, ct);
 
         if (!outcome.Succeeded)
             return BadRequest(new RegisterResponse(false, outcome.Error!,
@@ -268,10 +269,14 @@ public sealed class AccountRegistrationController : ControllerBase
     }
 }
 
-/// <summary>A sign-up. <c>Handle</c> is normalised and checked server-side regardless of what the browser did.</summary>
+/// <summary>
+/// A sign-up. <c>Handle</c> is normalised and checked server-side regardless of what the browser did.
+/// <c>TimeZoneId</c> is the IANA zone the person chose (2026-09-28); optional, so an older client
+/// still signs people up.
+/// </summary>
 public sealed record RegisterRequest(
     string Email, string Password, string DisplayName, string Handle,
-    string? FirstName = null, string? LastName = null);
+    string? FirstName = null, string? LastName = null, string? TimeZoneId = null);
 
 /// <summary>The result of a sign-up. <c>Field</c> names the input to point at, or null for a general message.</summary>
 public sealed record RegisterResponse(bool Succeeded, string Message, string? Field);

@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Services;
@@ -94,6 +95,7 @@ public sealed class PublicInvestigationController : BenControllerBase
         var i = await db.Investigations.AsNoTracking()
             .Include(x => x.Organization)
             .Include(x => x.Place)
+            .Include(x => x.Case)
             .Where(x => x.OrganizationId == organization.Id && x.UrlName == slug)
             .Where(InvestigationVisibilityFilter.VisibleTo([], []))
             .FirstOrDefaultAsync(ct);
@@ -125,6 +127,8 @@ public sealed class PublicInvestigationController : BenControllerBase
             i.Place?.City,
             i.Place?.State,
             lat,
-            lon));
+            lon,
+            // The clock the visit happened on (2026-09-28) — its own, its case's, or its group's.
+            Zones.Effective(i.TimeZoneId, i.Case?.TimeZoneId, i.Organization.TimeZoneId)));
     }
 }

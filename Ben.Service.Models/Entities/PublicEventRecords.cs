@@ -263,7 +263,9 @@ public sealed record PublicInvestigationDetail(
     string? City,
     string? State,
     decimal? ApproximateLatitude,
-    decimal? ApproximateLongitude);
+    decimal? ApproximateLongitude,
+    // The clock the visit happened on (2026-09-28); the times above are UTC.
+    string? TimeZoneId = null);
 
 /// <summary>One attendee evidence submission, in every view that shows one (item 111).</summary>
 public sealed record EventEvidenceRecord(

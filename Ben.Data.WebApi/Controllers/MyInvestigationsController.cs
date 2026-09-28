@@ -1,3 +1,4 @@
+using Ben.Data.Common.Helpers;
 ﻿using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.AspNetCore.Authorization;
@@ -81,7 +82,9 @@ public sealed class MyInvestigationsController : BenControllerBase
             PlaceId:           a.Investigation.PlaceId,
             PlaceName:         a.Investigation.Place?.Name,
             Latitude:          a.Investigation.Latitude,
-            Longitude:         a.Investigation.Longitude)));
+            Longitude:         a.Investigation.Longitude,
+            TimeZoneId:        Zones.Effective(a.Investigation.TimeZoneId, a.Investigation.Case?.TimeZoneId,
+                                               a.Investigation.Organization.TimeZoneId))));
     }
 
     /// <summary>
@@ -192,7 +195,10 @@ public sealed record MyInvestigationItem(
     Guid?               PlaceId = null,
     string?             PlaceName = null,
     decimal?            Latitude = null,
-    decimal?            Longitude = null);
+    decimal?            Longitude = null,
+    // The clock the visit happens on — its own, its case's, or its group's (2026-09-28), so a
+    // member can read it in the place's time or their own.
+    string?             TimeZoneId = null);
 
 public sealed record UpdateMyRsvpRequest(RsvpStatus Rsvp);
 

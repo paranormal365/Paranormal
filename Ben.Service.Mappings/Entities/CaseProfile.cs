@@ -12,7 +12,9 @@ public class CaseProfile : Profile
             // Null unless the caller included the navigation. The case page does; the list does
             // not, and does not need to.
             .ForMember(d => d.PlaceName,
-                       o => o.MapFrom(s => s.Place != null ? s.Place.Name : null));
+                       o => o.MapFrom(s => s.Place != null ? s.Place.Name : null))
+            // Filled by ZoneChain, which looks the group's zone up itself.
+            .ForMember(d => d.EffectiveTimeZoneId, o => o.Ignore());
     }
 }
 

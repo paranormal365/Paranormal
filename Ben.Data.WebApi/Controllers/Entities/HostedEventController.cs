@@ -140,7 +140,9 @@ public sealed class HostedEventController : OrgCmsControllerBase
             Description = Clean(request.Description),
             PlaceId = venue!.Id,
             HideExactLocation = request.HideExactLocation,
-            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz : HouseClock.ZoneId,
+            // Left out, an event runs on its group's home clock (2026-09-28).
+            TimeZoneId = request.TimeZoneId?.Trim() is { Length: > 0 } tz ? tz
+                : await ZoneChain.ForNewAsync(db, orgId, null, ct),
             StartsOn = request.StartsOn.Date,
             EndsOn = request.EndsOn.Date,
             DatesAreSeparate = request.DatesAreSeparate,
