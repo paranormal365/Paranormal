@@ -30,6 +30,10 @@ struct FieldKitHomeView: View {
     /// How many server sessions are listed before "Show all".
     private static let serverRowsShown = 3
     @State private var downloading: UUID?
+    /// Group sessions a lead has launched for this person that are still open (item 252).
+    @State private var happening: [FieldLaunchRecord] = []
+    /// Whether this person leads anything that could be launched now.
+    @State private var mayLaunch = false
 
     private var store: FieldSessionStore { dependencies.fieldKit }
 
@@ -67,6 +71,49 @@ struct FieldKitHomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("field-session-row")
+                }
+            }
+
+            // Item 252: the lead's own button, above what is happening — it is why they opened this.
+            if mayLaunch {
+                Section {
+                    Button {
+                        router.push(.launchForGroup)
+                    } label: {
+                        Label("Launch a session for your group", systemImage: "megaphone")
+                    }
+                    .accessibilityIdentifier("open-launch-for-group")
+                } footer: {
+                    Text("Something you lead is on now. Launching it lets everybody registered join from their feed.")
+                }
+            }
+
+            // Item 252: a lead launched these. Join opens a session already set up for it; nobody is
+            // started automatically (Ben: "instead of forcing them to join").
+            if !happening.isEmpty {
+                Section {
+                    ForEach(happening) { launch in
+                        HStack(spacing: 12) {
+                            Button {
+                                router.push(.launchDetail(launch.id, sent: nil))
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(launch.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.bone)
+                                    Text("\(launch.organizationName) · started by \(launch.launchedByName)")
+                                        .font(.caption).foregroundStyle(Theme.fog)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            Button("Join") { router.push(.joinLaunch(launch.id)) }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityIdentifier("happening-join")
+                        }
+                    }
+                } header: {
+                    Text("Happening now")
+                } footer: {
+                    Text("A lead started these. Join opens a session set up for it — nothing records until you press Start.")
                 }
             }
 
@@ -230,6 +277,21 @@ struct FieldKitHomeView: View {
         }
         .onAppear { store.load() }
         .task { await loadServerSessions() }
+        // Again whenever the person signed in changes: what they may launch, and what they were
+        // sent, are theirs (found by the lead's UI test, signed in after another account).
+        .task(id: dependencies.session.me?.userId) { await loadLaunches() }
+        .refreshable { await loadLaunches(); await loadServerSessions() }
+    }
+
+    /// What is happening now and whether this person may launch anything. Best-effort, like the
+    /// server list: signed out or without a signal the sections simply do not appear.
+    private func loadLaunches() async {
+        guard dependencies.session.me != nil else { happening = []; mayLaunch = false; return }
+        if case .ok(let mine) = await dependencies.fieldLaunches.mine() {
+            happening = mine
+            if !mine.isEmpty { PushRegistrar.shared.askIfUseful() }
+        }
+        if case .ok(let items) = await dependencies.fieldLaunches.launchable() { mayLaunch = !items.isEmpty }
     }
 
     /// The server's list, less what is already here. Best-effort: signed out, or no signal, and
@@ -313,6 +375,26 @@ struct FieldKitHomeView: View {
         guard let previous = router.startAnotherSessionLike else { return }
         router.startAnotherSessionLike = nil
         startingLike = store.summary(for: previous)
+        // Another session in a group session a lead launched (item 252): "They can take multiple
+        // sessions without having to do anything with them" — so no sheet, the same setup again.
+        if let like = startingLike, like.fieldLaunchId != nil, openSession == nil {
+            do {
+                let id = try store.startSession(
+                    locationLabel: like.locationLabel,
+                    investigationId: like.investigationId,
+                    investigationTitle: like.investigationTitle,
+                    channels: like.channels,
+                    orgCalendarEventId: like.orgCalendarEventId,
+                    hostedEventId: like.hostedEventId,
+                    eventTitle: like.eventTitle,
+                    fieldLaunchId: like.fieldLaunchId)
+                startingLike = nil
+                router.push(.fieldSession(id))
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return
+        }
         askToStart()
     }
 
@@ -362,9 +444,20 @@ private struct SessionRow: View {
                 if let investigation = summary.investigationTitle, !investigation.isEmpty,
                    investigation != summary.title {
                     Text(investigation).font(.caption2).foregroundStyle(Theme.haunt)
+                } else if let event = summary.eventTitle, !event.isEmpty, event != summary.title {
+                    // A group's night it was joined from (item 252).
+                    Text(event).font(.caption2).foregroundStyle(Theme.haunt)
                 }
             }
             Spacer()
+            // Sessions pile up, to be sent whenever (item 252, Ben: "They can choose to submit them
+            // later"), so the list says which are still only on this phone.
+            if !summary.isOpen && !summary.isImported {
+                Text(summary.isUploaded ? "Sent" : "Not sent")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(summary.isUploaded ? Theme.success : Theme.fog)
+                    .accessibilityIdentifier(summary.isUploaded ? "session-sent" : "session-not-sent")
+            }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.fog)
         }
         .padding(.vertical, 2)

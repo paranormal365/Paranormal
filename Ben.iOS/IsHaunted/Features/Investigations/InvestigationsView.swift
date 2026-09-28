@@ -63,6 +63,9 @@ struct InvestigationsView: View {
             let store = InvestigationsStore(api: dependencies.api)
             self.store = store
             await store.load()
+            // Something coming up that its lead may launch (item 252): the moment a notification
+            // saying "it's starting" plainly helps.
+            if !store.upcoming.isEmpty { PushRegistrar.shared.askIfUseful() }
         }
         .onChange(of: dependencies.session.me?.userId) { _, _ in
             Task { await store?.load() }

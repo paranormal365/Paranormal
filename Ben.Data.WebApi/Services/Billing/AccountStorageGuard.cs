@@ -118,6 +118,8 @@ public static class AccountStorageGuard
                      && f.UploadFile.StoragePath.StartsWith(mine)
                      && f.UploadFile.ArchivedFromUploadFileId == null
                      && (f.FieldSessionUpload!.InvestigationId != null
+                      || f.FieldSessionUpload.OrgCalendarEventId != null
+                      || f.FieldSessionUpload.HostedEventId != null
                       || f.FieldSessionUpload.PublishedAtUtc != null))
             .SumAsync(f => (long?)f.UploadFile!.FileSize, ct) ?? 0L;
 

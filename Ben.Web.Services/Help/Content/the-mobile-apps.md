@@ -486,6 +486,78 @@ page on the website shows — so the map shows the place rather than the path th
 recordings come with it only once they have been approved for the archive. Location is needed only
 for *near you*; searching by name works with it off.
 
+## When the group's session starts
+
+A guide, an event's organiser or the lead of an investigation can start the night for everybody at
+once from the app. When they do, nobody's phone is taken over: you are told, and you join when you
+are ready.
+
+### Joining
+
+You hear about it three ways, and each one does the same thing:
+
+- **A notification** — "Printers Alley After Dark is starting". Tap it.
+- **A card in your feed** with **Join the session**, for when you missed the notification or have
+  notifications off.
+- **Happening now**, at the top of Field Kit, for as long as it is open.
+
+![The guide has started the walk, and the phone says so](/help/media/the-mobile-apps/iphone-launch-notified.png)
+
+![The card in the feed, for anybody who missed the notification](/help/media/the-mobile-apps/iphone-launch-feed-card.png)
+
+**Join** opens Field Kit straight into a session already set up for the tour, event or
+investigation and its place — there is nothing to choose. Nothing records until you press
+**Start**. Stop, and start another as often as you like; every session stays on your phone.
+
+The card leaves the feed, and the link stops opening, six hours after the thing ends.
+
+### Sending what you recorded — now, or days later
+
+Your sessions pile up on the phone, and each row in Field Kit says **Sent** or **Not sent**. Send
+them whenever you are ready — that night, or days later after you have been through them. When you
+do, the send screen already says where it goes:
+
+![The send screen, already going to the walk](/help/media/the-mobile-apps/iphone-launch-send-to.png)
+
+Leave **Send to …** on and the group that ran it sees it on their page for that date or event. Turn
+it off to keep it as your own session instead. One upload carries ten minutes of video and 600 MB;
+a longer night goes in parts — narrow the window, send, move it along, send again — and each part
+arrives as its own session rather than replacing the last.
+
+What you send is the group's to see, not the other guests'.
+
+### Joining by scanning the lead's code
+
+The lead can hold up a QR code. Scan it with your phone's camera:
+
+- **Registered for it** — you are straight in, as if you had tapped the card.
+- **A public walk or event** — anybody is straight in; it is open to everybody.
+- **A private night** — you sign in and tap **Ask to join**. The lead is told on their phone and
+  says yes or no. You do not have to wait to record: start a session while they decide. When they
+  let you in you are told, and what you recorded can go to the group; if they say no, it stays
+  yours.
+
+![Asking to join a private night](/help/media/the-mobile-apps/iphone-join-ask.png)
+
+A visit to somebody's home, or a private client case, has no code at all.
+
+### Starting it, if you lead
+
+Field Kit shows **Launch a session for your group** whenever something you lead is on — a tour
+date you guide, an event you organise or run the door at, an investigation you lead or manage. It
+opens three hours before it starts and stays open until it ends. Tap **Launch** and say yes: the
+card goes in the feed — for anyone when it is public, only for the people registered when it is
+not — and everybody registered who has the app is notified. The page after tells you how many that
+reached.
+
+That page also shows the **QR code** to hold up, and anybody **asking to join**, with **Let in**
+and **No**. Letting somebody in registers them properly — a seat on a walk, a place at an event, a
+guest pass for an investigation — and tells their phone. A paid event is never booked this way.
+
+![The lead's page: somebody asking to join, and the code to scan](/help/media/the-mobile-apps/ipad-launch-asking.png)
+
+Launching twice within ten minutes does nothing more — everybody already has the card.
+
 ## Sharing what you found — the field archive
 
 A session normally belongs to you, or to the investigation you recorded it for. There is a third

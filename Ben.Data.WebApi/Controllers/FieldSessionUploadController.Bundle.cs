@@ -41,7 +41,10 @@ public sealed partial class FieldSessionUploadController
         IFormFile file, [FromForm] Guid deviceSessionId,
         [FromForm] Guid? investigationId,
         [FromForm] Guid? recordedByAppUserId, [FromForm] string? recordedByName,
-        CancellationToken ct)
+        CancellationToken ct,
+        // Item 252: a tour date or event, a hosted event, or the lead's launch it was joined from.
+        [FromForm] Guid? orgCalendarEventId = null, [FromForm] Guid? hostedEventId = null,
+        [FromForm] Guid? fieldLaunchId = null)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -51,22 +54,18 @@ public sealed partial class FieldSessionUploadController
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        Guid organizationId;
-        if (investigationId is Guid target && target != Guid.Empty)
+        // Where it goes: an investigation, a tour date or event, a hosted event, or wherever the
+        // lead's launch it was joined from points. An investigation that is not the sender's to
+        // write to is answered as absent — whether somebody else's exists is not for probing.
+        SessionTarget destination;
+        switch (await ResolveTargetAsync(db, userId, investigationId, orgCalendarEventId, hostedEventId, fieldLaunchId, ct))
         {
-            var investigation = await db.Investigations
-                .FirstOrDefaultAsync(i => i.Id == target, ct);
-            if (investigation is null) return NotFound();
-            // Same answer as absent: whether somebody else's investigation exists is not a thing
-            // to let an outsider probe for.
-            if (!await MayWriteAsync(db, target, userId, ct)) return NotFound();
-            organizationId = investigation.OrganizationId;
+            case TargetResult.Found found: destination = found.Target; break;
+            case TargetResult.Refused refused: return BadRequest(refused.Reason);
+            default: return NotFound();
         }
-        else
-        {
-            investigationId = null;
-            organizationId = Guid.Empty;
-        }
+        investigationId = destination.InvestigationId;
+        var organizationId = destination.OrganizationId;
 
         // Asked before a gigabyte is written rather than after: being refused for space having
         // already uploaded the night is the version of this that wastes somebody's evening.
@@ -228,6 +227,9 @@ public sealed partial class FieldSessionUploadController
 
         session.IsBundle = true;
         session.InvestigationId = investigationId;
+        session.OrgCalendarEventId = destination.OrgCalendarEventId;
+        session.HostedEventId = destination.HostedEventId;
+        session.FieldLaunchId = destination.FieldLaunchId;
         session.DocumentUploadFileId = uploadFile.Id;
         session.DeviceModel = summary.DeviceModel;
         session.LocationLabel = summary.LocationLabel;

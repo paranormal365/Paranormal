@@ -108,6 +108,10 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FeedPostConsent> FeedPostConsents { get; set; }
         public virtual DbSet<UserFollow> UserFollows { get; set; }
         public virtual DbSet<UserBlock> UserBlocks { get; set; }
+        public virtual DbSet<PushDevice> PushDevices { get; set; }
+        public virtual DbSet<FieldLaunch> FieldLaunches { get; set; }
+        public virtual DbSet<FieldLaunchRecipient> FieldLaunchRecipients { get; set; }
+        public virtual DbSet<FieldLaunchJoinRequest> FieldLaunchJoinRequests { get; set; }
         public virtual DbSet<Publication> Publications { get; set; }
         public virtual DbSet<PublicationPost> PublicationPosts { get; set; }
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
@@ -3090,6 +3094,50 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UserBlock>()
                 .HasIndex(e => e.BlockerAppUserId);
 
+            // ── PushDevice (item 252) ────────────────────────────────────────
+            modelBuilder.Entity<PushDevice>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PushDevice>()
+                .Property(e => e.Token).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<PushDevice>()
+                .Property(e => e.AppVersion).HasMaxLength(32);
+            // One row per phone: a second sign-in on it takes the row over rather than adding one.
+            modelBuilder.Entity<PushDevice>()
+                .HasIndex(e => e.Token).IsUnique();
+            // A launch's one question: which phones does each of these people have?
+            modelBuilder.Entity<PushDevice>()
+                .HasIndex(e => e.AppUserId);
+
+            // ── FieldLaunch (item 252) ───────────────────────────────────────
+            // No foreign keys to the things launched or to people: a launch is a record of a
+            // moment, and must not stand in the way of deleting an event, an investigation or an
+            // account (the purges sweep these rows by id instead).
+            modelBuilder.Entity<FieldLaunch>()
+                .Property(e => e.Title).HasMaxLength(300).IsRequired();
+            modelBuilder.Entity<FieldLaunch>()
+                .Property(e => e.LocationLabel).HasMaxLength(300);
+            modelBuilder.Entity<FieldLaunch>()
+                .HasIndex(e => new { e.Target, e.InvestigationId, e.OrgCalendarEventId, e.HostedEventId });
+            modelBuilder.Entity<FieldLaunch>()
+                .HasIndex(e => e.ExpiresUtc);
+            modelBuilder.Entity<FieldLaunchRecipient>()
+                .HasOne(e => e.FieldLaunch).WithMany(l => l.Recipients)
+                .HasForeignKey(e => e.FieldLaunchId).OnDelete(DeleteBehavior.Cascade);
+            // Who may read a private notice, asked on every feed page: is this reader one of them?
+            modelBuilder.Entity<FieldLaunchRecipient>()
+                .HasIndex(e => new { e.AppUserId, e.FieldLaunchId }).IsUnique();
+            modelBuilder.Entity<FieldLaunch>()
+                .Property(e => e.JoinToken).HasMaxLength(64);
+            modelBuilder.Entity<FieldLaunch>()
+                .HasIndex(e => e.JoinToken).IsUnique().HasFilter("[JoinToken] IS NOT NULL");
+            modelBuilder.Entity<FieldLaunchJoinRequest>()
+                .HasOne(e => e.FieldLaunch).WithMany(l => l.JoinRequests)
+                .HasForeignKey(e => e.FieldLaunchId).OnDelete(DeleteBehavior.Cascade);
+            // Asking twice is asking once.
+            modelBuilder.Entity<FieldLaunchJoinRequest>()
+                .HasIndex(e => new { e.FieldLaunchId, e.AppUserId }).IsUnique();
+
             // ── Publication ──────────────────────────────────────────────────
             modelBuilder.Entity<Publication>()
                 .HasOne(e => e.Organization).WithMany()
@@ -4139,6 +4187,11 @@ namespace Ben.Data.Source.Context
             // makes a retried upload find its existing row instead of making a second one.
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.InvestigationId, e.StartedAt });
+            // The team's list of what was sent up at a tour date or event (item 252).
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.StartedAt });
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasIndex(e => new { e.HostedEventId, e.StartedAt });
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.SubmittedByAppUserId, e.StartedAt });
             // Per PERSON, not per investigation: a retried upload finds its own row, while two

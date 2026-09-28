@@ -182,6 +182,12 @@ struct RootShell: View {
                     destination(route)
                 }
         }
+        // One stack per section, by identity. The split view's detail column is ONE place that
+        // shows whichever section is selected; without this it kept the previous section's stack
+        // and ignored a path set in the same moment the section changed — so on an iPad a link or
+        // a notification into a page below a section's front screen (a lead's "wants to join")
+        // stopped at the front screen (found by item 252's role-play, 2026-09-28).
+        .id(section)
     }
 
     @ViewBuilder
@@ -280,6 +286,14 @@ struct RootShell: View {
             LiveSessionView(sessionId: id)
         case .publicFieldSessions:
             PublicSessionsView()
+        case .joinLaunch(let id):
+            JoinLaunchView(launchId: id)
+        case .launchDetail(let id, let sent):
+            LaunchDetailView(launchId: id, sent: sent)
+        case .launchForGroup:
+            LaunchForGroupView()
+        case .joinByCode(let token):
+            JoinByCodeView(token: token)
         case .fieldSessionReview(let id):
             SessionReviewView(sessionId: id)
         default:

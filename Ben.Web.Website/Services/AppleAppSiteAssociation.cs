@@ -63,6 +63,10 @@ public static class AppleAppSiteAssociation
         // The emailed confirmation link. Opening it in the app is strictly better than in Safari:
         // the app confirms and the person is already signed in where they wanted to be.
         "/validate-email/*",
+
+        // A lead's QR code (item 252): the camera opens Field Kit, which asks to join. Without the
+        // app, the website's page says to get it and scan again.
+        "/field-kit/join/*",
     ];
 
     /// <summary>

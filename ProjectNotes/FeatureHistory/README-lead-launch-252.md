@@ -1,0 +1,186 @@
+# Item 252: the lead starts everybody's Field Kit (09/28/2026)
+
+Branch `feature/lead-launch-252`, from develop after the iOS time zones (`76247740`). Ships in the
+app's **1.1.0**. Ben:
+
+> check to see if the tour guide, event planner or group investigation lead is logged in and if they
+> are, they should be able to send a push from the app to others logged in who are registered for
+> the event, tour etc and pushes their phone app to automatically start with the event, tour
+> investigation in the field kit... They can take multiple sessions without having to do anything
+> with them. They can choose to submit them later. They will be limited to 10 minutes each or
+> 550mb for upload, so they might have to clip the time.
+>
+> maybe the guide or planner has a button that submits to the server and the server pushes to the
+> participants.
+>
+> It might be public, it might be a single investigation in a larger case, it might be a public
+> investigation at a public event, it might be a tour or a specific event and the planner wants the
+> hunt to start at a specific time. That is what the button does. I think it should also write a
+> text message in the feed the users can click to start a new session if they miss the first push.
+> This will expire like 6 hours after the end of the event or tour or investigation.
+
+## Decisions (Ben, 09/28/2026)
+
+0. **Nobody is forced into a session** (Ben, later the same day): "Maybe instead of forcing their
+   phone into a session, the launch button posts the link in the feed where they can click to join
+   the group's session... Clicking the link would open the Field Kit into a session where they don't
+   have to complete picking the location before the session." / "Instead of forcing them to join."
+   The card's **Join** (and the push, which only says it is starting) opens Field Kit straight into
+   a session already set to the event, tour or investigation and its place; recording starts when
+   they press Start. **A push goes out as well** (Ben chose "feed link + push").
+
+1. **Feed post audience:** public when the thing is public (a public tour date, public event,
+   public investigation); otherwise only the people it was sent to, and the lead.
+2. **Timing:** the button starts the hunt when it is pressed. No scheduling in advance.
+3. **Upload limit:** stays 600 MB and 10 minutes of video per upload (not 550).
+4. **Who may launch:** the lead plus the group's managers —
+   - a tour date: its guides, and anyone who may edit the group's calendar;
+   - a hosted event: its organiser, and staff who run the door;
+   - a public calendar event: anyone who may edit the group's calendar;
+   - an investigation: its lead, its creator, the case manager, and group admins
+     (`InvestigationAccess.CanManageAsync`).
+
+## Where things stood (mapped 09/28)
+
+- **No push at all.** No APNs sender, device-token table or endpoint on the server; no
+  `aps-environment`, no `registerForRemoteNotifications`, no tap handler in the app. (The backlog
+  said "the app registers for pushes"; it does not. Seat reminders are LOCAL notifications.)
+  Reusable: the ES256 `.p8` signing Sign in with Apple already does (`AppleClientSecret`,
+  `PrivateKeyFile`).
+- **A Field Kit session belongs to an investigation or nothing.** No event or tour-date field on the
+  phone's `FieldSession`, the upload form, or `FieldSessionUpload`.
+- **Feed posts** (`OrgMessage`, PublicFeed) have no expiry, no audience, and no event / tour /
+  investigation target; there is no robot account (posts are written as a person).
+- **Registered** means: tour dates and public events — `OrgCalendarEventAttendee.RsvpStatus =
+  Accepted`; hosted events — a Confirmed booking's lead and named guests; investigations —
+  `InvestigationAttendee` rows not declined, and live guest passes.
+- **No "things I lead" list** in the app for tour dates or events; guides are display rows only.
+- **Found in passing:** sending a second ten-minute window of one session REPLACES the first on the
+  server (same device session id), and a session row does not say whether it has been sent.
+
+## Plan
+
+**L1 — Push, end to end (server).** `PushDevice` (user, APNs token, environment, app version,
+last seen); `POST/DELETE api/me/push-devices`; an APNs sender (HTTP/2, ES256 JWT from a `.p8`,
+config section `Apns`, sandbox vs production per token; 410 Unregistered prunes the token); a fake
+sender for tests. Never logs a token.
+
+**L2 — Launches (server).** `FieldLaunch` (target: investigation, calendar event / tour date, or
+hosted event; launched by/at; ends at; expires = end + 6 h; public or not). `POST
+api/field-launches` checks who may launch and fans the push out to registered people with a
+device; `GET api/field-launches/mine` lists live ones. The feed post: `OrgMessage` gains
+`FieldLaunchId` and `ExpiresUtc` — public when the target is public, otherwise shown only to the
+launch's people. Uploads accept an `orgCalendarEventId` / `hostedEventId` target, with a rule for
+who may attach.
+
+**L3 — Joining, in the app.** The feed card's **Join**, a "Happening now" list in Field Kit, and a
+Field Kit link (`ishaunted://field-kit/launch/{id}`) all open the live session pending (item 215),
+already set to the thing and its place — no New session sheet. Push: entitlement and delegate,
+token registered when signed in and removed at sign-out; a tap opens the same link.
+
+**L4 — The lead's button (app).** "Things I lead today" and a **Launch** button on an
+investigation, a tour date and an event door, with "Send to N people" before it goes.
+
+**L4b — Join by QR code, for somebody who is not registered.** Ben: "would the qr code scan also
+register someone to join the tour, event or investigation? maybe it sends a request to the leader
+and the leader has to confirm to have them join. maybe we require them to sign in in order to use it
+during event... whatever you think is more appropriate." What was chosen:
+
+- The lead's launch screen shows a **QR code** of the launch's website address
+  (`https://ishaunted.com/field-kit/launch/{id}`), claimed as a universal link so the phone's camera
+  opens the app; without the app, the page says how to get it.
+- **Already registered:** exactly the card — straight into the group's session.
+- **Not registered: sign in, then ask.** Joining the group's session means your sessions go to the
+  group, so it has to know who you are; Field Kit on its own still needs no account. Scanning sends
+  "wants to join" to the lead, who sees it on the launch screen and approves with one tap.
+- **Nobody waits to record.** Field Kit opens at once and records to the phone like any session;
+  the lead's yes is what lets those sessions go to the group and puts the card in their feed. A no
+  leaves them as the person's own sessions.
+- **What a yes registers:** a tour date — a reserved seat; a public event — an accepted attendee; an
+  investigation — a guest pass (the join-by-code mechanism that already exists). A **hosted event is
+  paid**, so a yes adds the person to this launch only and never makes a booking.
+
+**L5 — Sessions pile up (app + server).** Sessions tied to a tour date or event on the phone and in
+the `.ben` upload; each row says sent / not sent; the next window of a long session adds to the
+first rather than replacing it.
+
+**L6 — Where the sessions land (website).** A tour date's and an event's sessions are visible to
+the group that ran it, and the feed shows the launch post on the website too.
+
+**L7 — Help, change logs, screenshots, PDF; tests throughout.**
+
+## What shipped (so far)
+
+- **L1** (`10d2e991`) push: `PushDevice`, `api/me/push-devices`, `ApnsPushSender`, `PushNotifier`.
+- **L2** (`78d1ea5a`) launches: `FieldLaunch` + recipients, `api/field-launches` (launchable, launch,
+  mine, one), the feed card (public, or the `FieldLaunchNotice` channel only its people see) with
+  `ExpiresUtc`.
+- **L3a** (`fcb28472`) nobody is forced: the card and the push invite; BenKit joins a launch.
+- **L3/L4 in the app**: Join on the feed card; Field Kit's "Launch a session for your group" and
+  "Happening now"; the lead's page (Launch, who it reached, the QR); push registration, taps and
+  sign-out removal (`PushRegistrar`, `AppDelegate`, `aps-environment`).
+- **L4b QR join**: `FieldLaunch.JoinToken` (only to managers; none for a home or a private case),
+  `FieldLaunchJoinRequest`, `api/field-launches/join/{token}` (standing, ask) and
+  `{id}/requests` (list, approve, decline). A yes registers — reserved tour seat, accepted
+  attendee, or a guest pass on the guide's own item-248 code (never a new code, which would revoke
+  theirs); a hosted event is never booked. The site claims `/field-kit/join/*`; its page names
+  nothing and says get the app, then scan again.
+
+## What testing found (and fixed)
+
+- The card was refused by SQL Server for a missing creator — invisible to the in-memory store; a
+  launch test now runs on SQLite with keys on.
+- Tapping a notification crashed the app: the `async` form of `didReceive` finished off the main
+  thread. Found by the end-to-end push test (real APNs sandbox → simulator), fixed, re-run green.
+- A manager who was not the launcher could not open a private launch's page, so could not see who
+  was asking.
+- Field Kit loaded "may I launch?" once, for whoever was signed in first; switching accounts left
+  the lead's button missing.
+- With launches listed, the session in progress and the lead's button were pushed off screen; the
+  order is now: Start, the open session, Launch, Happening now.
+
+## The role-play (09/28)
+
+Ben: "Run from start to end as Leader of a Tour and a guest of the tour... as the planner of an
+event.. a host of an event and guest of an event. Verify all are working as expected and test it
+as a user would use the app and website in conjunction together."
+
+Played on three simulators at once — **James Thornton** (BenCo member: the tour's guide and the
+event's host at the door) on an iPad, **Daniel Park** (guest) on an iPhone, **Wren Ashby** (a solo
+investigator, not in BenCo: the walk-up) on another iPhone — with **Sarah Mitchell** (BenCo
+administrator: the planner) on the website in a real browser (Playwright). Tonight's tour, its
+date and a live hosted event were made through the API as Sarah (`roleplay_setup.py`, scratchpad);
+every item-252 step was done in the app or on the site.
+
+1. Web, Sarah: approves Daniel's seat on the tour date; confirms his booking at the event.
+2. iPhone, Daniel: opens his seat; the reminders ask for notifications; allowed.
+3. iPad, James: Field Kit → Launch a session → the tour date → Launch. Daniel's phone, on its home
+   screen, gets "…is starting — James Thornton started the group's session"; the tap joins; he
+   records, stops, sends — to the tour date, nothing chosen.
+4. iPhone, Wren scans James's code at the PUBLIC tour: straight in (a public launch asks nobody's
+   leave), records, sends.
+5. A private BenCo members' hunt, launched by James: Wren scans, signs in, asks; James's iPad is
+   told "Wren Ashby wants to join"; he opens it and taps Let in; Wren is told "You're in" and sends
+   the session she recorded while waiting.
+6. iPad, James as host launches the hosted event; Daniel joins from the feed card, records, sends.
+7. Web: Daniel sees the launch card in the web feed; James finds both sessions on the tour date's
+   page and plays one back; Sarah finds Daniel's on the event's page; Daniel's own list marks the
+   tour's session as the group's, with no Delete.
+
+**Found by it:** on an iPad a link or a notification into a page below a section's front screen
+stopped at the front screen (the split view kept the previous section's stack) — so a lead on an
+iPad could not reach "wants to join" from the notification; each section's stack now has its own
+identity. And the card said "Tap Join", which the website does not have — it now says where to
+join. (Also: the website host must be restarted after a build, or it serves the old pages.)
+
+## The APNs key (09/28)
+
+Ben made one key for **both** sandbox and production. Key ID `TVH4P55742`, team `5778H75249`; the
+`.p8` lives beside the other Apple keys in `~/.ishaunted/` (mode 600), named by
+`Apns:PrivateKeyPath` in the git-ignored `appsettings.Development.json` — never in the repository.
+`ApnsLiveTests` (opt-in: `BEN_APNS_TEAM_ID`, `BEN_APNS_KEY_ID`, `BEN_APNS_KEY_PATH`) asks Apple for
+real: both services accept it and refuse only the made-up phone; with a wrong key id both refuse
+the key (checked).
+
+**Production still needs** the same file on the server, readable by the app pool identity (see
+`PrivateKeyFile`), and `Apns:KeyId` / `Apns:PrivateKeyPath` in its settings — at deploy.

@@ -16,7 +16,18 @@ security-related, say only that it was, and never the shape of it.
 read.
 
 **Versions** (from 2026-09-28): each heading after the service went live carries the release
-number after a middle dot — `## 2026-09-28 · 2.8.0`. A day of fixes moves the last number (2.7.0 →
+number after a middle dot — `## 2026-09-28 · 2.9.0
+
+- The apps can now be told when a group's session starts, with notifications on iPhone and iPad.
+  A phone is registered for them only while somebody is signed in on it, and forgotten when they
+  sign out or the phone is gone.
+- A lead can start a session for everybody registered for a tour date, an event or an
+  investigation; people who were not registered can ask to join by scanning the lead's code, and
+  the lead decides.
+- Field Kit sessions can be sent to a tour date or an event as well as to an investigation, at any
+  time after the night. Only the group running it can read them.
+
+## 2026-09-28 · 2.8.0`. A day of fixes moves the last number (2.7.0 →
 2.7.1); a day that adds something moves the middle one (→ 2.8.0); a whole new part of the service
 moves the first (→ 3.0.0). The service went live as 1.0.0 with the 2026-08-22 release; the day
 before it carries no number.

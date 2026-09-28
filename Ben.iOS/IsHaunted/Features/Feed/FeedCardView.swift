@@ -23,22 +23,43 @@ struct FeedCardView: View {
     var onRecategorize: (() -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            bodyText
-            media
-            marks
-            nudge
-            counts
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                bodyText
+                media
+                marks
+                nudge
+                counts
+            }
+            // One VoiceOver element per card, summarized; the thread opens on activate.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityAddTraits(.isButton)
+            .contentShape(Rectangle())
+            .onTapGesture { router.push(.feedPost(post.id), in: .feed) }
+            join
         }
         .padding(14)
         .background(Theme.mist, in: RoundedRectangle(cornerRadius: 14))
-        // One VoiceOver element per card, summarized; the thread opens on activate.
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityAddTraits(.isButton)
-        .contentShape(Rectangle())
-        .onTapGesture { router.push(.feedPost(post.id), in: .feed) }
+    }
+
+    /// A lead's launch (item 252): the way in for everybody it was sent to, and the second chance
+    /// for anybody who missed the notification. Its own control, outside the card's summary, so it
+    /// is a button to VoiceOver and to a finger alike.
+    @ViewBuilder
+    private var join: some View {
+        if let launch = post.launch {
+            Button {
+                router.open(.fieldLaunch(launch.launchId))
+            } label: {
+                Label("Join the session", systemImage: "record.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("feed-join-launch")
+        }
     }
 
     private var header: some View {

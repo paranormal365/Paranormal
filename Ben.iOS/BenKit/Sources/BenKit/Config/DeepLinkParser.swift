@@ -33,6 +33,14 @@ public enum DeepLink: Sendable, Equatable {
     case confirmEmail(token: String)
     /// `/attending/{token}` — the emailed no-account event RSVP link.
     case attending(token: String)
+    /// `field-kit/launch/{id}` — join the group's session a lead launched (item 252), from a feed
+    /// card or a push. Opens Field Kit set to it; nothing records until Start.
+    case fieldLaunch(UUID)
+    /// `field-kit/launch/{id}/requests` — the lead's notification that somebody asked to join.
+    case fieldLaunchRequests(UUID)
+    /// `/field-kit/join/{token}` — the lead's QR code. Joins straight away if the person is in;
+    /// otherwise asks the lead.
+    case fieldJoin(token: String)
 }
 
 /// Parses both `ishaunted://…` scheme URLs and `https://ishaunted.com/…`
@@ -107,6 +115,18 @@ public enum DeepLinkParser {
         case "attending":
             guard components.count > 1 else { return nil }
             return .attending(token: components[1])
+        case "field-kit":
+            guard components.count > 2 else { return nil }
+            switch components[1].lowercased() {
+            case "launch":
+                guard let id = UUID(uuidString: components[2]) else { return nil }
+                if components.count > 3, components[3].lowercased() == "requests" { return .fieldLaunchRequests(id) }
+                return .fieldLaunch(id)
+            case "join":
+                return components[2].isEmpty ? nil : .fieldJoin(token: components[2])
+            default:
+                return nil
+            }
         default:
             return nil
         }

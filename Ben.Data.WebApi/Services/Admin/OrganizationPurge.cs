@@ -101,8 +101,10 @@ public sealed class OrganizationPurge
             Investigations: investigationIds.Count,
             Events: eventIds.Count,
             FieldSessions: await db.FieldSessionUploads.AsNoTracking()
-                .CountAsync(s => s.InvestigationId != null
-                              && investigationIds.Contains(s.InvestigationId.Value), ct),
+                .CountAsync(s => (s.InvestigationId != null && investigationIds.Contains(s.InvestigationId.Value))
+                              || (s.OrgCalendarEventId != null && eventIds.Contains(s.OrgCalendarEventId.Value))
+                              || (s.HostedEventId != null
+                                  && db.HostedEvents.Any(h => h.Id == s.HostedEventId && h.OrganizationId == organizationId)), ct),
             EventEvidence: await db.EventEvidenceSubmissions.AsNoTracking()
                 .CountAsync(e => eventIds.Contains(e.OrgCalendarEventId), ct),
             StoredFiles: (await StoredPathsAsync(db, organizationId, caseIds, investigationIds, eventIds, ct)).Count,
@@ -140,9 +142,16 @@ public sealed class OrganizationPurge
             .Where(g => g.Tour.OrganizationId == organizationId)
             .Select(g => g.UploadFileId).ToListAsync(ct));
 
+        // Sessions sent to its investigations, and — item 252 — to its tour dates, events and
+        // hosted events: all stored as the group's.
+        var hostedIds = db.HostedEvents.Where(h => h.OrganizationId == organizationId).Select(h => h.Id);
         fileIds.AddRange(await db.FieldSessionUploadFiles.AsNoTracking()
-            .Where(f => f.FieldSessionUpload.InvestigationId != null
-                     && investigationIds.Contains(f.FieldSessionUpload.InvestigationId.Value))
+            .Where(f => (f.FieldSessionUpload.InvestigationId != null
+                         && investigationIds.Contains(f.FieldSessionUpload.InvestigationId.Value))
+                     || (f.FieldSessionUpload.OrgCalendarEventId != null
+                         && eventIds.Contains(f.FieldSessionUpload.OrgCalendarEventId.Value))
+                     || (f.FieldSessionUpload.HostedEventId != null
+                         && hostedIds.Contains(f.FieldSessionUpload.HostedEventId.Value)))
             // A bundle member has no file of its own — its bytes are inside the session's
             // single .ben, which is removed with the session document above.
             .Where(f => f.UploadFileId != null)
@@ -192,8 +201,11 @@ public sealed class OrganizationPurge
             .Select(i => i.Id).ToListAsync(ct);
         var eventIds = await db.OrgCalendarEvents.Where(e => e.OrganizationId == organizationId)
             .Select(e => e.Id).ToListAsync(ct);
+        var hostedEventIds = db.HostedEvents.Where(h => h.OrganizationId == organizationId).Select(h => h.Id);
         var sessionIds = await db.FieldSessionUploads
-            .Where(s => s.InvestigationId != null && investigationIds.Contains(s.InvestigationId.Value))
+            .Where(s => (s.InvestigationId != null && investigationIds.Contains(s.InvestigationId.Value))
+                     || (s.OrgCalendarEventId != null && eventIds.Contains(s.OrgCalendarEventId.Value))
+                     || (s.HostedEventId != null && hostedEventIds.Contains(s.HostedEventId.Value)))
             .Select(s => s.Id).ToListAsync(ct);
         var reportIds = await db.CaseReports.Where(r => caseIds.Contains(r.CaseId))
             .Select(r => r.Id).ToListAsync(ct);
@@ -490,6 +502,17 @@ public sealed class OrganizationPurge
                 .Where(x => x.HostedEventId != null && x.HostedEvent!.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+
+            // The group's launches (item 252). Their cards are posts people may have replied to or
+            // liked, so they are ended now — expired and unlinked — rather than deleted from under
+            // those; the launches themselves, and who they went to, go.
+            var launchIds = db.FieldLaunches.Where(x => x.OrganizationId == organizationId).Select(x => (Guid?)x.Id);
+            var endedAt = DateTime.UtcNow;
+            await db.OrgMessages.Where(x => x.FieldLaunchId != null && launchIds.Contains(x.FieldLaunchId))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ExpiresUtc, endedAt).SetProperty(x => x.FieldLaunchId, (Guid?)null), ct);
+            await db.FieldLaunchRecipients.Where(x => launchIds.Contains(x.FieldLaunchId)).ExecuteDeleteAsync(ct);
+            await db.FieldLaunchJoinRequests.Where(x => launchIds.Contains(x.FieldLaunchId)).ExecuteDeleteAsync(ct);
+            await db.FieldLaunches.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             // The outbox is CLEARED of its link, never emptied (item 239). A queued letter is not
             // the group's property — it is a letter to a person, and the most important one a

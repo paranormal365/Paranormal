@@ -312,6 +312,9 @@ struct EventDetailView: View {
     private func refreshReminders() async {
         guard let event else { return }
         await SeatReminders.schedule(for: event)
+        // The reminders asked for notifications; with them allowed, the phone registers for the
+        // guide's "the walk is starting" too (item 252).
+        if event.mySeat?.status == .reserved { PushRegistrar.shared.refresh() }
         remindersRefused = event.mySeat?.status == .reserved
             ? await AppPermission.notifications.isRefusedNow()
             : false

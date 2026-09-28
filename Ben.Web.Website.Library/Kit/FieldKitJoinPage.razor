@@ -1,0 +1,45 @@
+@namespace Ben.Web.Website.Library.Kit
+@page "/field-kit/join/{Token}"
+
+@*
+    Where a lead's QR code lands for somebody WITHOUT the app (item 252).
+
+    With the app installed, the phone never shows this page: the site claims /field-kit/join/* for
+    the app (AppleAppSiteAssociation), so the camera opens Field Kit, which asks to join. This page
+    is for everybody else, and says the one useful thing — get the app, then scan again.
+
+    It names nothing. The token is enough to ask to join, and a code photographed and posted
+    somewhere would otherwise tell a stranger what the group is doing tonight and where. The app
+    shows the name, to somebody signed in, standing there.
+
+    "Scan again" rather than anything cleverer: Apple has no deferred deep linking, so an app
+    installed from this page cannot know what was scanned before it existed (item 248 found the
+    same, and printed a code to type; a launch lasts one night, so scanning twice is simpler).
+*@
+
+<PageTitle>Join the group's session</PageTitle>
+
+<div class="container py-5" style="max-width:560px;">
+    <div class="card">
+        <div class="card-body py-5 text-center" id="field-kit-join">
+            <h3 class="mb-3">Join the group's session</h3>
+            <p class="text-secondary">
+                This code opens Field Kit in the IsHaunted app for iPhone and iPad, ready to record
+                with the group. If you aren't one of the people registered, the app asks the lead to
+                let you in — you can record while you wait.
+            </p>
+            <a class="btn btn-primary mb-4" href="@($"ishaunted://field-kit/join/{Uri.EscapeDataString(Token)}")"
+               id="field-kit-join-open">
+                Open in the IsHaunted app
+            </a>
+            <p class="text-secondary small mb-0">
+                Don't have it? Get <strong>IsHaunted</strong> from the App Store, sign in, then scan
+                the code again.
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+}

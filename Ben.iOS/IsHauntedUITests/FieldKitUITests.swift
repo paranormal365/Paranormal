@@ -49,7 +49,11 @@ final class FieldKitUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        XCTAssertTrue(app.staticTexts[marker].waitForExistence(timeout: 25),
+        // Signed in, the screen can open with group sessions above this phone's own (item 252), so
+        // the row may be further down.
+        let row = app.staticTexts[marker]
+        for _ in 0..<6 where !row.waitForExistence(timeout: 5) { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 20),
                       "a session interrupted by termination must still be listed")
 
         // And it is no longer claiming to be recording — the app cannot know when it stopped,

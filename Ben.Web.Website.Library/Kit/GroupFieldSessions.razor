@@ -1,0 +1,112 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    What the guests sent up from Field Kit at one tour date or event (item 252) — the group's side.
+
+    A lead launches the night, people join and record on their phones, and send their sessions
+    whenever they get round to it — days later is fine. This is where those sessions arrive, for the
+    group's team only: the other guests never see each other's.
+
+    The parent page has already waited for sign-in; this only loads.
+*@
+
+<div class="card mt-4" id="group-field-sessions">
+    <div class="card-body">
+        <h5 class="card-title mb-1">Field sessions sent up</h5>
+        <p class="text-secondary small mb-3">
+            What people recorded in Field Kit and sent to this @(HostedEventId is null ? "date" : "event").
+            They can send them long after the night — each arrives here when it does.
+        </p>
+
+        @if (_loading)
+        {
+            <div class="text-secondary small">Loading…</div>
+        }
+        else if (_refusal is not null)
+        {
+            <div class="alert alert-warning py-2 mb-0" data-testid="group-sessions-refused">@_refusal</div>
+        }
+        else if (_rows.Count == 0)
+        {
+            <p class="text-secondary mb-0" data-testid="group-sessions-empty">
+                Nothing sent up yet. Launch the night from the IsHaunted app to invite everybody to record —
+                or anybody registered can send a session later from Field Kit.
+            </p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Who</th>
+                            <th>Where they stood</th>
+                            <th class="text-end">Flagged</th>
+                            <th class="text-end">Files</th>
+                            <th class="text-end">&nbsp;</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr data-testid="group-session-row">
+                                <td class="text-nowrap">@row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</td>
+                                <td>@(row.RecordedByName ?? "—")</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
+                                <td class="text-end">@(row.MarkerCount > 0 ? row.MarkerCount.ToString() : "—")</td>
+                                <td class="text-end font-monospace">@row.Files.Count</td>
+                                <td class="text-end text-nowrap">
+                                    <a class="btn btn-secondary btn-sm text-nowrap" data-testid="group-session-play"
+                                       href="@($"/field-sessions/{row.Id}")">Play back</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>A tour date or calendar event.</summary>
+    [Parameter] public Guid? EventId { get; set; }
+
+    /// <summary>A hosted event.</summary>
+    [Parameter] public Guid? HostedEventId { get; set; }
+
+    private bool _loading = true;
+    private string? _refusal;
+    private IReadOnlyList<FieldSessionSummaryRecord> _rows = [];
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var target = EventId ?? HostedEventId;
+        if (target is null || target == _loadedFor) return;
+        _loadedFor = target;
+        _loading = true;
+        try
+        {
+            var result = EventId is { } eventId
+                ? await AdminClient.GetEventFieldSessionsAsync(eventId)
+                : await AdminClient.GetHostedEventFieldSessionsAsync(HostedEventId!.Value);
+            if (result.SessionExpired) _refusal = "You have been signed out. Sign in again to see these.";
+            else if (result.Failed) _refusal = result.Reason ?? "Couldn't load the sessions sent up just now.";
+            else { _rows = result.Items; _refusal = null; }
+        }
+        catch
+        {
+            // Never "loading" forever: a list that cannot load says so.
+            _refusal = "Couldn't load the sessions sent up just now.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

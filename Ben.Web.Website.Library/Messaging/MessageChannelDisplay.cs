@@ -22,6 +22,7 @@ public static class MessageChannelDisplay
         OrgMessageChannel.PublicCaseComment => "Case Comment",
         OrgMessageChannel.EventRoom     => "Event Room",
         OrgMessageChannel.EventStaffRoom => "Event Staff",
+        OrgMessageChannel.FieldLaunchNotice => "Group Session",
         // Reached only by a channel nobody has named yet, and it shows the enum's own spelling —
         // "EventStaffRoom" in a badge, which is how a reader learns the site was built by
         // somebody who forgot. MessageChannelDisplayTests fails before a reader ever sees it.
@@ -38,6 +39,7 @@ public static class MessageChannelDisplay
         OrgMessageChannel.PublicCaseComment => "bg-success",
         OrgMessageChannel.EventRoom     => "bg-secondary",
         OrgMessageChannel.EventStaffRoom => "text-bg-dark",
+        OrgMessageChannel.FieldLaunchNotice => "bg-success",
         _                               => "bg-secondary",
     };
 

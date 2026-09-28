@@ -174,6 +174,7 @@ account for exactly this reason.</p>
                             "one sender comes as that many packages, each with its own tracking.",
             "3d-my-questions": "Questions they asked about store items, and the answers — private to them "
                                "unless copied into an item's FAQ, which never names them.",
+            "3e-tour-date-field-sessions": "The same date as its guide sees it: what guests recorded and sent, for the group and the date's guides only.",
         },
     },
     "viewer": {
@@ -225,6 +226,7 @@ documents for what the same page looks like without those grants.</p>
                                        "the guest reads. The pass goes with the confirmation.",
             "5b-writing-to-guests": "One letter to everybody with a place, with the count shown before it is sent.",
             "5c-venue-profile": "The group's venue: its history, house rules and photo library.",
+            "5f-tour-date-field-sessions": "A tour date's page after the night: the seats, and the Field Kit sessions guests sent up from the guide's launch, with Play back.",
         },
     },
     "superadmin": {

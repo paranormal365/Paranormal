@@ -25,6 +25,11 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var recordedByAccountId: UUID?
     /// Somebody else's published night from the public archive, positions at the place's public point.
     public var isPublicArchiveCopy: Bool
+    /// Joined from a lead's launch (item 252): the tour date or event it belongs to, and the launch.
+    public var orgCalendarEventId: UUID?
+    public var hostedEventId: UUID?
+    public var eventTitle: String?
+    public var fieldLaunchId: UUID?
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
@@ -32,7 +37,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                 serverSessionId: UUID? = nil, uploadedAt: Date? = nil,
                 channels: CaptureChannels = .default,
                 importedAt: Date? = nil, sourceDeviceId: String? = nil,
-                recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false) {
+                recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false,
+                orgCalendarEventId: UUID? = nil, hostedEventId: UUID? = nil,
+                eventTitle: String? = nil, fieldLaunchId: UUID? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -50,6 +57,10 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.sourceDeviceId = sourceDeviceId
         self.recordedByAccountId = recordedByAccountId
         self.isPublicArchiveCopy = isPublicArchiveCopy
+        self.orgCalendarEventId = orgCalendarEventId
+        self.hostedEventId = hostedEventId
+        self.eventTitle = eventTitle
+        self.fieldLaunchId = fieldLaunchId
     }
 
     init(_ session: FieldSession) {
@@ -69,7 +80,11 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   importedAt: session.importedAt,
                   sourceDeviceId: session.sourceDeviceId,
                   recordedByAccountId: session.recordedByAccountId,
-                  isPublicArchiveCopy: session.isPublicArchiveCopy == true)
+                  isPublicArchiveCopy: session.isPublicArchiveCopy == true,
+                  orgCalendarEventId: session.orgCalendarEventId,
+                  hostedEventId: session.hostedEventId,
+                  eventTitle: session.eventTitle,
+                  fieldLaunchId: session.fieldLaunchId)
     }
 
     /// Whether this session arrived as a `.ben` rather than being recorded on this device.
@@ -89,7 +104,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     /// title AND as the first thing in the subtitle, so the list read the same timestamp twice on
     /// every untitled row. The row needs to know which it is looking at, not just what to print.
     public var isUntitled: Bool {
-        (locationLabel?.isEmpty ?? true) && (investigationTitle?.isEmpty ?? true)
+        (locationLabel?.isEmpty ?? true) && (investigationTitle?.isEmpty ?? true) && (eventTitle?.isEmpty ?? true)
     }
 
     /// What to call it in a list. The operator's own label wins; failing that, where it sat in
@@ -101,6 +116,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var title: String {
         if let locationLabel, !locationLabel.isEmpty { return locationLabel }
         if let investigationTitle, !investigationTitle.isEmpty { return investigationTitle }
+        if let eventTitle, !eventTitle.isEmpty { return eventTitle }
         return "Untitled session"
     }
 

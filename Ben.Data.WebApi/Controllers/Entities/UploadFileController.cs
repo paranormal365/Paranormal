@@ -772,6 +772,15 @@ public sealed class UploadFileController : BenControllerBase
                      .Where(s => (sessionIds.Contains(s.Id) || s.DocumentUploadFileId == id) && s.InvestigationId != null)
                      .Join(db.Investigations.AsNoTracking(), s => s.InvestigationId!.Value, i => i.Id, (s, i) => i.OrganizationId)
                      .ToListAsync(ct)) Add(org, direct: 1);
+        // And one sent to a group's tour date, event or hosted event (item 252).
+        foreach (var org in await db.FieldSessionUploads.AsNoTracking()
+                     .Where(s => (sessionIds.Contains(s.Id) || s.DocumentUploadFileId == id) && s.OrgCalendarEventId != null)
+                     .Join(db.OrgCalendarEvents.AsNoTracking(), s => s.OrgCalendarEventId!.Value, e => e.Id, (s, e) => e.OrganizationId)
+                     .ToListAsync(ct)) Add(org, direct: 1);
+        foreach (var org in await db.FieldSessionUploads.AsNoTracking()
+                     .Where(s => (sessionIds.Contains(s.Id) || s.DocumentUploadFileId == id) && s.HostedEventId != null)
+                     .Join(db.HostedEvents.AsNoTracking(), s => s.HostedEventId!.Value, h => h.Id, (s, h) => h.OrganizationId)
+                     .ToListAsync(ct)) Add(org, direct: 1);
 
         var orgIds = claims.Keys.ToList();
         var names = await db.Organizations.AsNoTracking().Where(o => orgIds.Contains(o.Id))

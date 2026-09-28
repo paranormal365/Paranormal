@@ -797,4 +797,126 @@ public sealed class FieldSessionUploadControllerTests
         var file = Assert.Single(rows.Single(r => r.Id == session.Id).Files);
         Assert.Equal(bytes.Length, file.FileSize);
     }
+
+    // ── Sessions at a tour date, an event, or through a lead's launch (item 252) ─────
+
+    private static readonly Guid EventId = Guid.NewGuid();
+    private static readonly Guid GuestId = Guid.NewGuid();        // a seat on the tour date
+    private static readonly Guid OtherGuestId = Guid.NewGuid();   // another seat, the same night
+    private static readonly Guid LetInId = Guid.NewGuid();        // not registered; the lead let them in by the QR code
+    private static readonly Guid LaunchId = Guid.NewGuid();
+
+    /// <summary>The usual world, plus a tour date with two guests, and a launch of it that ended a week ago.</summary>
+    private static async Task<IDbContextFactory<BenDataContext>> SeedEventAsync()
+    {
+        var factory = await SeedAsync();
+        await using var db = await factory.CreateDbContextAsync();
+        foreach (var (id, name) in new[] { (GuestId, "A Guest"), (OtherGuestId, "Another Guest"), (LetInId, "Let In") })
+            db.Users.Add(new AppUser { Id = id, UserName = $"{id:N}@t", Email = $"{id:N}@t", DisplayName = name });
+        db.OrgCalendarEvents.Add(new OrgCalendarEvent
+        {
+            Id = EventId, OrganizationId = OrgId, Title = "Saturday walk", IsPublic = false,
+            StartDateTime = DateTime.UtcNow.AddDays(-8), EndDateTime = DateTime.UtcNow.AddDays(-8).AddHours(2),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+        });
+        foreach (var guest in new[] { GuestId, OtherGuestId })
+            db.OrgCalendarEventAttendees.Add(new OrgCalendarEventAttendee
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = EventId, AppUserId = guest, RsvpStatus = RsvpStatus.Accepted,
+                Seats = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = guest,
+            });
+        db.FieldLaunches.Add(new FieldLaunch
+        {
+            Id = LaunchId, OrganizationId = OrgId, Target = FieldLaunchTarget.CalendarEvent, OrgCalendarEventId = EventId,
+            Title = "Saturday walk", LaunchedByAppUserId = MemberId, LaunchedUtc = DateTime.UtcNow.AddDays(-8),
+            EndsUtc = DateTime.UtcNow.AddDays(-8).AddHours(2), ExpiresUtc = DateTime.UtcNow.AddDays(-8).AddHours(8),
+            IsPublic = false,
+        });
+        db.FieldLaunchRecipients.Add(new FieldLaunchRecipient { Id = Guid.NewGuid(), FieldLaunchId = LaunchId, AppUserId = LetInId });
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    private static IFormFile ABundle() => Upload(
+        Bundle(("data.json", Encoding.UTF8.GetBytes(ValidDocument())), ("media/audio-001.m4a", PlausibleM4a())),
+        "session.ben", BenBundle.ContentType);
+
+    [Fact]
+    public async Task A_guest_sends_a_session_to_the_tour_date_and_the_group_reads_it_but_the_other_guests_do_not()
+    {
+        var factory = await SeedEventAsync();
+
+        var result = await Build(factory, GuestId).SubmitBundle(ABundle(), Guid.NewGuid(), null, GuestId, null, default,
+            orgCalendarEventId: EventId);
+        var sent = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(EventId, sent.OrgCalendarEventId);
+        Assert.Null(sent.InvestigationId);
+
+        // Stored as the group's, like an investigation's.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var document = await db.FieldSessionUploads.Where(x => x.Id == sent.Id).Select(x => x.DocumentUploadFile.StoragePath).SingleAsync();
+            Assert.StartsWith($"orgs/{OrgId}/", document);
+        }
+
+        var team = await Build(factory, MemberId).GetForEvent(EventId, default);
+        Assert.Single(Assert.IsAssignableFrom<IEnumerable<FieldSessionRecord>>(Assert.IsType<OkObjectResult>(team.Result).Value));
+        Assert.IsType<OkObjectResult>(await Build(factory, MemberId).GetSession(sent.Id, default));
+
+        Assert.IsType<NotFoundResult>((await Build(factory, OtherGuestId).GetForEvent(EventId, default)).Result);
+        Assert.IsNotType<OkObjectResult>(await Build(factory, OtherGuestId).GetSession(sent.Id, default));
+    }
+
+    [Fact]
+    public async Task Somebody_not_registered_cannot_send_to_the_event_and_is_told_it_is_still_on_their_phone()
+    {
+        var factory = await SeedEventAsync();
+
+        var result = await Build(factory, StrangerId).SubmitBundle(ABundle(), Guid.NewGuid(), null, StrangerId, null, default,
+            orgCalendarEventId: EventId);
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(result.Result).Value?.ToString() ?? "";
+        Assert.Contains("aren't registered", refusal);
+        Assert.Contains("still on your phone", refusal);
+    }
+
+    /// <summary>Ben: "they should be able to upload their evidence days after the event."</summary>
+    [Fact]
+    public async Task A_session_joined_from_a_launch_goes_where_it_points_a_week_after_it_ended()
+    {
+        var factory = await SeedEventAsync();
+
+        var result = await Build(factory, LetInId).SubmitBundle(ABundle(), Guid.NewGuid(), null, LetInId, null, default,
+            fieldLaunchId: LaunchId);
+
+        var sent = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(EventId, sent.OrgCalendarEventId);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(LaunchId, (await db.FieldSessionUploads.SingleAsync(x => x.Id == sent.Id)).FieldLaunchId);
+    }
+
+    [Fact]
+    public async Task Somebody_not_let_into_a_private_launch_cannot_send_to_it()
+    {
+        var factory = await SeedEventAsync();
+
+        var result = await Build(factory, StrangerId).SubmitBundle(ABundle(), Guid.NewGuid(), null, StrangerId, null, default,
+            fieldLaunchId: LaunchId);
+
+        Assert.Contains("weren't let into", Assert.IsType<BadRequestObjectResult>(result.Result).Value?.ToString() ?? "");
+    }
+
+    [Fact]
+    public async Task Each_part_of_a_long_session_is_its_own_session_and_resending_a_part_replaces_only_it()
+    {
+        // The phone gives each ten-minute part its own id (item 252); the server keeps one session per id.
+        var factory = await SeedEventAsync();
+        var (first, second) = (Guid.NewGuid(), Guid.NewGuid());
+        foreach (var part in new[] { first, second, first })
+            Assert.IsType<OkObjectResult>((await Build(factory, GuestId).SubmitBundle(ABundle(), part, null, GuestId, null, default,
+                orgCalendarEventId: EventId)).Result);
+
+        var team = await Build(factory, MemberId).GetForEvent(EventId, default);
+        Assert.Equal(2, Assert.IsAssignableFrom<IEnumerable<FieldSessionRecord>>(Assert.IsType<OkObjectResult>(team.Result).Value).Count());
+    }
 }

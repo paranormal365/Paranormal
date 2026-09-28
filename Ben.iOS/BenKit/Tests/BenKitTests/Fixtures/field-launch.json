@@ -1,0 +1,16 @@
+{
+  "id": "be32705c-03e2-4163-8d40-1ad3c7bf6b88",
+  "target": "investigation",
+  "investigationId": "2d213f63-0f5f-49e6-872a-7b1ee7c3ee36",
+  "orgCalendarEventId": null,
+  "hostedEventId": null,
+  "title": "Evening visit",
+  "locationLabel": "The front parlour",
+  "organizationName": "Paranormal365",
+  "launchedByName": "AverageBen",
+  "launchedUtc": "2026-09-28T18:29:15.964347Z",
+  "endsUtc": "2026-09-28T21:59:00Z",
+  "expiresUtc": "2026-09-29T03:59:00Z",
+  "isPublic": false,
+  "appLink": "ishaunted://field-kit/launch/be32705c-03e2-4163-8d40-1ad3c7bf6b88"
+}

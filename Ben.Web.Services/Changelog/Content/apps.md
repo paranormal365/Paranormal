@@ -24,6 +24,24 @@ move the last number, new things the middle one, a whole new part of the app the
 
 ## 2026-09-28 · 1.1.0
 
+- A lead can now start everybody's Field Kit. A tour's guide, an event's organiser or door staff,
+  or an investigation's lead taps **Launch a session for your group** in Field Kit. Everybody
+  registered is told with a notification and a card in the feed, and Field Kit lists it under
+  **Happening now**. Nobody is started automatically: **Join** opens a session already set up for
+  the tour, event or investigation and its place, and nothing records until Start.
+- The lead's page shows who it reached, a **QR code** to hold up, and anybody asking to join. At a
+  public tour or event anybody who scans is straight in; at a private night they sign in and ask,
+  and the lead taps **Let in** or **No**. People can record while they wait.
+- Sessions pile up on the phone and can be sent whenever you like — that night or days later.
+  Each row says **Sent** or **Not sent**, and the send screen already says where it goes, with a
+  switch to keep it as your own instead.
+- Sending the next ten minutes of a long session no longer replaces the part sent before it.
+- The send screen gives the upload allowance as 600 MB, which is what it is; it read 629.1 MB.
+- On an iPad, a notification or a link into a page deeper than a section's front screen now opens
+  that page rather than stopping at the front.
+
+## 2026-09-28 · 1.1.0
+
 - Times in the app are shown on the clock of wherever the phone is, and follow it when it crosses
   into another time zone. Every time is still stored in universal time; the zone chosen on the
   website sets only the website's clock.

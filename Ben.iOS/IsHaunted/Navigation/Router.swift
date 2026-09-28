@@ -121,6 +121,16 @@ enum AppRoute: Hashable {
     case fieldSessionReview(UUID)
     /// Sessions other people published, near here or by a place's name (2026-09-27).
     case publicFieldSessions
+    /// Joining the group's session a lead launched (item 252) — from a feed card, a push, a QR
+    /// code or "Happening now". Fetches it, then gives way to the live session, set up and waiting
+    /// for Start.
+    case joinLaunch(UUID)
+    /// One launch: what it is, Join, and the QR code that lets somebody else join.
+    case launchDetail(UUID, sent: LaunchSent?)
+    /// The lead's page: what they may launch now.
+    case launchForGroup
+    /// The lead's QR code, scanned: join straight away, or ask the lead (item 252).
+    case joinByCode(String)
     /// Public events as a pushed screen, for the shell that has no Events tab.
     case eventsList
     case eventDetail(UUID)
@@ -276,10 +286,31 @@ final class Router {
             selection = .profile
             paths[.profile] = NavigationPath()
         case .confirmEmail(let token): push(.confirmEmail(token: token), in: .profile)
+        case .fieldLaunch(let id):
+            openArea(.fieldKit, pushing: .fieldKit, then: .joinLaunch(id))
+        case .fieldLaunchRequests(let id):
+            openArea(.fieldKit, pushing: .fieldKit, then: .launchDetail(id, sent: nil))
+        case .fieldJoin(let token):
+            openArea(.fieldKit, pushing: .fieldKit, then: .joinByCode(token))
         case .attending:
             // Website-only flow until universal links are hosted (AASA); the
             // route case is reserved so nothing here needs restructuring.
             openArea(.events, pushing: .eventsList)
         }
+    }
+}
+
+/// What a launch just did, carried to its page so the lead sees who it reached (item 252).
+struct LaunchSent: Hashable {
+    let people: Int
+    let peopleWithTheApp: Int
+    let phonesReached: Int
+    let pushConfigured: Bool
+
+    init(_ outcome: LaunchOutcomeRecord) {
+        people = outcome.people
+        peopleWithTheApp = outcome.peopleWithTheApp
+        phonesReached = outcome.phonesReached
+        pushConfigured = outcome.pushConfigured
     }
 }

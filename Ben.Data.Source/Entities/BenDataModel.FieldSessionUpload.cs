@@ -41,6 +41,20 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Guid? InvestigationId { get; set; }
 
+        /// <summary>
+        /// The tour date or calendar event it was recorded at (item 252) — a session somebody
+        /// joined from a guide's or organiser's launch. Read by the group's team for that event,
+        /// never by the other guests.
+        /// </summary>
+        /// <remarks>No foreign key, like a launch: the event going must not take a person's night with it.</remarks>
+        public Guid? OrgCalendarEventId { get; set; }
+
+        /// <summary>The hosted event it was recorded at (item 252), on the same terms.</summary>
+        public Guid? HostedEventId { get; set; }
+
+        /// <summary>The lead's launch it was joined from, when it was (item 252).</summary>
+        public Guid? FieldLaunchId { get; set; }
+
         /// <summary>Who sent it up. Not necessarily who recorded it — somebody may hand a device
         /// to a colleague to upload.</summary>
         public Guid SubmittedByAppUserId { get; set; }

@@ -319,6 +319,29 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Apple.AppleClientSecret>(
 builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Apple.IAppleTokenClient,
                                Ben.Data.WebApi.Services.Apple.AppleTokenClient>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Apple.AppleCredentialService>();
+// Push to phones (item 252): APNs with a token signed by the APNs key, read from a FILE named in
+// configuration — never from configuration itself, the repository is public. No key means
+// "not configured": launches still happen, the feed post still goes up, and nobody is pushed.
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var section = config.GetSection("Apns");
+    var pem = PrivateKeyFile.ReadOrEmpty(section["PrivateKeyPath"], "Apns:PrivateKeyPath");
+    var teamId = section["TeamId"] is { Length: > 0 } t ? t : config["Apple:TeamId"] ?? string.Empty;
+    return new Ben.Data.WebApi.Services.Push.ApnsOptions(
+        teamId, section["KeyId"] ?? string.Empty, pem, section["BundleId"] ?? string.Empty);
+});
+// One key and one provider token for the process: the sender below is made fresh per use.
+builder.Services.AddSingleton(sp => new Ben.Data.WebApi.Services.Push.ApnsCredentials(
+    sp.GetRequiredService<Ben.Data.WebApi.Services.Push.ApnsOptions>()));
+builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Push.IPushSender, Ben.Data.WebApi.Services.Push.ApnsPushSender>(client =>
+{
+    client.DefaultRequestVersion = System.Net.HttpVersion.Version20;
+    client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Push.PushNotifier>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldLaunches.FieldLaunchService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserHandleBackfillService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillService>();
 // Cleans message bodies written before sending sanitised them (2026-09-04). Idempotent: after the

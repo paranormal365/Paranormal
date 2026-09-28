@@ -123,6 +123,8 @@ struct MyEventsView: View {
         case .ok(let rows):
             bookings = rows
             state = .loaded
+            // A booking its organiser may launch a session at (item 252).
+            if !rows.isEmpty { PushRegistrar.shared.askIfUseful() }
         case .failed(let reason, _):
             state = .failed(reason)
         case .sessionEnded:

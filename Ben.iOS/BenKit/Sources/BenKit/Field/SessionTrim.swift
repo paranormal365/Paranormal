@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// The stretch of a session worth sending (item 210).
 ///
@@ -25,6 +26,23 @@ public struct SessionWindow: Sendable, Equatable {
     }
 
     public var duration: TimeInterval { end.timeIntervalSince(start) }
+
+    /// The id this part of a session is sent under (item 252).
+    ///
+    /// The server keeps one session per id it is sent, and replaces it when the same id comes
+    /// again — so a retry of a send is safe. Sending every part of a long session under the
+    /// session's own id made the second ten minutes REPLACE the first. Each part now has its own
+    /// id, the same every time that part is sent (a retry still replaces only itself), derived
+    /// from the session and the part's whole seconds so a handle nudged by a fraction is not a
+    /// new part.
+    public func uploadId(for sessionId: UUID) -> UUID {
+        let key = "\(sessionId.uuidString.lowercased())|\(Int(start.timeIntervalSince1970.rounded()))|\(Int(end.timeIntervalSince1970.rounded()))"
+        var bytes = Array(SHA256.hash(data: Data(key.utf8)).prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x50   // version 5: derived from a name
+        bytes[8] = (bytes[8] & 0x3F) | 0x80   // RFC 4122 variant
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
+    }
 
     public func contains(_ moment: Date) -> Bool { moment >= start && moment <= end }
 
@@ -82,8 +100,16 @@ public enum UploadAllowance: Sendable {
     /// a night's sound and photographs still fit in one upload.
     public static let maximumBytes: Int64 = 600 * 1024 * 1024
 
-    public static var spokenSize: String {
-        ByteCountFormatter.string(fromByteCount: maximumBytes, countStyle: .file)
+    public static var spokenSize: String { spoken(maximumBytes) }
+
+    /// A size on the send screen, in the same units as the allowance.
+    ///
+    /// The allowance is 600 × 1024 × 1024 bytes, and Ben's "600 MB". Printed in the Finder's decimal
+    /// units it read "629.1 MB" (found in item 252's help screenshots, 2026-09-28) — and a window's
+    /// weight printed in those units beside it could look over the line while fitting. Everything
+    /// the send screen weighs is said in the allowance's own units.
+    public static func spoken(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory)
     }
 }
 

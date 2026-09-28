@@ -201,7 +201,7 @@
                                 @* Item 218. A session recorded for an investigation is the group's
                                    record of that night, so it has no delete here — and the reason
                                    is shown rather than left as a missing button. *@
-                                @if (row.InvestigationId is null)
+                                @if (!row.IsGroupWork)
                                 {
                                     <button type="button" class="btn btn-outline-danger btn-sm ms-1"
                                             title="Delete this session" data-testid="delete-session"
@@ -212,7 +212,9 @@
                                 else
                                 {
                                     <span class="text-secondary small ms-2" data-testid="belongs-to-group"
-                                          title="Recorded for an investigation, so it belongs to the group's record of that night.">
+                                          title="@(row.InvestigationId is not null
+                                                   ? "Recorded for an investigation, so it belongs to the group's record of that night."
+                                                   : "Sent to a group's tour or event, so it belongs to their record of that night.")">
                                         the group's
                                     </span>
                                 }

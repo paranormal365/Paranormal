@@ -115,11 +115,18 @@ public final class SessionStore {
         errorMessage = nil
     }
 
+    /// Awaited at the very start of a deliberate sign-out, while the account's tokens still work —
+    /// for what has to be told to the server AS this person before they are gone. Item 252: this
+    /// phone stops being pushed for them, or somebody else holding it would see their notifications.
+    public var beforeSignOut: (@MainActor () async -> Void)?
+
     /// Called when somebody signs out on purpose — not when a session merely expires — so what the app keeps on the
     /// phone for them (saved event passes) goes before the next person picks the phone up.
     public var onDeliberateSignOut: (@MainActor () -> Void)?
 
     public func signOut() async {
+        // First, while this account's tokens still work (item 252: stop pushing to this phone).
+        await beforeSignOut?()
         onDeliberateSignOut?()
         clearPending()
         // Signing out on purpose is not an interrupt — the event this emits

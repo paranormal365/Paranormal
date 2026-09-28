@@ -134,6 +134,15 @@ public final class FieldSession {
     /// the place's public point rather than where they walked. Optional, like every later attribute.
     public var isPublicArchiveCopy: Bool?
 
+    /// Joined from a lead's launch (item 252): the tour date or calendar event, or the hosted
+    /// event, the session belongs to, what it is called, and the launch it came from. An
+    /// investigation's launch uses `investigationId` like any other. Optional, like every later
+    /// attribute.
+    public var orgCalendarEventId: UUID?
+    public var hostedEventId: UUID?
+    public var eventTitle: String?
+    public var fieldLaunchId: UUID?
+
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]
     @Relationship(deleteRule: .cascade, inverse: \FieldCapture.session)

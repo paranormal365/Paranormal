@@ -215,6 +215,7 @@
                     </a>
                     <a class="list-group-item list-group-item-action" href="#event-venue">The venue's say-so</a>
                     <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
+                    <a class="list-group-item list-group-item-action" href="#group-field-sessions">Field sessions</a>
                     <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
                     @* The screens of their own that hang off this page. *@
                     @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
@@ -835,6 +836,11 @@
                             </button>
                         </div>
                     </div>
+                </div>
+
+                @* ── What the guests recorded and sent up (item 252) ──────── *@
+                <div class="mb-3">
+                    <GroupFieldSessions HostedEventId="EventId" />
                 </div>
 
                 @* ── Ending it ───────────────────────────────────────────── *@

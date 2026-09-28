@@ -14,7 +14,18 @@ identify a person, it does not belong here.
 read. Add today's heading at the top when you ship something people can see.
 
 **Versions** (from 2026-09-28): each heading after the site went live carries the release number
-after a middle dot — `## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
+after a middle dot — `## 2026-09-28 · 2.12.0
+
+- A tour date's page and an event's page now show **Field sessions sent up**: what guests recorded
+  in Field Kit and sent to that night, with who, when and where, and **Play back**. Your group and
+  the night's guides or staff see them; the other guests do not.
+- When a guide or organiser starts the group's session from the app, its card in the feed says
+  where to join and offers **Open in the app**. It leaves the feed six hours after the night ends.
+- A session somebody sent to a group's tour or event belongs to that group's record, so it is no
+  longer offered for deletion from My Field Sessions.
+- Someone without the app who scans a lead's code is shown how to get it and join.
+
+## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
 2.10.1); a day that adds something people can use moves the middle one (→ 2.11.0); a whole new part
 of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
 it carry no number.

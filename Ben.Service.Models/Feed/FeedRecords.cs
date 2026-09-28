@@ -94,7 +94,12 @@ public sealed record FeedPostRecord(
     /// all — and who needs to see that they scheduled it, which is the difference between
     /// scheduling something and losing it.
     /// </remarks>
-    DateTime? ScheduledForUtc = null);
+    DateTime? ScheduledForUtc = null,
+    /// <summary>
+    /// "The hunt is starting" (item 252): the launch this card announces, with the link that opens
+    /// Field Kit on it. Null for every ordinary post.
+    /// </summary>
+    Ben.Service.Models.FieldLaunches.FeedLaunchCard? Launch = null);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind

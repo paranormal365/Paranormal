@@ -67,6 +67,7 @@ public sealed class AppLinksAndManifestTests
             "/notifications",
             "/profile",
             "/validate-email/*",
+            "/field-kit/join/*",
         ], claimed);
     }
 

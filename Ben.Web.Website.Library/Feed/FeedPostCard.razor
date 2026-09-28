@@ -213,6 +213,24 @@
             </div>
         }
 
+        @* A lead's launch (item 252): the group's session is starting. Joining is a phone's job —
+           Field Kit records on the phone — so the website says where, and on a phone with the app
+           the button opens it there. *@
+        @if (Post.Launch is { } launch)
+        {
+            <div class="mt-2 p-2 rounded border border-success-subtle d-flex align-items-center gap-2 flex-wrap small"
+                 data-testid="feed-post-launch">
+                <BenIcon Name="radio" />
+                <span class="flex-grow-1">
+                    Join <strong>@launch.Title</strong> from the IsHaunted app on your phone — it's in Field Kit
+                    under <em>Happening now</em>. Open until
+                    @launch.ExpiresUtc.ToViewerLocalTime(UserState).ToString("h:mm tt").
+                </span>
+                <a class="btn btn-success btn-sm text-nowrap" href="@launch.AppLink"
+                   data-testid="feed-post-launch-open">Open in the app</a>
+            </div>
+        }
+
         @* AUTHOR-ONLY, like the media-pending note: a post waiting for its hour is on the page
            only for the person who scheduled it, and they should be told when it goes up. *@
         @if (Post.ScheduledForUtc is { } goesUp && Post.IsOwnPost)
