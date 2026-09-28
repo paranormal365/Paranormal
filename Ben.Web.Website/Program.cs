@@ -28,9 +28,57 @@ var builder = WebApplication.CreateBuilder(args);
 // NOTE:
 // Ensure repository project receives ILoggerFactory via DI; Serilog integrates automatically. Use Errors minimum level to limit rows.
 
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .CreateLogger();
+// A DEVELOPMENT CONSOLE (2026-09-24). This site's only committed sink is the MSSqlServer one, and
+// its connection string in appsettings.json is a placeholder the deploy replaces. UseSerilog also
+// replaces the framework's own console logger. So a checkout with no appsettings.Development.json of
+// its own — every worktree — could not record an error anywhere, and scripts/run-e2e.sh's web.log
+// held build output only: a Blazor circuit the server closed with an error left no record at all,
+// just "Connection closed with an error" in the browser console.
+//
+// Added in code rather than to appsettings.json because Serilog:WriteTo is an array that
+// configuration merges BY INDEX (see the API's Program.cs, W-S7): a Console entry at index 0 here
+// would merge with whatever a local Development file keeps at index 0. It is skipped when
+// configuration already declares a Console sink, so a local file that adds one does not print
+// every line twice.
+const string LogConnectionPlaceholder = "SET-BY-DEPLOY-OR-ENVIRONMENT";
+var serilogSinks = builder.Configuration.GetSection("Serilog:WriteTo").GetChildren().ToList();
+var placeholderSinks = serilogSinks
+    .Where(s => (s["Args:connectionString"] ?? "").Contains(LogConnectionPlaceholder))
+    .ToList();
+
+// Worse than logging nowhere: with the placeholder still in place the site did not START.
+// autoCreateSqlTable makes the sink open a connection while it is being CONSTRUCTED, the
+// placeholder host does not resolve, and ReadFrom.Configuration threw out of Main. In Development
+// the sink is left in place but told not to reach for the table at startup, so it only fails
+// (silently) if an error is ever written. Everywhere else the throw stands: a deploy that forgot
+// the connection string should stop, not run blind.
+if (builder.Environment.IsDevelopment() && placeholderSinks.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(placeholderSinks.Select(s =>
+        new KeyValuePair<string, string?>($"{s.Path}:Args:autoCreateSqlTable", "false")));
+}
+
+var loggerConfiguration = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration);
+
+if (builder.Environment.IsDevelopment()
+    && !serilogSinks.Any(s => string.Equals(s["Name"], "Console", StringComparison.OrdinalIgnoreCase)))
+{
+    // Warning and up: Information would put every request in the log and bury the errors.
+    loggerConfiguration.WriteTo.Console(
+        restrictedToMinimumLevel: LogEventLevel.Warning,
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}");
+}
+
+Log.Logger = loggerConfiguration.CreateLogger();
+
+if (builder.Environment.IsDevelopment() && placeholderSinks.Count > 0)
+{
+    Log.Warning("The Logs table sink has no connection string (still {Placeholder}), so errors are "
+        + "written to this console only. Set Serilog__WriteTo__{Index}__Args__connectionString to a "
+        + "non-production database to record them there as well.",
+        LogConnectionPlaceholder, placeholderSinks[0].Key);
+}
 
 builder.Host.UseSerilog();
 
@@ -306,7 +354,15 @@ builder.Services.AddAuthorization();
 // KB of store front, and the page just sat there, drawn but dead. The Playwright test
 // The_carried_state_fits_the_connection keeps each store page well under this limit.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents()
+    .AddInteractiveServerComponents(circuit =>
+    {
+        // Development only: the exception behind a closed circuit reaches the browser console
+        // instead of "Connection closed with an error". Never in UAT or production — it sends
+        // server stack traces to whoever is looking. Only ever switched ON here, so a local
+        // appsettings "DetailedErrors" still has its say.
+        if (builder.Environment.IsDevelopment())
+            circuit.DetailedErrors = true;
+    })
     .AddHubOptions(o => o.MaximumReceiveMessageSize = 128 * 1024);
 
 var app = builder.Build();
