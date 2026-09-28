@@ -31,19 +31,19 @@ struct EventClockTests {
         #expect(Self.plain(EventClock.label(Self.walkStart, "Europe/London")) == "GMT+1")
     }
 
-    @Test func nobodySaidMeansUtcAndSaysSo() {
+    @Test func nobodySaidMeansTheHouseClockAndSaysSo() {
         // Most events carry no zone, and a silent guess at the reader's own is how a night ends up
-        // advertised at the wrong hour. UTC, named.
-        #expect(Self.plain(EventClock.label(Self.walkStart, nil)) == "GMT")
-        #expect(Self.plain(EventClock.dayAndTime(Self.walkStart, nil)) == "9/13/26, 8:08 PM GMT")
-        #expect(Self.plain(EventClock.dayAndTime(Self.walkStart, "")) == "9/13/26, 8:08 PM GMT")
+        // advertised at the wrong hour. The house clock (Chicago), named — the website's rule since
+        // 2026-09-20, and the phone's since 2026-09-28; it said UTC, which is nobody's evening.
+        #expect(Self.plain(EventClock.label(Self.walkStart, nil)) == "CDT")
+        #expect(Self.plain(EventClock.dayAndTime(Self.walkStart, nil)) == "9/13/26, 3:08 PM CDT")
+        #expect(Self.plain(EventClock.dayAndTime(Self.walkStart, "")) == "9/13/26, 3:08 PM CDT")
     }
 
     @Test func anUnknownZoneFallsBackRatherThanFailing() {
-        // An id this phone's database does not know is a reason to say UTC, not to leave a row
+        // An id this phone's database does not know is a reason to fall back, not to leave a row
         // blank. The server is free to record a zone a two-year-old iOS release has never heard of.
-        // Foundation normalises the UTC zone's identifier to "GMT"; what matters is the offset.
-        #expect(EventClock.zone("Mars/Olympus_Mons").secondsFromGMT() == 0)
+        #expect(EventClock.zone("Mars/Olympus_Mons").identifier == "America/Chicago")
     }
 
     @Test func theAbbreviationFollowsTheSeason() {

@@ -168,15 +168,24 @@ public struct MyCaseOccurrence: Sendable, Codable, Equatable, Identifiable {
     public var experienceTypeIds: [UUID]
 }
 
-/// An investigation on the client's case, as the client may see it.
+/// A visit on the client's case, as the client may see it — `ClientCaseInvestigation` on the server.
+///
+/// **Matches the server's record, which it did not** (found 2026-09-28): it declared
+/// `investigationId` and `scheduledStart`, names the server has never sent, so no visit's date ever
+/// decoded — and the fixture's list was empty, so no test could notice. Nothing drew it, which is
+/// the other half of the same gap: a client could not see their visits on the phone at all.
 public struct MyCaseInvestigation: Sendable, Codable, Equatable, Identifiable {
-    public var id: UUID?
-    public var investigationId: UUID?
-    public var title: String?
-    public var scheduledStart: Date?
-    public var status: Int?
-
-    public var identity: UUID { investigationId ?? id ?? UUID() }
+    public var id: UUID
+    public var title: String
+    public var scheduledDateTime: Date
+    public var endDateTime: Date?
+    public var location: String?
+    public var status: Int
+    public var evidenceDueDate: Date?
+    /// The last moment the client may call it off, when it can still be cancelled.
+    public var cancellationDeadlineUtc: Date?
+    /// The visit's own clock (2026-09-28): its own zone, else its case's, else its group's.
+    public var timeZoneId: String?
 }
 
 /// Somebody the client can contact about this case.
@@ -225,6 +234,8 @@ public struct MyCaseDetail: Sendable, Codable, Equatable, Identifiable {
     /// contradicts. Today the server always fills it, so nothing failed; but a null would have
     /// thrown and taken the whole case-detail screen with it, not one section (2026-09-17 audit).
     public var contacts: [MyCaseContact]?
+    /// The clock the case reads on (2026-09-28); nil from an older server.
+    public var timeZoneId: String?
 
     public var id: UUID { caseId }
 

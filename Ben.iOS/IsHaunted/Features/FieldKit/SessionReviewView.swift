@@ -552,7 +552,7 @@ struct SessionReviewView: View {
         if let summary {
             VStack(alignment: .leading, spacing: 6) {
                 LabeledContent("Started",
-                               value: summary.startedAt.formatted(date: .abbreviated,
+                               value: summary.startedAt.readerFormatted(date: .abbreviated,
                                                                   time: .shortened))
                 if let duration = summary.duration {
                     LabeledContent("Ran for", value: SessionReviewView.durationText(duration))

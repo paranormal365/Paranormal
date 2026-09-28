@@ -71,7 +71,7 @@ struct HostedBookingPanel: View {
                 .font(.footnote).foregroundStyle(Theme.fog)
         case .held:
             if let until = booking.holdExpiresUtc {
-                Text("Nobody else can take them until \(until.formatted(date: .abbreviated, time: .shortened)), while the venue answers.")
+                Text("Nobody else can take them until \(until.readerFormatted(date: .abbreviated, time: .shortened)), while the venue answers.")
                     .font(.footnote).foregroundStyle(Theme.fog)
             }
         case .confirmed:

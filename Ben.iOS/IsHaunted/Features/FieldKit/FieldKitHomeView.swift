@@ -249,7 +249,7 @@ struct FieldKitHomeView: View {
     private func serverDetail(_ session: FieldUploadClient.ServerSession) -> String {
         var parts: [String] = []
         if let started = session.startedAt {
-            parts.append(started.formatted(date: .abbreviated, time: .shortened))
+            parts.append(started.readerFormatted(date: .abbreviated, time: .shortened))
         }
         parts.append("\(session.readingCount) readings")
         if session.markerCount > 0 { parts.append("\(session.markerCount) marked") }
@@ -371,7 +371,7 @@ private struct SessionRow: View {
     }
 
     private var detail: String {
-        var parts: [String] = [summary.startedAt.formatted(date: .abbreviated, time: .shortened)]
+        var parts: [String] = [summary.startedAt.readerFormatted(date: .abbreviated, time: .shortened)]
         if let duration = summary.duration {
             parts.append(Self.durationText(duration))
         } else if summary.outcome == .interrupted {

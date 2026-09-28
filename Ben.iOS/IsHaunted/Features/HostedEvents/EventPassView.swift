@@ -139,7 +139,7 @@ struct EventPassView: View {
             }
 
             if let savedAt {
-                Label("Saved on this phone \(savedAt.formatted(date: .abbreviated, time: .shortened)) — no signal just now.",
+                Label("Saved on this phone \(savedAt.readerFormatted(date: .abbreviated, time: .shortened)) — no signal just now.",
                       systemImage: "wifi.slash")
                     .font(.caption).foregroundStyle(Theme.warning).multilineTextAlignment(.center)
                     .accessibilityIdentifier("event-pass-saved")

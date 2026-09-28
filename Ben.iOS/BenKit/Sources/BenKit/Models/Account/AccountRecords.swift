@@ -12,15 +12,20 @@ public struct RegisterRequest: Encodable, Sendable {
     public var handle: String
     public var firstName: String?
     public var lastName: String?
+    /// The zone the account reads the site in (2026-09-28): this phone's, which the person can
+    /// change in Settings. Sent so an account made on the phone is not left on the house clock.
+    public var timeZoneId: String?
 
     public init(email: String, password: String, displayName: String, handle: String,
-                firstName: String? = nil, lastName: String? = nil) {
+                firstName: String? = nil, lastName: String? = nil,
+                timeZoneId: String? = TimeZone.current.identifier) {
         self.email = email
         self.password = password
         self.displayName = displayName
         self.handle = handle
         self.firstName = firstName
         self.lastName = lastName
+        self.timeZoneId = timeZoneId
     }
 }
 

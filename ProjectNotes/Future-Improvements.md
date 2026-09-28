@@ -13564,3 +13564,53 @@ international buyers, these need answers.
   moved to.
 - **Fee model.** The Stripe fee is known only after the charge (from the balance transaction). A
   per-unit fee column is an estimate until then.
+
+## 252. Lead starts everybody's Field Kit from a push (QUEUED — NEXT after iOS time zones, 2026-09-28)
+
+Ben, 09/28/2026: "check to see if the tour guide, event planner or group investigation lead is
+logged in and if they are, they should be able to send a push from the app to others logged in who
+are registered for the event, tour etc and pushes their phone app to automatically start with the
+event, tour investigation in the field kit... so this would log them as being part of the event,
+tour etc in that first screen where they would select it and move them to the active investigation
+session screen. They can take multiple sessions without having to do anything with them. They can
+choose to submit them later. They will be limited to 10 minutes each or 550mb for upload, so they
+might have to clip the time."
+
+**Ships in 1.1.0** (Ben, 09/28: "The next push of the iOS app is going to be 1.1.0. This cleans up
+bugs and clarifies handling timezones and will add a launch button for the planner, tour guide or
+investigation lead etc.").
+
+- **How it is sent** (Ben, same day: "maybe the guide or planner has a button that submits to the
+  server and the server pushes to the participants"): the lead taps a button in the app, the app
+  asks the server, and the server sends the push to each participant's device. Phones cannot push
+  to each other directly, so this is the only way it can work — and it means the server checks who
+  may send and who is registered, not the phone.
+- **What it can be started for** (Ben, same day): a public investigation, one investigation within a
+  larger case, a public investigation at a public event, a tour date, or a specific event — "the
+  planner wants the hunt to start at a specific time. That is what the button does."
+- **A post in the feed as well as the push:** "it should also write a text message in the feed the
+  users can click to start a new session if they miss the first push." The post is the second way
+  in: tapping it opens the same New session sheet on the same thing. It **expires about 6 hours
+  after the end** of the event, tour or investigation.
+- **Who may send:** the tour guide on a tour date, the organizer of an event, the lead on a group
+  investigation — only while signed in on the app.
+- **Who receives:** everybody registered for that date, event or investigation who is signed in on
+  the app (a push to their device).
+- **What the push does:** opens the app into Field Kit's New session sheet with that event, tour
+  date or investigation already chosen (marking them as part of it), and on to the live session
+  screen.
+- **Sessions pile up:** they can record several sessions without doing anything with them, and send
+  them later.
+- **Upload limit:** each upload 10 minutes of video or 550 MB, trimmed on the phone if longer.
+  **Check with Ben:** the phone's allowance is 600 MB today (raised 09/27 at his request).
+
+### Already exists
+
+- Field Kit's New session sheet takes a preselected investigation; the trimmer and the upload
+  allowance exist; the app registers for pushes; tours and events know who is registered.
+
+### Decide before building
+
+- Whether a push can START a recording, or only open the sheet ready to start (iOS will not record
+  in the background from a push, and starting a microphone unasked needs the person's tap).
+- Which roles count as "lead" for each of the three (guide, event staff role, investigation lead).

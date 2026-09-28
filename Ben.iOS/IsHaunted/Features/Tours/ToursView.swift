@@ -129,6 +129,12 @@ struct ToursView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                // Each night on its own clock, or all on the reader's (2026-09-28).
+                .safeAreaInset(edge: .top) {
+                    TimeZoneSwitch(zoneId: nil)
+                        .padding(.horizontal).padding(.vertical, 6)
+                        .background(.bar)
+                }
                 .refreshable { await repeatLastSearch() }
             }
         }
@@ -211,7 +217,8 @@ struct TourRow: View {
                 }
                 if let next = tour.nextDateStartUtc {
                     // The walk's own clock, not this phone's — see EventClock.
-                    Text("· next \(EventClock.dayAndTime(next, tour.timeZoneId))")
+                    Text("· next")
+                    PlaceTime(utc: next, zoneId: tour.timeZoneId)
                 } else {
                     Text("· no dates yet")
                 }

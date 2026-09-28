@@ -115,7 +115,7 @@ struct FieldCaptureBar: View {
                                 .font(.caption2).foregroundStyle(Theme.fog)
                         }
                         Spacer()
-                        Text(capture.at, format: .dateTime.hour().minute().second())
+                        Text(capture.at, format: ReaderClock.dateTime.hour().minute().second())
                             .font(.caption2.monospacedDigit()).foregroundStyle(Theme.fog)
                     }
                     .accessibilityIdentifier("capture-row")

@@ -46,7 +46,7 @@ struct ExportSessionView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(capture.relativePath
                                             .replacingOccurrences(of: "media/", with: ""))
-                                    Text(capture.at.formatted(date: .omitted, time: .standard))
+                                    Text(capture.at.readerFormatted(date: .omitted, time: .standard))
                                         .font(.caption2).foregroundStyle(Theme.fog)
                                 }
                             }

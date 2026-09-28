@@ -189,7 +189,7 @@ struct EVPModeView: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(question.text ?? "Question")
                                     .font(.callout).foregroundStyle(Theme.bone)
-                                Text(question.at, format: .dateTime.hour().minute().second())
+                                Text(question.at, format: ReaderClock.dateTime.hour().minute().second())
                                     .font(.caption2).foregroundStyle(Theme.fog)
                             }
                             Spacer()

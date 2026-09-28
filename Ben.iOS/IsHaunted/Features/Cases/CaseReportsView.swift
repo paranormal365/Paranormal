@@ -66,7 +66,7 @@ struct CaseReportsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(report.title).foregroundStyle(Theme.bone)
-                        Text(report.readerDate.formatted(date: .abbreviated, time: .omitted))
+                        Text(report.readerDate.readerFormatted(date: .abbreviated, time: .omitted))
                             .font(.caption).foregroundStyle(Theme.fog)
                     }
                     Spacer()

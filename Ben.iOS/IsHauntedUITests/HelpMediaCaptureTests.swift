@@ -244,6 +244,22 @@ final class HelpMediaCaptureTests: XCTestCase {
         snap("\(device)-review")
     }
 
+    /// A client's visits, read on the phone's clock with the visit's own a switch away (2026-09-28).
+    ///
+    /// Daniel, the setUp account: a client whose case has a visit.
+    func testCaptureCaseVisits() throws {
+        settle(6)
+        XCTAssertTrue(AppNavigator.openSection("My Cases", in: app), "Could not reach My Cases.")
+        let firstCase = app.cells.firstMatch
+        XCTAssertTrue(firstCase.waitForExistence(timeout: 15), "The client should have a case.")
+        firstCase.tap()
+        let visit = app.staticTexts["visit-when"].firstMatch
+        for _ in 0..<4 where !(visit.exists && visit.isHittable) { app.swipeUp() }
+        XCTAssertTrue(visit.waitForExistence(timeout: 10), "The case should list its visits.")
+        settle(1)
+        snap("iphone-case-visits")
+    }
+
     /// During the event: the event's own screen, its programme, a menu and the room (item 235 phase 14b).
     ///
     /// Walks each booking's event screen until one has a programme to show, and photographs what that event has; a

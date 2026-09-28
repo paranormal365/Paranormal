@@ -28,7 +28,7 @@ struct BlockedAccountsView: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     Text(person.displayName)
-                                    Text("Blocked \(person.dateCreated.formatted(date: .abbreviated, time: .omitted))")
+                                    Text("Blocked \(person.dateCreated.readerFormatted(date: .abbreviated, time: .omitted))")
                                         .font(.caption).foregroundStyle(Theme.fog)
                                 }
                                 Spacer()

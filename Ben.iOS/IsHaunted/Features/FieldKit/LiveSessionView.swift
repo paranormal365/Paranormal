@@ -632,7 +632,7 @@ struct LiveSessionView: View {
                             }
                         }
                         Spacer()
-                        Text(marker.at, format: .dateTime.hour().minute().second())
+                        Text(marker.at, format: ReaderClock.dateTime.hour().minute().second())
                             .font(.caption2.monospacedDigit()).foregroundStyle(Theme.fog)
                     }
                     .accessibilityIdentifier("marker-row")
