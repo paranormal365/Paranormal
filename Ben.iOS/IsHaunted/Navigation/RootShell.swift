@@ -280,6 +280,14 @@ struct RootShell: View {
             LiveSessionView(sessionId: id)
         case .publicFieldSessions:
             PublicSessionsView()
+        case .joinLaunch(let id):
+            JoinLaunchView(launchId: id)
+        case .launchDetail(let id, let sent):
+            LaunchDetailView(launchId: id, sent: sent)
+        case .launchForGroup:
+            LaunchForGroupView()
+        case .joinByCode(let token):
+            JoinByCodeView(token: token)
         case .fieldSessionReview(let id):
             SessionReviewView(sessionId: id)
         default:

@@ -1,0 +1,24 @@
+{
+  "launchId": "b38028e1-fd7a-4a1d-9cde-72814f5bc582",
+  "title": "S\u00e9ance at the Union Station Hotel",
+  "organizationName": "Paranormal365",
+  "launchedByName": "AverageBen",
+  "standing": "in",
+  "launch": {
+    "id": "b38028e1-fd7a-4a1d-9cde-72814f5bc582",
+    "target": "event",
+    "investigationId": null,
+    "orgCalendarEventId": "265b1ec3-17a9-43b3-9f09-c642ca046854",
+    "hostedEventId": null,
+    "title": "S\u00e9ance at the Union Station Hotel",
+    "locationLabel": "Union Station Hotel",
+    "organizationName": "Paranormal365",
+    "launchedByName": "AverageBen",
+    "launchedUtc": "2026-09-28T19:48:03.979548Z",
+    "endsUtc": "2026-09-28T22:08:00Z",
+    "expiresUtc": "2026-09-29T04:08:00Z",
+    "isPublic": false,
+    "appLink": "ishaunted://field-kit/launch/b38028e1-fd7a-4a1d-9cde-72814f5bc582",
+    "joinToken": null
+  }
+}

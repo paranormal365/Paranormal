@@ -56,12 +56,46 @@ namespace Ben.Data.Source.Entities
         /// <summary>The card in the feed.</summary>
         public Guid? FeedPostId { get; set; }
 
+        /// <summary>
+        /// The secret behind the lead's QR code, for somebody NOT registered to ask to join (item
+        /// 252: "maybe it sends a request to the leader and the leader has to confirm").
+        /// </summary>
+        /// <remarks>
+        /// A token rather than the launch's id, so a photographed card or a forwarded link is not a
+        /// way to ask. Null where asking must not be possible at all: a visit to somebody's home or
+        /// a private client case — the rule item 248's guest codes keep, because even the request
+        /// screen would show the visit's title.
+        /// </remarks>
+        public string? JoinToken { get; set; }
+
         /// <summary>How many people it was for, how many had the app, and how many phones took it.</summary>
         public int PeopleCount { get; set; }
         public int PeopleWithTheApp { get; set; }
         public int PhonesReached { get; set; }
 
         public virtual ICollection<FieldLaunchRecipient> Recipients { get; set; } = new List<FieldLaunchRecipient>();
+        public virtual ICollection<FieldLaunchJoinRequest> JoinRequests { get; set; } = new List<FieldLaunchJoinRequest>();
+    }
+
+    /// <summary>
+    /// Somebody who scanned the lead's code and asked to join (item 252). The lead approves or
+    /// declines; a yes registers them for the thing and adds them to the launch.
+    /// </summary>
+    /// <remarks>
+    /// They never wait to record: Field Kit opens at once and keeps their sessions on the phone.
+    /// What the yes decides is whether those sessions may go to the group.
+    /// </remarks>
+    public partial class FieldLaunchJoinRequest
+    {
+        public Guid Id { get; set; }
+        public Guid FieldLaunchId { get; set; }
+        public Guid AppUserId { get; set; }
+        public FieldLaunchJoinStatus Status { get; set; }
+        public DateTime RequestedUtc { get; set; }
+        public DateTime? DecidedUtc { get; set; }
+        public Guid? DecidedByAppUserId { get; set; }
+
+        public virtual FieldLaunch FieldLaunch { get; set; } = null!;
     }
 
     /// <summary>One person a launch was sent to (item 252).</summary>

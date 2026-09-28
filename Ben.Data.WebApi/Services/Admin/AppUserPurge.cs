@@ -137,7 +137,8 @@ public sealed class AppUserPurge
         var groupMessages = await db.OrgMessages.AsNoTracking().CountAsync(x => x.AuthorAppUserId == userId, ct);
         var evidence = await db.EventEvidenceSubmissions.AsNoTracking().CountAsync(x => x.SubmittedByAppUserId == userId, ct);
         var groupSessions = await db.FieldSessionUploads.AsNoTracking()
-            .CountAsync(s => s.SubmittedByAppUserId == userId && s.InvestigationId != null, ct);
+            .CountAsync(s => s.SubmittedByAppUserId == userId
+                          && (s.InvestigationId != null || s.OrgCalendarEventId != null || s.HostedEventId != null), ct);
         var storeOrders = await db.StoreOrders.AsNoTracking()
             .Where(o => o.BuyerAppUserId == userId).Select(o => o.Status).ToListAsync(ct);
 
@@ -249,6 +250,7 @@ public sealed class AppUserPurge
             await db.PushDevices.Where(d => d.AppUserId == userId).ExecuteDeleteAsync(ct);
             // And which launches they were sent: a list of where a person was going to be.
             await db.FieldLaunchRecipients.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
+            await db.FieldLaunchJoinRequests.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserTourStates.Where(t => t.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserMessageTos.Where(m => m.ToAppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserFollows
@@ -383,14 +385,15 @@ public sealed class AppUserPurge
 
     /// <summary>Sessions that were never part of anybody's investigation.</summary>
     /// <remarks>
-    /// The <c>InvestigationId == null</c> half is the whole rule. A session recorded FOR a group is
-    /// the group's evidence and outlives whoever carried the phone; one recorded on somebody's own
-    /// walk-through is theirs alone.
+    /// The "for nobody" half is the whole rule. A session recorded FOR a group — an investigation,
+    /// or since item 252 a tour date, an event or a hosted event — is the group's evidence and
+    /// outlives whoever carried the phone; one recorded on somebody's own walk-through is theirs alone.
     /// </remarks>
     private static async Task<List<Guid>> PersonalSessionIdsAsync(
         BenDataContext db, Guid userId, CancellationToken ct)
         => await db.FieldSessionUploads.AsNoTracking()
-            .Where(s => s.SubmittedByAppUserId == userId && s.InvestigationId == null)
+            .Where(s => s.SubmittedByAppUserId == userId && s.InvestigationId == null
+                     && s.OrgCalendarEventId == null && s.HostedEventId == null)
             .Select(s => s.Id)
             .ToListAsync(ct);
 
@@ -453,7 +456,7 @@ public sealed class AppUserPurge
         // <paramref name="going"/>.
         var sweptEntities = new HashSet<string>(StringComparer.Ordinal)
         {
-            nameof(SignInEvent), nameof(PushDevice), nameof(FieldLaunchRecipient), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
+            nameof(SignInEvent), nameof(PushDevice), nameof(FieldLaunchRecipient), nameof(FieldLaunchJoinRequest), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),

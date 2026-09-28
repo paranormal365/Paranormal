@@ -32,4 +32,34 @@ public struct FieldLaunchActions: Sendable {
     public func launch(_ id: UUID) async -> LoadResult<FieldLaunchRecord> {
         await api.load(Endpoint(.get, "api/field-launches/\(id.uuidString.lowercased())"), as: FieldLaunchRecord.self)
     }
+
+    // ── Joining by the lead's code ──────────────────────────────────────────
+
+    /// Where the signed-in person (or a visitor) stands for the code they scanned.
+    public func standing(token: String) async -> LoadResult<JoinStandingRecord> {
+        await api.load(Endpoint(.get, "api/field-launches/join/\(Self.escaped(token))"), as: JoinStandingRecord.self)
+    }
+
+    /// Asks the lead to be let in.
+    public func ask(token: String) async -> LoadResult<JoinStandingRecord> {
+        await api.load(Endpoint(.post, "api/field-launches/join/\(Self.escaped(token))/ask"), as: JoinStandingRecord.self)
+    }
+
+    /// Who has asked to join — for whoever may manage the launch.
+    public func requests(launchId: UUID) async -> LoadResult<[JoinRequestRecord]> {
+        await api.load(Endpoint(.get, "api/field-launches/\(launchId.uuidString.lowercased())/requests"),
+                       as: [JoinRequestRecord].self)
+    }
+
+    /// The lead's yes or no.
+    public func decide(launchId: UUID, requestId: UUID, approve: Bool) async -> LoadResult<JoinRequestRecord> {
+        let verb = approve ? "approve" : "decline"
+        return await api.load(Endpoint(.post, "api/field-launches/\(launchId.uuidString.lowercased())/requests/\(requestId.uuidString.lowercased())/\(verb)"),
+                              as: JoinRequestRecord.self)
+    }
+
+    /// Tokens are URL-safe base64 already; escaping anyway means a hand-typed one cannot break the path.
+    static func escaped(_ token: String) -> String {
+        token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? token
+    }
 }

@@ -331,6 +331,9 @@ builder.Services.AddSingleton(sp =>
     return new Ben.Data.WebApi.Services.Push.ApnsOptions(
         teamId, section["KeyId"] ?? string.Empty, pem, section["BundleId"] ?? string.Empty);
 });
+// One key and one provider token for the process: the sender below is made fresh per use.
+builder.Services.AddSingleton(sp => new Ben.Data.WebApi.Services.Push.ApnsCredentials(
+    sp.GetRequiredService<Ben.Data.WebApi.Services.Push.ApnsOptions>()));
 builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Push.IPushSender, Ben.Data.WebApi.Services.Push.ApnsPushSender>(client =>
 {
     client.DefaultRequestVersion = System.Net.HttpVersion.Version20;

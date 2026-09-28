@@ -498,4 +498,166 @@ public sealed class FieldLaunchServiceTests
         Assert.Empty(await service.LaunchableAsync(w.Member, default));
         Assert.Empty(await service.LaunchableAsync(w.Stranger, default));
     }
+
+    [Fact]
+    public async Task TheGroupsOwnPrivateNightIsOnTheLeadsList()
+    {
+        // Ben: "or a specific event" — not only a tour date or a public night.
+        var w = new World(Tonight);
+        await w.SeedAsync(starts: Tonight.AddMinutes(30));
+        await using (var db = await w.Db.CreateDbContextAsync())
+        {
+            var night = await db.OrgCalendarEvents.SingleAsync(e => e.Id == w.TourDate);
+            (night.TourId, night.IsPublic) = (null, false);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal([w.TourDate], (await w.Service().LaunchableAsync(w.Guide, default)).Select(l => l.Id));
+    }
+
+    // ── Joining by the lead's code (the QR) ──────────────────────────────────
+
+    private static async Task<(World W, FieldLaunchService Service, Ben.Service.Models.FieldLaunches.FieldLaunchRecord Launch)>
+        LaunchedPrivateTourAsync()
+    {
+        var w = new World(Tonight);
+        await w.SeedAsync(starts: Tonight.AddMinutes(30), tourPublic: false);
+        var service = w.Service();
+        var launch = Launched(await service.LaunchAsync(w.Guide, false, FieldLaunchTarget.CalendarEvent, w.TourDate, default)).Outcome.Launch;
+        return (w, service, launch);
+    }
+
+    [Fact]
+    public async Task OnlyTheLeadIsGivenTheCode()
+    {
+        var (w, service, launch) = await LaunchedPrivateTourAsync();
+
+        Assert.NotNull(launch.JoinToken);                                             // the lead's own answer
+        Assert.NotNull((await service.ReadAsync(launch.Id, w.Owner, false, default))!.JoinToken);   // a manager
+        Assert.Null((await service.ReadAsync(launch.Id, w.Guest, false, default))!.JoinToken);      // a guest
+        Assert.Null(Assert.Single(await service.MineAsync(w.Guest, default)).JoinToken);
+    }
+
+    [Fact]
+    public async Task SomebodyWhoScansIsToldWhereTheyStand()
+    {
+        var (w, service, launch) = await LaunchedPrivateTourAsync();
+        var token = launch.JoinToken!;
+
+        Assert.Equal("in", (await service.StandingAsync(token, w.Guest, false, default))!.Standing);
+        Assert.NotNull((await service.StandingAsync(token, w.Guest, false, default))!.Launch);
+        Assert.Equal("ask", (await service.StandingAsync(token, w.Stranger, false, default))!.Standing);
+        Assert.Null((await service.StandingAsync(token, w.Stranger, false, default))!.Launch);
+        Assert.Equal("sign-in", (await service.StandingAsync(token, Guid.Empty, false, default))!.Standing);
+        Assert.Null(await service.StandingAsync("not-the-code", w.Stranger, false, default));
+    }
+
+    [Fact]
+    public async Task AskingTellsTheLeadAndWaitsForThem()
+    {
+        var (w, service, launch) = await LaunchedPrivateTourAsync();
+        w.Sender.Sent.Clear();
+
+        Assert.Equal("pending", (await service.AskAsync(launch.JoinToken!, w.Stranger, default))!.Standing);
+        Assert.Equal("pending", (await service.AskAsync(launch.JoinToken!, w.Stranger, default))!.Standing);   // asking twice is once
+
+        var told = Assert.Single(w.Sender.Sent);
+        Assert.Equal(w.TokenOf(w.Guide), told.Token);
+        Assert.Equal("Stan wants to join", told.Message.Title);
+        Assert.Equal(FieldLaunchService.RequestsLink(launch.Id), told.Message.Data["link"]);
+
+        Assert.Null(await service.RequestsAsync(launch.Id, w.Guest, false, default));   // not the guests' business
+        var asked = Assert.Single((await service.RequestsAsync(launch.Id, w.Guide, false, default))!);
+        Assert.Equal(("Stan", "pending"), (asked.DisplayName, asked.Status));
+        Assert.Empty(await service.MineAsync(w.Stranger, default));                      // not in yet
+    }
+
+    [Fact]
+    public async Task ALeadsYesReservesATourSeatAndLetsThemIn()
+    {
+        var (w, service, launch) = await LaunchedPrivateTourAsync();
+        await service.AskAsync(launch.JoinToken!, w.Stranger, default);
+        var request = Assert.Single((await service.RequestsAsync(launch.Id, w.Guide, false, default))!);
+        w.Sender.Sent.Clear();
+
+        Assert.IsType<FieldLaunchService.DecideResult.Forbidden>(await service.DecideAsync(launch.Id, request.Id, w.Guest, false, approve: true, default));
+        var decided = Assert.IsType<FieldLaunchService.DecideResult.Decided>(
+            await service.DecideAsync(launch.Id, request.Id, w.Guide, false, approve: true, default));
+        Assert.Equal("approved", decided.Request.Status);
+
+        await using (var db = await w.Db.CreateDbContextAsync())
+        {
+            var seat = await db.OrgCalendarEventAttendees.SingleAsync(a => a.OrgCalendarEventId == w.TourDate && a.AppUserId == w.Stranger);
+            Assert.Equal((RsvpStatus.Accepted, TourSeatStatus.Reserved), (seat.RsvpStatus, seat.SeatStatus));
+        }
+        Assert.Equal("in", (await service.StandingAsync(launch.JoinToken!, w.Stranger, false, default))!.Standing);
+        Assert.Single(await service.MineAsync(w.Stranger, default));
+        var told = Assert.Single(w.Sender.Sent);
+        Assert.Equal((w.TokenOf(w.Stranger), "You're in"), (told.Token, told.Message.Title));
+        Assert.Equal(launch.AppLink, told.Message.Data["link"]);
+    }
+
+
+    [Fact]
+    public async Task ALeadsNoLeavesThemOut()
+    {
+        var (w, service, launch) = await LaunchedPrivateTourAsync();
+        await service.AskAsync(launch.JoinToken!, w.Stranger, default);
+        var request = Assert.Single((await service.RequestsAsync(launch.Id, w.Guide, false, default))!);
+
+        await service.DecideAsync(launch.Id, request.Id, w.Guide, false, approve: false, default);
+
+        Assert.Equal("declined", (await service.StandingAsync(launch.JoinToken!, w.Stranger, false, default))!.Standing);
+        Assert.Equal("declined", (await service.AskAsync(launch.JoinToken!, w.Stranger, default))!.Standing);   // a no stands
+        Assert.Empty(await service.MineAsync(w.Stranger, default));
+        await using var db = await w.Db.CreateDbContextAsync();
+        Assert.False(await db.OrgCalendarEventAttendees.AnyAsync(a => a.AppUserId == w.Stranger));
+    }
+
+    [Fact]
+    public async Task AYesOnAnInvestigationIsAGuestPassAndKeepsTheGuidesCode()
+    {
+        var w = new World(Tonight);
+        await w.SeedAsync(starts: Tonight.AddMinutes(30));
+        var sheet = Guid.NewGuid();
+        await using (var db = await w.Db.CreateDbContextAsync())
+        {
+            db.InvestigationJoinCodes.Add(new InvestigationJoinCode
+            {
+                Id = sheet, InvestigationId = w.Investigation, OrganizationId = w.Org, Token = "printed-sheet",
+                TypedCode = "ABC123", ExpiresUtc = Tonight.AddHours(8), DateCreated = Tonight, CreatedByAppUserId = w.Lead,
+            });
+            await db.SaveChangesAsync();
+        }
+        var service = w.Service();
+        var launch = Launched(await service.LaunchAsync(w.Lead, false, FieldLaunchTarget.Investigation, w.Investigation, default)).Outcome.Launch;
+        await service.AskAsync(launch.JoinToken!, w.Stranger, default);
+        var request = Assert.Single((await service.RequestsAsync(launch.Id, w.Lead, false, default))!);
+
+        Assert.IsType<FieldLaunchService.DecideResult.Decided>(
+            await service.DecideAsync(launch.Id, request.Id, w.Lead, false, approve: true, default));
+
+        await using var check = await w.Db.CreateDbContextAsync();
+        var pass = await check.InvestigationGuestPasses.SingleAsync(p => p.AppUserId == w.Stranger);
+        Assert.Equal(sheet, pass.InvestigationJoinCodeId);                                      // minted on the guide's own code
+        Assert.Null((await check.InvestigationJoinCodes.SingleAsync(c => c.Id == sheet)).RevokedUtc);   // which still works
+        Assert.False(await check.InvestigationAttendees.AnyAsync(a => a.AppUserId == w.Stranger));      // a guest, not a member
+    }
+
+    [Fact]
+    public async Task ASomebodysHomeCannotBeJoinedByCode()
+    {
+        var w = new World(Tonight);
+        await w.SeedAsync(starts: Tonight.AddMinutes(30));
+        await using (var db = await w.Db.CreateDbContextAsync())
+        {
+            var home = Guid.NewGuid();
+            db.Places.Add(new Place { Id = home, Name = "12 Oak Lane", Kind = PlaceKind.PrivateResidence, DateCreated = Tonight, CreatedByAppUserId = w.Owner });
+            (await db.Investigations.SingleAsync(i => i.Id == w.Investigation)).PlaceId = home;
+            await db.SaveChangesAsync();
+        }
+        var launch = Launched(await w.Service().LaunchAsync(w.Lead, false, FieldLaunchTarget.Investigation, w.Investigation, default)).Outcome.Launch;
+
+        Assert.Null(launch.JoinToken);   // even to the lead: there is no code to show
+    }
 }

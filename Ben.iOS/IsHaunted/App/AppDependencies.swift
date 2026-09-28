@@ -29,6 +29,8 @@ final class AppDependencies {
     /// Getting an account and looking after it (Slice 8).
     let accountActions: AccountActions
     let archiveActions: ArchiveActions
+    /// A lead's Launch and everybody else's Join (item 252).
+    let fieldLaunches: FieldLaunchActions
     /// Published sessions near a point or by a place's name, and their public copies.
     let publicArchive: PublicArchiveClient
 
@@ -70,12 +72,15 @@ final class AppDependencies {
         self.imageLoader = AuthenticatedImageLoader(api: api)
         self.accountActions = AccountActions(api: api)
         self.archiveActions = ArchiveActions(api: api)
+        self.fieldLaunches = FieldLaunchActions(api: api)
         self.publicArchive = PublicArchiveClient(api: api)
         self.evidenceActions = EvidenceActions(api: api)
         self.surfaces = SurfacesStore(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
         // Saved event passes, and a door's guest lists and kept arrivals, belong to the person who signed in, not to
         // the phone (item 235 phase 14).
+        // Before the tokens go: this phone stops being pushed for the person leaving it (item 252).
+        self.session.beforeSignOut = { await PushRegistrar.shared.signingOut() }
         self.session.onDeliberateSignOut = {
             PassCache.applicationSupport().removeAll()
             DoorCache.applicationSupport().removeAll()

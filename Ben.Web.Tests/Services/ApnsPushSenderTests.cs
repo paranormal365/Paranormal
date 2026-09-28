@@ -49,7 +49,7 @@ public class ApnsPushSenderTests
     {
         var stub = new Stub();
         var clock = new Clock(new DateTimeOffset(2026, 9, 28, 20, 0, 0, TimeSpan.Zero));
-        return (new ApnsPushSender(new HttpClient(stub), options ?? Configured(), NullLogger<ApnsPushSender>.Instance, clock), stub, clock);
+        return (new ApnsPushSender(new HttpClient(stub), new ApnsCredentials(options ?? Configured(), clock), NullLogger<ApnsPushSender>.Instance), stub, clock);
     }
 
     private static readonly PushMessage Message = new(
@@ -149,6 +149,25 @@ public class ApnsPushSenderTests
         var tokens = stub.Sent.Select(s => s.Request.Headers.Authorization!.Parameter).ToList();
         Assert.Equal(tokens[0], tokens[1]);
         Assert.NotEqual(tokens[1], tokens[2]);
+    }
+
+    /// <summary>
+    /// The sender is a typed HTTP client, made fresh for every use. When it held the token itself,
+    /// every launch minted a new one and Apple answered 429 TooManyProviderTokenUpdates (found in
+    /// the local API's log, 2026-09-28). The token belongs to the process.
+    /// </summary>
+    [Fact]
+    public async Task SendersMadeFreshForEachLaunchShareOneProviderToken()
+    {
+        var stub = new Stub();
+        var credentials = new ApnsCredentials(Configured(), new Clock(DateTimeOffset.UtcNow));
+        foreach (var _ in Enumerable.Range(0, 3))
+        {
+            var sender = new ApnsPushSender(new HttpClient(stub), credentials, NullLogger<ApnsPushSender>.Instance);
+            await sender.SendAsync(Token, PushEnvironment.Production, Message, default);
+        }
+
+        Assert.Single(stub.Sent.Select(s => s.Request.Headers.Authorization!.Parameter).Distinct());
     }
 
     [Fact]

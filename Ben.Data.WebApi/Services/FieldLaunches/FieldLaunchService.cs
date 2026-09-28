@@ -3,6 +3,7 @@ using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Investigations;
 using Ben.Data.WebApi.Services.Push;
 using Ben.Service.Models.FieldLaunches;
 using Ben.Service.RepositoryService.GenericInterfaces;
@@ -128,7 +129,9 @@ public sealed class FieldLaunchService
             if (await ResolveAsync(db, FieldLaunchTarget.Investigation, id, ct) is { } c && Open(c, now)) candidates.Add(c);
 
         var eventIds = await db.OrgCalendarEvents.AsNoTracking()
-            .Where(e => e.HostedEventId == null && (e.TourId != null || e.IsPublic)
+            // Any of the group's calendar events — a tour date, a public night, or the group's own
+            // hunt ("a specific event"). A hosted event's umbrella row is launched as the hosted event.
+            .Where(e => e.HostedEventId == null
                      && e.StartDateTime <= opensBy && e.EndDateTime >= now
                      && (myOrgs.Contains(e.OrganizationId) || guideOf.Contains(e.Id)))
             .Select(e => e.Id).ToListAsync(ct);
@@ -203,6 +206,7 @@ public sealed class FieldLaunchService
             ExpiresUtc = expires,
             IsPublic = candidate.IsPublic,
             PeopleCount = recipients.Count,
+            JoinToken = await MayBeJoinedByCodeAsync(db, candidate, ct) ? NewJoinToken() : null,
         };
         foreach (var person in recipients)
             launch.Recipients.Add(new FieldLaunchRecipient { Id = Guid.NewGuid(), FieldLaunchId = launch.Id, AppUserId = person });
@@ -237,7 +241,7 @@ public sealed class FieldLaunchService
         launch.PhonesReached = fanOut.Delivered;
         await db.SaveChangesAsync(ct);
 
-        var record = await ToRecordAsync(db, launch, ct);
+        var record = await ToRecordAsync(db, launch, forManager: true, ct);
         return new LaunchResult.Launched(new LaunchOutcomeRecord(
             record, fanOut.People, fanOut.PeopleWithTheApp, fanOut.Delivered, fanOut.Configured));
     }
@@ -258,13 +262,15 @@ public sealed class FieldLaunchService
         await using var db = await _db.CreateDbContextAsync(ct);
         var launch = await db.FieldLaunches.AsNoTracking().FirstOrDefaultAsync(l => l.Id == launchId, ct);
         if (launch is null || launch.ExpiresUtc <= now) return null;
-        if (!launch.IsPublic && !isSuperAdmin
-            && launch.LaunchedByAppUserId != readerId
+        // Whoever may manage it opens it too — another guide, the group's owner — or nobody but the
+        // launcher could see who is asking to join.
+        var manages = await MayManageAsync(db, launch, readerId, isSuperAdmin, ct);
+        if (!launch.IsPublic && !manages
             && (readerId == Guid.Empty
                 || !await db.FieldLaunchRecipients.AsNoTracking()
                         .AnyAsync(r => r.FieldLaunchId == launchId && r.AppUserId == readerId, ct)))
             return null;
-        return await ToRecordAsync(db, launch, ct);
+        return await ToRecordAsync(db, launch, manages, ct);
     }
 
     /// <summary>The launches still open for this person, newest first — "happening now" in Field Kit.</summary>
@@ -279,9 +285,255 @@ public sealed class FieldLaunchService
             .OrderByDescending(l => l.LaunchedUtc)
             .ToListAsync(ct);
         var records = new List<FieldLaunchRecord>();
-        foreach (var launch in launches) records.Add(await ToRecordAsync(db, launch, ct));
+        foreach (var launch in launches) records.Add(await ToRecordAsync(db, launch, forManager: launch.LaunchedByAppUserId == userId, ct));
         return records;
     }
+
+    // ── Joining by the lead's code ───────────────────────────────────────────
+
+    /// <summary>The link that opens the lead's list of who is asking, from the lead's notification.</summary>
+    public static string RequestsLink(Guid launchId) => $"ishaunted://field-kit/launch/{launchId}/requests";
+
+    /// <summary>
+    /// Where somebody who scanned the lead's code stands — or null for a code that is unknown,
+    /// ended or never allowed, which the endpoint answers as 404.
+    /// </summary>
+    public async Task<JoinStandingRecord?> StandingAsync(string token, Guid readerId, bool isSuperAdmin, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await StandingAsync(db, token, readerId, isSuperAdmin, ct);
+    }
+
+    private async Task<JoinStandingRecord?> StandingAsync(
+        BenDataContext db, string token, Guid readerId, bool isSuperAdmin, CancellationToken ct)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime;
+        if (string.IsNullOrWhiteSpace(token)) return null;
+        var launch = await db.FieldLaunches.AsNoTracking().FirstOrDefaultAsync(l => l.JoinToken == token, ct);
+        if (launch is null || launch.ExpiresUtc <= now) return null;
+
+        var orgName = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == launch.OrganizationId).Select(o => o.Name).FirstOrDefaultAsync(ct) ?? string.Empty;
+        var lead = await NameAsync(db, launch.LaunchedByAppUserId, ct);
+        JoinStandingRecord Standing(string standing, FieldLaunchRecord? record = null)
+            => new(launch.Id, launch.Title, orgName, lead, standing, record);
+
+        var isIn = launch.IsPublic || isSuperAdmin || launch.LaunchedByAppUserId == readerId
+            || (readerId != Guid.Empty && await db.FieldLaunchRecipients.AsNoTracking()
+                    .AnyAsync(r => r.FieldLaunchId == launch.Id && r.AppUserId == readerId, ct));
+        if (isIn)
+            return Standing("in", await ToRecordAsync(db, launch, await MayManageAsync(db, launch, readerId, isSuperAdmin, ct), ct));
+        if (readerId == Guid.Empty) return Standing("sign-in");
+
+        var asked = await db.FieldLaunchJoinRequests.AsNoTracking()
+            .Where(r => r.FieldLaunchId == launch.Id && r.AppUserId == readerId)
+            .Select(r => (FieldLaunchJoinStatus?)r.Status).FirstOrDefaultAsync(ct);
+        return asked switch
+        {
+            FieldLaunchJoinStatus.Pending => Standing("pending"),
+            FieldLaunchJoinStatus.Declined => Standing("declined"),
+            _ => Standing("ask"),
+        };
+    }
+
+    /// <summary>
+    /// Asks the lead to be let in. Idempotent; a decline stands (asking again is asking the lead
+    /// in person). The lead is told on their phone.
+    /// </summary>
+    public async Task<JoinStandingRecord?> AskAsync(string token, Guid userId, CancellationToken ct)
+    {
+        if (userId == Guid.Empty) return null;
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var standing = await StandingAsync(db, token, userId, isSuperAdmin: false, ct);
+        if (standing is null || standing.Standing != "ask") return standing;
+
+        var now = _clock.GetUtcNow().UtcDateTime;
+        db.FieldLaunchJoinRequests.Add(new FieldLaunchJoinRequest
+        {
+            Id = Guid.NewGuid(), FieldLaunchId = standing.LaunchId, AppUserId = userId,
+            Status = FieldLaunchJoinStatus.Pending, RequestedUtc = now,
+        });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Asked twice at once; the other one stands.
+        }
+
+        var launcher = await db.FieldLaunches.AsNoTracking()
+            .Where(l => l.Id == standing.LaunchId).Select(l => l.LaunchedByAppUserId).FirstAsync(ct);
+        var asker = await NameAsync(db, userId, ct, fallback: "Somebody");
+        await _push.SendAsync([launcher], new PushMessage(
+            Title: $"{asker} wants to join",
+            Body: $"{standing.Title}: tap to let them in.",
+            Data: new Dictionary<string, string> { ["link"] = RequestsLink(standing.LaunchId) },
+            CollapseId: $"asks-{standing.LaunchId:N}"), ct);
+
+        return standing with { Standing = "pending" };
+    }
+
+    /// <summary>Who has asked to join, for whoever may manage the launch — null for anybody else.</summary>
+    public async Task<IReadOnlyList<JoinRequestRecord>?> RequestsAsync(
+        Guid launchId, Guid userId, bool isSuperAdmin, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var launch = await db.FieldLaunches.AsNoTracking().FirstOrDefaultAsync(l => l.Id == launchId, ct);
+        if (launch is null || !await MayManageAsync(db, launch, userId, isSuperAdmin, ct)) return null;
+
+        var requests = await db.FieldLaunchJoinRequests.AsNoTracking()
+            .Where(r => r.FieldLaunchId == launchId)
+            .OrderBy(r => r.Status).ThenBy(r => r.RequestedUtc)
+            .ToListAsync(ct);
+        var people = requests.Select(r => r.AppUserId).ToList();
+        var names = await db.AppUsers.AsNoTracking().Where(u => people.Contains(u.Id))
+            .Select(u => new { u.Id, Name = u.DisplayName ?? u.Handle })
+            .ToDictionaryAsync(u => u.Id, u => u.Name ?? "Somebody", ct);
+        return requests.Select(r => new JoinRequestRecord(
+            r.Id, r.AppUserId, names.GetValueOrDefault(r.AppUserId, "Somebody"), StatusName(r.Status),
+            AsUtc(r.RequestedUtc), r.DecidedUtc is { } d ? AsUtc(d) : null)).ToList();
+    }
+
+    /// <summary>What deciding a request came to.</summary>
+    public abstract record DecideResult
+    {
+        public sealed record Decided(JoinRequestRecord Request) : DecideResult;
+        public sealed record NotFound : DecideResult;
+        public sealed record Forbidden : DecideResult;
+        public sealed record Refused(string Reason) : DecideResult;
+    }
+
+    /// <summary>
+    /// The lead's yes or no. A yes registers the person for the thing — a reserved seat on a tour
+    /// date, an accepted place at an event, a guest pass for an investigation, and for a paid hosted
+    /// event only this launch, never a booking — adds them to the launch, and tells their phone.
+    /// </summary>
+    public async Task<DecideResult> DecideAsync(
+        Guid launchId, Guid requestId, Guid userId, bool isSuperAdmin, bool approve, CancellationToken ct)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime;
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var launch = await db.FieldLaunches.FirstOrDefaultAsync(l => l.Id == launchId, ct);
+        var request = await db.FieldLaunchJoinRequests.FirstOrDefaultAsync(r => r.Id == requestId && r.FieldLaunchId == launchId, ct);
+        if (launch is null || request is null) return new DecideResult.NotFound();
+        if (!await MayManageAsync(db, launch, userId, isSuperAdmin, ct)) return new DecideResult.Forbidden();
+
+        if (request.Status != FieldLaunchJoinStatus.Pending)
+            return new DecideResult.Decided(await RequestRecordAsync(db, request, ct));
+        if (launch.ExpiresUtc <= now) return new DecideResult.Refused("It has ended, so there is nothing to join.");
+
+        if (approve)
+        {
+            if (await RegisterAsync(db, launch, request.AppUserId, userId, now, ct) is { } refused)
+                return new DecideResult.Refused(refused);
+            if (!await db.FieldLaunchRecipients.AnyAsync(r => r.FieldLaunchId == launchId && r.AppUserId == request.AppUserId, ct))
+                db.FieldLaunchRecipients.Add(new FieldLaunchRecipient { Id = Guid.NewGuid(), FieldLaunchId = launchId, AppUserId = request.AppUserId });
+        }
+        request.Status = approve ? FieldLaunchJoinStatus.Approved : FieldLaunchJoinStatus.Declined;
+        request.DecidedUtc = now;
+        request.DecidedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        if (approve)
+            await _push.SendAsync([request.AppUserId], new PushMessage(
+                Title: "You're in",
+                Body: $"{launch.Title}: tap to join the group's session.",
+                Data: new Dictionary<string, string> { ["link"] = AppLink(launch.Id), ["launchId"] = launch.Id.ToString() },
+                CollapseId: $"in-{launch.Id:N}",
+                ExpiresAt: new DateTimeOffset(DateTime.SpecifyKind(launch.ExpiresUtc, DateTimeKind.Utc))), ct);
+
+        return new DecideResult.Decided(await RequestRecordAsync(db, request, ct));
+    }
+
+    /// <summary>Registers somebody the lead let in, as the thing itself registers people. Null, or why not.</summary>
+    private static async Task<string?> RegisterAsync(
+        BenDataContext db, FieldLaunch launch, Guid personId, Guid leadId, DateTime now, CancellationToken ct)
+    {
+        switch (launch.Target)
+        {
+            case FieldLaunchTarget.CalendarEvent when launch.OrgCalendarEventId is { } eventId:
+            {
+                var isTour = await db.OrgCalendarEvents.AsNoTracking()
+                    .Where(e => e.Id == eventId).Select(e => e.TourId != null).FirstOrDefaultAsync(ct);
+                var attendee = await db.OrgCalendarEventAttendees
+                    .FirstOrDefaultAsync(a => a.OrgCalendarEventId == eventId && a.AppUserId == personId, ct);
+                if (attendee is null)
+                {
+                    attendee = new OrgCalendarEventAttendee
+                    {
+                        Id = Guid.NewGuid(), OrgCalendarEventId = eventId, AppUserId = personId,
+                        Seats = 1, DateCreated = now, CreatedByAppUserId = leadId,
+                    };
+                    db.OrgCalendarEventAttendees.Add(attendee);
+                }
+                attendee.RsvpStatus = RsvpStatus.Accepted;
+                attendee.DateRsvp ??= now;
+                if (isTour)
+                {
+                    attendee.SeatStatus = TourSeatStatus.Reserved;
+                    attendee.Seats = Math.Max(1, attendee.Seats);
+                    attendee.SeatDecidedUtc = now;
+                    attendee.SeatDecidedByAppUserId = leadId;
+                }
+                return null;
+            }
+            case FieldLaunchTarget.Investigation when launch.InvestigationId is { } investigationId:
+            {
+                // The guest pass item 248's codes mint — the one credential an outsider holds for a
+                // visit. A code the guide already holds up is reused: issuing one would take theirs away.
+                var code = (await GuestCodes.LiveForAsync(db, investigationId, ct)).FirstOrDefault();
+                if (code is null)
+                {
+                    var investigation = await db.Investigations.FirstAsync(i => i.Id == investigationId, ct);
+                    code = await GuestCodes.IssueAsync(db, investigation, leadId, launch.ExpiresUtc, ct);
+                }
+                var name = await db.AppUsers.AsNoTracking().Where(u => u.Id == personId)
+                    .Select(u => u.DisplayName ?? u.Handle).FirstOrDefaultAsync(ct);
+                var (_, refused) = await GuestCodes.RedeemAsync(db, code, personId, name, ct);
+                return refused;
+            }
+            default:
+                // A hosted event is paid for: a yes lets them into this launch, and makes no booking.
+                return null;
+        }
+    }
+
+    private static async Task<JoinRequestRecord> RequestRecordAsync(BenDataContext db, FieldLaunchJoinRequest r, CancellationToken ct)
+        => new(r.Id, r.AppUserId, await NameAsync(db, r.AppUserId, ct, fallback: "Somebody"), StatusName(r.Status),
+               AsUtc(r.RequestedUtc), r.DecidedUtc is { } d ? AsUtc(d) : null);
+
+    private static string StatusName(FieldLaunchJoinStatus status) => status switch
+    {
+        FieldLaunchJoinStatus.Approved => "approved",
+        FieldLaunchJoinStatus.Declined => "declined",
+        _ => "pending",
+    };
+
+    /// <summary>The launcher, or anybody who may launch the thing now — the lead's managers.</summary>
+    private async Task<bool> MayManageAsync(BenDataContext db, FieldLaunch launch, Guid userId, bool isSuperAdmin, CancellationToken ct)
+    {
+        if (isSuperAdmin || (userId != Guid.Empty && launch.LaunchedByAppUserId == userId)) return true;
+        if (userId == Guid.Empty) return false;
+        var id = launch.InvestigationId ?? launch.OrgCalendarEventId ?? launch.HostedEventId;
+        return id is { } targetId && await ResolveAsync(db, launch.Target, targetId, ct) is { } c
+            && await MayLaunchAsync(db, c, userId, isSuperAdmin: false, ct);
+    }
+
+    /// <summary>
+    /// Whether a stranger may ask to join by the lead's code. Not for a visit to somebody's home
+    /// or a private client case — item 248's rule, because even the request screen names the visit.
+    /// </summary>
+    private static async Task<bool> MayBeJoinedByCodeAsync(BenDataContext db, Candidate c, CancellationToken ct)
+    {
+        if (c.Target != FieldLaunchTarget.Investigation) return true;
+        var investigation = await db.Investigations.AsNoTracking().FirstOrDefaultAsync(i => i.Id == c.Id, ct);
+        return investigation is not null && await GuestCodes.WhyACodeMayNotBeIssuedAsync(db, investigation, ct) is null;
+    }
+
+    private static string NewJoinToken()
+        => Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     // ── The rules ────────────────────────────────────────────────────────────
 
@@ -418,20 +670,21 @@ public sealed class FieldLaunchService
             .Select(l => (DateTime?)l.LaunchedUtc)
             .FirstOrDefaultAsync(ct);
 
-    private static async Task<FieldLaunchRecord> ToRecordAsync(BenDataContext db, FieldLaunch launch, CancellationToken ct)
+    private static async Task<FieldLaunchRecord> ToRecordAsync(BenDataContext db, FieldLaunch launch, bool forManager, CancellationToken ct)
     {
         var orgName = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == launch.OrganizationId).Select(o => o.Name).FirstOrDefaultAsync(ct) ?? string.Empty;
         return new FieldLaunchRecord(
             launch.Id, TargetName(launch.Target), launch.InvestigationId, launch.OrgCalendarEventId, launch.HostedEventId,
             launch.Title, launch.LocationLabel, orgName, await NameAsync(db, launch.LaunchedByAppUserId, ct),
-            AsUtc(launch.LaunchedUtc), AsUtc(launch.EndsUtc), AsUtc(launch.ExpiresUtc), launch.IsPublic, AppLink(launch.Id));
+            AsUtc(launch.LaunchedUtc), AsUtc(launch.EndsUtc), AsUtc(launch.ExpiresUtc), launch.IsPublic, AppLink(launch.Id),
+            forManager ? launch.JoinToken : null);
     }
 
-    private static async Task<string> NameAsync(BenDataContext db, Guid userId, CancellationToken ct)
+    private static async Task<string> NameAsync(BenDataContext db, Guid userId, CancellationToken ct, string fallback = "Your lead")
         => await db.AppUsers.AsNoTracking().Where(u => u.Id == userId)
                .Select(u => u.DisplayName ?? u.Handle).FirstOrDefaultAsync(ct) is { Length: > 0 } name
-            ? name : "Your lead";
+            ? name : fallback;
 
     private static DateTime AsUtc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
 

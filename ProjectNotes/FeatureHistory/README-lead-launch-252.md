@@ -109,6 +109,36 @@ the group that ran it, and the feed shows the launch post on the website too.
 
 **L7 — Help, change logs, screenshots, PDF; tests throughout.**
 
+## What shipped (so far)
+
+- **L1** (`10d2e991`) push: `PushDevice`, `api/me/push-devices`, `ApnsPushSender`, `PushNotifier`.
+- **L2** (`78d1ea5a`) launches: `FieldLaunch` + recipients, `api/field-launches` (launchable, launch,
+  mine, one), the feed card (public, or the `FieldLaunchNotice` channel only its people see) with
+  `ExpiresUtc`.
+- **L3a** (`fcb28472`) nobody is forced: the card and the push invite; BenKit joins a launch.
+- **L3/L4 in the app**: Join on the feed card; Field Kit's "Launch a session for your group" and
+  "Happening now"; the lead's page (Launch, who it reached, the QR); push registration, taps and
+  sign-out removal (`PushRegistrar`, `AppDelegate`, `aps-environment`).
+- **L4b QR join**: `FieldLaunch.JoinToken` (only to managers; none for a home or a private case),
+  `FieldLaunchJoinRequest`, `api/field-launches/join/{token}` (standing, ask) and
+  `{id}/requests` (list, approve, decline). A yes registers — reserved tour seat, accepted
+  attendee, or a guest pass on the guide's own item-248 code (never a new code, which would revoke
+  theirs); a hosted event is never booked. The site claims `/field-kit/join/*`; its page names
+  nothing and says get the app, then scan again.
+
+## What testing found (and fixed)
+
+- The card was refused by SQL Server for a missing creator — invisible to the in-memory store; a
+  launch test now runs on SQLite with keys on.
+- Tapping a notification crashed the app: the `async` form of `didReceive` finished off the main
+  thread. Found by the end-to-end push test (real APNs sandbox → simulator), fixed, re-run green.
+- A manager who was not the launcher could not open a private launch's page, so could not see who
+  was asking.
+- Field Kit loaded "may I launch?" once, for whoever was signed in first; switching accounts left
+  the lead's button missing.
+- With launches listed, the session in progress and the lead's button were pushed off screen; the
+  order is now: Start, the open session, Launch, Happening now.
+
 ## The APNs key (09/28)
 
 Ben made one key for **both** sandbox and production. Key ID `TVH4P55742`, team `5778H75249`; the

@@ -122,6 +122,17 @@ public sealed class MediaRetentionPolicy
             .FirstOrDefaultAsync(ct);
         if (inASession is not null) return inASession;
 
+        // Sent to a tour date, an event or a hosted event (item 252): that group's.
+        var atAGroupsEvent = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.UploadFileId == uploadFileId)
+            .Select(f => f.FieldSessionUpload.OrgCalendarEventId != null
+                ? db.OrgCalendarEvents.Where(e => e.Id == f.FieldSessionUpload.OrgCalendarEventId).Select(e => (Guid?)e.OrganizationId).FirstOrDefault()
+                : f.FieldSessionUpload.HostedEventId != null
+                    ? db.HostedEvents.Where(h => h.Id == f.FieldSessionUpload.HostedEventId).Select(h => (Guid?)h.OrganizationId).FirstOrDefault()
+                    : null)
+            .FirstOrDefaultAsync(ct);
+        if (atAGroupsEvent is not null) return atAGroupsEvent;
+
         return await db.CaseFiles.AsNoTracking()
             .Where(f => f.UploadFileId == uploadFileId)
             .Select(f => (Guid?)f.Case.OrganizationId)

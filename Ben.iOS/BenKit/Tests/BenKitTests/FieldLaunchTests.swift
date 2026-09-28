@@ -43,6 +43,39 @@ struct FieldLaunchTests {
         #expect(DeepLinkParser.parse(URL(string: "ishaunted://field-kit")!) == nil)
     }
 
+    @Test func theLeadsCodeAndTheLeadsNotificationHaveLinksOfTheirOwn() throws {
+        let id = UUID()
+        #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/field-kit/join/Ab3_-x9")!) == .fieldJoin(token: "Ab3_-x9"))
+        #expect(DeepLinkParser.parse(URL(string: "ishaunted://field-kit/join/Ab3_-x9")!) == .fieldJoin(token: "Ab3_-x9"))
+        #expect(DeepLinkParser.parse(URL(string: "ishaunted://field-kit/launch/\(id.uuidString)/requests")!) == .fieldLaunchRequests(id))
+        // The plain launch link still joins; it is not mistaken for the requests list.
+        #expect(DeepLinkParser.parse(URL(string: "ishaunted://field-kit/launch/\(id.uuidString)")!) == .fieldLaunch(id))
+        #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/field-kit/somewhere/else")!) == nil)
+    }
+
+    @Test func whereAScannerStandsDecodesAsTheServerSendsIt() throws {
+        let asking = try BenJSON.decoder.decode(JoinStandingRecord.self, from: try Fixtures.data("field-launch-join-ask", in: Bundle.module))
+        #expect(asking.standing == "ask")
+        #expect(!asking.isIn)
+        #expect(asking.launch == nil)                        // not in: nothing to open yet
+        #expect(asking.title == "Séance at the Union Station Hotel")
+
+        let inside = try BenJSON.decoder.decode(JoinStandingRecord.self, from: try Fixtures.data("field-launch-join-in", in: Bundle.module))
+        #expect(inside.isIn)
+        let launch = try #require(inside.launch)
+        #expect(launch.id == inside.launchId)
+        #expect(launch.joinToken == nil)                      // a guest is never handed the lead's code
+
+        let asked = try BenJSON.decoder.decode([JoinRequestRecord].self, from: try Fixtures.data("field-launch-join-requests", in: Bundle.module))
+        #expect(asked.map(\.status) == ["pending"])
+        #expect(asked.first?.displayName.isEmpty == false)
+    }
+
+    @Test func aTokenIsEscapedForItsPath() {
+        #expect(FieldLaunchActions.escaped("Ab3_-x9") == "Ab3_-x9")
+        #expect(FieldLaunchActions.escaped("a/b c") == "a%2Fb%20c")
+    }
+
     private func makeStore() throws -> (FieldSessionStore, URL) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("launch-\(UUID().uuidString)", isDirectory: true)
         return (FieldSessionStore(database: try .inMemory(), files: SessionFileStore(root: root), deviceModel: "iPhone17,1"), root)

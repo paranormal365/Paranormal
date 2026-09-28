@@ -406,6 +406,37 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         return Ok(sessions.Select(ToRecord));
     }
 
+    /// <summary>Everything sent up at one tour date or calendar event — for the group's team for it (item 252).</summary>
+    [HttpGet("for-event/{eventId:guid}")]
+    public async Task<ActionResult<IEnumerable<FieldSessionRecord>>> GetForEvent(Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsEventTeamAsync(db, eventId, userId, ct)) return NotFound();
+        return Ok(await SessionsAsync(db, s => s.OrgCalendarEventId == eventId, ct));
+    }
+
+    /// <summary>Everything sent up at one hosted event — for the group and the event's staff (item 252).</summary>
+    [HttpGet("for-hosted-event/{hostedEventId:guid}")]
+    public async Task<ActionResult<IEnumerable<FieldSessionRecord>>> GetForHostedEvent(Guid hostedEventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await IsHostedTeamAsync(db, hostedEventId, userId, ct)) return NotFound();
+        return Ok(await SessionsAsync(db, s => s.HostedEventId == hostedEventId, ct));
+    }
+
+    private static async Task<IEnumerable<FieldSessionRecord>> SessionsAsync(
+        BenDataContext db, System.Linq.Expressions.Expression<Func<FieldSessionUpload, bool>> which, CancellationToken ct)
+        => (await db.FieldSessionUploads.AsNoTracking()
+                .Where(which)
+                .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+                .OrderByDescending(s => s.StartedAt)
+                .ToListAsync(ct))
+            .Select(ToRecord);
+
     /// <summary>
     /// One session, with the document itself, for playing back.
     /// </summary>
@@ -870,8 +901,11 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         BenDataContext db, FieldSessionUpload session, Guid userId, CancellationToken ct)
     {
         if (session.SubmittedByAppUserId == userId) return true;
-        return session.InvestigationId is Guid linked
-            && await MayContributeAsync(db, linked, userId, ct);
+        if (session.InvestigationId is Guid linked) return await MayContributeAsync(db, linked, userId, ct);
+        // A tour date's or event's sessions are for the group's team for it, not the other guests.
+        if (session.OrgCalendarEventId is Guid eventId) return await IsEventTeamAsync(db, eventId, userId, ct);
+        if (session.HostedEventId is Guid hostedId) return await IsHostedTeamAsync(db, hostedId, userId, ct);
+        return false;
     }
 
     /// <summary>
@@ -963,7 +997,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
                     f.Id, f.RelativePath, f.UploadFile?.FileSize ?? 0,
                     f.Sha256, f.DigestMatched, f.DateCreated))
                 .ToList(),
-            session.IsBundle);
+            session.IsBundle,
+            session.OrgCalendarEventId,
+            session.HostedEventId);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -1076,7 +1112,10 @@ public sealed record FieldSessionRecord(
     // back. Said here so a phone listing what it could pull down offers Download only where it
     // would be answered; a 1.0.2 session (a document and loose recordings) is listed without one.
     // Trailing and defaulted: additive for the app that is in review.
-    bool IsBundle = false);
+    bool IsBundle = false,
+    // The tour date or event, or hosted event, it went to (item 252). Trailing and defaulted.
+    Guid? OrgCalendarEventId = null,
+    Guid? HostedEventId = null);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

@@ -20,16 +20,20 @@ public struct FieldLaunchRecord: Sendable, Codable, Equatable, Identifiable {
     public var expiresUtc: Date
     public var isPublic: Bool
     public var appLink: String
+    /// The secret the lead's QR code carries, for somebody not registered to ask to join. Sent only
+    /// to whoever may manage the launch; nil for everybody else, and for a home or a private case.
+    public var joinToken: String?
 
     public init(id: UUID, target: String, investigationId: UUID? = nil, orgCalendarEventId: UUID? = nil,
                 hostedEventId: UUID? = nil, title: String, locationLabel: String? = nil,
                 organizationName: String, launchedByName: String, launchedUtc: Date, endsUtc: Date,
-                expiresUtc: Date, isPublic: Bool, appLink: String) {
+                expiresUtc: Date, isPublic: Bool, appLink: String, joinToken: String? = nil) {
         self.id = id; self.target = target; self.investigationId = investigationId
         self.orgCalendarEventId = orgCalendarEventId; self.hostedEventId = hostedEventId
         self.title = title; self.locationLabel = locationLabel; self.organizationName = organizationName
         self.launchedByName = launchedByName; self.launchedUtc = launchedUtc; self.endsUtc = endsUtc
         self.expiresUtc = expiresUtc; self.isPublic = isPublic; self.appLink = appLink
+        self.joinToken = joinToken
     }
 }
 
@@ -64,4 +68,28 @@ public struct FeedLaunchCard: Sendable, Codable, Equatable {
     public var title: String
     public var appLink: String
     public var expiresUtc: Date
+}
+
+/// Where somebody who scanned the lead's code stands (item 252).
+public struct JoinStandingRecord: Sendable, Codable, Equatable {
+    public var launchId: UUID
+    public var title: String
+    public var organizationName: String
+    public var launchedByName: String
+    /// `in` (with `launch`), `ask`, `pending`, `declined` or `sign-in`.
+    public var standing: String
+    public var launch: FieldLaunchRecord?
+
+    public var isIn: Bool { standing == "in" }
+}
+
+/// Somebody asking to join, as the lead sees them.
+public struct JoinRequestRecord: Sendable, Codable, Equatable, Identifiable {
+    public var id: UUID
+    public var appUserId: UUID
+    public var displayName: String
+    /// `pending`, `approved` or `declined`.
+    public var status: String
+    public var requestedUtc: Date
+    public var decidedUtc: Date?
 }

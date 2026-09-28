@@ -31,9 +31,9 @@ public class ApnsLiveTests
     {
         Skip.IfNot(Configured, "Set BEN_APNS_TEAM_ID, BEN_APNS_KEY_ID and BEN_APNS_KEY_PATH to ask Apple for real.");
 
-        using var sender = new ApnsPushSender(new HttpClient(),
-            new ApnsOptions(TeamId!, KeyId!, File.ReadAllText(KeyPath!), "com.ishaunted.ios"),
-            NullLogger<ApnsPushSender>.Instance);
+        using var credentials = new ApnsCredentials(
+            new ApnsOptions(TeamId!, KeyId!, File.ReadAllText(KeyPath!), "com.ishaunted.ios"));
+        var sender = new ApnsPushSender(new HttpClient(), credentials, NullLogger<ApnsPushSender>.Instance);
 
         var outcome = await sender.SendAsync(new string('0', 64), environment,
             new PushMessage("Test", "Nobody receives this.", new Dictionary<string, string>()), default);

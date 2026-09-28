@@ -12,3 +12,11 @@ public enum FieldLaunchTarget
     /// <summary>A hosted event — a weekend at a venue, a dinner and a show.</summary>
     HostedEvent = 2,
 }
+
+/// <summary>Where somebody's request to join a launch stands (item 252).</summary>
+public enum FieldLaunchJoinStatus
+{
+    Pending = 0,
+    Approved = 1,
+    Declined = 2,
+}

@@ -18,6 +18,11 @@ namespace Ben.Service.Models.FieldLaunches;
 /// <param name="ExpiresUtc">When the link stops opening it — six hours after the end.</param>
 /// <param name="IsPublic">Whether the card is for anyone, or only the people it was sent to.</param>
 /// <param name="AppLink">Opens Field Kit on it: <c>ishaunted://field-kit/launch/{id}</c>.</param>
+/// <param name="JoinToken">
+/// The secret the lead's QR code carries, for somebody not registered to ask to join. Sent ONLY to
+/// whoever may manage the launch; null for everybody else, and null where asking is not allowed
+/// (a home, a private client case).
+/// </param>
 public sealed record FieldLaunchRecord(
     Guid Id,
     string Target,
@@ -32,7 +37,8 @@ public sealed record FieldLaunchRecord(
     DateTime EndsUtc,
     DateTime ExpiresUtc,
     bool IsPublic,
-    string AppLink);
+    string AppLink,
+    string? JoinToken = null);
 
 /// <summary>Something the caller may launch now, for the lead's list.</summary>
 /// <param name="Target"><c>investigation</c>, <c>event</c> or <c>hosted-event</c>.</param>
@@ -71,3 +77,20 @@ public sealed record LaunchOutcomeRecord(
 
 /// <summary>A feed card's launch (item 252): its title, the app link, and when it goes.</summary>
 public sealed record FeedLaunchCard(Guid LaunchId, string Title, string AppLink, DateTime ExpiresUtc);
+
+/// <summary>
+/// Where somebody who scanned the lead's code stands (item 252).
+/// </summary>
+/// <param name="Standing">
+/// <c>in</c> — registered, public, or let in: <paramref name="Launch"/> is set, join straight away;
+/// <c>ask</c> — signed in, not registered: they may ask the lead; <c>pending</c> — asked, waiting;
+/// <c>declined</c> — the lead said no; <c>sign-in</c> — signed out, and it is not public.
+/// </param>
+public sealed record JoinStandingRecord(
+    Guid LaunchId, string Title, string OrganizationName, string LaunchedByName, string Standing,
+    FieldLaunchRecord? Launch);
+
+/// <summary>Somebody asking to join, as the lead sees them.</summary>
+/// <param name="Status"><c>pending</c>, <c>approved</c> or <c>declined</c>.</param>
+public sealed record JoinRequestRecord(
+    Guid Id, Guid AppUserId, string DisplayName, string Status, DateTime RequestedUtc, DateTime? DecidedUtc);

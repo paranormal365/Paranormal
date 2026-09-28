@@ -25,6 +25,12 @@
 	<array>
 		<string>group.com.ishaunted.ios</string>
 	</array>
+	<!-- Push notifications (item 252): a lead's "the group's session is starting". Development here;
+	     Xcode signs an archive for TestFlight and the App Store with production. Like the others,
+	     this changes the provisioning profile: the Push Notifications capability has to be on the
+	     App ID, which Xcode's automatic signing adds on the next device build. -->
+	<key>aps-environment</key>
+	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:ishaunted.com</string>
