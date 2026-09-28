@@ -21,7 +21,11 @@
         </div>
     }
 
-    <h1 class="mb-1">@(UrlName is null ? "What's on" : "Events")</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h1 class="mb-1">@(UrlName is null ? "What's on" : "Events")</h1>
+        @* Each walk on its own clock, or all on the reader's (2026-09-28). *@
+        <TimeZoneSwitch Noun="event" />
+    </div>
     <p class="text-secondary mb-3">
         @(UrlName is null
             ? "Public investigations, meetings and walks that groups have opened to anyone."
@@ -60,8 +64,8 @@
            starts at eight where it starts, whoever is reading about it; the reader's own clock
            would move one night onto a different day depending on where they happen to be sitting,
            and would disagree with the guest mail and the calendar file, which both use the walk's
-           time. The zone is named beside it. An event with no zone recorded reads in UTC and says
-           so — see EventClock. *@
+           time. The zone is named beside it, and the reader can switch to their own clock (2026-09-28).
+           An event with no zone recorded reads on the house clock — see EventClock. *@
         @foreach (var day in _events.Items
                      .OrderBy(e => e.StartDateTime)
                      .GroupBy(e => EventClock.At(e.StartDateTime, e.TimeZoneId).Date))
@@ -81,7 +85,6 @@
             <div class="ev-list">
                 @foreach (var item in day)
                 {
-                    var (when, zone) = EventClock.InPlaceTime(item.StartDateTime, item.TimeZoneId);
                     var full = item.AttendeeCapacity is { } c && item.AttendingCount >= c;
 
                     <div class="ev-row @(full ? "ev-row--full" : "")">
@@ -92,8 +95,9 @@
                             }
                             else
                             {
-                                @when.ToDisplayTime()
-                                <span class="ev-row__zone">@zone</span>
+                                @* The walk's time, or the reader's if they chose (2026-09-28). *@
+                                <BenTime Utc="@item.StartDateTime" ZoneId="@item.TimeZoneId" Format="BenTime.Shape.Time"
+                                         LettersClass="ev-row__zone" TestId="event-time" />
                             }
                         </span>
 

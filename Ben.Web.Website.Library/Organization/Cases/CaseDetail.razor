@@ -299,7 +299,7 @@
             @* ── Investigations ───────────────────────────────────────────── *@
             <BenTab Title="Investigations" Id="investigations">
                 <div class="mt-2">
-                    <InvestigationPanel OrgId="@OrgId" CaseId="@CaseId" />
+                    <InvestigationPanel OrgId="@OrgId" CaseId="@CaseId" CaseTimeZoneId="@_case?.EffectiveTimeZoneId" />
                 </div>
             </BenTab>
 

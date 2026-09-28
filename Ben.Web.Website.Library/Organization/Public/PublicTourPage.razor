@@ -12,6 +12,8 @@
 @inject IBenUserState UserState
 @inject IMediaUrlBuilder MediaUrls
 @inject NavigationManager NavManager
+@inject TimeView View
+@implements IDisposable
 
 @* One tour, for somebody deciding whether to come. The meeting point is given in full and the
    guides are named and pictured: Ben's reason was safety, and an address withheld from the person
@@ -366,10 +368,12 @@ else
             @* Each date is the offer, so each date is a card with a plate a reader can find at a
                glance — the same shape a ticket has. The bar under the time is how full it is:
                "19 left" is a number, and a walk two thirds sold is a reason to book tonight. *@
+            @* The walk's clock, or the reader's own (2026-09-28). *@
+            <div class="mb-2"><TimeZoneSwitch ZoneId="@_tour.TimeZoneId" Noun="tour" /></div>
             <div class="tour-datelist">
                 @foreach (var date in _tour.UpcomingDates)
                 {
-                    var (when, zone) = EventClock.InPlaceTime(date.StartDateTime, _tour.TimeZoneId);
+                    var (when, zone) = Clock(date.StartDateTime);
                     var cap = date.AttendeeCapacity;
                     var left = cap is { } c ? Math.Max(0, c - date.AttendingCount) : (int?)null;
                     var full = left == 0;
@@ -469,8 +473,7 @@ else
 
             if (_tour.UpcomingDates.Count > 0)
             {
-                var (soonest, zone) = EventClock.InPlaceTime(
-                    _tour.UpcomingDates[0].StartDateTime, _tour.TimeZoneId);
+                var (soonest, zone) = Clock(_tour.UpcomingDates[0].StartDateTime);
                 facts.Add(new BenFactItem("Next walk", soonest.ToString("ddd MM/dd"),
                     $"{soonest:h:mm tt} {zone}", Href: "#tour-dates", Emphasis: true));
             }
@@ -531,12 +534,36 @@ else
 
     // Loaded during prerender so a link shared into a group chat has something to show, then
     // again once the circuit knows who is reading.
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        View.Changed += OnClockChanged;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// A date on the walk's clock, or the reader's when they chose it (2026-09-28), with that
+    /// clock's letters. The calendar's marked days follow the same clock as the list beside it.
+    /// </summary>
+    private (DateTime At, string Zone) Clock(DateTime utc)
+    {
+        if (!View.InMyTime) return EventClock.InPlaceTime(utc, _tour?.TimeZoneId);
+        return (utc.ToViewerLocalTime(UserState),
+                Ben.Data.Common.Helpers.Zones.Abbreviation(UserState.ViewerTimeZone, utc));
+    }
+
+    private void OnClockChanged()
+    {
+        _dateDays = [.. (_tour?.UpcomingDates ?? []).Select(d => Clock(d.StartDateTime).At.Date)];
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => View.Changed -= OnClockChanged;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await View.EnsureLoadedAsync();
         await LoadAsync();
         StateHasChanged();
     }
@@ -571,7 +598,7 @@ else
         // the list beside it — and so a reader two zones away is not shown a dot on the wrong day
         // for a walk that has only ever run on Saturdays (Ben, 2026-09-10).
         _dateDays = [.. (_tour?.UpcomingDates ?? [])
-            .Select(d => EventClock.At(d.StartDateTime, _tour?.TimeZoneId).Date)];
+            .Select(d => Clock(d.StartDateTime).At.Date)];
 
         if (_dateDays.Count > 0)
         {

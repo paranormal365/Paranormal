@@ -564,7 +564,7 @@
                                 @foreach (var date in _dates)
                                 {
                                     <tr class="@(date.StartDateTime < DateTime.UtcNow ? "text-secondary" : "")">
-                                        <td>@date.StartDateTime.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</td>
+                                        <td><BenTime Utc="@date.StartDateTime" ZoneId="@_tour?.TimeZoneId" TestId="tour-date" /></td>
                                         <td class="small">
                                             @(date.Guides.Count == 0
                                                 ? "—"

@@ -89,8 +89,10 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Which clock this is. Never guessed from the reader's machine, so it has to be said. */
-.ev-row__zone {
+/* Which clock this is. Never guessed from the reader's machine, so it has to be said. Drawn inside
+   BenTime (2026-09-28), a child component, so the rule reaches it through ::deep. */
+.ev-row__zone,
+.ev-row__time ::deep .ev-row__zone {
     display: block;
     font-size: .68rem;
     font-weight: 600;

@@ -59,8 +59,7 @@
         <span class="ben-tourcard__line">
             @if (Tour.NextDateStartUtc is { } next)
             {
-                var (at, zone) = EventClock.InPlaceTime(next, Tour.TimeZoneId);
-                <text>Next @at.ToString("ddd MM/dd, h:mm tt") @zone</text>
+                <text>Next <BenTime Utc="@next" ZoneId="@Tour.TimeZoneId" /></text>
             }
             else
             {

@@ -199,7 +199,10 @@ public sealed record MyHostedEventBookingRecord(
 
     /// <summary>Whether they may review the event now, and whether they already have.</summary>
     bool MayReview = false,
-    bool HasReviewed = false);
+    bool HasReviewed = false,
+
+    /// <summary>The event's own clock (IANA), so its sessions read in its time or the guest's (2026-09-28).</summary>
+    string? TimeZoneId = null);
 
 /// <summary>One session on a guest's own list.</summary>
 public sealed record MySessionLineRecord(

@@ -242,6 +242,8 @@ builder.Services.AddScoped<NotificationState>();
 // copy of the cart per circuit, so the header, the drawer and the cart page agree.
 builder.Services.AddScoped<StoreCartTokenHolder>();
 builder.Services.AddScoped<VisitorAddressHolder>();
+// Which clock a case, investigation, event or tour reads on, per reader (2026-09-28).
+builder.Services.AddScoped<Ben.Web.Website.Library.Kit.TimeView>();
 builder.Services.AddScoped<StoreCartState>();
 builder.Services.AddScoped<StoreFavouriteState>();   // storefront S6.3: the hearts
 // Scoped = per circuit. Avatar resolution depends on who is asking, so this must not be shared

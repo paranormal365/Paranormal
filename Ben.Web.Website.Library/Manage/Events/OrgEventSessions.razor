@@ -162,7 +162,9 @@
                         <div class="list-group-item programme-session @(s.IsCancelled ? "opacity-75" : "")" data-session="@s.Id">
                             <div class="d-flex flex-column flex-md-row gap-2">
                                 <div class="text-nowrap fw-semibold" style="min-width:10rem;">
-                                    @VenueClock.Span(s.StartsAtUtc, s.EndsAtUtc, programme.TimeZoneId)
+                                    @* The venue's clock, or the reader's (2026-09-28); the night headings stay the venue's. *@
+                                    <BenTime Utc="@s.StartsAtUtc" EndUtc="@s.EndsAtUtc" ZoneId="@programme.TimeZoneId"
+                                             Format="BenTime.Shape.TimeSpan" TestId="session-time" />
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="@(s.IsCancelled ? "text-decoration-line-through" : "")">@s.Title</div>

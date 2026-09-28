@@ -1074,7 +1074,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .Select(g => new HostedEventBookingGuestRecord(
                     g.Id, g.DisplayName, g.AppUserId, g.DietaryNotes, g.SortOrder))
                 .ToList(),
-            b.HoldExpiresUtc);
+            b.HoldExpiresUtc,
+            TimeZoneId: b.HostedEvent?.TimeZoneId);
 
     internal static string? Trimmed(string? value)
         => value?.Trim() is { Length: > 0 } v ? v : null;

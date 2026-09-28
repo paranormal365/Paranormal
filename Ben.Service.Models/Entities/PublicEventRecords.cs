@@ -181,7 +181,9 @@ public sealed record EventAttendanceInviteInfo(
     string OrganizationUrlName,
     string? EventUrlName,
     DateTime StartDateTime,
-    string Email);
+    string Email,
+    // The event's own clock (2026-09-28); null reads on the house clock.
+    string? TimeZoneId = null);
 
 /// <summary>The result of using a confirmation link.</summary>
 public sealed record EventAttendanceConfirmation(
@@ -222,7 +224,10 @@ public sealed record EventAttendanceConfirmation(
     /// Added 2026-09-23: the page told these guests "You're coming" while the welcome letter was
     /// held back precisely because nothing had been reserved. Like a hosted event, it is a request.
     /// </remarks>
-    bool AwaitsApproval = false);
+    bool AwaitsApproval = false,
+
+    /// <summary>The event's own clock (2026-09-28); null reads on the house clock.</summary>
+    string? TimeZoneId = null);
 
 
 // ── Published investigations (backlog item #89) ──────────────────────────────

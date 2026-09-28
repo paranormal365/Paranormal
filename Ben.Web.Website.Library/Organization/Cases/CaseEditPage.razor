@@ -96,6 +96,16 @@
                             </p>
                         </div>
 
+                        @* The case's clock (Ben, 2026-09-28): its visits start on it, and anybody reading the
+                           case can see its times here or in their own zone. *@
+                        <div>
+                            <label class="form-label fw-semibold" for="case-edit-time-zone">Time zone</label>
+                            <TimeZonePicker Id="case-edit-time-zone" @bind-Value="_editTimeZoneId" AllowUnset="true"
+                                            UnsetLabel="@(_groupZoneHint is null ? "Same as the group" : $"Same as the group — {TimeZoneCatalog.Label(_groupZoneHint)}")"
+                                            TestId="case-edit-time-zone" />
+                            <div class="form-text">Where the case is. New investigations start on this clock.</div>
+                        </div>
+
                         <div>
                             <label class="form-label fw-semibold" for="casedetail-public-pseudonym-88c6">Public Pseudonym</label>
                             <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:after="CheckLeaksAsync" />
@@ -295,6 +305,9 @@
     private string _editPseudonym = "";
     private bool _editIsPublic;
     private bool _editIsPrivate;
+    private string? _editTimeZoneId;
+    /// <summary>The group's zone, known only while the case has none of its own (then they are the same).</summary>
+    private string? _groupZoneHint;
     private string _editCaseManagerKey = "";
 
     /// <summary>Whether the group's plan covers private-residence work (item 193). Fails open, as the server does.</summary>
@@ -379,6 +392,8 @@
         _editPseudonym      = c.PublicPseudonym ?? "";
         _editIsPublic       = c.IsPublic;
         _editIsPrivate      = c.IsPrivateEngagement;
+        _editTimeZoneId     = c.TimeZoneId;
+        _groupZoneHint      = c.TimeZoneId is null ? c.EffectiveTimeZoneId : _groupZoneHint;
         _editCaseManagerKey = c.CaseManagerAppUserId?.ToString() ?? "";
         _baseline = Snapshot();
     }
@@ -444,7 +459,9 @@
                 PublicPseudonym:      string.IsNullOrWhiteSpace(_editPseudonym) ? null : _editPseudonym.Trim(),
                 IsPublic:             _editIsPublic,
                 CaseManagerAppUserId: EditCaseManagerId,
-                IsPrivateEngagement:  _editIsPrivate);
+                IsPrivateEngagement:  _editIsPrivate,
+                // Unset is a choice: empty returns the case to the group's clock.
+                TimeZoneId:           _editTimeZoneId ?? string.Empty);
 
             var (result, error) = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, request);
             if (result is null)

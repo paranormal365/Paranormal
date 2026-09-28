@@ -12,7 +12,11 @@
 <PageTitle>My Investigations</PageTitle>
 
 <div class="container-fluid py-3" style="max-width:860px;">
-    <h3 class="mb-4">My Investigations</h3>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h3 class="mb-0">My Investigations</h3>
+        @* Each visit and event in its own local time, or all in yours (2026-09-28). *@
+        <TimeZoneSwitch Noun="investigation" />
+    </div>
 
     @if (_error is not null)
     {
@@ -131,10 +135,10 @@
                                     </div>
                                 </div>
                                 <div class="text-secondary small text-end flex-shrink-0">
-                                    @ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDate()
+                                    <BenTime Utc="@ev.StartDateTime" ZoneId="@ev.TimeZoneId" Format="BenTime.Shape.Date" />
                                     @if (!ev.IsAllDay)
                                     {
-                                        <span class="d-block">@ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayTimeNoSeconds()</span>
+                                        <span class="d-block"><BenTime Utc="@ev.StartDateTime" ZoneId="@ev.TimeZoneId" Format="BenTime.Shape.Time" /></span>
                                     }
                                 </div>
                             </div>
@@ -324,7 +328,8 @@
                 </div>
                 <div class="small mt-1">
                     <BenIcon Name="calendar" />
-                    @(inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(inv.EndDateTime?.ToViewerLocalTime(UserState)))
+                    <BenTime Utc="@inv.ScheduledDateTime" EndUtc="@inv.EndDateTime" ZoneId="@inv.TimeZoneId"
+                             Format="BenTime.Shape.Span" TestId="investigation-when" />
                 </div>
                 @if (!string.IsNullOrWhiteSpace(inv.Location))
                 {

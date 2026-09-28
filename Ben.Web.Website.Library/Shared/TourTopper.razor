@@ -61,7 +61,7 @@
                                 var (at, zone) = EventClock.InPlaceTime(next, tour.TimeZoneId);
                                 <span class="tour-topper__when">
                                     @at.ToString("ddd MM/dd")
-                                    <span class="tour-topper__time">@at.ToString("h:mm tt") @zone</span>
+                                    <span class="tour-topper__time"><BenTime Utc="@next" ZoneId="@tour.TimeZoneId" Format="BenTime.Shape.Time" /></span>
                                 </span>
                             }
 

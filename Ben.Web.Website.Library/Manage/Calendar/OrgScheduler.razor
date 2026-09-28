@@ -1,4 +1,5 @@
 @page "/organizations/{OrgId:guid}/calendar"
+@using Ben.Data.Common.Helpers
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
@@ -331,7 +332,7 @@
                 <select id="ev-zone" class="form-select"
                         @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? "")">
                     <option value="" selected="@(string.IsNullOrWhiteSpace(_form.TimeZoneId))">
-                        @(_form.TourId is null ? "(Not said — shown as UTC)" : "(The tour's)")
+                        @(_form.TourId is null ? $"(The group's — {TimeZoneCatalog.Label(_groupZone ?? Ben.Data.Common.Constants.HouseClock.ZoneId)})" : "(The tour's)")
                     </option>
                     @foreach (var zone in TimeZoneChoices.All)
                     {
@@ -339,8 +340,8 @@
                     }
                 </select>
                 <div class="form-text">
-                    The zone the event actually happens in. Anybody reading it publicly sees this
-                    clock, wherever they are.
+                    The zone the event actually happens in. The start and end above are on this clock
+                    (@FormZoneLetters), and anybody reading the event sees it — or their own, if they choose.
                 </div>
             </div>
 
@@ -518,6 +519,27 @@
 
     /// <summary>This business's tours (item 233). Empty for a group that runs none.</summary>
     private IReadOnlyList<Ben.Service.Models.Entities.TourRecord> _tours = [];
+
+    /// <summary>The group's home clock, when it could be read.</summary>
+    private string? _groupZone;
+
+    /// <summary>
+    /// The clock the form's times are on: the zone chosen in it, else its tour's, else the group's,
+    /// else the scheduler's own (2026-09-28). What is typed is what is saved.
+    /// </summary>
+    private TimeZoneInfo FormZone => Zones.Find(
+        _form.TimeZoneId,
+        _form.TourId is { } tourId ? _tours.FirstOrDefault(t => t.Id == tourId)?.TimeZoneId : null,
+        _groupZone,
+        Zones.IanaId(UserState.ViewerTimeZone));
+
+    private string FormZoneLetters => Zones.Abbreviation(FormZone, Zones.ToUtc(_form.Start, FormZone));
+
+    /// <summary>An existing event's clock, by the same rule the server stamps.</summary>
+    private TimeZoneInfo EventZone(OrgCalendarEventRecord e) => Zones.Find(
+        e.TimeZoneId,
+        e.TourId is { } tourId ? _tours.FirstOrDefault(t => t.Id == tourId)?.TimeZoneId : null,
+        _groupZone);
 
     /// <summary>Whether a public date here has to name a tour — the server's rule, mirrored.</summary>
     private bool _datesBelongToTours;
@@ -739,6 +761,9 @@
             // round to be wrong.
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgKind = org?.Kind ?? Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
+            // The group's home clock (2026-09-28): what a new event starts on and what "(The
+            // group's)" means. Unreadable, the scheduler's own zone stands in, stated in the form.
+            _groupZone = (await AdminClient.GetOrgSettingsAsync(OrgId))?.TimeZoneId;
 
             // Item 233: a public date of a tour business belongs to a tour. The server refuses
             // one that does not; this is so the form asks for it rather than letting somebody
@@ -846,10 +871,12 @@
 
         if (args.IsNew)
         {
+            // The grid is on the reader's clock; the form is on the event's. Same instant, moved.
+            var startOnEventClock = Zones.ToZone(args.Start.ToUtcFromViewerLocal(UserState), Zones.Find(_groupZone ?? Zones.IanaId(UserState.ViewerTimeZone)));
             _form = new EventFormModel
             {
-                Start    = args.Start,
-                End      = args.Start.AddHours(1),
+                Start    = startOnEventClock,
+                End      = startOnEventClock.AddHours(1),
                 IsAllDay = args.IsAllDay,
                 // A walking tour's events ARE its product, so they start public; an
                 // investigation group's calendar is mostly internal and starts private
@@ -859,12 +886,9 @@
                 // Arrived from a tour's own page ("Schedule a date"), or there is only one tour
                 // it could be. Either way the answer is already known, so do not ask.
                 TourId = _preselectedTourId ?? (_tours.Count == 1 ? _tours[0].Id : null),
-                // The person scheduling is almost always in the zone the thing happens in, so
-                // their own is the right first guess — and it is a guess they can see and change,
-                // rather than a silent UTC nobody notices until a guest turns up an hour out.
-                TimeZoneId = TimeZoneChoices.All.Any(z => z.Id == UserState.ViewerTimeZone.Id)
-                    ? UserState.ViewerTimeZone.Id
-                    : "",
+                // The group's home clock (2026-09-28) — named, so it is a choice somebody can see
+                // and change. Without the group's, the scheduler's own, for the same reason.
+                TimeZoneId = _groupZone ?? Zones.IanaId(UserState.ViewerTimeZone),
             };
             ApplyTourDefaults();
         }
@@ -875,14 +899,17 @@
                 Title          = _editingEvent.Title,
                 Description    = _editingEvent.Description ?? "",
                 Location       = _editingEvent.Location ?? "",
-                Start          = _editingEvent.StartDateTime.ToViewerLocalTime(UserState),
-                End            = _editingEvent.EndDateTime.ToViewerLocalTime(UserState),
+                // On the event's own clock — the one its times are sold and mailed on.
+                Start          = Zones.ToZone(_editingEvent.StartDateTime, EventZone(_editingEvent)),
+                End            = Zones.ToZone(_editingEvent.EndDateTime, EventZone(_editingEvent)),
                 IsAllDay       = _editingEvent.IsAllDay,
                 IsPublic       = _editingEvent.IsPublic,
                 PlaceId           = _editingEvent.PlaceId,
                 HideExactLocation = _editingEvent.HideExactLocation,
                 AttendeeCapacity  = _editingEvent.AttendeeCapacity,
-                RsvpClosesAt      = _editingEvent.RsvpClosesAt,
+                // Was loaded as the raw UTC value and saved back through the viewer's zone, so
+                // every edit moved the deadline by the viewer's offset (found 2026-09-28).
+                RsvpClosesAt      = _editingEvent.RsvpClosesAt is { } closes ? Zones.ToZone(closes, EventZone(_editingEvent)) : null,
                 EventTypeId    = _editingEvent.EventTypeId,
                 TourId         = _editingEvent.TourId,
                 TimeZoneId     = _editingEvent.TimeZoneId ?? "",
@@ -1040,8 +1067,8 @@
                 Title:          _form.Title.Trim(),
                 Description:    string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
                 Location:       string.IsNullOrWhiteSpace(_form.Location) ? null : _form.Location.Trim(),
-                StartDateTime:  _form.Start.ToUtcFromViewerLocal(UserState),
-                EndDateTime:    _form.End.ToUtcFromViewerLocal(UserState),
+                StartDateTime:  Zones.ToUtc(_form.Start, FormZone),
+                EndDateTime:    Zones.ToUtc(_form.End, FormZone),
                 IsAllDay:       _form.IsAllDay,
                 IsPublic:       _form.IsPublic,
                 EventTypeId:    _form.EventTypeId,
@@ -1052,7 +1079,7 @@
                 PlaceId:           _form.PlaceId,
                 HideExactLocation: _form.HideExactLocation,
                 AttendeeCapacity:  _form.AttendeeCapacity,
-                RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState),
+                RsvpClosesAt:      _form.RsvpClosesAt is { } rsvp ? Zones.ToUtc(rsvp, FormZone) : null,
                 TourId:            _form.TourId,
                 // An empty list is an instruction, not silence. Sending null when nobody was
                 // ticked meant the server left the old guides in place — so the last guide could

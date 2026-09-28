@@ -215,7 +215,7 @@
                                 @* The night's own clock, not the reader's — Ben's rule,
                                    2026-09-10. Declared here, in the loop body, because a `var`
                                    written among the markup below is rendered as text. *@
-                                var (evAt, evZone) = EventClock.InPlaceTime(ev.StartDateTime, ev.TimeZoneId);
+                                var evAt = EventClock.At(ev.StartDateTime, ev.TimeZoneId);
 
                                 <div class="col-12 col-md-6 col-lg-4">
                                     <div class="nearby-card h-100 d-flex flex-column">
@@ -223,7 +223,7 @@
                                             <span class="nearby-card__date">
                                                 @evAt.ToString("ddd MM/dd")
                                                 <span class="nearby-card__time">
-                                                    @evAt.ToString("h:mm tt") @evZone
+                                                    <BenTime Utc="@ev.StartDateTime" ZoneId="@ev.TimeZoneId" Format="BenTime.Shape.Time" />
                                                 </span>
                                             </span>
                                             <span class="nearby-card__title">@ev.Title</span>

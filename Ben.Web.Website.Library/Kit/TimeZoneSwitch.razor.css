@@ -1,0 +1,4 @@
+/* "Local time · My time" (2026-09-28): each button keeps its zone on one line. */
+.ben-time-switch .btn {
+    white-space: nowrap;
+}
