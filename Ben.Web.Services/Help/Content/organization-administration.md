@@ -796,6 +796,23 @@ so they can download it. Nothing is ever deleted that has not been warned about 
 
 Groups that are not on a tour plan have no clock at all: their files stay, as they always have.
 
+### Starting the night, and what your guests send back
+
+On the night, a date's guide — or anybody who may edit your calendar — can start everybody's Field
+Kit from the IsHaunted app: **Launch a session for your group** in Field Kit. Everybody with a
+reserved seat is told, and the card goes in the feed. Guests who were never registered can scan the
+guide's code; at a public date they are straight in, and at a private one they ask and the guide
+lets them in. See [The iPhone and iPad Apps](/help/the-mobile-apps).
+
+Whatever they record and send — that night or days later — arrives on the date's page, under
+**Field sessions sent up**, with **Play back**. Your group and the date's guides see it; the other
+guests do not.
+
+![What guests sent up from a tour date](help-media:organization-administration/tour-date-field-sessions.png)
+
+A session sent to one of your dates is your group's record of that night: the guest who sent it
+cannot delete it.
+
 ### Where your tours show up
 
 Tours are public. They appear on your own public page, on the map on the front page, and in the
@@ -1186,6 +1203,13 @@ Four different things, and they are deliberately separate permissions:
 
 **Publishing is separate again** and needs whoever can change the group's settings, because it is
 the one act that spends money.
+
+### The group's session on the night
+
+As with a tour, the organiser — or staff who run the door — can start everybody's Field Kit from the
+IsHaunted app, and confirmed guests are told. What they send comes back to the event's page under
+**Field sessions sent up**, for your group and the event's staff. Letting in somebody who scanned the
+code and asked never makes a booking: it lets them record with everybody, nothing more.
 
 ### Minimum numbers
 

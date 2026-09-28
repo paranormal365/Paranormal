@@ -167,6 +167,14 @@ who are happy to be shown.
 The organizers can keep photos to the event's own team; you can still write in the room when they
 do. The room closes to new posts a week after the last night, and stays there to look back through.
 
+## When the organiser starts the group's session
+
+At some events the organiser, or whoever is running the door, starts a Field Kit session for
+everybody at once. If you have the IsHaunted app you are told, and you can join from the
+notification, from the card in your feed, or from **Happening now** in Field Kit — nothing records
+until you press Start, and you can send what you recorded that night or days later. See
+[The iPhone and iPad Apps](/help/the-mobile-apps).
+
 ## Your pass
 
 Once a venue confirms you, your pass is on the event's page and on this list. **One pass admits

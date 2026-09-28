@@ -153,6 +153,11 @@ struct FieldLaunchSendingTests {
         #expect(first.uploadId(for: UUID()) != first.uploadId(for: session))         // another session's is its own
     }
 
+    @Test func theAllowanceReadsAsTheSixHundredMegabytesItIs() {
+        // Printed in decimal units it read "629.1 MB" on the send screen.
+        #expect(UploadAllowance.spokenSize.replacingOccurrences(of: "\u{00A0}", with: " ") == "600 MB")
+    }
+
     @Test func aJoinedSessionIsSentWithItsLaunchAndNoInvestigation() async throws {
         let transport = MockTransport(status: 200, body: Data("""
         {"id":"\(UUID().uuidString.lowercased())","investigationId":null,

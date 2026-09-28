@@ -67,6 +67,29 @@ public class PersonaDocCaptureTests : BenTestBase
         await ShotAsync(name);
     }
 
+    /// <summary>
+    /// Item 252: a tour date's "Field sessions sent up", for the owner and for the guide (a member),
+    /// against the world the launch capture run made (BEN_RP_FILE). New numbers only — see below.
+    /// </summary>
+    [Test]
+    [Description("Captures the tour date page with what guests sent up. Set BEN_PERSONA (owner or member) and BEN_RP_FILE.")]
+    public async Task CaptureGroupSessions()
+    {
+        var file = Environment.GetEnvironmentVariable("BEN_RP_FILE");
+        if (Persona is not ("owner" or "member") || string.IsNullOrEmpty(file) || !File.Exists(file))
+            Assert.Ignore("Set BEN_PERSONA to owner or member, and BEN_RP_FILE to the item-252 capture world.");
+        var world = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(file!)).RootElement;
+        string Id(string name) => world.GetProperty(name).GetString()!;
+
+        await Page.SetViewportSizeAsync(1440, 900);
+        await Page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
+        if (Persona == "owner") await LoginAsync(UserEmail, UserPassword);
+        else await LoginAsync(MemberEmail, MemberPassword);
+
+        await VisitAsync(Persona == "owner" ? "5f-tour-date-field-sessions" : "3e-tour-date-field-sessions",
+            $"/organizations/{Id("orgId")}/tours/{Id("tourId")}/dates/{Id("tourDateId")}");
+    }
+
     [Test]
     [Description("Captures one persona's view of the site. Set BEN_PERSONA.")]
     public async Task CaptureThisPersona()

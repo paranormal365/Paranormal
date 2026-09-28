@@ -198,7 +198,7 @@ struct UploadSessionView: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(quality.title)
                                     .foregroundStyle(Theme.bone)
-                                Text("about \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
+                                Text("about \(UploadAllowance.spoken(size))"
                                      + (fits ? "" : " — still too heavy"))
                                     .font(.caption2)
                                     .foregroundStyle(fits ? Theme.fog : Theme.warning)
@@ -424,9 +424,7 @@ struct UploadSessionView: View {
     /// waited twenty minutes for an upload to fail has learned the rule the expensive way.
     @ViewBuilder
     private func allowanceRow(_ plan: SessionTrimPlan) -> some View {
-        let size = ByteCountFormatter.string(
-            fromByteCount: plan.approximateBytesSent(atVideoQuality: videoQuality),
-            countStyle: .file)
+        let size = UploadAllowance.spoken(plan.approximateBytesSent(atVideoQuality: videoQuality))
         VStack(alignment: .leading, spacing: 4) {
             Label {
                 Text(plan.videoSecondsSent > 0

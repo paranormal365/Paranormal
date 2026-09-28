@@ -328,6 +328,31 @@ public sealed class HelpMediaCapture : BenTestBase
     // ── Everyone ──────────────────────────────────────────────────────────────
 
     [Test]
+    [Description("the-feed and organization-administration: a lead's launch (item 252) — its card in the feed, and what the group was sent.")]
+    public async Task Capture_GroupSessions()
+    {
+        // Needs tonight's world from the item-252 capture run: a tour date with a session sent up,
+        // and a launch card in the guest's feed. BEN_RP_FILE names the JSON that run wrote.
+        var file = Environment.GetEnvironmentVariable("BEN_RP_FILE");
+        if (string.IsNullOrEmpty(file) || !File.Exists(file)) Assert.Ignore("set BEN_RP_FILE to the item-252 capture world");
+        var world = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(file!)).RootElement;
+        string Id(string name) => world.GetProperty(name).GetString()!;
+
+        // The guest's view: the launch card in the feed.
+        await LoginAsync(ClientEmail, ClientPassword);
+        await Page.GotoAsync($"{BaseUrl}/feed");
+        await ShootAsync("the-feed", "launch-card.png",
+            selector: "article.bv-feed-post:has([data-testid=feed-post-launch])", proves: "is starting now");
+
+        // The group's view: what was recorded and sent to the tour date.
+        await LogoutAsync();
+        await LoginAsync(UserEmail, UserPassword);
+        await Page.GotoAsync($"{BaseUrl}/organizations/{Id("orgId")}/tours/{Id("tourId")}/dates/{Id("tourDateId")}");
+        await ShootAsync("organization-administration", "tour-date-field-sessions.png", gated: true,
+            selector: "#group-field-sessions", proves: "Field sessions sent up");
+    }
+
+    [Test]
     [Description("getting-started: the signed-out view of the site.")]
     public async Task Capture_GettingStarted()
     {

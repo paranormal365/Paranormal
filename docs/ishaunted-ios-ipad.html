@@ -322,6 +322,56 @@ an investigation happening here first, and says when other people published sess
 permission the app needs was refused, the switch says so and offers Settings.</p>
 
 <figure><img src='ios-media/ipad/53-session-review.png'><figcaption>Ending a session &mdash; iPad, dark mode</figcaption></figure>
+<h2>A group session, started by the lead</h2>
+
+<p>Item 252. A tour's guide, an event's organiser or door staff, or an investigation's lead starts
+everybody's Field Kit at once. The server (<code>FieldLaunchService</code>) finds who is
+registered, writes a card in the feed — public when the thing is, otherwise a
+<code>FieldLaunchNotice</code> only its people can read — and pushes to every registered phone
+through APNs. Nobody is forced in: the push, the card and Field Kit's <b>Happening now</b> all open
+the same link, <code>ishaunted://field-kit/launch/{id}</code>, and <code>JoinLaunchView</code>
+turns it into a session already set to the thing and its place (<code>startSession(joining:)</code>),
+pending until Start.</p>
+
+<p>Push is <code>PushRegistrar</code> with an <code>AppDelegate</code> adaptor: permission is asked
+at moments it plainly helps (a reserved seat, a booking, something coming up), the token is sent to
+<code>api/me/push-devices</code> while somebody is signed in, and removed in
+<code>SessionStore.beforeSignOut</code>. Taps finish on the main thread — the <code>async</code> form
+of <code>didReceive</code> crashed the app.</p>
+
+<h2>The launch in the feed</h2>
+
+<p><code>FeedPostRecord.launch</code> carries the card's launch; <code>FeedCardView</code> draws
+<b>Join the session</b> outside the card's combined accessibility element, so it is a real button to
+VoiceOver and to UI tests. The card leaves the feed six hours after the thing ends.</p>
+
+<h2>Sending it to the night</h2>
+
+<p>A joined session remembers its launch (<code>fieldLaunchId</code>) and the tour date or event.
+The send screen replaces the investigation picker with <b>Send to …</b>; the upload sends the
+launch and the server resolves where it goes — so it works days later, and for a walk-up let in
+after they recorded. Each part of a long session goes under its own id
+(<code>SessionWindow.uploadId</code>), so the next ten minutes no longer replaces the first. Rows in
+Field Kit say Sent or Not sent.</p>
+
+<h2>Joining by the lead's code</h2>
+
+<p>The lead's QR carries a secret join token (<code>/field-kit/join/{token}</code>, claimed as a
+universal link). <code>JoinByCodeView</code> asks the server where the scanner stands: registered
+or public — straight in; otherwise sign in and <b>Ask to join</b>, record while waiting, and the view
+looks again every few seconds so a yes moves them in. A home or a private client case has no
+token.</p>
+
+<h2>The lead's page</h2>
+
+<p><code>LaunchForGroupView</code> lists what the signed-in person may launch now (three hours
+before until the end); <code>LaunchDetailView</code> shows who it reached, the QR code, and anybody
+asking, with Let in and No. On an iPad the split view's detail column gives each section's
+<code>NavigationStack</code> its own identity (<code>.id(section)</code>) — without it, a link into a
+page below a section's front screen, such as the lead's "wants to join" notification, stopped at the
+front screen.</p>
+
+<figure><img src='ios-media/ipad/58-launch-lead-page.png'><figcaption>The lead's page &mdash; iPad, dark mode</figcaption></figure>
 <h2>Events</h2>
 
 <p>Public events — tours, open investigations, group meetings. Someone who attended can offer what

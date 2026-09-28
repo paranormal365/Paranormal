@@ -100,8 +100,16 @@ public enum UploadAllowance: Sendable {
     /// a night's sound and photographs still fit in one upload.
     public static let maximumBytes: Int64 = 600 * 1024 * 1024
 
-    public static var spokenSize: String {
-        ByteCountFormatter.string(fromByteCount: maximumBytes, countStyle: .file)
+    public static var spokenSize: String { spoken(maximumBytes) }
+
+    /// A size on the send screen, in the same units as the allowance.
+    ///
+    /// The allowance is 600 × 1024 × 1024 bytes, and Ben's "600 MB". Printed in the Finder's decimal
+    /// units it read "629.1 MB" (found in item 252's help screenshots, 2026-09-28) — and a window's
+    /// weight printed in those units beside it could look over the line while fitting. Everything
+    /// the send screen weighs is said in the allowance's own units.
+    public static func spoken(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory)
     }
 }
 

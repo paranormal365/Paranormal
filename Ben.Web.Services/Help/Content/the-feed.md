@@ -184,6 +184,18 @@ While the page is open it quietly checks for newer posts; a **"new posts"** butt
 there are some, and clicking it brings them in without losing your place. The site's home page
 also shows a small taste of the feed's current top posts — the front door on the front page.
 
+## When a group's session starts
+
+A guide, an organiser or an investigation lead can start the night for everybody from the app.
+Their card says so, and offers **Open in the app** — joining is done on a phone, in Field Kit,
+where the recording happens. On a phone with the app, the button opens it there; the app itself
+also lists it under **Happening now**.
+
+![A card saying the group's session has started](/help/media/the-feed/launch-card.png)
+
+For a public tour or event the card is in everybody's feed. For anything private it is shown only
+to the people it was for. Either way it goes six hours after the thing ends.
+
 ## Following
 
 Press **Follow** beside somebody's name on a post, or on their feed page. It is one-directional and
