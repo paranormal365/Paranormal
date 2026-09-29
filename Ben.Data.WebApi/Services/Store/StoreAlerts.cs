@@ -21,9 +21,12 @@ namespace Ben.Data.WebApi.Services.Store;
 /// </remarks>
 public sealed class StoreAlerts(
     IDbContextFactory<BenDataContext> dbFactory, PlatformMessageService messages, StoreOrderMailer mailer,
-    ILogger<StoreAlerts> log, TimeProvider? clock = null)
+    ILogger<StoreAlerts> log, TimeProvider? clock = null, ConcurrentDictionary<string, DateTime>? hourlyLimits = null)
 {
-    private static readonly ConcurrentDictionary<string, DateTime> LastSent = new();
+    // Process-wide, since the service is scoped. A test passes its own record: the static one is
+    // cleared and filled (on the real clock) by every other store test running in parallel.
+    private static readonly ConcurrentDictionary<string, DateTime> SharedLastSent = new();
+    private ConcurrentDictionary<string, DateTime> LastSent => hourlyLimits ?? SharedLastSent;
     public static readonly TimeSpan ConfigurationAlertGap = TimeSpan.FromHours(1);
 
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
@@ -155,7 +158,7 @@ public sealed class StoreAlerts(
     }
 
     /// <summary>Forgets the hourly limits — tests only.</summary>
-    internal static void ResetHourlyLimits() => LastSent.Clear();
+    internal static void ResetHourlyLimits() => SharedLastSent.Clear();
 
     private async Task ToAdminsAsync(string subject, string body, CancellationToken ct)
     {
