@@ -16,7 +16,21 @@ security-related, say only that it was, and never the shape of it.
 read.
 
 **Versions** (from 2026-09-28): each heading after the service went live carries the release
-number after a middle dot — `## 2026-09-28 · 2.9.0
+number after a middle dot — `## 2026-09-28 · 2.8.0`. A day of fixes moves the last number (2.7.0 →
+2.7.1); a day that adds something moves the middle one (→ 2.8.0); a whole new part of the service
+moves the first (→ 3.0.0). The service went live as 1.0.0 with the 2026-08-22 release; the day
+before it carries no number.
+
+This stream deliberately does not repeat the website's list. A change people meet as a page
+belongs there; this is for the part underneath.
+
+## 2026-09-29 · 2.8.1
+
+- The service now answers the apps at a new address of its own; the iPhone and iPad app's next
+  version uses it directly.
+- Maps, Sign in with Apple and notifications are more dependable to start up.
+
+## 2026-09-28 · 2.8.0
 
 - The apps can now be told when a group's session starts, with notifications on iPhone and iPad.
   A phone is registered for them only while somebody is signed in on it, and forgotten when they
@@ -26,17 +40,6 @@ number after a middle dot — `## 2026-09-28 · 2.9.0
   the lead decides.
 - Field Kit sessions can be sent to a tour date or an event as well as to an investigation, at any
   time after the night. Only the group running it can read them.
-
-## 2026-09-28 · 2.8.0`. A day of fixes moves the last number (2.7.0 →
-2.7.1); a day that adds something moves the middle one (→ 2.8.0); a whole new part of the service
-moves the first (→ 3.0.0). The service went live as 1.0.0 with the 2026-08-22 release; the day
-before it carries no number.
-
-This stream deliberately does not repeat the website's list. A change people meet as a page
-belongs there; this is for the part underneath.
-
-## 2026-09-28 · 2.8.0
-
 - People, groups, cases and investigations have time zones. Signing up and the profile take the
   zone a person reads the site in; a group has a home zone that new cases, events and tours start
   on; a case or an investigation can name its own, and otherwise reads on its case's or group's.
