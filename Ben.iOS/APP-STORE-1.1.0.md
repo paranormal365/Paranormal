@@ -332,12 +332,14 @@ The letter is in App Store Connect → 1.1.0 → **App Review** → *Resolution 
 - [x] *Device ID* declared in the build's privacy manifest (§5.6), and said in plain words in the
       website's privacy policy and the app's About & Privacy (Guideline 5.1.1: the policy names
       what is collected) — the policy change goes live with the §2 deploy
-- [ ] *Device ID* added and published in App Store Connect → App Privacy (§5.6)
-- [ ] Migrations applied with `dotnet ef database update`, then production deployed from the latest `master` (§2.1)
-- [ ] APNs key copied to `C:\ishaunted-deploy\`, `ApnsKeyId`/`ApnsKeyPath` in `secrets.json`, deployed (§2.2), checks pass (§2.3)
-- [ ] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4)
-- [x] Archived and uploaded 1.1.0 (8) (§4) — 09/29 from Xcode, after signing in again; Apple processing
+- [x] *Device ID* added and published in App Store Connect → App Privacy (§5.6) — Ben, before submitting
+- [x] Migrations applied with `dotnet ef database update`, then production deployed from the latest `master` (§2.1) —
+      `d84a1ada` live 09/29; the public feed (which reads the new columns) answers 200
+- [x] APNs key copied to `C:\ishaunted-deploy\`, `ApnsKeyId`/`ApnsKeyPath` in `secrets.json`, deployed (§2.2), checks pass (§2.3) —
+      build `d84a1ada`, association file lists `/field-kit/join/*`, privacy line live (checked from outside)
+- [x] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4) — Ben, before submitting
+- [x] Archived and uploaded 1.1.0 (8) (§4) — 09/29 from Xcode, after signing in again
 - [ ] Tried from TestFlight on a real phone — a push arrives and opens the session (§3)
-- [ ] Version 1.1.0 made, What's New pasted, build 8 chosen, review notes pasted (§5)
-- [ ] Submitted for review
+- [x] Version 1.1.0 made, What's New pasted, build 8 chosen, review notes pasted (§5)
+- [x] Submitted for review — 09/29/2026
 - [ ] Approved and released; remove "App Review night"
