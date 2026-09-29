@@ -87,7 +87,7 @@ move the last number, new things the middle one, a whole new part of the app the
 - One upload now carries 10 minutes of video and 600 MB in total, and **Send without the video**
   sends everything else in one go.
 
-## 2026-09-17 · 1.1.0
+## 2026-09-17 · 1.0.3
 
 - The button in a running session is a **Photo** button. It takes a photograph of what the camera
   sees — there and then when the camera is already on, or from a viewfinder that opens and closes
