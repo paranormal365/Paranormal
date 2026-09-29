@@ -52,9 +52,13 @@ apps change log (`Ben.Web.Services/Changelog/Content/apps.md`, the **1.1.0** sec
 The reviewer's app talks to **production**. If production is behind, the new screens fail in front
 of Apple.
 
-1. **Deploy `master` at `262e1646` or later** to ishaunted.com — the usual deploy
-   (`docs/deploy-production.md`). It carries these database migrations; the deploy applies them:
-   - `TimeZonesForPeopleGroupsCasesAndInvestigations` (only if the time-zone release is not live yet)
+1. **Apply the migrations first, then deploy `master` at `407713e4` or later** to ishaunted.com
+   (`docs/deploy-production.md`). **Nothing applies migrations at startup** — run
+   `dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi` against
+   production before the new API goes up (check with `dotnet ef migrations list …` first: these five
+   should be the only `(Pending)` ones). All five only add columns, tables and indexes — nothing is
+   dropped or rewritten. Production was at `353f1674` on 09/29, which has none of them:
+   - `TimeZonesForPeopleGroupsCasesAndInvestigations`
    - `PushDevicesForLeadLaunch`
    - `FieldLaunchesAndExpiringPosts`
    - `FieldLaunchJoinByCode`
@@ -326,7 +330,7 @@ The letter is in App Store Connect → 1.1.0 → **App Review** → *Resolution 
       website's privacy policy and the app's About & Privacy (Guideline 5.1.1: the policy names
       what is collected) — the policy change goes live with the §2 deploy
 - [ ] *Device ID* added and published in App Store Connect → App Privacy (§5.6)
-- [ ] Production deployed at `262e1646` or later, migrations applied (§2.1)
+- [ ] Migrations applied with `dotnet ef database update`, then production deployed at `407713e4` or later (§2.1)
 - [ ] APNs key on the server, `Apns` settings added, API restarted (§2.2), checks pass (§2.3)
 - [ ] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4)
 - [x] Archived and uploaded 1.1.0 (8) (§4) — 09/29 from Xcode, after signing in again; Apple processing
