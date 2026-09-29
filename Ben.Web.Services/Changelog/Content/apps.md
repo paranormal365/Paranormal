@@ -22,6 +22,13 @@ on somebody's own phone. Several days can share a number, because one build carr
 work. A change not yet on the App Store is listed under the number the next build will have. Fixes
 move the last number, new things the middle one, a whole new part of the app the first.
 
+## 2026-09-29 · 1.1.1
+
+- The app now talks to the service at its new address. Everything that needs you signed in —
+  your cases, investigations, launching or joining a group's session, sending sessions — works
+  again after the move; 1.1.0 and earlier can still read the feed and use Field Kit, but ask you
+  to sign in again for the rest.
+
 ## 2026-09-28 · 1.1.0
 
 - A lead can now start everybody's Field Kit. A tour's guide, an event's organiser or door staff,

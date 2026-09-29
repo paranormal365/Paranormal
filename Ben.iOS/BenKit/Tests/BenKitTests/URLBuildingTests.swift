@@ -107,13 +107,31 @@ struct DateDecodingTests {
 @Suite("What a shipped build is allowed to talk to")
 struct ShippingEnvironmentTests {
 
-    /// The constant the release build falls back to. If this drifts back to a bare
-    /// `https://ishaunted.com`, every call 404s: the API is an IIS application under `/webapi`
-    /// and its own routes already begin with `api/`.
-    @Test func theLiveEnvironmentCarriesTheWebapiBasePath() {
-        #expect(APIEnvironment.production.baseURL.absoluteString == "https://ishaunted.com/webapi")
+    /// The constant the release build falls back to. Since 2026-09-29 the API is the ROOT of its
+    /// own host, `api.ishaunted.com` (MonsterASP), and its routes already begin with `api/`. Before
+    /// that it was an IIS application under `ishaunted.com/webapi`; a redirect from there loses the
+    /// sign-in (iOS drops Authorization on a cross-host redirect), so the app must call the new host.
+    @Test func theLiveEnvironmentIsTheAPISubdomain() {
+        #expect(APIEnvironment.production.baseURL.absoluteString == "https://api.ishaunted.com")
         let url = APIEnvironment.production.url(for: Endpoint(.get, "api/public/events"))
-        #expect(url?.absoluteString == "https://ishaunted.com/webapi/api/public/events")
+        #expect(url?.absoluteString == "https://api.ishaunted.com/api/public/events")
+    }
+
+    /// A choice saved when production was `ishaunted.com/webapi` still means production — an updated
+    /// app must not stay pinned to the old address.
+    @Test(arguments: [
+        "https://ishaunted.com/webapi",
+        "https://ishaunted.com/webapi/",
+        "https://www.ishaunted.com/webapi",
+        "https://api.ishaunted.com",
+    ])
+    func productionAtAnyOfItsAddressesIsProduction(_ raw: String) {
+        #expect(APIEnvironment(name: "IsHaunted", baseURL: URL(string: raw)!).isProduction)
+    }
+
+    @Test func otherAddressesAreNotProduction() {
+        #expect(!APIEnvironment.dev.isProduction)
+        #expect(!APIEnvironment(name: "t", baseURL: URL(string: "https://example.com/webapi")!).isProduction)
     }
 
     /// Addresses only a developer's own machine can answer. A release build must refuse to
@@ -138,6 +156,7 @@ struct ShippingEnvironmentTests {
     /// The mirror image: real public hosts must pass, including the 172 addresses that sit
     /// OUTSIDE the private 172.16–172.31 range and would be caught by a sloppier prefix test.
     @Test(arguments: [
+        "https://api.ishaunted.com",
         "https://ishaunted.com/webapi",
         "https://www.ishaunted.com/webapi",
         "https://172.32.0.1",
