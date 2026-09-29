@@ -140,6 +140,21 @@ upload complains about the capability instead, turn it on by hand: developer.app
 *Certificates, Identifiers & Profiles* → *Identifiers* → `com.ishaunted.ios` → tick **Push
 Notifications** → Save, then run the export again.
 
+**What actually happened on 09/29, and the fix.** The first **Product → Archive** failed with
+*"Unable to log in with account 'haveben@msn.com' … rejected"* and *"Provisioning profile 'iOS Team
+Provisioning Profile: com.ishaunted.ios' doesn't include the Push Notifications capability"* (and
+*"…aps-environment entitlement"*). One cause: Xcode's Apple account session had expired, so it could
+not make the new push-enabled profile and fell back to the old one. **Xcode → Settings → Accounts →**
+sign in again, check **Signing & Capabilities** lists *Push Notifications*, and archive again. Also:
+**Archive is greyed out** while the destination at the top is a simulator — pick **Any iOS Device
+(arm64)** first. Leave *Background Modes → Remote notifications* **off** (that is for silent pushes;
+ours are ordinary alerts).
+
+**Xcode may rewrite `Support/Info.plist` and `project.pbxproj`** when you open the target's
+settings — moving the keys into `INFOPLIST_KEY_…` build settings and dropping the comments. The app it
+builds is the same, but don't commit that churn: `git checkout -- Ben.iOS/Support/Info.plist
+Ben.iOS/IsHaunted.xcodeproj/project.pbxproj`.
+
 The log should end *"Uploading “IsHaunted.ipa” is complete … EXPORT SUCCEEDED"*.
 
 ---
@@ -314,7 +329,7 @@ The letter is in App Store Connect → 1.1.0 → **App Review** → *Resolution 
 - [ ] Production deployed at `262e1646` or later, migrations applied (§2.1)
 - [ ] APNs key on the server, `Apns` settings added, API restarted (§2.2), checks pass (§2.3)
 - [ ] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4)
-- [ ] Archived and uploaded 1.1.0 (8) (§4)
+- [x] Archived and uploaded 1.1.0 (8) (§4) — 09/29 from Xcode, after signing in again; Apple processing
 - [ ] Tried from TestFlight on a real phone — a push arrives and opens the session (§3)
 - [ ] Version 1.1.0 made, What's New pasted, build 8 chosen, review notes pasted (§5)
 - [ ] Submitted for review
