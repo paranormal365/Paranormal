@@ -52,7 +52,7 @@ apps change log (`Ben.Web.Services/Changelog/Content/apps.md`, the **1.1.0** sec
 The reviewer's app talks to **production**. If production is behind, the new screens fail in front
 of Apple.
 
-1. **Apply the migrations first, then deploy `master` at `407713e4` or later** to ishaunted.com
+1. **Apply the migrations first, then deploy the latest `master`** (it must include the 09/29 deploy-script change that carries the push key) to ishaunted.com
    (`docs/deploy-production.md`). **Nothing applies migrations at startup** — run
    `dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi` against
    production before the new API goes up (check with `dotnet ef migrations list …` first: these five
@@ -63,18 +63,21 @@ of Apple.
    - `FieldLaunchesAndExpiringPosts`
    - `FieldLaunchJoinByCode`
    - `FieldSessionsAtEvents`
-2. **Put the push key on the server.** The key is `AuthKey_TVH4P55742.p8` in `~/.ishaunted/` on
-   this Mac (the one made for sandbox and production). Copy it to the server beside the other Apple
-   keys, and give the site's application-pool identity **read** on that file. Then add to the
-   production API settings:
-   ```json
-   "Apns": {
-     "KeyId": "TVH4P55742",
-     "PrivateKeyPath": "<full path to AuthKey_TVH4P55742.p8 on the server>"
-   }
-   ```
-   Team and bundle id need nothing: the team falls back to `Apple:TeamId`, and `BundleId` is already
-   `com.ishaunted.ios`. Restart the API.
+2. **Put the push key on the server — do this BEFORE running the deploy.** The key is
+   `AuthKey_TVH4P55742.p8` in `~/.ishaunted/` on this Mac (the one made for sandbox and production).
+   - Copy it to the server as `C:\ishaunted-deploy\AuthKey_TVH4P55742.p8`, beside the other two
+     Apple keys and `secrets.json`.
+   - In `C:\ishaunted-deploy\secrets.json` add:
+     ```json
+     "ApnsKeyId": "TVH4P55742",
+     "ApnsKeyPath": "C:\\ishaunted-deploy\\AuthKey_TVH4P55742.p8",
+     ```
+   - Then run the usual `.\scripts\deploy-ishaunted.ps1 -Apps webapi,website`. The script writes
+     `Apns:KeyId` / `Apns:PrivateKeyPath` into the API's settings and grants both pools read on
+     the file, as it does for the other Apple keys — **don't hand-edit the deployed
+     `appsettings.json`**, the next deploy rewrites it from `secrets.json`. The team falls back to
+     `AppleTeamId`, and `BundleId` is already `com.ishaunted.ios`.
+   - The deploy's log names `Apns:KeyId … not set (feature stays off)` if it did not find them.
 3. **Check it:**
    - `https://ishaunted.com/webapi/api/public/build` answers the commit you deployed.
    - `https://ishaunted.com/.well-known/apple-app-site-association` lists `/field-kit/join/*`
@@ -330,8 +333,8 @@ The letter is in App Store Connect → 1.1.0 → **App Review** → *Resolution 
       website's privacy policy and the app's About & Privacy (Guideline 5.1.1: the policy names
       what is collected) — the policy change goes live with the §2 deploy
 - [ ] *Device ID* added and published in App Store Connect → App Privacy (§5.6)
-- [ ] Migrations applied with `dotnet ef database update`, then production deployed at `407713e4` or later (§2.1)
-- [ ] APNs key on the server, `Apns` settings added, API restarted (§2.2), checks pass (§2.3)
+- [ ] Migrations applied with `dotnet ef database update`, then production deployed from the latest `master` (§2.1)
+- [ ] APNs key copied to `C:\ishaunted-deploy\`, `ApnsKeyId`/`ApnsKeyPath` in `secrets.json`, deployed (§2.2), checks pass (§2.3)
 - [ ] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4)
 - [x] Archived and uploaded 1.1.0 (8) (§4) — 09/29 from Xcode, after signing in again; Apple processing
 - [ ] Tried from TestFlight on a real phone — a push arrives and opens the session (§3)

@@ -651,6 +651,12 @@ if ($Apps -contains 'webapi') {
         'Apple:TeamId'                    = (Get-JsonValue $secrets 'AppleTeamId')
         'Apple:KeyId'                     = (Get-JsonValue $secrets 'AppleSignInKeyId')
         'Apple:PrivateKeyPath'            = (Get-JsonValue $secrets 'AppleSignInKeyPath')
+        # Pushes to the iPhone app (item 252): a lead's "the group's session is starting". One APNs
+        # key serves sandbox and production; the team falls back to Apple:TeamId. Like the keys
+        # above, PrivateKeyPath is a .p8 OUTSIDE the publish folder. Absent, launches still post
+        # to the feed and nobody is pushed.
+        'Apns:KeyId'                      = (Get-JsonValue $secrets 'ApnsKeyId')
+        'Apns:PrivateKeyPath'             = (Get-JsonValue $secrets 'ApnsKeyPath')
     }
     foreach ($key in $carry.Keys) {
         if ($null -ne $carry[$key] -and "$($carry[$key])" -ne '') {
@@ -765,7 +771,8 @@ if ($Apps -contains 'website') {
     #
     # Granted on the FILES, never on the folder: secrets.json lives beside them and must stay
     # unreadable. Re-applied every deploy so a replaced key file cannot quietly lose its grant.
-    foreach ($keyPath in @((Get-JsonValue $secrets 'AppleSignInKeyPath'), (Get-JsonValue $secrets 'AppleMapsKeyPath'))) {
+    foreach ($keyPath in @((Get-JsonValue $secrets 'AppleSignInKeyPath'), (Get-JsonValue $secrets 'AppleMapsKeyPath'),
+                           (Get-JsonValue $secrets 'ApnsKeyPath'))) {
         if (-not $keyPath) { continue }
         if (-not (Test-Path $keyPath)) {
             throw "The secrets file names an Apple key file that is not on this machine: $keyPath"

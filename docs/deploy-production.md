@@ -656,6 +656,7 @@ touches the database purely through Serilog's error sink.
 | `SmtpPassword` | environment variable `Smtp__Password` on the API's app pool — never a file | registration: accounts need a confirmed address, so people sign up and can never sign in |
 | `AppleTeamId`, `AppleMapsKeyId`, `AppleMapsKeyPath` | API and website `appsettings.json` (`Maps:*`) | every map says it could not be loaded; address lookup answers nothing |
 | `AppleSignInKeyId`, `AppleSignInKeyPath` | API `appsettings.json` (`Apple:*`) | Apple tokens are never revoked when an account is deleted |
+| `ApnsKeyId`, `ApnsKeyPath` | API `appsettings.json` (`Apns:*`) | a lead's launch still posts to the feed, but no phone gets a notification |
 | `SqlConnectionString` | both packages' `appsettings.json` — **normally left null** | nothing; the Integrated Security default applies. Set it only to reach a different server, and note that a password put here does land on disk |
 | `AzureAd` | API `appsettings.json` | nothing — Entra sign-in stays off until `ClientId` is a real GUID |
 | `SeedSuperAdmin` | `Email`, `DisplayName`: API `appsettings.json`. `Password`: environment variable `SeedData__SuperAdmin__Password` on the API's app pool — never a file | the startup seeder skips itself entirely: no administrator on an empty database, and no new site role (Admin, Moderator, Seller, or one a later release adds) is ever created |
