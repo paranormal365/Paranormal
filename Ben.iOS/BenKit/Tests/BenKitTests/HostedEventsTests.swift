@@ -137,8 +137,14 @@ struct HostedEventsTests {
         #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/my-events/not-an-id/pass")!) == .myEvents)
     }
 
-    @Test func theWebsiteIsTheAPIsOwnHostWithoutItsPath() {
+    @Test func theWebsiteIsTheAPIsHostWithoutItsAPILabelOrPath() {
         #expect(APIEnvironment.production.websiteURL.absoluteString == "https://ishaunted.com")
+        // The address production had before 2026-09-29, and a custom one typed the same way.
+        #expect(APIEnvironment(name: "t", baseURL: URL(string: "https://ishaunted.com/webapi")!)
+                    .websiteURL.absoluteString == "https://ishaunted.com")
+        // The Field Kit join code must name the WEBSITE's host — the one the universal links claim.
+        #expect(APIEnvironment.production.websiteURL(path: "field-kit/join/abc").absoluteString
+                == "https://ishaunted.com/field-kit/join/abc")
         #expect(APIEnvironment.dev.websiteURL.absoluteString == "http://localhost:5078")
         #expect(APIEnvironment.production.websiteURL(path: "o/paranormal365/events/seance").absoluteString
                 == "https://ishaunted.com/o/paranormal365/events/seance")
