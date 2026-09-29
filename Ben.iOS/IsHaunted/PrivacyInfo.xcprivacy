@@ -73,6 +73,21 @@
 			</array>
 		</dict>
 		<dict>
+			<!-- The phone's push token (1.1.0, item 252), sent to our server while somebody is signed
+			     in so a lead's "the group's session is starting" can reach them; removed at sign-out.
+			     Declared as a device-level ID to be safe: used only for notifications, never tracking. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
 			<!-- Field-session readings carry latitude/longitude and are uploaded inside the
 			     session document (FieldReading -> DeviceDataExporter -> submitDocument). -->
 			<key>NSPrivacyCollectedDataType</key>

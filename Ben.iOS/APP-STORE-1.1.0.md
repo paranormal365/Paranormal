@@ -202,20 +202,27 @@ proprietary encryption; `ITSAppUsesNonExemptEncryption` is already false in the 
 - **Contact:** your name, phone and email.
 - **Notes:** paste §6 in full.
 
-### 5.6 App Privacy — one decision before you archive
+### 5.6 App Privacy — add Device ID
 
 The app now sends the phone's **push token** to our server so it can be notified. Apple's *Device
-ID* category covers "other device-level IDs", and whether a push token counts is not spelled out.
-The safe answer is to declare it:
+ID* category covers "other device-level IDs", so it is declared — Ben's decision, 2026-09-29. The
+build already says so: `IsHaunted/PrivacyInfo.xcprivacy` has the entry (checked in a Release build).
+The App Store page has to say the same thing, and that is yours to click:
 
-- App Store Connect → **App Privacy** (left column, under *General*) → **Edit** next to *Data
-  Types* → tick **Identifiers → Device ID** → purpose **App Functionality** → **linked** to the
-  user → **not** used for tracking → **Publish**.
-- The build's own privacy manifest (`IsHaunted/PrivacyInfo.xcprivacy`) should say the same thing,
-  and it is inside the build — so **decide before §4**. Tell me and I'll add the entry and re-check
-  the build; it is a two-line change.
+1. App Store Connect → **IsHaunted** → **App Privacy** (left column, under *General*).
+2. Next to *Data Types*, click **Edit**.
+3. Under **Identifiers**, tick **Device ID** → **Next**.
+4. On the Device ID page: purpose **App Functionality** only → **Next**; *Is it linked to the
+   user's identity?* **Yes** → **Next**; *Used for tracking?* **No** → **Save**.
+5. Back on App Privacy, click **Publish** (top right). App Privacy is not part of the version, so
+   it takes effect as soon as it is published — do it before you submit.
 
-Everything else in App Privacy is unchanged: seven data types, all linked, none for tracking.
+The privacy policy at ishaunted.com/privacy and the app's About & Privacy now say it too — the
+notification address, kept while signed in, removed at sign-out — so the label and the policy
+agree. The website line goes live with the §2 deploy.
+
+App Privacy then shows **eight** data types, all linked, none for tracking: Email Address, Name,
+User ID, **Device ID**, Precise Location, Photos or Videos, Audio Data, Other User Content.
 
 ### 5.7 Release and submit
 
@@ -300,7 +307,10 @@ The letter is in App Store Connect → 1.1.0 → **App Review** → *Resolution 
 - [x] No third-party frameworks or packages (re-checked 2026-09-29; zero remote package references)
 - [x] Server suite, BenKit, iPhone and iPad UI suites green at `262e1646`; three-phone role-play passed twice
 - [x] Help, change logs, screenshots and product PDFs updated for 1.1.0
-- [ ] Decide on *Device ID* for the push token (§5.6) — **before** archiving
+- [x] *Device ID* declared in the build's privacy manifest (§5.6), and said in plain words in the
+      website's privacy policy and the app's About & Privacy (Guideline 5.1.1: the policy names
+      what is collected) — the policy change goes live with the §2 deploy
+- [ ] *Device ID* added and published in App Store Connect → App Privacy (§5.6)
 - [ ] Production deployed at `262e1646` or later, migrations applied (§2.1)
 - [ ] APNs key on the server, `Apns` settings added, API restarted (§2.2), checks pass (§2.3)
 - [ ] "App Review night" set up with apple@apple.com as Lead, running 14 days (§2.4)

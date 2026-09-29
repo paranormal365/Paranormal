@@ -60,6 +60,10 @@ struct AboutView: View {
                 Text("Location is stamped on readings only while a session is running, and only "
                    + "if you allowed it. The app never asks for background location and never "
                    + "watches where you are between sessions.")
+                // 1.1.0 (item 252): the one thing kept that nobody types — declared as Device ID.
+                Text("If you allow notifications, we keep the address Apple gives this phone for "
+                   + "them while you are signed in on it, so your group can tell you its session "
+                   + "has started. It is removed when you sign out.")
                 Link(destination: Self.privacyURL) {
                     Label("Read the full privacy policy", systemImage: "hand.raised")
                 }
