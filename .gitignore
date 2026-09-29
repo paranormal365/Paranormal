@@ -141,3 +141,8 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 #
 # If a private paper ever does land here, give it its own line rather than a pattern that catches
 # the built documents with it — and remember that ignoring it only stops FUTURE commits.
+
+# Web Deploy publish profiles carry the site password in plain text (userPWD). They live outside the
+# repository (C:\ishaunted-monster on the Windows server); this is the net in case one is ever saved here.
+*.publishSettings
+*.PublishSettings
