@@ -57,8 +57,13 @@
     <link rel="stylesheet" href="_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" />
     <!-- The site's palette. After Kendo: both define variables on :root, and the later file wins. -->
     <link rel="stylesheet" href="css/site-palette.css" />
+    <!-- Signal: the site's tokens, a byte-for-byte copy held identical by SignalCopiesStayInStepTests. -->
+    <link rel="stylesheet" href="css/signal-tokens.css" />
     <!-- The site's own Kendo remap, loaded in the same place the site loads it. -->
-    <link rel="stylesheet" href="theme/telerik-night.css" />
+    <!-- The site's Telerik bridge, copied. This host used to carry its own telerik-night.css, an
+         OLDER copy that had missed two fixes the site got later: white on the success green at
+         3.35:1, and command cells whose row borders stopped short at the buttons. -->
+    <link rel="stylesheet" href="theme/telerik-signal.css" />
     <!-- The editor's token fallbacks, then the map onto the palette, which must win over them. -->
     <link rel="stylesheet" href="_content/Ben.Canvas.Editor/css/bc-variables.css" />
     <link rel="stylesheet" href="_content/Ben.Canvas.Editor/css/bc-theme.css" />

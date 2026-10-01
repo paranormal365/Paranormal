@@ -209,6 +209,54 @@ else
                     <GridColumn Field="@nameof(Row.Count)" Title="Count" Width="90px" />
                 </GridColumns>
             </TelerikGrid>
+
+            @*
+                Signal (2026-10-01). This panel had three widgets while the site uses twenty-odd, and
+                a widget that is not on this page cannot be checked in both themes — so it was only
+                ever checked by happening to visit a screen that had one. These are the common ones,
+                by count across the website and both editors: buttons (139, in every theme colour
+                and fill the site actually uses), sliders (92), checkboxes, progress bars, numeric
+                boxes, tab strips and the rich-text editor.
+            *@
+            <label class="form-label mt-3">TelerikButton — the theme colours and fills in use</label>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Primary">Primary</TelerikButton>
+                <TelerikButton>Base</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Info">Info</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Warning">Warning</TelerikButton>
+                <TelerikButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error">Error</TelerikButton>
+                <TelerikButton Enabled="false" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary">Disabled</TelerikButton>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary">Outline</TelerikButton>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Outline" ThemeColor="@ThemeConstants.Button.ThemeColor.Error">Outline error</TelerikButton>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat" ThemeColor="@ThemeConstants.Button.ThemeColor.Primary">Flat</TelerikButton>
+                <TelerikButton FillMode="@ThemeConstants.Button.FillMode.Flat">Flat base</TelerikButton>
+            </div>
+
+            <label class="form-label mt-3">TelerikSlider · TelerikCheckBox · TelerikNumericTextBox</label>
+            <div class="d-flex flex-wrap gap-3 align-items-center">
+                <TelerikSlider @bind-Value="_slider" Min="0" Max="100" SmallStep="1" LargeStep="25" Width="220px" />
+                <label class="d-inline-flex align-items-center gap-2 mb-0"><TelerikCheckBox @bind-Value="_checked" /> Checked</label>
+                <label class="d-inline-flex align-items-center gap-2 mb-0"><TelerikCheckBox @bind-Value="_unchecked" /> Not checked</label>
+                <TelerikNumericTextBox @bind-Value="_number" Width="120px" />
+            </div>
+
+            <label class="form-label mt-3">TelerikProgressBar</label>
+            <TelerikProgressBar Value="62" Max="100" />
+
+            <label class="form-label mt-3">TelerikTabStrip</label>
+            <TelerikTabStrip>
+                <TabStripTab Title="Overview"><p class="mb-0 py-2">The first tab.</p></TabStripTab>
+                <TabStripTab Title="Timeline"><p class="mb-0 py-2">The second tab.</p></TabStripTab>
+                <TabStripTab Title="Files"><p class="mb-0 py-2">The third tab.</p></TabStripTab>
+            </TelerikTabStrip>
+
+            @* BenEditor, not a raw TelerikEditor: it is what all sixteen of the site's editors go
+               through, and it sets EditMode.Div. The raw component defaults to an iframe, which
+               does not inherit the page's font — shown here first, it rendered in Times New Roman. *@
+            <label class="form-label mt-3">BenEditor (TelerikEditor, in-page mode)</label>
+            <BenEditor @bind-Value="_html" Height="180px" />
         </BenPanel>
 
         <BenPanel Title="Alerts &amp; badges" Collapsible="true" Collapsed="false">
@@ -269,6 +317,13 @@ else
     private string _modalText = string.Empty;
     private bool _confirm;
     private string _dropText = string.Empty;
+
+    // The extra Kept Telerik widgets (Signal)
+    private double _slider = 40;
+    private bool _checked = true;
+    private bool _unchecked;
+    private int _number = 12;
+    private string _html = "<p>Some <strong>rich</strong> text, as a case summary would have.</p>";
 
     private DateTime? _date = DateTime.Today;
     private string _option = "Second";

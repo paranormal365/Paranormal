@@ -30,6 +30,8 @@
          Replaced themes/night.min.css on 2026-10-01: that file was 252 rules doing nothing but
          overriding Bootstrap's own --bs-* defaults with the Night palette, so Signal does the same
          job with its own values and everything it does not mention falls back to Bootstrap. -->
+    @* The values first — shared, byte for byte, with both editor hosts — then the site's use of them. *@
+    <link rel="stylesheet" href="/css/themes/signal-tokens.css" />
     <link id="theme-style" rel="stylesheet" media="screen" href="/css/themes/signal.css" />
     <link rel="stylesheet" href="/webfonts/smartadmin/sa-icons.css" />
     <link rel="stylesheet" href="/webfonts/fontawesome/css/all.min.css" />

@@ -47,7 +47,8 @@ public sealed class HostShellGuardTests
             "Ben.Wasm.Canvas.styles.css",
             "kendo-theme-bootstrap/all.css",
             "css/site-palette.css",
-            "theme/telerik-night.css",
+            "css/signal-tokens.css",      // Signal's tokens, shared with the website (2026-10-01)
+            "theme/telerik-signal.css",   // the website's Telerik bridge; this host's older copy is gone
             "css/bc-variables.css",
             "css/bc-theme.css",
             "css/bc-kit.css",

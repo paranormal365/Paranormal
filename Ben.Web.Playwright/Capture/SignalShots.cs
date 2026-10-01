@@ -36,6 +36,7 @@ public class SignalShots : BenTestBase
         ("my-equipment",    "/my-equipment"),
         ("store",           "/store"),
         ("pricing",         "/pricing"),
+        ("my-videos",       "/my-videos"),
         ("styleguide",      "/styleguide"),
     ];
 

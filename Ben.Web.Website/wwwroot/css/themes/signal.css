@@ -1,191 +1,27 @@
 /* ============================================================================
- * Signal — the site's skin.
+ * Signal — the site's COMPONENTS and SHELL.
  *
- * REPLACES themes/night.min.css at the <link id="theme-style"> swap point. Ben chose Signal from
- * the three directions in docs/design on 2026-10-01 and said the SmartAdmin theme file could be
+ * REPLACED themes/night.min.css at the <link id="theme-style"> swap point (2026-10-01). Ben chose
+ * Signal from the three directions in docs/design and said the SmartAdmin theme file could be
  * replaced outright, as long as Bootstrap stays Bootstrap.
  *
- * WHAT THIS FILE IS, AND WHAT IT DELIBERATELY IS NOT
- *
- * It is a TOKEN file. Bootstrap 5.3.8 is compiled into smartapp.min.css and already defines every
- * --bs-* variable it uses; night.min.css was 252 rules that did nothing but OVERRIDE some of those
- * with the Night palette. So this does the same job with Signal's values, and everything it does
- * not mention falls back to Bootstrap's own default — which is the point of consolidating: fewer
- * values to own, and the ones we own are all here, in one place, readable.
- *
- * It is NOT a second component library. Where a Bootstrap component needs to look different, the
- * change is made by setting that component's OWN --bs-* variables (`.card { --bs-card-bg: … }`)
- * rather than by writing a competing rule. That is Bootstrap's documented extension point, it
- * survives a Bootstrap upgrade, and it is the form Ben reads fluently.
+ * The values live in themes/signal-tokens.css, which loads first and which the two editor hosts
+ * share; this file is how the WEBSITE uses them. Where a Bootstrap component needs to look
+ * different, it is changed by setting that component's own --bs-* variables (`.card { --bs-card-bg:
+ * … }`) rather than by a competing rule — Bootstrap's documented extension point, which survives an
+ * upgrade and is the form Ben reads fluently.
  *
  * LOAD ORDER, which is load-bearing
- *     smartapp.min.css   (vendored: Bootstrap + the template. NEVER edited.)
- *     themes/signal.css  (this file)
+ *     smartapp.min.css          (vendored: Bootstrap + the template. NEVER edited.)
+ *     themes/signal-tokens.css  (the values — shared with the editor hosts)
+ *     themes/signal.css         (this file)
  *     kit/ben-kit.css, kit/ben-store.css
- *     app.css            (LAST, so a page-specific correction still beats the skin —
- *                         --ben-success-behind-white lives there and must keep winning)
+ *     app.css                   (LAST, so a page-specific correction still beats the skin)
  *
- * BOTH MODES, ALWAYS. The switch is Bootstrap's own `data-bs-theme` on <html>, set before first
- * paint by scripts/core/ben-boot.js. Every fault found in the mock-ups was light-only — a kicker
- * that vanished on a photograph, a card gap hidden by an invisible dark border — so nothing here
- * is considered done until it has been seen in light as well as dark.
+ * BOTH MODES, ALWAYS. Every fault found while building this was light-only — a kicker invisible on
+ * a photograph, a card gap behind an invisible dark border, a wordmark white on a white bar — so
+ * nothing here is done until it has been seen in light as well as dark.
  * ========================================================================= */
-
-/* ── The palette, named once ──────────────────────────────────────────────
- * --ben-* is ours and says what a thing IS (surface, ink, line, accent).
- * --bs-*  is Bootstrap's and says what a COMPONENT uses. Ours feed Bootstrap's, never the reverse,
- * so there is exactly one place to change a colour.
- */
-:root,
-[data-bs-theme="light"] {
-    /* surfaces, back to front */
-    --ben-bg:            #FFFFFF;
-    --ben-bg-sunken:     #F4F7FC;   /* page gutters, striped rows, the app bar */
-    --ben-surface:       #FFFFFF;   /* cards, popovers, anything that sits on the page */
-    --ben-surface-raised:#FFFFFF;
-    --ben-ink:           #0E1726;
-    --ben-ink-muted:     #5A6679;
-    --ben-ink-faint:     #8A94A6;
-    --ben-line:          rgba(14, 23, 38, .11);
-    --ben-line-strong:   rgba(14, 23, 38, .20);
-
-    /* the two accents Signal is built on */
-    --ben-accent:        #5B3DF5;
-    --ben-accent-rgb:    91, 61, 245;
-    --ben-accent-2:      #0891A6;
-    --ben-accent-2-rgb:  8, 145, 166;
-    --ben-accent-soft:   rgba(91, 61, 245, .10);
-    --ben-on-accent:     #FFFFFF;   /* what is legible ON the gradient, in either mode */
-    --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
-
-    /* depth */
-    /* the chrome: app bar and sidebar. Signal follows the mode rather than keeping a dark nav
-       over a light page, which is what the mock-up shows and what makes the two halves read as
-       one thing. */
-    --ben-nav-bg:        #F4F7FC;
-    --ben-nav-ink:       #0E1726;
-    --ben-nav-ink-muted: #5A6679;
-
-    --ben-shadow-sm:     0 2px 6px rgba(14, 23, 38, .07);
-    --ben-shadow:        0 8px 22px rgba(14, 23, 38, .10);
-    --ben-shadow-lg:     0 18px 44px rgba(14, 23, 38, .14);
-    --ben-glow:          0 8px 22px rgba(var(--ben-accent-rgb), .30);
-
-    color-scheme: light;
-}
-
-[data-bs-theme="dark"] {
-    --ben-bg:            #0C1017;
-    --ben-bg-sunken:     #090D13;
-    --ben-surface:       #151C28;
-    --ben-surface-raised:#1B2433;
-    --ben-ink:           #E9EDF4;
-    --ben-ink-muted:     #98A3B4;
-    --ben-ink-faint:     #6C7889;
-    --ben-line:          rgba(255, 255, 255, .09);
-    --ben-line-strong:   rgba(255, 255, 255, .18);
-
-    --ben-accent:        #7C5CFF;
-    --ben-accent-rgb:    124, 92, 255;
-    --ben-accent-2:      #22D3EE;
-    --ben-accent-2-rgb:  34, 211, 238;
-    --ben-accent-soft:   rgba(124, 92, 255, .16);
-    --ben-on-accent:     #FFFFFF;
-    --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
-
-    --ben-nav-bg:        #090D13;
-    --ben-nav-ink:       #E9EDF4;
-    --ben-nav-ink-muted: #98A3B4;
-
-    --ben-shadow-sm:     0 2px 8px rgba(0, 0, 0, .40);
-    --ben-shadow:        0 10px 26px rgba(0, 0, 0, .46);
-    --ben-shadow-lg:     0 20px 48px rgba(0, 0, 0, .55);
-    --ben-glow:          0 8px 24px rgba(var(--ben-accent-rgb), .40);
-
-    color-scheme: dark;
-}
-
-/* ── Shape and rhythm, shared by both modes ─────────────────────────────── */
-:root {
-    --ben-radius-sm:  8px;
-    --ben-radius:     12px;
-    --ben-radius-lg:  20px;
-    --ben-radius-pill: 999px;
-
-    /* Signal's display type is the UI face at a heavier weight and tighter tracking; no webfont
-       is added, because a redesign that costs a render-blocking font fetch on every page is not
-       an improvement. fonts.css already carries what the template loads. */
-    --ben-display-weight: 700;
-    --ben-display-tracking: -.028em;
-}
-
-/* ── Ours → Bootstrap's ──────────────────────────────────────────────────
- * Everything below is a BRIDGE. No colour literals: if one appears here, it belongs above.
- */
-:root,
-[data-bs-theme="light"],
-[data-bs-theme="dark"] {
-    --bs-body-bg:                 var(--ben-bg);
-    --bs-body-color:              var(--ben-ink);
-    --bs-emphasis-color:          var(--ben-ink);
-    --bs-secondary-color:         var(--ben-ink-muted);
-    --bs-secondary-bg:            var(--ben-bg-sunken);
-    --bs-tertiary-color:          var(--ben-ink-faint);
-    --bs-tertiary-bg:             var(--ben-bg-sunken);
-
-    --bs-border-color:            var(--ben-line);
-    --bs-border-color-translucent: var(--ben-line);
-
-    --bs-primary:                 var(--ben-accent);
-    --bs-primary-rgb:             var(--ben-accent-rgb);
-    --bs-info:                    var(--ben-accent-2);
-    --bs-info-rgb:                var(--ben-accent-2-rgb);
-
-    --bs-link-color:              var(--ben-accent);
-    --bs-link-color-rgb:          var(--ben-accent-rgb);
-    --bs-link-hover-color:        var(--ben-accent-2);
-    --bs-link-hover-color-rgb:    var(--ben-accent-2-rgb);
-
-    --bs-border-radius-sm:        var(--ben-radius-sm);
-    --bs-border-radius:           var(--ben-radius);
-    --bs-border-radius-lg:        var(--ben-radius-lg);
-    --bs-border-radius-xl:        var(--ben-radius-lg);
-    --bs-border-radius-pill:      var(--ben-radius-pill);
-
-    --bs-focus-ring-color:        rgba(var(--ben-accent-rgb), .35);
-    --bs-focus-ring-width:        3px;
-
-    /* The template paints its content area from this one variable, and the Night skin had it at
-       #363c41 — the grey the old hero PNG was blended to. It is most of why the signed-in pages
-       still looked like the old site after everything else had changed. */
-    --app-content-background:     var(--ben-bg);
-}
-
-/* ── The semantic colours, carried over from Night ─────────────────────────────
- * Retiring night.min.css removed the only place success, warning and danger were defined, and
- * they fell back SILENTLY to the template's compiled defaults: a light turquoise success (#1dc9b7)
- * and a hot-pink danger (#fd3995). That changed the meaning-colour of every badge, outline button
- * and coloured word on the site, and the turquoise took success-alert text down to 3.33:1. It was
- * found by measuring the alerts in the browser, not by looking.
- *
- * These are Night's values, verbatim, and they are owned here now. Kept rather than replaced
- * because the 2026-09-22 contrast audit was run against exactly these, in both themes, on every
- * surface it covered — and app.css's --ben-success-behind-white (#3c833c, the fill that carries
- * white text) was tuned against this green. Replacing them is a design decision with an audit
- * attached, not a side effect of a skin change. */
-:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
-    --bs-success: #489e48;  --bs-success-rgb: 72, 158, 72;
-    --bs-warning: #aaa256;  --bs-warning-rgb: 170, 162, 86;
-    --bs-danger:  #a85593;  --bs-danger-rgb: 168, 85, 147;
-}
-
-/* --bs-body-*-rgb cannot be an alias: Bootstrap composes them inside rgba(), so they must be
-   three bare numbers. They are the only duplicated literals in this file, and they are here
-   rather than in the palette so the duplication is visible. */
-:root, [data-bs-theme="light"] { --bs-body-bg-rgb: 255,255,255; --bs-body-color-rgb: 14,23,38;
-                                 --bs-emphasis-color-rgb: 14,23,38; --bs-secondary-bg-rgb: 244,247,252; }
-[data-bs-theme="dark"]         { --bs-body-bg-rgb: 12,16,23;    --bs-body-color-rgb: 233,237,244;
-                                 --bs-emphasis-color-rgb: 233,237,244; --bs-secondary-bg-rgb: 21,28,40; }
 
 /* ── Components, through their own Bootstrap variables ──────────────────── */
 
@@ -380,6 +216,11 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    same cell as BenHeader, and a hidden sidebar that still declares `grid-area: sidebar` made the
    browser invent a row for it — which is how the menu ended up floating in the middle of the
    login page. */
+/* The chrome above <main> is now two rows — the app bar and the section bar — measured at 120px.
+   .ben-editor-page sizes itself as "the window minus this" (kit/ben-kit.css), and the old 58px
+   allowance counted only the app bar, so an editor page was a menu-row too tall. */
+:root { --ben-appbar-h: 120px; }
+
 @media (min-width: 992px) {
     .app-wrap {
         grid-template-columns: 1fr !important;
@@ -470,7 +311,18 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 /* ── the rail ───────────────────────────────────────────────────────────── */
 /* Inset from the window on both sides: without it the rail sat on x:0 and its rounded corners
    were clipped by the edge of the page, which read as a column again rather than a card. */
-.app-shell { display: flex; align-items: flex-start; gap: 1.5rem; padding-inline: 1.25rem; }
+.app-shell { display: flex; align-items: flex-start; gap: 1.5rem; padding-inline: 1.25rem;
+             /* FILL the content area. The template makes .app-content a flex container, and a
+                flex child with no size of its own shrinks to fit its contents — measured at 837px
+                inside 1280. Every page was narrower than it should have been; the video editor was
+                the one that showed it, because below a width it hides its own timeline. */
+             flex: 1 1 auto; width: 100%; }
+
+/* A page that hosts a full-height editor gets no section banner: the editor is sized to the
+   window, and a photograph above it only pushes its transport controls off the bottom. Keyed on
+   the editor page's own class rather than a list of routes, so My Videos and a case's Video tab
+   are both covered, and so is the next page that hosts it. */
+.content-wrapper:has(.ben-editor-page) > .section-banner { display: none; }
 .app-shell > .content-wrapper { flex: 1; min-width: 0; }
 
 /* min-width:0 at EVERY level, not just the innermost. A flex or grid child defaults to
@@ -540,66 +392,6 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     color: var(--ben-ink);
 }
 .app-rail__sublist { list-style: none; margin: 0; padding: 0 0 0 .35rem; }
-
-/* ── Semantic tints: alerts, subtle badges, list and table variants ──────────
- *
- * Bootstrap 5.3 draws every alert — 617 of them on this site, across eight variants — and every
- * `-subtle` badge, list item and table row from three variables per colour: --bs-X-bg-subtle,
- * --bs-X-border-subtle and --bs-X-text-emphasis. The Night skin set them; Signal had not, so they
- * fell back to Bootstrap's stock blues and the "has work waiting" notice on almost every page read
- * as an off-palette sky-blue box in light mode.
- *
- * They are DERIVED here rather than listed: each is a mix of the semantic colour into the page's
- * own surface or ink, so a notice is tinted by what it means and sits on the same surface as
- * everything else. Change --ben-surface or --bs-danger and every one of them follows. color-mix is
- * already a dependency of app.css (--app-nav-bg), so this adds none.
- */
-:root, [data-bs-theme="light"] {
-    --ben-tint-bg: 9%;      --ben-tint-border: 30%;   --ben-tint-text: 72%;
-}
-[data-bs-theme="dark"] {
-    --ben-tint-bg: 14%;     --ben-tint-border: 38%;   --ben-tint-text: 55%;
-}
-
-:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
-    --bs-primary-bg-subtle:       color-mix(in srgb, var(--bs-primary)   var(--ben-tint-bg),     var(--ben-surface));
-    --bs-primary-border-subtle:   color-mix(in srgb, var(--bs-primary)   var(--ben-tint-border), var(--ben-surface));
-    --bs-primary-text-emphasis:   color-mix(in srgb, var(--bs-primary)   var(--ben-tint-text),   var(--ben-ink));
-    --bs-info-bg-subtle:          color-mix(in srgb, var(--bs-info)      var(--ben-tint-bg),     var(--ben-surface));
-    --bs-info-border-subtle:      color-mix(in srgb, var(--bs-info)      var(--ben-tint-border), var(--ben-surface));
-    --bs-info-text-emphasis:      color-mix(in srgb, var(--bs-info)      var(--ben-tint-text),   var(--ben-ink));
-    --bs-success-bg-subtle:       color-mix(in srgb, var(--bs-success)   var(--ben-tint-bg),     var(--ben-surface));
-    --bs-success-border-subtle:   color-mix(in srgb, var(--bs-success)   var(--ben-tint-border), var(--ben-surface));
-    --bs-success-text-emphasis:   color-mix(in srgb, var(--bs-success)   var(--ben-tint-text),   var(--ben-ink));
-    --bs-warning-bg-subtle:       color-mix(in srgb, var(--bs-warning)   var(--ben-tint-bg),     var(--ben-surface));
-    --bs-warning-border-subtle:   color-mix(in srgb, var(--bs-warning)   var(--ben-tint-border), var(--ben-surface));
-    --bs-warning-text-emphasis:   color-mix(in srgb, var(--bs-warning)   var(--ben-tint-text),   var(--ben-ink));
-    --bs-danger-bg-subtle:        color-mix(in srgb, var(--bs-danger)    var(--ben-tint-bg),     var(--ben-surface));
-    --bs-danger-border-subtle:    color-mix(in srgb, var(--bs-danger)    var(--ben-tint-border), var(--ben-surface));
-    --bs-danger-text-emphasis:    color-mix(in srgb, var(--bs-danger)    var(--ben-tint-text),   var(--ben-ink));
-    --bs-secondary-bg-subtle:     var(--ben-bg-sunken);
-    --bs-secondary-border-subtle: var(--ben-line-strong);
-    --bs-secondary-text-emphasis: var(--ben-ink-muted);
-    --bs-light-bg-subtle:         var(--ben-bg-sunken);
-    --bs-light-border-subtle:     var(--ben-line);
-    --bs-light-text-emphasis:     var(--ben-ink);
-    --bs-dark-bg-subtle:          var(--ben-surface-raised);
-    --bs-dark-border-subtle:      var(--ben-line-strong);
-    --bs-dark-text-emphasis:      var(--ben-ink);
-}
-
-/* WARNING IN LIGHT MODE IS THE EXCEPTION, AND IT WAS MEASURED, NOT GUESSED. A yellow cannot carry
-   72% of itself into the ink and stay readable on a pale tint. Against the template's #ffc241 the
-   derived text came to 2.78:1; against Night's olive #aaa256, restored below, it is still 4.04:1 —
-   both under WCAG's 4.5:1, on 129 warning alerts. 40% of the colour measures 7.87:1 in the browser
-   and still reads as amber. SignalContrastTests measures every variant in both themes and fails
-   naming this one if the override is ever lost; that was checked by removing it.
-
-   Scoped `:root:not([data-bs-theme="dark"])` rather than `:root`, because :root ALSO matches in
-   dark mode — where this darker mix on a dark tint would fail in the other direction. */
-:root:not([data-bs-theme="dark"]) {
-    --bs-warning-text-emphasis: color-mix(in srgb, var(--bs-warning) 40%, var(--ben-ink));
-}
 
 /* An alert is a card with a coloured spine: the tint says what it means, the bar says it loudly,
    the radius and shadow say it belongs to the same page as everything else. */
