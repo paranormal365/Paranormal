@@ -378,6 +378,16 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 }
 .app-topnav::-webkit-scrollbar { display: none; }
 
+/* A SuperAdmin in three groups has three group names on the bar, and it runs past the window.
+   It scrolls, but with the scrollbar hidden nothing said so — the last entry was simply cut in
+   half. The fade at the right edge is the cue. It only shows while there is more to scroll to:
+   app.css can't know that, so it is the browser's own scroll-timeline where supported, and a
+   permanent soft edge where not, which costs nothing when the bar fits. */
+.app-topnav {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+
 .topnav-list {
     display: flex;
     align-items: stretch;
@@ -428,6 +438,14 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    were clipped by the edge of the page, which read as a column again rather than a card. */
 .app-shell { display: flex; align-items: flex-start; gap: 1.5rem; padding-inline: 1.25rem; }
 .app-shell > .content-wrapper { flex: 1; min-width: 0; }
+
+/* min-width:0 at EVERY level, not just the innermost. A flex or grid child defaults to
+   `min-width: auto`, which means "never narrower than the widest thing inside me" — so on an
+   admin page the user grid's table set the width of .app-shell, then .app-content, and the
+   notices, the banner and the grid all ran off the right edge of the window together. With the
+   chain broken, a wide table scrolls inside its own box instead of stretching the page. */
+.app-body, .app-content, .app-shell { min-width: 0; }
+.app-content { overflow-x: clip; }
 
 .app-rail {
     flex: none;

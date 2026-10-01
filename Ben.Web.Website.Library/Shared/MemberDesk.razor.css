@@ -16,7 +16,7 @@
 .desk-hero__photo {
     position: absolute;
     inset: 0;
-    background: url('/static/images/signal/i2-dark-hallway.jpg') center 40% / cover no-repeat;
+    background: url('/static/images/signal/i2-dark-hallway.jpg') center 52% / cover no-repeat;   /* the lit doorway — see SectionBanner.Focal */
     z-index: -2;
 }
 

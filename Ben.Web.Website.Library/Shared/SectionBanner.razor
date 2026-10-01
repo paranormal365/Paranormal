@@ -26,8 +26,10 @@
 
 @if (Current is { } band)
 {
-    <section class="section-banner" data-testid="section-banner" data-section="@band.Kicker">
-        <div class="section-banner__photo" style="@($"background-image:url('/static/images/signal/{band.Photo}.jpg')")" aria-hidden="true"></div>
+    <section class="section-banner @(band.Slim ? "section-banner--slim" : null)" data-testid="section-banner" data-section="@band.Kicker">
+        <div class="section-banner__photo"
+             style="@($"background-image:url('/static/images/signal/{band.Photo}.jpg');background-position:center {Focus(band.Photo)}")"
+             aria-hidden="true"></div>
         <div class="section-banner__inner">
             <div class="section-banner__kicker">@band.Kicker</div>
             <div class="section-banner__line">@band.Line</div>
@@ -36,17 +38,50 @@
 }
 
 @code {
-    private sealed record Band(string Kicker, string Line, string Photo);
+    private sealed record Band(string Kicker, string Line, string Photo, bool Slim = false);
+
+    /// <summary>
+    /// Where each photograph's subject sits, as a vertical percentage — chosen by looking at every
+    /// one cropped to the band's real proportions (roughly 6:1 to 8:1), not by guessing.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only the vertical number matters. A landscape photograph in a band this wide is
+    /// scaled to the band's WIDTH and cropped top-to-bottom, so a horizontal position does
+    /// nothing at all.</para>
+    /// <para>It belongs to the PHOTO rather than the section, so a photograph used by two
+    /// sections is framed the same way in both. One centre for everything was wrong for most of
+    /// them: the graveyard at 45% was nearly all fog — its headstones are at 70% — and the
+    /// hallway's lit doorway sat off-centre.</para>
+    /// </remarks>
+    private static readonly Dictionary<string, string> Focal = new()
+    {
+        ["i1-flashlight-silhouette"] = "40%",   // head, shoulders and the beam
+        ["i2-dark-hallway"]          = "52%",   // the lit doorway, centred
+        ["i3-walking-to-house"]      = "48%",   // the lit windows
+        ["p1-phone-camera"]          = "40%",   // the phone, whole
+        ["s1-candles"]               = "28%",   // the densest candlelight
+        ["s2-ouija"]                 = "48%",   // the word OUIJA and the planchette
+        ["s3-candle-chandelier"]     = "35%",   // the candles, not the curtain below
+        ["t1-theatre-seats"]         = "45%",
+        ["v1-venue-exterior"]        = "38%",   // the turrets and the lit facade
+        ["v3-hotel-lobby"]           = "40%",   // the room's depth and its chandeliers
+        ["v6-ballroom"]              = "35%",   // the chandeliers fill the band
+        ["w2-cobblestone-night"]     = "50%",   // the lamp-lit doorway down the alley
+        ["w3-foggy-graveyard"]       = "70%",   // the headstones, not the fog above them
+        ["d1-candlelit-dinner"]      = "60%",   // faces and candles together
+    };
+
+    private static string Focus(string photo) => Focal.TryGetValue(photo, out var y) ? y : "50%";
 
     // Most specific first: the first prefix that matches the address wins.
     private static readonly (string Prefix, Band Band)[] Bands =
     [
-        ("/admin",             new("Administration", "Running the site, from the people to the paperwork.", "v4-hallway-chandelier")),
-        ("/moderation",        new("Moderation",     "What the public sees, held until somebody has looked.", "v4-hallway-chandelier")),
+        ("/admin",             new("Administration", "Running the site, from the people to the paperwork.", "s3-candle-chandelier", Slim: true)),
+        ("/moderation",        new("Moderation",     "What the public sees, held until somebody has looked.", "s3-candle-chandelier", Slim: true)),
         ("/my-cases",          new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
         ("/my-investigations", new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
         ("/my-requests",       new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
-        ("/organizations",     new("Your groups",    "The people you investigate with, and the work you share.", "v2-victorian-mansion")),
+        ("/organizations",     new("Your groups",    "The people you investigate with, and the work you share.", "v1-venue-exterior")),
         ("/find",              new("Find a group",   "Investigators near you who take on cases like yours.", "i3-walking-to-house")),
         ("/notifications",     new("Notifications",  "Everything waiting on you, in one place.",             "s1-candles")),
         ("/equipment",         new("Equipment",      "The gear, who has it, and when it is due back.",       "i1-flashlight-silhouette")),
@@ -54,14 +89,14 @@
         ("/my-checkouts",      new("Equipment",      "The gear, who has it, and when it is due back.",       "i1-flashlight-silhouette")),
         ("/media",             new("Media",          "Recordings, photographs and what you made from them.", "p1-phone-camera")),
         ("/my-videos",         new("Media",          "Recordings, photographs and what you made from them.", "p1-phone-camera")),
-        ("/store",             new("The store",      "Kit, sold by the people who use it.",                  "s3-candle-chandelier")),
+        ("/store",             new("The store",      "Kit, sold by the people who use it.",                  "s2-ouija")),
         ("/feed",              new("The feed",       "What people are finding, as they find it.",            "w2-cobblestone-night")),
         ("/events",            new("What's on",      "Ghost walks, investigations and haunted weekends.",     "v6-ballroom")),
         ("/tours",             new("What's on",      "Ghost walks, investigations and haunted weekends.",     "v6-ballroom")),
         ("/publications",      new("Publications",   "What groups have written up and chosen to share.",     "v3-hotel-lobby")),
         ("/places",            new("Places",         "Where it happened, and what has been seen there since.", "w3-foggy-graveyard")),
-        ("/community",         new("Community",      "The people behind the work.",                          "t2-audience-presentation")),
-        ("/pricing",           new("Plans",          "Free to explore. Pay only for what you run.",          "t2-audience-presentation")),
+        ("/community",         new("Community",      "The people behind the work.",                          "d1-candlelit-dinner")),
+        ("/pricing",           new("Plans",          "Free to explore. Pay only for what you run.",          "t1-theatre-seats")),
         ("/help",              new("Help",           "How everything here works.",                           "v3-hotel-lobby")),
         ("/profile",           new("Your account",   "How you appear, and how we reach you.",                "s1-candles")),
     ];

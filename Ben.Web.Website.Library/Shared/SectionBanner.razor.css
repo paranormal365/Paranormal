@@ -16,7 +16,7 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    background-position: center 45%;
+    /* position is set per photograph, inline, from SectionBanner.Focal */
     background-size: cover;
     /* the photograph eases in, rather than snapping, once it arrives */
     animation: section-banner-in .6s ease both;
@@ -65,3 +65,11 @@
     .section-banner { min-height: 6.5rem; }
     .section-banner__line { font-size: 1rem; }
 }
+
+/* Administration and moderation: a slimmer band. Those screens are mostly grids, and a full band
+   spent ~140px of height above data a person came to work in — enough to know where you are,
+   no more. Same photograph, same scrim, less of both. */
+.section-banner--slim { min-height: 4.75rem; margin-bottom: 1rem; }
+.section-banner--slim .section-banner__inner { padding: .7rem 1.25rem .75rem; }
+.section-banner--slim .section-banner__kicker { margin-bottom: .1rem; }
+.section-banner--slim .section-banner__line { font-size: .98rem; }

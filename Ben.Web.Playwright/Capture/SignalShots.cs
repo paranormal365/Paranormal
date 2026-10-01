@@ -35,7 +35,14 @@ public class SignalShots : BenTestBase
         ("notifications",   "/notifications"),
         ("my-equipment",    "/my-equipment"),
         ("store",           "/store"),
+        ("pricing",         "/pricing"),
         ("styleguide",      "/styleguide"),
+    ];
+
+    /// <summary>Administration is SuperAdmin-only, so it is photographed as the SuperAdmin.</summary>
+    private static readonly (string Slug, string Url)[] AdminScreens =
+    [
+        ("admin-users",     "/admin/users"),
     ];
 
     [Test]
@@ -44,7 +51,14 @@ public class SignalShots : BenTestBase
         var root = Path.Combine(RepoRoot(), "docs", "design", "preview", "signal-live");
         Directory.CreateDirectory(root);
 
-        await LoginAsync(UserEmail, UserPassword);          // Sarah — an ordinary administrator
+        await ShootAsync(root, UserEmail, UserPassword, Screens);            // Sarah
+        await ShootAsync(root, SuperAdminEmail, SuperAdminPassword, AdminScreens);
+    }
+
+    private async Task ShootAsync(string root, string email, string password, (string Slug, string Url)[] screens)
+    {
+        await Context.ClearCookiesAsync();
+        await LoginAsync(email, password);
 
         foreach (var theme in new[] { "dark", "light" })
         {
@@ -54,7 +68,7 @@ public class SignalShots : BenTestBase
                 "t => { try { localStorage.setItem('layoutSettings', JSON.stringify({ theme: t })); " +
                 "localStorage.setItem('ben-theme', t); } catch (e) { } }", theme);
 
-            foreach (var (slug, url) in Screens)
+            foreach (var (slug, url) in screens)
             {
                 await Page.GotoAsync($"{BaseUrl}{url}");
                 await Expect(Page.Locator(".app-topnav")).ToBeVisibleAsync(new() { Timeout = 20_000 });
