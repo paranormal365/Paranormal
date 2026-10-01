@@ -69,7 +69,7 @@
 }
 
 /* ── Kendo → palette ──────────────────────────────────────────────────────────
- * The site does this in Ben.Web.Website/wwwroot/theme/telerik-night.css, so that its Telerik
+ * The site does this in Ben.Web.Website/wwwroot/theme/telerik-signal.css, so that its Telerik
  * widgets read as part of the template rather than as a control suite dropped on top of it. This
  * host loads the same Kendo Bootstrap baseline and needs the same correction; the editor's own
  * tokens are handled separately by _content/Ben.Video.Editor/css/ben-video-theme.css.

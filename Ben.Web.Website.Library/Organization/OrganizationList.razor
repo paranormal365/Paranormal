@@ -147,7 +147,11 @@
                         @{
                             var org = (OrganizationListItemResponse)context;
                         }
-                        <div class="btn-group">
+                        @* Separate circles, as on every other grid — not Bootstrap's .btn-group, which
+                           FUSES its buttons: it strips the inner corners and butts them together, so
+                           this was the one grid whose View and "…" read as a single half-rounded
+                           lozenge. Row actions are independent verbs, not a segmented control. *@
+                        <div class="d-inline-flex align-items-center gap-1">
                             <BenGridAction Icon="eye" Label="View" OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))" />
                             <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="180px" Floating="true">
                                 <ToggleContent><BenIcon Name="more-horizontal" /></ToggleContent>

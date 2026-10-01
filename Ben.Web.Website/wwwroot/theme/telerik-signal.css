@@ -1,4 +1,7 @@
-/* Telerik/Kendo → Night bridge.
+/* Telerik/Kendo → Signal bridge. (Renamed from telerik-night.css on 2026-10-01; the Night skin it
+ * was written against is gone, and a file named for a palette the site no longer has would send
+ * the next reader looking for one. The canvas host still carries its own, older copy under the old
+ * name — they had already drifted, 7.6 KB against 8.9 KB — and that is folded in with the editors.)
  *
  * Loaded after kendo-theme-bootstrap/all.css. Kendo themes in Telerik 14.x are CSS-variable
  * driven, so remapping the variables is enough to make the widgets kept from Telerik (Grid,
@@ -175,4 +178,95 @@ body.k-body {
 
 .k-grid .k-command-cell > .k-button:last-child {
     margin-inline-end: 0;
+}
+
+
+/* ── Signal ──────────────────────────────────────────────────────────────────
+   Everything above maps colour. This is the shape, so a grid reads as one of the site's cards
+   rather than a control suite dropped onto it — the thing Ben pointed at when he said the site
+   felt dated. Tokens only (--ben-*, from themes/signal.css), so both themes follow.
+
+   A grid is a CARD: the surface, line, radius and shadow every card on the site has. overflow is
+   clipped so the header's corners round with it, which is also why the header is painted here
+   rather than left transparent — a transparent header on a rounded card shows the page through
+   its corners. */
+.k-grid {
+    background-color: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow);
+    overflow: hidden;
+}
+
+.k-grid .k-grid-header,
+.k-grid .k-table-th,
+.k-grid .k-grid-toolbar {
+    background-color: var(--ben-bg-sunken);
+}
+
+/* The header is a label row, not a data row: smaller, quieter, spaced — so the eye goes to the
+   data. Ink-muted rather than emphasis, which is what made the old header shout. */
+.k-grid .k-table-th {
+    color: var(--ben-ink-muted);
+    font-size: .76rem;
+    font-weight: 650;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border-bottom-color: var(--ben-line);
+}
+
+.k-grid .k-table-row:hover,
+.k-grid .k-table-row.k-hover {
+    background-color: var(--ben-accent-soft);
+}
+
+.k-grid .k-table-row.k-selected,
+.k-grid .k-table-row.k-selected > td {
+    background-color: color-mix(in srgb, var(--ben-accent) 18%, transparent);
+}
+
+/* The pager sits on the card's own sunken foot, not on a second, differently-coloured strip. */
+.k-grid .k-grid-pager,
+.k-pager {
+    background-color: var(--ben-bg-sunken);
+    border-color: var(--ben-line);
+}
+/* The current page. Kendo's pager numbers are FLAT buttons, and Kendo declares
+   `.k-button-flat { background: none !important }` — so a background here is erased while a text
+   colour survives, which is exactly how the first version of this rule left a white "1" on
+   nothing. Rather than out-!important Kendo, the tint is painted with an inset shadow, which that
+   rule does not touch. A tint and accent text, not a filled pill: the same way the top bar marks
+   its current item, and for the same reason — a filled pill competes with the primary button. */
+.k-pager .k-button.k-selected,
+.k-pager .k-pager-nav.k-selected {
+    color: var(--ben-accent);
+    font-weight: 700;
+    border-radius: var(--ben-radius-pill);
+    box-shadow: inset 0 0 0 999px var(--ben-accent-soft);
+}
+
+/* Kendo's primary buttons carry the same gradient as Bootstrap's .btn-primary, so a "Save" in a
+   Telerik dialog and a "Save" on a page are visibly the same button. */
+.k-button-solid-primary {
+    background-image: var(--ben-accent-grad);
+    border-color: transparent;
+    color: var(--ben-on-accent);
+    box-shadow: var(--ben-glow);
+}
+.k-button-solid-primary:hover { filter: brightness(1.07); }
+
+/* Popups, dialogs and windows: the raised surface, the large radius, the deep shadow — the same
+   three things a Bootstrap modal has under Signal. */
+.k-popup,
+.k-dialog,
+.k-window {
+    background-color: var(--ben-surface-raised);
+    border-color: var(--ben-line);
+    border-radius: var(--ben-radius);
+    box-shadow: var(--ben-shadow-lg);
+}
+.k-window-titlebar,
+.k-dialog-titlebar {
+    background-color: transparent;
+    border-bottom: 1px solid var(--ben-line);
 }

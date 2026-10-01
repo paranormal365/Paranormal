@@ -161,6 +161,24 @@
     --app-content-background:     var(--ben-bg);
 }
 
+/* ── The semantic colours, carried over from Night ─────────────────────────────
+ * Retiring night.min.css removed the only place success, warning and danger were defined, and
+ * they fell back SILENTLY to the template's compiled defaults: a light turquoise success (#1dc9b7)
+ * and a hot-pink danger (#fd3995). That changed the meaning-colour of every badge, outline button
+ * and coloured word on the site, and the turquoise took success-alert text down to 3.33:1. It was
+ * found by measuring the alerts in the browser, not by looking.
+ *
+ * These are Night's values, verbatim, and they are owned here now. Kept rather than replaced
+ * because the 2026-09-22 contrast audit was run against exactly these, in both themes, on every
+ * surface it covered — and app.css's --ben-success-behind-white (#3c833c, the fill that carries
+ * white text) was tuned against this green. Replacing them is a design decision with an audit
+ * attached, not a side effect of a skin change. */
+:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+    --bs-success: #489e48;  --bs-success-rgb: 72, 158, 72;
+    --bs-warning: #aaa256;  --bs-warning-rgb: 170, 162, 86;
+    --bs-danger:  #a85593;  --bs-danger-rgb: 168, 85, 147;
+}
+
 /* --bs-body-*-rgb cannot be an alias: Bootstrap composes them inside rgba(), so they must be
    three bare numbers. They are the only duplicated literals in this file, and they are here
    rather than in the palette so the duplication is visible. */
@@ -185,6 +203,19 @@
     --bs-btn-font-weight:   600;
     --bs-btn-padding-x:     1.15rem;
 }
+
+/* Bootstrap gives .btn-sm and .btn-lg radii of their OWN (--bs-border-radius-sm/-lg), declared
+   after .btn, so the pill above stopped at the default size: every small button on the site was an
+   8px rounded square beside full pills. It showed first in the grids, where each row action is
+   `btn btn-sm` and sat as a square next to the circular "…" menu. One shape for every size. */
+.btn-sm, .btn-lg, .btn-group-sm > .btn, .btn-group-lg > .btn {
+    --bs-btn-border-radius: var(--ben-radius-pill);
+}
+
+/* An icon-only button is a CIRCLE: a pill whose width equals its height. The grid's row actions
+   are 2rem squares by design (app.css, "Row actions are icons"), so the pill radius above is what
+   rounds them; this keeps any other icon-only button the same shape. */
+.ben-grid-action { border-radius: 50%; }
 
 /* The primary button is the one place the gradient appears in the chrome: a surface people press,
    so it may be the loudest thing on the page. Borderless, because a gradient with a flat border
@@ -352,8 +383,8 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 @media (min-width: 992px) {
     .app-wrap {
         grid-template-columns: 1fr !important;
-        grid-template-rows: auto auto 1fr !important;
-        grid-template-areas: "header" "nav" "body" !important;
+        grid-template-rows: auto auto auto 1fr !important;
+        grid-template-areas: "header" "nav" "banner" "body" !important;
     }
     .app-wrap > .app-header  { grid-area: header; }
     .app-wrap > .app-topnav  { grid-area: nav; }
@@ -364,8 +395,11 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     .app-wrap > .app-sidebar,
     .app-wrap > .backdrop { display: none !important; }
 
-    /* the impersonation banner rides with the nav row rather than inventing one of its own */
-    .app-wrap > .impersonation-banner--top { grid-area: nav; align-self: end; }
+    /* The impersonation banner has a row of its own. It first shared the nav's cell, and two
+       elements in one grid cell overlap: the bar sat over "Return to SuperAdmin", which was visible
+       and could not be clicked — the one control that ends an impersonation. When nobody is
+       impersonating the row is empty and `auto` collapses it to nothing. */
+    .app-wrap > .impersonation-banner--top { grid-area: banner; }
 
 }
 
@@ -506,3 +540,80 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     color: var(--ben-ink);
 }
 .app-rail__sublist { list-style: none; margin: 0; padding: 0 0 0 .35rem; }
+
+/* ── Semantic tints: alerts, subtle badges, list and table variants ──────────
+ *
+ * Bootstrap 5.3 draws every alert — 617 of them on this site, across eight variants — and every
+ * `-subtle` badge, list item and table row from three variables per colour: --bs-X-bg-subtle,
+ * --bs-X-border-subtle and --bs-X-text-emphasis. The Night skin set them; Signal had not, so they
+ * fell back to Bootstrap's stock blues and the "has work waiting" notice on almost every page read
+ * as an off-palette sky-blue box in light mode.
+ *
+ * They are DERIVED here rather than listed: each is a mix of the semantic colour into the page's
+ * own surface or ink, so a notice is tinted by what it means and sits on the same surface as
+ * everything else. Change --ben-surface or --bs-danger and every one of them follows. color-mix is
+ * already a dependency of app.css (--app-nav-bg), so this adds none.
+ */
+:root, [data-bs-theme="light"] {
+    --ben-tint-bg: 9%;      --ben-tint-border: 30%;   --ben-tint-text: 72%;
+}
+[data-bs-theme="dark"] {
+    --ben-tint-bg: 14%;     --ben-tint-border: 38%;   --ben-tint-text: 55%;
+}
+
+:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+    --bs-primary-bg-subtle:       color-mix(in srgb, var(--bs-primary)   var(--ben-tint-bg),     var(--ben-surface));
+    --bs-primary-border-subtle:   color-mix(in srgb, var(--bs-primary)   var(--ben-tint-border), var(--ben-surface));
+    --bs-primary-text-emphasis:   color-mix(in srgb, var(--bs-primary)   var(--ben-tint-text),   var(--ben-ink));
+    --bs-info-bg-subtle:          color-mix(in srgb, var(--bs-info)      var(--ben-tint-bg),     var(--ben-surface));
+    --bs-info-border-subtle:      color-mix(in srgb, var(--bs-info)      var(--ben-tint-border), var(--ben-surface));
+    --bs-info-text-emphasis:      color-mix(in srgb, var(--bs-info)      var(--ben-tint-text),   var(--ben-ink));
+    --bs-success-bg-subtle:       color-mix(in srgb, var(--bs-success)   var(--ben-tint-bg),     var(--ben-surface));
+    --bs-success-border-subtle:   color-mix(in srgb, var(--bs-success)   var(--ben-tint-border), var(--ben-surface));
+    --bs-success-text-emphasis:   color-mix(in srgb, var(--bs-success)   var(--ben-tint-text),   var(--ben-ink));
+    --bs-warning-bg-subtle:       color-mix(in srgb, var(--bs-warning)   var(--ben-tint-bg),     var(--ben-surface));
+    --bs-warning-border-subtle:   color-mix(in srgb, var(--bs-warning)   var(--ben-tint-border), var(--ben-surface));
+    --bs-warning-text-emphasis:   color-mix(in srgb, var(--bs-warning)   var(--ben-tint-text),   var(--ben-ink));
+    --bs-danger-bg-subtle:        color-mix(in srgb, var(--bs-danger)    var(--ben-tint-bg),     var(--ben-surface));
+    --bs-danger-border-subtle:    color-mix(in srgb, var(--bs-danger)    var(--ben-tint-border), var(--ben-surface));
+    --bs-danger-text-emphasis:    color-mix(in srgb, var(--bs-danger)    var(--ben-tint-text),   var(--ben-ink));
+    --bs-secondary-bg-subtle:     var(--ben-bg-sunken);
+    --bs-secondary-border-subtle: var(--ben-line-strong);
+    --bs-secondary-text-emphasis: var(--ben-ink-muted);
+    --bs-light-bg-subtle:         var(--ben-bg-sunken);
+    --bs-light-border-subtle:     var(--ben-line);
+    --bs-light-text-emphasis:     var(--ben-ink);
+    --bs-dark-bg-subtle:          var(--ben-surface-raised);
+    --bs-dark-border-subtle:      var(--ben-line-strong);
+    --bs-dark-text-emphasis:      var(--ben-ink);
+}
+
+/* WARNING IN LIGHT MODE IS THE EXCEPTION, AND IT WAS MEASURED, NOT GUESSED. A yellow cannot carry
+   72% of itself into the ink and stay readable on a pale tint. Against the template's #ffc241 the
+   derived text came to 2.78:1; against Night's olive #aaa256, restored below, it is still 4.04:1 —
+   both under WCAG's 4.5:1, on 129 warning alerts. 40% of the colour measures 7.87:1 in the browser
+   and still reads as amber. SignalContrastTests measures every variant in both themes and fails
+   naming this one if the override is ever lost; that was checked by removing it.
+
+   Scoped `:root:not([data-bs-theme="dark"])` rather than `:root`, because :root ALSO matches in
+   dark mode — where this darker mix on a dark tint would fail in the other direction. */
+:root:not([data-bs-theme="dark"]) {
+    --bs-warning-text-emphasis: color-mix(in srgb, var(--bs-warning) 40%, var(--ben-ink));
+}
+
+/* An alert is a card with a coloured spine: the tint says what it means, the bar says it loudly,
+   the radius and shadow say it belongs to the same page as everything else. */
+.alert {
+    --bs-alert-border-radius: var(--ben-radius);
+    border-left-width: 4px;
+    box-shadow: var(--ben-shadow-sm);
+}
+.alert-primary   { border-left-color: var(--bs-primary); }
+.alert-info      { border-left-color: var(--bs-info); }
+.alert-success   { border-left-color: var(--bs-success); }
+.alert-warning   { border-left-color: var(--bs-warning); }
+.alert-danger    { border-left-color: var(--bs-danger); }
+.alert-secondary,
+.alert-light     { border-left-color: var(--ben-line-strong); }
+.alert-dark      { border-left-color: var(--ben-ink-muted); }
+.alert .alert-link { color: var(--ben-accent); }

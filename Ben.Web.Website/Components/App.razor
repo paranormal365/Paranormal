@@ -51,11 +51,11 @@
     <script src="/plugins/bootstrap/bootstrap.bundle.min.js"></script>
 
     <!-- Kendo's Bootstrap-flavoured theme is the closest starting point for the widgets kept from
-         Telerik (Grid, Scheduler, Editor, Map, pickers). telerik-night.css then remaps its CSS
+         Telerik (Grid, Scheduler, Editor, Map, pickers). telerik-signal.css then remaps its CSS
          variables onto the Night palette so those widgets read as part of the template rather
          than as a control suite dropped on top of it. Load order matters: override comes last. -->
     <link rel="stylesheet" href="/_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" />
-    <link rel="stylesheet" href="/theme/telerik-night.css" />
+    <link rel="stylesheet" href="/theme/telerik-signal.css" />
     <script src="/_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
     <script src="/_content/Ben.Video.Editor/js/moduleLoader.js"></script>
@@ -65,7 +65,7 @@
        fetch it from a third-party CDN before `load` fired. wwwroot/js/image-editor.js now
        loads it from wwwroot/plugins/fabric/ on demand. See VENDORED.md there, and item 114. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
-    @* …then the map onto this template's palette. telerik-night.css above covers the Kendo
+    @* …then the map onto this template's palette. telerik-signal.css above covers the Kendo
        variables the widgets use; this covers the editor's own --bv-* family and the handful of
        Kendo tokens only the editor reads (--kendo-color-subtle-text alone drives every secondary
        label in its timeline). Without it the editor kept its own dark palette inside the site. *@
