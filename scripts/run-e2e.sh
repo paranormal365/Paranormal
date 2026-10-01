@@ -27,6 +27,8 @@ set -euo pipefail
 #   scripts/run-e2e.sh                    # everything
 #   scripts/run-e2e.sh --filter Nearby    # one slice, same isolation
 #   scripts/run-e2e.sh --keep             # leave the hosts up afterwards to poke at
+#   scripts/run-e2e.sh --workers 6        # six tests at once (4 by default)
+#   scripts/run-e2e.sh --workers 1        # one at a time, to reproduce a parallel failure
 #   BEN_E2E_DB=OtherName scripts/run-e2e.sh   # a fresh name = a fresh database AND uploads dir
 #
 # The seeded passwords the sign-in tests need are read from the gitignored
@@ -125,13 +127,26 @@ WASM_URL="http://localhost:5180"
 CANVAS_URL="http://localhost:5125"
 
 KEEP=0
+# How many tests run at once. 4 is what Ben.Web.Playwright/Parallelism.cs compiles in as the
+# suite's own default; naming it here lets a run say otherwise without a rebuild, and
+# --workers 1 puts the suite back to one test at a time, which is how a failure found in a
+# parallel run gets reproduced before it is believed.
+WORKERS="${BEN_E2E_WORKERS:-4}"
 PASSTHROUGH=()
-for arg in "$@"; do
-  case "$arg" in
-    --keep) KEEP=1 ;;
-    *)      PASSTHROUGH+=("$arg") ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep)      KEEP=1 ;;
+    --workers)   WORKERS="$2"; shift ;;
+    --workers=*) WORKERS="${1#*=}" ;;
+    *)           PASSTHROUGH+=("$1") ;;
   esac
+  shift
 done
+
+if ! [[ "$WORKERS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--workers takes a whole number of test workers, not '$WORKERS'."
+  exit 1
+fi
 
 STARTED_PIDS=()
 LOG_DIR="$(mktemp -d)"
@@ -273,8 +288,32 @@ if [[ "${BEN_STRIPE_E2E:-}" == "1" ]]; then
   fi
   STRIPE_FORWARD=1
 fi
+# ── The rate limiter, told that this one caller is a test suite ───────────
+#
+# The limits partition per CALLER, and a signed-in caller is keyed by user id — so most of the
+# suite's traffic already has a budget of its own and none of it mattered while tests ran one at
+# a time. Two partitions are keyed by ADDRESS instead, because there is nobody signed in yet,
+# and the whole suite is one address:
+#
+#   · /login and /register, at 20 a minute. A serial run of 400 tests over 18 minutes signs in
+#     about twenty times a minute ALREADY — the suite has been sitting on this ceiling, which is
+#     where "a 429 reads as Invalid email or password" came from. Four workers would put it
+#     straight through it, and the failure would look like a password problem in four unrelated
+#     fixtures at once.
+#   · The global ceiling at 600 a minute, which anonymous page traffic shares: every public page
+#     the crawls walk, signed out, on every worker.
+#
+# Raised for the length of the run, through configuration rather than the database, because the
+# limits ARE the database's when a row exists and no seeder writes one — so a fresh e2e database
+# takes these values and the admin page still shows the real defaults. Nothing here is a test of
+# the limiter: RateLimitSettingsTests and StoreRateLimitPartitionTests cover it in Ben.Web.Tests,
+# where no host is involved and the numbers are the ones that ship.
+API_RATE_LIMIT_ENV="RateLimits__AuthPerMinute=2000 RateLimits__GlobalPerMinute=30000 \
+RateLimits__GeocodingPerMinute=2000 RateLimits__EventAttendancePerMinute=3000 \
+RateLimits__AudioProcessingPerMinute=600"
+
 start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
-  "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV"
+  "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV $API_RATE_LIMIT_ENV"
 if [[ "${STRIPE_FORWARD:-}" == "1" ]]; then
   echo "── Forwarding Stripe's test events to the API ──────────────────────────"
   # The events the webhook handles — the same list the live endpoint is given (stripe-go-live.md).
@@ -434,6 +473,7 @@ echo ""
 echo "── Running the suite ───────────────────────────────────────────────────"
 echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"
+echo "   workers : $WORKERS$( [[ "$WORKERS" == 1 ]] && echo "  (one test at a time)" )"
 echo ""
 
 # Emailed links: with no mail server, a letter is still queued in the outbox, and a test that has
@@ -450,6 +490,7 @@ echo ""
   echo "E2E_STARTED=$(date +%s)"
   echo "E2E_DB=$DB_NAME"
   echo "E2E_FILTER=${PASSTHROUGH[*]:-}"
+  echo "E2E_WORKERS=$WORKERS"
 } > "$LOG_DIR/meta"
 
 # Built once, here, so neither pass below repeats it.
@@ -479,9 +520,15 @@ echo ""
 # quiet view it has always had by filtering that stream down to what a person watching cares about.
 # scripts/e2e-progress.sh reads the log, not the terminal.
 set +e
+# NUnit.NumberOfTestWorkers overrides the [LevelOfParallelism] compiled into the assembly, and
+# it goes after a bare -- because that is where VSTest takes runsettings overrides; anything
+# before it is a dotnet test argument. Fixtures run against each other, the tests inside one
+# stay in order, and forty fixtures that share site-wide state sit out — see
+# Ben.Web.Playwright/Parallelism.cs for the whole arrangement and why it is safe.
 dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
   --logger "console;verbosity=normal" \
-  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_DB="$DB_NAME" "${PASSTHROUGH[@]:-}" 2>&1 \
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_DB="$DB_NAME" "${PASSTHROUGH[@]:-}" \
+  -- NUnit.NumberOfTestWorkers="$WORKERS" 2>&1 \
   | tee "$LOG_DIR/e2e.log" \
   | grep -E --line-buffered '^( *(Failed|Error) |Test Run |Total tests:|A total of)' || true
 STATUS=${PIPESTATUS[0]}
