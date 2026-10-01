@@ -19,6 +19,10 @@
 {
     <Ben.Web.Website.Library.Client.ClientCaseStrip />
     <HomeHero />
+    @* Signal (Ben, 2026-10-01: "The home page should sell the site"). The visitor is told what
+       the site IS before being handed its tools: what you get, what it does, how the phone and
+       the website work together. The live sections below then prove it; HomeJoin asks. *@
+    <Ben.Web.Website.Library.Shared.HomePitch />
 }
 @* Item 233: tours with a date on the calendar, soonest first, each led by its own picture.
    Renders nothing at all when there are none. *@
@@ -27,12 +31,17 @@
 @* Item 186 F9: the feed's front door on the front page. Renders nothing while the feed is dark. *@
 <Ben.Web.Website.Library.Feed.FeedTeaser />
 @* Item 166 W3: one promoted group per load, rotating server-side, always marked. *@
-@* The home page's sections share one column: 1000px from the content's left edge. The teaser and this card sat in a
+@* The home page's sections share one column, the full content width (.home-band in signal.css). The teaser and this card sat in a
    narrower centred column and read as misaligned beside the sections above and below (UI test pass, 2026-09-14). *@
-<div class="container-fluid px-3" style="max-width:1000px;">
+<div class="home-band">
     <PromotedGroupsCard />
 </div>
 <PublicCaseDiscovery />
+@if (!_hasGroups)
+{
+    @* The ask, after the proof. *@
+    <Ben.Web.Website.Library.Shared.HomeJoin />
+}
 @* The seven advertisements as 64px thumbnails, the audience under each (Ben, 2026-10-01). Static
    files, so it renders the same for a visitor and a member; last, because it is for sending on
    rather than for using the site. *@

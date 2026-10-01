@@ -42,7 +42,7 @@ public class NearbyDiscoveryTests : BenTestBase
     {
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("What's Near You", new() { Exact = false }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "What's Near You" }))
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
 
@@ -63,7 +63,7 @@ public class NearbyDiscoveryTests : BenTestBase
     [Description("The panel renders its heading and distance control.")]
     public async Task Panel_RendersHeadingAndDistanceControl()
     {
-        var heading = Page.GetByText("What's Near You", new() { Exact = false });
+        var heading = Page.GetByRole(AriaRole.Heading, new() { Name = "What's Near You" });
         await Expect(heading).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         var radius = Page.Locator("#nearby-radius");
@@ -148,7 +148,7 @@ public class NearbyDiscoveryFallbackTests : BenTestBase
     {
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("What's Near You", new() { Exact = false }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "What's Near You" }))
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
 
@@ -156,7 +156,7 @@ public class NearbyDiscoveryFallbackTests : BenTestBase
     [Description("Without location permission, the panel offers a place-name search instead.")]
     public async Task Denied_OffersManualLocationEntry()
     {
-        await Expect(Page.GetByText("What's Near You", new() { Exact = false }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "What's Near You" }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         var input = Page.Locator("#nearby-location");

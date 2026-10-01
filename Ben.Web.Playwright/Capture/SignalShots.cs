@@ -52,8 +52,35 @@ public class SignalShots : BenTestBase
         var root = Path.Combine(RepoRoot(), "docs", "design", "preview", "signal-live");
         Directory.CreateDirectory(root);
 
+        await ShootVisitorAsync(root);                                       // nobody signed in
         await ShootAsync(root, UserEmail, UserPassword, Screens);            // Sarah
         await ShootAsync(root, SuperAdminEmail, SuperAdminPassword, AdminScreens);
+    }
+
+    /// <summary>The visitor's Home, signed out — the page that has to sell the site. Full page.</summary>
+    private async Task ShootVisitorAsync(string root)
+    {
+        await Context.ClearCookiesAsync();
+        foreach (var theme in new[] { "dark", "light" })
+        {
+            await Page.GotoAsync(BaseUrl);
+            await Page.EvaluateAsync(
+                "t => { try { localStorage.setItem('layoutSettings', JSON.stringify({ theme: t })); " +
+                "localStorage.setItem('ben-theme', t); } catch (e) { } }", theme);
+            await Page.GotoAsync(BaseUrl);
+            await Expect(Page.Locator("[data-testid=home-pitch]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await Page.WaitForTimeoutAsync(1500);
+            // lazy screens below the fold only load once scrolled to
+            await Page.EvaluateAsync("async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 120)); } window.scrollTo(0, 0); }");
+            await Page.WaitForTimeoutAsync(800);
+            // The shell is pinned to the window and scrolls INSIDE .app-body (app.css, "App-shell
+            // height"), so a full-page screenshot sees one screen. Unpinned for the photograph
+            // only — this style never leaves the capture's own page.
+            await Page.AddStyleTagAsync(new() { Content =
+                ".app-wrap{height:auto!important} .app-body,.app-content{overflow:visible!important;height:auto!important}" });
+            await Page.WaitForTimeoutAsync(300);
+            await Page.ScreenshotAsync(new() { Path = Path.Combine(root, $"home-visitor-{theme}.png"), FullPage = true });
+        }
     }
 
     private async Task ShootAsync(string root, string email, string password, (string Slug, string Url)[] screens)

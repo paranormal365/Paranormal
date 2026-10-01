@@ -308,6 +308,32 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     border-bottom: 1px solid var(--ben-line);
 }
 
+/* ── the home page's one column ─────────────────────────────────────────── */
+/* Every section of Home — hero, pitch, the live lists, the join band, the flyers — shares the full
+   content width. The live sections used to sit in a centred 1000px column and read as a page
+   within the page beside the full-width pitch. */
+.home-band { width: 100%; }
+
+/* A section's head: a small coloured kicker over a large title, an optional lede under it. One
+   definition for every page section that is not sitting on a photograph (those keep their own
+   light ink — text over a photograph is not the page's ink). */
+.ben-section-head { margin: 3rem 0 1.25rem; max-width: 46rem; }
+.ben-section-head:first-child { margin-top: .5rem; }
+.ben-section-head--row {
+    max-width: none; display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: .5rem 1rem;
+}
+.ben-kicker {
+    font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ben-accent); margin-bottom: .35rem;
+}
+.ben-section-title { font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.1; margin: 0; }
+.ben-accent-text {
+    background-image: var(--ben-accent-grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ben-section-lede { color: var(--ben-ink-muted); font-size: 1.02rem; margin: .6rem 0 0; }
+
 /* ── the rail ───────────────────────────────────────────────────────────── */
 /* Inset from the window on both sides: without it the rail sat on x:0 and its rounded corners
    were clipped by the edge of the page, which read as a column again rather than a card. */

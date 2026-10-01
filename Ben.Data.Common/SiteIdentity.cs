@@ -47,6 +47,32 @@ public sealed class SiteIdentity
     /// </remarks>
     public string ApiBaseUrl { get; set; } = "";
 
+    /// <summary>
+    /// The iPhone and iPad app's App Store page. Shown in the footer, on Home, in the help, and as
+    /// Safari's smart app banner on iOS (Ben, 2026-10-01: "The appstore should have a link on the site").
+    /// </summary>
+    /// <remarks>
+    /// Read off Apple's own public lookup (itunes.apple.com/search) on 2026-10-01 rather than typed
+    /// from memory: IsHaunted, seller Paul Benjamin Clark, bundle com.ishaunted.ios, version 1.1.1
+    /// — the bundle and release the repo records. Apple's `?uo=4` tracking suffix is left off.
+    /// Configuration like everything else here, with the real address as the default so no deploy
+    /// needs a settings change to show it.
+    /// </remarks>
+    public string AppStoreUrl { get; set; } = "https://apps.apple.com/us/app/ishaunted/id6806786633";
+
+    /// <summary>
+    /// The numeric App Store id from <see cref="AppStoreUrl"/> (the digits after <c>/id</c>), which is
+    /// what Safari's smart app banner asks for — or null when the address does not carry one.
+    /// </summary>
+    public string? AppStoreAppId
+    {
+        get
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(AppStoreUrl ?? "", @"/id(\d+)");
+            return m.Success ? m.Groups[1].Value : null;
+        }
+    }
+
     /// <summary>An absolute URL for a path, or the path unchanged when no origin is configured.</summary>
     public string AbsoluteUrl(string relativePath)
     {

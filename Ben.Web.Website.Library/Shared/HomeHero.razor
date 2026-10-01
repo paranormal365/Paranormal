@@ -5,22 +5,28 @@
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 @* ── Hero ─────────────────────────────────────────────────────────────────── *@
-<div class="home-hero">
-    <div class="home-hero__brand">
-        @* The logo carries the site's name, so there is no title line under it.
-           ONE picture now, and it is the vector.
-           It used to be two rasters with the glow BAKED IN — logo-glass-white.png blended to white
-           and logo-glass-gray.png to #363c41 — which meant each was tied to one palette. Signal's
-           dark is #0C1017, not #363c41, so the baked halo showed as a grey box around the mark the
-           moment the skin changed, and every future palette change would need both files redrawn.
-           The glow is a CSS drop-shadow off the accent token instead, so it blends into whatever
-           the page is, in either mode, with nothing to regenerate. *@
-        <img src="/static/images/is-haunted-logo.svg" alt="@SiteOptions.Value.Name"
-             class="home-hero__logo" width="627" height="627" />
-        <p class="home-hero__tagline">Connect with paranormal investigation groups near you</p>
-    </div>
+@*
+    Signal (Ben, 2026-10-01). The visitor's front door opens the way the mock-up he chose does — a
+    photograph, a headline, and the search laid over it — and the way the signed-in desk now does,
+    so arriving signed out and signed in read as the same site.
 
-    @* ── Location search ─────────────────────────────────────────────────── *@
+    It used to open on the logo at 460px over a one-line tagline. The logo is in the header lockup
+    on every page now (option C), so the hero no longer has to carry the brand — and 09/25's rule
+    still holds in a new form: the hero never prints the site's NAME, because the header already
+    does, once. The headline is a promise, not a repetition. HomePageTests guards both.
+
+    Everything that WORKS here is unchanged: the geocoded search, Enter to submit, its results and
+    its refusal below, and the two links. Only the frame around them moved.
+*@
+<section class="home-hero" data-testid="home-hero">
+    <div class="home-hero__photo" aria-hidden="true"></div>
+    <div class="home-hero__inner">
+        <div class="home-hero__kicker">One home for the paranormal</div>
+        <h1 class="home-hero__headline">Find out what happened here.</h1>
+        <p class="home-hero__tagline">
+            Haunted places near you, the groups that investigate them, and the nights you can book.
+        </p>
+
     <div class="home-hero__search-box">
         <div class="home-hero__search-row">
             @* Enter submits, which a plain button in a div would not do — the search box is the
@@ -55,13 +61,14 @@
 
     @* ── CTA buttons ──────────────────────────────────────────────────────── *@
     <div class="home-hero__ctas">
-        <a href="/find" class="btn btn-outline-secondary">Browse All Groups</a>
+        <a href="/find" class="btn btn-outline-light">Browse All Groups</a>
         @* The request wizard runs signed out and makes the account at Submit (site evaluation
            2026-09-06, phase 1), so this no longer routes the one person the page exists for
            through a sign-in screen first. *@
-        <a href="/my-requests/new" class="btn btn-outline-info">Request an Investigation</a>
+        <a href="/my-requests/new" class="btn btn-outline-light">Request an Investigation</a>
     </div>
-</div>
+    </div>
+</section>
 
 @* ── Search results ────────────────────────────────────────────────────────── *@
 @if (_searched && _results.Count == 0)
@@ -125,77 +132,6 @@
         </div>
     </div>
 }
-
-<style>
-    .home-hero {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-        padding: 2rem 1rem 1rem;
-        text-align: center;
-        max-width: 700px;
-        margin: 0 auto;
-    }
-
-    /* Fluid: follows the window as it is resized — never under 220px on a phone, never over 460px. */
-    .home-hero__logo {
-        --logo-w: clamp(220px, 42vw, 460px);
-        width: var(--logo-w);
-        max-width: 90vw;
-        height: auto;
-    }
-
-    /* The glow, which used to be painted into the two rasters and is now cast off the accent.
-       Two shadows rather than one: a tight dark lift so the white ghost keeps an edge on a white
-       page, and a wide accent bloom that ties the mark to the rest of the skin. Both read in
-       either mode because they are drawn from tokens, and nothing has to be redrawn when the
-       palette moves again. */
-    .home-hero__logo {
-        filter:
-            drop-shadow(0 2px 10px rgba(0, 0, 0, .18))
-            drop-shadow(0 0 48px rgba(var(--ben-accent-rgb), .40));
-    }
-
-    /* The vector has no reflection under it, so the tagline no longer has to climb into one. */
-    .home-hero__logo { margin-bottom: .35rem; }
-
-    .home-hero__tagline {
-        color: var(--kendo-color-subtle-text, #888);
-        font-size: 1.05rem;
-        margin: 0;
-    }
-
-    .home-hero__brand {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: .4rem;
-    }
-
-    .home-hero__search-box {
-        width: 100%;
-        max-width: 560px;
-    }
-
-    .home-hero__search-row {
-        display: flex;
-        gap: .5rem;
-    }
-
-    .home-hero__search-input {
-        flex: 1;
-    }
-
-    .home-hero__ctas {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
-        justify-content: center;
-    }
-
-</style>
-
 @code {
     // Item #103: the hero's call-to-action row is auth-gated in markup, and auth resolves
     // asynchronously after the circuit connects — without this, a signed-in user hard-navigating

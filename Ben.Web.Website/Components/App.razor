@@ -7,6 +7,12 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* Safari's own smart app banner on iPhone and iPad: "Open" if the app is installed, "Get" if not.
+       The id comes from SiteIdentity.AppStoreUrl, so the address lives in one place. *@
+    @if (SiteOptions.Value.AppStoreAppId is { } appStoreId)
+    {
+        <meta name="apple-itunes-app" content="app-id=@appStoreId" />
+    }
     <base href="/" />
     <!-- Every asset href/src below is explicitly root-relative (leading slash) rather than
          relying on <base href> resolution — Safari has a known quirk where relative URLs in

@@ -1,0 +1,54 @@
+@namespace Ben.Web.Website.Library.Shared
+@inject IBenUserState UserState
+
+@*
+    The foot of the visitor's Home: what it costs, and the ask. After the live sections, so the
+    page sells (HomePitch), proves it is alive (what's on, what's near you, the map), then asks.
+
+    The prices are the flyers' wording, which was taken from docs/ads/build-ads.py so the site and
+    the seven flyers cannot drift apart. Change them there and here together.
+
+    The button follows who is looking, once AuthReady says so: a visitor is asked to join, a
+    signed-in person who is in no group yet is offered the way into one. Before AuthReady the
+    visitor's version renders, which is right for the prerender a search engine reads.
+*@
+
+<section class="home-join" data-testid="home-join">
+    <div class="home-join__photo" aria-hidden="true"></div>
+    <div class="home-join__inner">
+        <div class="home-join__kicker">Plans</div>
+        <h2 class="home-join__title">Free to explore. <span>Pay only for what you run.</span></h2>
+        <ul class="home-join__prices">
+            <li><b>Free</b><span>to join, explore and post — with Field Kit and 2&nbsp;GB of your own files</span></li>
+            <li><b>$19.99</b><span>a month for a group, and public places stay free on every plan</span></li>
+            <li><b>$29</b><span>a month per ghost walk, every guide and every date included</span></li>
+            <li><b>$99</b><span>per hosted event, however many nights — guests pay you directly</span></li>
+        </ul>
+        <div class="home-join__ctas">
+            @if (_signedIn)
+            {
+                <a class="btn btn-primary btn-lg" href="/find">Find a group</a>
+                <a class="btn btn-outline-light btn-lg" href="/pricing">See every plan</a>
+            }
+            else
+            {
+                <a class="btn btn-primary btn-lg" href="/signup" data-testid="home-join-signup">Join free</a>
+                <a class="btn btn-outline-light btn-lg" href="/pricing">See every plan</a>
+            }
+        </div>
+        <p class="home-join__fine">No card needed to join.</p>
+    </div>
+</section>
+
+@code {
+    private bool _signedIn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.AuthReady;
+        if (UserState.IsAuthenticated == _signedIn) return;
+        _signedIn = UserState.IsAuthenticated;
+        StateHasChanged();
+    }
+}

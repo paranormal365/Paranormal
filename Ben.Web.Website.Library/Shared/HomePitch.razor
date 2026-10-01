@@ -1,0 +1,154 @@
+@namespace Ben.Web.Website.Library.Shared
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@*
+    The visitor's Home, selling the site (Ben, 2026-10-01: "The home page should sell the site").
+
+    Until this, Home for a visitor was a set of tools — a search, a map, a list — which only makes
+    sense to somebody who already knows what IsHaunted is. The flyer he liked does the selling, so
+    this is the flyer's argument, in the site's own words and with the site's own screens: what you
+    get, what it does, and how the phone and the website are one thing. The live sections below it
+    (what's on, what's near you, the map) then PROVE it; HomeJoin at the foot asks.
+
+    Every screen here is a photograph of the running site from the public help captures, served
+    from /help/media — nothing is a mock-up, and nothing new had to be published to show it.
+    Static on purpose: no client, no loading state, nothing to fail before the page has said what
+    the site is.
+*@
+
+<section class="pitch" data-testid="home-pitch">
+
+    @* ── Three ways in ───────────────────────────────────────────────────── *@
+    <div class="ben-section-head">
+        <div class="ben-kicker">What you get</div>
+        <h2 class="ben-section-title">Three ways in. All of them start free.</h2>
+    </div>
+    <div class="pitch__pillars">
+        @foreach (var p in Pillars)
+        {
+            <a class="pitch-pillar" href="@p.Href">
+                <span class="pitch-pillar__badge"><BenIcon Name="@p.Icon" /></span>
+                <h3>@p.Title</h3>
+                <p>@p.Line</p>
+                <span class="pitch-pillar__go">@p.Go →</span>
+            </a>
+        }
+    </div>
+
+    @* ── Everything it does ───────────────────────────────────────────────── *@
+    <div class="ben-section-head">
+        <div class="ben-kicker">Everything it does</div>
+        <h2 class="ben-section-title">The tools, built in — <span class="ben-accent-text">not bolted on.</span></h2>
+        <p class="ben-section-lede">
+            The editors, the EVP detector and the apps are part of the site, not separate products.
+            A recording made in a dark hallway reaches a client's report without anybody emailing a file.
+        </p>
+    </div>
+    <div class="pitch__tiles">
+        @foreach (var t in Tiles)
+        {
+            <div class="pitch-tile">
+                <div class="pitch-shot" style="@($"--f:{t.Focus};--z:{t.Zoom}")">
+                    <img src="@t.Shot" alt="" loading="lazy" />
+                </div>
+                <div class="pitch-tile__body">
+                    <h3><BenIcon Name="@t.Icon" /> @t.Title</h3>
+                    <p>@t.Line</p>
+                </div>
+            </div>
+        }
+    </div>
+
+    @* ── The phone and the website ────────────────────────────────────────── *@
+    <div class="ben-section-head">
+        <div class="ben-kicker">The phone and the website are one thing</div>
+        <h2 class="ben-section-title">The same recording, start to finish.</h2>
+        <p class="ben-section-lede">Nothing exported, nothing uploaded by hand.</p>
+    </div>
+    <ol class="pitch__chain">
+        @for (var i = 0; i < Chain.Length; i++)
+        {
+            var c = Chain[i];
+            <li class="pitch-step">
+                @if (c.Phone)
+                {
+                    <div class="pitch-phone"><img src="@c.Shot" alt="" loading="lazy" /></div>
+                }
+                else
+                {
+                    <div class="pitch-shot pitch-shot--step" style="--f:top left;--z:1.5">
+                        <img src="@c.Shot" alt="" loading="lazy" />
+                    </div>
+                }
+                <span class="pitch-step__n">@(i + 1)</span>
+                <h3>@c.Title</h3>
+                <p>@c.Line</p>
+            </li>
+        }
+    </ol>
+    <div class="pitch__apps">
+        <a class="btn btn-primary" href="@SiteOptions.Value.AppStoreUrl" target="_blank" rel="noopener"
+           data-testid="home-app-store">
+            <BenIcon Name="smartphone" /> Get the iPhone &amp; iPad app
+        </a>
+        <a href="/help/the-mobile-apps">How the app works with the site →</a>
+    </div>
+</section>
+
+@code {
+    private const string M = "/help/media/";
+
+    private sealed record Pillar(string Icon, string Title, string Line, string Href, string Go);
+    private sealed record Tile(string Icon, string Title, string Line, string Shot, string Focus, double Zoom);
+    private sealed record Step(string Title, string Line, string Shot, bool Phone = false);
+
+    // The flyer's three, in the same words, each opening the part of the site it describes.
+    private static readonly Pillar[] Pillars =
+    [
+        new("globe",    "Explore for nothing",
+            "The feed, a map of haunted places, and every tour and night out near you. No account needed to look.",
+            "/find", "Find what's near you"),
+        new("shield",   "Investigate properly",
+            "Cases, evidence tools, roles that decide who sees a private home, and reports a client can read.",
+            "/pricing", "See what a group gets"),
+        new("calendar", "Fill the house",
+            "Ghost walks, venues and haunted weekends: bookings, passes, the door, and the money.",
+            "/events", "See what's on"),
+    ];
+
+    // Eight of the flyer's twelve — the ones whose screens are public. Each is cropped to the part
+    // of its screen that shows the thing, with the zoom and anchor the flyer settled on: a whole
+    // page shrunk to a tile is a grey smudge, and a full-page crop from the top-left shows the
+    // navigation rather than the product.
+    private static readonly Tile[] Tiles =
+    [
+        new("globe",    "The feed",               "Follow places, groups and nights out. Polls, photos and link cards.",
+            M + "the-feed/feed.png",                         "center right", 2.0),
+        new("map-pin",  "A map of haunted places", "Every public place, what happened there, and what is on near you.",
+            M + "getting-started/public-map.png",            "center",       1.2),
+        new("folder",   "Cases and evidence",      "The client's own words, the timeline, the files — one thread for everybody.",
+            M + "working-a-case/case-detail.png",            "center right", 1.8),
+        new("activity", "The EVP detector",        "Scans a recording for voices under the noise and hands you the candidates.",
+            M + "using-the-audio-editor/evp-candidates.png", "top left",     1.5),
+        new("film",     "A video editor",          "Timeline, callouts, text and export — in the browser.",
+            M + "using-the-video-editor/timeline-two-clips.png", "center",   1.25),
+        new("layout",   "Research boards",         "Lay out a family tree or a deed trail, then present it full screen.",
+            M + "working-a-case/board-presenting.png",       "center",       1.15),
+        new("compass",  "Ghost walks and tours",   "A page per tour, dates people book, and a door list for the guide.",
+            M + "getting-started/tour-page.png",             "top right",    1.5),
+        new("calendar", "Hosted events",           "Rooms or seats on a plan, and passes that open with no signal.",
+            M + "getting-started/event-page.png",            "top right",    1.5),
+    ];
+
+    private static readonly Step[] Chain =
+    [
+        new("Record it in the field", "Field Kit turns the phone into a meter and a recorder. No signal needed.",
+            M + "the-mobile-apps/iphone-meter.png", Phone: true),
+        new("It lands on the case",   "The session uploads itself when there is signal again, onto the right case.",
+            M + "working-a-case/field-session-player.png"),
+        new("Scan it for voices",     "The EVP detector works the whole recording and marks what it heard.",
+            M + "using-the-audio-editor/evp-candidates.png"),
+        new("The client reads it",    "They see their own case and the evidence you chose — and nothing you did not.",
+            M + "working-a-case/case-detail.png"),
+    ];
+}

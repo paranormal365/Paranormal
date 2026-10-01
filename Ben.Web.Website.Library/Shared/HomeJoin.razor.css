@@ -1,0 +1,45 @@
+/* The ask, at the foot of the visitor's Home. Same photograph-card language as the hero and the
+   desk; text over the photograph is light in both themes with its own scrim. */
+.home-join {
+    position: relative; overflow: hidden; isolation: isolate;
+    margin: 2.5rem 0 2rem; border-radius: var(--ben-radius-lg); box-shadow: var(--ben-shadow-lg);
+}
+.home-join__photo {
+    position: absolute; inset: 0; z-index: -1;
+    background: url('/static/images/signal/v6-ballroom.jpg') center 35% / cover no-repeat;
+}
+.home-join__photo::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+        linear-gradient(100deg, rgba(6, 10, 18, .92) 0%, rgba(6, 10, 18, .74) 55%, rgba(6, 10, 18, .45) 100%),
+        linear-gradient(0deg, rgba(var(--ben-accent-rgb), .30) 0%, transparent 60%);
+}
+.home-join__inner { padding: 2.25rem 2.25rem 2rem; max-width: 52rem; }
+.home-join__kicker {
+    font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ben-accent-2); margin-bottom: .4rem;
+}
+.home-join__title { color: #fff; font-size: clamp(1.6rem, 3vw, 2.3rem); line-height: 1.08; margin: 0 0 1.25rem; }
+.home-join__title span {
+    background-image: linear-gradient(120deg, #c4b5fd, var(--ben-accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.home-join__prices {
+    list-style: none; margin: 0 0 1.5rem; padding: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem;
+}
+.home-join__prices li {
+    padding: .85rem .9rem; border-radius: var(--ben-radius);
+    background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.home-join__prices b { display: block; color: #fff; font-size: 1.45rem; font-weight: 800; letter-spacing: -.02em; }
+.home-join__prices span { display: block; color: rgba(255, 255, 255, .80); font-size: .8rem; line-height: 1.35; margin-top: .15rem; }
+.home-join__ctas { display: flex; flex-wrap: wrap; gap: .75rem; }
+.home-join__fine { color: rgba(255, 255, 255, .65); font-size: .8rem; margin: .75rem 0 0; }
+
+@media (max-width: 991.98px) { .home-join__prices { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 575.98px) {
+    .home-join__inner { padding: 1.6rem 1.25rem; }
+    .home-join__prices { grid-template-columns: 1fr; }
+}

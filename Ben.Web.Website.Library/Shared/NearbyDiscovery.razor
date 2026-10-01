@@ -27,9 +27,12 @@
 {
     @* The id is for the help capture and for anything else that wants the panel rather than the
        page it sits on. *@
-    <div class="container-fluid px-3 mt-5" id="nearby" style="max-width:1000px;">
-        <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
-            <h4 class="mb-0" id="whats-near-you">What's Near You</h4>
+    <div class="home-band mt-5" id="nearby">
+        <div class="ben-section-head ben-section-head--row mb-3">
+            <div>
+                <div class="ben-kicker">Start where you are</div>
+                <h2 class="ben-section-title" id="whats-near-you">What's Near You</h2>
+            </div>
             <div class="d-flex align-items-center gap-2">
                 @* OUTSIDE the tabs on purpose. It lived inside the Places tab until 2026-09-21,
                    and the tabs only render once a location search has actually succeeded — so
