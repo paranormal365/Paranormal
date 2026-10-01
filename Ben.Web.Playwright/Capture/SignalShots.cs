@@ -30,7 +30,11 @@ public class SignalShots : BenTestBase
     [
         ("home",            "/"),
         ("my-cases",        "/my-cases"),
+        ("my-requests",     "/my-requests"),
         ("organizations",   "/organizations"),
+        ("notifications",   "/notifications"),
+        ("my-equipment",    "/my-equipment"),
+        ("store",           "/store"),
         ("styleguide",      "/styleguide"),
     ];
 

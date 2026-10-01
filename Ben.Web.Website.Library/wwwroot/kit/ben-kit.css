@@ -168,3 +168,46 @@ label > .sa-icon,
     height: calc(100vh - var(--ben-appbar-h, 58px));
     overflow: hidden;
 }
+
+/* ── Empty states (Signal) ───────────────────────────────────────────────────
+   BenListState frames every list's empty state in this, so 116 screens share one look. Tokens
+   only. The mark is a quiet, accent-lit watermark above the words — a picture for an empty page
+   that does not compete with what the page is saying. */
+.ben-empty {
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    padding: 2.5rem 1.5rem 2.25rem;
+    border: 1px dashed var(--ben-line-strong);
+    border-radius: var(--ben-radius-lg);
+    background:
+        radial-gradient(60% 70% at 50% 0%, rgba(var(--ben-accent-rgb), .10) 0%, transparent 70%),
+        var(--ben-surface);
+    color: var(--ben-ink-muted);
+}
+
+.ben-empty__mark {
+    display: block;
+    width: 4.5rem;
+    height: 4.5rem;
+    margin: 0 auto 1rem;
+    opacity: .9;
+    filter: drop-shadow(0 6px 22px rgba(var(--ben-accent-rgb), .35));
+    animation: ben-empty-float 5s ease-in-out infinite;
+}
+
+.ben-empty__title { color: var(--ben-ink); font-weight: 650; }
+
+/* the page's own content keeps its paragraphs and buttons; only the padding it brought for a
+   frameless page is taken back, or the frame would double it */
+.ben-empty > .py-5 { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+/* a ghost should drift a little; nothing more */
+@keyframes ben-empty-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ben-empty__mark { animation: none; }
+}

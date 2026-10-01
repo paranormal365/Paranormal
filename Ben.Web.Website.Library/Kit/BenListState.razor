@@ -63,18 +63,28 @@ else if (Result.Failed)
 }
 else if (Result.IsEmpty)
 {
-    @if (Empty is not null)
-    {
-        @Empty
-    }
-    else
-    {
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <h6 class="mb-0">@(EmptyText ?? "Nothing here yet")</h6>
-            </div>
-        </div>
-    }
+    @*
+        Every list's empty state passes through here — 116 screens — so this is where they all got
+        their picture (Signal, 2026-10-01: "it feels empty without images and styling"). One frame
+        and one mark around whatever the page wrote, rather than thirty hand-styled
+        `text-center py-5` blocks restyled one at a time.
+
+        The mark, not a photograph: it is the brand, it is already in every visitor's cache from
+        the header, and a photograph behind a sentence on 116 screens would be heavy and loud
+        where the job is to be calm. A page's own words still lead — `Empty` is rendered as-is
+        inside the frame, and `EmptyText` is the fallback it always was.
+    *@
+    <div class="ben-empty" data-testid="list-empty">
+        <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
+        @if (Empty is not null)
+        {
+            @Empty
+        }
+        else
+        {
+            <h6 class="ben-empty__title mb-0">@(EmptyText ?? "Nothing here yet")</h6>
+        }
+    </div>
 }
 else
 {
