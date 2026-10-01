@@ -85,8 +85,13 @@ public class HomePageTests : BenTestBase
             return await shown.GetAttributeAsync("src");
         }
 
-        Assert.That(await ShownLogoAsync("dark"), Is.EqualTo("/static/images/logo-glass-gray.png"));
-        Assert.That(await ShownLogoAsync("light"), Is.EqualTo("/static/images/logo-glass-white.png"));
+        // Signal (2026-10-01): ONE picture, the vector, in both themes. It used to be two rasters
+        // with the glow baked in — one blended to white, one to #363c41 — each tied to a palette,
+        // and the halo showed as a grey box the moment the skin changed. The glow is now CSS cast
+        // off the accent token. This asserts that contract rather than merely relaxing the old
+        // one: the same vector must show, and load, under each theme.
+        Assert.That(await ShownLogoAsync("dark"),  Is.EqualTo("/static/images/is-haunted-logo.svg"));
+        Assert.That(await ShownLogoAsync("light"), Is.EqualTo("/static/images/is-haunted-logo.svg"));
     }
 
     [Test]

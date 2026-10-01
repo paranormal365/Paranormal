@@ -476,3 +476,15 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 @media (max-width: 991.98px) {
     .app-rail { display: none; }   /* the drawer carries the whole menu on a phone */
 }
+
+/* a group inside the rail — Administration's Users, Cases, Billing — is a heading over its pages */
+.app-rail__group { margin-top: .6rem; }
+.app-rail__group:first-child { margin-top: 0; }
+.app-rail__group-title {
+    display: block;
+    padding: .35rem .55rem .2rem;
+    font-size: .74rem;
+    font-weight: 700;
+    color: var(--ben-ink);
+}
+.app-rail__sublist { list-style: none; margin: 0; padding: 0 0 0 .35rem; }

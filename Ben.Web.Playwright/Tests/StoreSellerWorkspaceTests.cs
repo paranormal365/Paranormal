@@ -29,7 +29,10 @@ public class StoreSellerWorkspaceTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/");
         await WaitForTheCircuitAsync();
 
-        await Expect(Page.Locator("#nav-menu").GetByText("Selling", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // The menu on a wide screen is the top bar (#top-menu) since Signal; #nav-menu is the
+        // phone drawer, hidden here. Two elements had the same id for one build, which is how this
+        // assertion first failed — "Selling" resolved twice.
+        await Expect(Page.Locator("#top-menu").GetByText("Selling", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await Page.GotoAsync($"{BaseUrl}/store/selling");
         await WaitForTheCircuitAsync();
 

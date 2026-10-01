@@ -33,13 +33,13 @@ public class SidebarOrgSwapTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 45_000 });
 
         // The sidebar's your-groups link to another group (item 159's list).
-        var npsLink = Page.Locator("#nav-menu a", new() { HasTextString = "Nashville Paranormal Society" }).First;
+        var npsLink = Page.Locator("#top-menu a", new() { HasTextString = "Nashville Paranormal Society" }).First;
         await Expect(npsLink).ToBeVisibleAsync(new() { Timeout = 45_000 });
         await ClickUntilAsync(npsLink,
             Main.Locator("dd", new() { HasTextString = "Nashville Paranormal Society" }));
 
         // …and back again, because the second swap is the one the stale instance breaks.
-        var tghLink = Page.Locator("#nav-menu a", new() { HasTextString = "Paranormal365" }).First;
+        var tghLink = Page.Locator("#top-menu a", new() { HasTextString = "Paranormal365" }).First;
         await ClickUntilAsync(tghLink,
             Main.Locator("dd", new() { HasTextString = "Paranormal365" }));
     }

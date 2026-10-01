@@ -1064,6 +1064,36 @@ public abstract class BenTestBase : PageTest
     /// </remarks>
     protected async Task<ILocator> FindSidebarLinkAsync(string name)
     {
+        // ── Signal (2026-10-01): the menu is a top bar plus a rail ─────────────────────────
+        // On a wide screen the sidebar is hidden and the menu is two things: the bar, which picks
+        // a SECTION, and the rail beside the page, which lists what is inside the section you are
+        // in. So an entry is found the way a person now finds it — already on screen, or by
+        // stepping into each section in turn and reading its rail. The filtered-sidebar path
+        // below is kept for narrow windows, where the drawer is still the whole menu.
+        var topnav = Page.Locator(".app-topnav");
+        if (await topnav.IsVisibleAsync())
+        {
+            var onScreen = Page.Locator(".app-topnav, .app-rail").GetByRole(AriaRole.Link, new() { Name = name });
+            if (await onScreen.CountAsync() > 0 && await onScreen.First.IsVisibleAsync())
+                return onScreen.First;
+
+            var sections = await topnav.Locator("a.topnav-link").EvaluateAllAsync<string[]>(
+                "els => els.map(e => e.getAttribute('href')).filter(h => h && h !== '#')");
+            foreach (var href in sections.Distinct())
+            {
+                await Page.GotoAsync($"{BaseUrl}{href}");
+                var inRail = Page.Locator(".app-rail").GetByRole(AriaRole.Link, new() { Name = name });
+                try
+                {
+                    await Expect(inRail.First).ToBeVisibleAsync(new() { Timeout = 4_000 });
+                    return inRail.First;
+                }
+                catch (Exception) { /* not in this section; try the next */ }
+            }
+            // Fall through: the caller's Expect reports it with the caller's own context.
+            return onScreen.First;
+        }
+
         var filter = Page.Locator(".app-menu-filter-container #searchInput");
         var link = Page.Locator(".primary-nav").GetByRole(AriaRole.Link, new() { Name = name });
 
@@ -1095,7 +1125,7 @@ public abstract class BenTestBase : PageTest
         // Leave the menu the way it was found — a filtered sidebar would quietly change what
         // every later assertion in the same test can and cannot see.
         var filter = Page.Locator(".app-menu-filter-container #searchInput");
-        if (await filter.CountAsync() > 0) await filter.FillAsync(string.Empty);
+        if (await filter.CountAsync() > 0 && await filter.IsVisibleAsync()) await filter.FillAsync(string.Empty);
     }
 
     /// <summary>
@@ -1374,7 +1404,17 @@ public abstract class BenTestBase : PageTest
     /// too, where it simply narrows to the same region.
     /// </para>
     /// </summary>
-    protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
+    // .content-wrapper FIRST, and alone where it exists. Under Signal (2026-10-01) the section
+    // rail sits inside <main>, beside the page — so the old `.app-content, main, …` resolved to an
+    // element that CONTAINS the menu, and a test asking the page for a link named "View" found the
+    // rail's "Media Review" instead. Historically Main meant the page and never the menu, because
+    // the sidebar lived outside <main>; this restores exactly that.
+    //
+    // Alone, not in a list: `.Or(main).First` takes whichever comes first in the DOM, and <main>
+    // precedes .content-wrapper — so the list form returns the element that contains the rail.
+    // Every page renders under MainLayout, which owns the outer .content-wrapper, so it always
+    // exists; the first one in the DOM is that outer one even on pages that nest another.
+    protected ILocator Main => Page.Locator(".content-wrapper").First;
 
     /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
     /// <summary>Anything on the page that means "not finished yet".</summary>

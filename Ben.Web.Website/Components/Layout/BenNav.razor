@@ -37,7 +37,7 @@
 *@
 @if (TopBar)
 {
-    <nav class="app-topnav" id="nav-menu">
+    <nav class="app-topnav" id="top-menu">
         @{ _activeUrl = MostSpecificMatch(); }
         <ul class="topnav-list">
             @foreach (var section in BarSections)
@@ -80,18 +80,25 @@ else if (Contextual)
             <ul class="app-rail__list">
                 @foreach (var child in current.Children)
                 {
-                    <li class="@(IsActive(child) ? "active" : null)">
-                        <a href="@child.Url" title="@child.Text">
-                            <BenIcon Name="@child.Icon" />
-                            <span>@child.Text</span>
-                            @if (child.Count > 0)
-                            {
-                                <span class="badge @NotificationBadge.CssClass(child.Urgency)"
-                                      title="@($"{child.Count} {child.BadgeNoun}")"
-                                      aria-label="@($"{child.Count} {child.BadgeNoun}")">@NotificationBadge.Text(child.Count)</span>
-                            }
-                        </a>
-                    </li>
+                    @* A child that is itself a group — Administration's Users, Cases, Billing… — is
+                       a HEADING over its own pages, not a link: it has no address of its own, and
+                       rendering it as one left a dead link over a list that was never shown. *@
+                    @if (child.Children.Count > 0)
+                    {
+                        <li class="app-rail__group">
+                            <span class="app-rail__group-title">@child.Text</span>
+                            <ul class="app-rail__sublist">
+                                @foreach (var leaf in child.Children)
+                                {
+                                    @RailLink(leaf)
+                                }
+                            </ul>
+                        </li>
+                    }
+                    else
+                    {
+                        @RailLink(child)
+                    }
                 }
             </ul>
         </aside>
@@ -138,18 +145,9 @@ else
         }
     </nav>
 
-    @if (IsImpersonating)
-    {
-        <div class="impersonation-banner p-2">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <BenIcon Name="user" />
-                <span class="text-truncate">Viewing as <strong>@TokenStore.UserEmail</strong></span>
-            </div>
-            <button type="button" class="btn btn-warning btn-sm w-100" @onclick="ReturnToSuperAdmin">
-                Return to SuperAdmin
-            </button>
-        </div>
-    }
+    @* The impersonation banner is drawn once, by the top bar, which is rendered at every width.
+       A second copy here doubled "Viewing as …" on the page — hidden, but still there, and found
+       twice by anything that reads the text. *@
 </aside>
 
 @* The template's own backdrop, from _Sidebar.cshtml. It does two jobs on small screens: dims the
@@ -208,18 +206,51 @@ else
         }
     }
 
-    /// <summary>Where picking a section on the bar goes: its own url, or its first child's.</summary>
+    /// <summary>
+    /// Where picking a section on the bar goes: its own address, or the first real address
+    /// anywhere beneath it. Depth-first, because Administration's first child is a GROUP with no
+    /// address of its own — taking only the first child's address sent the bar to "".
+    /// </summary>
     private string LandingUrl(NavItem section)
-        => !string.IsNullOrEmpty(section.Url) && section.Url != "#"
-            ? section.Url
-            : section.Children.FirstOrDefault()?.Url ?? "/";
+        => FirstAddress(section) ?? "/";
+
+    private static string? FirstAddress(NavItem item)
+    {
+        if (!string.IsNullOrEmpty(item.Url) && item.Url != "#") return item.Url;
+        foreach (var child in item.Children)
+            if (FirstAddress(child) is { } url) return url;
+        return null;
+    }
 
     /// <summary>The section the current address belongs to, if any.</summary>
     private NavItem? CurrentSection
         => BarSections.FirstOrDefault(IsCurrentSection);
 
+    /// <summary>
+    /// Whether the address is this section or anywhere beneath it. Recursive: an Administration
+    /// page is a GRANDCHILD (Administration → Users → Manage Users), so checking only direct
+    /// children left every admin page with no current section — no underline on the bar and no
+    /// rail at all. ContainsActive, further down, already walked the whole tree for the sidebar's
+    /// expand-on-load; it is reused rather than written twice.
+    /// </summary>
     private bool IsCurrentSection(NavItem section)
-        => IsActive(section) || section.Children.Any(IsActive);
+        => (!string.IsNullOrEmpty(section.Url) && IsActive(section)) || ContainsActive(section);
+
+    private RenderFragment RailLink(NavItem item) => __builder =>
+    {
+        <li class="@(IsActive(item) ? "active" : null)">
+            <a href="@item.Url" title="@item.Text">
+                <BenIcon Name="@item.Icon" />
+                <span>@item.Text</span>
+                @if (item.Count > 0)
+                {
+                    <span class="badge @NotificationBadge.CssClass(item.Urgency)"
+                          title="@($"{item.Count} {item.BadgeNoun}")"
+                          aria-label="@($"{item.Count} {item.BadgeNoun}")">@NotificationBadge.Text(item.Count)</span>
+                }
+            </a>
+        </li>
+    };
 
     private string _filter = string.Empty;
     private readonly HashSet<string> _openGroups = new();
