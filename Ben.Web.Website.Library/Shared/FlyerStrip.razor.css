@@ -1,0 +1,48 @@
+/* 64-pixel thumbnails with room between them, as asked for. The image is drawn at 128 pixels and
+   displayed at 64, because a 64-pixel image on a retina screen is visibly soft. */
+
+#flyer-strip {
+    /* gap rather than margins: the last row wraps without leaving a hanging edge */
+    gap: 1.25rem 1.5rem;
+}
+
+.flyer {
+    display: block;
+    width: 5.5rem;             /* wider than the 64px sheet so two-word audiences sit under it */
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+}
+
+.flyer img {
+    display: block;
+    margin: 0 auto;
+    border-radius: 3px;
+    /* a sheet of paper, so it needs an edge of its own against a card that is also pale */
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .35), 0 0 0 1px rgba(128, 128, 128, .45);
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.flyer:hover img,
+.flyer:focus-visible img {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .45), 0 0 0 1px rgba(128, 128, 128, .6);
+}
+
+.flyer .who {
+    display: block;
+    margin-top: .45rem;
+    font-size: .74rem;
+    line-height: 1.22;
+}
+
+.flyer:hover .who,
+.flyer:focus-visible .who {
+    text-decoration: underline;
+}
+
+.flyer:focus-visible {
+    outline: 2px solid var(--bs-primary, #0d6efd);
+    outline-offset: 4px;
+    border-radius: 4px;
+}
