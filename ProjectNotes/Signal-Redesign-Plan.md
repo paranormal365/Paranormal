@@ -88,11 +88,17 @@ that use each one.
 Ben likes the purple there, and Signal's accent **is** violet, so admin and the public site
 converge rather than diverge. Dashboards, grids, the settings pages, the logs.
 
-### Phase 5 — The canvas and video editors (L)
-77 stylesheets. Their chrome takes the tokens; their canvases stay neutral, because a drawing
-surface that tints with the theme lies about what is on it. **These are vendored**
-(`Ben.Canvas.VENDORED.md`, `Ben.Video.VENDORED.md`), so changes must be written to survive a
-re-vendor — tokens in an overlay file of ours rather than edits scattered through theirs.
+### Phase 5 — The canvas and video editors — DONE 2026-10-01
+
+**Correction to the first version of this plan**, which said editor changes "must be written to
+survive a re-vendor". They need not: both `Ben.Video.VENDORED.md` and `Ben.Canvas.VENDORED.md` say
+the copies diverge on purpose and work happens here, with no upstream merge. Editing them directly
+is fine.
+
+Done as a consolidation rather than a restyle. The skin split into `signal-tokens.css` (values
+only) and `signal.css` (the website's use of them); both editor hosts load byte-for-byte copies of
+the tokens and of `telerik-signal.css`, replacing their hand-copied Night palettes and the canvas
+host's older Telerik bridge. `SignalCopiesStayInStepTests` fails the build if a copy drifts.
 
 ### Phase 6 — Everything written and printed (M, mostly machine time)
 - **210 help screenshots and recordings** recaptured through the existing harness
