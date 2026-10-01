@@ -29,20 +29,18 @@ else if (_case is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-4" style="max-width:960px; margin:0 auto;">
+    <div class="home-band">
 
         @* The group's own band and pills, as everywhere else under /o/. The case's reference is
            the eyebrow above its title, so a reader knows which case they are on without a third
            breadcrumb button that goes nowhere. *@
-        <OrgPublicBanner Name="@_case.OrgName" UrlName="@UrlName"
+        <OrgPublicBanner Facts="@Summary" Name="@_case.OrgName" UrlName="@UrlName"
                          PageTitle="@_case.Title"
-                         LogoUrl="@_logoUrl" Class="mb-3" />
+                         LogoUrl="@_logoUrl">
+            <Nav><OrgPublicNav OrgUrlName="@UrlName" NavPages="@_navPages" Active="cases" /></Nav>
+        </OrgPublicBanner>
 
-        <OrgPublicNav OrgUrlName="@UrlName" NavPages="@_navPages" Active="cases" Class="mb-4" />
-
-        @* The facts of the case, in the rail every other public page states a figure in. *@
-        <BenFactRail Facts="@Summary" Class="mb-4" />
-
+        @* The facts of the case are in the hero's tiles (Summary). *@
         @* The traversal a stranger would naturally make — read this case, then see every group's
            work at the same location — was missing in exactly the direction that serves them
            (2026-09-17 audit). The server sends a place only for a PUBLIC location, so this can

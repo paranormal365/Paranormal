@@ -21,16 +21,17 @@ namespace Ben.Web.Website.Services;
 /// <para><b>Name and colours are not literals.</b> <see cref="SiteIdentity"/> exists because the
 /// domain is not settled, and a name baked into a manifest is exactly the kind of thing that gets
 /// missed on a rename — it is read by an installer, not by a page, so nobody sees it go stale. The
-/// background matches the Night theme's <c>--bs-body-bg</c>; a mismatch shows as a flash of the
-/// wrong colour on every launch.</para>
+/// background matches the Signal skin's dark page colour (<c>--ben-bg</c> in signal-tokens.css,
+/// which feeds <c>--bs-body-bg</c>); a mismatch shows as a flash of the wrong colour on every
+/// launch. It was Night's #212529 until Signal replaced that theme (2026-10-01).</para>
 /// </remarks>
 public static class WebAppManifest
 {
-    /// <summary>The Night theme's body background. Kept in step with night.min.css by a test.</summary>
-    public const string BackgroundColor = "#212529";
+    /// <summary>Signal's dark page colour. Kept in step with signal-tokens.css by a test.</summary>
+    public const string BackgroundColor = "#0C1017";
 
     /// <summary>What the browser paints its own chrome with while the site is open.</summary>
-    public const string ThemeColor = "#212529";
+    public const string ThemeColor = "#0C1017";
 
     public static ManifestDocument For(SiteIdentity site) =>
         new(

@@ -76,8 +76,8 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        // Telerik TabStrip renders tab items
-        var detailsTab = Page.GetByText("Details", new() { Exact = false });
+        // The group's sections: tabs on a phone, the rail's group menu where it shows (Signal).
+        var detailsTab = OrgTab("Details");
         await Expect(detailsTab).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -95,7 +95,7 @@ public class OrganizationTests : BenTestBase
         // label the moment the Details tab gained one, and Playwright's strict mode
         // failed on the ambiguity rather than picking the wrong one — which is the good
         // outcome, but the locator was always too vague to mean "the tab".
-        var membersTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Members" });
+        var membersTab = OrgTab("Members");
         await Expect(membersTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await membersTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -114,7 +114,7 @@ public class OrganizationTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
+        var casesTab = OrgTab("Cases");
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

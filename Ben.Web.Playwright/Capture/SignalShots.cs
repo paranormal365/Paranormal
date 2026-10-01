@@ -40,10 +40,30 @@ public class SignalShots : BenTestBase
         ("styleguide",      "/styleguide"),
     ];
 
-    /// <summary>Administration is SuperAdmin-only, so it is photographed as the SuperAdmin.</summary>
+    /// <summary>Administration is SuperAdmin-only, so it is photographed as the SuperAdmin. The
+    /// second is inside a group of the menu, so the rail shows that group with the way back.</summary>
     private static readonly (string Slug, string Url)[] AdminScreens =
     [
         ("admin-users",     "/admin/users"),
+        ("admin-dashboard", "/admin/dashboard"),
+        ("admin-system-drilled", "/admin/email-templates"),
+    ];
+
+    /// <summary>Phase 2's public pages, as a visitor sees them (one screen each).</summary>
+    private static readonly (string Slug, string Url)[] PublicScreens =
+    [
+        ("public-find",         "/find"),
+        ("public-events",       "/events"),
+        ("public-group",        "/o/paranormal365"),
+        ("public-group-cases",  "/o/paranormal365/cases"),
+        ("public-event",        "/o/paranormal365/events/2026-10-15-bell-witch-cave-public-night-walk"),
+        ("public-feed",         "/feed"),
+        ("public-publications", "/publications"),
+        ("public-pricing",      "/pricing"),
+        ("public-help",         "/help"),
+        ("public-catalog",      "/equipment-catalog"),
+        ("public-place",        "/places/40000001-0000-0000-0000-000000000001"),
+        ("public-store",        "/store"),
     ];
 
     [Test]
@@ -53,7 +73,9 @@ public class SignalShots : BenTestBase
         Directory.CreateDirectory(root);
 
         await ShootVisitorAsync(root);                                       // nobody signed in
+        await ShootPublicAsync(root);
         await ShootAsync(root, UserEmail, UserPassword, Screens);            // Sarah
+        await ShootGroupRailAsync(root);                                     // Sarah, inside her group
         await ShootAsync(root, SuperAdminEmail, SuperAdminPassword, AdminScreens);
     }
 
@@ -80,6 +102,53 @@ public class SignalShots : BenTestBase
                 ".app-wrap{height:auto!important} .app-body,.app-content{overflow:visible!important;height:auto!important}" });
             await Page.WaitForTimeoutAsync(300);
             await Page.ScreenshotAsync(new() { Path = Path.Combine(root, $"home-visitor-{theme}.png"), FullPage = true });
+        }
+    }
+
+    /// <summary>The public pages, signed out, one screen each.</summary>
+    private async Task ShootPublicAsync(string root)
+    {
+        await Context.ClearCookiesAsync();
+        foreach (var theme in new[] { "dark", "light" })
+        {
+            await Page.GotoAsync(BaseUrl);
+            await Page.EvaluateAsync(
+                "t => { try { localStorage.setItem('layoutSettings', JSON.stringify({ theme: t })); " +
+                "localStorage.setItem('ben-theme', t); } catch (e) { } }", theme);
+            foreach (var (slug, url) in PublicScreens)
+            {
+                await Page.GotoAsync($"{BaseUrl}{url}");
+                await Expect(Page.Locator(".app-topnav")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await Page.WaitForTimeoutAsync(1500);
+                await Page.ScreenshotAsync(new() { Path = Path.Combine(root, $"{slug}-{theme}.png") });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sarah's first group, from the inside: the rail is the group's menu (Ben, 2026-10-01: "the
+    /// menu becomes the menu for that page with a back button at the top"). Run straight after
+    /// <see cref="ShootAsync"/>, so she is still signed in.
+    /// </summary>
+    private async Task ShootGroupRailAsync(string root)
+    {
+        await Page.GotoAsync($"{BaseUrl}/organizations");
+        var href = await Page.Locator(".content-wrapper a[href^='/organizations/']").EvaluateAllAsync<string[]>(
+            "els => els.map(e => e.getAttribute('href')).filter(h => /^\\/organizations\\/[0-9a-f-]{36}$/.test(h))");
+        if (href.Length == 0) { TestContext.Out.WriteLine("no group to photograph"); return; }
+
+        foreach (var theme in new[] { "dark", "light" })
+        {
+            await Page.EvaluateAsync(
+                "t => { try { localStorage.setItem('layoutSettings', JSON.stringify({ theme: t })); " +
+                "localStorage.setItem('ben-theme', t); } catch (e) { } }", theme);
+            foreach (var (slug, tab) in new[] { ("group-rail", "details"), ("group-rail-members", "members") })
+            {
+                await Page.GotoAsync($"{BaseUrl}{href[0]}?tab={tab}");
+                await Expect(Page.Locator("[data-testid=rail-context]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await Page.WaitForTimeoutAsync(1500);
+                await Page.ScreenshotAsync(new() { Path = Path.Combine(root, $"{slug}-{theme}.png") });
+            }
         }
     }
 

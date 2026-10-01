@@ -6,60 +6,68 @@
 
 <PageTitle>Find a Group — IsHaunted</PageTitle>
 
-<div class="container-fluid px-3 py-4" style="max-width:860px; margin:0 auto;">
+@*
+    Signal phase 2 (2026-10-01): the search is IN the hero, over the photograph, because it is the
+    one thing most people come here to do — it used to sit under the section band and a second
+    plain heading that said the same thing. Everything that works is unchanged.
+*@
+<PageHero Photo="v1-venue-exterior" TestId="find-hero"
+          Kicker="Find a group"
+          Title="Investigators near you."
+          Lede="Groups that take on cases like yours. Search where you are, or browse every one below."
+          Facts="@HeroFacts">
+    <div class="find-search">
+        <label class="visually-hidden" for="orgdiscovery-your-location-3e6b">Your Location</label>
+        <input id="orgdiscovery-your-location-3e6b" type="search" class="form-control"
+               placeholder="Enter city, address, or zip code"
+               @bind="_query" @bind:event="oninput" @onkeydown="OnQueryKeyDown" />
+        <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@(!(!_searching && !string.IsNullOrWhiteSpace(_query)))">
+            @(_searching ? "Searching…" : "Search")
+        </button>
+    </div>
+    @if (_searched)
+    {
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-light" @onclick="ClearSearchAsync" disabled="@(!(!_searching))">Show all groups</button>
+        </div>
+    }
+    @if (_geocodeError is not null)
+    {
+        <div class="alert alert-warning mb-0">@_geocodeError</div>
+    }
+</PageHero>
 
-    <h1 class="mb-1">Find a Paranormal Investigation Group</h1>
-    <p class="text-secondary mb-4">
-        Enter your location to find groups accepting cases near you, or browse every group below.
-    </p>
+<div class="home-band" data-testid="org-discovery">
 
     @* Item 166 W3: the Featured groups slot — approved, rotating, marked Promoted. *@
     <Ben.Web.Website.Library.Shared.PromotedGroupsCard />
 
-    @* ── Search form ──────────────────────────────────────────────────────── *@
-    <div class="row g-2 mb-4 align-items-end">
-        <div class="col-12 col-md-7">
-            <label class="form-label" for="orgdiscovery-your-location-3e6b">Your Location</label>
-            <input id="orgdiscovery-your-location-3e6b" type="text" class="form-control" placeholder="Enter city, address, or zip code" @bind="_query" @bind:event="oninput" />
-        </div>
-        <div class="col-auto">
-            <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@(!(!_searching && !string.IsNullOrWhiteSpace(_query)))">
-                @(_searching ? "Searching…" : "Search")
-            </button>
-        </div>
-        @if (_searched)
-        {
-            <div class="col-auto">
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="ClearSearchAsync" disabled="@(!(!_searching))">Show all groups</button>
-            </div>
-        }
-    </div>
-
-    @if (_geocodeError is not null)
-    {
-        <div class="alert alert-warning mb-3">@_geocodeError</div>
-    }
-
     @* ── Proximity results ────────────────────────────────────────────────── *@
     @if (_searched && _results.Count == 0)
     {
-        <div class="alert alert-light text-muted text-center py-4">
-            No organizations accepting cases were found near <strong>@_searchedQuery</strong>.
-            <br /><span class="small">Try a nearby city, or browse the full list below.</span>
+        <div class="ben-empty mt-2">
+            <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
+            <div class="ben-empty__title">Nobody near @_searchedQuery yet</div>
+            <p class="ben-empty__text">No groups taking cases were found there. Try a nearby city, or show every group.</p>
+            <div class="ben-empty__actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearSearchAsync">Show every group</button>
+                <a class="btn btn-outline-secondary" href="/my-requests/new">Request an investigation anyway</a>
+            </div>
         </div>
     }
 
     @if (_withinRange.Count > 0)
     {
-        <div class="d-flex align-items-baseline gap-2 mb-3">
-            <span class="text-secondary">Results near <strong>@_searchedQuery</strong></span>
-            <span class="badge bg-secondary">@_results.Count found</span>
+        <div class="ben-section-head ben-section-head--row">
+            <div>
+                <div class="ben-kicker">@_results.Count found near @_searchedQuery</div>
+                <h2 class="ben-section-title">Within Operating Range</h2>
+            </div>
         </div>
-        <h5 class="text-success mb-2">Within Operating Range</h5>
         <div class="row g-3 mb-4">
             @foreach (var org in _withinRange)
             {
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-md-6 col-xl-4">
                     <OrgCard Name="@org.Name" UrlName="@org.UrlName"
                              AreaLabel="@org.DisplayLabel" LogoFileId="@org.ActiveLogoFileId">
                         <MetaLine>
@@ -84,16 +92,16 @@
     {
         @if (_withinRange.Count == 0 && _searched)
         {
-            <div class="d-flex align-items-baseline gap-2 mb-3">
-                <span class="text-secondary">Results near <strong>@_searchedQuery</strong></span>
-                <span class="badge bg-secondary">@_results.Count found</span>
-            </div>
+            <div class="ben-kicker mt-4">@_results.Count found near @_searchedQuery</div>
         }
-        <h5 class="text-secondary mb-2">Outside Normal Range (still accepting)</h5>
+        <div class="ben-section-head">
+            <h2 class="ben-section-title">Outside Normal Range</h2>
+            <p class="ben-section-lede">Further than these groups usually travel — but still taking cases.</p>
+        </div>
         <div class="row g-3 mb-4">
             @foreach (var org in _outsideRange)
             {
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-md-6 col-xl-4">
                     <OrgCard Name="@org.Name" UrlName="@org.UrlName"
                              AreaLabel="@org.DisplayLabel" LogoFileId="@org.ActiveLogoFileId">
                         <MetaLine>
@@ -121,8 +129,6 @@
     *@
     @if (!_searched)
     {
-        <hr class="my-4" />
-
         @if (_browsing && _browse is null)
         {
             <BenLoaderOverlay Visible="true" Text="Loading groups…" />
@@ -136,30 +142,36 @@
             @* An empty FILTER is not an empty site. "No groups have registered yet" is a lie
                when 21 have and none of them run tours, and it sends the reader away thinking
                there is nothing here at all. *@
-            <div class="alert alert-light text-muted text-center py-4">
+            <div class="ben-empty">
+                <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
                 @if (_toursOnly)
                 {
-                    <text>No groups are listed as running walking tours yet.</text>
-                    <div class="mt-2">
+                    <div class="ben-empty__title">No groups are listed as running walking tours yet.</div>
+                    <div class="ben-empty__actions">
                         <button type="button" class="btn btn-sm btn-outline-secondary"
                                 @onclick="@(() => SetToursOnlyAsync(false))">See every group</button>
                     </div>
                 }
                 else
                 {
-                    <text>No groups have registered yet.</text>
+                    <div class="ben-empty__title">No groups have registered yet.</div>
+                    <div class="ben-empty__actions">
+                        <a class="btn btn-sm btn-primary" href="/organizations/new">Start the first one</a>
+                    </div>
                 }
             </div>
         }
         else
         {
-            <div class="d-flex align-items-baseline gap-2 mb-3 flex-wrap">
-                <h5 class="mb-0">@(_toursOnly ? "Walking Tours" : "All Groups")</h5>
-                <span class="badge bg-secondary">@_browse.TotalCount total</span>
+            <div class="ben-section-head ben-section-head--row">
+                <div>
+                    <div class="ben-kicker">@_browse.TotalCount @(_browse.TotalCount == 1 ? "group" : "groups") listed</div>
+                    <h2 class="ben-section-title">@(_toursOnly ? "Walking Tours" : "All Groups")</h2>
+                </div>
                 @* Somebody visiting a strange city wants tours, not a list to sift
                    (2026-08-24). Matches the CAPABILITY, so an investigation group that also
                    runs tours is in here too. *@
-                <div class="ms-auto btn-group btn-group-sm" role="group" aria-label="Filter groups">
+                <div class="btn-group" role="group" aria-label="Filter groups">
                     <button type="button" class="btn @(_toursOnly ? "btn-outline-secondary" : "btn-secondary")"
                             @onclick="@(() => SetToursOnlyAsync(false))" disabled="@_browsing">
                         Everyone
@@ -175,7 +187,7 @@
             <div class="row g-3">
                 @foreach (var org in _browse.Items)
                 {
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-6 col-xl-4">
                         <OrgCard Name="@org.Name" UrlName="@org.UrlName"
                                  AreaLabel="@org.AreaLabel" LogoFileId="@org.ActiveLogoFileId">
                             <MetaLine>
@@ -246,6 +258,18 @@
         : (int)Math.Ceiling(_browse.TotalCount / (double)_browse.PageSize);
 
     protected override async Task OnInitializedAsync() => await LoadBrowseAsync(1);
+
+    /// <summary>How many groups the site lists, once the list has loaded — never a typed number.</summary>
+    private IReadOnlyList<Ben.Web.Website.Library.Kit.BenFactItem>? HeroFacts =>
+        _browse is { TotalCount: > 0 } b && !_toursOnly
+            ? [new("Groups", b.TotalCount.ToString(), "listed here", Emphasis: true)]
+            : null;
+
+    // Enter searches, as it does on the home page's box.
+    private async Task OnQueryKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await SearchAsync();
+    }
 
     /// <summary>Narrowed to groups running public walking tours.</summary>
     private bool _toursOnly;

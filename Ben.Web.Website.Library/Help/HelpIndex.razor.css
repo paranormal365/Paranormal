@@ -1,0 +1,104 @@
+/* The help index (Signal). Sections fold; each guide is a tile. Tokens only. */
+
+.help-find { width: 100%; max-width: 34rem; }
+
+.help-group {
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    background: var(--ben-surface);
+    box-shadow: var(--ben-shadow);
+    overflow: hidden;
+}
+
+.help-group__head {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    list-style: none;
+}
+.help-group__head::-webkit-details-marker { display: none; }
+
+/* a chevron that turns as the section opens */
+.help-group__head::after {
+    content: "";
+    margin-left: auto;
+    width: .55rem;
+    height: .55rem;
+    border-right: 2px solid var(--ben-ink-muted);
+    border-bottom: 2px solid var(--ben-ink-muted);
+    transform: rotate(-45deg);
+    transition: transform .16s ease;
+}
+.help-group[open] > .help-group__head::after { transform: rotate(45deg); }
+
+.help-group__name { font-size: 1.15rem; font-weight: 700; letter-spacing: -.01em; }
+
+.help-group__count {
+    padding: .1rem .55rem;
+    border-radius: 999px;
+    background: rgba(var(--ben-accent-rgb), .12);
+    color: var(--ben-accent);
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.help-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: .75rem;
+}
+.help-group .help-tiles { padding: 0 1.25rem 1.25rem; }
+
+.help-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: .9rem 1rem .9rem 1.15rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+    background: var(--ben-fill);
+    color: inherit;
+    text-decoration: none;
+    overflow: hidden;
+    transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+/* the accent down the left edge, brighter on hover */
+.help-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--ben-accent-grad);
+    opacity: .55;
+    transition: opacity .16s ease;
+}
+
+.help-tile:hover,
+.help-tile:focus-visible {
+    border-color: rgba(var(--ben-accent-rgb), .6);
+    transform: translateY(-2px);
+    box-shadow: var(--ben-shadow);
+    color: inherit;
+}
+.help-tile:hover::before { opacity: 1; }
+
+.help-tile__section {
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ben-accent);
+}
+
+.help-tile__title { font-weight: 700; line-height: 1.25; }
+.help-tile__summary { font-size: .86rem; color: var(--ben-ink-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+    .help-tile, .help-tile::before, .help-group__head::after { transition: none; }
+    .help-tile:hover, .help-tile:focus-visible { transform: none; }
+}

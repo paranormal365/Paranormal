@@ -1,0 +1,200 @@
+/* The top of a public page (Signal). Tokens only, so it follows the theme and the skin. */
+
+.page-hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    display: flex;
+    align-items: flex-end;
+    min-height: clamp(19rem, 44vh, 27rem);
+    margin: .25rem 0 2rem;
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow-lg);
+    background: #0a0d16;
+}
+
+/* the front door gets a little more of the photograph */
+.page-hero--tall { min-height: clamp(22rem, 52vh, 30rem); }
+.page-hero--compact { min-height: clamp(13rem, 30vh, 17rem); margin-bottom: 1.5rem; }
+
+.page-hero__photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-repeat: no-repeat;
+    animation: page-hero-in .7s ease both;
+}
+
+/* Text over a photograph is light in BOTH themes, behind a scrim; the accent wash at the foot
+   ties the picture to the skin. */
+.page-hero__photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(100deg, rgba(6, 10, 18, .9) 0%, rgba(6, 10, 18, .64) 45%, rgba(6, 10, 18, .18) 100%),
+        linear-gradient(0deg, rgba(var(--ben-accent-rgb), .32) 0%, transparent 62%);
+}
+
+/* No picture of its own: a plate in the subject's colour, lit from the upper right, with a faint
+   grain of candlelight so it reads as a place rather than a swatch. */
+.page-hero--plate .page-hero__photo {
+    background:
+        radial-gradient(circle at 82% 18%, hsl(var(--plate-hue) 70% 58% / .55), transparent 46%),
+        radial-gradient(circle at 12% 110%, rgba(var(--ben-accent-rgb), .45), transparent 52%),
+        linear-gradient(140deg, hsl(var(--plate-hue) 38% 20%) 0%, hsl(calc(var(--plate-hue) + 40deg) 34% 9%) 100%);
+}
+.page-hero--plate .page-hero__photo::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url('/static/images/signal/s1-candles.jpg') center 28% / cover no-repeat;
+    mix-blend-mode: luminosity;
+    opacity: .16;
+}
+.page-hero--plate .page-hero__photo::after {
+    background: linear-gradient(100deg, rgba(6, 10, 18, .55) 0%, rgba(6, 10, 18, .1) 70%);
+}
+
+.page-hero__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem 2rem;
+    width: 100%;
+    padding: 2.25rem 2.25rem 2rem;
+}
+
+.page-hero__copy { flex: 1 1 26rem; min-width: 0; max-width: 44rem; }
+
+.page-hero__lead { margin-bottom: 1rem; }
+.page-hero__lead ::deep a { color: rgba(255, 255, 255, .82); text-decoration: none; font-size: .88rem; }
+.page-hero__lead ::deep a:hover { color: #fff; }
+
+.page-hero__kicker {
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ben-accent-2);
+    margin-bottom: .45rem;
+}
+
+.page-hero__title {
+    color: #fff;
+    font-size: clamp(2rem, 4.4vw, 3.3rem);
+    line-height: 1.04;
+    letter-spacing: -.03em;
+    margin: 0 0 .7rem;
+    text-shadow: 0 3px 22px rgba(0, 0, 0, .45);
+    overflow-wrap: anywhere;
+}
+.page-hero--compact .page-hero__title { font-size: clamp(1.8rem, 3.6vw, 2.6rem); }
+
+.page-hero__lede {
+    color: rgba(255, 255, 255, .86);
+    font-size: 1.06rem;
+    line-height: 1.45;
+    max-width: 36rem;
+    margin: 0 0 1.25rem;
+}
+.page-hero__copy > :last-child { margin-bottom: 0; }
+
+.page-hero__actions { display: flex; flex-direction: column; gap: .75rem; }
+
+/* fields that sit on the photograph: glass wells rather than white boxes */
+.page-hero__actions ::deep .form-control,
+.page-hero__actions ::deep .form-select {
+    background-color: rgba(10, 14, 22, .55);
+    border-color: rgba(255, 255, 255, .30);
+    color: #fff;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.page-hero__actions ::deep .form-control::placeholder { color: rgba(255, 255, 255, .7); }
+.page-hero__actions ::deep .form-select option { color: initial; }
+
+/* secondary buttons and muted text on the photograph — the clock switch, "show all" — as glass,
+   since the theme's greys are drawn for a page, not for a night photograph */
+.page-hero__actions ::deep .btn-outline-secondary,
+.page-hero__actions ::deep .btn-outline-light {
+    color: #fff;
+    border-color: rgba(255, 255, 255, .45);
+    background: rgba(10, 14, 22, .35);
+}
+.page-hero__actions ::deep .btn-outline-secondary:hover,
+.page-hero__actions ::deep .btn-outline-light:hover { color: #fff; background: rgba(255, 255, 255, .16); }
+.page-hero__actions ::deep .btn-secondary { background: #fff; border-color: #fff; color: #10131c; }
+.page-hero__actions ::deep .text-secondary { color: rgba(255, 255, 255, .8) !important; }
+
+/* figures in glass tiles */
+.page-hero__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(7.5rem, 1fr));
+    gap: .6rem;
+    margin: 0;
+    flex: 0 1 auto;
+}
+.page-hero__fact {
+    padding: .7rem .9rem;
+    border-radius: var(--ben-radius);
+    background: rgba(10, 14, 22, .5);
+    border: 1px solid rgba(255, 255, 255, .16);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.page-hero__fact dt {
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .7);
+}
+.page-hero__fact dd {
+    margin: .15rem 0 0;
+    color: #fff;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.15;
+}
+.page-hero__fact dd a { color: inherit; text-decoration: none; }
+.page-hero__fact dd span {
+    display: block;
+    font-size: .76rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, .72);
+}
+.page-hero__fact--em { border-color: rgba(var(--ben-accent-rgb), .7); background: rgba(var(--ben-accent-rgb), .28); }
+
+.page-hero__aside { flex: 0 1 auto; }
+
+@keyframes page-hero-in {
+    from { opacity: 0; transform: scale(1.04); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-hero__photo { animation: none; }
+}
+
+/* A phone: the frame is the first screen, so it is spent on the title and the action. The figures
+   become one row of small tiles without their sub-lines — on What's On the 2×2 grid filled the
+   rest of an 812px screen and pushed the first night below it. */
+@media (max-width: 575.98px) {
+    .page-hero,
+    .page-hero--tall,
+    .page-hero--compact { min-height: 0; margin-bottom: 1.25rem; }
+    .page-hero__inner { padding: 1.5rem 1.1rem 1.2rem; gap: 1rem; }
+    .page-hero__lede { font-size: .98rem; margin-bottom: 1rem; }
+    .page-hero__facts {
+        width: 100%;
+        grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+        gap: .4rem;
+    }
+    .page-hero__fact { padding: .45rem .55rem; }
+    .page-hero__fact dt { font-size: .58rem; letter-spacing: .1em; }
+    .page-hero__fact dd { font-size: 1rem; }
+    .page-hero__fact dd span { display: none; }
+}

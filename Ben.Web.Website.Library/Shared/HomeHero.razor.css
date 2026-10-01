@@ -1,93 +1,11 @@
-/* The visitor's front door (Signal). Moved out of an inline <style> block, which was global, into
-   the component's own scoped sheet like the rest of Signal's components. Tokens only. */
-
-.home-hero {
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-    display: flex;
-    align-items: flex-end;
-    min-height: clamp(22rem, 52vh, 30rem);
-    margin: .25rem 0 2rem;
-    border-radius: var(--ben-radius-lg);
-    box-shadow: var(--ben-shadow-lg);
-}
-
-.home-hero__photo {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    /* the lit windows, which is the photograph's subject — see SectionBanner.Focal */
-    background: url('/static/images/signal/i3-walking-to-house.jpg') center 46% / cover no-repeat;
-    animation: home-hero-in .7s ease both;
-}
-
-/* Text over a photograph is light in BOTH themes, with a scrim behind the words — the rule the
-   light-mode mock-up taught, and the same treatment as the desk and the section banners. The
-   accent wash at the foot ties the picture to the skin. */
-.home-hero__photo::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-        linear-gradient(100deg, rgba(6, 10, 18, .88) 0%, rgba(6, 10, 18, .62) 42%, rgba(6, 10, 18, .12) 100%),
-        linear-gradient(0deg, rgba(var(--ben-accent-rgb), .32) 0%, transparent 60%);
-}
-
-.home-hero__inner { width: 100%; max-width: 40rem; padding: 2.5rem 2.25rem 2.25rem; }
-
-.home-hero__kicker {
-    font-size: .74rem;
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: var(--ben-accent-2);
-    margin-bottom: .5rem;
-}
-
-.home-hero__headline {
-    color: #fff;
-    font-size: clamp(2.2rem, 5vw, 3.6rem);
-    line-height: 1.02;
-    letter-spacing: -.03em;
-    margin: 0 0 .75rem;
-    text-shadow: 0 3px 22px rgba(0, 0, 0, .45);
-}
-
-.home-hero__tagline {
-    color: rgba(255, 255, 255, .86);
-    font-size: 1.08rem;
-    line-height: 1.45;
-    max-width: 34rem;
-    margin: 0 0 1.4rem;
-}
+/* The visitor's front door. The frame — photograph, scrim, title, glass fields — is PageHero's;
+   what is left here is the search row's own shape. */
 
 .home-hero__search-box { width: 100%; max-width: 34rem; }
 .home-hero__search-row { display: flex; gap: .5rem; }
 .home-hero__search-input { flex: 1; min-width: 0; }
-
-/* the field sits on a photograph: a glass well rather than a white box */
-.home-hero__search-input {
-    background: rgba(10, 14, 22, .55);
-    border-color: rgba(255, 255, 255, .30);
-    color: #fff;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-}
-.home-hero__search-input::placeholder { color: rgba(255, 255, 255, .70); }
-
-.home-hero__ctas { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
-
-@keyframes home-hero-in {
-    from { opacity: 0; transform: scale(1.04); }
-    to   { opacity: 1; transform: scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .home-hero__photo { animation: none; }
-}
+.home-hero__ctas { display: flex; flex-wrap: wrap; gap: .6rem; }
 
 @media (max-width: 575.98px) {
-    .home-hero__inner { padding: 1.75rem 1.25rem 1.5rem; }
     .home-hero__search-row { flex-direction: column; }
 }

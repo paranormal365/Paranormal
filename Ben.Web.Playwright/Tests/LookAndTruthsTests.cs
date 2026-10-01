@@ -106,9 +106,13 @@ public class LookAndTruthsTests : BenTestBase
         var marginTop = await Page.EvaluateAsync<string>(
             """
             (() => {
+                // The page's first frame: its hero (Signal phase 2) or, on pages without one, the
+                // container it used to open with.
                 const h1 = document.querySelector('h1');
-                const c  = h1.closest('div[class*="container"]');
-                return getComputedStyle(c).marginTop;
+                const c  = h1.closest('.page-hero') || h1.closest('div[class*="container"]');
+                const m  = getComputedStyle(c).marginTop;
+                // a hero sits a hair below the bar by design (.25rem); centring would be hundreds
+                return parseFloat(m) <= 4 ? "0px" : m;
             })()
             """);
 

@@ -17,21 +17,19 @@
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
+    <div class="home-band">
 
         @* The group's own band and pills, as on its home page and its CMS pages. This page used
            to carry a pair of outline buttons of its own, so a visitor who clicked Cases arrived
            somewhere that did not look like the site they had been reading. *@
-        <OrgPublicBanner Name="@(_orgName ?? UrlName)" UrlName="@UrlName"
+        <OrgPublicBanner Facts="@Summary" Name="@(_orgName ?? UrlName)" UrlName="@UrlName"
                          PageTitle="Investigations"
-                         LogoUrl="@_logoUrl" Class="mb-3" />
+                         LogoUrl="@_logoUrl">
+            <Nav><OrgPublicNav OrgUrlName="@UrlName" NavPages="@_navPages" Active="cases" /></Nav>
+        </OrgPublicBanner>
 
-        <OrgPublicNav OrgUrlName="@UrlName" NavPages="@_navPages" Active="cases" Class="mb-4" />
-
-        @* What has been published, before the cards. A group with two cases and a group with
-           forty look identical until somebody counts. *@
-        <BenFactRail Facts="@Summary" Class="mb-4" />
-
+        @* What has been published, before the cards — in the hero's tiles (Summary). A group with
+           two cases and a group with forty look identical until somebody counts. *@
         @* A visitor has no account, no logs and no second opinion: if this page says the group
            has published nothing, that is the only thing they will ever know. *@
         <BenListState TItem="PublicCaseListItem" Result="@_casesResult"

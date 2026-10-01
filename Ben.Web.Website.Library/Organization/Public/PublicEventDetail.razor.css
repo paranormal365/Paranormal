@@ -11,22 +11,15 @@
     the tour's own page so a guest reading one and then the other is told things the same way.
 */
 
-/* ── The banner ─────────────────────────────────────────────────────────────
-   A date plate against a wash in the tour's colour, or the host's when this is not a tour date —
-   so every event page has a character of its own without needing a photograph nobody uploaded. */
-.event-head {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.1rem 1.25rem;
-    border-radius: .65rem;
-    background:
-        radial-gradient(ellipse 60% 140% at 8% 50%, hsl(var(--plate-hue) 55% 42% / .26), transparent 62%),
-        linear-gradient(105deg,
-            hsl(var(--plate-hue) 34% 13%) 0%,
-            hsl(calc(var(--plate-hue) + 34deg) 30% 8%) 100%);
-    color: #fff;
-}
+/* ── Above the title, in the hero ───────────────────────────────────────────
+   The frame is PageHero's (a photograph from the host's gallery, or a plate in the tour's colour).
+   What is particular to this page: the ways back, the date plate, the tour line. The ground is dark
+   in both themes, so links take a fixed light colour rather than the theme's. */
+.event-head { display: flex; flex-direction: column; gap: .9rem; color: #fff; }
+
+.event-head__ways { display: flex; flex-wrap: wrap; gap: 1rem; }
+
+.event-head__row { display: flex; align-items: center; gap: 1rem; }
 
 .event-head__plate {
     display: flex;
@@ -34,10 +27,11 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 4.25rem;
-    padding: .45rem 0;
-    border-radius: .5rem;
-    background: rgba(255, 255, 255, .1);
+    width: 4.5rem;
+    padding: .5rem 0;
+    border-radius: var(--ben-radius);
+    background: var(--ben-accent-grad);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .35);
     line-height: 1.05;
 }
 
@@ -45,29 +39,26 @@
 .event-head__mon {
     font-size: .68rem;
     font-weight: 700;
-    letter-spacing: .08em;
+    letter-spacing: .1em;
     text-transform: uppercase;
-    opacity: .8;
+    color: rgba(255, 255, 255, .85);
 }
 
-.event-head__day {
-    font-size: 1.9rem;
+.event-head__day { font-size: 2rem; font-weight: 750; }
+
+.event-head__tour { font-size: 1rem; font-weight: 650; }
+
+.event-head__tour-kicker {
+    display: block;
+    font-size: .68rem;
     font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ben-accent-2);
 }
 
-.event-head__text {
-    min-width: 0;
-}
+.event-head__rating { font-weight: 500; color: rgba(255, 255, 255, .8); }
 
-.event-head__tour {
-    font-size: .8rem;
-    font-weight: 600;
-    letter-spacing: .02em;
-    opacity: .85;
-}
-
-/* The banner paints its own ground, so links in it take a fixed light colour rather than the
-   theme's: the ground is the same in both themes and the theme's link colour is not. */
 .event-head__tour a,
 .event-head__by a {
     color: #fff;
@@ -75,16 +66,7 @@
     text-underline-offset: .15em;
 }
 
-.event-head__title {
-    margin: .1rem 0 .15rem;
-    font-size: clamp(1.35rem, 3vw, 2rem);
-    line-height: 1.15;
-}
-
-.event-head__by {
-    font-size: .85rem;
-    opacity: .85;
-}
+.event-head__by { font-size: .95rem; color: rgba(255, 255, 255, .88); }
 
 /* ── The sign-up ──────────────────────────────────────────────────────────── */
 .event-act__ask {

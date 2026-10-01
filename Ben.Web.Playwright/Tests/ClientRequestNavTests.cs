@@ -213,7 +213,7 @@ public class ClientRequestNavTests : BenTestBase
         await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var requestsTab = Page.GetByText("Requests", new() { Exact = true });
+        var requestsTab = OrgTab("Requests");
         await Expect(requestsTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -228,7 +228,7 @@ public class ClientRequestNavTests : BenTestBase
                            .First;
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var requestsTab = Page.GetByText("Requests", new() { Exact = true });
+        var requestsTab = OrgTab("Requests");
         await Expect(requestsTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await requestsTab.ClickAsync();
         await WaitUntilLoadedAsync();

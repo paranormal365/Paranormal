@@ -23,7 +23,10 @@
     }
     else
     {
-    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+    @* The product's own pictures are this page's hero, so the store's photo band steps aside
+       (data-own-hero, signal.css) — on a phone it pushed Add to cart below the fold. *@
+    <OwnHero />
+    <div class="container-fluid px-3 py-3" style="max-width:80rem;" data-own-hero="true">
         <BenItemState TItem="StoreProductDetail" Result="_product" Loading="_loading" LoadingText="Loading the product…" OnRetry="LoadAsync">
             <ChildContent Context="p">
                 <SocialCard Title="@p.Name" Description="@p.ShortDescription" RelativeUrl="@($"/store/p/{p.Slug}")"

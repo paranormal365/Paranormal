@@ -5,7 +5,15 @@
 
 /** @returns {null | {top,left,width,height,cardTop,cardLeft}} */
 export function positionFor(selector) {
-    const el = document.querySelector(selector);
+    // The step's own target — unless it is not on screen and something stands in for it. A group
+    // page's tabs are hidden where the rail lists the same pages (Signal, 2026-10-01), and each
+    // rail entry says which tab it replaces with data-tour-for.
+    const shown = e => !!e && e.getClientRects().length > 0;
+    let el = document.querySelector(selector);
+    if (!shown(el)) {
+        const stand = document.querySelector(`[data-tour-for="${CSS.escape(selector)}"]`);
+        if (shown(stand)) el = stand;
+    }
     if (!el) return null;
 
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });

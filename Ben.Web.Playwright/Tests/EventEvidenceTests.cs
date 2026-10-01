@@ -138,7 +138,7 @@ public class EventEvidenceTests : BenTestBase
         if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Ignore("No Paranormal365 in this database.");
 
-        await Main.GetByRole(AriaRole.Tab, new() { Name = "Calendar", Exact = true }).ClickAsync();
+        await OrgTab("Calendar").ClickAsync();
 
         var row = Main.Locator("div", new() { HasTextString = marker }).Last;
         try

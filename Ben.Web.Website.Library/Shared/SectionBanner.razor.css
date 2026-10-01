@@ -16,7 +16,7 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    /* position is set per photograph, inline, from SectionBanner.Focal */
+    /* position is set per photograph, inline, from SignalPhotos */
     background-size: cover;
     /* the photograph eases in, rather than snapping, once it arrives */
     animation: section-banner-in .6s ease both;

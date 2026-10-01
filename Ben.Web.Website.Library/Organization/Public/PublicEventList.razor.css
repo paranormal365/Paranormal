@@ -6,16 +6,19 @@
     the date once, and each night under it only has to say what is different about it.
 */
 
+/* Signal phase 2. Each day is a heading with its date as a plate; each night under it is a card
+   in its tour's (or its group's) own colour — the same colour TourPlate gives it on the tour's
+   page and on the home strip — in a grid, so a week reads at a glance instead of as one long
+   column of identical rows. */
+
 .ev-day {
     display: flex;
     align-items: center;
-    gap: .75rem;
-    margin: 1.5rem 0 .5rem;
+    gap: .9rem;
+    margin: 2.25rem 0 .85rem;
 }
 
-.ev-day:first-of-type {
-    margin-top: 0;
-}
+.ev-day:first-of-type { margin-top: .5rem; }
 
 /* The same plate a tour date wears on the tour's page and on the event's own, so a reader moving
    between them is reading one idiom rather than three. */
@@ -25,90 +28,108 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 3.1rem;
-    padding: .3rem 0;
-    border-radius: .45rem;
-    background: color-mix(in srgb, var(--bs-primary) 16%, var(--bs-body-bg));
+    width: 3.6rem;
+    padding: .4rem 0;
+    border-radius: var(--ben-radius);
+    background: var(--ben-accent-grad);
+    color: #fff;
     line-height: 1.05;
+    box-shadow: 0 6px 18px rgba(var(--ben-accent-rgb), .3);
 }
 
 .ev-day__dow,
 .ev-day__mon {
-    font-size: .58rem;
+    font-size: .6rem;
     font-weight: 700;
-    letter-spacing: .08em;
+    letter-spacing: .1em;
     text-transform: uppercase;
-    color: var(--bs-secondary-color);
+    color: rgba(255, 255, 255, .85);
 }
 
-.ev-day__num {
-    font-size: 1.3rem;
-    font-weight: 700;
-}
+.ev-day__num { font-size: 1.45rem; font-weight: 750; }
 
 .ev-day__label {
-    font-size: 1rem;
-    font-weight: 650;
+    font-size: clamp(1.15rem, 2vw, 1.4rem);
+    font-weight: 700;
+    letter-spacing: -.01em;
 }
 
-/* Pushed to the far end by the rule that grows between them. */
+/* a hairline runs from the label to the count */
+.ev-day__label::after { content: none; }
 .ev-day__count {
     flex: 0 0 auto;
     margin-left: auto;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    background: var(--ben-fill);
     font-size: .78rem;
-    color: var(--bs-secondary-color);
+    color: var(--ben-ink-muted);
 }
 
 .ev-list {
-    display: flex;
-    flex-direction: column;
-    gap: .4rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
+    gap: .9rem;
 }
 
 .ev-row {
+    position: relative;
     display: flex;
-    align-items: center;
-    gap: .9rem;
-    padding: .55rem .75rem;
-    border: 1px solid var(--bs-border-color);
-    border-radius: .6rem;
-    background: var(--bs-body-bg);
-    transition: border-color .16s ease, transform .16s ease;
+    flex-direction: column;
+    gap: .55rem;
+    padding: 1rem 1.1rem 1rem 1.25rem;
+    overflow: hidden;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    background:
+        radial-gradient(120% 90% at 100% 0%, hsl(var(--plate-hue) 65% 55% / .14), transparent 55%),
+        var(--ben-surface);
+    box-shadow: var(--ben-shadow);
+    transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+/* the night's colour, down its left edge */
+.ev-row::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: linear-gradient(180deg, hsl(var(--plate-hue) 70% 58%), hsl(calc(var(--plate-hue) + 40deg) 60% 45%));
 }
 
 .ev-row:hover {
-    border-color: var(--bs-primary);
-    transform: translateX(2px);
+    border-color: rgba(var(--ben-accent-rgb), .6);
+    transform: translateY(-3px);
+    box-shadow: var(--ben-shadow-lg);
 }
 
-/* Wide enough for a time and the name of its clock, so the titles line up down the column
-   whatever the times are. */
 .ev-row__time {
-    flex: 0 0 5.5rem;
-    font-weight: 650;
+    font-size: 1.05rem;
+    font-weight: 750;
     font-variant-numeric: tabular-nums;
+    color: var(--ben-accent);
 }
 
 /* Which clock this is. Never guessed from the reader's machine, so it has to be said. Drawn inside
    BenTime (2026-09-28), a child component, so the rule reaches it through ::deep. */
 .ev-row__zone,
 .ev-row__time ::deep .ev-row__zone {
-    display: block;
-    font-size: .68rem;
-    font-weight: 600;
-    letter-spacing: .05em;
-    color: var(--bs-secondary-color);
+    display: inline;
+    margin-left: .35rem;
+    font-size: .7rem;
+    font-weight: 650;
+    letter-spacing: .06em;
+    color: var(--ben-ink-muted);
 }
 
-.ev-row__main {
-    flex: 1 1 auto;
-    min-width: 0;
-}
+.ev-row__main { min-width: 0; }
 
 .ev-row__title {
     display: block;
-    font-weight: 600;
+    font-size: 1.08rem;
+    font-weight: 700;
     line-height: 1.25;
+    letter-spacing: -.01em;
 }
 
 /* A link that looks like a link.
@@ -117,114 +138,90 @@
    What's On page — the front door of the whole ticket journey — showed four bold black lines and
    nothing a visitor could tell was clickable. Hover is not an affordance: it is not there on a
    phone at all, and on a desktop it only rewards somebody who already guessed. */
-
 .ev-row__title a {
-    color: var(--bs-link-color);
+    color: var(--ben-ink);
     text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: .15em;
+    text-decoration-color: rgba(var(--ben-accent-rgb), .55);
+    text-decoration-thickness: 2px;
+    text-underline-offset: .2em;
 }
 
 .ev-row__title a:hover,
 .ev-row__title a:focus-visible {
-    color: var(--bs-link-hover-color);
-    text-decoration-thickness: 2px;
+    color: var(--ben-accent);
+    text-decoration-color: currentColor;
 }
+
+/* the whole card opens the night, not just its title — the title link is stretched over it */
+.ev-row__title a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+/* the group and tour links stay their own targets, above the stretched one */
+.ev-row__by a { position: relative; z-index: 1; }
 
 .ev-row__by,
 .ev-row__where {
     display: block;
-    font-size: .78rem;
-    color: var(--bs-secondary-color);
+    margin-top: .2rem;
+    font-size: .82rem;
+    color: var(--ben-ink-muted);
 }
 
 .ev-row__by a {
     color: inherit;
     text-decoration: none;
+    font-weight: 600;
 }
 
 .ev-row__by a:hover {
-    color: var(--bs-primary);
+    color: var(--ben-accent);
     text-decoration: underline;
 }
 
 .ev-row__online {
     display: inline-block;
     margin-right: .35rem;
-    padding: 0 .35rem;
-    border-radius: .25rem;
+    padding: 0 .4rem;
+    border-radius: .3rem;
     background: color-mix(in srgb, var(--bs-info) 22%, transparent);
     font-weight: 600;
 }
 
-.ev-row__seats {
-    flex: 0 0 auto;
-    width: 7rem;
-    text-align: right;
-}
+.ev-row__seats { margin-top: auto; }
 
 .ev-row__count {
     display: block;
     font-size: .8rem;
-    color: var(--bs-secondary-color);
+    font-weight: 600;
+    color: var(--ben-ink-muted);
 }
 
 .ev-row__bar {
     display: block;
-    height: 4px;
-    margin-top: .3rem;
-    border-radius: 2px;
-    background: var(--bs-border-color);
+    height: 6px;
+    margin-top: .35rem;
+    border-radius: 3px;
+    background: var(--ben-fill-strong);
     overflow: hidden;
 }
 
 .ev-row__fill {
     display: block;
     height: 100%;
-    background: var(--bs-primary);
+    border-radius: inherit;
+    background: var(--ben-accent-grad);
 }
 
 /* A full night is still worth opening — the page carries the details — but it must not read as an
    invitation to book. */
-.ev-row--full .ev-row__fill {
-    background: var(--bs-secondary-color);
-}
-
-/* On a phone the seats column and the time column both cost more than they are worth beside a
-   title that has to wrap. The time moves above the title and the seats fall in under it. */
-@media (max-width: 575.98px) {
-    .ev-row {
-        flex-wrap: wrap;
-        gap: .15rem .6rem;
-    }
-
-    .ev-row__time {
-        flex: 0 0 auto;
-        font-size: .8rem;
-        color: var(--bs-primary);
-    }
-
-    .ev-row__main {
-        flex: 1 1 100%;
-    }
-
-    .ev-row__seats {
-        width: auto;
-        text-align: left;
-        flex: 1 1 100%;
-    }
-
-    .ev-row__bar {
-        max-width: 10rem;
-    }
-}
+.ev-row--full .ev-row__fill { background: var(--ben-ink-muted); }
+.ev-row--full .ev-row__count { color: var(--bs-danger-text-emphasis); }
 
 @media (prefers-reduced-motion: reduce) {
-    .ev-row {
-        transition: none;
-    }
-
-    .ev-row:hover {
-        transform: none;
-    }
+    .ev-row { transition: none; }
+    .ev-row:hover { transform: none; }
 }

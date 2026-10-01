@@ -51,6 +51,9 @@
         <main class="app-body">
             <div class="app-content">
               <div class="app-shell">
+                @* Supplies the rail a group's or an event's own menu while you are inside one;
+                   draws nothing itself. *@
+                <Ben.Web.Website.Library.Shared.ContextRail />
                 <BenNav Contextual="true"
                         IsAuthenticated="@TokenStore.IsAuthenticated"
                         IsSuperAdmin="@TokenStore.IsSuperAdmin"

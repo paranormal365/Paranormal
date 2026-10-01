@@ -220,7 +220,7 @@ public class NewGroupJourneyTests : BenTestBase
 
         await LoginAsync(founder.Email, founder.Password);
         Assert.That(await OpenOrganizationAsync(groupName), Is.True);
-        await Main.GetByRole(AriaRole.Tab, new() { Name = "Members", Exact = true }).ClickAsync();
+        await OrgTab("Members").ClickAsync();
 
         for (var i = 1; i <= 2; i++)
         {
@@ -239,7 +239,7 @@ public class NewGroupJourneyTests : BenTestBase
 
         // ── 5. A case, and an investigation on it ────────────────────────────
         var caseTitle = $"Journey case {run}";
-        await Main.GetByRole(AriaRole.Tab, new() { Name = "Cases", Exact = true }).ClickAsync();
+        await OrgTab("Cases").ClickAsync();
         await ClickUntilAsync(
             Main.GetByRole(AriaRole.Button, new() { Name = "New Case", Exact = false }),
             Page.Locator("#casecreatepage-case-title-b1b1"));

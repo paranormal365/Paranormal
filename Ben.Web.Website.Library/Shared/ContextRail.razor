@@ -1,0 +1,262 @@
+@namespace Ben.Web.Website.Library.Shared
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject SiteFeaturesProvider Features
+@inject RailMenuState Rail
+
+@*
+    Supplies the rail's menu for the places that have one of their own (Signal, 2026-10-01).
+
+    Ben: "Instead of tabs for an organization, the left-side menu would be a good place and when
+    you navigate to the sub-page, the menu becomes the menu for that page with a back button at the
+    top." So:
+
+        /organizations/{group}…                 the GROUP's menu, back to Your groups
+        /organizations/{group}/events/{event}…  the EVENT's screens, back to the group
+
+    Rendered once, by the layout, so no page has to remember to ask for it, and a page added under a
+    group gets the group's menu by living there. Draws nothing itself — BenNav's rail draws the menu.
+
+    The group's entries are the group page's own tabs, under the same names — a phone keeps the
+    tabs and a desktop shows the rail, and the two must read alike — gated by the same answers the page uses to
+    decide whether to draw each tab (membership, the per-area permissions, manager, site switches):
+    a menu entry that opens onto a refusal is a dead end, and this codebase has paid for enough of
+    those. The tabs themselves stay on a phone, where there is no rail.
+*@
+
+@code {
+    private Guid? _orgId;
+    private Guid? _eventId;
+    private OrgFacts? _org;
+    private string? _eventName;
+    private string? _eventSlug;
+    private readonly object _groupKey = new();
+    private readonly object _eventKey = new();
+
+    private sealed record OrgFacts(
+        Guid Id, string Name, string? UrlName, bool IsMember, bool CanManage,
+        bool CanReadCases, bool CanReadInvestigations);
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await RefreshAsync();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        var (orgId, eventId) = Parse(Nav.ToBaseRelativePath(Nav.Uri));
+        if (orgId is null)
+        {
+            Rail.Clear(_groupKey);
+            Rail.Clear(_eventKey);
+            return;
+        }
+
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) || !UserState.IsAuthenticated)
+            return;
+
+        // The facts are fetched once per group, not once per click inside it.
+        if (_orgId != orgId || _org is null)
+        {
+            _orgId = orgId;
+            _org = await LoadOrgAsync(orgId.Value);
+        }
+
+        if (_org is null)
+        {
+            Rail.Clear(_groupKey);
+            Rail.Clear(_eventKey);
+            return;
+        }
+
+        Rail.Set(_groupKey, GroupMenu(_org));
+
+        if (eventId is null)
+        {
+            Rail.Clear(_eventKey);
+            return;
+        }
+
+        if (_eventId != eventId)
+        {
+            _eventId = eventId;
+            _eventName = null;
+            _eventSlug = null;
+            try
+            {
+                var ev = await AdminClient.GetHostedEventAsync(orgId.Value, eventId.Value);
+                _eventName = ev?.Name;
+                _eventSlug = ev?.UrlName;
+            }
+            catch { /* the menu still works with a plain title */ }
+        }
+        Rail.Set(_eventKey, EventMenu(_org, eventId.Value));
+    }
+
+    /// <summary>The group and event in an address under /organizations, if it names them.</summary>
+    public static (Guid? Org, Guid? Event) Parse(string relative)
+    {
+        var path = relative.Split('?', '#')[0].Trim('/');
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !parts[0].Equals("organizations", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(parts[1], out var org))
+            return (null, null);
+
+        if (parts.Length >= 4 && parts[2].Equals("events", StringComparison.OrdinalIgnoreCase)
+            && Guid.TryParse(parts[3], out var ev))
+            return (org, ev);
+
+        return (org, null);
+    }
+
+    private async Task<OrgFacts?> LoadOrgAsync(Guid orgId)
+    {
+        try
+        {
+            var orgTask = AdminClient.GetOrganizationAsync(orgId);
+            var listTask = AdminClient.GetOrganizationsAsync();
+            await Task.WhenAll(orgTask, listTask);
+            if (orgTask.Result is not { } org) return null;
+
+            // Membership is read off this list. Refused, it would read as "not a member" and the
+            // menu would quietly offer less than the person has — so no menu at all, and the
+            // page's own tabs, which ask the same question, say what happened.
+            if (listTask.Result.Failed) return null;
+
+            var listItem = listTask.Result.Items.FirstOrDefault(o => o.Id == orgId);
+            var isMember = UserState.IsSuperAdmin || listItem is not null;
+            var perms = isMember ? await AdminClient.GetMyOrgPermissionsAsync(orgId) : null;
+            var canManage = UserState.IsSuperAdmin || (listItem?.CanEdit ?? false);
+
+            return new OrgFacts(orgId, org.Name, org.UrlName, isMember, canManage,
+                perms?.CanReadCases == true, perms?.CanReadInvestigations == true);
+        }
+        catch
+        {
+            // No menu rather than a wrong one: the page's own tabs still work.
+            return null;
+        }
+    }
+
+    // ── The group's menu: its page's tabs, in the same order and behind the same gates ──────
+
+    private RailMenuModel GroupMenu(OrgFacts o)
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('#')[0];
+        var here = path.Split('?')[0].TrimEnd('/');
+        var root = $"/organizations/{o.Id}";
+        var tab = TabOf(path);
+
+        // A tab is lit on the group page with that tab open, and on any page beneath it that
+        // belongs to it — a case's own page lights Cases.
+        RailMenuItem Tab(string text, string icon, string id, string group)
+            => new(text, icon, $"{root}?tab={id}",
+                   Active: (here.Equals(root, StringComparison.OrdinalIgnoreCase) && tab == id)
+                           || here.StartsWith($"{root}/{id}", StringComparison.OrdinalIgnoreCase),
+                   Group: group, TourFor: $"#tab-{id}");
+
+        RailMenuItem Page(string text, string icon, string suffix, string group)
+            => new(text, icon, root + suffix,
+                   Active: here.StartsWith(root + suffix, StringComparison.OrdinalIgnoreCase), Group: group);
+
+        var items = new List<RailMenuItem> { Tab("Details", "home", "details", "The group") };
+        if (o.IsMember) items.Add(Tab("Members", "users", "members", "The group"));
+        if (o.IsMember && Features.IsOn(SiteFeatures.OrgMessaging)) items.Add(Tab("Messages", "message-square", "messages", "The group"));
+        if (o.IsMember) items.Add(Tab("Files", "folder", "files", "The group"));
+
+        if (o.IsMember && o.CanReadCases) items.Add(Tab("Cases", "briefcase", "cases", "The work"));
+        if (o.IsMember && o.CanReadInvestigations) items.Add(Tab("Investigations", "search", "investigations", "The work"));
+        if (o.IsMember && Features.IsOn(SiteFeatures.Events))
+        {
+            items.Add(Tab("Calendar", "calendar", "calendar", "The work"));
+            items.Add(Page("Events", "star", "/events", "The work"));
+        }
+        if (o.CanManage) items.Add(Tab("Requests", "inbox", "requests", "The work"));
+        if (o.CanManage) items.Add(Tab("Clients", "map-pin", "clients", "The work"));
+
+        if (o.CanManage && Features.IsOn(SiteFeatures.CmsPages)) items.Add(Tab("CMS", "layout", "cms", "In public"));
+        if (o.CanManage && Features.IsOn(SiteFeatures.Publications)) items.Add(Tab("Publications", "book-open", "publications", "In public"));
+        if (o.UrlName is { Length: > 0 } slug)
+            items.Add(new RailMenuItem("See the public page", "external-link", $"/o/{slug}", Group: "In public", External: true));
+
+        if (Features.IsOn(SiteFeatures.Equipment)) items.Add(Tab("Equipment", "tool", "equipment", "Running it"));
+        if (o.CanManage)
+        {
+            items.Add(Tab("Roles", "lock", "roles", "Running it"));
+            items.Add(Tab("Addresses", "map", "addresses", "Running it"));
+            items.Add(Tab("Settings", "settings", "settings", "Running it"));
+            items.Add(Page("Plan & billing", "credit-card", "/billing", "Running it"));
+        }
+
+        return new RailMenuModel(o.Name, items, BackText: "Your groups", BackHref: "/organizations",
+                                 Kicker: "Group", Depth: 1);
+    }
+
+    // ── An event's screens: the same list its own page indexes, with the way back ────────────
+
+    private RailMenuModel EventMenu(OrgFacts o, Guid eventId)
+    {
+        var here = ("/" + Nav.ToBaseRelativePath(Nav.Uri)).Split('?', '#')[0].TrimEnd('/');
+        var root = $"/organizations/{o.Id}/events/{eventId}";
+
+        RailMenuItem Screen(string text, string icon, string suffix, string group)
+            => new(text, icon, root + suffix,
+                   Active: here.Equals(root + suffix, StringComparison.OrdinalIgnoreCase), Group: group);
+
+        var items = new List<RailMenuItem>
+        {
+            Screen("Overview",               "home",          "",          "The event"),
+            Screen("Plan",                   "grid",          "/layout",   "The event"),
+            Screen("Programme",              "list",          "/sessions", "The event"),
+            Screen("Staff",                  "users",         "/staff",    "The event"),
+            Screen("Bands",                  "layers",        "/bands",    "The event"),
+            Screen("Files",                  "folder",        "/files",    "The event"),
+            Screen("Bookings",               "inbox",         "/bookings", "Guests"),
+            Screen("The door",               "log-in",        "/door",     "Guests"),
+            Screen("Menus",                  "coffee",        "/menus",    "Food"),
+            Screen("Dining tables",          "circle",        "/dining",   "Food"),
+            Screen("What the kitchen needs", "clipboard",     "/dietary",  "Food"),
+            new("Advertise this event", "star", $"/organizations/{o.Id}/promote?event={eventId}", Group: "Guests"),
+            Screen("Gallery",                "image",         "/gallery",  "Afterwards"),
+            new("Photo wall", "grid", $"/events/{eventId}/wall", Group: "Afterwards"),
+            Screen("After the event",        "check-circle",  "/after",    "Afterwards"),
+            Screen("Copy this event",        "copy",          "/copy",     "Afterwards"),
+        };
+
+        // The room lives on the event's own public page, where a moderator sees what guests see.
+        if (o.UrlName is { Length: > 0 } orgSlug && _eventSlug is { Length: > 0 } evSlug)
+            items.Insert(items.FindIndex(i => i.Text == "The door") + 1,
+                new RailMenuItem("The room", "message-circle", $"/o/{orgSlug}/events/{evSlug}#hosted-room", Group: "Guests"));
+
+        return new RailMenuModel(_eventName ?? "This event", items,
+                                 BackText: o.Name, BackHref: $"/organizations/{o.Id}/events",
+                                 Kicker: "Event", Depth: 2);
+    }
+
+    private static string TabOf(string path)
+    {
+        var q = path.Contains('?') ? path[(path.IndexOf('?') + 1)..] : "";
+        foreach (var pair in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split('=', 2);
+            if (kv[0].Equals("tab", StringComparison.OrdinalIgnoreCase) && kv.Length == 2)
+                return Uri.UnescapeDataString(kv[1]).Trim().ToLowerInvariant();
+        }
+        return "details";
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Rail.Clear(_groupKey);
+        Rail.Clear(_eventKey);
+    }
+}

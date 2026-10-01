@@ -16,17 +16,13 @@
     does, once. The headline is a promise, not a repetition. HomePageTests guards both.
 
     Everything that WORKS here is unchanged: the geocoded search, Enter to submit, its results and
-    its refusal below, and the two links. Only the frame around them moved.
+    its refusal below, and the two links. Only the frame around them moved — and since phase 2 the
+    frame is the shared PageHero, so every public page opens the same way this one does.
 *@
-<section class="home-hero" data-testid="home-hero">
-    <div class="home-hero__photo" aria-hidden="true"></div>
-    <div class="home-hero__inner">
-        <div class="home-hero__kicker">One home for the paranormal</div>
-        <h1 class="home-hero__headline">Find out what happened here.</h1>
-        <p class="home-hero__tagline">
-            Haunted places near you, the groups that investigate them, and the nights you can book.
-        </p>
-
+<PageHero Photo="i3-walking-to-house" TestId="home-hero" Class="home-hero page-hero--tall"
+          Kicker="One home for the paranormal"
+          Title="Find out what happened here."
+          Lede="Haunted places near you, the groups that investigate them, and the nights you can book.">
     <div class="home-hero__search-box">
         <div class="home-hero__search-row">
             @* Enter submits, which a plain button in a div would not do — the search box is the
@@ -67,8 +63,7 @@
            through a sign-in screen first. *@
         <a href="/my-requests/new" class="btn btn-outline-light">Request an Investigation</a>
     </div>
-    </div>
-</section>
+</PageHero>
 
 @* ── Search results ────────────────────────────────────────────────────────── *@
 @if (_searched && _results.Count == 0)

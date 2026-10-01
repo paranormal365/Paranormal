@@ -28,7 +28,7 @@ else if (_page is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
+    <div class="home-band">
 
         @* The same band and the same pills as the group's home page (OrgPublicBanner,
            OrgPublicNav): a group whose front door and whose "About us" look like two different
@@ -37,11 +37,10 @@ else
         <OrgPublicBanner Name="@_page.OrgName" UrlName="@_page.OrgUrlName"
                          PageTitle="@_page.Page.PageTitle"
                          LogoUrl="@(_page.Logos.Any() ? AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId) : null)"
-                         LogoAlt="@(_page.Logos.FirstOrDefault()?.AltText)"
-                         Class="mb-3" />
-
-        <OrgPublicNav OrgUrlName="@_page.OrgUrlName" NavPages="@_page.NavPages"
-                      Active="@PageSlug" Class="mb-4" />
+                         LogoAlt="@(_page.Logos.FirstOrDefault()?.AltText)">
+            <Nav><OrgPublicNav OrgUrlName="@_page.OrgUrlName" NavPages="@_page.NavPages"
+                      Active="@PageSlug" /></Nav>
+        </OrgPublicBanner>
 
         @* ── Page sections ────────────────────────────────────────────────── *@
         @if (_page.Page.Sections.Count == 0)

@@ -1,0 +1,3 @@
+/* A venue's page. The hero is PageHero's; the line under the name is light on its photograph. */
+.venue-hero__by { font-size: .95rem; color: rgba(255, 255, 255, .88); }
+.venue-hero__by a { color: #fff; text-decoration: underline; text-underline-offset: .15em; }

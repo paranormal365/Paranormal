@@ -39,11 +39,11 @@ public class HomePageTests : BenTestBase
         // signed-in desk — a photograph, a headline, the search over it. It used to open on the logo.
         var hero = Page.Locator("[data-testid=home-hero]");
         await Expect(hero).ToBeVisibleAsync();
-        await Expect(hero.Locator(".home-hero__headline")).ToBeVisibleAsync();
-        await Expect(hero.Locator(".home-hero__tagline")).ToBeVisibleAsync();
+        await Expect(hero.Locator(".page-hero__title")).ToBeVisibleAsync();
+        await Expect(hero.Locator(".page-hero__lede")).ToBeVisibleAsync();
         await Expect(hero.Locator(".home-hero__search-input")).ToBeVisibleAsync();
 
-        var photo = await hero.Locator(".home-hero__photo")
+        var photo = await hero.Locator(".page-hero__photo")
             .EvaluateAsync<string>("e => getComputedStyle(e).backgroundImage");
         Assert.That(photo, Does.Contain("/static/images/signal/"), "the hero's photograph did not load");
 
@@ -61,7 +61,7 @@ public class HomePageTests : BenTestBase
         await Page.SetViewportSizeAsync(375, 812);
         await Page.GotoAsync(BaseUrl);
         var hero = Page.Locator("[data-testid=home-hero]");
-        await Expect(hero.Locator(".home-hero__headline")).ToBeVisibleAsync();
+        await Expect(hero.Locator(".page-hero__title")).ToBeVisibleAsync();
 
         var overflow = await Page.EvaluateAsync<double>(
             "() => Math.max(...[...document.querySelectorAll('[data-testid=home-hero] *')].map(e => e.getBoundingClientRect().right)) - window.innerWidth");
@@ -97,6 +97,21 @@ public class HomePageTests : BenTestBase
     }
 
     [Test]
+    [Description("The group price on Home is one the plans page actually sells.")]
+    public async Task The_home_group_price_is_a_price_on_the_plans_page()
+    {
+        // It was typed in from the flyers; a SuperAdmin changing a band would have left the front
+        // page quoting a price nobody could buy. It is read from the same tier rows now.
+        var price = Page.Locator("[data-testid=home-join-group-price]");
+        await Expect(price).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        var quoted = (await price.InnerTextAsync()).Trim();
+
+        await Page.GotoAsync($"{BaseUrl}/pricing");
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("main, body").First).ToContainTextAsync(quoted, new() { Timeout = 20_000 });
+    }
+
+    [Test]
     [Description("Text on the hero's photograph stays light in BOTH themes.")]
     public async Task Hero_text_stays_light_on_its_photograph_in_both_themes()
     {
@@ -106,7 +121,7 @@ public class HomePageTests : BenTestBase
         foreach (var theme in new[] { "dark", "light" })
         {
             await Page.EvaluateAsync($"document.documentElement.setAttribute('data-bs-theme', '{theme}')");
-            var luminance = await Page.Locator("[data-testid=home-hero] .home-hero__headline").EvaluateAsync<double>(
+            var luminance = await Page.Locator("[data-testid=home-hero] .page-hero__title").EvaluateAsync<double>(
                 @"e => { const [r,g,b] = getComputedStyle(e).color.match(/[\d.]+/g).map(Number);
                          const f = v => { v/=255; return v<=0.03928 ? v/12.92 : ((v+0.055)/1.055)**2.4; };
                          return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b); }");

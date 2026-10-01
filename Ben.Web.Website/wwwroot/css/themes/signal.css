@@ -349,6 +349,13 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    the editor page's own class rather than a list of routes, so My Videos and a case's Video tab
    are both covered, and so is the next page that hosts it. */
 .content-wrapper:has(.ben-editor-page) > .section-banner { display: none; }
+/* …and no rail beside an editor either: an editor under a group (the video editor, the audio mix)
+   would otherwise get the group's menu, and the width it needs would go to a list of links. */
+.app-shell:has(.ben-editor-page) > .app-rail { display: none; }
+/* A page with its own hero (Shared/PageHero, or anything marked data-own-hero — the store's
+   carousel) has its picture and title in one frame already; the section band above it would be a
+   second picture and a second title an inch away. */
+.content-wrapper:has(.page-hero, [data-own-hero]) > .section-banner { display: none; }
 .app-shell > .content-wrapper { flex: 1; min-width: 0; }
 
 /* min-width:0 at EVERY level, not just the innermost. A flex or grid child defaults to
@@ -407,17 +414,71 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     .app-rail { display: none; }   /* the drawer carries the whole menu on a phone */
 }
 
-/* a group inside the rail — Administration's Users, Cases, Billing — is a heading over its pages */
-.app-rail__group { margin-top: .6rem; }
-.app-rail__group:first-child { margin-top: 0; }
-.app-rail__group-title {
-    display: block;
-    padding: .35rem .55rem .2rem;
-    font-size: .74rem;
-    font-weight: 700;
-    color: var(--ben-ink);
+/* ── the rail drills down (Ben, 2026-10-01) ─────────────────────────────────
+   "when you navigate to the sub-page, the menu becomes the menu for that page with a back button
+   at the top." The way back is the first thing in the card; under it, what this menu is, then
+   its entries. A group of entries inside a menu is a link into that group, marked with a chevron. */
+.app-rail__back {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin: -.1rem -.1rem .7rem;
+    padding: .45rem .6rem;
+    border-radius: var(--ben-radius-sm);
+    background: var(--ben-fill);
+    color: var(--ben-ink-muted);
+    font-size: .82rem;
+    font-weight: 650;
+    text-decoration: none;
+    transition: background-color .16s ease, color .16s ease;
 }
-.app-rail__sublist { list-style: none; margin: 0; padding: 0 0 0 .35rem; }
+.app-rail__back:hover { background: var(--ben-accent-soft); color: var(--ben-ink); }
+.app-rail__back span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.app-rail__kicker {
+    padding: 0 .55rem;
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ben-accent);
+}
+
+.app-rail__heading {
+    padding: .1rem .55rem .6rem;
+    font-size: 1.02rem;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: -.01em;
+    color: var(--ben-ink);
+    overflow-wrap: anywhere;
+}
+
+/* a heading between entries of one menu — "The work", "Running it" */
+.app-rail__divider {
+    margin: .65rem 0 .15rem;
+    padding: .35rem .55rem 0;
+    border-top: 1px solid var(--ben-line);
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ben-ink-faint);
+}
+.app-rail__list > .app-rail__divider:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
+.app-rail__drill .app-rail__chev { margin-left: auto; opacity: .55; }
+.app-rail__drill .badge + .app-rail__chev { margin-left: .35rem; }
+.app-rail__drill:hover .app-rail__chev { opacity: 1; }
+
+/* A page with a rail menu of its own does not also draw it as tabs where the rail is showing:
+   the group page's tab strip, the event page's list of its screens. A phone has no rail, so
+   both stay there. */
+@media (min-width: 992px) {
+    .app-shell:has(.app-rail--context) .rail-replaces > .ben-tabs-scroll { display: none; }
+    .app-shell:has(.app-rail--context) .rail-replaces > .tab-content { padding-top: 0 !important; }
+    .app-shell:has(.app-rail--context) .rail-replaces-item { display: none; }
+}
 
 /* An alert is a card with a coloured spine: the tint says what it means, the bar says it loudly,
    the radius and shadow say it belongs to the same page as everything else. */

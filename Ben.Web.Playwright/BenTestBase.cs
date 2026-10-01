@@ -1077,8 +1077,20 @@ public abstract class BenTestBase : PageTest
             if (await onScreen.CountAsync() > 0 && await onScreen.First.IsVisibleAsync())
                 return onScreen.First;
 
-            var sections = await topnav.Locator("a.topnav-link").EvaluateAllAsync<string[]>(
-                "els => els.map(e => e.getAttribute('href')).filter(h => h && h !== '#')");
+            // Read the bar once it has stopped changing. The prerendered bar is drawn before the
+            // circuit knows the site's switches, so the first read missed Media, Store and
+            // Community — and the walk reported "Media Library" as missing from the menu.
+            await WaitForTheCircuitAsync();
+            string[] sections = [];
+            for (var settle = 0; settle < 10; settle++)
+            {
+                var now = await topnav.Locator("a.topnav-link").EvaluateAllAsync<string[]>(
+                    "els => els.map(e => e.getAttribute('href')).filter(h => h && h !== '#')");
+                if (settle > 0 && now.SequenceEqual(sections)) break;
+                sections = now;
+                await Page.WaitForTimeoutAsync(400);
+            }
+            TestContext.Out.WriteLine($"[menu] looking for '{name}' in sections: {string.Join(", ", sections.Distinct())}");
             foreach (var href in sections.Distinct())
             {
                 await Page.GotoAsync($"{BaseUrl}{href}");
@@ -1088,7 +1100,12 @@ public abstract class BenTestBase : PageTest
                     await Expect(inRail.First).ToBeVisibleAsync(new() { Timeout = 4_000 });
                     return inRail.First;
                 }
-                catch (Exception) { /* not in this section; try the next */ }
+                catch (Exception)
+                {
+                    // Not in this section; try the next — and say what WAS there, so a miss explains itself.
+                    var seen = await Page.Locator(".app-rail a").AllInnerTextsAsync();
+                    TestContext.Out.WriteLine($"[menu] {href}: rail = [{string.Join(" | ", seen.Select(t => t.Trim()))}]");
+                }
             }
             // Fall through: the caller's Expect reports it with the caller's own context.
             return onScreen.First;
@@ -1215,8 +1232,12 @@ public abstract class BenTestBase : PageTest
             return false;   // seed data differs; caller decides whether to skip
         }
 
-        // The org hub is identified by its tab strip, which only the detail page renders.
-        await ClickUntilAsync(opener, Main.GetByRole(AriaRole.Tab).Or(Main.Locator(".nav-tabs .nav-link")));
+        // The org hub is identified by its tab strip, which only the detail page renders — or,
+        // where the rail is showing, by the group's own menu there, which replaces the strip
+        // (Signal, 2026-10-01).
+        await ClickUntilAsync(opener, Main.GetByRole(AriaRole.Tab)
+                                          .Or(Main.Locator(".nav-tabs .nav-link").Filter(new() { Visible = true }))
+                                          .Or(Page.Locator("[data-testid=rail-context]")));
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         return true;
     }
@@ -1227,14 +1248,60 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected async Task OpenTabAsync(string tabName, ILocator expected)
     {
-        var tab = Main.GetByRole(AriaRole.Tab, new() { Name = tabName, Exact = true })
-                      .Or(Main.Locator(".nav-tabs .nav-link", new() { HasTextString = tabName }))
-                      .Or(Main.GetByText(tabName, new() { Exact = true }))
-                      .First;
-
-        await Expect(tab).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        var tab = await TabOrRailEntryAsync(tabName);
         await ClickUntilAsync(tab, expected);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    /// <summary>
+    /// The GROUP page's tab by name, or its entry in the rail where the rail has replaced the strip
+    /// (a desktop, Signal 2026-10-01). Role locators skip hidden elements, so exactly one of the two
+    /// matches at any width. For a page that has tabs of its own beside the group's rail — a case —
+    /// use <see cref="TabOrRailEntryAsync"/>, which prefers the page's.
+    /// </summary>
+    protected ILocator OrgTab(string name)
+        => Main.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true })
+               .Or(Page.Locator("[data-testid=rail-context]").GetByRole(AriaRole.Link, new() { Name = name, Exact = true }));
+
+    /// <summary>
+    /// A page's tab by name — or, where the rail has replaced the page's tabs with the page's own
+    /// menu (a group page on a desktop, Signal 2026-10-01), the rail's entry of the same name.
+    /// </summary>
+    /// <remarks>
+    /// The page's own visible tab wins. A case page sits inside its group, so the rail beside it
+    /// holds the GROUP's Files and Messages while the case has tabs of the same names; taking the
+    /// rail's would open the wrong thing.
+    /// </remarks>
+    protected async Task<ILocator> TabOrRailEntryAsync(string tabName, int timeoutMs = 8_000)
+    {
+        var inPage = Main.GetByRole(AriaRole.Tab, new() { Name = tabName, Exact = true })
+                         .Or(Main.Locator(".nav-tabs .nav-link", new() { HasTextString = tabName }))
+                         .Filter(new() { Visible = true });
+        // Only on a page whose strip the rail REPLACES (.rail-replaces). Without that, a case page
+        // still loading its own tabs offered the group's rail entry of the same name first, and
+        // the walk opened the group's Files instead of the case's.
+        var inRail = Page.Locator(".app-shell:has(.rail-replaces) [data-testid=rail-context]")
+                         .GetByRole(AriaRole.Link, new() { Name = tabName, Exact = true });
+        // Last, plain text — for pages whose "tabs" are not tabs. Last because a group's Details
+        // carries a stats panel labelled "Members", which is not the Members tab.
+        var asText = Main.GetByText(tabName, new() { Exact = true }).Filter(new() { Visible = true });
+
+        await Expect(inPage.Or(inRail).Or(asText).First).ToBeVisibleAsync(new() { Timeout = timeoutMs });
+        if (await inPage.CountAsync() > 0) return inPage.First;
+
+        // A page whose strip the rail replaces gets its menu a beat after its content (the rail
+        // asks what this person may open), so wait for the entry rather than take the text.
+        if (await Page.Locator(".rail-replaces").CountAsync() > 0)
+        {
+            try
+            {
+                await Expect(inRail.First).ToBeVisibleAsync(new() { Timeout = timeoutMs });
+                return inRail.First;
+            }
+            catch (PlaywrightException) { /* no such entry for this person; fall through */ }
+        }
+        if (await inRail.CountAsync() > 0) return inRail.First;
+        return asText.First;
     }
 
     /// <summary>

@@ -97,7 +97,7 @@
                         @foreach (var p in t.Prices.Where(p => p.IsActive))
                         {
                             <span class="badge bg-primary me-1">
-                                @($"{p.Price:C0}") @CadenceLabel(p.Interval)
+                                @BenMoney.Format(p.Price) @CadenceLabel(p.Interval)
                                 @if (p.SavingPercentAgainstMonthly is { } save)
                                 {
                                     <span class="ms-1">(save @save%)</span>

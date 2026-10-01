@@ -40,8 +40,9 @@ public class CaselessInvestigationClickTests : BenTestBase
 
         // The tab is actually selected, and the clicked visit is on it, highlighted, with its
         // team open — "show something" means the row is unmissable, not merely present.
-        var invTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Investigations" });
-        await Expect(invTab).ToHaveClassAsync(new Regex("active"), new() { Timeout = 15_000 });
+        // The tab is lit — on the strip as .active, in the rail (desktop) as the current page.
+        var invTab = OrgTab("Investigations").And(Page.Locator(".active, [aria-current=page]"));
+        await Expect(invTab).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         var focusedRow = Page.Locator("tr.table-active", new() { HasText = CaselessTitle });
         await Expect(focusedRow).ToBeVisibleAsync(new() { Timeout = 15_000 });

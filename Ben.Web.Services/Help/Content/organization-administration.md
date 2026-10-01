@@ -9,6 +9,13 @@ order: 60
 Visible to owners and administrators of a group. Managers and members work cases but do not
 configure the group itself.
 
+**Where the tabs are.** On a computer, a group's sections — Details, Members, Cases, Settings and
+the rest — are the **menu card on the left** while you are anywhere inside the group, with
+**← Your groups** at the top. On a phone they are **tabs** along the top of the group's page. They
+are the same sections either way, offered by the same rules, and this guide calls them tabs. Open
+one of the group's events and the card becomes that event's own menu, with the group's name at the
+top to take you back.
+
 ## Group settings
 
 Everything a group can configure lives on the **Settings** tab, and there is a lot of it: billing,

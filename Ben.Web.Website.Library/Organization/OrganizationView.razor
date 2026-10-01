@@ -211,6 +211,9 @@
             </div>
         }
 
+        @* Where the rail is showing, it lists these same tabs as the group's menu (ContextRail,
+           Ben 2026-10-01), so the strip steps aside there; a phone has no rail and keeps it. *@
+        <div class="rail-replaces">
         <BenTabs @bind-ActiveId="_activeTabId">
 
             <BenTab Title="Details" Id="details">
@@ -433,6 +436,7 @@
             }
 
         </BenTabs>
+        </div>
 
         @* Item 166 W1: the owner's first-steps tour. Auto-launches once after founding
            (?welcome=1 from the wizard) unless already dismissed; the ? relaunches it. *@

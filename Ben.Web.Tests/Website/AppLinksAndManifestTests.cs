@@ -202,11 +202,15 @@ public sealed class AppLinksAndManifestTests
     [Fact]
     public void The_manifest_background_matches_the_theme_the_site_actually_renders()
     {
-        var css = File.ReadAllText(RepoFile("Ben.Web.Website/wwwroot/css/themes/night.min.css"));
+        var css = File.ReadAllText(RepoFile("Ben.Web.Website/wwwroot/css/themes/signal-tokens.css"));
 
         // A mismatch is not a style nit: the installed window paints this colour before the page
-        // does, so a wrong value is a flash of the wrong shade on every single launch.
-        Assert.Contains($"--bs-body-bg:{WebAppManifest.BackgroundColor}", css, StringComparison.OrdinalIgnoreCase);
+        // does, so a wrong value is a flash of the wrong shade on every single launch. Signal's
+        // page colour is --ben-bg, which --bs-body-bg reads; the dark block is the one to match.
+        var dark = css[css.IndexOf("[data-bs-theme=\"dark\"] {", StringComparison.Ordinal)..];
+        var bg = System.Text.RegularExpressions.Regex.Match(dark, @"--ben-bg:\s*(#[0-9A-Fa-f]{6})").Groups[1].Value;
+        Assert.Equal(WebAppManifest.BackgroundColor, bg, ignoreCase: true);
+        Assert.Contains("--bs-body-bg:                 var(--ben-bg)", css);
         Assert.Equal(WebAppManifest.BackgroundColor, WebAppManifest.ThemeColor);
     }
 

@@ -1,0 +1,14 @@
+@namespace Ben.Web.Website.Library.Shared
+@implements IDisposable
+@inject OwnHeroState Hero
+
+@*
+    Marks the page as having a hero of its own, so the layout's section band stands aside
+    (OwnHeroState). PageHero renders one; a page with some other hero — the store's carousel —
+    renders one beside it. Draws nothing.
+*@
+
+@code {
+    protected override void OnInitialized() => Hero.Enter();
+    public void Dispose() => Hero.Leave();
+}

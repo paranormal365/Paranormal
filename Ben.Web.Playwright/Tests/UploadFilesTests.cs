@@ -29,8 +29,10 @@ public class UploadFilesTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/upload-files");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var uploadBtn = Page.GetByText("Upload", new() { Exact = false })
-                            .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Upload" }))
+        // In the page, not the menu: under Signal the phone drawer's hidden "Upload Files" entry
+        // came first and the test waited on something nobody can see.
+        var uploadBtn = Main.GetByText("Upload", new() { Exact = false })
+                            .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Upload" }))
                             .First;
         await Expect(uploadBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }

@@ -47,12 +47,15 @@ public class AdminStoreCatalogTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
         await WaitForTheCircuitAsync();
 
+        // In the rail: with the shop switched on, the bar has a "Store" of its own — the shop, not
+        // its back office — and that one came first.
+        var rail = Page.Locator(".app-rail");
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First,
-            Page.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First);
+            rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First);
         await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First,
-            Page.GetByRole(AriaRole.Link, new() { Name = "Store Settings", Exact = false }).First);
+            rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First,
+            rail.GetByRole(AriaRole.Link, new() { Name = "Store Settings", Exact = false }).First);
 
         foreach (var entry in new[] { "Store Dashboard", "Categories", "Products", "Sale Requests", "Sellers", "Stock", "Discount Codes", "Reviews", "Store Settings" })
             await Expect(Page.GetByRole(AriaRole.Link, new() { Name = entry, Exact = true }).First).ToBeVisibleAsync();

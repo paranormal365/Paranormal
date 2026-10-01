@@ -254,6 +254,12 @@ builder.Services.AddScoped<AvatarCache>();
 // above: a toast raised for one session must never surface in another.
 builder.Services.AddScoped<Ben.Web.Website.Library.Kit.BenToastService>();
 
+// The menu a page supplies to the rail — a group's own pages, an event's screens (Signal,
+// 2026-10-01). Scoped for the same reason: it describes one person's current page.
+builder.Services.AddScoped<Ben.Web.Website.Library.Kit.RailMenuState>();
+// Whether the page draws its own hero, so the section band stands aside (OwnHeroState).
+builder.Services.AddScoped<Ben.Web.Website.Library.Kit.OwnHeroState>();
+
 // Help documents are embedded, immutable between deployments and identical for every reader, so
 // one parse for the whole process is right. Who may *see* which document is per-circuit, and lives
 // in the resolver instead.

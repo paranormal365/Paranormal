@@ -1,53 +1,33 @@
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Shared
 
 @*
-    The band at the top of every one of a group's public pages.
+    The top of every one of a group's public pages.
 
-    What stood here was a name, a small grey badge and an email address — which is what a page
-    looks like when nobody has decided it is the first thing a stranger sees. The wash is the org's
-    own colour (TourPlate), the same rule that colours its tours, its dates and its cards elsewhere
+    What stood here once was a name, a small grey badge and an email address — which is what a page
+    looks like when nobody has decided it is the first thing a stranger sees. The ground is the
+    group's own colour (TourPlate), the same rule that colours its cards, tours and dates elsewhere
     on the site, so a reader arriving from one of those lands somewhere that looks related to what
     they clicked.
 
-    Shared by the home page and by every CMS page under it: a group whose front door and whose
+    Signal phase 2 (2026-10-01): it is a PageHero now — the same frame as every other public page —
+    in the group's colour rather than a photograph, because a group has a logo and no picture of its
+    own, and a stock photograph on its page would read as theirs. The group's page links and its
+    figures sit inside the frame, so the top of the page is one thing instead of a band, a row of
+    pills and a rail stacked on each other.
+
+    Shared by the home page and by every page under it: a group whose front door and whose
     "About us" look like two different sites has no front door.
 *@
 
-<div class="org-banner @Class" style="@TourPlate.HueStyle(Name)">
-    @if (LogoUrl is { } logo)
-    {
-        <span class="org-banner__logo">
-            <BenImage Src="@logo" Alt="@(LogoAlt ?? Name)"
-                      Style="max-height:56px; max-width:100px; object-fit:contain;" />
-        </span>
-    }
-    else
-    {
-        @* Their initials rather than an empty square, which reads as a page that failed to load. *@
-        <span class="org-banner__logo org-banner__logo--none" aria-hidden="true">
-            @TourPlate.Monogram(Name)
-        </span>
-    }
-
-    <div class="org-banner__text">
-        @if (PageTitle is { } title)
-        {
-            @* On a sub-page the group's name is the eyebrow and the page is the heading: the
-               reader knows whose site they are on and needs to be told which page they reached. *@
-            <div class="org-banner__eyebrow">
-                <a href="@($"/o/{UrlName}")">@Name</a>
-            </div>
-            <h1 class="org-banner__name">@title</h1>
-        }
-        else
-        {
-            <h1 class="org-banner__name">@Name</h1>
-        }
-
+<PageHero Hue="@TourPlate.Hue(Name)" Compact="@(PageTitle is not null)" Class="@($"org-hero {Class}")"
+          TestId="org-hero" Facts="@Facts" Lead="@LeadMark" Title="@(PageTitle ?? Name)">
+    <div class="org-banner">
         @ChildContent
+        @Nav
     </div>
-</div>
+</PageHero>
 
 @code {
     [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
@@ -64,5 +44,32 @@
     /// <summary>Badges and contact lines, which only the home page has.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>The group's page links (OrgPublicNav), drawn at the foot of the frame.</summary>
+    [Parameter] public RenderFragment? Nav { get; set; }
+
+    /// <summary>The page's figures, in the frame's glass tiles.</summary>
+    [Parameter] public IReadOnlyList<BenFactItem>? Facts { get; set; }
+
     [Parameter] public string? Class { get; set; }
+
+    // The logo on a light plate (most are drawn for a white page), or the group's initials; on a
+    // sub-page the group's name beside it is the way home, and the page's title is the heading.
+    private RenderFragment LeadMark => @<div class="org-banner__lead">
+        @if (LogoUrl is { } logo)
+        {
+            <span class="org-banner__logo">
+                <BenImage Src="@logo" Alt="@(LogoAlt ?? Name)"
+                          Style="max-height:64px; max-width:110px; object-fit:contain;" />
+            </span>
+        }
+        else
+        {
+            @* Their initials rather than an empty square, which reads as a page that failed to load. *@
+            <span class="org-banner__logo org-banner__logo--none" aria-hidden="true">@TourPlate.Monogram(Name)</span>
+        }
+        @if (PageTitle is not null)
+        {
+            <a class="org-banner__eyebrow" href="@($"/o/{UrlName}")">@Name</a>
+        }
+    </div>;
 }

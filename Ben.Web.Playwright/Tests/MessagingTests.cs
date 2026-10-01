@@ -50,7 +50,7 @@ public class MessagingTests : BenTestBase
 
         await Expect(Main.GetByText("do not have access", new() { Exact = false }))
             .ToHaveCountAsync(0);
-        await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = "Messages", Exact = true }))
+        await Expect(OrgTab("Messages"))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 

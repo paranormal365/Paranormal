@@ -1,0 +1,7 @@
+/* the search, laid over the hero's photograph */
+.find-search { display: flex; gap: .5rem; width: 100%; max-width: 34rem; }
+.find-search input { flex: 1; min-width: 0; }
+
+@media (max-width: 575.98px) {
+    .find-search { flex-direction: column; }
+}

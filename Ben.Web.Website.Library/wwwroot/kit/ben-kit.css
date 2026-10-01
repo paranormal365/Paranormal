@@ -197,6 +197,8 @@ label > .sa-icon,
 }
 
 .ben-empty__title { color: var(--ben-ink); font-weight: 650; }
+.ben-empty__text { max-width: 36rem; margin: .4rem auto 0; font-size: .92rem; }
+.ben-empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 1rem; }
 
 /* the page's own content keeps its paragraphs and buttons; only the padding it brought for a
    frameless page is taken back, or the frame would double it */

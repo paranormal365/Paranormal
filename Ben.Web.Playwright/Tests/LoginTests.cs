@@ -83,7 +83,8 @@ public class LoginTests : BenTestBase
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var adminBtn = Page.GetByText("Administration");
+        // On the bar (Signal). The phone drawer carries the same entry, hidden at this width.
+        var adminBtn = Page.Locator("#top-menu").GetByText("Administration", new() { Exact = true });
         await Expect(adminBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 }

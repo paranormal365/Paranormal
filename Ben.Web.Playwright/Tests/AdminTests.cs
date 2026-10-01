@@ -301,17 +301,23 @@ public class AdminTests : BenTestBase
 
         // The journey has moved twice. A right-hand side panel, then a group inside the sidebar,
         // and under Signal (2026-10-01) the bar picks the SECTION and the rail beside the page
-        // lists what is inside it. So: Administration on the bar, then Manage Users in the rail,
-        // under its Users heading. The nesting is what this guards — the first Signal rail drew
+        // lists what is inside it. So: Administration on the bar, then the Users group in the rail,
+        // then Manage Users inside it. The nesting is what this guards — the first Signal rail drew
         // only one level, so every page under a group (Manage Users among them) vanished.
         var admin = Page.Locator("#top-menu a.topnav-link").Filter(new() { HasText = "Administration" }).First;
         await Expect(admin).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await ClickUntilUrlAsync(admin, @"/admin/");
 
+        // And since Ben's note of the same day the rail DRILLS: a group is a link into its own
+        // menu, and inside it the way back is at the top.
         var rail = Page.Locator(".app-rail");
-        await Expect(rail.Locator(".app-rail__group-title").Filter(new() { HasText = "Users" }))
-            .ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await Expect(rail.GetByRole(AriaRole.Link, new() { Name = "Manage Users" }))
-            .ToBeVisibleAsync(new() { Timeout = 5_000 });
+        var users = rail.Locator("a.app-rail__drill").Filter(new() { HasText = "Users" });
+        await Expect(users).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await ClickUntilAsync(users, rail.GetByRole(AriaRole.Link, new() { Name = "Manage Users" }));
+        await Expect(rail.Locator("[data-testid=rail-back]")).ToContainTextAsync("Administration");
+
+        // Back shows the section's top again.
+        await rail.Locator("[data-testid=rail-back]").ClickAsync();
+        await Expect(users).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
 }

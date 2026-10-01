@@ -38,7 +38,7 @@ public class InvestigationPanelTests : BenTestBase
     public async Task InvestigationsTab_IsVisibleOnCaseDetail()
     {
         await NavigateToInvestigationsTabAsync();
-        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
+        var casesTab = OrgTab("Cases");
         await Expect(casesTab).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
@@ -74,7 +74,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
+        var casesTab = OrgTab("Cases");
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -107,7 +107,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
+        var casesTab = OrgTab("Cases");
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -166,7 +166,7 @@ public class InvestigationPanelTests : BenTestBase
         await viewLink.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var casesTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Cases" });
+        var casesTab = OrgTab("Cases");
         await casesTab.ClickAsync();
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 

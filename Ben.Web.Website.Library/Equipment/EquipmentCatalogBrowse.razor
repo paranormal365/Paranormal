@@ -16,28 +16,24 @@
        items whose owners opted in, and its projection carries no owner identity and no serial — see
        PublicEquipmentItemRecord. *@
 
-    <div class="container-fluid py-3" style="max-width:900px;">
-        <h3 class="mb-1">Equipment Catalog<HelpLink Slug="your-equipment" Anchor="the-public-catalog" /></h3>
-        <p class="text-secondary small mb-4">
-            Gear used for paranormal investigation. The makes and models grow as members add their own
-            equipment. Nothing here shows who owns anything.
-        </p>
-
-        <div class="row g-2 mb-3">
-            <div class="col-md-5">
-                <input class="form-control" placeholder="Search make or model…"
-                       value="@_search"
-                       @oninput="@(e => _search = e.Value?.ToString() ?? string.Empty)"
-                       @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
-            </div>
-            <div class="col-md-4">
+    @* Signal phase 2: the photograph, the title and the search in one frame. *@
+    <PageHero Photo="i1-flashlight-silhouette" TestId="catalog-hero" Compact="true"
+              Kicker="Equipment" Title="Equipment Catalog"
+              Lede="Gear used for paranormal investigation. The makes and models grow as members add their own equipment. Nothing here shows who owns anything.">
+        <div class="catalog-search">
+            <input class="form-control" placeholder="Search make or model…" aria-label="Search make or model"
+                   value="@_search"
+                   @oninput="@(e => _search = e.Value?.ToString() ?? string.Empty)"
+                   @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
+            <div class="catalog-search__category">
                 <BenSelect Data="@_categories" Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))" TextField="@nameof(EquipmentCategoryRecord.Name)" ValueField="@nameof(EquipmentCategoryRecord.Id)" DefaultText="All categories" Width="100%" />
             </div>
-            <div class="col-md-3">
-                <button type="button" class="btn btn-primary" @onclick="LoadAsync" disabled="@(!(!_loading))">Search</button>
-            </div>
+            <button type="button" class="btn btn-primary" @onclick="LoadAsync" disabled="@(!(!_loading))">Search</button>
         </div>
+        <div><a class="btn btn-sm btn-outline-light" href="/help/your-equipment#the-public-catalog">How the catalogue works</a></div>
+    </PageHero>
 
+    <div class="home-band">
         @if (_loading)
         {
             <BenLoaderOverlay Visible="true" Text="Loading the catalog…" />

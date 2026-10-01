@@ -7,18 +7,60 @@
 
 <PageTitle>Help</PageTitle>
 
-<div class="container-fluid py-3 help-page">
-    <div class="mb-4">
-        <h3 class="mb-1">Help</h3>
-        <p class="text-secondary mb-0">
-            Guides to using @SiteOptions.Value.Name. You see the topics that apply to you — signing in, or
-            joining a group, adds more.
-        </p>
+@*
+    Signal phase 2: the photograph, the title and a box that finds a guide as you type, in one
+    frame. Somebody on this page has a question; the fastest answer is to type it, not to open
+    sections until one looks right. The sections stay collapsible (as asked for), each guide a tile.
+*@
+<PageHero Photo="v3-hotel-lobby" TestId="help-hero" Compact="true"
+          Kicker="Guides" Title="Help"
+          Lede="@($"Guides to using {SiteOptions.Value.Name}. You see the topics that apply to you — signing in, or joining a group, adds more.")"
+          Facts="@HeroFacts">
+    <div class="help-find">
+        <label class="visually-hidden" for="help-find">Find a guide</label>
+        <input id="help-find" type="search" class="form-control" placeholder="Find a guide — try “EVP” or “tour”"
+               @bind="_find" @bind:event="oninput" autocomplete="off" />
     </div>
+</PageHero>
 
+<div class="home-band">
     @if (_sections is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading help…" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_find))
+    {
+        var found = Matches().ToList();
+        <div class="ben-section-head">
+            <div class="ben-kicker">@found.Count @(found.Count == 1 ? "guide" : "guides") for “@_find.Trim()”</div>
+        </div>
+        @if (found.Count == 0)
+        {
+            <div class="ben-empty">
+                <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
+                <div class="ben-empty__title">No guide mentions that.</div>
+                <p class="ben-empty__text">Try a shorter word, or open the sections below.</p>
+                <div class="ben-empty__actions">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => _find = "")">Show every section</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="help-tiles">
+                @foreach (var doc in found)
+                {
+                    <a class="help-tile" href="@($"/help/{doc.Slug}")">
+                        <span class="help-tile__section">@doc.Section</span>
+                        <span class="help-tile__title">@doc.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(doc.Summary))
+                        {
+                            <span class="help-tile__summary">@doc.Summary</span>
+                        }
+                    </a>
+                }
+            </div>
+        }
     }
     else
     {
@@ -27,19 +69,19 @@
             @* Collapsible per the request: a reader opens the part that concerns them rather
                than scrolling past every other role's documents. The first section starts open
                so the page never looks empty. *@
-            <details class="card mb-3 help-section" open="@(section == _sections[0])">
-                <summary class="card-header d-flex align-items-center justify-content-between">
-                    <span class="fw-semibold">@section.Name</span>
-                    <span class="badge bg-secondary">@section.Documents.Count</span>
+            <details class="help-group" open="@(section == _sections[0])">
+                <summary class="help-group__head">
+                    <span class="help-group__name">@section.Name</span>
+                    <span class="help-group__count">@section.Documents.Count</span>
                 </summary>
-                <div class="list-group list-group-flush">
+                <div class="help-tiles">
                     @foreach (var doc in section.Documents)
                     {
-                        <a class="list-group-item list-group-item-action" href="@($"/help/{doc.Slug}")">
-                            <div class="fw-semibold">@doc.Title</div>
+                        <a class="help-tile" href="@($"/help/{doc.Slug}")">
+                            <span class="help-tile__title">@doc.Title</span>
                             @if (!string.IsNullOrWhiteSpace(doc.Summary))
                             {
-                                <div class="small text-secondary">@doc.Summary</div>
+                                <span class="help-tile__summary">@doc.Summary</span>
                             }
                         </a>
                     }
@@ -51,6 +93,27 @@
 
 @code {
     private IReadOnlyList<HelpSection>? _sections;
+    private string _find = "";
+
+    /// <summary>Every word typed must appear in the guide's title, summary or section.</summary>
+    private IEnumerable<HelpDocument> Matches()
+    {
+        var words = _find.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return (_sections ?? [])
+            .SelectMany(s => s.Documents)
+            .Where(d => words.All(w =>
+                d.Title.Contains(w, StringComparison.OrdinalIgnoreCase)
+                || d.Summary.Contains(w, StringComparison.OrdinalIgnoreCase)
+                || d.Section.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .DistinctBy(d => d.Slug);
+    }
+
+    private IReadOnlyList<Ben.Web.Website.Library.Kit.BenFactItem>? HeroFacts =>
+        _sections is null ? null :
+        [
+            new("Guides", _sections.SelectMany(s => s.Documents).Select(d => d.Slug).Distinct().Count().ToString(), "for you", Emphasis: true),
+            new("Sections", _sections.Count.ToString(), null),
+        ];
 
     protected override async Task OnInitializedAsync()
     {

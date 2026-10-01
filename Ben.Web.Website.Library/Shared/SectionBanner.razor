@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Shared
 @implements IDisposable
 @inject NavigationManager Nav
+@inject OwnHeroState OwnHero
 
 @*
     A photograph across the top of every page, chosen by the section the page belongs to.
@@ -24,11 +25,11 @@
     wwwroot/static/images/signal, resampled to 1500px.
 *@
 
-@if (Current is { } band)
+@if (!OwnHero.Active && Current is { } band)
 {
     <section class="section-banner @(band.Slim ? "section-banner--slim" : null)" data-testid="section-banner" data-section="@band.Kicker">
         <div class="section-banner__photo"
-             style="@($"background-image:url('/static/images/signal/{band.Photo}.jpg');background-position:center {Focus(band.Photo)}")"
+             style="@SignalPhotos.BackgroundStyle(band.Photo)"
              aria-hidden="true"></div>
         <div class="section-banner__inner">
             <div class="section-banner__kicker">@band.Kicker</div>
@@ -40,38 +41,6 @@
 @code {
     private sealed record Band(string Kicker, string Line, string Photo, bool Slim = false);
 
-    /// <summary>
-    /// Where each photograph's subject sits, as a vertical percentage — chosen by looking at every
-    /// one cropped to the band's real proportions (roughly 6:1 to 8:1), not by guessing.
-    /// </summary>
-    /// <remarks>
-    /// <para>Only the vertical number matters. A landscape photograph in a band this wide is
-    /// scaled to the band's WIDTH and cropped top-to-bottom, so a horizontal position does
-    /// nothing at all.</para>
-    /// <para>It belongs to the PHOTO rather than the section, so a photograph used by two
-    /// sections is framed the same way in both. One centre for everything was wrong for most of
-    /// them: the graveyard at 45% was nearly all fog — its headstones are at 70% — and the
-    /// hallway's lit doorway sat off-centre.</para>
-    /// </remarks>
-    private static readonly Dictionary<string, string> Focal = new()
-    {
-        ["i1-flashlight-silhouette"] = "40%",   // head, shoulders and the beam
-        ["i2-dark-hallway"]          = "52%",   // the lit doorway, centred
-        ["i3-walking-to-house"]      = "48%",   // the lit windows
-        ["p1-phone-camera"]          = "40%",   // the phone, whole
-        ["s1-candles"]               = "28%",   // the densest candlelight
-        ["s2-ouija"]                 = "48%",   // the word OUIJA and the planchette
-        ["s3-candle-chandelier"]     = "35%",   // the candles, not the curtain below
-        ["t1-theatre-seats"]         = "45%",
-        ["v1-venue-exterior"]        = "38%",   // the turrets and the lit facade
-        ["v3-hotel-lobby"]           = "40%",   // the room's depth and its chandeliers
-        ["v6-ballroom"]              = "35%",   // the chandeliers fill the band
-        ["w2-cobblestone-night"]     = "50%",   // the lamp-lit doorway down the alley
-        ["w3-foggy-graveyard"]       = "70%",   // the headstones, not the fog above them
-        ["d1-candlelit-dinner"]      = "60%",   // faces and candles together
-    };
-
-    private static string Focus(string photo) => Focal.TryGetValue(photo, out var y) ? y : "50%";
 
     // Most specific first: the first prefix that matches the address wins.
     private static readonly (string Prefix, Band Band)[] Bands =
@@ -125,8 +94,17 @@
     }
 
     // The layout outlives a navigation — only @Body changes — so the band has to be told.
-    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        OwnHero.Changed += OnOwnHeroChanged;
+    }
+    private void OnOwnHeroChanged() => InvokeAsync(StateHasChanged);
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
         => InvokeAsync(StateHasChanged);
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        OwnHero.Changed -= OnOwnHeroChanged;
+    }
 }

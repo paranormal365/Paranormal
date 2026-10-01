@@ -31,12 +31,12 @@ else if (_org is null)
 else
 {
     @* ── Org header ──────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
+    <div class="home-band">
 
         <OrgPublicBanner Name="@_org.OrgName" UrlName="@_org.OrgUrlName"
                          LogoUrl="@(_org.Logos.Any() ? AdminClient.GetFileThumbnailUrl(_org.Logos.First().UploadFileId) : null)"
                          LogoAlt="@(_org.Logos.FirstOrDefault()?.AltText)"
-                         Class="mb-3">
+                         Facts="@(_org.Facts is { } hf ? GroupFacts(hf) : null)">
             @* What this group is, said plainly (2026-08-24). A visitor who wants a tour and a
                visitor who wants an investigation are looking for different things, and the name
                alone rarely tells them apart. *@
@@ -68,11 +68,10 @@ else
                     }
                 </div>
             }
+            @* ── Sub-page navigation, at the foot of the frame ─────────────────── *@
+            <OrgPublicNav OrgUrlName="@_org.OrgUrlName" NavPages="@_org.NavPages"
+                          ShowTours="@(_tours.Count > 0)" />
         </OrgPublicBanner>
-
-        @* ── Sub-page navigation ──────────────────────────────────────────── *@
-        <OrgPublicNav OrgUrlName="@_org.OrgUrlName" NavPages="@_org.NavPages"
-                      ShowTours="@(_tours.Count > 0)" Class="mb-4" />
 
         @* ── Home page content ────────────────────────────────────────────── *@
         @if (_org.HomePage is not null)
@@ -93,8 +92,6 @@ else
                     @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@facts.AreaServed</strong></text> }
                     @if (facts.OnSinceYear > 0) { <text>, on @SiteOptions.Value.Name since @facts.OnSinceYear</text> }.
                 </p>
-
-                <BenFactRail Facts="@GroupFacts(facts)" Class="mb-2" />
 
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     @if (facts.IsAcceptingClients)
@@ -141,8 +138,9 @@ else
         }
         else
         {
-            <div class="alert alert-light text-center text-muted mt-4">
-                This organization has not published a home page yet.
+            <div class="ben-empty mt-4">
+                <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
+                <div class="ben-empty__title">This organization has not published a home page yet.</div>
             </div>
         }
 

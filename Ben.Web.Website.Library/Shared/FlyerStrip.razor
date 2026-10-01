@@ -1,3 +1,4 @@
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @*
     Ben, 2026-10-01: the seven advertisements, on the home page, as 64-pixel thumbnails with the
     audience written underneath — "with the IsHaunted-flyer being for everyone".
@@ -23,9 +24,9 @@
                 @foreach (var f in Flyers)
                 {
                     <a class="flyer" href="@($"/flyers/{f.File}")" target="_blank" rel="noopener"
-                       title="@f.Title" data-flyer="@f.File">
+                       title="@TitleOf(f)" data-flyer="@f.File">
                         <img src="@($"/flyers/thumbs/{f.File.Replace(".pdf", ".png")}")"
-                             width="64" height="83" loading="lazy" alt="@($"Front page of {f.Title}")" />
+                             width="64" height="83" loading="lazy" alt="@($"Front page of {TitleOf(f)}")" />
                         <span class="who">@f.Who</span>
                     </a>
                 }
@@ -37,12 +38,15 @@
 @code {
     private sealed record Flyer(string File, string Who, string Title);
 
+    private string TitleOf(Flyer f) => string.Format(f.Title, SiteOptions.Value.Name);
+
     // "Everyone" first, and it is the whole-platform one: the other six each answer "is this for
     // me?", this one answers "what does it do?".
     private static readonly Flyer[] Flyers =
     [
-        new("IsHaunted-Flyer.pdf",          "Everyone",            "Everything IsHaunted.com does"),
-        new("IsHaunted-Ad-IsHaunted.pdf",   "Just curious",        "IsHaunted.com — a first look"),
+        // {0} is the site's name, from SiteIdentity — the domain is not settled.
+        new("IsHaunted-Flyer.pdf",          "Everyone",            "Everything {0} does"),
+        new("IsHaunted-Ad-IsHaunted.pdf",   "Just curious",        "{0} — a first look"),
         new("IsHaunted-Ad-Individuals.pdf", "Enthusiasts",         "IsHaunted for enthusiasts"),
         new("IsHaunted-Ad-Groups.pdf",      "Investigation groups","IsHaunted for investigation groups"),
         new("IsHaunted-Ad-Ghost-Walks.pdf", "Ghost walk tours",    "IsHaunted for ghost walk tours"),

@@ -210,7 +210,7 @@
     private static string Describe(PublicHostedEventPlanUnitRecord unit)
     {
         var holds = unit.Holds is { } capacity ? $" · sleeps {capacity}" : "";
-        var price = unit.Price is { } money ? $" · {money:C0}" : "";
+        var price = unit.Price is { } money ? $" · {BenMoney.Format(money)}" : "";
         return $"{unit.Name}{holds}{price}";
     }
 
@@ -219,7 +219,7 @@
     {
         if (_kind == HostedEventBookingKind.DayPass)
             return Hosted.DayPassPrice is { } day
-                ? $"A day pass is {day:C0}, settled with {Hosted.OrganizationName} and never here."
+                ? $"A day pass is {BenMoney.Format(day)}, settled with {Hosted.OrganizationName} and never here."
                 : null;
 
         var named = _preferred.Values.OfType<Guid>()
@@ -229,7 +229,7 @@
 
         return named.Count == 0
             ? null
-            : $"Those rooms come to {named.Sum(p => p!.Value):C0}, settled with "
+            : $"Those rooms come to {BenMoney.Format(named.Sum(p => p!.Value))}, settled with "
               + $"{Hosted.OrganizationName} and never here.";
     }
 
