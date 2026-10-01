@@ -19,6 +19,86 @@
     the template already has a nested-menu pattern, and one place to look for navigation beats two.
 *@
 
+@*
+    ── ONE MODEL, THREE RENDERINGS ──────────────────────────────────────────
+    Signal moves the navigation to the top (Ben, 2026-10-01): the bar picks a SECTION, and the
+    rail beside the page shows what you can do inside it — the shape Administration already had,
+    applied to the whole site.
+
+    All three renderings read the SAME `VisibleSections`, so every gate, badge and count has one
+    owner and cannot drift. Only the markup differs:
+
+        TopBar      the sections, as links. Picking one goes to its landing page.
+        Contextual  the children of whichever section you are in, in the rail.
+        (neither)   the original full sidebar, kept for the mobile drawer.
+
+    A section with no children of its own is a plain link and leaves the rail empty, which is
+    correct: there is nothing else to do in it.
+*@
+@if (TopBar)
+{
+    <nav class="app-topnav" id="nav-menu">
+        @{ _activeUrl = MostSpecificMatch(); }
+        <ul class="topnav-list">
+            @foreach (var section in BarSections)
+            {
+                <li class="topnav-item @(IsCurrentSection(section) ? "active" : null)">
+                    <a class="topnav-link" href="@LandingUrl(section)" title="@section.Text">
+                        <BenIcon Name="@section.Icon" />
+                        <span>@section.Text</span>
+                        @if (section.Count > 0)
+                        {
+                            <span class="badge @NotificationBadge.CssClass(section.Urgency)"
+                                  title="@($"{section.Count} {section.BadgeNoun}")"
+                                  aria-label="@($"{section.Count} {section.BadgeNoun}")">@NotificationBadge.Text(section.Count)</span>
+                        }
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+    @if (IsImpersonating)
+    {
+        <div class="impersonation-banner impersonation-banner--top">
+            <BenIcon Name="user" />
+            <span class="text-truncate">Viewing as <strong>@TokenStore.UserEmail</strong></span>
+            <button type="button" class="btn btn-warning btn-sm ms-auto" @onclick="ReturnToSuperAdmin">
+                Return to SuperAdmin
+            </button>
+        </div>
+    }
+}
+else if (Contextual)
+{
+    _activeUrl = MostSpecificMatch();
+
+    @if (CurrentSection is { } current && current.Children.Count > 0)
+    {
+        <aside class="app-rail">
+            <div class="app-rail__title">@current.Text</div>
+            <ul class="app-rail__list">
+                @foreach (var child in current.Children)
+                {
+                    <li class="@(IsActive(child) ? "active" : null)">
+                        <a href="@child.Url" title="@child.Text">
+                            <BenIcon Name="@child.Icon" />
+                            <span>@child.Text</span>
+                            @if (child.Count > 0)
+                            {
+                                <span class="badge @NotificationBadge.CssClass(child.Urgency)"
+                                      title="@($"{child.Count} {child.BadgeNoun}")"
+                                      aria-label="@($"{child.Count} {child.BadgeNoun}")">@NotificationBadge.Text(child.Count)</span>
+                            }
+                        </a>
+                    </li>
+                }
+            </ul>
+        </aside>
+    }
+}
+else
+{
 <aside class="app-sidebar d-flex flex-column">
 
     @* No logo here: the brand lives in the header, ahead of the sidebar toggle. *@
@@ -77,6 +157,7 @@
    the open sidebar is 288px wide starting at x:0, which covers the hamburger that opened it, so
    the only way out is to pick a link. CSS shows it only while .app-mobile-menu-open is set. *@
 <div class="backdrop" data-action="toggle-swap" data-toggleclass="app-mobile-menu-open"></div>
+}
 
 @code {
     /// <summary>Passed down by MainLayout — see the note at its call site for why these are
@@ -90,6 +171,55 @@
     /// <summary>Store sellers (backlog 251): holds the Seller role, so has a Selling workspace.</summary>
     [Parameter] public bool IsSeller { get; set; }
     [Parameter] public bool IsImpersonating { get; set; }
+
+    /// <summary>Render the sections as a horizontal bar (Signal).</summary>
+    [Parameter] public bool TopBar { get; set; }
+
+    /// <summary>Render the current section's children as the rail beside the page (Signal).</summary>
+    [Parameter] public bool Contextual { get; set; }
+
+
+    // ── The bar and the rail ─────────────────────────────────────────────
+    //
+    // Both are built from VisibleSections, so they cannot drift from each other or from the
+    // sidebar. A section that HAS a title becomes one entry on the bar; the untitled section
+    // (Home and the public destinations) contributes its items directly, because those are
+    // destinations rather than areas.
+
+    /// <summary>The sections, as the bar shows them.</summary>
+    private List<NavItem> BarSections
+    {
+        get
+        {
+            var items = new List<NavItem>();
+            foreach (var section in VisibleSections)
+            {
+                if (section.Title is { } title)
+                {
+                    items.Add(new NavItem(title, section.Items.FirstOrDefault()?.Icon ?? "grid",
+                                          url: string.Empty, children: section.Items.ToList()));
+                }
+                else
+                {
+                    items.AddRange(section.Items);
+                }
+            }
+            return items;
+        }
+    }
+
+    /// <summary>Where picking a section on the bar goes: its own url, or its first child's.</summary>
+    private string LandingUrl(NavItem section)
+        => !string.IsNullOrEmpty(section.Url) && section.Url != "#"
+            ? section.Url
+            : section.Children.FirstOrDefault()?.Url ?? "/";
+
+    /// <summary>The section the current address belongs to, if any.</summary>
+    private NavItem? CurrentSection
+        => BarSections.FirstOrDefault(IsCurrentSection);
+
+    private bool IsCurrentSection(NavItem section)
+        => IsActive(section) || section.Children.Any(IsActive);
 
     private string _filter = string.Empty;
     private readonly HashSet<string> _openGroups = new();

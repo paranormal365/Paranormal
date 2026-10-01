@@ -48,13 +48,12 @@
             <BenIcon Name="menu" />
         </button>
 
-        <button type="button" class="collapse-icon me-3 d-none d-lg-inline-flex"
-                data-action="toggle" data-class="set-nav-minified"
-                aria-label="Toggle Navigation Size">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 8">
-                <polygon fill="currentColor" points="4.5,1 3.8,0.2 0,4 3.8,7.8 4.5,7 1.5,4" />
-            </svg>
-        </button>
+        @* The sidebar-size toggle is gone. Signal moved the navigation to the top bar and a
+           contextual rail, so on a wide screen there is no sidebar for it to minify — it was a
+           control that visibly did nothing, which is worse than no control. The template also
+           forced it to display:flex past anything a stylesheet could hide it with, so it is
+           removed rather than hidden. The phone's hamburger, below, is a separate button and
+           still opens the drawer. No test referenced it. *@
     </div>
 
     @* No settings drawer: the template's layout options (fixed header, nav variants, skins) are

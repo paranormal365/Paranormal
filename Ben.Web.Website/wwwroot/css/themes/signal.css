@@ -154,6 +154,11 @@
 
     --bs-focus-ring-color:        rgba(var(--ben-accent-rgb), .35);
     --bs-focus-ring-width:        3px;
+
+    /* The template paints its content area from this one variable, and the Night skin had it at
+       #363c41 — the grey the old hero PNG was blended to. It is most of why the signed-in pages
+       still looked like the old site after everything else had changed. */
+    --app-content-background:     var(--ben-bg);
 }
 
 /* --bs-body-*-rgb cannot be an alias: Bootstrap composes them inside rgba(), so they must be
@@ -323,3 +328,151 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 .ben-brand__tile img { width: 68%; height: 68%; filter: brightness(0) invert(1); }
 .ben-brand__dot { background-image: var(--ben-accent-grad); -webkit-background-clip: text;
                   background-clip: text; color: transparent; }
+
+/* ── The shell: a bar that picks a section, a rail that shows what is in it ───
+ *
+ * Ben, 2026-10-01: the menus move to the top, and picking one opens that section — the shape
+ * Administration already had, applied to the whole site. The rail is then only the things you can
+ * do inside the section you are in, which is why it is usually short.
+ *
+ * "I don't like the side menu flowing into some top nav bar. I think it should be separate maybe
+ * rounded edges." — so the rail is a CARD, not a column: it floats in the content area with the
+ * same surface, radius and shadow as everything else on the page, and there is daylight between it
+ * and the bar above it.
+ *
+ * The template's own full sidebar is still rendered, for the mobile drawer. It is hidden here on
+ * wide screens rather than removed, because the drawer, its backdrop and the hamburger that opens
+ * it are one working mechanism and taking a piece out breaks the other two.
+ */
+/* The template's grid is header + sidebar + body. Signal needs header + nav + body, in one
+   column, and the areas have to be STATED: leaving .app-topnav to claim `header` put it in the
+   same cell as BenHeader, and a hidden sidebar that still declares `grid-area: sidebar` made the
+   browser invent a row for it — which is how the menu ended up floating in the middle of the
+   login page. */
+@media (min-width: 992px) {
+    .app-wrap {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto auto 1fr !important;
+        grid-template-areas: "header" "nav" "body" !important;
+    }
+    .app-wrap > .app-header  { grid-area: header; }
+    .app-wrap > .app-topnav  { grid-area: nav; }
+    .app-wrap > .app-body    { grid-area: body; min-height: 0; }
+
+    /* The full sidebar and its backdrop stay in the markup for the mobile drawer; out of the
+       grid's way entirely rather than merely invisible, or they still take a row. */
+    .app-wrap > .app-sidebar,
+    .app-wrap > .backdrop { display: none !important; }
+
+    /* the impersonation banner rides with the nav row rather than inventing one of its own */
+    .app-wrap > .impersonation-banner--top { grid-area: nav; align-self: end; }
+
+}
+
+.app-topnav {
+    background-color: var(--ben-nav-bg);
+    border-bottom: 1px solid var(--ben-line);
+    padding: 0 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.app-topnav::-webkit-scrollbar { display: none; }
+
+.topnav-list {
+    display: flex;
+    align-items: stretch;
+    gap: .15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    min-height: 3rem;
+}
+
+.topnav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    height: 100%;
+    padding: .55rem .85rem;
+    border: 0;
+    background: transparent;
+    color: var(--ben-nav-ink-muted);
+    font-size: .92rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+    border-radius: var(--ben-radius-sm);
+    cursor: pointer;
+}
+.topnav-link:hover { color: var(--ben-nav-ink); background-color: var(--ben-accent-soft); }
+
+/* The current section carries the accent as an underline rather than a fill: a filled pill on the
+   bar competes with the primary button, which is the one thing on a page that should look pressed. */
+.topnav-item.active > .topnav-link {
+    color: var(--ben-nav-ink);
+    box-shadow: inset 0 -2px 0 0 var(--ben-accent);
+    border-radius: var(--ben-radius-sm) var(--ben-radius-sm) 0 0;
+}
+
+.impersonation-banner--top {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem 1rem;
+    background-color: var(--bs-warning-bg-subtle);
+    border-bottom: 1px solid var(--ben-line);
+}
+
+/* ── the rail ───────────────────────────────────────────────────────────── */
+/* Inset from the window on both sides: without it the rail sat on x:0 and its rounded corners
+   were clipped by the edge of the page, which read as a column again rather than a card. */
+.app-shell { display: flex; align-items: flex-start; gap: 1.5rem; padding-inline: 1.25rem; }
+.app-shell > .content-wrapper { flex: 1; min-width: 0; }
+
+.app-rail {
+    flex: none;
+    width: 15rem;
+    /* Sticky, so it is an ordinary part of the page until you scroll level with it and then stays
+       put — "static when you scroll past it". It also starts low rather than flush with the bar,
+       which is what keeps it from reading as a second navigation strip hanging off the top. */
+    position: sticky;
+    top: 1.25rem;
+    margin: 5.5rem 0 1.5rem;
+    padding: .85rem;
+    background-color: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow);
+}
+
+.app-rail__title {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ben-ink-faint);
+    padding: 0 .55rem .5rem;
+}
+
+.app-rail__list { list-style: none; margin: 0; padding: 0; }
+.app-rail__list a {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .5rem .55rem;
+    border-radius: var(--ben-radius-sm);
+    color: var(--ben-ink-muted);
+    font-size: .88rem;
+    text-decoration: none;
+}
+.app-rail__list a:hover { background-color: var(--ben-accent-soft); color: var(--ben-ink); }
+.app-rail__list li.active > a {
+    background-color: var(--ben-accent-soft);
+    color: var(--ben-ink);
+    font-weight: 650;
+}
+.app-rail__list .badge { margin-left: auto; }
+
+@media (max-width: 991.98px) {
+    .app-rail { display: none; }   /* the drawer carries the whole menu on a phone */
+}
