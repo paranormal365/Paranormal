@@ -28,11 +28,18 @@
            Deliberately NOT the template's .app-logo class: that is a fixed 252px block shaped
            around the template's own logo markup, and our wordmark overflows it straight under
            the toggle button. This one sizes to its content. *@
-        <a href="/" class="ben-brand d-flex align-items-center gap-2 me-3 flex-shrink-0">
-            <img src="/static/images/is-haunted-logo.svg" alt="" style="height:30px;width:auto;" />
-            <span class="is-haunted-text d-none d-sm-inline">
-                <strong>Is</strong><em>Haunted</em><span class="opacity-75">.com</span>
-            </span>
+        <a href="/" class="ben-brand me-3 flex-shrink-0">
+            @* Signal's lockup. The mark is a white ghost in a GREEN ring with amber windows and
+               Signal is violet and cyan, so at full colour it is the only green thing in the bar.
+               .ben-brand__tile turns it white and sets it in the accent gradient — a CSS filter,
+               not a second asset, so the brand file is untouched and still serves the favicon, the
+               app icon, the iOS listing and the flyers at full colour. *@
+            <span class="ben-brand__tile"><img src="/static/images/is-haunted-logo.svg" alt="" /></span>
+            @* .is-haunted-text is load-bearing, not decoration: app.css hides the wordmark by that
+               class when the nav is minified, with !important, because it carries Bootstrap's own
+               .d-sm-inline utility. Dropping the class left the wordmark showing in the minified
+               rail. *@
+            <span class="is-haunted-text d-none d-sm-inline">IsHaunted<span class="ben-brand__dot">.com</span></span>
         </a>
 
         <button class="mobile-menu-icon me-2 d-flex d-lg-none flex-shrink-0" type="button"

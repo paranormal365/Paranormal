@@ -7,14 +7,16 @@
 @* ── Hero ─────────────────────────────────────────────────────────────────── *@
 <div class="home-hero">
     <div class="home-hero__brand">
-        @* The logo carries the site's name, so there is no title line under it. One picture per theme,
-           chosen by the site's own theme attribute (so the header's toggle is followed, not only the
-           device's setting); each blends into its page — #363c41 in dark, white in light. Lazy, so
-           the browser fetches only the one it shows: a hidden lazy image is never requested. *@
-        <img src="/static/images/logo-glass-white.png" alt="@SiteOptions.Value.Name"
-             class="home-hero__logo home-hero__logo--light" width="1254" height="1254" loading="lazy" />
-        <img src="/static/images/logo-glass-gray.png" alt="@SiteOptions.Value.Name"
-             class="home-hero__logo home-hero__logo--dark" width="1254" height="1254" loading="lazy" />
+        @* The logo carries the site's name, so there is no title line under it.
+           ONE picture now, and it is the vector.
+           It used to be two rasters with the glow BAKED IN — logo-glass-white.png blended to white
+           and logo-glass-gray.png to #363c41 — which meant each was tied to one palette. Signal's
+           dark is #0C1017, not #363c41, so the baked halo showed as a grey box around the mark the
+           moment the skin changed, and every future palette change would need both files redrawn.
+           The glow is a CSS drop-shadow off the accent token instead, so it blends into whatever
+           the page is, in either mode, with nothing to regenerate. *@
+        <img src="/static/images/is-haunted-logo.svg" alt="@SiteOptions.Value.Name"
+             class="home-hero__logo" width="627" height="627" />
         <p class="home-hero__tagline">Connect with paranormal investigation groups near you</p>
     </div>
 
@@ -144,16 +146,19 @@
         height: auto;
     }
 
-    /* The square pictures leave empty space under the reflection; the tagline moves up into it, by a
-       share of the logo's own width so the gap stays the same at every size. The light one only a
-       little: its dark halo reaches further down, and the grey tagline must not sit on it. */
-    .home-hero__logo--dark  { margin-bottom: calc(var(--logo-w) * -0.13); }
-    .home-hero__logo--light { margin-bottom: calc(var(--logo-w) * -0.05); }
+    /* The glow, which used to be painted into the two rasters and is now cast off the accent.
+       Two shadows rather than one: a tight dark lift so the white ghost keeps an edge on a white
+       page, and a wide accent bloom that ties the mark to the rest of the skin. Both read in
+       either mode because they are drawn from tokens, and nothing has to be redrawn when the
+       palette moves again. */
+    .home-hero__logo {
+        filter:
+            drop-shadow(0 2px 10px rgba(0, 0, 0, .18))
+            drop-shadow(0 0 48px rgba(var(--ben-accent-rgb), .40));
+    }
 
-    /* Light by default; the dark picture only under the dark theme. */
-    .home-hero__logo--dark { display: none; }
-    [data-bs-theme="dark"] .home-hero__logo--dark  { display: block; }
-    [data-bs-theme="dark"] .home-hero__logo--light { display: none; }
+    /* The vector has no reflection under it, so the tagline no longer has to climb into one. */
+    .home-hero__logo { margin-bottom: .35rem; }
 
     .home-hero__tagline {
         color: var(--kendo-color-subtle-text, #888);

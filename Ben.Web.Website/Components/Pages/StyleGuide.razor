@@ -28,6 +28,82 @@ else
 <div class="row">
 
     <div class="col-xl-6">
+        <BenPanel Title="Skin tokens" Subtitle="themes/signal.css">
+            @*
+                Signal phase 1. The skin names every colour, shape and shadow ONCE, as a --ben-*
+                token, and feeds Bootstrap's own --bs-* from it; nothing else in the site should
+                carry a colour literal. These swatches read the live values, so this panel tells
+                the truth about whatever is in themes/signal.css right now rather than about what
+                it said when this was written.
+
+                Flip light/dark in the header: every chip here must change and none may vanish.
+                Every fault found so far has been light-only.
+            *@
+            <h4 class="h6 mb-2">Surfaces and lines</h4>
+            <div class="sg-tokens mb-3">
+                @foreach (var (token, label) in Surfaces)
+                {
+                    <div class="sg-token">
+                        <span class="sg-chip" style="@($"background:var({token})")"></span>
+                        <code>@token</code><small>@label</small>
+                    </div>
+                }
+            </div>
+
+            <h4 class="h6 mb-2">Ink</h4>
+            <div class="sg-tokens mb-3">
+                @foreach (var (token, label) in Inks)
+                {
+                    <div class="sg-token">
+                        <span class="sg-chip sg-chip--text" style="@($"color:var({token})")">Aa</span>
+                        <code>@token</code><small>@label</small>
+                    </div>
+                }
+            </div>
+
+            <h4 class="h6 mb-2">Accent</h4>
+            <div class="sg-tokens mb-3">
+                <div class="sg-token"><span class="sg-chip" style="background:var(--ben-accent)"></span><code>--ben-accent</code><small>primary</small></div>
+                <div class="sg-token"><span class="sg-chip" style="background:var(--ben-accent-2)"></span><code>--ben-accent-2</code><small>secondary</small></div>
+                <div class="sg-token"><span class="sg-chip" style="background:var(--ben-accent-soft)"></span><code>--ben-accent-soft</code><small>tint</small></div>
+                <div class="sg-token"><span class="sg-chip sg-chip--grad"></span><code>--ben-accent-grad</code><small>gradient</small></div>
+            </div>
+
+            <h4 class="h6 mb-2">Shape and depth</h4>
+            <div class="sg-tokens">
+                @foreach (var (token, label) in Shapes)
+                {
+                    <div class="sg-token">
+                        <span class="sg-chip sg-chip--plain" style="@($"border-radius:var({token})")"></span>
+                        <code>@token</code><small>@label</small>
+                    </div>
+                }
+                @foreach (var (token, label) in Shadows)
+                {
+                    <div class="sg-token">
+                        <span class="sg-chip sg-chip--plain" style="@($"box-shadow:var({token})")"></span>
+                        <code>@token</code><small>@label</small>
+                    </div>
+                }
+            </div>
+        </BenPanel>
+
+        <BenPanel Title="The brand lockup" Subtitle="ben-brand">
+            @*
+                The mark is a white ghost in a GREEN ring with amber windows, and Signal is violet
+                and cyan — at full colour it is the only green thing on a page and reads as a
+                sticker. It is turned white by a CSS filter and set in a gradient tile, which
+                leaves the brand file itself untouched: the full-colour original still serves the
+                favicon, the app icon, the iOS listing and the flyers.
+            *@
+            <a class="ben-brand fs-4" href="/">
+                <span class="ben-brand__tile"><img src="/static/images/is-haunted-logo.svg" alt="" /></span>
+                <span>IsHaunted<span class="ben-brand__dot">.com</span></span>
+            </a>
+        </BenPanel>
+    </div>
+
+    <div class="col-xl-6">
         <BenPanel Title="Buttons &amp; inputs" Subtitle="native Bootstrap">
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <button class="btn btn-primary">Primary</button>
@@ -209,6 +285,30 @@ else
         new("Cedar Street", "Open", 7),
         new("The Old Rectory", "Closed", 1),
     };
+
+    private static readonly (string Token, string Label)[] Surfaces =
+    [
+        ("--ben-bg", "page"), ("--ben-bg-sunken", "gutters, bars"),
+        ("--ben-surface", "cards"), ("--ben-surface-raised", "popovers, modals"),
+        ("--ben-line", "hairlines"), ("--ben-line-strong", "field borders"),
+    ];
+
+    private static readonly (string Token, string Label)[] Inks =
+    [
+        ("--ben-ink", "body"), ("--ben-ink-muted", "secondary"), ("--ben-ink-faint", "captions"),
+    ];
+
+    private static readonly (string Token, string Label)[] Shapes =
+    [
+        ("--ben-radius-sm", "8px"), ("--ben-radius", "12px"),
+        ("--ben-radius-lg", "20px"), ("--ben-radius-pill", "pill"),
+    ];
+
+    private static readonly (string Token, string Label)[] Shadows =
+    [
+        ("--ben-shadow-sm", "small"), ("--ben-shadow", "default"),
+        ("--ben-shadow-lg", "large"), ("--ben-glow", "accent glow"),
+    ];
 
     private void ToastSuccess() => Toasts.Success("Saved.");
     private void ToastInfo()    => Toasts.Info("Nine files queued.");

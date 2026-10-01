@@ -1,0 +1,325 @@
+/* ============================================================================
+ * Signal — the site's skin.
+ *
+ * REPLACES themes/night.min.css at the <link id="theme-style"> swap point. Ben chose Signal from
+ * the three directions in docs/design on 2026-10-01 and said the SmartAdmin theme file could be
+ * replaced outright, as long as Bootstrap stays Bootstrap.
+ *
+ * WHAT THIS FILE IS, AND WHAT IT DELIBERATELY IS NOT
+ *
+ * It is a TOKEN file. Bootstrap 5.3.8 is compiled into smartapp.min.css and already defines every
+ * --bs-* variable it uses; night.min.css was 252 rules that did nothing but OVERRIDE some of those
+ * with the Night palette. So this does the same job with Signal's values, and everything it does
+ * not mention falls back to Bootstrap's own default — which is the point of consolidating: fewer
+ * values to own, and the ones we own are all here, in one place, readable.
+ *
+ * It is NOT a second component library. Where a Bootstrap component needs to look different, the
+ * change is made by setting that component's OWN --bs-* variables (`.card { --bs-card-bg: … }`)
+ * rather than by writing a competing rule. That is Bootstrap's documented extension point, it
+ * survives a Bootstrap upgrade, and it is the form Ben reads fluently.
+ *
+ * LOAD ORDER, which is load-bearing
+ *     smartapp.min.css   (vendored: Bootstrap + the template. NEVER edited.)
+ *     themes/signal.css  (this file)
+ *     kit/ben-kit.css, kit/ben-store.css
+ *     app.css            (LAST, so a page-specific correction still beats the skin —
+ *                         --ben-success-behind-white lives there and must keep winning)
+ *
+ * BOTH MODES, ALWAYS. The switch is Bootstrap's own `data-bs-theme` on <html>, set before first
+ * paint by scripts/core/ben-boot.js. Every fault found in the mock-ups was light-only — a kicker
+ * that vanished on a photograph, a card gap hidden by an invisible dark border — so nothing here
+ * is considered done until it has been seen in light as well as dark.
+ * ========================================================================= */
+
+/* ── The palette, named once ──────────────────────────────────────────────
+ * --ben-* is ours and says what a thing IS (surface, ink, line, accent).
+ * --bs-*  is Bootstrap's and says what a COMPONENT uses. Ours feed Bootstrap's, never the reverse,
+ * so there is exactly one place to change a colour.
+ */
+:root,
+[data-bs-theme="light"] {
+    /* surfaces, back to front */
+    --ben-bg:            #FFFFFF;
+    --ben-bg-sunken:     #F4F7FC;   /* page gutters, striped rows, the app bar */
+    --ben-surface:       #FFFFFF;   /* cards, popovers, anything that sits on the page */
+    --ben-surface-raised:#FFFFFF;
+    --ben-ink:           #0E1726;
+    --ben-ink-muted:     #5A6679;
+    --ben-ink-faint:     #8A94A6;
+    --ben-line:          rgba(14, 23, 38, .11);
+    --ben-line-strong:   rgba(14, 23, 38, .20);
+
+    /* the two accents Signal is built on */
+    --ben-accent:        #5B3DF5;
+    --ben-accent-rgb:    91, 61, 245;
+    --ben-accent-2:      #0891A6;
+    --ben-accent-2-rgb:  8, 145, 166;
+    --ben-accent-soft:   rgba(91, 61, 245, .10);
+    --ben-on-accent:     #FFFFFF;   /* what is legible ON the gradient, in either mode */
+    --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
+
+    /* depth */
+    /* the chrome: app bar and sidebar. Signal follows the mode rather than keeping a dark nav
+       over a light page, which is what the mock-up shows and what makes the two halves read as
+       one thing. */
+    --ben-nav-bg:        #F4F7FC;
+    --ben-nav-ink:       #0E1726;
+    --ben-nav-ink-muted: #5A6679;
+
+    --ben-shadow-sm:     0 2px 6px rgba(14, 23, 38, .07);
+    --ben-shadow:        0 8px 22px rgba(14, 23, 38, .10);
+    --ben-shadow-lg:     0 18px 44px rgba(14, 23, 38, .14);
+    --ben-glow:          0 8px 22px rgba(var(--ben-accent-rgb), .30);
+
+    color-scheme: light;
+}
+
+[data-bs-theme="dark"] {
+    --ben-bg:            #0C1017;
+    --ben-bg-sunken:     #090D13;
+    --ben-surface:       #151C28;
+    --ben-surface-raised:#1B2433;
+    --ben-ink:           #E9EDF4;
+    --ben-ink-muted:     #98A3B4;
+    --ben-ink-faint:     #6C7889;
+    --ben-line:          rgba(255, 255, 255, .09);
+    --ben-line-strong:   rgba(255, 255, 255, .18);
+
+    --ben-accent:        #7C5CFF;
+    --ben-accent-rgb:    124, 92, 255;
+    --ben-accent-2:      #22D3EE;
+    --ben-accent-2-rgb:  34, 211, 238;
+    --ben-accent-soft:   rgba(124, 92, 255, .16);
+    --ben-on-accent:     #FFFFFF;
+    --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
+
+    --ben-nav-bg:        #090D13;
+    --ben-nav-ink:       #E9EDF4;
+    --ben-nav-ink-muted: #98A3B4;
+
+    --ben-shadow-sm:     0 2px 8px rgba(0, 0, 0, .40);
+    --ben-shadow:        0 10px 26px rgba(0, 0, 0, .46);
+    --ben-shadow-lg:     0 20px 48px rgba(0, 0, 0, .55);
+    --ben-glow:          0 8px 24px rgba(var(--ben-accent-rgb), .40);
+
+    color-scheme: dark;
+}
+
+/* ── Shape and rhythm, shared by both modes ─────────────────────────────── */
+:root {
+    --ben-radius-sm:  8px;
+    --ben-radius:     12px;
+    --ben-radius-lg:  20px;
+    --ben-radius-pill: 999px;
+
+    /* Signal's display type is the UI face at a heavier weight and tighter tracking; no webfont
+       is added, because a redesign that costs a render-blocking font fetch on every page is not
+       an improvement. fonts.css already carries what the template loads. */
+    --ben-display-weight: 700;
+    --ben-display-tracking: -.028em;
+}
+
+/* ── Ours → Bootstrap's ──────────────────────────────────────────────────
+ * Everything below is a BRIDGE. No colour literals: if one appears here, it belongs above.
+ */
+:root,
+[data-bs-theme="light"],
+[data-bs-theme="dark"] {
+    --bs-body-bg:                 var(--ben-bg);
+    --bs-body-color:              var(--ben-ink);
+    --bs-emphasis-color:          var(--ben-ink);
+    --bs-secondary-color:         var(--ben-ink-muted);
+    --bs-secondary-bg:            var(--ben-bg-sunken);
+    --bs-tertiary-color:          var(--ben-ink-faint);
+    --bs-tertiary-bg:             var(--ben-bg-sunken);
+
+    --bs-border-color:            var(--ben-line);
+    --bs-border-color-translucent: var(--ben-line);
+
+    --bs-primary:                 var(--ben-accent);
+    --bs-primary-rgb:             var(--ben-accent-rgb);
+    --bs-info:                    var(--ben-accent-2);
+    --bs-info-rgb:                var(--ben-accent-2-rgb);
+
+    --bs-link-color:              var(--ben-accent);
+    --bs-link-color-rgb:          var(--ben-accent-rgb);
+    --bs-link-hover-color:        var(--ben-accent-2);
+    --bs-link-hover-color-rgb:    var(--ben-accent-2-rgb);
+
+    --bs-border-radius-sm:        var(--ben-radius-sm);
+    --bs-border-radius:           var(--ben-radius);
+    --bs-border-radius-lg:        var(--ben-radius-lg);
+    --bs-border-radius-xl:        var(--ben-radius-lg);
+    --bs-border-radius-pill:      var(--ben-radius-pill);
+
+    --bs-focus-ring-color:        rgba(var(--ben-accent-rgb), .35);
+    --bs-focus-ring-width:        3px;
+}
+
+/* --bs-body-*-rgb cannot be an alias: Bootstrap composes them inside rgba(), so they must be
+   three bare numbers. They are the only duplicated literals in this file, and they are here
+   rather than in the palette so the duplication is visible. */
+:root, [data-bs-theme="light"] { --bs-body-bg-rgb: 255,255,255; --bs-body-color-rgb: 14,23,38;
+                                 --bs-emphasis-color-rgb: 14,23,38; --bs-secondary-bg-rgb: 244,247,252; }
+[data-bs-theme="dark"]         { --bs-body-bg-rgb: 12,16,23;    --bs-body-color-rgb: 233,237,244;
+                                 --bs-emphasis-color-rgb: 233,237,244; --bs-secondary-bg-rgb: 21,28,40; }
+
+/* ── Components, through their own Bootstrap variables ──────────────────── */
+
+.card {
+    --bs-card-bg:            var(--ben-surface);
+    --bs-card-border-color:  var(--ben-line);
+    --bs-card-border-radius: var(--ben-radius-lg);
+    --bs-card-inner-border-radius: calc(var(--ben-radius-lg) - 1px);
+    --bs-card-cap-bg:        transparent;
+    box-shadow: var(--ben-shadow);
+}
+
+.btn {
+    --bs-btn-border-radius: var(--ben-radius-pill);
+    --bs-btn-font-weight:   600;
+    --bs-btn-padding-x:     1.15rem;
+}
+
+/* The primary button is the one place the gradient appears in the chrome: a surface people press,
+   so it may be the loudest thing on the page. Borderless, because a gradient with a flat border
+   reads as a sticker on top of itself. */
+.btn-primary {
+    --bs-btn-bg:              transparent;
+    --bs-btn-border-color:    transparent;
+    --bs-btn-hover-bg:        transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg:       transparent;
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-color:           var(--ben-on-accent);
+    --bs-btn-hover-color:     var(--ben-on-accent);
+    --bs-btn-active-color:    var(--ben-on-accent);
+    background-image: var(--ben-accent-grad);
+    box-shadow: var(--ben-glow);
+}
+.btn-primary:hover    { filter: brightness(1.07); }
+.btn-primary:active   { filter: brightness(.94); box-shadow: none; }
+.btn-primary:disabled { background-image: none; background-color: var(--ben-accent);
+                        box-shadow: none; opacity: .55; }
+
+.btn-outline-primary {
+    --bs-btn-color:        var(--ben-accent);
+    --bs-btn-border-color: var(--ben-line-strong);
+    --bs-btn-hover-bg:     var(--ben-accent-soft);
+    --bs-btn-hover-color:  var(--ben-accent);
+    --bs-btn-hover-border-color: var(--ben-accent);
+}
+
+.form-control, .form-select, .input-group-text {
+    --bs-border-radius: var(--ben-radius-pill);
+    background-color: var(--ben-surface);
+    border-color: var(--ben-line-strong);
+}
+.form-control:focus, .form-select:focus {
+    border-color: var(--ben-accent);
+    box-shadow: 0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color);
+}
+
+.badge { --bs-badge-border-radius: var(--ben-radius-pill); --bs-badge-font-weight: 600; }
+
+.dropdown-menu {
+    --bs-dropdown-bg:            var(--ben-surface-raised);
+    --bs-dropdown-border-color:  var(--ben-line);
+    --bs-dropdown-border-radius: var(--ben-radius);
+    --bs-dropdown-link-active-bg: var(--ben-accent-soft);
+    --bs-dropdown-link-active-color: var(--ben-ink);
+    box-shadow: var(--ben-shadow-lg);
+}
+
+.modal-content, .offcanvas, .popover, .toast {
+    background-color: var(--ben-surface-raised);
+    border-color: var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow-lg);
+}
+
+.table {
+    --bs-table-bg:            transparent;
+    --bs-table-border-color:  var(--ben-line);
+    --bs-table-striped-bg:    var(--ben-bg-sunken);
+    --bs-table-hover-bg:      var(--ben-accent-soft);
+}
+
+.nav-link            { --bs-nav-link-color: var(--ben-ink-muted);
+                       --bs-nav-link-hover-color: var(--ben-ink); }
+.nav-link.active,
+.nav-pills .nav-link.active { color: var(--ben-ink); background-color: var(--ben-accent-soft); }
+
+.list-group { --bs-list-group-bg: var(--ben-surface);
+              --bs-list-group-border-color: var(--ben-line);
+              --bs-list-group-border-radius: var(--ben-radius);
+              --bs-list-group-active-bg: var(--ben-accent);
+              --bs-list-group-active-border-color: var(--ben-accent); }
+
+.progress   { --bs-progress-bg: var(--ben-bg-sunken);
+              --bs-progress-border-radius: var(--ben-radius-pill); }
+.progress-bar { background-image: var(--ben-accent-grad); }
+
+hr          { border-color: var(--ben-line); opacity: 1; }
+
+/* Headings carry Signal's display treatment. Weight and tracking only — the family stays the
+   template's, so nothing new is fetched. */
+h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
+    font-weight: var(--ben-display-weight);
+    letter-spacing: var(--ben-display-tracking);
+}
+
+/* ── The chrome ──────────────────────────────────────────────────────────
+ * The template ships a `set-nav-dark` treatment that ben-boot.js switches on, and it is built
+ * around the template's OWN palette: it tints the sidebar with `rgba(var(--bs-info-rgb), .18)`
+ * and leaves the text colour to the page. Under Signal in light mode that came out as dark ink on
+ * a dark panel — the nav was the first thing the new skin broke, and it broke only in light.
+ *
+ * So the chrome is painted here, explicitly, in both modes. The class is left alone because other
+ * template rules hang off it; only the paint is taken back.
+ */
+.app-sidebar,
+.set-nav-dark:not([data-bs-theme="dark"]) .app-sidebar {
+    background-image: none;
+    background-color: var(--ben-nav-bg);
+    border-right: 1px solid var(--ben-line);
+    color: var(--ben-nav-ink);
+}
+
+.app-sidebar a,
+.app-sidebar .nav-link,
+.set-nav-dark:not([data-bs-theme="dark"]) .app-sidebar a { color: var(--ben-nav-ink-muted); }
+
+.app-sidebar a:hover,
+.app-sidebar .nav-link:hover { color: var(--ben-nav-ink); }
+
+.app-sidebar .active > a,
+.app-sidebar a.active,
+.app-sidebar .nav-link.active {
+    color: var(--ben-nav-ink);
+    background-color: var(--ben-accent-soft);
+    border-radius: var(--ben-radius-sm);
+}
+
+.app-header {
+    background-color: var(--ben-nav-bg);
+    border-bottom: 1px solid var(--ben-line);
+    color: var(--ben-nav-ink);
+}
+
+/* ── The brand lockup ────────────────────────────────────────────────────
+ * The mark is a white ghost in a GREEN ring with amber windows, and Signal is violet and cyan, so
+ * at full colour it is the only green thing on the page and reads as a sticker. It is turned white
+ * with a filter and set in a gradient tile instead — one line, reversible, and the brand file is
+ * not touched: the full-colour original still serves the favicon, the app icon, the iOS listing
+ * and the flyers. (docs/design/preview/11-signal-brand-b-dark.png is what the alternative looks
+ * like.)
+ */
+.ben-brand { display: inline-flex; align-items: center; gap: .6rem;
+             font-weight: 800; letter-spacing: -.02em; text-decoration: none; color: var(--ben-ink); }
+.ben-brand__tile { width: 2.1rem; height: 2.1rem; border-radius: calc(var(--ben-radius-sm) + 1px);
+                   display: grid; place-items: center; flex: none;
+                   background-image: var(--ben-accent-grad); box-shadow: var(--ben-glow); }
+.ben-brand__tile img { width: 68%; height: 68%; filter: brightness(0) invert(1); }
+.ben-brand__dot { background-image: var(--ben-accent-grad); -webkit-background-clip: text;
+                  background-clip: text; color: transparent; }

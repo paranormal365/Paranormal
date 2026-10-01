@@ -20,7 +20,11 @@
 .ben-brand,
 .ben-brand:hover {
     text-decoration: none;
-    color: inherit;
+    /* was `inherit`, which was right while the header was always dark: the wordmark took the
+       bar's white. Under Signal the bar follows the theme, so inheriting made the wordmark white
+       on a white bar and only the gradient ".com" survived. It takes the skin's ink now, which is
+       correct in both modes and has one place to change. */
+    color: var(--ben-ink);
     white-space: nowrap;
     padding-left: .75rem;
 }
@@ -557,7 +561,7 @@ html:not([data-bs-theme="dark"]) .ben-mark-on-light {
 
 @media (max-width: 991.98px) {
     html:not([data-bs-theme="dark"]) .app-header .ben-brand img {
-        background-color: var(--app-nav-bg, #2f3849);
+        background-color: var(--ben-nav-bg, var(--app-nav-bg, #2f3849));
         border-radius: 50%;
         padding: 2px;
     }
@@ -580,8 +584,12 @@ html:not([data-bs-theme="dark"]) .ben-mark-on-light {
         align-self: stretch;
         margin-right: 0;
         padding-inline: 1.25rem;
-        background-color: var(--app-nav-bg);
-        color: #fff;
+        /* The brand block sits over the sidebar's column, so it takes the NAV's surface and the
+           NAV's ink — not the page's. Both were literals (--app-nav-bg, #fff) chosen when the bar
+           was always dark; under Signal the chrome follows the theme, and white here left the
+           wordmark invisible on a light bar with only the gradient ".com" surviving. */
+        background-color: var(--ben-nav-bg, var(--app-nav-bg));
+        color: var(--ben-nav-ink, #fff);
         overflow: hidden;
         will-change: width;
         transition: width 470ms cubic-bezier(.34, 1.25, .3, 1);

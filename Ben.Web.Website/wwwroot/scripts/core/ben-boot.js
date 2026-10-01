@@ -55,17 +55,24 @@ var layoutSettings = (function () {
         kept = String(s.htmlRoot).split(/[^\w-]+/).filter(function (c) { return /^set-/i.test(c); });
     }
 
-    // The template's dark navigation treatment, which its own demos ship. Its rules apply only in
-    // light mode (`.set-nav-dark:not([data-bs-theme=dark])`) and carry far more than a background:
-    // the nav text, hover and active states, the active indicator and the logo panel all change
-    // with it. That is why this is switched on rather than just recolouring the sidebar — a dark
-    // background alone would leave the template's dark-on-light nav text sitting on it.
+    // The navigation follows the theme rather than staying dark over a light page.
     //
-    // app.css then greys the background off the palette; see --app-nav-bg there.
+    // It used to default to the template's `set-nav-dark` treatment, which its own demos ship:
+    // those rules apply only in light mode (`.set-nav-dark:not([data-bs-theme=dark])`) and carry
+    // far more than a background — the nav text, hover and active states, the active indicator
+    // and the logo panel all change with it. That was the right call for the Night skin, where a
+    // dark nav was the look.
     //
-    // A stored choice still wins, so this can be turned off per browser without a rebuild.
+    // Signal paints the chrome from its own tokens in both modes (themes/signal.css, "The
+    // chrome"), and the two treatments fought: with `set-nav-dark` on, the template kept forcing
+    // the nav text WHITE while Signal painted the sidebar light, so every label in the sidebar
+    // disappeared. Taking the background back was not enough precisely because the treatment
+    // carries the text with it — which is what the note that used to be here said, and it was
+    // right. So the treatment is not switched on at all any more.
+    //
+    // A stored choice still wins, so anyone who has set a preference keeps it.
     if (!kept.some(function (c) { return /^set-nav-(dark|light)$/i.test(c); })) {
-        kept.push('set-nav-dark');
+        kept.push('set-nav-light');
     }
 
     if (kept.length) htmlRoot.className = (htmlRoot.className + ' ' + kept.join(' ')).trim();
