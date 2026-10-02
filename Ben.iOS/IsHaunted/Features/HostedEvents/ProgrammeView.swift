@@ -33,7 +33,7 @@ struct ProgrammeView: View {
                 } description: {
                     Text(failure)
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
                 ContentUnavailableView("No programme yet", systemImage: "calendar",
@@ -70,7 +70,7 @@ struct ProgrammeView: View {
 
     @ViewBuilder
     private func list(_ programme: HostedEventProgramme) -> some View {
-        List {
+        SignalList {
             if let message {
                 Section { Text(message).font(.footnote).foregroundStyle(Theme.warning) }
             }
@@ -132,7 +132,7 @@ struct ProgrammeView: View {
                 }
                 Spacer()
                 Button(mine.waiting ? "Leave" : "Give up") { leaving = session }
-                    .buttonStyle(.bordered).disabled(busySession != nil)
+                    .buttonStyle(.signalSecondary).disabled(busySession != nil)
             }
         } else if programme.canSignUp {
             let title = session.isFull ? "Join the waiting list" : "Sign up"
@@ -144,10 +144,10 @@ struct ProgrammeView: View {
                         Button(people == 1 ? "Just me" : "\(people) of us") { Task { await signUp(session, people: people) } }
                     }
                 }
-                .buttonStyle(.borderedProminent).disabled(busySession != nil)
+                .buttonStyle(.signalPrimary).disabled(busySession != nil)
             } else {
                 Button(title) { Task { await signUp(session, people: 1) } }
-                    .buttonStyle(.borderedProminent).disabled(busySession != nil)
+                    .buttonStyle(.signalPrimary).disabled(busySession != nil)
             }
         }
     }

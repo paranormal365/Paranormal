@@ -40,7 +40,7 @@ struct GroupCaseView: View {
                     Text(reason)
                 } actions: {
                     Button("Try again") { Task { await store?.load() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
 
             case .loaded:
@@ -60,7 +60,7 @@ struct GroupCaseView: View {
 
     @ViewBuilder
     private var loaded: some View {
-        List {
+        SignalList {
             if let record = store?.groupCase {
                 Section {
                     Text(record.title).font(.headline)

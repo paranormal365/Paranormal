@@ -38,7 +38,7 @@ struct ReservationCheckInView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SignalList {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline) {
@@ -107,7 +107,7 @@ struct ReservationCheckInView: View {
                                 Text("Check in as arrived").font(.title3.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 56)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                         .disabled(busy)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         .accessibilityIdentifier("reservation-check-in")

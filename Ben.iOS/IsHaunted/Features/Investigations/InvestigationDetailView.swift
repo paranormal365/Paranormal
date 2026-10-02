@@ -49,7 +49,7 @@ struct InvestigationDetailView: View {
 
     @ViewBuilder
     private func detail(_ investigation: MyInvestigation) -> some View {
-        List {
+        SignalList {
             Section {
                 Text(investigation.title).font(.headline)
                 if let caseTitle = investigation.caseTitle, !caseTitle.isEmpty {

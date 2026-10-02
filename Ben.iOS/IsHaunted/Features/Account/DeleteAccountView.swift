@@ -27,7 +27,7 @@ struct DeleteAccountView: View {
     }
 
     var body: some View {
-        List {
+        SignalList {
             if didDelete {
                 Section {
                     Label("Your account has been deleted.", systemImage: "checkmark.circle")

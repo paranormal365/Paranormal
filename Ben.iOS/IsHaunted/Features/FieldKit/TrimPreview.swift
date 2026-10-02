@@ -66,7 +66,7 @@ struct TrimPreview: View {
                     Label(replay.isPlaying ? "Pause" : "Play what will be sent",
                           systemImage: replay.isPlaying ? "pause.fill" : "play.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .tint(Theme.ecto)
                 .disabled(!replay.isLoaded)
                 .accessibilityIdentifier("trim-preview-play")

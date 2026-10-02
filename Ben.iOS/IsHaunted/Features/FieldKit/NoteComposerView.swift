@@ -37,7 +37,7 @@ struct NoteComposerView: View {
 
     private var composer: some View {
         Group {
-            Form {
+            SignalForm {
                 Section {
                     Picker("How", selection: $kind) {
                         ForEach(available, id: \.self) { option in
@@ -69,7 +69,7 @@ struct NoteComposerView: View {
                     } label: {
                         Text("Save the note").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(isListening || (kind != .audio && trimmed.isEmpty))
                     .accessibilityIdentifier("save-note")
                 }

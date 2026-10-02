@@ -183,7 +183,7 @@ struct PositionReadout: View {
                 if let onUseLocation {
                     Button("Use location", action: onUseLocation)
                         .font(.caption)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.signalSecondary)
                         .tint(Theme.ecto)
                         .accessibilityIdentifier("use-location")
                 }

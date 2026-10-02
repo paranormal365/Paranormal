@@ -178,8 +178,10 @@ struct RootShell: View {
     private func sectionStack(_ section: AppSection) -> some View {
         NavigationStack(path: router.path(for: section)) {
             sectionRoot(section)
+                .signalPage()
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(route)
+                        .signalPage()
                 }
         }
         // One stack per section, by identity. The split view's detail column is ONE place that

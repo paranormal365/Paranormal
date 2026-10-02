@@ -100,7 +100,7 @@ struct CaseDetailView: View {
     }
 
     private func content(_ detail: MyCaseDetail) -> some View {
-        List {
+        SignalList {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {

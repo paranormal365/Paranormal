@@ -18,7 +18,7 @@ struct RecategorizeSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     Picker("Category", selection: $selected) {
                         Text("No category").tag(UUID?.none)

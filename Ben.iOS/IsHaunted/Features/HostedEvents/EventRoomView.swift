@@ -53,7 +53,7 @@ struct EventRoomView: View {
                 } description: {
                     Text(failure)
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
                 ContentUnavailableView("The room is for the people at the event", systemImage: "bubble.left.and.bubble.right",
@@ -112,7 +112,7 @@ struct EventRoomView: View {
 
     @ViewBuilder
     private func list(_ room: EventRoom) -> some View {
-        List {
+        SignalList {
             if let roomSavedAt {
                 Section {
                     Label("No signal — this is the room as it was at \(roomSavedAt.readerFormatted(date: .omitted, time: .shortened)). Anything you post is kept on this phone and sent when there's signal.",
@@ -198,7 +198,7 @@ struct EventRoomView: View {
                     Button { Task { await openMedia(message) } } label: {
                         Label("Play the video", systemImage: "play.rectangle")
                     }
-                    .buttonStyle(.bordered).disabled(busy)
+                    .buttonStyle(.signalSecondary).disabled(busy)
                 } else {
                     RoomPhoto(eventId: hostedEventId, messageId: message.id, loader: dependencies.imageLoader)
                         .frame(maxWidth: .infinity).frame(height: 220).clipped()
@@ -433,7 +433,7 @@ struct RoomComposerView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField(media.isEmpty ? "Say something to the room" : "A caption (optional)", text: $text, axis: .vertical)
                         .lineLimit(2...6)

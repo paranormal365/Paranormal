@@ -376,7 +376,7 @@ struct LiveSessionView: View {
                     .font(.headline)
                     .padding(.horizontal, 6)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.signalSecondary)
             .accessibilityLabel("Blackout the screen")
             .accessibilityIdentifier("blackout")
 
@@ -517,7 +517,7 @@ struct LiveSessionView: View {
                           systemImage: "target")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .accessibilityIdentifier("set-base-level")
 
                 if active.isRecording {
@@ -527,7 +527,7 @@ struct LiveSessionView: View {
                         Label("Mark", systemImage: "flag")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("mark-now")
                 } else {
                     // Set-up time. The mark, EVP and capture controls arrive with Start — a
@@ -547,7 +547,7 @@ struct LiveSessionView: View {
                         Label("Note", systemImage: "square.and.pencil")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("open-note")
 
                     Button {
@@ -556,7 +556,7 @@ struct LiveSessionView: View {
                         Label("EVP", systemImage: "questionmark.bubble")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("open-evp")
                 }
 
@@ -700,7 +700,7 @@ private struct LevelsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     LabeledContent("Magnetic base") {
                         Text(session.baselines.magneticMilligauss
@@ -794,7 +794,7 @@ struct LocationExplainerSheet: View {
                 } label: {
                     Text("Continue").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .accessibilityIdentifier("location-continue")
 
                 Button("Record without it") { onAnswered(); dismiss() }

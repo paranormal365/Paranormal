@@ -21,7 +21,7 @@ struct SignInView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField("Email", text: $email)
                         .textContentType(.username)
@@ -53,7 +53,7 @@ struct SignInView: View {
                             Text("Sign in").frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(email.isEmpty || password.isEmpty || countdown > 0
                               || session.state == .authenticating
                               || session.state == .fetchingIdentity)
@@ -128,7 +128,7 @@ struct TwoFactorChallengeView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField(usingRecoveryCode ? "Recovery code" : "6-digit code", text: $code)
                         .textContentType(.oneTimeCode)
@@ -161,7 +161,7 @@ struct TwoFactorChallengeView: View {
                             Text("Verify").frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(code.isEmpty || session.state == .authenticating)
 
                     Button(usingRecoveryCode ? "Use authenticator code instead" : "Use a recovery code") {

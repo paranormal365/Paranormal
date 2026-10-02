@@ -18,7 +18,7 @@ struct JoinByCodeView: View {
     @State private var busy = false
 
     var body: some View {
-        List {
+        SignalList {
             if let problem {
                 Section { Text(problem).foregroundStyle(Theme.warning) }
             }

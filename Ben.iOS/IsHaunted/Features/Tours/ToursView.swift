@@ -64,7 +64,7 @@ struct ToursView: View {
                 } label: {
                     Label("Near me", systemImage: "location")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .disabled(searching)
 
                 Spacer()
@@ -109,7 +109,7 @@ struct ToursView: View {
                 Text(reason ?? "The server couldn't be reached.")
             } actions: {
                 Button("Try again") { Task { await repeatLastSearch() } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
             }
 
         case .loaded:
@@ -122,7 +122,7 @@ struct ToursView: View {
                          : "Nothing matching “\(place)”. Try a wider distance, or another name.")
                 }
             } else {
-                List(store?.tours ?? []) { tour in
+                SignalList(store?.tours ?? []) { tour in
                     NavigationLink(value: AppRoute.tourDetail(
                         organizationUrlName: tour.organizationUrlName, tourSlug: tour.urlName)) {
                         TourRow(tour: tour)
@@ -133,7 +133,7 @@ struct ToursView: View {
                 .safeAreaInset(edge: .top) {
                     TimeZoneSwitch(zoneId: nil)
                         .padding(.horizontal).padding(.vertical, 6)
-                        .background(.bar)
+                        .background(Theme.ink)
                 }
                 .refreshable { await repeatLastSearch() }
             }

@@ -57,7 +57,7 @@ struct DoorView: View {
                 } description: {
                     Text(failure ?? "Check your connection and try again.")
                 } actions: {
-                    Button("Try again") { Task { await refresh() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await refresh() } }.buttonStyle(.signalPrimary)
                 }
             }
         }
@@ -130,7 +130,7 @@ struct DoorView: View {
         let coming = matching.filter { !$0.isIn }
         let inside = matching.filter(\.isIn)
 
-        List {
+        SignalList {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(door.peopleIn) in · \(door.peopleExpected) expected")
@@ -173,7 +173,7 @@ struct DoorView: View {
                             .frame(maxWidth: .infinity, minHeight: 56)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .disabled(lookingUp)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 .accessibilityIdentifier("door-scan")
@@ -219,7 +219,7 @@ struct DoorView: View {
                     HStack {
                         Label(waiting == 1 ? "1 arrival waiting to send" : "\(waiting) arrivals waiting to send", systemImage: "tray.and.arrow.up")
                         Spacer()
-                        Button("Send now") { Task { await refresh() } }.buttonStyle(.bordered)
+                        Button("Send now") { Task { await refresh() } }.buttonStyle(.signalSecondary)
                     }
                     .font(.subheadline)
                     .accessibilityIdentifier("door-waiting")
@@ -302,7 +302,7 @@ struct DoorView: View {
                 } primaryAction: {
                     Task { await arrive(party, door, people: nil) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .disabled(busyParty != nil)
                 .accessibilityIdentifier("door-check-in-\(party.id.uuidString.lowercased())")
             }
@@ -326,7 +326,7 @@ struct DoorView: View {
             .buttonStyle(.plain)
             Spacer(minLength: 8)
             Button("Undo") { Task { await move { await $0.undo(door, organization: organizationId, party: party) } } }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .frame(minHeight: 44)
                 .disabled(busyParty != nil)
         }
@@ -471,7 +471,7 @@ private struct WalkUpSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     Stepper(people == 1 ? "1 person" : "\(people) people", value: $people, in: 1...40)
                     TextField("Name (optional)", text: $name)

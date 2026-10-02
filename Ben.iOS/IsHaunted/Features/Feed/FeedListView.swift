@@ -185,7 +185,7 @@ struct FeedListView: View {
                 Text(reason ?? "The server couldn't be reached.")
             } actions: {
                 Button("Try again") { Task { await store.load() } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
             }
         case .rateLimited(let retryAfter):
             ContentUnavailableView {

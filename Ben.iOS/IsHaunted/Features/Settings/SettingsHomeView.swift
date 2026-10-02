@@ -14,7 +14,7 @@ struct SettingsHomeView: View {
     private var session: SessionStore { dependencies.session }
 
     var body: some View {
-        List {
+        SignalList {
             if let me = session.me {
                 Section("Account") {
                     LabeledContent("Email", value: me.email)
@@ -178,7 +178,7 @@ struct DeveloperSettingsView: View {
     @State private var customError: String?
 
     var body: some View {
-        List {
+        SignalList {
             Section("Environment") {
                 ForEach(APIEnvironment.presets, id: \.self) { preset in
                     Button {

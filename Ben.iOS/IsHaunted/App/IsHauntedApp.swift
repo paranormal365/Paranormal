@@ -7,6 +7,10 @@ struct IsHauntedApp: App {
     @State private var dependencies = AppDependencies()
     @State private var router = Router()
 
+    init() {
+        SignalAppearance.apply()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootShell()

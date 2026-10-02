@@ -17,7 +17,7 @@ struct MenusView: View {
     var body: some View {
         Group {
             if let menus, !menus.menus.isEmpty {
-                List {
+                SignalList {
                     ForEach(menus.menus.sorted(by: order)) { menu in
                         Section { meal(menu) } header: { Text(nightTitle(menu)) }
                     }
@@ -31,7 +31,7 @@ struct MenusView: View {
                 } description: {
                     Text(failure)
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
                 ContentUnavailableView("No menus yet", systemImage: "fork.knife",

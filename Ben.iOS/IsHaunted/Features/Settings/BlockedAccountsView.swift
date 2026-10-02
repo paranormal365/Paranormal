@@ -15,7 +15,7 @@ struct BlockedAccountsView: View {
     @State private var toast: String?
 
     var body: some View {
-        List {
+        SignalList {
             if let blocked {
                 if blocked.isEmpty {
                     Section {
@@ -35,7 +35,7 @@ struct BlockedAccountsView: View {
                                 Button("Unblock") {
                                     Task { await unblock(person) }
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.signalSecondary)
                             }
                         }
                     } footer: {

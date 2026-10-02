@@ -38,7 +38,7 @@ struct MyEvidenceView: View {
                     systemImage: "camera",
                     description: Text("Evidence is offered from a public event you attended."))
             } else {
-                List(rows) { row in
+                SignalList(rows) { row in
                     rowView(row)
                 }
                 .listStyle(.insetGrouped)
@@ -86,7 +86,7 @@ struct MyEvidenceView: View {
                               systemImage: row.isInArchive ? "minus.circle" : "plus.circle")
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .disabled(busyId == row.id)
                 .padding(.top, 2)
             }

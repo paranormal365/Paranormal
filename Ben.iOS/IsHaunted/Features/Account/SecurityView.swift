@@ -14,7 +14,7 @@ struct SecurityView: View {
     @State private var showPasswordChange = false
 
     var body: some View {
-        List {
+        SignalList {
             Section {
                 Button {
                     showPasswordChange = true
@@ -74,7 +74,7 @@ struct SecurityView: View {
                             } label: {
                                 if isBusy { ProgressView() } else { Text("Turn on two-step") }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.signalPrimary)
                             .disabled(code.isEmpty || isBusy)
                         }
                         .padding(.vertical, 4)
@@ -192,7 +192,7 @@ struct ChangePasswordView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     SecureField("Current password", text: $current)
                         .textContentType(.password)

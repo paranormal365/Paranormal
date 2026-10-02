@@ -21,7 +21,7 @@ struct DownloadsView: View {
     var body: some View {
         Group {
             if !files.isEmpty {
-                List {
+                SignalList {
                     if let message {
                         Section { Text(message).font(.footnote).foregroundStyle(Theme.warning) }
                     }
@@ -40,7 +40,7 @@ struct DownloadsView: View {
                 } description: {
                     Text(failure)
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
                 ContentUnavailableView("Nothing to download", systemImage: "arrow.down.doc",

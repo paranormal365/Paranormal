@@ -48,7 +48,7 @@ struct SentryPanel: View {
                     Label("Set up watching", systemImage: "eye")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("arm-sentry")
             }
         }
@@ -76,7 +76,7 @@ private struct SentrySetupSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     Toggle("Magnetic field", isOn: $config.watchMagnetic)
                         .accessibilityIdentifier("watch-magnetic")
@@ -131,7 +131,7 @@ private struct SentrySetupSheet: View {
                     } label: {
                         Text("Start watching").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(session.armingProblem(for: config) != nil)
                     .accessibilityIdentifier("confirm-arm")
                 } footer: {

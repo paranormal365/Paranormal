@@ -44,7 +44,7 @@ struct EventDetailView: View {
                 } description: {
                     Text("It may have been taken off the calendar.")
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             }
         }
@@ -131,7 +131,7 @@ struct EventDetailView: View {
                     Text("Let them know you've seen it, if you like — it's optional.")
                         .font(.footnote).foregroundStyle(Theme.fog)
                     Button("Got it") { Task { await acknowledge() } }
-                        .buttonStyle(.borderedProminent).disabled(busy)
+                        .buttonStyle(.signalPrimary).disabled(busy)
                 } else {
                     Text("You've confirmed you've seen it.")
                         .font(.footnote).foregroundStyle(Theme.fog)
@@ -150,7 +150,7 @@ struct EventDetailView: View {
                 // else takes it off.
                 if event.mySeat?.acknowledgedUtc == nil {
                     Button("Got it") { Task { await acknowledge() } }
-                        .buttonStyle(.bordered).disabled(busy)
+                        .buttonStyle(.signalSecondary).disabled(busy)
                 }
 
             case .none where event.flags.hasRsvpd:
@@ -181,10 +181,10 @@ struct EventDetailView: View {
                 }
                 .pickerStyle(.menu)
                 Button("Ask for a place") { Task { await ask() } }
-                    .buttonStyle(.borderedProminent).disabled(busy)
+                    .buttonStyle(.signalPrimary).disabled(busy)
             } else {
                 Button("I'm coming") { Task { await ask() } }
-                    .buttonStyle(.borderedProminent).disabled(busy)
+                    .buttonStyle(.signalPrimary).disabled(busy)
             }
         } else {
             Text(event.flags.rsvpBlockedReason ?? "Sign-ups for this one have closed.")
@@ -222,7 +222,7 @@ struct EventDetailView: View {
                     Link(destination: url) {
                         Label("Directions", systemImage: "arrow.triangle.turn.up.right.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                 }
                 AddToCalendarButton(event: listItem(event))
             }

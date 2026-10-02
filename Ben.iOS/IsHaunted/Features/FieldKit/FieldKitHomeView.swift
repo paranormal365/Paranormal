@@ -38,7 +38,7 @@ struct FieldKitHomeView: View {
     private var store: FieldSessionStore { dependencies.fieldKit }
 
     var body: some View {
-        List {
+        SignalList {
             if case .unavailable(let reason) = store.state {
                 // A store that cannot open says so. An empty list here would tell somebody
                 // their sessions were gone.
@@ -106,7 +106,7 @@ struct FieldKitHomeView: View {
                             }
                             .buttonStyle(.plain)
                             Button("Join") { router.push(.joinLaunch(launch.id)) }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.signalPrimary)
                                 .accessibilityIdentifier("happening-join")
                         }
                     }
@@ -543,7 +543,7 @@ private struct StartSessionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 whereSection
 
                 if !investigations.isEmpty {
@@ -620,7 +620,7 @@ private struct StartSessionSheet: View {
                         // It opens the live screen; Start is pressed THERE, once the room is ready.
                         else { Text("Open the session").frame(maxWidth: .infinity) }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(busy)
                     .accessibilityIdentifier("confirm-start-session")
                 }
@@ -688,7 +688,7 @@ private struct StartSessionSheet: View {
                         HStack {
                             ForEach(nearbyPlaces.prefix(5)) { place in
                                 Button(place.name ?? "Unnamed place") { useName(place.name) }
-                                    .buttonStyle(.bordered)
+                                    .buttonStyle(.signalSecondary)
                                     .font(.caption)
                             }
                         }

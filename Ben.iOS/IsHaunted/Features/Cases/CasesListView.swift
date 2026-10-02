@@ -30,7 +30,7 @@ struct CasesListView: View {
                     Text(reason ?? "The server couldn't be reached.")
                 } actions: {
                     Button("Try again") { Task { await store?.load() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
 
             case .loaded where store?.cases.isEmpty == true:
@@ -48,7 +48,7 @@ struct CasesListView: View {
                 }
 
             case .loaded:
-                List(store?.cases ?? []) { summary in
+                SignalList(store?.cases ?? []) { summary in
                     Button {
                         router.push(.caseDetail(summary.caseId), in: .cases)
                     } label: {

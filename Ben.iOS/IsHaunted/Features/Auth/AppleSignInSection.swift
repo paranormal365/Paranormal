@@ -288,7 +288,7 @@ struct AppleProfileSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 if let addressTaken = flow.addressTaken {
                     Section {
                         Label(addressTaken, systemImage: "person.crop.circle.badge.checkmark")
@@ -332,7 +332,7 @@ struct AppleProfileSheet: View {
                             if flow.busy { ProgressView().frame(maxWidth: .infinity) }
                             else { Text("Create my account").frame(maxWidth: .infinity) }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                         .disabled(!canCreate)
                         .accessibilityIdentifier("apple-create-submit")
                     }
@@ -365,9 +365,9 @@ struct AppleProfileSheet: View {
                     // Prominent only when it is the ONLY door left. Two prominent buttons on one
                     // sheet would say nothing about which one to press.
                     if flow.addressTaken == nil {
-                        linkButton.buttonStyle(.bordered)
+                        linkButton.buttonStyle(.signalSecondary)
                     } else {
-                        linkButton.buttonStyle(.borderedProminent)
+                        linkButton.buttonStyle(.signalPrimary)
                     }
                 } header: {
                     Text(flow.addressTaken == nil ? "Already have an account here?" : "Sign in to it to continue")
