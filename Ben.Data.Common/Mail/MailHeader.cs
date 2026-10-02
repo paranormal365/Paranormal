@@ -8,7 +8,9 @@ namespace Ben.Data.Common.Mail;
 /// <remarks>
 /// <para><b>The design is Ben's, taken from the templates he wrote</b> (2026-09-20). All sixteen
 /// published templates open with a byte-identical block: the wordmark on the left at 35px, and the
-/// dark app icon on the right at 64x64 with rounded corners. This is that block, so a letter
+/// site's icon on the right at 64x64 with rounded corners. The icon file is the site's
+/// apple-touch-icon, so when it became the violet-to-cyan tile (10/02/2026) every letter, code-built
+/// or template, changed with it. This is that block, so a letter
 /// written in code and a letter written in the template editor open the same way.</para>
 ///
 /// <para><b>The wordmark is literal markup, not a token, and that is deliberate.</b> "Is" at 70%

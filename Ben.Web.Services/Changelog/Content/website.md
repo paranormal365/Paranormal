@@ -32,6 +32,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   colors.
 - Emails from the site now match its new look: the same violet and cyan, rounded card and button
   as the pages they link to.
+- The site's icon, in the browser tab, on a phone's home screen and at the top of every email, is
+  the ghost in white on violet and cyan, like the logo at the top of every page.
 - EVP scans now keep a few measurements of each sound they find, and your keep or dismiss choices
   beside them, so a future version can rank candidates more like investigators do. No audio is
   copied, and they are deleted with the recording. The privacy page says so.
