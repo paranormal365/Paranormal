@@ -20,7 +20,7 @@
 }
 .pitch-pillar h3 { font-size: 1.12rem; margin: 0; }
 .pitch-pillar p { color: var(--ben-ink-muted); font-size: .9rem; line-height: 1.45; margin: 0; flex: 1; }
-.pitch-pillar__go { color: var(--ben-accent); font-weight: 650; font-size: .88rem; margin-top: .35rem; }
+.pitch-pillar__go { color: var(--ben-link); font-weight: 650; font-size: .88rem; margin-top: .35rem; }
 
 /* ── a browser window around a real screen, cropped to its subject ── */
 .pitch-shot {
@@ -74,7 +74,7 @@
 @media (min-width: 992px) {
     .pitch-step:not(:last-child)::after {
         content: "→"; position: absolute; right: -.85rem; top: 3.4rem;
-        color: var(--ben-accent); font-weight: 800;
+        color: var(--ben-link); font-weight: 800;
     }
 }
 .pitch__apps { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0 0; }

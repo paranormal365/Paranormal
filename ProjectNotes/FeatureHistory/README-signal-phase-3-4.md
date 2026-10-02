@@ -20,8 +20,25 @@ checkbox, numeric box, progress bar, tab strip and editor that were there.
 Known limit: a chart keeps the colours it was drawn with until it re-renders, so toggling the
 theme live leaves an open chart in the old palette until the page is reloaded.
 
-## Phase 4 — Administration (in progress)
-The dashboard already reads as Signal (cards, the violet Ben likes, charts). The pass is over the
-working screens: settings, logs, the billing grids, places, cases, the store back office, mail and
-roles — photographed in both themes by `SignalShots` (`admin-*.png` in
-`docs/design/preview/signal-live/`) and fixed where they still read as the old template.
+## Phase 4 — Administration (done)
+The dashboard already read as Signal. Ten more admin screens photographed in both themes
+(`admin-*.png` in `docs/design/preview/signal-live/`) found these, all fixed:
+
+- **The bar overflowed for anyone in several groups.** Each group was its own bar entry; the
+  SuperAdmin's five pushed everything after Notifications off a 1280px window, behind a hidden
+  scrollbar. They fold into one **Your groups** section whose card lists them; a group's own menu
+  says "← Your groups". The phone drawer still lists them by name.
+- **"Work waiting"** was a full alert per group above every page — a third of the window on admin
+  screens. One compact card now, a row per group, each still dismissable.
+- **Links in grids looked like text.** Kendo sets `.k-grid a { color: inherit }`, so a group's name
+  on Your groups, a case's title, read as plain text in all 55 grids. Plain links get the link
+  colour back.
+- **Dark-mode links were 3.9:1.** `--bs-link-color` was the accent, short of 4.5:1 on a dark card.
+  A `--ben-link` token (lighter violet in dark, 5.7–7:1) now carries words: links, kickers, outline
+  buttons, card labels. `SignalContrastTests` measures links and kickers, and fails on the old value.
+- **Icon grid buttons lost their names** while the tooltip showed (it moves `title` aside), so the
+  new-group journey's second Accept was a nameless button — the one e2e test that had failed since
+  before the redesign. 45 command buttons carry a visually-hidden name;
+  `GridCommandButtonsKeepTheirNamesTests` holds the rule.
+- All Cases: titles wrapped to five lines; fixed columns tightened. A group's menu scrolls inside
+  itself when taller than the window; the group page's Back steps aside where the rail shows.

@@ -107,7 +107,7 @@
     font-size: 1.05rem;
     font-weight: 750;
     font-variant-numeric: tabular-nums;
-    color: var(--ben-accent);
+    color: var(--ben-link);
 }
 
 /* Which clock this is. Never guessed from the reader's machine, so it has to be said. Drawn inside
@@ -148,7 +148,7 @@
 
 .ev-row__title a:hover,
 .ev-row__title a:focus-visible {
-    color: var(--ben-accent);
+    color: var(--ben-link);
     text-decoration-color: currentColor;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .ev-row__by a:hover {
-    color: var(--ben-accent);
+    color: var(--ben-link);
     text-decoration: underline;
 }
 

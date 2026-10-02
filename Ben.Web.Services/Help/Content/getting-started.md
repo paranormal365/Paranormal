@@ -147,10 +147,11 @@ grows once you sign in and grows again if you run a group. Pick a section and it
 Beside the page, a little way down, the **menu card on the left** lists what is inside the section
 you are in. It stays put as you scroll past it, so it is always to hand.
 
-- **Your groups come first.** Signed in, the bar starts with Home and a link to each group you
-  belong to (more than five fold into one **Your Organizations** entry).
-- **Notifications** and **Organizations** sit on the bar by themselves — you check those
-  constantly, and they should not be behind anything.
+- **Your groups come first.** Signed in, the bar starts with Home and **Your groups**, whose card
+  lists each group you belong to by name, and **All your groups** for the full list with each
+  one's roster and settings. (The menu on a phone lists them by name directly.)
+- **Notifications** sits on the bar by itself — you check it constantly, and it should not be
+  behind anything.
 - **My Work**, **Equipment**, **Media** and **Community** each open their own short menu in the card.
 - **Administration**, for site administrators, holds the site-wide tools grouped by what they are for.
 

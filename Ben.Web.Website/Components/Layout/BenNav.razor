@@ -266,8 +266,59 @@ else
                     items.AddRange(section.Items);
                 }
             }
-            return items;
+            return FoldGroupsIntoOneSection(items);
         }
+    }
+
+    /// <summary>
+    /// Every group the person belongs to, as ONE section on the bar — "Your groups" — whose rail
+    /// lists them (Signal phase 4, 2026-10-01).
+    /// </summary>
+    /// <remarks>
+    /// The menu put each group on the bar by name, which is right in a sidebar and wrong in a bar:
+    /// a SuperAdmin in five groups had five names ahead of Administration, and everything after
+    /// Notifications ran off the right edge — reachable only by scrolling a bar sideways whose
+    /// scrollbar is hidden, which an ordinary mouse wheel cannot do. Folded, the bar fits, and the
+    /// drill-down carries on naturally: Your groups → a group → that group's own menu (ContextRail),
+    /// whose way back is "Your groups". The drawer keeps the groups by name, as it always had.
+    /// </remarks>
+    private List<NavItem> FoldGroupsIntoOneSection(List<NavItem> items)
+    {
+        static bool IsGroupLink(NavItem i)
+            => i.Children.Count == 0 && i.Url is { } u
+               && u.StartsWith("/organizations/", StringComparison.OrdinalIgnoreCase)
+               && Guid.TryParse(u["/organizations/".Length..], out _);
+
+        var groupLinks = new List<NavItem>();
+        NavItem? allGroups = null;
+        var firstAt = -1;
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var isFolder = item.Text == "Your Organizations" && item.Children.All(IsGroupLink);
+            var isAll = item.Url == "/organizations" && item.Children.Count == 0;
+            if (!IsGroupLink(item) && !isFolder && !isAll) continue;
+
+            if (firstAt < 0) firstAt = i;
+            if (isFolder) groupLinks.AddRange(item.Children);
+            else if (isAll) allGroups = item;
+            else groupLinks.Add(item);
+        }
+        if (groupLinks.Count == 0) return items;
+
+        var children = new List<NavItem>(groupLinks);
+        if (allGroups is not null)
+            children.Add(new NavItem("All your groups", "list", allGroups.Url,
+                                     allGroups.Bucket, badgeNoun: allGroups.BadgeNoun));
+
+        var folded = items.Where(i => !groupLinks.Contains(i) && i != allGroups
+                                      && !(i.Text == "Your Organizations" && i.Children.All(IsGroupLink)))
+                          .ToList();
+        // Its own address is the list of them, so picking "Your groups" on the bar lands somewhere
+        // that is about all of them rather than on whichever happens to be first.
+        folded.Insert(Math.Min(firstAt, folded.Count),
+            new NavItem("Your groups", "globe", allGroups?.Url ?? "/organizations", children: children));
+        return folded;
     }
 
     /// <summary>

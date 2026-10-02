@@ -48,7 +48,31 @@ public class SignalContrastTests : BenTestBase
 
         // Returned as a JSON string and parsed here: Playwright for .NET handed a plain JS object
         // back as an EMPTY Dictionary<string, double>, which read as "nothing was measured".
-        var json = await Page.EvaluateAsync<string>(
+        // Measured up to three times: on a freshly started stack the circuit can still swap the
+        // content area out from under the measurement after WaitForTheCircuitAsync, and a swapped
+        // node reads as an empty colour — a timing fault, not a contrast one.
+        string json = "";
+        for (var attempt = 1; ; attempt++)
+        {
+            try { json = await MeasureAsync(); break; }
+            catch (PlaywrightException ex) when (attempt < 3 && ex.Message.Contains("unreadable colour"))
+            {
+                await Page.WaitForTimeoutAsync(1_000);
+            }
+        }
+        var results = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double>>(json)
+                      ?? new Dictionary<string, double>();
+
+        Assert.That(results, Is.Not.Empty, "Nothing was measured.");
+        var failures = results.Where(r => r.Value < Minimum)
+                              .Select(r => $"{r.Key}: {r.Value:0.00}:1")
+                              .ToList();
+        Assert.That(failures, Is.Empty,
+            $"Below {Minimum}:1 — a token change in themes/signal.css has made these unreadable:\n  "
+            + string.Join("\n  ", failures));
+    }
+
+    private Task<string> MeasureAsync() => Page.EvaluateAsync<string>(
             """
             async () => {
                 const rgb = s => {
@@ -78,6 +102,25 @@ public class SignalContrastTests : BenTestBase
                         out[`${mode} alert-${v}`] = ratio(rgb(cs.color), rgb(cs.backgroundColor));
                         d.remove();
                     }
+                    // Links and the small accent words (kickers), on the page and on a card. The
+                    // accent itself was 3.9:1 on a dark card — fine for a fill, short for words —
+                    // so words take --ben-link (2026-10-01).
+                    {
+                        const card = document.createElement('div');
+                        card.className = 'card'; host.appendChild(card);
+                        const a = document.createElement('a');
+                        a.href = '#'; a.textContent = 'x'; card.appendChild(a);
+                        out[`${mode} link on a card`] = ratio(rgb(getComputedStyle(a).color), rgb(getComputedStyle(card).backgroundColor));
+                        card.remove();
+                        const a2 = document.createElement('a');
+                        a2.href = '#'; a2.textContent = 'x'; host.appendChild(a2);
+                        out[`${mode} link on the page`] = ratio(rgb(getComputedStyle(a2).color), page);
+                        a2.remove();
+                        const k = document.createElement('div');
+                        k.className = 'ben-kicker'; k.textContent = 'x'; host.appendChild(k);
+                        out[`${mode} kicker on the page`] = ratio(rgb(getComputedStyle(k).color), page);
+                        k.remove();
+                    }
                     for (const v of ['success', 'danger', 'warning']) {
                         const t = document.createElement('span');
                         t.className = 'text-' + v; t.textContent = 'x'; host.appendChild(t);
@@ -88,15 +131,4 @@ public class SignalContrastTests : BenTestBase
                 return JSON.stringify(out);
             }
             """);
-        var results = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double>>(json)
-                      ?? new Dictionary<string, double>();
-
-        Assert.That(results, Is.Not.Empty, "Nothing was measured.");
-        var failures = results.Where(r => r.Value < Minimum)
-                              .Select(r => $"{r.Key}: {r.Value:0.00}:1")
-                              .ToList();
-        Assert.That(failures, Is.Empty,
-            $"Below {Minimum}:1 — a token change in themes/signal.css has made these unreadable:\n  "
-            + string.Join("\n  ", failures));
-    }
 }

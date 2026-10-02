@@ -57,6 +57,9 @@
     --ben-accent-soft:   rgba(91, 61, 245, .10);
     --ben-on-accent:     #FFFFFF;   /* what is legible ON the gradient, in either mode */
     --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
+    /* text links: the accent, which reads 6.1:1 on white */
+    --ben-link:          #5B3DF5;
+    --ben-link-rgb:      91, 61, 245;
 
     /* depth */
     /* the chrome: app bar and sidebar. Signal follows the mode rather than keeping a dark nav
@@ -94,6 +97,11 @@
     --ben-accent-soft:   rgba(124, 92, 255, .16);
     --ben-on-accent:     #FFFFFF;
     --ben-accent-grad:   linear-gradient(120deg, var(--ben-accent), var(--ben-accent-2));
+    /* text links: lighter than the accent. The accent itself is 3.9:1 on a dark card — fine for a
+       button's fill, short of 4.5:1 for words (measured 2026-10-01). This is 5.7–7:1 on every
+       dark surface. */
+    --ben-link:          #A78BFA;
+    --ben-link-rgb:      167, 139, 250;
 
     --ben-nav-bg:        #090D13;
     --ben-nav-ink:       #E9EDF4;
@@ -143,8 +151,8 @@
     --bs-info:                    var(--ben-accent-2);
     --bs-info-rgb:                var(--ben-accent-2-rgb);
 
-    --bs-link-color:              var(--ben-accent);
-    --bs-link-color-rgb:          var(--ben-accent-rgb);
+    --bs-link-color:              var(--ben-link);
+    --bs-link-color-rgb:          var(--ben-link-rgb);
     --bs-link-hover-color:        var(--ben-accent-2);
     --bs-link-hover-color-rgb:    var(--ben-accent-2-rgb);
 

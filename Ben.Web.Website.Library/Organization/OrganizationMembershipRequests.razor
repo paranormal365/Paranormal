@@ -68,19 +68,19 @@
                                           Size="@ThemeConstants.Button.Size.Small"
                                           Title="Accept"
                                           Class="ben-grid-action"
-                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="check" /></GridCommandButton>
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="check" /><span class="visually-hidden">Accept</span></GridCommandButton>
                         <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                           Size="@ThemeConstants.Button.Size.Small"
                                           Title="Deny"
                                           Class="ben-grid-action"
-                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="x" /></GridCommandButton>
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="x" /><span class="visually-hidden">Deny</span></GridCommandButton>
                         <GridCommandButton OnClick="@(e => OpenVoteDialog((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
                                           Size="@ThemeConstants.Button.Size.Small"
                                           Title="Vote"
                                           Class="ben-grid-action"
-                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="thumbs-up" /></GridCommandButton>
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="thumbs-up" /><span class="visually-hidden">Vote</span></GridCommandButton>
                     </GridCommandColumn>
                 </GridColumns>
             </TelerikGrid>

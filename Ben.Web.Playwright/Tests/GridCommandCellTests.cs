@@ -112,7 +112,11 @@ public class GridActionTooltipTests : BenTestBase
         var edit = Page.Locator(".k-grid").GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).First;
         await Expect(edit).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
-        Assert.That((await edit.InnerTextAsync()).Trim(), Is.Empty, "the Edit action still shows words instead of an icon");
+        // Words a person SEES — not the visually-hidden name inside it, which is there so the
+        // button keeps a name while the tooltip has taken its title (GridCommandButtonsKeepTheirNamesTests).
+        var seen = await edit.EvaluateAsync<string>(
+            "b => { const c = b.cloneNode(true); c.querySelectorAll('.visually-hidden').forEach(n => n.remove()); return c.textContent.trim(); }");
+        Assert.That(seen, Is.Empty, "the Edit action still shows words instead of an icon");
         await Expect(edit.Locator("svg")).ToHaveCountAsync(1);
 
         // Hover as a person does — move onto it, and off and on again if nothing showed. The tooltip's listener is attached

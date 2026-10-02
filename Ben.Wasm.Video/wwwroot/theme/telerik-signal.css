@@ -239,7 +239,7 @@ body.k-body {
    its current item, and for the same reason — a filled pill competes with the primary button. */
 .k-pager .k-button.k-selected,
 .k-pager .k-pager-nav.k-selected {
-    color: var(--ben-accent);
+    color: var(--ben-link);
     font-weight: 700;
     border-radius: var(--ben-radius-pill);
     box-shadow: inset 0 0 0 999px var(--ben-accent-soft);
@@ -406,3 +406,19 @@ body.k-body {
     box-shadow: var(--ben-shadow);
 }
 .k-tooltip .k-callout { color: var(--ben-ink); }
+
+/* ── Links in grid cells look like links ─────────────────────────────────────
+   Kendo sets `.k-grid a { color: inherit; text-decoration: none }`, so in every one of the site's
+   grids a link — a group's name on Your groups, a case's title — read as plain text, and the only
+   visible way in was the icon button beside it (found on the group list, Signal phase 4). Plain
+   links only (no class of their own): buttons, badges and icon actions keep their own looks. */
+.k-grid td a:not([class]) {
+    color: var(--bs-link-color);
+    font-weight: 600;
+}
+.k-grid td a:not([class]):hover,
+.k-grid td a:not([class]):focus-visible {
+    color: var(--bs-link-hover-color);
+    text-decoration: underline;
+    text-underline-offset: .15em;
+}

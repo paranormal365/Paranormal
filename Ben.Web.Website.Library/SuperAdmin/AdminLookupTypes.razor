@@ -101,13 +101,13 @@
                                        OnClick="@((GridCommandEventArgs e) => OpenEdit((LookupTypeAdminRecord)e.Items.First()))"
                                        Title="Edit"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                     <GridCommandButton Command="Delete"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                        OnClick="@((GridCommandEventArgs e) => ConfirmDelete((LookupTypeAdminRecord)e.Items.First()))"
                                        Title="Delete"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

@@ -224,4 +224,32 @@ public class NavigationTests : BenTestBase
         Assert.That(body, Does.Contain("IsHaunted").Or.Contain("Investigation").Or.Contain("Ghost"),
             $"Expected content at {label}.");
     }
+
+    /// <summary>
+    /// The bar fits, however many groups somebody is in (Signal phase 4, 2026-10-01).
+    /// </summary>
+    /// <remarks>
+    /// Each group was its own entry on the bar. The seeded SuperAdmin is in five, and everything
+    /// after Notifications ran off the right edge of a 1280px window — reachable only by scrolling a
+    /// bar sideways whose scrollbar is hidden. They are one "Your groups" section now.
+    /// </remarks>
+    [Test]
+    public async Task The_bar_fits_with_every_group_folded_into_one_section()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.SetViewportSizeAsync(1280, 800);
+        await Page.GotoAsync($"{BaseUrl}/");
+        await WaitForTheCircuitAsync();
+
+        var bar = Page.Locator("#top-menu");
+        await Expect(bar.Locator("a.topnav-link", new() { HasTextString = "Your groups" })).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(bar.Locator("a[href^='/organizations/']")).ToHaveCountAsync(0);
+
+        var overflow = await bar.EvaluateAsync<double>("e => e.scrollWidth - e.clientWidth");
+        Assert.That(overflow, Is.LessThanOrEqualTo(1), "the bar runs past the window; its last sections cannot be reached");
+
+        // And the section's card lists the groups, by name.
+        await bar.Locator("a.topnav-link", new() { HasTextString = "Your groups" }).ClickAsync();
+        await Expect(Page.Locator(".app-rail a[href^='/organizations/']").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+    }
 }

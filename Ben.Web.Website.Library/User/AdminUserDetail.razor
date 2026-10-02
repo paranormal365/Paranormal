@@ -121,20 +121,20 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))"
                                 Title="Edit"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))"
                                 Title="Show on a map"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="map" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="map" /><span class="visually-hidden">Show on a map</span></GridCommandButton>
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))"
                                 Title="Directions"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="navigation" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="navigation" /><span class="visually-hidden">Directions</span></GridCommandButton>
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -154,12 +154,12 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))"
                                 Title="Edit"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -180,12 +180,12 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))"
                                 Title="Edit"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -210,12 +210,12 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))"
                                 Title="Edit"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -235,12 +235,12 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))"
                                 Title="Edit"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -271,7 +271,7 @@ else
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))"
                                 Title="View the group"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="eye" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="eye" /><span class="visually-hidden">View the group</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -309,13 +309,13 @@ else
                                     OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))"
                                     Title="Edit image"
                                     Class="ben-grid-action"
-                                    FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
+                                    FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /><span class="visually-hidden">Edit image</span></GridCommandButton>
                             }
                             <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                 OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"
                                 Title="Delete"
                                 Class="ben-grid-action"
-                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>

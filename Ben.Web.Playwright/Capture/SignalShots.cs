@@ -143,7 +143,9 @@ public class SignalShots : BenTestBase
     private async Task ShootGroupRailAsync(string root)
     {
         await Page.GotoAsync($"{BaseUrl}/organizations");
-        var href = await Page.Locator(".content-wrapper a[href^='/organizations/']").EvaluateAllAsync<string[]>(
+        // From the "Your groups" card, which lists them as links; the page itself offers View buttons.
+        await Expect(Page.Locator(".app-rail a[href^='/organizations/']").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        var href = await Page.Locator(".app-rail a[href^='/organizations/']").EvaluateAllAsync<string[]>(
             "els => els.map(e => e.getAttribute('href')).filter(h => /^\\/organizations\\/[0-9a-f-]{36}$/.test(h))");
         if (href.Length == 0) { TestContext.Out.WriteLine("no group to photograph"); return; }
 

@@ -75,10 +75,11 @@
                         box-shadow: none; opacity: .55; }
 
 .btn-outline-primary {
-    --bs-btn-color:        var(--ben-accent);
+    /* the button's WORDS read in the link colour — the accent is short of 4.5:1 on dark cards */
+    --bs-btn-color:        var(--ben-link);
     --bs-btn-border-color: var(--ben-line-strong);
     --bs-btn-hover-bg:     var(--ben-accent-soft);
-    --bs-btn-hover-color:  var(--ben-accent);
+    --bs-btn-hover-color:  var(--ben-link);
     --bs-btn-hover-border-color: var(--ben-accent);
 }
 
@@ -325,7 +326,7 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 }
 .ben-kicker {
     font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
-    color: var(--ben-accent); margin-bottom: .35rem;
+    color: var(--ben-link); margin-bottom: .35rem;
 }
 .ben-section-title { font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.1; margin: 0; }
 .ben-accent-text {
@@ -375,6 +376,11 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     position: sticky;
     top: 1.25rem;
     margin: 5.5rem 0 1.5rem;
+    /* A group's menu runs to seventeen entries: taller than a laptop window, and pinned, its foot
+       could never be reached. It scrolls inside itself instead. */
+    max-height: calc(100vh - 2.5rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
     padding: .85rem;
     background-color: var(--ben-surface);
     border: 1px solid var(--ben-line);
@@ -441,7 +447,7 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
     font-weight: 700;
     letter-spacing: .16em;
     text-transform: uppercase;
-    color: var(--ben-accent);
+    color: var(--ben-link);
 }
 
 .app-rail__heading {
@@ -495,4 +501,4 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 .alert-secondary,
 .alert-light     { border-left-color: var(--ben-line-strong); }
 .alert-dark      { border-left-color: var(--ben-ink-muted); }
-.alert .alert-link { color: var(--ben-accent); }
+.alert .alert-link { color: var(--ben-link); }
