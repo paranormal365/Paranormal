@@ -12,6 +12,7 @@ struct SignalListSurface: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .background(Theme.ink)
+            .toolbarBackground(Theme.ink, for: .navigationBar)
             .listRowBackground(Theme.mist)
     }
 }
@@ -23,7 +24,13 @@ extension View {
     /// Signal's page colour behind a whole screen in a navigation stack — the parts no list
     /// covers, like a search bar above one, or a page built from a plain stack. Set once, on every
     /// section's front screen and every pushed page, in `RootShell`.
-    func signalPage() -> some View { containerBackground(Theme.ink, for: .navigation) }
+    func signalPage() -> some View {
+        containerBackground(Theme.ink, for: .navigation)
+            // Once the page scrolls, its words ran under the title and the clock with nothing
+            // behind them and both became unreadable (walk, 2026-10-02). The bar takes the page's
+            // colour when content is under it, the way the website's header stays solid.
+            .toolbarBackground(Theme.ink, for: .navigationBar)
+    }
 }
 
 /// A `List` in Signal's colours. `.listRowBackground` only reaches rows when it is set on the

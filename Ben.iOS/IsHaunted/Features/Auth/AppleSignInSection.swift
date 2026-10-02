@@ -198,6 +198,7 @@ final class AppleSignInFlow {
 /// The form itself is presented by ``SignInView``, not from here — see ``AppleSignInFlow``.
 struct AppleSignInSection: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.colorScheme) private var colorScheme
 
     let flow: AppleSignInFlow
     var onSignedIn: () -> Void
@@ -213,7 +214,10 @@ struct AppleSignInSection: View {
                     if await flow.begin(result, using: dependencies) { onSignedIn() }
                 }
             }
-            .signInWithAppleButtonStyle(.black)
+            // Apple's own rule, and the eye's: a white button on a dark screen. Black on the
+            // night card all but disappeared. Keyed on the scheme because the style is read once.
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+            .id(colorScheme)
             .frame(height: 46)
             .disabled(flow.busy)
             .accessibilityIdentifier("sign-in-with-apple")

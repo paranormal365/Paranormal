@@ -49,6 +49,12 @@ struct EventsView: View {
                 }
 
             case .loaded:
+                // The time switch sits ABOVE the list, as on Tours. Pinned over the list as a safe-
+                // area inset it hid the screen's own title, so "Events" opened on a blank band
+                // (walk, 2026-10-02).
+                VStack(spacing: 0) {
+                TimeZoneSwitch(zoneId: nil)
+                    .padding(.horizontal).padding(.vertical, 6)
                 SignalList(store?.events ?? []) { event in
                     // Item 234: the row opens the night. It had nowhere to go before — there was
                     // no event screen at all — so a walk could be reserved and never looked at.
@@ -63,11 +69,6 @@ struct EventsView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
-                // Each night on its own clock, or all on the reader's (2026-09-28).
-                .safeAreaInset(edge: .top) {
-                    TimeZoneSwitch(zoneId: nil)
-                        .padding(.horizontal).padding(.vertical, 6)
-                        .background(Theme.ink)
                 }
             }
         }
@@ -132,7 +133,9 @@ struct EventRow: View {
             // The tour this night belongs to, above the business that runs it (item 233). A walk
             // is booked by its NAME — "Printers Alley Ghost Walk" — and a business with three
             // walks would otherwise show three rows reading "Saturday walk".
-            if let tour = event.tourName {
+            // …and only when it says something the title has not: a night named after its walk
+            // printed the same name twice.
+            if let tour = event.tourName, tour != event.title {
                 Label(tour, systemImage: "figure.walk")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(Theme.bone)
@@ -154,8 +157,12 @@ struct EventRow: View {
             .font(.caption).foregroundStyle(Theme.fog)
 
             HStack(spacing: 8) {
-                if let left = event.spacesLeft {
-                    Text(event.isFull ? "Full" : "\(left) space\(left == 1 ? "" : "s") left")
+                if event.startDateTime <= .now {
+                    // Started and not yet over — the list keeps a night until it ends.
+                    Text("Under way now").font(.caption.weight(.semibold)).foregroundStyle(Theme.haunt)
+                } else if let left = event.spacesLeft {
+                    // "places", as the tour page and the website say it.
+                    Text(event.isFull ? "Full" : "\(left) place\(left == 1 ? "" : "s") left")
                         .font(.caption)
                         .foregroundStyle(event.isFull ? Theme.danger : Theme.fog)
                 } else if event.attendingCount > 0 {
@@ -178,7 +185,7 @@ struct EventRow: View {
                         .buttonStyle(.bordered).controlSize(.small)
                 } else if canRsvp && !event.isFull && event.startDateTime > .now {
                     Button("Reserve", action: onRsvp)
-                        .buttonStyle(.borderedProminent).controlSize(.small)
+                        .buttonStyle(.signalPrimary).controlSize(.small)
                 }
             }
         }

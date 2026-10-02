@@ -50,7 +50,9 @@ struct EventDetailView: View {
         }
         .navigationTitle(event?.tourName ?? event?.title ?? "Event")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        // Keyed on who is signed in: what a person may do here (ask for a place) depends on it, and
+        // signing in from this screen's own button must bring the ask, not the signed-out text.
+        .task(id: dependencies.session.me?.userId) {
             if store == nil { store = EventsStore(api: dependencies.api) }
             await load()
         }
@@ -172,6 +174,9 @@ struct EventDetailView: View {
         if !signedIn {
             Text(event.flags.rsvpBlockedReason ?? "Sign in to say you're coming.")
                 .font(.footnote).foregroundStyle(Theme.fog)
+            if event.flags.rsvpBlockedReason == nil {
+                SignInButton()
+            }
         } else if event.flags.canRsvp {
             if event.tourName != nil {
                 // A walk asks how many are coming; an ordinary evening does not, because one

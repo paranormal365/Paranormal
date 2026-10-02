@@ -156,6 +156,10 @@ struct PublicSessionsView: View {
 
     private func lookNearby() async {
         problem = nil
+        // Say what is happening from the first moment. Before this the page stayed blank —
+        // a search box over nothing — for the seconds the phone took to find itself (walk,
+        // 2026-10-02): the "Finding where you are…" row only drew once something was showing.
+        showing = .near
         guard let point = await locator.locate() else {
             if locator.access == .allowed {
                 problem = "Couldn't work out where you are. Search for a place or a town instead."

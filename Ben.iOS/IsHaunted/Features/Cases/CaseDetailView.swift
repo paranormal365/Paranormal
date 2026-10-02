@@ -22,6 +22,8 @@ struct CaseDetailView: View {
             case .signedOut:
                 ContentUnavailableView {
                     Label("Sign in to see this case", systemImage: "folder.badge.person.crop")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):
@@ -92,7 +94,8 @@ struct CaseDetailView: View {
         }
         .animation(.default, value: toast)
         .refreshable { await store?.load() }
-        .task {
+        // Keyed on who is signed in, so signing in from this screen's own button loads the case.
+        .task(id: dependencies.session.me?.userId) {
             let store = CaseDetailStore(caseId: caseId, api: dependencies.api)
             self.store = store
             await store.load()

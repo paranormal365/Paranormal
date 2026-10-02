@@ -21,6 +21,8 @@ struct InvestigationsView: View {
                     Label("Sign in to see your investigations", systemImage: "binoculars")
                 } description: {
                     Text("Investigations belong to the group running them.")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):

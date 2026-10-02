@@ -32,8 +32,11 @@ struct CaseReportsView: View {
             ProgressView().frame(maxWidth: .infinity).padding(24)
 
         case .signedOut:
-            ContentUnavailableView("Sign in to read your reports",
-                                   systemImage: "person.crop.circle.badge.questionmark")
+            ContentUnavailableView {
+                Label("Sign in to read your reports", systemImage: "person.crop.circle.badge.questionmark")
+            } actions: {
+                SignInButton()
+            }
 
         case .failed(let reason):
             // A refusal is not an empty list, and must not look like one.

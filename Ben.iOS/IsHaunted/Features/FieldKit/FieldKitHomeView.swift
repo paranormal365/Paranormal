@@ -584,12 +584,16 @@ private struct StartSessionSheet: View {
                         Toggle(isOn: Binding(
                             get: { channels.contains(channel) },
                             set: { isOn in
-                                // Refused before, so iOS will not ask again: say so and offer Settings.
-                                if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
-                                    refusedPermission = needed
+                                guard isOn, let needed = AppPermission.needed(for: channel) else {
+                                    if isOn { channels.insert(channel) } else { channels.remove(channel) }
                                     return
                                 }
-                                if isOn { channels.insert(channel) } else { channels.remove(channel) }
+                                // Asked now if iOS never has; refused (now or before) stays off and
+                                // offers Settings — see AppPermission.ensure.
+                                Task {
+                                    if await needed.ensure() { channels.insert(channel) }
+                                    else { refusedPermission = needed }
+                                }
                             })
                         ) {
                             VStack(alignment: .leading, spacing: 1) {

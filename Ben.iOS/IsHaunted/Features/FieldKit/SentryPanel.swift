@@ -73,6 +73,21 @@ private struct SentrySetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: ActiveFieldSession
     @Binding var config: SentryConfig
+    @State private var refusedPermission: AppPermission?
+
+    /// A watch that needs a permission: asked now if iOS never has; refused stays off and offers
+    /// Settings (Ben, 2026-10-02 — "same with other toggles"). See AppPermission.ensure.
+    private func needing(_ permission: AppPermission, _ value: WritableKeyPath<SentryConfig, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { config[keyPath: value] },
+            set: { on in
+                guard on else { config[keyPath: value] = false; return }
+                Task {
+                    if await permission.ensure() { config[keyPath: value] = true }
+                    else { refusedPermission = permission }
+                }
+            })
+    }
 
     var body: some View {
         NavigationStack {
@@ -80,10 +95,10 @@ private struct SentrySetupSheet: View {
                 Section {
                     Toggle("Magnetic field", isOn: $config.watchMagnetic)
                         .accessibilityIdentifier("watch-magnetic")
-                    Toggle("Sound", isOn: $config.watchSound)
+                    Toggle("Sound", isOn: needing(.microphone, \.watchSound))
                     Toggle("The device is moved", isOn: $config.watchDeviceMovement)
                         .accessibilityIdentifier("watch-device-movement")
-                    Toggle("Movement in the camera's view", isOn: $config.watchSceneMotion)
+                    Toggle("Movement in the camera's view", isOn: needing(.camera, \.watchSceneMotion))
                         .accessibilityIdentifier("watch-scene-motion")
                 } header: {
                     Text("Wake up for")
@@ -139,6 +154,7 @@ private struct SentrySetupSheet: View {
                 }
             }
             .navigationTitle("Watching")
+            .permissionRefusedAlert($refusedPermission)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

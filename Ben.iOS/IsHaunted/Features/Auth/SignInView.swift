@@ -16,6 +16,7 @@ struct SignInView: View {
     /// Sign in with Apple's whole flow, owned HERE rather than by the section that draws the
     /// button, so the form it leads to is presented by the form — see ``AppleSignInFlow``.
     @State private var apple = AppleSignInFlow()
+    @State private var showRegister = false
 
     private var session: SessionStore { dependencies.session }
 
@@ -57,6 +58,21 @@ struct SignInView: View {
                     .disabled(email.isEmpty || password.isEmpty || countdown > 0
                               || session.state == .authenticating
                               || session.state == .fetchingIdentity)
+                } footer: {
+                    // Somebody who has forgotten their password had no way forward from here — the
+                    // reset lives on the website, and the email it sends links back there.
+                    // A newcomer had no way to an account from here either (walk, 2026-10-02).
+                    HStack {
+                        Link("Forgot your password?",
+                             destination: dependencies.environment.websiteURL(path: "forgot-password"))
+                            .accessibilityIdentifier("forgot-password")
+                        Spacer()
+                        Button("Create an account") { showRegister = true }
+                            .accessibilityIdentifier("create-account-from-sign-in")
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.ecto)
+                    .padding(.top, 6)
                 }
 
                 AppleSignInSection(flow: apple) { dismiss() }
@@ -74,6 +90,9 @@ struct SignInView: View {
             ) {
                 TwoFactorChallengeView()
                     .environment(dependencies)
+            }
+            .sheet(isPresented: $showRegister) {
+                RegisterView().environment(dependencies)
             }
             .onChange(of: session.state) { _, newState in
                 if case .signedIn = newState { dismiss() }

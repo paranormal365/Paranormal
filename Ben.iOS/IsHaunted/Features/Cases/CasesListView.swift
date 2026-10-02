@@ -20,6 +20,8 @@ struct CasesListView: View {
                     Label("Sign in to see your cases", systemImage: "folder.badge.person.crop")
                 } description: {
                     Text("A case is between you and the group looking into it.")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):

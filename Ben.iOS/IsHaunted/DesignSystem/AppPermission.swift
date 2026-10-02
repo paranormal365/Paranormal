@@ -82,6 +82,70 @@ enum AppPermission: String, Identifiable, Sendable {
     }
 }
 
+extension AppPermission {
+    /// Makes sure the app may use this, asking iOS now if it has never asked.
+    ///
+    /// Ben, 2026-10-02: "if they decline permission for video and click the toggle button... ask
+    /// for permission again and open the permission for them to set it correctly. Same with other
+    /// toggles." A switch used to turn on whatever iOS would later say, and a "no" given at the
+    /// system question left it on, recording nothing. Every permission switch now calls this
+    /// first: `true` turns it on; `false` — refused now or before — leaves it off, and the caller
+    /// shows ``permissionRefusedAlert(_:)``, which takes the person to Settings. iOS shows its own
+    /// question only once, so after a "no" Settings is the only way to change the answer.
+    @MainActor
+    func ensure() async -> Bool {
+        if await isRefusedNow() { return false }
+        switch self {
+        case .camera:
+            guard AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined else { return true }
+            return await AVCaptureDevice.requestAccess(for: .video)
+        case .microphone:
+            guard AVAudioApplication.shared.recordPermission == .undetermined else { return true }
+            return await AVAudioApplication.requestRecordPermission()
+        case .location:
+            return await LocationAsker().ask()
+        case .speech:
+            guard SFSpeechRecognizer.authorizationStatus() == .notDetermined else { return true }
+            return await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0 == .authorized) }
+            }
+        case .notifications:
+            return (try? await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        }
+    }
+}
+
+/// Asks for when-in-use location once and reports the answer — the delegate dance, awaited.
+@MainActor
+private final class LocationAsker: NSObject, @preconcurrency CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private var keepAlive: LocationAsker?
+
+    func ask() async -> Bool {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways: return true
+        case .denied, .restricted: return false
+        default: break
+        }
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            keepAlive = self
+            manager.delegate = self
+            manager.requestWhenInUseAuthorization()
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        guard status != .notDetermined, let continuation else { return }
+        self.continuation = nil
+        keepAlive = nil
+        continuation.resume(returning: status == .authorizedWhenInUse || status == .authorizedAlways)
+    }
+}
+
 extension View {
     /// Says a permission was refused, and offers this app's page in Settings.
     ///
