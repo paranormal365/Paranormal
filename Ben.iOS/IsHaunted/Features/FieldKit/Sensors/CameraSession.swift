@@ -600,24 +600,25 @@ struct CameraPreview: UIViewRepresentable {
 
 /// The device being moved, from the accelerometer with gravity already removed — so a phone
 /// propped at any angle reads near zero until something actually disturbs it.
+///
+/// From the app's one shared device-motion stream (`SharedDeviceMotion`): its own manager, started
+/// in a different frame, stopped the magnetometer reading when Watch for Motion was on (1.1.1).
 final class LiveDeviceMovement: DeviceMovementSource, @unchecked Sendable {
-    private let manager = CMMotionManager()
+    private let motion: SharedDeviceMotion
 
-    var isAvailable: Bool { manager.isDeviceMotionAvailable }
+    init(motion: SharedDeviceMotion = .shared) { self.motion = motion }
+
+    var isAvailable: Bool { motion.isAvailable }
 
     func movements(hz: Double) -> AsyncStream<DeviceMovementSample> {
         AsyncStream { continuation in
-            guard manager.isDeviceMotionAvailable else { continuation.finish(); return }
-            manager.deviceMotionUpdateInterval = 1 / max(1, hz)
-            manager.startDeviceMotionUpdates(to: .main) { motion, _ in
-                guard let motion else { return }
-                let a = motion.userAcceleration
+            guard motion.isAvailable else { continuation.finish(); return }
+            let id = motion.subscribe(hz: hz) { reading in
+                let a = reading.userAcceleration
                 let magnitude = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
                 continuation.yield(DeviceMovementSample(at: Date(), magnitudeG: magnitude))
             }
-            continuation.onTermination = { [weak self] _ in self?.stop() }
+            continuation.onTermination = { [motion] _ in motion.unsubscribe(id) }
         }
     }
-
-    private func stop() { manager.stopDeviceMotionUpdates() }
 }
