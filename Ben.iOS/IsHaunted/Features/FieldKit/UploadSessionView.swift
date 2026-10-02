@@ -54,7 +54,7 @@ struct UploadSessionView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 if dependencies.session.me == nil {
                     Section {
                         Label("Sign in to send this session", systemImage: "person.crop.circle")
@@ -393,7 +393,7 @@ struct UploadSessionView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.signalPrimary)
             .disabled(busy || overAllowance)
             .accessibilityIdentifier("send-session")
         } footer: {
@@ -451,7 +451,7 @@ struct UploadSessionView: View {
                 } label: {
                     Label("Send without the video", systemImage: "video.slash")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .font(.caption)
                 .padding(.top, 2)
                 .accessibilityIdentifier("send-without-video")

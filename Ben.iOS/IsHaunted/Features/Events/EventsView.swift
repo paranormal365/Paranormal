@@ -28,7 +28,7 @@ struct EventsView: View {
                     Text("The server couldn't be reached.")
                 } actions: {
                     Button("Try again") { Task { await store?.load(signedIn: signedIn) } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
 
             case .failed(let reason):
@@ -49,7 +49,7 @@ struct EventsView: View {
                 }
 
             case .loaded:
-                List(store?.events ?? []) { event in
+                SignalList(store?.events ?? []) { event in
                     // Item 234: the row opens the night. It had nowhere to go before — there was
                     // no event screen at all — so a walk could be reserved and never looked at.
                     NavigationLink(value: AppRoute.eventDetail(event.id)) {
@@ -67,7 +67,7 @@ struct EventsView: View {
                 .safeAreaInset(edge: .top) {
                     TimeZoneSwitch(zoneId: nil)
                         .padding(.horizontal).padding(.vertical, 6)
-                        .background(.bar)
+                        .background(Theme.ink)
                 }
             }
         }
@@ -199,7 +199,7 @@ struct AddToCalendarButton: View {
         } label: {
             Image(systemName: "calendar.badge.plus")
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.signalSecondary)
         .controlSize(.small)
         .accessibilityLabel("Add to calendar")
         .sheet(isPresented: $showSheet) {

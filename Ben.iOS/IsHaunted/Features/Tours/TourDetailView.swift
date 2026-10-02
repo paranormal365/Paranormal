@@ -29,7 +29,7 @@ struct TourDetailView: View {
                 } description: {
                     Text("It may have stopped running.")
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             }
         }
@@ -94,7 +94,7 @@ struct TourDetailView: View {
                     Link(destination: url) {
                         Label("Directions", systemImage: "arrow.triangle.turn.up.right.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                 }
             }
         }

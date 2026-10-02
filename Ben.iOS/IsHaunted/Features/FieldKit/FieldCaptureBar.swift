@@ -180,7 +180,7 @@ struct FieldCaptureBar: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.signalSecondary)
         .disabled(takingPhoto)
         // Never disabled for want of a camera: a device with none says so on the capture
         // screen, in a sentence. A dead button explains nothing.

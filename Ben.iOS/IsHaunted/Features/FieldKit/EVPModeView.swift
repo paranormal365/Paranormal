@@ -108,7 +108,7 @@ struct EVPModeView: View {
                         Task { await session.startRecording() }
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("evp-start-recording")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -171,7 +171,7 @@ struct EVPModeView: View {
                     Label("Ask, and type it", systemImage: "square.and.pencil")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("evp-ask-with-text")
             }
         }

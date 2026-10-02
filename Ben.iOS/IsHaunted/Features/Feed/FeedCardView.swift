@@ -57,7 +57,7 @@ struct FeedCardView: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.signalPrimary)
             .accessibilityIdentifier("feed-join-launch")
         }
     }

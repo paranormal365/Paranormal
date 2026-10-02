@@ -31,7 +31,7 @@ struct InvestigationsView: View {
                     Text(reason ?? "The server couldn't be reached.")
                 } actions: {
                     Button("Try again") { Task { await store?.load() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
 
             case .loaded:
@@ -73,7 +73,7 @@ struct InvestigationsView: View {
     }
 
     private func list(_ store: InvestigationsStore) -> some View {
-        List {
+        SignalList {
             // Each visit on its own clock, or all on the reader's (2026-09-28).
             TimeZoneSwitch(zoneId: nil)
                 .listRowBackground(Color.clear)

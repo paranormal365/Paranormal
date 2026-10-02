@@ -41,7 +41,7 @@ struct JoinLaunchView: View {
                     Text("This session is for the people the group sent it to. Sign in with the account you registered with.")
                 } actions: {
                     Button("Sign in") { router.open(.profile) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
             case .failed(let reason):
                 ContentUnavailableView {

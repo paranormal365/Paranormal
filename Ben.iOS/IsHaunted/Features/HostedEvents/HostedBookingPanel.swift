@@ -88,12 +88,12 @@ struct HostedBookingPanel: View {
                 NavigationLink(value: AppRoute.eventPass(hostedEventId)) {
                     Label("Your pass", systemImage: "qrcode")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .accessibilityIdentifier("hosted-booking-pass")
                 NavigationLink(value: AppRoute.eventHub(hostedEventId)) {
                     Label("Programme and room", systemImage: "sparkles")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("hosted-booking-hub")
             }
             if booking.status == .requested || booking.status == .held {
@@ -137,7 +137,7 @@ struct HostedBookingPanel: View {
         } label: {
             Label(title, systemImage: "safari")
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.signalPrimary)
         .accessibilityIdentifier("hosted-booking-website")
     }
 

@@ -22,7 +22,7 @@ struct ExportSessionView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     Text("The readings, the marks and where you were are always included. Choose which recordings go with them.")
                         .font(.callout).foregroundStyle(Theme.fog)
@@ -97,7 +97,7 @@ struct ExportSessionView: View {
                         else { Text(result == nil ? "Build the bundle" : "Build it again")
                                 .frame(maxWidth: .infinity) }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .disabled(busy)
                     .accessibilityIdentifier("build-export")
                 }

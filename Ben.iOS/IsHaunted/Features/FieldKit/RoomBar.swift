@@ -70,7 +70,7 @@ struct RoomSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField("Room", text: $draft)
                         .focused($typing)

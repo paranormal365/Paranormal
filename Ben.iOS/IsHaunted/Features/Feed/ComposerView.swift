@@ -42,7 +42,7 @@ struct ComposerView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField(parentPostId == nil ? "What did you find?" : "Write a reply",
                               text: $text, axis: .vertical)

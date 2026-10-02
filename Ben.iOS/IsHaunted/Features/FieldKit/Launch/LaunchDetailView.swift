@@ -17,7 +17,7 @@ struct LaunchDetailView: View {
     @State private var deciding: UUID?
 
     var body: some View {
-        List {
+        SignalList {
             if let problem, launch != nil {
                 Section { Text(problem).foregroundStyle(Theme.warning) }
             }
@@ -119,10 +119,10 @@ struct LaunchDetailView: View {
                     Spacer()
                     if request.status == "pending" {
                         Button("No") { Task { await decide(request, approve: false) } }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.signalSecondary)
                             .accessibilityIdentifier("decline-\(request.appUserId.uuidString.lowercased())")
                         Button("Let in") { Task { await decide(request, approve: true) } }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.signalPrimary)
                             .accessibilityIdentifier("approve-\(request.appUserId.uuidString.lowercased())")
                     }
                 }

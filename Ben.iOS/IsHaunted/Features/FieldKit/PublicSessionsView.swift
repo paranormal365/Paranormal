@@ -23,7 +23,7 @@ struct PublicSessionsView: View {
     private enum Showing: Equatable { case nothingYet, near, search(String) }
 
     var body: some View {
-        List {
+        SignalList {
             if showing != .nothingYet || loading || problem != nil {
                 resultsSection
             }
@@ -122,7 +122,7 @@ struct PublicSessionsView: View {
             Spacer(minLength: 8)
             if onPhone {
                 Button("Open") { router.push(.fieldSessionReview(row.id)) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("open-public-session")
             } else if !row.canDownload {
                 Text("On the website only").font(.caption2).foregroundStyle(Theme.fog)

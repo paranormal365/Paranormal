@@ -42,7 +42,7 @@ struct EventPassView: View {
                     } description: {
                         Text(failure ?? "Check your connection and try again.")
                     } actions: {
-                        Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                        Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                     }
                 }
             }

@@ -16,7 +16,7 @@ struct DoorDutiesView: View {
     var body: some View {
         Group {
             if !duties.isEmpty {
-                List {
+                SignalList {
                     if let savedAt {
                         Section {
                             Label("No signal — this is the list kept on this phone at \(savedAt.readerFormatted(date: .omitted, time: .shortened)).",
@@ -44,7 +44,7 @@ struct DoorDutiesView: View {
                 } description: {
                     Text(failure)
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
                 ContentUnavailableView("No doors to run", systemImage: "door.left.hand.open",

@@ -29,7 +29,7 @@ struct MyEventsView: View {
                 } description: {
                     Text(reason ?? "Pull to try again.")
                 } actions: {
-                    Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent)
+                    Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             default:
                 if bookings.isEmpty {
@@ -38,7 +38,7 @@ struct MyEventsView: View {
                         systemImage: "ticket",
                         description: Text("Events you ask to come to, or are given a place at, show here."))
                 } else {
-                    List {
+                    SignalList {
                         let coming = bookings.filter { $0.status.isLive }
                         let over = bookings.filter { !$0.status.isLive }
                         if !coming.isEmpty {
@@ -101,14 +101,14 @@ struct MyEventsView: View {
                     Button { router.push(.eventPass(booking.hostedEventId)) } label: {
                         Label("Pass", systemImage: "qrcode")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.signalPrimary)
                     .accessibilityIdentifier("my-events-pass-\(booking.hostedEventId.uuidString.lowercased())")
                 }
                 // Programme, menus, downloads and the room live on the event's own screen, which also links to its page.
                 Button { router.push(.eventHub(booking.hostedEventId)) } label: {
                     Label("The event", systemImage: "sparkles")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("my-events-hub-\(booking.hostedEventId.uuidString.lowercased())")
             }
             .padding(.top, 2)

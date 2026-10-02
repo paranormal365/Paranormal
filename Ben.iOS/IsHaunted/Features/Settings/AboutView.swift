@@ -26,7 +26,7 @@ struct AboutView: View {
     }
 
     var body: some View {
-        List {
+        SignalList {
             Section {
                 Text("IsHaunted is the field companion for paranormal investigators. Run an "
                    + "investigation from your phone: record a session with the sensors and "

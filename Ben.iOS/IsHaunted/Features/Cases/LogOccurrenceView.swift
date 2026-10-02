@@ -30,7 +30,7 @@ struct LogOccurrenceView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 Section {
                     TextField("What happened?", text: $title)
                     TextField("Anything else worth saying", text: $detail, axis: .vertical)

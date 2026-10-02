@@ -53,7 +53,7 @@ struct LoadStateView<T: Sendable, Content: View>: View {
             } actions: {
                 if let retry {
                     Button("Try again") { Task { await retry() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
             }
         case .sessionEnded:

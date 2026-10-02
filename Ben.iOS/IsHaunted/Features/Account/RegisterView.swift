@@ -25,7 +25,7 @@ struct RegisterView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 if let sentMessage {
                     Section {
                         // The end of the flow, not a step in it: nothing else to fill in.
@@ -91,7 +91,7 @@ struct RegisterView: View {
                                 Text("Create account").frame(maxWidth: .infinity)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                         .disabled(!canSubmit)
                     }
                 }
@@ -169,7 +169,7 @@ struct ConfirmEmailView: View {
                     Text("The server couldn't be reached. Your link is still good — try again.")
                 } actions: {
                     Button("Try again") { Task { await confirm() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
             } else if let response {
                 ContentUnavailableView {

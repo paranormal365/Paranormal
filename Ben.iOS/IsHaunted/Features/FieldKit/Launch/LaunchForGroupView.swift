@@ -16,7 +16,7 @@ struct LaunchForGroupView: View {
     @State private var launching = false
 
     var body: some View {
-        List {
+        SignalList {
             if let problem {
                 Section { Text(problem).foregroundStyle(Theme.warning) }
             }
@@ -66,7 +66,7 @@ struct LaunchForGroupView: View {
             }
             Spacer()
             Button("Launch") { confirming = item }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.signalPrimary)
                 .accessibilityIdentifier("launch-\(item.id.uuidString.lowercased())")
         }
         .padding(.vertical, 4)

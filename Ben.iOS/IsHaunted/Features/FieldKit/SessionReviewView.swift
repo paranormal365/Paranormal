@@ -64,7 +64,7 @@ struct SessionReviewView: View {
                 Label("Start another session", systemImage: "record.circle")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.signalPrimary)
             .tint(Theme.ecto)
             .accessibilityIdentifier("start-another-session")
         }

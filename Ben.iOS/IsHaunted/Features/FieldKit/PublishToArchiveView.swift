@@ -36,7 +36,7 @@ struct PublishToArchiveView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            SignalForm {
                 if published {
                     Section {
                         Label("Published", systemImage: "checkmark.circle")

@@ -32,7 +32,7 @@ struct NotificationsView: View {
                     Text(reason ?? "The server couldn't be reached.")
                 } actions: {
                     Button("Try again") { Task { await store.load() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.signalPrimary)
                 }
 
             case .loaded where store.rows.isEmpty:
@@ -43,7 +43,7 @@ struct NotificationsView: View {
                 }
 
             case .loaded:
-                List {
+                SignalList {
                     Section {
                         ForEach(store.rows) { row in
                             NotificationRowView(row: row) {

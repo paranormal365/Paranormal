@@ -24,7 +24,7 @@ struct EventHubView: View {
     @State private var openOnWebsite: URL?
 
     var body: some View {
-        List {
+        SignalList {
             if let title = event?.name ?? booking?.eventName {
                 Section { header(title) }
             }

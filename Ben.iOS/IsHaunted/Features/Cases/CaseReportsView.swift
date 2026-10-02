@@ -57,7 +57,7 @@ struct CaseReportsView: View {
     }
 
     private var reportList: some View {
-        List(store?.reports ?? []) { report in
+        SignalList(store?.reports ?? []) { report in
             // A pushed screen rather than a sheet: on iPad a sheet raised from inside the detail
             // column of a NavigationSplitView did not present at all — the row was tapped and
             // nothing happened. Pushing also matches how the rest of the app moves, and reading a
