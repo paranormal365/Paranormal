@@ -13622,7 +13622,7 @@ pressed; the upload cap stays 600 MB; the lead plus group managers may launch.
   in the background from a push, and starting a microphone unasked needs the person's tap).
 - Which roles count as "lead" for each of the three (guide, event staff role, investigation lead).
 
-## 253. The EVP detector learns from every Keep and Dismiss (FUTURE — Ben, 10/02/2026)
+## 253. The EVP detector learns from every Keep and Dismiss (STEP ONE BUILT 10/02/2026 — feature/evp-learning-253; the re-fit is still future)
 
 Ben, 10/02/2026: *"I would like to be able to use the audio editor EVP detector to learn the more it
 is used."* This is the cheap first step toward item 242, and it works with today's detector. Item
@@ -13692,3 +13692,75 @@ One migration that records features, scan records and "played before ruling", wi
 scoring**. Labels then build up while the rest waits. After a few weeks of real use, look at how
 many there are and how kept and dismissed candidates separate on each feature. That decides whether
 the refit (M) is worth building yet.
+
+## 254. Known voices: say "that's Sarah" once, and the scanner sets her aside everywhere (FUTURE — Ben, 10/02/2026)
+
+Ben, 10/02/2026, while item 253 was being built: *"Maybe when we scan, we can point out found voices
+so the user can say they know the person's voice. So, then we can compare the remaining recording
+and eliminate that person's voice and let them select voices and say yes or no if it is a person
+they know."* And: *"Then, what is left being analyzed is true EVPs."*
+
+### What it is
+Speaker recognition, not speech recognition. A small pretrained model turns a few seconds of a voice
+into a **voiceprint** (a speaker embedding: a list of a couple of hundred numbers). Two clips of the
+same person give voiceprints that sit close together, and different people's sit further apart.
+Nothing about *what* was said is involved.
+
+1. **Group the voices.** After a scan, cluster the candidates by voiceprint ("diarization"): "these
+   14 candidates sound like one person, these 6 like another".
+2. **Name them.** The investigator listens to a cluster and answers "Yes, that's Sarah (who is on
+   the team)", "That's me", or "No, I don't know this voice".
+3. **Set them aside.** Candidates matching a known voice are moved to a collapsed "Known voices"
+   group, not deleted, and are skipped by later scans of the same night or the same team.
+4. **What's left** is the shorter list worth careful listening: voices not matched to anyone known.
+5. Every Yes or No is a label, the same way item 253's Keep and Dismiss are.
+
+### Honest wording: "unexplained", not "true EVP"
+Taking out known voices leaves *voices not matched to anyone you named*. That is a much better list,
+but it is not proof. Things that will still be in it:
+- people nobody named: neighbors, passersby, another team in the building;
+- TVs, radios, phones on speaker, car stereos;
+- a known person whose clip was too short (under ~1–2 s), whispered, muffled or distorted to match;
+- the recorder's own artifacts.
+
+The product already labels candidates "Detected signal" rather than "Possible EVP" for this reason.
+The leftover group should read **"Unexplained voices"** and leave the verdict to the investigator.
+Whispers, the classic EVP, are also where voiceprints are weakest, so a match threshold that is
+too eager would wrongly set aside a real anomaly as "Sarah". The default has to lean toward
+keeping things in.
+
+### Privacy and law: the part that decides the design
+A voiceprint is **biometric data**:
+- Illinois BIPA requires written consent, a public retention policy, and carries per-violation
+  damages that private plaintiffs can sue for;
+- Texas and Washington have their own biometric laws;
+- GDPR treats it as special-category data.
+
+So:
+- **Each person enrolls their own voice and consents themselves.** An investigator may not
+  enroll a teammate, client or homeowner. "That's Sarah" becomes a request that Sarah confirms
+  from her own account.
+- **Stored per group, never shared across groups**, never used for item 253's cross-group learning,
+  never sold, and listed on the privacy page.
+- **Delete is one tap** and also happens automatically when the person leaves the group or closes
+  their account. There is a stated retention period.
+- **Private-engagement recordings (item 184):** clients and homeowners are never enrolled.
+  Matching only runs against team members who consented.
+- **Ben should get legal advice** before shipping, specifically on BIPA.
+
+### How it would be built
+- An open-source speaker-embedding model run locally as ONNX (for example ECAPA-TDNN or a
+  pyannote/WeSpeaker export). Same pattern as `OnnxNsfwScreener`: fetched by a script, never
+  committed, degrades loudly if missing. No audio leaves the server.
+- Tables: `VoiceProfile` (person, group, embedding, consented-at, model version) and per-candidate
+  embeddings computed at scan time for files whose group has opted in.
+- Matching is a cosine-similarity threshold, tuned on real tape before launch, with "not sure" as a
+  real outcome.
+- It fits after item 253 step one and beside item 242's speech detector. 242's "is this speech at
+  all" check is a good gate before trying a voiceprint.
+
+### First step when it starts
+Same as 242: a throwaway measurement outside the product, run on Ben's real recordings of the team
+talking. How often does the model match a known teammate correctly, how often does it wrongly match
+a stranger, and how short or whispered can a clip be before it gives up? Those numbers decide
+whether the feature is worth building and where the threshold sits.

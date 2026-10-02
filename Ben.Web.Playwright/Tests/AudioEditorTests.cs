@@ -44,7 +44,7 @@ public class AudioEditorTests : BenTestBase
     /// <para>The library draws waveforms on demand instead, one tap at a time, and everything here
     /// belongs to the seat running the test.</para>
     /// </remarks>
-    private async Task<bool> ReadyInFullViewAsync()
+    private async Task<bool> ReadyInFullViewAsync(byte[]? audio = null, string extension = "mp3", string mimeType = "audio/mpeg")
     {
         await LoginAsync(UserEmail, UserPassword);
 
@@ -71,12 +71,12 @@ public class AudioEditorTests : BenTestBase
         // including seeded ones owned by other people, so "the first card" is not necessarily ours
         // — and the editor will not save settings for a file that is not. A unique name also walks
         // past the same-name dialog rather than having to answer it.
-        var uploadedName = $"editor-test-{Guid.NewGuid():N}.mp3";
+        var uploadedName = $"editor-test-{Guid.NewGuid():N}.{extension}";
         await input.SetInputFilesAsync(new FilePayload
         {
             Name      = uploadedName,
-            MimeType  = "audio/mpeg",
-            Buffer    = await File.ReadAllBytesAsync(TestAudioPath),
+            MimeType  = mimeType,
+            Buffer    = audio ?? await File.ReadAllBytesAsync(TestAudioPath),
         });
 
         // The bytes go through page JavaScript in chunks, started by an explicit button.
@@ -270,6 +270,127 @@ public class AudioEditorTests : BenTestBase
         Assert.That(during, Is.Not.EqualTo(before),
             "the playhead did not move, so nothing was played. A point marker has no span, and "
             + "playing a zero-length region is a seek and a pause in the same instant.");
+    }
+
+    /// <summary>
+    /// The EVP lab advertises the smarter detector, explains it on request, and a scan's
+    /// candidates can be heard and ruled on (item 253).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 10/02/2026: the learning notice should read like a feature, with the explanation
+    /// behind a button, and the panel should look like the rest of the Signal site. The modal is
+    /// where the privacy promises live — no audio copied, nobody recorded, gone with the recording —
+    /// so the test reads them off the screen rather than trusting the markup.</para>
+    ///
+    /// <para>Pictures of the panel and the modal in both themes go to
+    /// <c>evp-lab-shots</c> beside the test assembly, for the help article and for review.</para>
+    /// </remarks>
+    [Test]
+    public async Task The_evp_lab_advertises_the_smarter_detector_and_explains_it()
+    {
+        // The fixture MP3 is music-like and a scan of it proposes nothing, which left the review
+        // list — the half of the panel this is about — unseen. This recording has three.
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the full view; see the output for where it gave up.");
+            return;
+        }
+
+        // Tall enough that the panel, which scrolls inside itself past about half the screen,
+        // shows whole in the pictures.
+        await Page.SetViewportSizeAsync(1440, 1400);
+
+        var shots = Path.Combine(AppContext.BaseDirectory, "evp-lab-shots");
+        Directory.CreateDirectory(shots);
+        async Task ShootBothAsync(ILocator target, string name)
+        {
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                await Page.EvaluateAsync($"document.documentElement.setAttribute('data-bs-theme', '{theme}')");
+                await Page.WaitForTimeoutAsync(300);
+                await target.ScreenshotAsync(new() { Path = Path.Combine(shots, $"{name}-{theme}.png") });
+            }
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false }).First.ClickAsync();
+        var panel = Modal.Locator("#evp-markers-panel");
+        await Expect(panel).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        var promo = panel.Locator("#evp-learning-notice");
+        await Expect(promo).ToContainTextAsync("Help build a smarter EVP detector");
+        await ShootBothAsync(panel, "panel-before-scan");
+
+        // The explanation is one click away, and it says what is and is not kept.
+        await promo.GetByRole(AriaRole.Button, new() { Name = "How it works" }).ClickAsync();
+        var info = Page.Locator(".modal.show[aria-label='A smarter EVP detector']");
+        await Expect(info).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(info).ToContainTextAsync("No audio is copied");
+        await Expect(info).ToContainTextAsync("Nothing records who made the choice");
+        await Expect(info).ToContainTextAsync("Delete the recording");
+        await ShootBothAsync(info.Locator(".modal-content"), "how-it-works");
+        await info.GetByRole(AriaRole.Button, new() { Name = "Got it" }).ClickAsync();
+        await Expect(info).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+
+        // A scan fills the review list; each candidate carries a score meter.
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+        await Expect(panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }))
+            .ToBeEnabledAsync(new() { Timeout = 120_000 });
+        await Page.WaitForTimeoutAsync(1_000);
+
+        var candidates = panel.Locator(".evp-row--candidate");
+        await Expect(candidates).ToHaveCountAsync(3, new() { Timeout = 90_000 });
+        TestContext.Out.WriteLine($"pictures in {shots}");
+        await Expect(candidates.First.Locator(".evp-score__meter > span")).ToBeAttachedAsync();
+        await ShootBothAsync(panel, "panel-after-scan");
+
+        // Heard, then dismissed: the ruling the detector will learn from.
+        await candidates.First.GetByTitle("Play this stretch with its surrounding context").ClickAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+        await candidates.First.GetByTitle("Not an EVP — won't be proposed again").ClickAsync();
+        await Expect(candidates).ToHaveCountAsync(2, new() { Timeout = 15_000 });
+
+        await Page.EvaluateAsync("document.documentElement.setAttribute('data-bs-theme', 'light')");
+    }
+
+    /// <summary>
+    /// Twenty seconds of room tone with three voice-like sounds at 4, 9 and 15 s: three formants in
+    /// the telephone band under a syllabic envelope, the shape <c>EvpDetectorTests</c> is built on.
+    /// A scan at Medium proposes exactly these three.
+    /// </summary>
+    private static byte[] ScannableWav()
+    {
+        const int rate = 16000;
+        var mono = new float[20 * rate];
+        var rng = new Random(2024);
+        for (var i = 0; i < mono.Length; i++) mono[i] = (float)((rng.NextDouble() * 2 - 1) * 0.004);
+
+        foreach (var (at, seconds) in new[] { (4.0, 0.8), (9.0, 0.7), (15.0, 1.0) })
+        {
+            var start = (int)(at * rate);
+            var count = (int)(seconds * rate);
+            for (var i = 0; i < count; i++)
+            {
+                var t = i / (double)rate;
+                var env = (0.5 + 0.5 * Math.Sin(2 * Math.PI * 4.0 * t))
+                        * Math.Min(1.0, Math.Min(i, count - i) / (0.02 * rate));
+                var tone = (Math.Sin(2 * Math.PI * 500 * t) + Math.Sin(2 * Math.PI * 1500 * t)
+                          + Math.Sin(2 * Math.PI * 2500 * t)) / 3.0;
+                mono[start + i] += (float)(tone * 0.03 * env);
+            }
+        }
+
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            var dataBytes = mono.Length * 2;
+            w.Write("RIFF"u8);  w.Write(36 + dataBytes);  w.Write("WAVE"u8);
+            w.Write("fmt "u8);  w.Write(16);              w.Write((short)1);
+            w.Write((short)1);  w.Write(rate);            w.Write(rate * 2);
+            w.Write((short)2);  w.Write((short)16);       w.Write("data"u8);
+            w.Write(dataBytes);
+            foreach (var v in mono) w.Write((short)Math.Clamp(v * 32767f, short.MinValue, short.MaxValue));
+        }
+        return ms.ToArray();
     }
 
     /// <summary>

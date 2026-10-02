@@ -46,3 +46,34 @@ an earlier `EvpScans` row and no overlapping candidate.
 The migration must reach the live database at deploy — **Ben runs it** (`dotnet ef database update
 --connection …`, never the default). Until it has, every scan and ruling still works and each
 learning write logs an error instead.
+
+## The EVP lab (same branch, Ben's follow-ups)
+
+Ben, 10/02/2026: *"Make the wording like an ad so it is a feature about it becoming a smarter EVP
+detector. Hide the explanation in a modal when a button is clicked. Make the EVP editor page flashy
+and unique like the rest of the new site."*
+
+- The panel is restyled in Signal (`AudioFilePreview.razor.css`, tokens only, both modes):
+  - a gradient top edge, the home page's kicker and gradient title, a pill switch for sensitivity
+    and sort, and score meters;
+  - round icon actions, with Keep as the gradient one;
+  - a shimmer on Scan and a pulse along the edge while a scan runs, both off under
+    reduced motion.
+- **Banner:** "Help build a smarter EVP detector. Every Keep and Dismiss you make trains the
+  next version." It says *next version*, never "learns as you go", because nothing re-fits yet.
+- **How it works** opens a modal: three steps, what is and is not kept, and what it will not learn
+  (whether a sound is paranormal).
+- **Found and fixed on the way:**
+  - The panel was squeezed in the full view's fixed-height column, which hid the Scan button.
+    It now scrolls inside itself, up to about half the screen.
+  - The template draws icons grey whatever they sit on.
+  - **`.dialog-footer-actions` had no CSS since 1762dfcb**: 42 dialogs site-wide had their
+    buttons flush left with no rule above. Restored in `ben-kit.css`.
+- **Test:** `AudioEditorTests.The_evp_lab_advertises_the_smarter_detector_and_explains_it` uploads
+  a generated recording with three voice-like sounds, reads the modal's privacy lines off the
+  screen, scans, plays one candidate and dismisses it. The ruling then appears in `EvpRulings` with
+  `PlayedFirst = true`; this was checked in the test database.
+- Help pictures `evp-candidates.png` and the new `evp-smarter-detector.png` came from that test,
+  dark. Help text and the product PDF are rebuilt.
+
+Backlog item 254 (known voices, Ben's idea from the same conversation) is written up separately.

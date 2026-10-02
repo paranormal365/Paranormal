@@ -252,227 +252,261 @@ else
                     </div>
                 }
 
-                @* EVP Markers panel *@
+                @* EVP Markers panel — the "EVP lab" (Signal look, Ben 10/02/2026: "make the EVP
+                   editor page flashy and unique like the rest of the new site"). Styles live in
+                   AudioFilePreview.razor.css. Button names and titles the walk, the editor tests
+                   and the help capture find it by are kept: "Scan for EVP", "Add Marker at …",
+                   "Keep as an EVP marker", #evp-markers-panel. *@
                 @if (_showMarkers && _modalReady)
                 {
-                    <div class="p-2 mb-2 rounded border bg-body-secondary" id="evp-markers-panel" style="font-size:0.8rem;">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <strong class="small">EVP Markers</strong>
+                    <section class="evp-lab mb-2" id="evp-markers-panel" aria-label="EVP markers">
+                        @if (_scanning)
+                        {
+                            <div class="evp-lab__sweep" aria-hidden="true"></div>
+                        }
+
+                        <header class="evp-lab__head">
+                            <div>
+                                <div class="evp-lab__kicker"><BenIcon Name="radio" /> EVP lab</div>
+                                <h2 class="evp-lab__title">
+                                    <span class="evp-lab__title-text">EVP Markers</span>
+                                    <span class="evp-lab__chip" title="Markers kept on this recording">@ConfirmedMarkers.Count()</span>
+                                </h2>
+                            </div>
                             <button type="button" class="btn btn-primary btn-sm" @onclick="AddMarkerAtCurrentTimeAsync">
-                                ➕ Add Marker at @FormatTime(_modalTime)
+                                <BenIcon Name="plus" Class="me-1" />Add Marker at @FormatTime(_modalTime)
+                            </button>
+                        </header>
+
+                        @* ── Item 253, said as the feature it is. The explanation, including what
+                           is and is not kept, is one click away in the How it works modal. Worded
+                           to what is true today: the rulings train the NEXT version; nothing
+                           re-fits yet. *@
+                        <div class="evp-lab__promo" id="evp-learning-notice">
+                            <span class="evp-lab__promo-mark" aria-hidden="true"><BenIcon Name="zap" /></span>
+                            <div class="evp-lab__promo-text">
+                                <strong>Help build a smarter EVP detector.</strong>
+                                <span>Every Keep and Dismiss you make trains the next version.</span>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="@(() => _showLearningInfo = true)">
+                                <BenIcon Name="info" Class="me-1" />How it works
                             </button>
                         </div>
-                        @if (_markersError is not null)
-                        {
-                            @* The transport itself failed, which BenListState never sees. *@
-                            <div class="alert alert-warning py-1 px-2 small mb-2">@_markersError</div>
-                        }
-                        else if (_markersResult.Failed)
-                        {
-                            @* Markers are somebody's analysis of a recording. "No markers yet"
-                               over a refusal says the file was reviewed and found empty. *@
-                            <BenListState TItem="AudioMarkerRecord" Result="@_markersResult" />
-                        }
-                        else if (!ConfirmedMarkers.Any())
-                        {
-                            <div class="text-secondary small fst-italic">No markers yet — play the file and drop a marker where you hear something.</div>
-                        }
-                        else
-                        {
-                            @foreach (var marker in ConfirmedMarkers)
+
+                        @* ── Kept markers ─────────────────────────────────────── *@
+                        <div class="evp-lab__section">
+                            <div class="evp-lab__section-head">Your markers</div>
+                            @if (_markersError is not null)
                             {
-                                var m = marker;
-                                <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded" style="background:var(--kendo-color-surface,#f5f5f5);">
-                                    <span class="badge" style="background:@MarkerColor(m);">@FormatMarkerRange(m)</span>
-                                    <span class="fw-semibold">@m.Label</span>
-                                    <span class="text-secondary small">@m.ConfidenceLevel</span>
-                                    @if (m.IsAutoDetected && m.DetectionScore is { } confirmedScore)
+                                @* The transport itself failed, which BenListState never sees. *@
+                                <div class="alert alert-warning py-1 px-2 small mb-0">@_markersError</div>
+                            }
+                            else if (_markersResult.Failed)
+                            {
+                                @* Markers are somebody's analysis of a recording. "No markers yet"
+                                   over a refusal says the file was reviewed and found empty. *@
+                                <BenListState TItem="AudioMarkerRecord" Result="@_markersResult" />
+                            }
+                            else if (!ConfirmedMarkers.Any())
+                            {
+                                <div class="evp-lab__empty">No markers yet. Play the file and drop a marker where you hear something, or scan for EVP below.</div>
+                            }
+                            else
+                            {
+                                <div class="evp-lab__list">
+                                    @foreach (var marker in ConfirmedMarkers)
                                     {
-                                        <span class="badge bg-secondary" title="Signal score from the detector that first proposed this">@confirmedScore.ToString("0")</span>
+                                        var m = marker;
+                                        <div class="evp-row evp-row--marker" style="--marker-color:@MarkerColor(m);">
+                                            <span class="evp-row__time">@FormatMarkerRange(m)</span>
+                                            <span class="evp-row__label">@m.Label</span>
+                                            <span class="evp-row__meta">@m.ConfidenceLevel</span>
+                                            @if (m.IsAutoDetected && m.DetectionScore is { } confirmedScore)
+                                            {
+                                                <span class="evp-row__pill" title="Signal score from the detector that first proposed this">score @confirmedScore.ToString("0")</span>
+                                            }
+                                            @if (m.LinkedClipUploadFileId is not null)
+                                            {
+                                                <span class="evp-row__pill evp-row__pill--clip" title="A clip has been cut from this marker"><BenIcon Name="headphones" /> clip</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(m.Note))
+                                            {
+                                                <span class="evp-row__note" title="@m.Note">@m.Note</span>
+                                            }
+                                            <span class="evp-row__actions">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayMarkerAsync(m))" title="Play this marker"><BenIcon Name="play" /></button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => OpenClipFromMarkerDialog(m))" title="@(m.LinkedClipUploadFileId is null
+                                                                         ? "Save this as its own audio file"
+                                                                         : "Save another clip from this marker")"><BenIcon Name="crop" /></button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => OpenEditMarkerDialog(m))" title="Edit this marker"><BenIcon Name="edit-2" /></button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm ben-grid-action" @onclick="@(() => DeleteMarkerAsync(m))" title="Delete this marker"><BenIcon Name="trash-2" /></button>
+                                            </span>
+                                        </div>
                                     }
-                                    @if (m.LinkedClipUploadFileId is not null)
-                                    {
-                                        <span class="badge bg-success" title="A clip has been cut from this marker">🎧 clip</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(m.Note))
-                                    {
-                                        <span class="text-secondary small text-truncate" style="max-width:200px;" title="@m.Note">@m.Note</span>
-                                    }
-                                    <span class="ms-auto d-flex gap-1">
-                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => PlayMarkerAsync(m))" title="Play this marker"><BenIcon Name="play" /></button>
-                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenClipFromMarkerDialog(m))" title="@(m.LinkedClipUploadFileId is null
-                                                                 ? "Save this as its own audio file"
-                                                                 : "Save another clip from this marker")"><BenIcon Name="crop" /></button>
-                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditMarkerDialog(m))"><BenIcon Name="edit-2" /></button>
-                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteMarkerAsync(m))"><BenIcon Name="trash-2" /></button>
-                                    </span>
                                 </div>
                             }
-                        }
+                        </div>
 
                         @* ── Detector ────────────────────────────────────────── *@
-                        <div class="mt-2 pt-2 border-top d-flex align-items-center gap-2 flex-wrap">
-                            <span class="small fw-semibold">Detect</span>
-                            @* Nothing scans on its own — a scan only happens when this is clicked. *@
-                            <BenSelect Class="form-select-sm" Data="@_sensitivityOptions" Value="@_scanSensitivity" ValueChanged="@((EvpSensitivity s) => ApplySensitivityPreset(s))" Width="110px" Enabled="@(!_scanning)" />
-                            <button type="button" class="btn btn-primary btn-sm" @onclick="RunScanAsync" disabled="@(!(!_scanning))">
-                                @(_scanning ? "Scanning…" : "Scan for EVP")
-                            </button>
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showScanTuning = !_showScanTuning)">
-                                @(_showScanTuning ? "Hide settings" : "Fine-tune")
-                            </button>
-                            @if (_scanMessage is not null)
+                        <div class="evp-lab__detector">
+                            <div class="evp-lab__detector-row">
+                                <span class="evp-lab__section-head mb-0">Detect</span>
+                                @* Nothing scans on its own — a scan only happens when Scan is clicked. *@
+                                <div class="evp-seg" role="group" aria-label="Sensitivity">
+                                    @foreach (var level in _sensitivityOptions)
+                                    {
+                                        var l = level;
+                                        <button type="button" class="evp-seg__btn @(l == _scanSensitivity ? "is-active" : null)"
+                                                aria-pressed="@(l == _scanSensitivity ? "true" : "false")"
+                                                disabled="@_scanning"
+                                                @onclick="@(() => ApplySensitivityPreset(l))">@l</button>
+                                    }
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm evp-lab__scan @(_scanning ? "is-scanning" : null)" @onclick="RunScanAsync" disabled="@_scanning">
+                                    <BenIcon Name="activity" Class="me-1" />@(_scanning ? "Scanning…" : "Scan for EVP")
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _showScanTuning = !_showScanTuning)">
+                                    <BenIcon Name="sliders" Class="me-1" />@(_showScanTuning ? "Hide settings" : "Fine-tune")
+                                </button>
+                                @if (_scanMessage is not null)
+                                {
+                                    <span class="evp-lab__msg">@_scanMessage</span>
+                                }
+                            </div>
+                            <p class="evp-lab__hint">
+                                @* Says plainly what the score is, so nobody reads it as "83% likely a voice". *@
+                                Finds sounds that rise above the recording's own background noise, in the
+                                frequency range speech occupies. Everything it finds needs listening to:
+                                the score is how much a sound stood out, not how likely it is to be a voice.
+                            </p>
+
+                            @if (_showScanTuning)
                             {
-                                <span class="small text-secondary">@_scanMessage</span>
+                                @* The preset seeds these; from here they're yours. Every recording is
+                                   different, and a threshold that suits a quiet bedroom floods the queue
+                                   in a room with a furnace. *@
+                                <div class="evp-lab__tuning">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="evp-lab__section-head mb-0">Detector settings</span>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => ApplySensitivityPreset(_scanSensitivity))">
+                                            Reset to @_scanSensitivity
+                                        </button>
+                                    </div>
+
+                                    <div class="mb-2">
+                                        <label class="small d-block" for="audiofilepreview-tolerance-how-far-above-0bad">
+                                            Tolerance: how far above the background a sound must rise,
+                                            <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
+                                        </label>
+                                        <input id="audiofilepreview-tolerance-how-far-above-0bad" type="range" class="form-range"
+                                               min="@EvpDetectionOptions.ThresholdRange.Min"
+                                               max="@EvpDetectionOptions.ThresholdRange.Max"
+                                               step="0.5"
+                                               value="@_scanOptions.ThresholdDb"
+                                               @oninput="@(e => SetThreshold(e.Value))" />
+                                        <div class="d-flex justify-content-between small text-secondary">
+                                            <span>lower: finds more, more to review</span>
+                                            <span>higher: only the obvious</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <label class="small">
+                                            Shortest sound (s)
+                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                                   min="@EvpDetectionOptions.MinDurationRange.Min"
+                                                   max="@EvpDetectionOptions.MinDurationRange.Max"
+                                                   step="0.05"
+                                                   value="@_scanOptions.MinDurationSeconds"
+                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
+                                        </label>
+                                        <label class="small">
+                                            Join sounds within (s)
+                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                                   min="@EvpDetectionOptions.MergeGapRange.Min"
+                                                   max="@EvpDetectionOptions.MergeGapRange.Max"
+                                                   step="0.05"
+                                                   value="@_scanOptions.MergeGapSeconds"
+                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
+                                        </label>
+                                        <label class="small">
+                                            Context either side (s)
+                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                                   min="@EvpDetectionOptions.ContextPadRange.Min"
+                                                   max="@EvpDetectionOptions.ContextPadRange.Max"
+                                                   step="0.1"
+                                                   value="@_scanOptions.ContextPadSeconds"
+                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
+                                        </label>
+                                        <label class="small">
+                                            Longest candidate (s)
+                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                                   min="@EvpDetectionOptions.MaxEventRange.Min"
+                                                   max="@EvpDetectionOptions.MaxEventRange.Max"
+                                                   step="0.5"
+                                                   value="@_scanOptions.MaxEventSeconds"
+                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
+                                        </label>
+                                    </div>
+
+                                    @if (_scanOptions.Validate() is { } settingsProblem)
+                                    {
+                                        <div class="text-danger small mt-2">@settingsProblem</div>
+                                    }
+                                </div>
                             }
                         </div>
-                        <div class="small text-secondary mt-1">
-                            @* Says plainly what the score is, so nobody reads it as "83% likely a voice". *@
-                            Finds sounds that rise above the recording's own background noise, in the
-                            frequency range speech occupies. Everything it finds needs listening to —
-                            the score is how much a sound stood out, not how likely it is to be a voice.
-                        </div>
 
-                        @if (_showScanTuning)
+                        @* ── Candidates to review ───────────────────────────────── *@
+                        @if (PendingCandidates.Any())
                         {
-                            @* The preset seeds these; from here they're yours. Every recording is
-                               different, and a threshold that suits a quiet bedroom floods the queue
-                               in a room with a furnace. *@
-                            <div class="mt-2 p-2 rounded border">
-                                <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <span class="small fw-semibold">Detector settings</span>
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ApplySensitivityPreset(_scanSensitivity))">
-                                        Reset to @_scanSensitivity
-                                    </button>
-                                </div>
-
-                                <div class="mb-2">
-                                    <label class="small d-block" for="audiofilepreview-tolerance-how-far-above-0bad">
-                                        Tolerance — how far above the background a sound must rise:
-                                        <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
-                                    </label>
-                                    <input id="audiofilepreview-tolerance-how-far-above-0bad" type="range" class="form-range"
-                                           min="@EvpDetectionOptions.ThresholdRange.Min"
-                                           max="@EvpDetectionOptions.ThresholdRange.Max"
-                                           step="0.5"
-                                           value="@_scanOptions.ThresholdDb"
-                                           @oninput="@(e => SetThreshold(e.Value))" />
-                                    <div class="d-flex justify-content-between small text-secondary">
-                                        <span>lower — finds more, more to review</span>
-                                        <span>higher — only the obvious</span>
+                            <div class="evp-lab__section">
+                                <div class="evp-lab__review-head">
+                                    <span class="evp-lab__chip evp-lab__chip--hot">@PendingCandidates.Count()</span>
+                                    <strong>@(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review</strong>
+                                    <div class="evp-seg evp-seg--sm ms-auto" role="group" aria-label="Sort candidates">
+                                        <button type="button" class="evp-seg__btn @(_candidatesByScore ? "is-active" : null)" aria-pressed="@(_candidatesByScore ? "true" : "false")" @onclick="@(() => _candidatesByScore = true)">Score</button>
+                                        <button type="button" class="evp-seg__btn @(!_candidatesByScore ? "is-active" : null)" aria-pressed="@(!_candidatesByScore ? "true" : "false")" @onclick="@(() => _candidatesByScore = false)">Time</button>
                                     </div>
                                 </div>
 
-                                <div class="d-flex gap-3 flex-wrap">
-                                    <label class="small">
-                                        Shortest sound (s)
-                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                               min="@EvpDetectionOptions.MinDurationRange.Min"
-                                               max="@EvpDetectionOptions.MinDurationRange.Max"
-                                               step="0.05"
-                                               value="@_scanOptions.MinDurationSeconds"
-                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
-                                    </label>
-                                    <label class="small">
-                                        Join sounds within (s)
-                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                               min="@EvpDetectionOptions.MergeGapRange.Min"
-                                               max="@EvpDetectionOptions.MergeGapRange.Max"
-                                               step="0.05"
-                                               value="@_scanOptions.MergeGapSeconds"
-                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
-                                    </label>
-                                    <label class="small">
-                                        Context either side (s)
-                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                               min="@EvpDetectionOptions.ContextPadRange.Min"
-                                               max="@EvpDetectionOptions.ContextPadRange.Max"
-                                               step="0.1"
-                                               value="@_scanOptions.ContextPadSeconds"
-                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
-                                    </label>
-                                    <label class="small">
-                                        Longest candidate (s)
-                                        <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                               min="@EvpDetectionOptions.MaxEventRange.Min"
-                                               max="@EvpDetectionOptions.MaxEventRange.Max"
-                                               step="0.5"
-                                               value="@_scanOptions.MaxEventSeconds"
-                                               @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
-                                    </label>
-                                </div>
-
-                                @if (_scanOptions.Validate() is { } settingsProblem)
-                                {
-                                    <div class="text-danger small mt-2">@settingsProblem</div>
-                                }
-                            </div>
-                        }
-
-                        @if (PendingCandidates.Any())
-                        {
-                            <div class="mt-2 pt-2 border-top">
-                                <div class="d-flex align-items-center gap-2 mb-2">
-                                    <span class="badge" style="background:rgba(245,158,11,0.75);">@PendingCandidates.Count()</span>
-                                    <strong class="small">
-                                        @(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review
-                                    </strong>
-                                    <span class="ms-auto d-flex align-items-center gap-1 small text-secondary">
-                                        Sort
-                                        <button type="button" class="btn @((_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _candidatesByScore = true)">Score</button>
-                                        <button type="button" class="btn @((!_candidatesByScore ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Flat) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _candidatesByScore = false)">Time</button>
-                                    </span>
-                                </div>
-
-                                @* Item 253: what is kept from a scan and a ruling, said where the
-                                   ruling is made. Worded to what is true today — the records are
-                                   kept for a future re-fit, nothing re-fits yet — and to what is
-                                   not kept, which is what anybody reading it wants to know. *@
-                                <p class="small text-secondary mb-2" id="evp-learning-notice">
-                                    Your Keep and Dismiss choices are saved with a few measurements of
-                                    each sound, never the audio, to help future versions rank
-                                    candidates better. Delete the recording and they go with it.
-                                </p>
-
-                                <div style="max-height:180px; overflow-y:auto;">
+                                <div class="evp-lab__list evp-lab__list--scroll">
                                     @foreach (var candidate in SortedCandidates)
                                     {
                                         var c = candidate;
                                         var isAdjusting = _adjustingCandidateId == c.Id;
-                                        <div class="d-flex align-items-center gap-2 mb-1 p-1 rounded"
-                                             style="background:@(isAdjusting ? "rgba(245,158,11,0.18)" : "var(--kendo-color-surface,#f5f5f5)");">
-                                            <span class="badge" style="background:rgba(245,158,11,0.75);"
-                                                  title="How much this stood out from the background — not a likelihood of speech">
-                                                @c.DetectionScore?.ToString("0")
+                                        var score = Math.Clamp(c.DetectionScore ?? 0, 0, 100);
+                                        <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null)">
+                                            <span class="evp-score" title="How much this stood out from the background, not a likelihood of speech">
+                                                <span class="evp-score__num">@score.ToString("0")</span>
+                                                <span class="evp-score__meter"><span style="width:@(score.ToString("0", System.Globalization.CultureInfo.InvariantCulture))%;"></span></span>
                                             </span>
                                             @if (isAdjusting)
                                             {
                                                 @* Live values, not the stored ones — the point is to see
                                                    what you're about to save while dragging. *@
-                                                <span class="small fw-semibold">
+                                                <span class="evp-row__time">
                                                     @FormatTime(_adjustedStart)–@FormatTime(_adjustedEnd)
                                                     (@((_adjustedEnd - _adjustedStart).ToString("0.0"))s)
                                                 </span>
-                                                <span class="small text-secondary">
-                                                    drag the edges on the waveform, then save
-                                                </span>
+                                                <span class="evp-row__meta">drag the edges on the waveform, then save</span>
                                             }
                                             else
                                             {
-                                                <span class="small">@FormatMarkerRange(c)</span>
+                                                <span class="evp-row__time">@FormatMarkerRange(c)</span>
                                             }
-                                            <span class="ms-auto d-flex gap-1">
-                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
+                                            <span class="evp-row__actions">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
                                                 @if (isAdjusting)
                                                 {
                                                     <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAdjustedBoundsAsync">Save bounds</button>
-                                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => StopAdjustingAsync(revert: true))">Cancel</button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => StopAdjustingAsync(revert: true))">Cancel</button>
                                                 }
                                                 else
                                                 {
-                                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => StartAdjustingAsync(c))" disabled="@(!(_reviewingCandidateId != c.Id))" title="Adjust where this starts and ends"><BenIcon Name="edit-2" /></button>
-                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenConfirmCandidateDialog(c))" disabled="@(!(_reviewingCandidateId != c.Id))" title="Keep as an EVP marker"><BenIcon Name="check" /></button>
-                                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DismissCandidateAsync(c))" disabled="@(!(_reviewingCandidateId != c.Id))" title="Not an EVP — won't be proposed again"><BenIcon Name="x" /></button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => StartAdjustingAsync(c))" disabled="@(_reviewingCandidateId == c.Id)" title="Adjust where this starts and ends"><BenIcon Name="edit-2" /></button>
+                                                    <button type="button" class="btn btn-primary btn-sm ben-grid-action" @onclick="@(() => OpenConfirmCandidateDialog(c))" disabled="@(_reviewingCandidateId == c.Id)" title="Keep as an EVP marker"><BenIcon Name="check" /></button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => DismissCandidateAsync(c))" disabled="@(_reviewingCandidateId == c.Id)" title="Not an EVP — won't be proposed again"><BenIcon Name="x" /></button>
                                                 }
                                             </span>
                                         </div>
@@ -480,7 +514,7 @@ else
                                 </div>
                             </div>
                         }
-                    </div>
+                    </section>
                 }
 
                 @* Destructive edit panel *@
@@ -693,6 +727,68 @@ else
 
             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _showMarkerDialog = false)">Cancel</button>
             <button type="button" class="btn btn-primary" @onclick="SaveMarkerAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_markerLabel)))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── How the smarter detector works (item 253) ───────────────────────────────
+   The panel advertises the feature in one line; this is where it is explained, including what
+   is kept and what is not. Every sentence here has to stay true: today the rulings are COLLECTED
+   for a future version — nothing re-fits yet — so it says "the next version", never "learns as
+   you go". Keep it in step with the privacy page and the help article. *@
+<BenModal @bind-Visible="@_showLearningInfo" Title="A smarter EVP detector">
+    <ChildContent>
+        <div class="evp-info">
+            <p class="evp-info__lede">
+                The EVP scanner gets better at its job by watching what investigators keep. You
+                don't have to do anything extra: reviewing candidates the way you already do is
+                the training.
+            </p>
+
+            <div class="evp-info__steps">
+                <div class="evp-info__step">
+                    <span class="evp-info__num">1</span>
+                    <div>
+                        <strong>Scan.</strong> For each sound it finds, the scanner notes a few
+                        measurements: how far it rose above the background, how much of it sat in
+                        the voice band, how long it lasted, how steady it was and how hiss-like.
+                    </div>
+                </div>
+                <div class="evp-info__step">
+                    <span class="evp-info__num">2</span>
+                    <div>
+                        <strong>Review.</strong> Your Keep or Dismiss is saved beside those
+                        measurements, along with whether you played the candidate first. A choice
+                        made after listening counts for more.
+                    </div>
+                </div>
+                <div class="evp-info__step">
+                    <span class="evp-info__num">3</span>
+                    <div>
+                        <strong>A smarter next version.</strong> Choices from many recordings and
+                        many groups are used to re-weight how candidates are ranked, so the sounds
+                        investigators keep rise to the top. A new version only replaces the old one
+                        if it ranks better.
+                    </div>
+                </div>
+            </div>
+
+            <div class="evp-info__facts">
+                <div><BenIcon Name="check" /> <span><strong>No audio is copied.</strong> Only the measurements and your choice.</span></div>
+                <div><BenIcon Name="check" /> <span><strong>Nothing records who made the choice.</strong></span></div>
+                <div><BenIcon Name="check" /> <span><strong>Delete the recording</strong> and its measurements and choices go with it.</span></div>
+            </div>
+
+            <p class="evp-info__fine">
+                What it learns is which sounds people tend to keep, not whether a sound is
+                paranormal. The score will still be how much a sound stands out, and every
+                candidate still needs your ears. More in the
+                <a href="/privacy">privacy policy</a>.
+            </p>
+        </div>
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-primary" @onclick="@(() => _showLearningInfo = false)">Got it</button>
         </div>
     </ChildContent>
 </BenModal>
@@ -2066,6 +2162,7 @@ else
     // made without hearing the sound says much less about the sound. "Heard" is the candidate's
     // own play button, or the playhead entering it while the recording plays.
     private bool                _modalPlaying;
+    private bool                _showLearningInfo;
     private readonly HashSet<Guid> _heardCandidates = [];
 
     private void OnModalRegionIn(string regionId)

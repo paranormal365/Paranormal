@@ -55,6 +55,21 @@
 .modal.show.d-block { z-index: 1055; }
 .modal-backdrop.show { z-index: 1050; }
 
+/* Action row for modals whose buttons live in the content rather than in BenModal's footer slot.
+   Forty-two dialogs use it. The rule lived in Ben.Web.WebApp's stylesheet and went with that
+   project (1762dfcb), so from then on every one of them laid its buttons out flush left with no
+   line above — the spacer that pushes them right had nothing to be a flex child of. Found
+   10/02/2026 on the EVP lab's How it works dialog. */
+.dialog-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-top: 1.25rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--ben-line);
+}
+.dialog-footer-spacer { flex: 1 1 auto; }
+
 /* ── BenPanel ───────────────────────────────────────────────────────────── */
 .panel-fullscreen {
     position: fixed;

@@ -89,23 +89,29 @@ it, at three sensitivities:
   fairly sure something is there.
 
 ![The candidates a scan produced](/help/media/using-the-audio-editor/evp-candidates.png)
-*Each candidate with its score, when it happens and how long it lasts. The four buttons play it,
-adjust where it starts and ends, keep it, or dismiss it.*
+*Each candidate with its score and a bar to compare it by, when it happens and how long it lasts.
+The four round buttons play it, adjust where it starts and ends, keep it, or dismiss it.*
 
 A scan proposes; it never decides. Every candidate waits for you to **keep** it — which asks for a
 label, because a marker with no name is not a finding anybody can use — or **dismiss** it. What you
 dismiss is remembered, so a second scan will not propose it again, and what you keep is left alone
 by every later scan.
 
-Your choices also help the scanner get better. Each scan saves a few measurements of every sound it
-finds, such as how far it rose above the background and how much of it was in the voice band, and
-each keep or dismiss is saved beside them, along with whether you played the candidate first. No
+A kept marker's ▶ plays it. If the marker names a single moment rather than a stretch, you hear a
+couple of seconds either side of it, which is usually what you need to tell a voice from a bump.
+
+### A smarter EVP detector
+
+Your choices also help the scanner get better, and **How it works** on the panel's banner explains
+how in one place. Each scan saves a few measurements of every sound it finds, such as how far it
+rose above the background and how much of it was in the voice band, and each keep or dismiss is
+saved beside them, along with whether you played the candidate first. No
 audio is copied and nothing records who made the choice. A future version will use these to rank
 candidates more like investigators do. It will learn which sounds people tend to keep, not whether
 a sound is paranormal. Delete the recording and its measurements and choices go with it.
 
-A kept marker's ▶ plays it. If the marker names a single moment rather than a stretch, you hear a
-couple of seconds either side of it, which is usually what you need to tell a voice from a bump.
+![How the smarter detector works](/help/media/using-the-audio-editor/evp-smarter-detector.png)
+*What a scan and a review keep, and what they don't.*
 
 ## Making a clip
 
