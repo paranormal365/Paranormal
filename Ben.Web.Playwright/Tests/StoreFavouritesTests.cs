@@ -64,13 +64,15 @@ public class StoreFavouritesTests : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
         await OpenAsync("/store/favorites");
 
-        await Expect(Page.Locator("[data-testid=favorites-grid] [data-testid=store-card][data-slug=rem-pod]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Expect(Page.Locator("[data-testid=favorites-grid] [data-testid=store-card][data-slug=h1n-handy-recorder]")).ToBeVisibleAsync();
+        await Expect(Page.Locator("[data-testid=favourites-grid] [data-testid=store-card][data-slug=rem-pod]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=favourites-grid] [data-testid=store-card][data-slug=h1n-handy-recorder]")).ToBeVisibleAsync();
         // One entry lit in the menu — "Browse the Store" (/store) covers this address too, and was
         // lit beside Favourites until the nav learned to light only the most specific (09/24).
         await Expect(Page.Locator("#nav-menu li.nav-item.active:not(.has-ul) > a")).ToHaveAttributeAsync("href", "/store/favorites");
 
-        await OpenAsync("/store/products");
+        // Searched for, not paged to: the suite creates products of its own, newest first, and on a
+        // database it has run against REM Pod is no longer on the first page (2026-10-02).
+        await OpenAsync("/store/products?q=rem");
         await Expect(Page.Locator("[data-testid=store-card][data-slug=rem-pod] [data-testid=store-heart]"))
             .ToHaveAttributeAsync("aria-pressed", "true", new() { Timeout = 30_000 });
     }
@@ -90,6 +92,6 @@ public class StoreFavouritesTests : BenTestBase
     public async Task Signed_out_favourites_go_to_sign_in()
     {
         await OpenAsync("/store/favorites");
-        await Page.WaitForURLAsync(new Regex(@"/login\?returnUrl=%2Fstore%2Ffavourites$"), new() { Timeout = 30_000 });
+        await Page.WaitForURLAsync(new Regex(@"/login\?returnUrl=%2Fstore%2Ffavorites$"), new() { Timeout = 30_000 });
     }
 }

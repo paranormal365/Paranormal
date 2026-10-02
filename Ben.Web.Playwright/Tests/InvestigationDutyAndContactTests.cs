@@ -34,7 +34,10 @@ public class InvestigationDutyAndContactTests : BenTestBase
 
         // The four seeded duties are on the board.
         foreach (var duty in new[] { "Lead Investigator", "Equipment", "Evidence Collection", "Documentation" })
-            await Expect(Main.GetByText(duty, new() { Exact = true }).First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            // Visible ones only: "Equipment" is also the group's tab, which the menu card has
+            // replaced on a desktop — hidden, and first in the page.
+            await Expect(Main.GetByText(duty, new() { Exact = true }).Filter(new() { Visible = true }).First)
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         // Hand out Evidence Collection to the first available attendee, then take it back.
         var row = Main.Locator("div.border.rounded", new() { HasText = "Documentation" }).First;

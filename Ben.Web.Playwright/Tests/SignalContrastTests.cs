@@ -55,7 +55,7 @@ public class SignalContrastTests : BenTestBase
         for (var attempt = 1; ; attempt++)
         {
             try { json = await MeasureAsync(); break; }
-            catch (PlaywrightException ex) when (attempt < 3 && ex.Message.Contains("unreadable color"))
+            catch (PlaywrightException ex) when (attempt < 3 && (ex.Message.Contains("unreadable colour") || ex.Message.Contains("unreadable color")))
             {
                 await Page.WaitForTimeoutAsync(1_000);
             }

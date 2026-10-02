@@ -47,7 +47,8 @@ public class MemberSurfaceWalkTests : BenTestBase
 
         foreach (var tab in MemberTabs)
         {
-            var handle = Main.GetByRole(AriaRole.Tab, new() { Name = tab, Exact = true });
+            // A tab, or its entry in the menu card where that has replaced the strip (Signal).
+            var handle = OrgTab(tab);
 
             // A tab a member is meant to reach must exist at all — its absence is the same
             // failure as a refusal, delivered more quietly.
@@ -82,12 +83,13 @@ public class MemberSurfaceWalkTests : BenTestBase
         if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         // Details always renders, so the hub is provably up before asserting absences.
-        await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = "Details", Exact = true }))
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+        // OrgTab looks in the strip AND in the menu card, so an admin-only entry is caught in
+        // either. Against the strip alone this passed trivially once the menu replaced it.
+        await Expect(OrgTab("Details")).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
         foreach (var tab in AdminOnlyTabs)
         {
-            var count = await Main.GetByRole(AriaRole.Tab, new() { Name = tab, Exact = true }).CountAsync();
+            var count = await OrgTab(tab).CountAsync();
             Assert.That(count, Is.EqualTo(0),
                 $"The {tab} tab is visible to an ordinary member — it is admin-only.");
         }

@@ -15,10 +15,12 @@ public class ImpersonationAndSidebarTests : BenTestBase
     public async Task The_sidebar_lists_my_groups_under_Home_not_every_group()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        await Page.GotoAsync($"{BaseUrl}/");
+        // Since Signal the groups are one "Your groups" entry on the bar, and its page carries the
+        // list in the menu card — Home has no card of its own.
+        await Page.GotoAsync($"{BaseUrl}/organizations");
         await WaitUntilLoadedAsync();
 
-        var nav = Page.Locator("aside, .app-nav, nav").First;
+        var nav = Page.Locator("aside").Filter(new() { HasTextString = "Your groups" }).First;
         // The SuperAdmin belongs to these three; a sees-all list would show fourteen.
         foreach (var org in new[] { "Paranormal365", "BenCo" })
             await Expect(nav.GetByText(org, new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 20_000 });

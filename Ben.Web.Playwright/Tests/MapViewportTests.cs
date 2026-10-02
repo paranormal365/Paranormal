@@ -59,7 +59,7 @@ public class MapViewportTests : BenTestBase
         if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Ignore("Seeded Paranormal365 not reachable.");
 
-        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).First);
+        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).Filter(new() { Visible = true }).First);   // the hidden tab strip says it too
         await SkipAnyTourAsync();
 
         var map = Page.Locator(".ben-map").First;
@@ -85,7 +85,7 @@ public class MapViewportTests : BenTestBase
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Ignore("Seeded Paranormal365 not reachable.");
-        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).First);
+        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).Filter(new() { Visible = true }).First);   // the hidden tab strip says it too
         await SkipAnyTourAsync();
 
         // MapKit draws pins on canvas, so there is no element to click and a synthetic click at a
