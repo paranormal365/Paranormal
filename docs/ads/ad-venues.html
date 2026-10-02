@@ -2,6 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><title>IsHaunted for venues</title><style>
 @page { size: 8.5in 11in; margin: 0; }
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* Signal (2026-10-01): the site's own gradient for every filled thing, white words on it. */
+:root { --fill: linear-gradient(120deg, #7C5CFF 0%, #22D3EE 100%); }
 html, body { margin: 0; padding: 0; background: #555; }
 body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: var(--ink); }
 .page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
@@ -19,8 +21,8 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
 .brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
 .brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
-.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--base);
-        background: var(--accent); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #fff;
+        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
 .kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
 .headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
@@ -32,12 +34,12 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
 .pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
 .pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
-.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: var(--base);
-                 background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 16px var(--glow); }
+.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: #fff;
+                 background: var(--fill); box-shadow: 0 6px 16px var(--glow); }
 .pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
 .pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
 .cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
-       padding: 0 .55in; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--base); z-index: 5; }
+       padding: 0 .55in; background: var(--fill); color: #fff; z-index: 5; }
 .cta .go { font-family: Futura, sans-serif; font-weight: 800; font-size: 19pt; letter-spacing: -.01em; }
 .cta .go span { display: block; font-family: "Avenir Next", sans-serif; font-size: 9pt; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .78; }
 .cta .price { text-align: right; font-weight: 700; font-size: 10pt; line-height: 1.25; }
@@ -70,19 +72,19 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .step h5 { margin: 0 0 .02in; font-size: 10pt; }
 .step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
 .offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
-         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px var(--accent), 0 16px 40px rgba(0,0,0,.45); }
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF, 0 16px 40px rgba(0,0,0,.45); }
 .offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
 .offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
 .offer .big em { font-style: normal; color: var(--accent); }
 .offer .small { font-size: 8.4pt; color: var(--muted); margin-top: .05in; line-height: 1.35; }
 .offer .url { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
-              color: var(--base); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+              color: #fff; background: var(--fill); }
 .offer .url b { display: block; font-family: Futura, sans-serif; font-weight: 800; font-size: 18pt; }
 .offer .url span { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .02in; }
 .fine { position: absolute; bottom: .14in; left: .55in; right: .55in; font-size: 5.8pt; white-space: nowrap; overflow: hidden; color: rgba(255,255,255,.42); text-align: center; }
 </style>
 <script>document.addEventListener('DOMContentLoaded',()=>{if(location.hash==='#front')document.body.classList.add('only-front');if(location.hash==='#back')document.body.classList.add('only-back');});</script>
-</head><body style="--base:#240A10;--base2:#4A1622;--accent:#E8C987;--accent2:#F6E3B4;--base-a0:rgba(36,10,16,0);--base-a70:rgba(36,10,16,0.72);--glow:rgba(232,201,135,0.28);--card:rgba(255,255,255,0.055);--card-solid:#4A1622;--line:rgba(255,255,255,0.09);--muted:rgba(255,255,255,.72);--ink:#fff;--focus:center 50%;">
+</head><body style="--base:#0C1017;--base2:#1E1650;--accent:#B6A2FF;--accent2:#67E8F9;--base-a0:rgba(12,16,23,0);--base-a70:rgba(12,16,23,0.72);--glow:rgba(124,92,255,0.35);--card:rgba(255,255,255,0.055);--card-solid:#1E1650;--line:rgba(255,255,255,0.09);--muted:rgba(255,255,255,.72);--ink:#fff;--focus:center 50%;">
 <section class="page front">
   <div class="hero" style="background-image:url(../media/stock/v6-ballroom.jpg)"></div>
   <div class="brandbar">
@@ -110,6 +112,6 @@ body.only-front .page, body.only-back .page { margin: 0; }
   <div class="steps"><div class="step"><b>1</b><div><h5>Describe the place</h5><p>History, rooms and what each one sleeps.</p></div></div><div class="step"><b>2</b><div><h5>Approve organizers</h5><p>Say yes to the nights and what you&#x27;ll lend.</p></div></div><div class="step"><b>3</b><div><h5>Open the doors</h5><p>Guests arrive with a pass; your staff check them in.</p></div></div></div>
   <div class="offer"><div><div class="big">Your venue page, <em>free</em>.</div><div class="small">Publish your own event with a $99 credit, good for a year — or host as many as you like on a business plan.</div></div>
     <div class="url"><b>ishaunted.com</b><span>Claim your building</span></div></div>
-  <div class="fine">IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone app is on its way to the App Store · Prices in USD, subject to change</div>
+  <div class="fine">IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone and iPad app is on the App Store · Prices in USD, subject to change</div>
 </section>
 </body></html>

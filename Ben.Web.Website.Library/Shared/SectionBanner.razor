@@ -88,9 +88,26 @@
                 if (path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase))
-                    return band;
+                    return IsWorkingScreen(path) ? band with { Slim = true } : band;
             return null;   // nothing invented for an address the site has not said what it is
         }
+    }
+
+    /// <summary>
+    /// A screen somebody works IN rather than arrives at — everything inside one group (its events,
+    /// plans, menus, members), and the store's selling and order pages — gets the slim band, the
+    /// way administration does. The help screenshots showed it: a full photograph and its band
+    /// over a group's seating plan pushed the plan halfway down the window (2026-10-02). The
+    /// section's own front page keeps the full photograph.
+    /// </summary>
+    private static bool IsWorkingScreen(string path)
+    {
+        var parts = path.Trim('/').Split('/');
+        if (parts.Length >= 2 && parts[0].Equals("organizations", StringComparison.OrdinalIgnoreCase)
+            && Guid.TryParse(parts[1], out _))
+            return true;
+        return path.StartsWith("/store/selling", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/store/orders", StringComparison.OrdinalIgnoreCase);
     }
 
     // The layout outlives a navigation — only @Body changes — so the band has to be told.

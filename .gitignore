@@ -146,3 +146,4 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 # repository (C:\ishaunted-monster on the Windows server); this is the net in case one is ever saved here.
 *.publishSettings
 *.PublishSettings
+docs/.print-media/

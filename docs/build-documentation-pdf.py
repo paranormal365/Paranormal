@@ -72,6 +72,34 @@ OUT_DIR        = pathlib.Path(__file__).parent
 
 missing_media = []
 
+# ── Print copies ──────────────────────────────────────────────────────────────
+# Chrome embeds an image in the PDF exactly as it finds it, and the help screenshots are 2× PNGs.
+# Recaptured on the Signal skin — photographs behind the page heroes, gradients, which PNG cannot
+# squeeze — the same 30 pages came to 105 MB, past GitHub's 100 MB limit on a single file
+# (2026-10-02). The PDF is printed from JPEG copies instead, no wider than a printed page needs;
+# the help pages themselves keep their PNGs. The copies live in a git-ignored folder.
+PRINT_MEDIA = OUT_DIR / ".print-media"
+PRINT_WIDTH = 1800   # px — a Letter page at 300 dpi is 2550 wide, and these sit inside its margins
+PRINT_QUALITY = 82
+
+
+def print_copy(path):
+    if path.suffix.lower() != ".png" or not path.exists():
+        return path
+    try:
+        from PIL import Image
+    except ImportError:
+        return path   # no Pillow: print the PNG, as before
+    rel = path.relative_to(ROOT)
+    out = (PRINT_MEDIA / rel).with_suffix(".jpg")
+    if not out.exists() or out.stat().st_mtime < path.stat().st_mtime:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        im = Image.open(path).convert("RGB")
+        if im.width > PRINT_WIDTH:
+            im = im.resize((PRINT_WIDTH, round(im.height * PRINT_WIDTH / im.width)), Image.LANCZOS)
+        im.save(out, "JPEG", quality=PRINT_QUALITY, optimize=True, progressive=True)
+    return out
+
 
 def resolve_media(body, slug):
     def public(m):
@@ -79,14 +107,14 @@ def resolve_media(body, slug):
         path = PUBLIC_MEDIA / rel
         if not path.exists():
             missing_media.append(f"{slug} → {path}")
-        return f"]({os.path.relpath(path, OUT_DIR)})"
+        return f"]({os.path.relpath(print_copy(path), OUT_DIR)})"
 
     def embedded(m):
         rel = m.group(1)
         path = EMBEDDED_MEDIA / rel
         if not path.exists():
             missing_media.append(f"{slug} → {path}")
-        return f"]({os.path.relpath(path, OUT_DIR)})"
+        return f"]({os.path.relpath(print_copy(path), OUT_DIR)})"
 
     body = re.sub(r"\]\(/help/media/([^)]+)\)", public, body)
     body = re.sub(r"\]\(help-media:([^)]+)\)", embedded, body)
