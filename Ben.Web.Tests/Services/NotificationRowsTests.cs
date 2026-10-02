@@ -69,6 +69,29 @@ public class NotificationRowsTests
         Assert.Equal("/feed?mode=mentions", rows.Single(r => r.Title == "Mentions on the feed").Destination);
     }
 
+    [Fact]
+    public void A_waiting_row_opens_the_page_its_bucket_names_and_the_groups_list_only_without_one()
+    {
+        // Tour sign-ups, venue requests, holds and bookings all opened /organizations — the list
+        // of every group (walk, 2026-10-02). The server now names the page of the oldest item.
+        var named = NotificationSummaryResponse.Empty with
+        {
+            TourSeatsToDecide = new(2, Then, "/organizations/o1/tours/t1/dates/d1"),
+            EventBookingsToDecide = new(1, Then, "/organizations/o1/events/e1/bookings"),
+            EventHoldsLapsing = new(1, Then, "/organizations/o1/events/e2/bookings"),
+            VenueRequestsToDecide = new(1, Then, "/organizations/v1/venue-requests"),
+        };
+        var rows = NotificationRows.For(named);
+        Assert.Equal("/organizations/o1/tours/t1/dates/d1", rows.Single(r => r.Title == "Sign-ups waiting on you").Destination);
+        Assert.Equal("/organizations/o1/events/e1/bookings", rows.Single(r => r.Title == "Bookings waiting on you").Destination);
+        Assert.Equal("/organizations/o1/events/e2/bookings", rows.Single(r => r.Title == "Holds running out").Destination);
+        Assert.Equal("/organizations/v1/venue-requests", rows.Single(r => r.Title == "Groups asking to use your venue").Destination);
+
+        // An older server that names nothing still lands somewhere real.
+        var unnamed = NotificationSummaryResponse.Empty with { TourSeatsToDecide = Waiting(1) };
+        Assert.Equal("/organizations", NotificationRows.For(unnamed).Single().Destination);
+    }
+
     /// <summary>
     /// The badge is the sum of the rows, item by item.
     /// </summary>

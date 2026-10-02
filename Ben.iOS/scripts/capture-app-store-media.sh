@@ -70,6 +70,7 @@ rm -rf /tmp/shots-$DEVICE_KIND.xcresult
 xcodebuild test-without-building -project IsHaunted.xcodeproj -scheme IsHaunted \
   -destination "platform=iOS Simulator,id=$UDID" \
   -only-testing:IsHauntedUITests/FieldKitScreenshotTests \
+  -only-testing:IsHauntedUITests/AppStoreScreenshotTests \
   -resultBundlePath /tmp/shots-$DEVICE_KIND.xcresult -quiet
 # Exported into a directory of its own, NOT straight into the set. The export writes UUID names
 # plus a manifest mapping each to the attachment's own name, and both of those used to land beside

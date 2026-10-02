@@ -115,7 +115,7 @@ public static class NotificationRows
         if (s.TourSeatsToDecide is { Count: > 0 } toDecide)
             rows.Add(new("Sign-ups waiting on you",
                 $"People asking for places on your tours · oldest {NotificationBadge.DescribeAge(toDecide.OldestUnreadUtc)}",
-                "user-check", "/organizations", toDecide));
+                "user-check", toDecide.Where ?? "/organizations", toDecide));
 
         if (s.MyTourSeats is { Count: > 0 } mine)
             rows.Add(new("A tour answered you",
@@ -131,18 +131,18 @@ public static class NotificationRows
         if (s.VenueRequestsToDecide is { Count: > 0 } venue)
             rows.Add(new("Groups asking to use your venue",
                 $"Events waiting for your yes or no · oldest {NotificationBadge.DescribeAge(venue.OldestUnreadUtc)}",
-                "map-pin", "/organizations", venue));
+                "map-pin", venue.Where ?? "/organizations", venue));
 
         // Holds about to run out come first: the clock decides those if nobody does (phase 8).
         if (s.EventHoldsLapsing is { Count: > 0 } lapsing)
             rows.Add(new("Holds running out",
                 $"Seats held at your events lapse within a day unless somebody confirms them · oldest {NotificationBadge.DescribeAge(lapsing.OldestUnreadUtc)}",
-                "clock", "/organizations", lapsing));
+                "clock", lapsing.Where ?? "/organizations", lapsing));
 
         if (s.EventBookingsToDecide is { Count: > 0 } bookings)
             rows.Add(new("Bookings waiting on you",
                 $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
-                "home", "/organizations", bookings));
+                "home", bookings.Where ?? "/organizations", bookings));
 
         // /my-events and not /events: the second is what is ON, a list of everybody's evenings,
         // and a row saying a venue answered YOU that lands there leaves somebody hunting for

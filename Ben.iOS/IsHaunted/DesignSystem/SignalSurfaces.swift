@@ -15,6 +15,10 @@ struct SignalListSurface: ViewModifier {
             // A sheet does not inherit the app's tint, so its icons fell back to system blue
             // (walk, 2026-10-02 — the Send session sheet). Every list and form carries it.
             .tint(Theme.ecto)
+            // Scrolling puts the keyboard away. Nothing did before, so on New session the one
+            // button sat under the keyboard until somebody thought to press Return (walk,
+            // 2026-10-02).
+            .scrollDismissesKeyboard(.interactively)
             .toolbarBackground(Theme.ink, for: .navigationBar)
             .listRowBackground(Theme.mist)
     }
@@ -74,6 +78,11 @@ struct SignalForm<Content: View>: View {
 /// The few UIKit controls SwiftUI gives no style for, in Signal's colours — set once at launch.
 enum SignalAppearance {
     static func apply() {
+        // The accent for everything UIKit draws under SwiftUI — including a presented sheet's own
+        // hosting view, which does not inherit `.tint` from the screen that presented it. The
+        // Send session sheet's icons came out system blue until this (walk, 2026-10-02).
+        UIView.appearance().tintColor = UIColor(named: "Ecto")
+
         // A segmented picker (Local time / My time, the feed's tabs) shows its choice as the site's
         // violet pill with white words, not the system's grey.
         let segment = UISegmentedControl.appearance()

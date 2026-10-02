@@ -9,7 +9,12 @@ namespace Ben.Service.Models.Entities;
 /// </summary>
 /// <param name="Count">Number of unread/pending items.</param>
 /// <param name="OldestUnreadUtc">UTC arrival time of the oldest item, or null when the bucket is empty.</param>
-public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc)
+/// <param name="Where">
+/// The page that holds the oldest item, when the bucket can name one — so a row about one event's
+/// bookings opens that event's bookings, not the list of every group (walk, 2026-10-02). Null when
+/// the row's own destination already says where.
+/// </param>
+public sealed record NotificationBucket(int Count, DateTime? OldestUnreadUtc, string? Where = null)
 {
     public static readonly NotificationBucket Empty = new(0, null);
 }
