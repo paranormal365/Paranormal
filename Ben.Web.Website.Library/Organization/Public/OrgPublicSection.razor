@@ -354,7 +354,7 @@
                 {
                     @if (ev.Programme is not { Count: > 0 } programme)
                     {
-                        <p class="text-secondary mb-0">The programme hasn't been published yet.</p>
+                        <p class="text-secondary mb-0">The program hasn't been published yet.</p>
                     }
                     else
                     {
@@ -367,7 +367,7 @@
                                         @session.Title
                                         <span class="d-block small text-secondary">@string.Join(" · ", new[] { session.Where, session.LedBy is { Length: > 0 } l ? $"with {l}" : null }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
                                     </span>
-                                    <span class="small text-secondary text-nowrap">@(session.IsCancelled ? "Cancelled" : session.Places)</span>
+                                    <span class="small text-secondary text-nowrap">@(session.IsCancelled ? "Canceled" : session.Places)</span>
                                 </div>
                             }
                         </div>

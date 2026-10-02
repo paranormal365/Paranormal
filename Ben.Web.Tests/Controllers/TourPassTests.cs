@@ -15,7 +15,7 @@ namespace Ben.Web.Tests.Controllers;
 /// <para>Two things carry weight, and neither is the QR code. <b>A pass belongs to a seat somebody
 /// actually holds</b> — a pass against a request is a ticket to a walk nobody agreed to give them,
 /// and they would turn up holding it. And <b>every refusal is a sentence</b>, because the reader is
-/// a guide on a dark street with a queue behind them: "not recognised" tells them to check the
+/// a guide on a dark street with a queue behind them: "not recognized" tells them to check the
 /// email; a status code tells them nothing.</para>
 /// </remarks>
 public sealed class TourPassTests
@@ -121,7 +121,7 @@ public sealed class TourPassTests
     /// The commonest honest mistake at a meeting point, named as itself.
     /// </summary>
     /// <remarks>
-    /// Telling somebody with a valid pass for next Friday that their code is "not recognised"
+    /// Telling somebody with a valid pass for next Friday that their code is "not recognized"
     /// sends them away believing they were never booked.
     /// </remarks>
     [Fact]

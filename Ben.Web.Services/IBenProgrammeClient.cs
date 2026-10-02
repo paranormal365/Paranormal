@@ -52,6 +52,6 @@ public interface IBenProgrammeClient
     Task<(PublicProgrammeRecord? Result, string? Error)> LeaveSessionAsync(
         Guid eventId, Guid sessionId, CancellationToken token = default);
 
-    /// <summary>Clears the bell's "the programme changed" row for this guest.</summary>
+    /// <summary>Clears the bell's "the program changed" row for this guest.</summary>
     Task MarkProgrammeSeenAsync(Guid eventId, CancellationToken token = default);
 }

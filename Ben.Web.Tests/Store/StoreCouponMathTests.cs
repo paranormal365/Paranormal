@@ -24,8 +24,8 @@ public sealed class StoreCouponMathTests
     [Fact]
     public void Each_reason_a_code_is_refused_has_its_own_sentence()
     {
-        Assert.Equal("That code isn't one we recognise.", StoreCouponMath.WhyNotRedeemable(null, 50m, 0, Now));
-        Assert.Equal("That code isn't one we recognise.", StoreCouponMath.WhyNotRedeemable(Code(active: false), 50m, 0, Now));
+        Assert.Equal("That code isn't one we recognize.", StoreCouponMath.WhyNotRedeemable(null, 50m, 0, Now));
+        Assert.Equal("That code isn't one we recognize.", StoreCouponMath.WhyNotRedeemable(Code(active: false), 50m, 0, Now));
         Assert.Equal("That code has expired.", StoreCouponMath.WhyNotRedeemable(Code(ends: Now), 50m, 0, Now));
         Assert.Equal("That code isn't active yet.", StoreCouponMath.WhyNotRedeemable(Code(starts: Now.AddMinutes(1)), 50m, 0, Now));
         Assert.Equal("That code has been used as many times as it can be.",

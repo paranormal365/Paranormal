@@ -342,7 +342,7 @@ public class AccountTests : BenTestBase
         Assert.That(created.Ok, Is.True, $"Could not create the test account: {created.Status}");
 
         var secret = await EnrolViaApiAsync(email, password);
-        Assert.That(secret, Is.Not.Null, "Could not enrol the test account through the API.");
+        Assert.That(secret, Is.Not.Null, "Could not enroll the test account through the API.");
 
         await SignInExpectingSecondStepAsync(email, password);
 

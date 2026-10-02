@@ -42,7 +42,7 @@ public static class SessionSignUps
         if (capacity is int cap && cap < placesTaken)
             return $"{placesTaken} people already have places, so it can't hold fewer than {placesTaken}.";
 
-        if (nightDates.Count == 0) return "Give the event its dates before planning its programme.";
+        if (nightDates.Count == 0) return "Give the event its dates before planning its program.";
 
         // On the venue's clock, and a session may start in the small hours after the last night —
         // a midnight séance on the Saturday is still the Saturday.
@@ -103,12 +103,12 @@ public static class SessionSignUps
             var session = await db.HostedEventSessions
                 .Include(s => s.SignUps)
                 .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
-            if (session is null) return new(null, false, null, "That session isn't on the programme.");
+            if (session is null) return new(null, false, null, "That session isn't on the program.");
 
             if (session.SignUps.FirstOrDefault(s => s.AppUserId == userId) is { } already)
                 return new(already.Id, already.WaitlistedUtc is not null, PositionOf(session, already), null);
 
-            if (session.CalledOffUtc is not null) return new(null, false, null, "That session has been cancelled.");
+            if (session.CalledOffUtc is not null) return new(null, false, null, "That session has been canceled.");
             if (!session.RequiresSignUp) return new(null, false, null, "There's no need to sign up for that one — just come.");
             if (session.StartsAtUtc <= now) return new(null, false, null, "That session has already started.");
 

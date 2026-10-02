@@ -18,7 +18,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 /// <para><b>Every answer is a sentence.</b> The reader is somebody standing on a dark street with
 /// a queue behind them, so a refused scan says what to do next — check the email, look them up by
 /// name, that pass is for Friday — rather than returning a status code for a page to interpret.
-/// A scan is never an error response for the same reason: "not recognised" is an ANSWER, and a
+/// A scan is never an error response for the same reason: "not recognized" is an ANSWER, and a
 /// 404 would make the page show its own failure text instead of the guide's.</para>
 /// </remarks>
 [Route("api/organizations/{orgId:guid}/events/{eventId:guid}/tour-door")]

@@ -134,7 +134,7 @@ struct PublishToArchiveView: View {
     private var namingSection: some View {
         Section {
             if naming {
-                TextField("Name people would recognise", text: $newName)
+                TextField("Name people would recognize", text: $newName)
                 TextField("Town", text: $newCity)
                 TextField("State", text: $newState).textInputAutocapitalization(.characters)
                 Button {

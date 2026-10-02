@@ -942,7 +942,7 @@
     /// I call myself" is a harder question than it looks when someone is deciding how exposed to be.
     /// </summary>
     private static readonly string[] AliasSuggestions =
-        ["The homeowner", "A local family", "Anonymous", "The tenant", "A neighbour"];
+        ["The homeowner", "A local family", "Anonymous", "The tenant", "A neighbor"];
 
     /// <summary>Which person is being edited; null while adding a new one.</summary>
     private Guid? _editingPersonId;
@@ -1173,7 +1173,7 @@
         InvestigationStatus.Scheduled  => "Scheduled",
         InvestigationStatus.InProgress => "In Progress",
         InvestigationStatus.Completed  => "Completed",
-        InvestigationStatus.Cancelled  => "Cancelled",
+        InvestigationStatus.Cancelled  => "Canceled",
         _                              => s.ToString(),
     };
 

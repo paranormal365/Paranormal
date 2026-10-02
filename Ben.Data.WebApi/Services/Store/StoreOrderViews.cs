@@ -10,7 +10,7 @@ public static class StoreOrderViews
 {
     public static string PaymentStatus(StoreOrder o) => o switch
     {
-        { PaidUtc: null, Status: StoreOrderStatus.Cancelled } => "Not paid — cancelled",
+        { PaidUtc: null, Status: StoreOrderStatus.Cancelled } => "Not paid — canceled",
         { PaidUtc: null } => "Awaiting payment",
         { Status: StoreOrderStatus.Refunded } => "Refunded",
         { RefundedAmount: > 0 } => "Partly refunded",

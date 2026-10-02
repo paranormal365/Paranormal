@@ -94,7 +94,7 @@ public class NearbyDiscoveryTests : BenTestBase
     }
 
     [Test]
-    [Description("Event locations are labelled approximate, never as an address.")]
+    [Description("Event locations are labeled approximate, never as an address.")]
     public async Task Events_AreLabelledApproximate()
     {
         await ShowTabAsync("events");

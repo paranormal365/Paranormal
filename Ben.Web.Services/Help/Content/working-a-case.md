@@ -15,7 +15,7 @@ Every case belongs to a group, and the group's own page is where its cases are l
 
 Client requests arrive under **Pending Requests** on the group's Cases screen. When any are
 waiting, the button turns yellow and shows how many. The status buttons above the list work the
-same way: a status with cases in it shows its count in that status's colour, so new proposals and
+same way: a status with cases in it shows its count in that status's color, so new proposals and
 active cases stand out. Every request
 shows **Review & vote**, which opens everything the client submitted — their description, the
 location, and any files they attached: photos, recordings, documents. Every group the client
@@ -82,7 +82,7 @@ Then say **what kind of place** it is, which has no default because both answers
 - **Private residence** — somebody's home. Findings stay with your group, and this is
   private-engagement work, which needs a plan that covers it.
 
-**Open Case** stays greyed out until you have answered. Once the case exists, a line at the top of
+**Open Case** stays grayed out until you have answered. Once the case exists, a line at the top of
 it names the place, says how many other groups have investigated there, and links to its page.
 
 ![Naming the place on a new case](/help/media/working-a-case/new-case-place.png)
@@ -153,7 +153,7 @@ five:
 | | |
 |---|---|
 | **Blank board** | nothing on it. What New board always did. |
-| **Moodboard** | four coloured sections — feel, places, sound, references — and a cluster of themes joined to a middle one. For the atmosphere of a place before the facts of it. |
+| **Moodboard** | four colored sections — feel, places, sound, references — and a cluster of themes joined to a middle one. For the atmosphere of a place before the facts of it. |
 | **Research plan** | what to ask, where to look, a four-square of what is worth doing, and a grid of four weeks. For deciding what to do next. |
 | **Family tree** | names in boxes joined at right angles, with a photo frame above every name and a legend saying what the lines mean. |
 | **Presentation deck** | four slide frames with room for a heading and points. Present it straight away; the frames are the slides. |
@@ -213,7 +213,7 @@ thing needs:
 | **Article** | a piece of writing — news, a book, a journal, a website or a broadcast — with its author and what it says. |
 | **Experience** | what somebody felt, heard or saw with nothing recording: what, which sense, who, where in the place, and when. |
 | **Quote** | somebody's words, who said them, when, and where the quote comes from. |
-| **Person** | a witness, a client, a neighbour or an owner: their connection to the place and what they describe. |
+| **Person** | a witness, a client, a neighbor or an owner: their connection to the place and what they describe. |
 
 Pick the kind while editing a card, at the top of its form. Changing your mind keeps what you have
 already typed: a field the new kind does not ask for waits in the card, and comes back if you change
@@ -240,14 +240,14 @@ be turned off when the grid has no headings.
 overdress: a theme, a question, a step in a process, a label on a region of the board. Pick which
 shape while it is selected.
 
-### Colour, panels and fills
+### Color, panels and fills
 
-Every block takes one of six colours, chosen while it is selected. Two switches change how that colour
+Every block takes one of six colors, chosen while it is selected. Two switches change how that color
 is used:
 
 | | |
 |---|---|
-| **Filled with its colour** | the whole block takes the colour rather than a stripe down its edge. Good for shapes and for the one card that matters most; harder to read for a card with a lot of words in it. |
+| **Filled with its color** | the whole block takes the color rather than a stripe down its edge. Good for shapes and for the one card that matters most; harder to read for a card with a lot of words in it. |
 | **Draw as a panel** | on a group: the area is filled and titled rather than outlined, so it reads as a section of the board instead of a ring round some cards. |
 
 Both are kept when the board is published, so a reader sees the board you laid out.
@@ -264,7 +264,7 @@ gets laid down:
 | **Drag a handle onto another card** | joins those two instead of making a new one. |
 | **Ctrl+Shift and an arrow key** | the same as clicking that side's handle. |
 
-The new card is the same kind, size and colour as the one it grew from, and one **Undo** takes back
+The new card is the same kind, size and color as the one it grew from, and one **Undo** takes back
 both the card and its arrow.
 
 ![Growing the next card from a side handle](/help/media/working-a-case/board-grow.png)
@@ -379,7 +379,7 @@ be kept.
 
 **Any block with an address in it can become a map.** Right-click a card, a note, a message or a
 picture's caption and, when there is an address written in it, the menu offers **Make a map**. The map
-appears next to the block, located and labelled with that address, and the block keeps what it says —
+appears next to the block, located and labeled with that address, and the block keeps what it says —
 a Person card is still wanted after the map exists. If nobody can find the address you are told, and
 nothing is added.
 
@@ -514,7 +514,7 @@ recordings.
 ## Entries at the same time
 
 Two people often record the same moment, and unrelated things sometimes coincide. Entries sharing
-an event time are shown together and labelled "1 of 2 at this time". The ordering is stable, so
+an event time are shown together and labeled "1 of 2 at this time". The ordering is stable, so
 you can refer to an entry by position and have it still be there tomorrow.
 
 ## The investigations map

@@ -78,7 +78,7 @@
                     <h3 class="mb-1">@(string.IsNullOrWhiteSpace(_displayName) ? "Your profile" : _displayName)</h3>
                     @*
                         An Apple relay address, or the placeholder a withheld address leaves behind,
-                        is not something this person recognises as their email. Printing it here as
+                        is not something this person recognizes as their email. Printing it here as
                         though they chose it tells them something untrue about themselves.
                     *@
                     @if (_profile.EmailKind == EmailAddressKind.Ordinary)

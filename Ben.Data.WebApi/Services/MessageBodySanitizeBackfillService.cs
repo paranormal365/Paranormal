@@ -59,8 +59,8 @@ public sealed class MessageBodySanitizeBackfillService : BackgroundService
             // saying "cleaned 0" on every boot trains people to stop reading the log.
             if (orgMessages + userMessages > 0)
                 _logger.LogWarning(
-                    "Sanitised {OrgCount} stored group message body(ies) and {UserCount} notification "
-                    + "body(ies) that predate sanitising on send.", orgMessages, userMessages);
+                    "Sanitized {OrgCount} stored group message body(ies) and {UserCount} notification "
+                    + "body(ies) that predate sanitizing on send.", orgMessages, userMessages);
         }
         catch (OperationCanceledException)
         {
@@ -71,7 +71,7 @@ public sealed class MessageBodySanitizeBackfillService : BackgroundService
         {
             // Loud, and not fatal. The site works with dirty bodies; it is just not safe, and the
             // person who can fix that needs to know rather than find out from a reader.
-            _logger.LogError(ex, "Could not sanitise stored message bodies.");
+            _logger.LogError(ex, "Could not sanitize stored message bodies.");
         }
     }
 

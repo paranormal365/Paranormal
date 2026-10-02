@@ -91,7 +91,7 @@ struct HostedBookingPanel: View {
                 .buttonStyle(.signalPrimary)
                 .accessibilityIdentifier("hosted-booking-pass")
                 NavigationLink(value: AppRoute.eventHub(hostedEventId)) {
-                    Label("Programme and room", systemImage: "sparkles")
+                    Label("Program and room", systemImage: "sparkles")
                 }
                 .buttonStyle(.signalSecondary)
                 .accessibilityIdentifier("hosted-booking-hub")

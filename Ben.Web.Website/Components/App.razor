@@ -44,7 +44,7 @@
     <link rel="stylesheet" href="/plugins/waves/waves.min.css" />
     @* Styles for the Kit components, shipped with the library that defines them. *@
     <link rel="stylesheet" href="/_content/Ben.Web.Website.Library/kit/ben-kit.css" />
-    @* The store's styles (storefront): Smarty's structure in our theme's colours. *@
+    @* The store's styles (storefront): Smarty's structure in our theme's colors. *@
     <link rel="stylesheet" href="/_content/Ben.Web.Website.Library/kit/ben-store.css" />
 
     <!-- Applies theme + layout classes to <html> before first paint. Must stay render-blocking. -->
@@ -55,7 +55,7 @@
          "Cannot redefine property: delegateTarget" on every soft nav. A head script on a Blazor
          Web App runs once per real document load, so that path is not re-entered — and the
          components in Kit/ own their own show/hide state rather than delegating to Bootstrap's
-         JS, which keeps the blast radius to dropdown/collapse behaviour only. -->
+         JS, which keeps the blast radius to dropdown/collapse behavior only. -->
     <script src="/plugins/bootstrap/bootstrap.bundle.min.js"></script>
 
     <!-- Kendo's Bootstrap-flavoured theme is the closest starting point for the widgets kept from
@@ -88,7 +88,7 @@
        the template's own layoutSettings convention. *@
     @* Telerik places a popup below its anchor and flips it above when there is no room —
        and leaves it hanging off the bottom edge when there is room on neither side, which is
-       what a dialog's centred layout produces. See the file for the measurement. *@
+       what a dialog's centered layout produces. See the file for the measurement. *@
     <script src="/js/popup-fit.js"></script>
     <script src="/js/geolocation.js"></script>
     <script src="/js/timezone.js"></script>
@@ -109,11 +109,11 @@
 
        theme-color paints the browser's own chrome — the address bar on Android, the title bar of
        an installed window. It matches the Night theme's body background; a mismatch reads as a
-       flash of the wrong colour on every launch. Both spellings of the capability meta are
+       flash of the wrong color on every launch. Both spellings of the capability meta are
        present: the apple- prefixed one is what iOS still reads, the unprefixed one is what
        replaced it and what Chrome reads. *@
     <link rel="manifest" href="/manifest.webmanifest" />
-    @* Both read from the same constant the manifest uses. Two copies of a colour drift, and this
+    @* Both read from the same constant the manifest uses. Two copies of a color drift, and this
        particular drift shows as the browser chrome flashing a different shade on every launch —
        the kind of fault nobody files a bug about and everybody notices. *@
     <meta name="theme-color" content="@WebAppManifest.ThemeColor" />

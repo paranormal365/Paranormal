@@ -47,7 +47,7 @@
     {
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
             <div>
-                <h3 class="mb-0">Order #@o.OrderNumber<HelpLink Slug="site-administration" Anchor="orders-and-fulfilment" /></h3>
+                <h3 class="mb-0">Order #@o.OrderNumber<HelpLink Slug="site-administration" Anchor="orders-and-fulfillment" /></h3>
                 <div class="small text-secondary">
                     Placed @o.PlacedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") ·
                     <span class="fw-medium text-@StoreOrderStatusText.Tone(o.Status)-emphasis" data-testid="order-status">@StoreOrderStatusText.Label(o.Status)</span> ·
@@ -421,11 +421,11 @@
     <ChildContent>
         @if (_cancelParcel is { } cancelling)
         {
-            <p class="small">Cancelling this package refunds its items and its shipping, and emails the buyer. The rest of the order goes on as it is.</p>
+            <p class="small">Canceling this package refunds its items and its shipping, and emails the buyer. The rest of the order goes on as it is.</p>
         }
         else
         {
-            <p class="small">Cancelling refunds everything still refundable and emails the buyer.</p>
+            <p class="small">Canceling refunds everything still refundable and emails the buyer.</p>
         }
         <div class="mb-2">
             <label class="form-label" for="cancel-reason">Reason</label>
@@ -611,8 +611,8 @@
     {
         var request = new CancelStoreOrderRequest(_cancelReason, _cancelRestock);
         var ok = _cancelParcel is { } parcel
-            ? await DoAsync(() => AdminClient.CancelStoreParcelAsync(Id, parcel.Id, request), $"Package {parcel.Number} cancelled and refunded.", inDialog: true)
-            : await DoAsync(() => AdminClient.CancelStoreOrderAsync(Id, request), "Cancelled and refunded.", inDialog: true);
+            ? await DoAsync(() => AdminClient.CancelStoreParcelAsync(Id, parcel.Id, request), $"Package {parcel.Number} canceled and refunded.", inDialog: true)
+            : await DoAsync(() => AdminClient.CancelStoreOrderAsync(Id, request), "Canceled and refunded.", inDialog: true);
         if (ok) _cancelOpen = false;
     }
 
@@ -681,7 +681,7 @@
         StoreOrderEventKind.Shipped => "Shipped",
         StoreOrderEventKind.TrackingChanged => "Tracking changed",
         StoreOrderEventKind.Delivered => "Delivered",
-        StoreOrderEventKind.Cancelled => "Cancelled",
+        StoreOrderEventKind.Cancelled => "Canceled",
         StoreOrderEventKind.RefundRequested => "Refund asked for",
         StoreOrderEventKind.RefundPending => "Refund processing at Stripe",
         StoreOrderEventKind.RefundSucceeded => "Refunded",

@@ -806,7 +806,7 @@ struct LocationExplainerSheet: View {
                     .font(.title3.bold())
 
                 Text("Every reading and every photo can carry where you were standing when you took it, so a spike in the cellar isn't confused with one in the hall.")
-                Text("Indoors a phone is usually accurate to somewhere between 20 and 50 metres — often the width of the whole building. Every reading carries its own accuracy so nobody mistakes it for room-level precision.")
+                Text("Indoors a phone is usually accurate to somewhere between 20 and 50 meters — often the width of the whole building. Every reading carries its own accuracy so nobody mistakes it for room-level precision.")
                     .font(.callout).foregroundStyle(Theme.fog)
                 Text("It stays on this device with the rest of the session.")
                     .font(.callout).foregroundStyle(Theme.fog)

@@ -231,7 +231,7 @@ public static class GuestCodes
     /// <summary>The code behind a scanned token or a typed string, live or not.</summary>
     /// <remarks>
     /// Expired and revoked codes are still FOUND, because "that code ran out at midnight" is a
-    /// different thing to say than "we don't recognise that", and only one of them tells the
+    /// different thing to say than "we don't recognize that", and only one of them tells the
     /// person in front of you what to do.
     /// </remarks>
     public static async Task<InvestigationJoinCode?> FindAsync(
@@ -262,7 +262,7 @@ public static class GuestCodes
     public static string? WhyThisCodeIsRefused(InvestigationJoinCode? code)
     {
         if (code is null)
-            return "We don't recognise that code. Check it against the sheet, or ask the guide for a new one.";
+            return "We don't recognize that code. Check it against the sheet, or ask the guide for a new one.";
 
         if (code.RevokedUtc is not null)
             return "That code was replaced. Ask the guide for the one they're showing now.";

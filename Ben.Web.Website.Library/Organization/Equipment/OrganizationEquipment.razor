@@ -319,7 +319,7 @@
         EquipmentCheckoutStatus.Requested  => "Waiting",
         EquipmentCheckoutStatus.Approved   => "Approved",
         EquipmentCheckoutStatus.Denied     => "Declined",
-        EquipmentCheckoutStatus.Cancelled  => "Cancelled",
+        EquipmentCheckoutStatus.Cancelled  => "Canceled",
         EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "Overdue" : "Out",
         EquipmentCheckoutStatus.Returned   => "Returned",
         _                                  => loan.Status.ToString(),

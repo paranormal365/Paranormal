@@ -154,8 +154,8 @@ public sealed class OrganizationPurgeCoverageTests
     [InlineData("AppUsers", "a person is not a group's property and may belong to other groups")]
     [InlineData("Places", "a place is shared, and its public archive is built from many people's visits")]
     [InlineData("UploadFileTypes", "site-wide lookup data that no group owns")]
-    [InlineData("EquipmentModels", "the equipment catalogue is site-wide reference data")]
-    [InlineData("EquipmentBrands", "the equipment catalogue is site-wide reference data")]
+    [InlineData("EquipmentModels", "the equipment catalog is site-wide reference data")]
+    [InlineData("EquipmentBrands", "the equipment catalog is site-wide reference data")]
     [InlineData("ExperienceTypes", "the experience taxonomy is site-wide reference data")]
     [InlineData("UploadFiles", "a file belongs to the person who uploaded it, or to the group they handed it to (item 180 Phase B) — and even then the purge releases the group's claim in the transaction and removes each file afterwards through UploadFileRows, never in bulk, because a file something else still holds must stay")]
     public void The_purge_never_deletes_what_a_group_does_not_own(string forbidden, string why)

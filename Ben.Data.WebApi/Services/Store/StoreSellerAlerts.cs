@@ -26,7 +26,7 @@ public sealed class StoreSellerAlerts(
     public Task TakenOffSaleAsync(Guid productId, CancellationToken ct = default)
         => ToAdminsAsync(productId, (item, seller) => (
             $"{seller} took {item} off sale",
-            $"{seller} took {item} off sale. It stays in the catalogue, hidden: /admin/store/products/{productId}/edit"), ct);
+            $"{seller} took {item} off sale. It stays in the catalog, hidden: /admin/store/products/{productId}/edit"), ct);
 
     public Task ApprovedAsync(Guid productId, CancellationToken ct = default)
         => ToSellerAsync(productId, item => (

@@ -184,7 +184,7 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
 {
     <section class="mb-5" aria-labelledby="about-heading">
         <h2 class="h4" id="about-heading">About the @Product.Name</h2>
-        @* The store page's copy was sanitised when it was saved (AdminStoreProductController.Update).
+        @* The store page's copy was sanitized when it was saved (AdminStoreProductController.Update).
            In the editor's preview it is the draft the editor itself is already showing, in the
            same browser, to the person typing it. Global prose class: a scoped one would never
            reach inside HTML a person wrote. *@
@@ -214,7 +214,7 @@ else if (Product.NewerVersion is { } newer && !Product.IsPreview)
 
 @if (Product.Equipment is { } model)
 {
-    <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalogue</a></p>
+    <p class="mb-5"><a href="@model.Href" data-testid="equipment-link">See the @model.BrandName @model.ModelName in the equipment catalog</a></p>
 }
 
 @if (Product.ReviewsEnabled)

@@ -91,7 +91,7 @@ typed: plain text, no formatting or links.
 
 ### Turning sections of the site on and off
 
-Near the bottom of Site Settings is a row of switches labelled **Feature — …**, one for each
+Near the bottom of Site Settings is a row of switches labeled **Feature — …**, one for each
 major section: the video editor, equipment, events and calendars, local discovery and maps, group
 public pages, the media library, group messaging, voting, and the two newer features below.
 
@@ -702,7 +702,7 @@ which earns its space. Members of a group on a paid plan are not capped at all.
 95%, each sent once. Somebody who frees space and drops back under 90% is warned again the next
 time they fill up, rather than being told once in their life and then meeting the limit in
 silence. Lowering the ceiling can therefore put accounts straight into the warned band on the next
-pass, which is the intended behaviour but worth expecting.
+pass, which is the intended behavior but worth expecting.
 
 ## Places
 
@@ -980,7 +980,7 @@ event, the group, the organizer or the place, and the state filter narrows the l
 ![Every hosted event](help-media:site-administration/every-event.png)
 
 The eye opens the event's own page as its organizer sees it. The arrow at the start of each row opens every
-other screen of that event — plan, bookings, menus, the kitchen's sheet, programme, staff, the door, bands,
+other screen of that event — plan, bookings, menus, the kitchen's sheet, program, staff, the door, bands,
 files, gallery, what happened afterwards, keeping the files, copying it, the photo wall and, while it is
 published, on or just ended, its public page. A SuperAdmin can open all of them for any group's event, including groups you don't
 belong to.
@@ -1064,7 +1064,7 @@ The store sells scientific gear for investigations — EMF meters, spirit boxes,
 anyone, with or without an account. Everything about it is managed under **Store** in the
 administration menu: the dashboard, categories, products, stock, discount codes, reviews and the
 store's own settings. Every one of those screens works while the shop is switched off, which is
-how the catalogue gets entered, priced and photographed before any visitor can see it.
+how the catalog gets entered, priced and photographed before any visitor can see it.
 
 ![The store dashboard: orders to pack and ship, reviews waiting, sales, and what is running low](help-media:site-administration/store-dashboard.png)
 
@@ -1077,7 +1077,7 @@ Two switches, for two different jobs:
   a buyer's order page, the thank-you page and the links in their letters keep working, and so do
   these admin screens.
 - **Take orders**, on the store settings page, pauses buying without hiding anything. The
-  catalogue stays browsable and every cart says the store isn't taking orders at the moment. This
+  catalog stays browsable and every cart says the store isn't taking orders at the moment. This
   is the switch to reach for if something goes wrong with payments.
 
 Before switching the shop on, open **Store Settings** and read the **Ready to sell** checklist. It
@@ -1138,10 +1138,10 @@ stock, specifications and copies of every picture — for a product that differs
 
 ## Options, variants and stock
 
-**Options** are what a buyer chooses — Colour, Size — up to three per product, each with its
-values (a Colour can show round swatches from a hex colour; everything else shows as buttons).
+**Options** are what a buyer chooses — Color, Size — up to three per product, each with its
+values (a Color can show round swatches from a hex color; everything else shows as buttons).
 **Generate variants** makes one variant for every combination the product does not have yet, so
-two colours by three sizes makes six; running it again adds nothing. A value some variant is made
+two colors by three sizes makes six; running it again adds nothing. A value some variant is made
 of cannot be removed from its option until that variant stops using it.
 
 Each **variant** has its own SKU, price, optional old price (shown struck through — it must be
@@ -1150,7 +1150,7 @@ deleted, and a live product always keeps at least one live variant.
 
 Stock only ever changes with a reason — **Received**, **Correction** or **Damaged** — and every
 change leaves a line in the variant's stock log saying who, when, by how much and what it left.
-**Sold**, **Refunded** and **Cancelled** lines are written by the store itself. A change is
+**Sold**, **Refunded** and **Canceled** lines are written by the store itself. A change is
 refused rather than applied if it would leave fewer on the shelf than open checkouts are holding.
 
 The **Stock** page shows every live variant at once: on hand, held by checkouts in progress, and
@@ -1164,7 +1164,7 @@ same all-or-nothing rule; **Export CSV** downloads the whole stock list for a st
 ## Product pictures
 
 Up to twelve pictures per product, in the order you drag them. A picture can be tied to a
-variant, so choosing that colour shows that photograph. Every picture is stored as a clean copy —
+variant, so choosing that color shows that photograph. Every picture is stored as a clean copy —
 the camera details and location are removed — sized for a sharp product page, with a small copy
 for cards and the cart. A live product keeps at least one picture.
 
@@ -1200,14 +1200,14 @@ same for their own packages from **Selling → My Packages**.
 
 The order's status follows its packages: **Partially shipped** while some have gone and some
 haven't, **Shipped** once all have, **Delivered** once all have arrived. The buyer gets one "on its
-way" email per package, listing only that package's items. An order can't be cancelled whole once
+way" email per package, listing only that package's items. An order can't be canceled whole once
 any package has shipped, and its address can't change then either — refund the items instead.
 **Refunds and packages.** The **Refund…** dialog can give back a package's shipping (and the tax on it)
 alongside items — each package's shipping only once. **Cancel package…** on a package that hasn't
 gone refunds its items and its shipping, puts the items back on the shelf if you tick it, and marks
-the package cancelled; the rest of the order carries on, and it reads **Shipped** once everything
-left has gone. The only package left can't be cancelled alone — cancel the whole order, which gives
-back every package's shipping. A package that has gone can't be cancelled: refund its items instead.
+the package canceled; the rest of the order carries on, and it reads **Shipped** once everything
+left has gone. The only package left can't be canceled alone — cancel the whole order, which gives
+back every package's shipping. A package that has gone can't be canceled: refund its items instead.
 The **To ship** tile counts partly shipped orders too. The CSV export has a row per item with its
 package, sender, carrier and tracking.
 
@@ -1226,7 +1226,7 @@ price for each unit sold. None of it is ever shown to shoppers.
 A product's **Files** tab holds its manuals, firmware, software and documents — uploads up to 95 MB,
 or a manual written on the site (Markdown, or imported from a `.md` or `.txt` file). Each file is
 **for buyers** or **private**. A file for buyers appears under **Downloads** on the order page of
-everyone who bought the product, once paid, while the order isn't cancelled and unless that line was
+everyone who bought the product, once paid, while the order isn't canceled and unless that line was
 refunded in full; a private one is only for the store and the product's seller. The seller manages
 their own item's files; the store can change any. Changes are recorded in the product's history.
 
@@ -1332,7 +1332,7 @@ what stops a code working today: **Takes nothing off**, **Expires before it star
 or **Expired**. Once an order has used a code it can be retired (switched off) but not renamed or
 deleted, because the order keeps the code it was bought with.
 
-## Orders and fulfilment
+## Orders and fulfillment
 
 **Orders** (under Store) lists every paid order and every checkout still waiting for payment,
 newest first. Search by order number, buyer, email, SKU, product or tracking number; filter by
@@ -1370,7 +1370,7 @@ buttons are only the ones that make sense now:
 ![One order on the desk: its actions, the buyer, where it's going, the items and the money](help-media:site-administration/store-order.png)
 
 **Needs attention.** An order is flagged when something about its payment needs a person to look —
-paid after its checkout was cancelled, or an amount that did not match. It cannot be packed or shipped
+paid after its checkout was canceled, or an amount that did not match. It cannot be packed or shipped
 until you read the reason and press **I've looked — clear it**.
 
 **Notes** you add go into the order's history with your name. Everything done to an order is there,
@@ -1392,7 +1392,7 @@ first and never refunds twice. A refund made in Stripe's own dashboard is record
 ("Refunded from the Stripe dashboard"), without restocking.
 
 **Cancel…** is for a paid order that has not shipped: it refunds everything still refundable,
-shipping included, puts the items back on the shelf if you tick it, and marks the order Cancelled
+shipping included, puts the items back on the shelf if you tick it, and marks the order Canceled
 once the refund goes through. A shipped order is refunded instead.
 
 **Refunds that failed or are stuck** on the Orders list finds the ones to look at. **Export refunds**

@@ -181,7 +181,7 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
     [Fact]
     public async Task Ship_is_refused_while_attention_is_set()
     {
-        var id = await OrderAsync(attention: "Paid after the checkout was cancelled.");
+        var id = await OrderAsync(attention: "Paid after the checkout was canceled.");
         Assert.StartsWith("This order needs attention first", (await ShipAsync(id, Tracked())).Refusal);
     }
 

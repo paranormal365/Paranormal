@@ -86,9 +86,9 @@ public sealed class HostedEventBandController : OrgCmsControllerBase
         var wanted = request.Bands ?? [];
 
         if (wanted.Any(b => string.IsNullOrWhiteSpace(b.Colour)))
-            return BadRequest("Every band needs a colour — the word your stewards will use for it.");
+            return BadRequest("Every band needs a color — the word your stewards will use for it.");
         if (wanted.Any(b => string.IsNullOrWhiteSpace(b.Meaning)))
-            return BadRequest("Say what each band means. A colour on its own tells a steward "
+            return BadRequest("Say what each band means. A color on its own tells a steward "
                             + "nothing they can act on.");
 
         var existing = await db.HostedEventBands

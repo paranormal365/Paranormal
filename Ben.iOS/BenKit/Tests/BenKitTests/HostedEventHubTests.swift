@@ -4,7 +4,7 @@ import Testing
 import BenKitTestSupport
 
 /// What a guest reads and does during a hosted event: programme, menus, downloads, the room (item 235 phase 14b).
-@Suite("Hosted events — programme, menus, downloads and the room")
+@Suite("Hosted events — program, menus, downloads and the room")
 @MainActor
 struct HostedEventHubTests {
 
@@ -86,7 +86,7 @@ struct HostedEventHubTests {
 
     @Test func noPublishedProgrammeIsNothingToShowNotAnError() async {
         guard case .ok(nil) = await Self.store(MockTransport(status: 404)).loadProgramme(Self.eventId) else {
-            Issue.record("a 404 programme should read as none"); return
+            Issue.record("a 404 program should read as none"); return
         }
     }
 

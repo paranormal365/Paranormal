@@ -723,9 +723,9 @@ private struct StartSessionSheet: View {
 
     private var whereFooter: String {
         if locator.access == .allowed, locator.point != nil, labelIsSuggested {
-            return "Filled in from where your phone is. Change it to anything you'll recognise later."
+            return "Filled in from where your phone is. Change it to anything you'll recognize later."
         }
-        return "Your own words. This is what you'll recognise the session by later."
+        return "Your own words. This is what you'll recognize the session by later."
     }
 
     private func useName(_ name: String?) {

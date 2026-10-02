@@ -206,7 +206,7 @@ internal static class DevelopmentRosterSeeder
             requestBody: "<p>My late husband's workshop light turns itself on most nights around 3 AM. "
                        + "The breaker for that circuit is off. Our dog will no longer go past the workshop door.</p>",
             caseTitle: "Fatherland Street Workshop, Nashville TN",   // place, not the client's surname (item 178)
-            caseBody: "<p>Widowed client reports electrical anomalies and animal avoidance centred on a "
+            caseBody: "<p>Widowed client reports electrical anomalies and animal avoidance centered on a "
                     + "detached workshop. Circuit verified dead at the panel on intake call.</p>",
             manager: rachel, pseudonym: "The Workshop Case",
             status: CaseStatus.Active, openedDaysAgo: 45, now: now);

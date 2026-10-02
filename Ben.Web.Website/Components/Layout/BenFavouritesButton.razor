@@ -5,14 +5,14 @@
 @inject SiteFeaturesProvider Features
 
 @*
-    The header's heart (storefront S6.3), after Smarty's header: a link to Favourites with its
-    count, beside the cart. Only a signed-in person keeps favourites, so BenHeader draws it inside
+    The header's heart (storefront S6.3), after Smarty's header: a link to Favorites with its
+    count, beside the cart. Only a signed-in person keeps favorites, so BenHeader draws it inside
     its signed-in block; it decides for itself whether the store is open.
 *@
 
 @if (Features.IsOn(SiteFeatures.Store))
 {
-    <a class="btn btn-system no-arrow position-relative" href="/store/favourites" id="nav-favourites"
+    <a class="btn btn-system no-arrow position-relative" href="/store/favorites" id="nav-favourites"
        aria-label="@Tooltip" title="@Tooltip">
         @if (Favourites.Count > 0)
         {
@@ -25,9 +25,9 @@
 @code {
     private string Tooltip => Favourites.Count switch
     {
-        0 => "Favourites",
-        1 => "Favourites: 1 product",
-        var n => $"Favourites: {n} products",
+        0 => "Favorites",
+        1 => "Favorites: 1 product",
+        var n => $"Favorites: {n} products",
     };
 
     protected override void OnInitialized() => Favourites.Changed += OnChanged;

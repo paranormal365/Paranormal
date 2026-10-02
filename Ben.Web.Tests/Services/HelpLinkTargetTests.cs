@@ -23,7 +23,7 @@ public sealed class HelpLinkTargetTests
 
     /// <summary>
     /// A plain link into help — <c>href="/help/slug#anchor"</c> — which the pattern above never saw.
-    /// The equipment catalog's "How the catalogue works" was one, pointing into a guide visitors
+    /// The equipment catalog's "How the catalog works" was one, pointing into a guide visitors
     /// cannot read (walk, 2026-10-02).
     /// </summary>
     private static readonly Regex HrefPattern = new(

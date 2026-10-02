@@ -68,7 +68,7 @@ public sealed class AuthReadyOnRoutablePagesTests
         ["StoreProduct.razor"]          = "Works signed out; awaits auth only for a SuperAdmin's ?preview=1, which needs the token.",
 
         // Both found by this test on its first run, and both checked rather than assumed:
-        ["EquipmentModelPage.razor"]    = "The public equipment catalogue — /api/equipment-catalog/models answers "
+        ["EquipmentModelPage.razor"]    = "The public equipment catalog — /api/equipment-catalog/models answers "
                                         + "200 with no token, and the help states anyone may browse it signed out.",
         ["EventPickConfirm.razor"] = "Reached from an emailed link at /event-picks/{Token}; the token is the "
             + "only credential and nobody is signed in (item 235 slice 11d).",
@@ -147,7 +147,7 @@ public sealed class AuthReadyOnRoutablePagesTests
         Assert.True(offenders.Count == 0,
             "These routable pages call the API in a lifecycle method without awaiting "
             + "WaitUntilAuthReadyAsync. On a hard navigation they render before the circuit is "
-            + "live, every call comes back unauthorised, and the client turns that into empty "
+            + "live, every call comes back unauthorized, and the client turns that into empty "
             + "results — so the page reports an empty account rather than a problem:\n  "
             + string.Join("\n  ", offenders.Distinct().OrderBy(x => x, StringComparer.Ordinal))
             + "\n\nIf the page is meant to work signed out, add it to Exempt with the reason.");

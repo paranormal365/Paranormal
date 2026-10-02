@@ -411,7 +411,7 @@ public sealed class CaseController : BenControllerBase
         if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
         {
             if (Zones.Normalize(request.TimeZoneId) is not { } caseZone)
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
             entity.TimeZoneId = caseZone;
         }
         var (yr, num) = await AssignCaseNumberAsync(db, orgId, entity.DateCaseOpened, ct);
@@ -751,7 +751,7 @@ public sealed class CaseController : BenControllerBase
             else if (Zones.Normalize(request.TimeZoneId) is { } caseZone)
                 entity.TimeZoneId = caseZone;
             else
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
         }
         // Set on the way out, cleared on the way back in — see CaseClosureDate. This line used
         // only ever to SET it, so reopening a case left it claiming to be closed.

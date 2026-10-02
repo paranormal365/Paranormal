@@ -15,7 +15,7 @@ people use; asking a question or sending feedback needs an account. Logging gear
 ![The public equipment catalog](/help/media/your-equipment/catalog.png)
 *The catalog lists makes and models, and — on its second tab — the gear people have chosen to list. It never names an owner.*
 
-The equipment catalogue — **Equipment → Catalogue** in the menu, or just **Equipment** if you are
+The equipment catalog — **Equipment → Catalog** in the menu, or just **Equipment** if you are
 not signed in — is public: anyone can browse it, including
 visitors who are not signed in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.
 *Gear people own* lists individual pieces whose owners chose to list them. Neither half ever

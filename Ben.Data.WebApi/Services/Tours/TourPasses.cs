@@ -86,7 +86,7 @@ public static class TourPasses
     /// </summary>
     /// <remarks>
     /// <para>Sentences rather than statuses, because the audience is somebody standing in the
-    /// dark with a queue behind them. "We don't recognise that code" tells them what to do next;
+    /// dark with a queue behind them. "We don't recognize that code" tells them what to do next;
     /// a 404 does not.</para>
     ///
     /// <para><b>The wrong-walk case is named specifically.</b> A guest holding a valid pass for
@@ -97,7 +97,7 @@ public static class TourPasses
         OrgCalendarEventAttendee? seat, Guid expectedEventId, string? otherWalkName)
     {
         if (seat is null)
-            return "We don't recognise that code. Ask them to check the email, or look them up by name.";
+            return "We don't recognize that code. Ask them to check the email, or look them up by name.";
 
         if (seat.OrgCalendarEventId != expectedEventId)
         {

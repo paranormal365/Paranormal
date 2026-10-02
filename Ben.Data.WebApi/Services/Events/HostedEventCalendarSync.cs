@@ -90,9 +90,9 @@ public sealed class HostedEventCalendarSync
         // is a different sentence, and "cancelled" would read as the organizer's doing.
         row.Title = hostedEvent.LifecycleState switch
         {
-            HostedEventLifecycleState.Cancelled => $"CANCELLED — {hostedEvent.Name}",
-            HostedEventLifecycleState.VenueWithdrawn => $"CANCELLED (venue withdrew) — {hostedEvent.Name}",
-            HostedEventLifecycleState.Removed => $"CANCELLED — {hostedEvent.Name}",
+            HostedEventLifecycleState.Cancelled => $"CANCELED — {hostedEvent.Name}",
+            HostedEventLifecycleState.VenueWithdrawn => $"CANCELED (venue withdrew) — {hostedEvent.Name}",
+            HostedEventLifecycleState.Removed => $"CANCELED — {hostedEvent.Name}",
             _ => hostedEvent.Name,
         };
 

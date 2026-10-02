@@ -105,7 +105,7 @@ public class VenueClaimTests : BenTestBase
         await Expect(Page.Locator("#claim-no-proving")).ToBeVisibleAsync();
 
         await Page.Locator("label[for=claim-role-2]").ClickAsync();
-        await Page.Locator("#claim-evidence").FillAsync("I book events for the owners. Our licence is under this name.");
+        await Page.Locator("#claim-evidence").FillAsync("I book events for the owners. Our license is under this name.");
         await ClickUntilAsync(Page.Locator("#claim-submit"), Page.Locator("#claim-under-review"));
 
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);

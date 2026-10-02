@@ -47,11 +47,11 @@ show them to you again.
 |---|---|
 | **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
 | **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
-| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
+| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Color follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is listed, and the group's **visits** to your case show when each one is, where, and the last moment to cancel it. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
-| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times read **where you are**, with the zone named beside them, and **Local time** switches to the clock of the place the night happens in — a Nashville walk's 3:08 PM CDT (see *Times and time zones*, below). An event whose organiser never said which zone it is in reads in Central time and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times read **where you are**, with the zone named beside them, and **Local time** switches to the clock of the place the night happens in — a Nashville walk's 3:08 PM CDT (see *Times and time zones*, below). An event whose organizer never said which zone it is in reads in Central time and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -101,12 +101,12 @@ is still identified in that cellar.
 2. **Where are you?** If the app may use your location, it fills this in for you: the name of a
    known place within a quarter of a mile, or otherwise the street address the phone reads. Other
    places close by sit underneath, one tap each. It is only a suggestion — change it to anything
-   you will recognise next week. If location has never been allowed, **Use my location** asks; if
+   you will recognize next week. If location has never been allowed, **Use my location** asks; if
    it was turned off, type where you are, and **Open Settings** is beside it. Indoors the phone
    sometimes cannot get a position at all; the sheet says so after a few seconds, and **Try again**
    asks once more.
 3. If you are signed in and on an investigation, pick it. Investigations **here** and **today**
-   are listed first and labelled that way, and when exactly one is both, it is already chosen for
+   are listed first and labeled that way, and when exactly one is both, it is already chosen for
    you. If you are not on one, leave it; you can attach the session to an investigation later.
    If other people have published sessions recorded near here, the sheet says how many — tap it to
    play what they found before you start.
@@ -154,7 +154,7 @@ why several things refuse to work until you have.
 
 On screen at once: the wall clock and how long the session has run, the dial in milligauss, a
 sound meter in decibels with your base and report levels marked on it, and where you are —
-**with the accuracy of that fix**. Indoors a phone is routinely 20 to 50 metres out, often the
+**with the accuracy of that fix**. Indoors a phone is routinely 20 to 50 meters out, often the
 width of the whole building, so the number is always shown. A reading taken with no fix at all
 carries no position rather than a made-up one.
 
@@ -222,7 +222,7 @@ rooms is one tap, and it drops a mark of its own, so a review a week later shows
 down to the cellar.
 
 This is worth doing because **nothing else can tell rooms apart**. A fix indoors is twenty to
-fifty metres wide — the width of the whole building — so the app cannot work out which room you
+fifty meters wide — the width of the whole building — so the app cannot work out which room you
 are in, and it does not pretend to. A person saying so is the only reliable source there is.
 
 Rooms you have already used this session come first in the list, so walking a loop through a
@@ -495,7 +495,7 @@ for *near you*; searching by name works with it off.
 
 ## When the group's session starts
 
-A guide, an event's organiser or the lead of an investigation can start the night for everybody at
+A guide, an event's organizer or the lead of an investigation can start the night for everybody at
 once from the app. When they do, nobody's phone is taken over: you are told, and you join when you
 are ready.
 
@@ -551,7 +551,7 @@ A visit to somebody's home, or a private client case, has no code at all.
 ### Starting it, if you lead
 
 Field Kit shows **Launch a session for your group** whenever something you lead is on — a tour
-date you guide, an event you organise or run the door at, an investigation you lead or manage. It
+date you guide, an event you organize or run the door at, an investigation you lead or manage. It
 opens three hours before it starts and stays open until it ends. Tap **Launch** and say yes: the
 card goes in the feed — for anyone when it is public, only for the people registered when it is
 not — and everybody registered who has the app is notified. The page after tells you how many that
@@ -695,18 +695,18 @@ Choosing seats on a plan stays on the website for now; everything you choose the
 
 ### During the event
 
-**The event** on What I'm going to (or **Programme and room** on a confirmed booking) opens everything
-for that event in one place. A row appears only when there is something behind it: no programme yet,
+**The event** on What I'm going to (or **Program and room** on a confirmed booking) opens everything
+for that event in one place. A row appears only when there is something behind it: no program yet,
 or menus the venue hasn't shared with you, simply aren't listed. When the hosts have said how to get in
 and around — stairs, a step-free door, parking, low light — it is under **Getting in and getting around**.
 
-![The event's own screen: pass, programme, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
+![The event's own screen: pass, program, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
 
-- **Programme** — night by night, **on the venue's clock** with the zone named, so 9:00 PM CDT is the
+- **Program** — night by night, **on the venue's clock** with the zone named, so 9:00 PM CDT is the
   same wherever you read it. **Sign up** asks how many of your party are coming. A full session puts you
   on its waiting list and says where you are in line, and when there aren't enough places left for your
   whole party it says that too. **Give up** or **Leave** hands your place to the next person. The
-  calendar button at the top adds the whole programme to your calendar.
+  calendar button at the top adds the whole program to your calendar.
 - **Menus** — each meal with its time, course by course, with the venue's dietary labels.
 - **Downloads** — the files the organizers share with guests. Tap one to open it, and share it on from
   there.
@@ -717,7 +717,7 @@ and around — stairs, a step-free door, parking, low light — it is under **Ge
   your own post to send it on later or take it down; press and hold somebody else's to report it. Your
   photos stay yours whichever you choose.
 
-![The programme, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
+![The program, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
 
 ![A menu, course by course](/help/media/the-mobile-apps/iphone-event-menus.png)
 
@@ -765,7 +765,7 @@ job — **Doors I'm running** appears under **Profile**. For everybody else it s
 - **Scan a pass** opens the camera. It reads the guest's code and closes, and the door screen shows the
   **reservation** that pass belongs to. Nobody is checked in by scanning alone.
 - **Tap the reservation** to open it: the name, how many are in the party, the nights and the room or
-  seat, the colour they wear, anybody with them, and anything the kitchen needs to know. **Check in as
+  seat, the color they wear, anybody with them, and anything the kitchen needs to know. **Check in as
   arrived** records them — set how many are actually here first if the whole party hasn't come.
 - A pass that isn't for this event, was withdrawn, or isn't expected tonight is said in words on the door
   screen instead.

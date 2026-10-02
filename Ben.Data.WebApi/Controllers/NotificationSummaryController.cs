@@ -391,7 +391,7 @@ public sealed class NotificationSummaryController : BenControllerBase
                 ct);
 
         // ── A guest's programme changed since they last looked (phase 10) ────────
-        // Dated by the change, one per booking however many sessions moved: "the programme changed"
+        // Dated by the change, one per booking however many sessions moved: "the program changed"
         // is one thing to go and read, not a count of edits.
         var eventScheduleChanges = await BucketAsync(
             db.HostedEventBookings.AsNoTracking()

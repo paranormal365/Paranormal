@@ -252,7 +252,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
         {
             if (Zones.Normalize(request.TimeZoneId) is not { } visitZone)
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
             entity.TimeZoneId = visitZone;
         }
         db.Investigations.Add(entity);

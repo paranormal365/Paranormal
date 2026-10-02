@@ -180,9 +180,9 @@ public static class DataProtectionSetup
 
             default:
                 log.Warning(
-                    "DataProtection:ProtectKeysWith has an unrecognised value {Mode}. Expected auto, "
+                    "DataProtection:ProtectKeysWith has an unrecognized value {Mode}. Expected auto, "
                   + "none, dpapi or certificate. Keys will be written unencrypted.", mode);
-                return "none (unrecognised mode)";
+                return "none (unrecognized mode)";
         }
     }
 

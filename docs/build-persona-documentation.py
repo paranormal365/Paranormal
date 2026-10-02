@@ -70,7 +70,7 @@ refused, session-ended and rate-limited as distinct states — and every one of 
 words on screen.</p>
 
 <p>This matters when reading this document: where a screenshot shows a refusal, that <i>is</i> the
-designed behaviour for this seat, not a broken page.</p>
+designed behavior for this seat, not a broken page.</p>
 """
 
 
@@ -309,7 +309,7 @@ def build(key):
         "<div class='cover'><p style='margin:0'><b>Every screenshot shows simulated, seeded "
         "data</b>, captured in dark mode while signed in as this user type. Nothing here is a real "
         "person, case or investigation. Where a page shows a refusal, that is the designed "
-        "behaviour for this seat.</p></div>")
+        "behavior for this seat.</p></div>")
     parts.append(p["intro"])
     parts.append(SHARED)
     parts.append("<h2>What this user sees, screen by screen</h2>")

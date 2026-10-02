@@ -31,7 +31,7 @@ public static class CanvasBoardTemplates
     public static IReadOnlyList<CanvasBoardTemplate> All { get; } =
     [
         new("blank", "Blank board", "Nothing on it. Build it your own way.", "file"),
-        new("moodboard", "Moodboard", "Coloured sections for pictures and feel, and a cluster of themes.", "layout"),
+        new("moodboard", "Moodboard", "Colored sections for pictures and feel, and a cluster of themes.", "layout"),
         new("research-plan", "Research plan", "What to ask, where to look, what matters most, and when.", "clipboard"),
         new("family-tree", "Family tree", "Who is related to whom, with a photo frame above every name.", "git-merge"),
         new("deck", "Presentation deck", "Slide frames you can walk somebody through.", "monitor"),

@@ -32,7 +32,7 @@ extension HostedEventsStore {
                        as: HostedEventProgramme.self)
     }
 
-    /// The guest has looked, so the bell's "the programme changed" row clears.
+    /// The guest has looked, so the bell's "the program changed" row clears.
     @discardableResult
     public func markProgrammeSeen(_ eventId: UUID) async -> Bool {
         await api.send(Endpoint(.post, "\(Self.base(eventId))/programme/seen")).isOk

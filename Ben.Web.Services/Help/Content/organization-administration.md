@@ -227,7 +227,7 @@ the equipment, and the Lead Investigator duty is open to your two most senior ru
 
 The ask stays deliberately soft. Whoever manages a visit can assign past it with an explicit
 *Assign anyway*, and the exception is marked on the assignment — the senior calls in sick and the
-capable junior steps up, and a hard wall would just send the group back to organising by text
+capable junior steps up, and a hard wall would just send the group back to organizing by text
 message.
 
 Two exceptions to that.
@@ -407,7 +407,7 @@ Under **Settings**, *Calendar Event Types* is the list the calendar's **Type** d
 Investigation, Meeting, Training, whatever the group actually does. A group with no types can
 still create events; the events simply have no type.
 
-Each type carries a name, an optional colour and icon, and a sort order that decides where it sits
+Each type carries a name, an optional color and icon, and a sort order that decides where it sits
 in the dropdown. Only owners and administrators can change the list.
 
 Clear **Active** to retire a type. It disappears from the dropdown for new events but stays on the
@@ -432,7 +432,7 @@ loans, requests for more time, service and faults, newest first — and the serv
 new entries are added.
 
 The service log part is what you write to. Anyone can read it; adding an entry needs the
-Equipment permission. The entry type does real work rather than just labelling the note:
+Equipment permission. The entry type does real work rather than just labeling the note:
 
 | Entry | What it does to the item |
 |---|---|
@@ -604,7 +604,7 @@ Two section types — **Our investigations** and **Our cases** — let you show 
 public page. Pick which records to show, and answer two questions about each section.
 
 **Where it happened.** You can show the rough area, or nothing at all. There is no option to publish
-the exact address, whichever way you set it: the point shown on the map is the centre of an area
+the exact address, whichever way you set it: the point shown on the map is the center of an area
 several miles across and cannot be traced back to a building. That is deliberate — a case is
 somebody's home, and a link outlives the page it was on.
 
@@ -744,7 +744,7 @@ You can write that email yourself under **Tours → the tour → Guest email**, 
 we send a complete one. Drop in the things that change per date by clicking a placeholder and
 pasting it: the tour's name and meeting point, the date and time in your tour's own time zone, who
 is guiding that night and their photograph, how many places are left, and your own contact line.
-Anything we do not recognise is simply left out, and **the meeting point is always included**
+Anything we do not recognize is simply left out, and **the meeting point is always included**
 whether or not you ask for it — a guest who cannot tell where to stand has not been told about the
 tour.
 
@@ -881,7 +881,7 @@ at **Events** in your group's menu.
 
 Give it a name, a venue and the dates it runs. That is a **draft**: only your own people can see it,
 it has no public page, it takes no bookings and it sends nothing. Build all of it — the dates, the
-programme, the rooms, the files, the page — and change your mind as often as you like. Nothing is
+program, the rooms, the files, the page — and change your mind as often as you like. Nothing is
 charged and nothing is announced until you press **Publish**.
 
 ### Who can build and change one
@@ -977,7 +977,7 @@ stays exactly as it is. Events are archived for you automatically a fortnight af
 so you never pay for last Halloween.
 
 **Cancel** is different, and it is for an event that was going to happen and now is not. The listing
-says CANCELLED in its title — the one line everybody actually reads, on your page, on a shared link
+says CANCELED in its title — the one line everybody actually reads, on your page, on a shared link
 and on somebody's phone — and the reason you give is shown to the people who had places. The event is
 kept rather than deleted, because somebody who was coming needs to be able to see that it is off.
 
@@ -1022,7 +1022,7 @@ hear back by email and in your messages:
   first time did.
 - **Declined** — the event stays removed, and the answer says why.
 
-Each removal can be appealed once. A removed event can't be un-cancelled, restored or published from its
+Each removal can be appealed once. A removed event can't be un-canceled, restored or published from its
 page, but you can still edit it before you appeal.
 
 ### Rooms and bookings
@@ -1213,7 +1213,7 @@ the one act that spends money.
 
 ### The group's session on the night
 
-As with a tour, the organiser — or staff who run the door — can start everybody's Field Kit from the
+As with a tour, the organizer — or staff who run the door — can start everybody's Field Kit from the
 IsHaunted app, and confirmed guests are told. What they send comes back to the event's page under
 **Field sessions sent up**, for your group and the event's staff. Letting in somebody who scanned the
 code and asked never makes a booking: it lets them record with everybody, nothing more.
@@ -1282,11 +1282,11 @@ never let is simply left in the list.
 
 Rooms keep the venue's own names, so renaming a room on the venue's Rooms page renames it here and
 on every guest's booking at once. A row whose rooms all share a floor gets that floor's name in the
-margin, which is how a hotel ends up with its floors labelled without a column spent on it.
+margin, which is how a hotel ends up with its floors labeled without a column spent on it.
 
 ### Laying out a theatre quickly
 
-![A 260-seat house with a centre aisle](help-media:organization-administration/event-plan-seats.png)
+![A 260-seat house with a center aisle](help-media:organization-administration/event-plan-seats.png)
 
 **Add a block** is how a house gets built: how many rows, how many seats in each, where the letters
 start, which way the numbers run, and what the section is called and costs. A line under the form
@@ -1385,7 +1385,7 @@ more it sleeps. "Full" on its own would leave you guessing whether a smaller par
 Confirming also puts them on the event's calendar entry, which is what the reminder email, the
 calendar file, the public count and the phone apps all read.
 
-#### Changing and cancelling
+#### Changing and canceling
 
 Bookings are editable after they are confirmed, because a real weekend has somebody dropping out on
 the Thursday. Change the party size, the rooms, the nights or the guests; the room is re-checked so
@@ -1400,7 +1400,7 @@ being asked for any more.
 staffed and possibly turned somebody else away against that room, and a room freed without your
 knowing is a room that stays empty. Their reason comes with the ask.
 
-Turning a booking down and cancelling one both tell the guest, and both give the room back.
+Turning a booking down and canceling one both tell the guest, and both give the room back.
 
 #### Bookings close
 
@@ -1482,7 +1482,7 @@ add a sitting between two other things.
 
 Only confirmed bookings that are here that night are listed, with how many of each party still need a
 seat and a badge when somebody in the party has dietary notes. A table never seats more people than it
-has chairs; if a party doesn't fit, the page says how many chairs are left. A booking that is cancelled
+has chairs; if a party doesn't fit, the page says how many chairs are left. A booking that is canceled
 drops off its table by itself.
 
 **Seat the same way** copies another sitting's seating — everybody who is at both meals goes back to the
@@ -1626,7 +1626,7 @@ weekend, red is Saturday only.*
 
 ![Setting up the bands](help-media:organization-administration/event-bands.png)
 
-**Bands** on the event page lists them. Each has a colour — **your** word for it, because the box of
+**Bands** on the event page lists them. Each has a color — **your** word for it, because the box of
 wristbands in your drawer says orange and the screen should too — an optional swatch, what it means,
 and who gets it:
 
@@ -1727,17 +1727,17 @@ there, months before the venue heard of us. When your group runs a place, open i
 are its owner, its manager, or a representative acting for them.
 
 **A claim is on the place, never on an event.** It decides who future organizers must ask. Nothing
-already booked there moves, is cancelled or changes hands, and you do not see who came to events you
+already booked there moves, is canceled or changes hands, and you do not see who came to events you
 had no part in.
 
 There are two ways to prove it:
 
 - **A code to the venue's own email.** If a public email address for the place was recorded by
   somebody **outside** your group at least a week ago, we can send a code there — shown masked, so you
-  can recognise your front desk. Whoever reads that inbox gives you the code. An address your own
+  can recognize your front desk. Whoever reads that inbox gives you the code. An address your own
   group added proves only that you read your own mail, so it is never offered.
 - **A review by a person**, when there is no such address. Tell them what shows you run the place —
-  a licence, a listing, your role — and they may contact you.
+  a license, a listing, your role — and they may contact you.
 
 ![Claiming a venue](help-media:organization-administration/venue-claim.png)
 
@@ -1753,9 +1753,9 @@ already gave standing.
 
 ![Reviewing a claim](help-media:organization-administration/venue-claim-review.png)
 
-### The programme
+### The program
 
-**Programme** on the event page is where the classes, talks and meals go — the part of the weekend
+**Program** on the event page is where the classes, talks and meals go — the part of the weekend
 guests opt into one piece at a time. Add each session with its night, its times **on the venue's
 clock** (an end earlier than the start is the next morning), where it is — one of the venue's rooms,
 or words like "meet at reception" — and who leads it.
@@ -1768,11 +1768,11 @@ or words like "meet at reception" — and who leads it.
   in order, a party is never jumped by one person behind it, and whoever gets in is written to.
 - **Who's coming** lists the people with places and the queue, and lets you take somebody off.
 
-![The programme, as the host builds it](help-media:organization-administration/event-programme.png)
+![The program, as the host builds it](help-media:organization-administration/event-programme.png)
 
-**Nothing is shown to guests until you press Publish the programme.** After that, every change says
+**Nothing is shown to guests until you press Publish the program.** After that, every change says
 what it will do: **moving** a session writes to everybody with a place and rings their bell;
-**cancelling** writes to everybody signed up or queued, with your reason; a session somebody signed
+**canceling** writes to everybody signed up or queued, with your reason; a session somebody signed
 up for cannot simply be removed — cancel it, so they hear.
 
 ### Files for the event
@@ -1837,7 +1837,7 @@ keeps an **Ask for a place** button at the bottom of the screen while people scr
 
 **Putting an event on your group's own pages.** When you edit one of your public pages, four sections
 show one of your published events and keep up with it by themselves: *An event: dates and ask for a
-place*, *An event's programme*, *An event's pictures* and *An event's venue*. A section pointing at an
+place*, *An event's program*, *An event's pictures* and *An event's venue*. A section pointing at an
 event that is no longer on the public site says so rather than showing it.
 
 **Advertise this event** on the event page starts your group's ad pointing at the event. It is reviewed
@@ -1892,7 +1892,7 @@ bookings*: **As they arrive** (the default, with the daily letter too), **A dail
 **Nothing**. The bell still counts what is waiting whichever you pick, and a hold about to run out
 gets a row of its own there.
 
-It always says the colour's name as well as showing it, because about one man in twelve cannot tell
+It always says the color's name as well as showing it, because about one man in twelve cannot tell
 red from green.
 
 ### Writing to your guests
@@ -1932,7 +1932,7 @@ button or a bad morning turning into forty emails; put the rest in one letter.
   marked as hidden. Turning reviews off stops new ones.
 
 **Files are kept for 90 days after the last date.** Then the event's files, its gallery pictures and the
-links to photos in its room are removed. The event itself stays, with its bookings, programme and reviews,
+links to photos in its room are removed. The event itself stays, with its bookings, program and reviews,
 and guests keep their own photos — a photo a guest sent you stays shared with you. You are written to a
 month and a week before, and nothing is removed within a week of the last letter.
 
@@ -1953,7 +1953,7 @@ Each part you made is offered with its size, ticked:
 
 - **the plan** — rooms or seats, sections, prices, and what the venue held back on which night,
 - **menus**, on the same night of the run,
-- **the programme**, at the same times, not yet published,
+- **the program**, at the same times, not yet published,
 - **bands**, and **helpers** with what they may do (an invitation nobody answered stays behind),
 - **the advert**, as a draft that is reviewed again before it shows,
 - **files**, copied into the new event's own space (unticked to start with, because they count
@@ -2031,8 +2031,8 @@ guest's pass and the screen answers in one line:
   code a minute ago.
 - **"That pass is for Friday Night Ghost Walk, not tonight's walk."** — a real booking, the wrong
   night. This is the commonest honest mistake at a meeting point, so it says which walk rather than
-  telling somebody their code is not recognised.
-- **"We don't recognise that code. Ask them to check the email, or look them up by name."**
+  telling somebody their code is not recognized.
+- **"We don't recognize that code. Ask them to check the email, or look them up by name."**
 
 If the camera will not start — an old phone, a browser that will not give it permission, no light —
 type the code from the guest's screen into the box underneath instead. It does exactly the same

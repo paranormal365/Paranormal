@@ -1,11 +1,11 @@
 @*
-    An item's options — what a buyer chooses, like Colour and Size — and the buttons that save them
+    An item's options — what a buyer chooses, like Color and Size — and the buttons that save them
     and make variants from them (store sellers, backlog 251, P3 — lifted from the admin editor).
     The page owns the drafts and the saves; a refusal is shown here, under the buttons.
 *@
 
 <h5>Options @Help</h5>
-<p class="text-secondary small">What a buyer chooses — up to three, like Colour and Size.</p>
+<p class="text-secondary small">What a buyer chooses — up to three, like Color and Size.</p>
 @foreach (var (option, oi) in Options.Select((o, i) => (o, i)))
 {
     var opt = option;
@@ -14,13 +14,13 @@
             <div class="row g-2 align-items-end mb-2">
                 <div class="col-7 col-md-5">
                     <label class="form-label small" for="@($"option-name-{oi}")">Option</label>
-                    <input id="@($"option-name-{oi}")" class="form-control form-control-sm" maxlength="60" placeholder="Colour" @bind="opt.Name" />
+                    <input id="@($"option-name-{oi}")" class="form-control form-control-sm" maxlength="60" placeholder="Color" @bind="opt.Name" />
                 </div>
                 <div class="col-5 col-md-3">
                     <label class="form-label small" for="@($"option-kind-{oi}")">Shown as</label>
                     <select id="@($"option-kind-{oi}")" class="form-select form-select-sm" @bind="opt.Kind">
                         <option value="@StoreOptionKind.Pill">Buttons</option>
-                        <option value="@StoreOptionKind.Swatch">Colour swatches</option>
+                        <option value="@StoreOptionKind.Swatch">Color swatches</option>
                     </select>
                 </div>
                 <div class="col-12 col-md-4 text-md-end">
@@ -36,7 +36,7 @@
                     <input id="@($"option-{oi}-value-{vi}")" class="form-control form-control-sm" style="max-width:14rem;" maxlength="60" placeholder="Black" @bind="val.Value" />
                     @if (opt.Kind == StoreOptionKind.Swatch)
                     {
-                        <BenColorPicker @bind-Value="val.SwatchHex" ShowHex="true" AriaLabel="@($"Colour of {val.Value}")" />
+                        <BenColorPicker @bind-Value="val.SwatchHex" ShowHex="true" AriaLabel="@($"Color of {val.Value}")" />
                     }
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input" type="checkbox" role="switch" id="@($"option-{oi}-value-{vi}-on")" @bind="val.IsActive" />

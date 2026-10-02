@@ -84,7 +84,7 @@ match score. **Is what it says** and **Category is wrong** each record your judg
 they do. A wrong category never hides a post; it nudges the author to fix the label and gently
 lowers the post's ranking.
 
-Those judgments are worth the click even when nothing is wrong: every one becomes a labelled
+Those judgments are worth the click even when nothing is wrong: every one becomes a labeled
 example the site's classifier learns from, and the classifier is only ever as good as the record
 of what people who looked actually decided.
 

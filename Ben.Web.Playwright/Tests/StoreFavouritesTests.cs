@@ -25,7 +25,7 @@ public class StoreFavouritesTests : BenTestBase
     }
 
     [Test]
-    [Description("A member hearts a product, finds it in Favourites with the header's count, and removes it after being asked.")]
+    [Description("A member hearts a product, finds it in Favorites with the header's count, and removes it after being asked.")]
     public async Task A_member_keeps_a_favourite_and_removes_it()
     {
         await LoginAsync(MemberEmail, MemberPassword);
@@ -40,35 +40,35 @@ public class StoreFavouritesTests : BenTestBase
 
         await BuyBoxHeart.ClickAsync();
         await Expect(BuyBoxHeart).ToHaveAttributeAsync("aria-pressed", "true", new() { Timeout = 15_000 });
-        await Expect(BuyBoxHeart).ToHaveAttributeAsync("aria-label", "Remove K-II EMF Meter from your favourites");
+        await Expect(BuyBoxHeart).ToHaveAttributeAsync("aria-label", "Remove K-II EMF Meter from your favorites");
         await Expect(Page.Locator("[data-testid=favourites-badge]")).ToBeVisibleAsync();
 
         await Page.Locator("#nav-favourites").ClickAsync();
-        await Page.WaitForURLAsync(new Regex("/store/favourites$"), new() { Timeout = 15_000 });
+        await Page.WaitForURLAsync(new Regex("/store/favorites$"), new() { Timeout = 15_000 });
         var card = Page.Locator("[data-testid=store-card][data-slug=k-ii-emf-meter]");
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await Expect(card.Locator("[data-testid=store-heart]")).ToHaveCountAsync(0);   // Remove takes its place
 
         await card.Locator("[data-testid=favourite-remove]").ClickAsync();
-        await Expect(Page.GetByText("Remove K-II EMF Meter from your favourites?")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Remove K-II EMF Meter from your favorites?")).ToBeVisibleAsync();
         await Page.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
         await Expect(card).ToHaveCountAsync(0, new() { Timeout = 15_000 });
-        await Expect(Page.GetByText("No favourites yet")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("No favorites yet")).ToBeVisibleAsync();
         await Expect(Page.Locator("[data-testid=favourites-badge]")).ToHaveCountAsync(0);
     }
 
     [Test]
-    [Description("Sarah's seeded favourites are on her Favourites page, with their hearts filled wherever the cards appear.")]
+    [Description("Sarah's seeded favorites are on her Favorites page, with their hearts filled wherever the cards appear.")]
     public async Task Seeded_favourites_are_listed()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await OpenAsync("/store/favourites");
+        await OpenAsync("/store/favorites");
 
-        await Expect(Page.Locator("[data-testid=favourites-grid] [data-testid=store-card][data-slug=rem-pod]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Expect(Page.Locator("[data-testid=favourites-grid] [data-testid=store-card][data-slug=h1n-handy-recorder]")).ToBeVisibleAsync();
+        await Expect(Page.Locator("[data-testid=favorites-grid] [data-testid=store-card][data-slug=rem-pod]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-testid=favorites-grid] [data-testid=store-card][data-slug=h1n-handy-recorder]")).ToBeVisibleAsync();
         // One entry lit in the menu — "Browse the Store" (/store) covers this address too, and was
         // lit beside Favourites until the nav learned to light only the most specific (09/24).
-        await Expect(Page.Locator("#nav-menu li.nav-item.active:not(.has-ul) > a")).ToHaveAttributeAsync("href", "/store/favourites");
+        await Expect(Page.Locator("#nav-menu li.nav-item.active:not(.has-ul) > a")).ToHaveAttributeAsync("href", "/store/favorites");
 
         await OpenAsync("/store/products");
         await Expect(Page.Locator("[data-testid=store-card][data-slug=rem-pod] [data-testid=store-heart]"))
@@ -76,7 +76,7 @@ public class StoreFavouritesTests : BenTestBase
     }
 
     [Test]
-    [Description("A guest's heart is a sign-in link that comes back to the page; the header has no favourites heart.")]
+    [Description("A guest's heart is a sign-in link that comes back to the page; the header has no favorites heart.")]
     public async Task A_guest_heart_asks_for_a_sign_in()
     {
         await OpenAsync("/store/p/k-ii-emf-meter");
@@ -86,10 +86,10 @@ public class StoreFavouritesTests : BenTestBase
     }
 
     [Test]
-    [Description("Signed out, the Favourites page asks for a sign-in and comes back.")]
+    [Description("Signed out, the Favorites page asks for a sign-in and comes back.")]
     public async Task Signed_out_favourites_go_to_sign_in()
     {
-        await OpenAsync("/store/favourites");
+        await OpenAsync("/store/favorites");
         await Page.WaitForURLAsync(new Regex(@"/login\?returnUrl=%2Fstore%2Ffavourites$"), new() { Timeout = 30_000 });
     }
 }

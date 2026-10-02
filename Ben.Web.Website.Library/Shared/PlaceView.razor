@@ -6,7 +6,7 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @* The feed's own composer and card, reused rather than forked (2026-09-17). Without this using,
-   Razor does not recognise <FeedComposer> as a component and emits it as a literal HTML element —
+   Razor does not recognize <FeedComposer> as a component and emits it as a literal HTML element —
    no error, no warning, just an empty <feedcomposer> tag in the page. Which is exactly what
    happened, and what cost an hour of looking at the server. *@
 @using Ben.Web.Website.Library.Feed
@@ -48,7 +48,7 @@
            investigations, and a visitor following this link would land on "topic isn't
            available" — worse than no link at all. *@
         @* Signal phase 2: the place's own photograph when somebody has put one up — the first of
-           "the place itself" below — and otherwise a plate in its own colour. Never a stock
+           "the place itself" below — and otherwise a plate in its own color. Never a stock
            photograph: behind a real building's name it would read as that building. *@
         <PageHero TestId="place-hero" Class="place-hero"
                   PhotoUrl="@(_pictures is { Count: > 0 } heroPics ? AdminClient.GetPlaceEvidenceFileUrl(PlaceId, heroPics[0].Id) : null)"

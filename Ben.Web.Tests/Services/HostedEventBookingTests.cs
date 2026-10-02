@@ -620,7 +620,7 @@ public sealed class HostedEventBookingTests
         {
             var booking = await db.HostedEventBookings.FirstAsync(b => b.Id == bookingId);
             booking.CancellationRequestedUtc = DateTime.UtcNow;
-            booking.CancellationReason = "My flight was cancelled.";
+            booking.CancellationReason = "My flight was canceled.";
             await db.SaveChangesAsync();
         }
 
@@ -633,7 +633,7 @@ public sealed class HostedEventBookingTests
             Assert.Equal(HostedEventBookingStatus.Confirmed, booking.Status);
             Assert.Equal(2, EventCapacity.PeopleIn(all, seeded.FridayId, seeded.BlueRoomId));
             Assert.NotNull(booking.CancellationRequestedUtc);
-            Assert.Equal("My flight was cancelled.", booking.CancellationReason);
+            Assert.Equal("My flight was canceled.", booking.CancellationReason);
         }
     }
 

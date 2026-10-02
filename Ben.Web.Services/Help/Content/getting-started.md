@@ -113,7 +113,7 @@ with the distance dropdown.
 A tab only appears when there is something behind it.*
 
 **Places** is the fourth tab, and it is a different kind of answer from the other three. A place is a
-location rather than an organisation or a date — a cave, a mill, a hotel — and the tab lists the
+location rather than an organization or a date — a cave, a mill, a hotel — and the tab lists the
 ones near you that groups have actually published work at. Opening one shows everything anybody has
 shared about that location: which groups have investigated there, what they concluded, recorded
 sessions, photographs from events held there, and what visitors have posted.
@@ -125,7 +125,7 @@ them.
 
 Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
 Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
-own name, so it is the same colour here, on the group's page, and on the tour's own page.
+own name, so it is the same color here, on the group's page, and on the tour's own page.
 
 Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
 open cases in your groups (yours first), how many messages and requests are waiting, and any gear
@@ -174,7 +174,7 @@ The same thing happens inside your own work:
 
 A few things worth knowing:
 
-- A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
+- A **number beside an entry** is work waiting for you. The color deepens the longer it waits.
   **A group shows the total of everything inside it**, so nothing is hidden by being grouped.
 - **On a phone**, the button beside the site name opens the whole menu as a drawer. Its **Filter**
   box narrows it as you type and looks *inside* the groups — type "checkouts" and you get the one
@@ -268,7 +268,7 @@ second one that has none of your history.
 
 Apple lets you **hide your email**. If you do, we receive a forwarding address that reaches you
 only while Apple allows it, and your profile says so rather than showing an address you would not
-recognise. If you give us no address at all, your profile warns you: Apple is then the only way
+recognize. If you give us no address at all, your profile warns you: Apple is then the only way
 into your account, and there is no reset link to fall back on until you add one.
 
 ## Your first minute
@@ -461,7 +461,7 @@ number is always the sum of the rows underneath it. If the bell says four, four 
 Buckets with nothing in them are not shown. The page is a list of things to do, not a dashboard of
 zeroes.
 
-**The colour means age, not importance.** A single item from last week is coloured more urgently
+**The color means age, not importance.** A single item from last week is colored more urgently
 than five from this morning, because the old one is the one somebody is still waiting on.
 
 If you decide bookings for a group, the page also has **Letters about bookings**, where you choose

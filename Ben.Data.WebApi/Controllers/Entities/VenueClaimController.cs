@@ -118,7 +118,7 @@ public sealed class VenueClaimController : BenControllerBase
         else if (evidence is null)
         {
             return BadRequest("Without an address to send a code to, a person reviews the claim. "
-                            + "Tell them what shows you run the place — a licence, a listing, your role there.");
+                            + "Tell them what shows you run the place — a license, a listing, your role there.");
         }
 
         var claim = new VenuePlaceClaim

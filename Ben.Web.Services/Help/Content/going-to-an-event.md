@@ -19,7 +19,7 @@ drawn for you exactly as it stands — what is free, what somebody is holding, a
 has kept back.
 
 ![The seating plan as a visitor sees it](/help/media/going-to-an-event/the-house.png)
-*Every square says what it is in words as well as in colour, so the plan reads the same to
+*Every square says what it is in words as well as in color, so the plan reads the same to
 everybody.*
 
 The page opens with the host's own pictures and how long until the first night. On a phone, an
@@ -107,13 +107,13 @@ still have free.
 The sessions you signed up for sit under each event with their times, marked when you are on the
 waiting list or a session has been called off.
 
-## The programme
+## The program
 
-Some events have a programme: a class, a talk, a séance, dinner. It is on the event's page, night by
+Some events have a program: a class, a talk, a séance, dinner. It is on the event's page, night by
 night, **on the venue's clock** — 9 PM means 9 PM at the venue, wherever you are reading it from.
 While the event is on, **Now** and **Next** mark what is happening.
 
-![The programme on the event's page](/help/media/going-to-an-event/programme.png)
+![The program on the event's page](/help/media/going-to-an-event/programme.png)
 
 - **Just come** means there is nothing to sign up for.
 - **3 of 15** means a session has places, and how many are taken. You see how many, never who.
@@ -125,12 +125,12 @@ While the event is on, **Now** and **Next** mark what is happening.
 - **Leave** gives your place back to whoever is next.
 - **Add to calendar** puts the session in your calendar at the right time.
 
-If a session moves or is cancelled after you have planned around it, you are written to, the bell
-says **The programme changed**, and the session is marked **Changed** until you have looked.
+If a session moves or is canceled after you have planned around it, you are written to, the bell
+says **The program changed**, and the session is marked **Changed** until you have looked.
 
-![The programme on a phone](/help/media/going-to-an-event/programme-phone.png)
+![The program on a phone](/help/media/going-to-an-event/programme-phone.png)
 
-The iPhone and iPad app has the same programme, menus, downloads and room under **Profile → What I'm going
+The iPhone and iPad app has the same program, menus, downloads and room under **Profile → What I'm going
 to → The event**. See [the mobile apps](/help/the-mobile-apps#during-the-event).
 
 ## Downloads
@@ -167,9 +167,9 @@ who are happy to be shown.
 The organizers can keep photos to the event's own team; you can still write in the room when they
 do. The room closes to new posts a week after the last night, and stays there to look back through.
 
-## When the organiser starts the group's session
+## When the organizer starts the group's session
 
-At some events the organiser, or whoever is running the door, starts a Field Kit session for
+At some events the organizer, or whoever is running the door, starts a Field Kit session for
 everybody at once. If you have the IsHaunted app you are told, and you can join from the
 notification, from the card in your feed, or from **Happening now** in Field Kit — nothing records
 until you press Start, and you can send what you recorded that night or days later. See

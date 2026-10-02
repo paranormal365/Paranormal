@@ -58,14 +58,14 @@ Three controls sit beside it:
 - **Resolution** trades detail in time against detail in frequency. A low number makes a smeared
   picture that shows exactly *when* something happened; a high one shows exactly *what pitch* it
   was, but blurs the timing. 512 or 1024 suits most speech.
-- **The colour ramp** changes nothing but how easy it is to see. Try Viridis if Jet's blues and
+- **The color ramp** changes nothing but how easy it is to see. Try Viridis if Jet's blues and
   reds are hard on your eyes.
 - **Mel** squashes the high frequencies and spreads out the low ones, which is roughly how hearing
   works. Speech takes up much more of the picture with it on.
 
 Right-click the spectrogram to turn the frequency labels on and off.
 
-The site remembers all of this for each recording — the spectrogram, its resolution, its colours,
+The site remembers all of this for each recording — the spectrogram, its resolution, its colors,
 the mel scale, the timeline, and the whole listening chain below. Open that file again next week and
 it looks and sounds the way you left it. Settings are only saved for recordings that are yours; on
 somebody else's file you can set things up however you like, and the editor will say plainly that it

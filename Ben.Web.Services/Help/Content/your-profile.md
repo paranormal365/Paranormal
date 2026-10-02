@@ -148,7 +148,7 @@ confirmed you were there.
 ## Your emails
 
 The site writes to you when something happens that you would want to know about while you are not
-here — a session you signed up for is cancelled or moved, a place comes free and is now yours, an
+here — a session you signed up for is canceled or moved, a place comes free and is now yours, an
 investigation request your group was reviewing went elsewhere, your plan is about to lapse.
 
 ![Choosing which emails you get](/help/media/your-profile/your-emails.png)

@@ -25,9 +25,9 @@ public sealed class StoreControllersAreGatedTests
     {
         ["StoreOrderController"] =
             "The order doors: a buyer who has been charged must reach the thank-you page, the emailed link and the "
-          + "invoice whatever the switch says, and the webhook still fulfils with the shop hidden.",
+          + "invoice whatever the switch says, and the webhook still fulfills with the shop hidden.",
         [nameof(PublicStoreImageController)] =
-            "Pictures serve while the shop is dark: the catalogue is entered and previewed before anybody can see it, "
+            "Pictures serve while the shop is dark: the catalog is entered and previewed before anybody can see it, "
           + "and an order page shows what was bought whether the shop is open or not.",
         ["PublicStoreVideoController"] =
             "Videos play while the shop is dark, like the pictures: the editor's preview shows them before anybody can "

@@ -46,7 +46,7 @@ public class MessagingTests : BenTestBase
     public async Task An_ordinary_member_can_open_their_own_group()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Expect(Main.GetByText("do not have access", new() { Exact = false }))
             .ToHaveCountAsync(0);
@@ -58,7 +58,7 @@ public class MessagingTests : BenTestBase
     public async Task The_folder_rail_offers_every_channel()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         foreach (var folder in new[] { "Inbox", "Sent", "Broadcasts", "Direct", "Case teams", "Public" })
         {
@@ -85,7 +85,7 @@ public class MessagingTests : BenTestBase
         await BroadcastToOrgAsync(subject);
 
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         var unread = Main.Locator("li.unread .mail-row", new() { HasTextString = subject }).First;
         await Expect(unread).ToBeVisibleAsync(new() { Timeout = 15_000 });
@@ -115,7 +115,7 @@ public class MessagingTests : BenTestBase
     public async Task Choosing_direct_message_offers_the_groups_members_as_recipients()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Compose.First.ClickAsync();
         await SelectChannelAsync("Direct Message");
@@ -146,7 +146,7 @@ public class MessagingTests : BenTestBase
         var subject = $"DM test {Guid.NewGuid():N}"[..20];
 
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Compose.First.ClickAsync();
         await SelectChannelAsync("Direct Message");
@@ -172,7 +172,7 @@ public class MessagingTests : BenTestBase
         // the message existed, addressed to nobody.
         await LogoutAsync();
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Expect(Main.GetByText(subject).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
     }

@@ -239,7 +239,7 @@ public interface IBenEventBookingClient
     /// </param>
     /// <summary>Scans a tour guest's pass at the meeting point (item 247).</summary>
     /// <remarks>
-    /// A refused scan is a RESULT, not an error: "we don't recognise that code" is the answer the
+    /// A refused scan is a RESULT, not an error: "we don't recognize that code" is the answer the
     /// guide reads out, and an error would make the page show its own failure text instead.
     /// </remarks>
     Task<(TourScanResult? Result, string? Error)> ScanTourPassAsync(

@@ -41,8 +41,8 @@ public sealed class VendoredPluginsAreDocumentedTests
     /// </remarks>
     private static readonly Dictionary<string, string> CameWithTheTheme = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["bootstrap"] = "Shipped inside the SmartAdmin template, under its licence.",
-        ["waves"] = "Shipped inside the SmartAdmin template, under its licence.",
+        ["bootstrap"] = "Shipped inside the SmartAdmin template, under its license.",
+        ["waves"] = "Shipped inside the SmartAdmin template, under its license.",
     };
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class VendoredPluginsAreDocumentedTests
         }
 
         Assert.True(missing.Count == 0,
-            "a vendored library needs its licence and a record of what it is:\n  "
+            "a vendored library needs its license and a record of what it is:\n  "
           + string.Join("\n  ", missing));
     }
 }

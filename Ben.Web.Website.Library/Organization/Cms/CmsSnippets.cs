@@ -48,7 +48,7 @@ public static class CmsSnippets
                  """),
 
         new("Card with header",
-            "A card with a coloured strip across the top.",
+            "A card with a colored strip across the top.",
             _ => """
                  <div class="card mb-3">
                    <div class="card-header">Header</div>

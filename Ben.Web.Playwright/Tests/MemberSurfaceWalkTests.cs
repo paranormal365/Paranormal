@@ -43,7 +43,7 @@ public class MemberSurfaceWalkTests : BenTestBase
     public async Task Every_member_tab_renders_content_not_a_refusal()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         foreach (var tab in MemberTabs)
         {
@@ -79,7 +79,7 @@ public class MemberSurfaceWalkTests : BenTestBase
     public async Task Admin_only_tabs_stay_hidden_from_an_ordinary_member()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         // Details always renders, so the hub is provably up before asserting absences.
         await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = "Details", Exact = true }))

@@ -68,7 +68,7 @@ public sealed class SharedSessionDocumentTests
         var prepared = SharedSessionDocument.Prepare(Document, includePositions: false);
         var position = JsonNode.Parse(prepared!.Value.Document)!["readings"]![0]!["position"]!;
 
-        // "Second floor, accurate to thirty metres" tells a reviewer how much to trust the numbers
+        // "Second floor, accurate to thirty meters" tells a reviewer how much to trust the numbers
         // around it and where in the building the device was. Neither locates the building.
         Assert.Equal(32, position["accuracy_meters"]!.GetValue<double>());
         Assert.Equal(2, position["floor"]!.GetValue<int>());

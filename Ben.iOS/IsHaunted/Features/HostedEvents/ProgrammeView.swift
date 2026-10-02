@@ -26,21 +26,21 @@ struct ProgrammeView: View {
             if let programme {
                 list(programme)
             } else if !loaded {
-                ProgressView("Loading the programme…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView("Loading the program…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let failure {
                 ContentUnavailableView {
-                    Label("Couldn't load the programme", systemImage: "exclamationmark.triangle").foregroundStyle(Theme.warning)
+                    Label("Couldn't load the program", systemImage: "exclamationmark.triangle").foregroundStyle(Theme.warning)
                 } description: {
                     Text(failure)
                 } actions: {
                     Button("Try again") { Task { await load() } }.buttonStyle(.signalPrimary)
                 }
             } else {
-                ContentUnavailableView("No programme yet", systemImage: "calendar",
+                ContentUnavailableView("No program yet", systemImage: "calendar",
                                        description: Text("The organizers haven't published what's on."))
             }
         }
-        .navigationTitle("Programme")
+        .navigationTitle("Program")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if programme != nil,
@@ -196,7 +196,7 @@ struct ProgrammeView: View {
         case .failed(let reason, _):
             failure = reason ?? "Check your connection and try again."
         case .sessionEnded:
-            failure = "Sign in again to see the programme."
+            failure = "Sign in again to see the program."
         case .rateLimited:
             failure = "Too many requests — try again shortly."
         }

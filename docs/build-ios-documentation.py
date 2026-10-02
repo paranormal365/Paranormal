@@ -328,7 +328,7 @@ permission the app needs was refused, the switch says so and offers Settings.</p
 """),
 
     ("A group session, started by the lead", "54-launch-notified", """
-<p>Item 252. A tour's guide, an event's organiser or door staff, or an investigation's lead starts
+<p>Item 252. A tour's guide, an event's organizer or door staff, or an investigation's lead starts
 everybody's Field Kit at once. The server (<code>FieldLaunchService</code>) finds who is
 registered, writes a card in the feed — public when the thing is, otherwise a
 <code>FieldLaunchNotice</code> only its people can read — and pushes to every registered phone
@@ -397,12 +397,12 @@ camera will not read the screen.</p>
 """),
 
     ("The event's own screen", "63-event-hub", """
-<p><code>EventHubView</code> gathers the pass, the programme, the menus, downloads, the room and the
+<p><code>EventHubView</code> gathers the pass, the program, the menus, downloads, the room and the
 venue's access notes. A row appears only when there is something behind it: a 403 or 404 from its
 endpoint is read as "not for this guest" (<code>absentIsNil</code>), not as an error.</p>
 """),
 
-    ("The programme", "64-event-programme", """
+    ("The program", "64-event-programme", """
 <p>Sessions night by night on the venue's clock, with sign-up, a waiting list, and a calendar export.
 A change the guest has not seen yet is badged on the hub.</p>
 """),

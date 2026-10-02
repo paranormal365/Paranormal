@@ -33,7 +33,7 @@ public class EquipmentTests : BenTestBase
         // The catalogue lists gear people have chosen to share, and the dev data has none — so
         // the empty state is the correct result here, and asserting it is real coverage rather
         // than a skip that quietly tests nothing.
-        Assert.That(body.Trim().Length, Is.GreaterThan(20), "the catalogue rendered nothing at all");
+        Assert.That(body.Trim().Length, Is.GreaterThan(20), "the catalog rendered nothing at all");
     }
 
     [Test]

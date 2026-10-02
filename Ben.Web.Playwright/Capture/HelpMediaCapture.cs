@@ -2522,7 +2522,7 @@ public sealed class HelpMediaCapture : BenTestBase
     /// reader the opposite of what the text says. It is taken when Stripe test keys are present.</para>
     /// </remarks>
     [Test]
-    [Description("shopping-at-the-store: the store, a product, the cart, checkout, orders and favourites.")]
+    [Description("shopping-at-the-store: the store, a product, the cart, checkout, orders and favorites.")]
     public async Task Capture_Shopping()
     {
         const string slug = "shopping-at-the-store";
@@ -3478,14 +3478,14 @@ public sealed class HelpMediaCapture : BenTestBase
                 DataObject = new
                 {
                     placeId, role = 1, placeContactId = (Guid?)null,
-                    evidence = "I'm the general manager. We have leased the building since 2019 and our name is on the city's venue licence.",
+                    evidence = "I'm the general manager. We have leased the building since 2019 and our name is on the city's venue license.",
                 },
             });
 
             await LoginAsync(SuperAdminEmail, SuperAdminPassword);
             await GoAsync("/admin/venue-claims");
             await ShootAsync("organization-administration", "venue-claim-review.png",
-                gated: true, selector: ".admin-venue-claim", proves: "venue licence");
+                gated: true, selector: ".admin-venue-claim", proves: "venue license");
         }
         finally
         {
@@ -3499,7 +3499,7 @@ public sealed class HelpMediaCapture : BenTestBase
 
     /// <summary>The programme: the host's editor, and what a guest reads on the event page (item 235 phase 10).</summary>
     [Test]
-    [Description("organization-administration + going-to-an-event: the programme.")]
+    [Description("organization-administration + going-to-an-event: the program.")]
     public async Task Capture_Programme()
     {
         var orgId = await OrgIdBySlugAsync("paranormal365");
@@ -3511,7 +3511,7 @@ public sealed class HelpMediaCapture : BenTestBase
 
         var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
         var ev = await api.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
-        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database, so there is no public programme to photograph.");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database, so there is no public program to photograph.");
         var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
 
         // The guest with a confirmed place, so the picture shows the Sign up buttons a guest sees.
@@ -3736,7 +3736,7 @@ public sealed class HelpMediaCapture : BenTestBase
         await Expect(Page.Locator("#letter-start")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await ClickUntilAsync(Page.Locator("#letter-start"), Page.Locator("#letter-subject"));
         await Page.Locator("#letter-subject").FillAsync("Doors open at eight on Saturday");
-        await Page.Locator("#letter-body").FillAsync("The séance starts half an hour later than the programme says. Dinner is unchanged.");
+        await Page.Locator("#letter-body").FillAsync("The séance starts half an hour later than the program says. Dinner is unchanged.");
         await ShootAsync("organization-administration", "event-write-to-guests.png",
             gated: true, selector: "#board-letters", proves: "It goes by email");
     }

@@ -170,7 +170,7 @@ public sealed class ChunkedUploadController : BenControllerBase
         var isSvg = ext.Equals(".svg", StringComparison.OrdinalIgnoreCase)
                  || (request.ContentType?.Contains("svg", StringComparison.OrdinalIgnoreCase) ?? false);
         if (isSvg)
-            return BadRequest("SVG files are sanitised as a whole document — upload them through the regular upload, not in chunks.");
+            return BadRequest("SVG files are sanitized as a whole document — upload them through the regular upload, not in chunks.");
 
         // Housekeeping on the way in: sessions this owner started and walked away from.
         await SweepAbandonedSessionsAsync(callerId, ct);

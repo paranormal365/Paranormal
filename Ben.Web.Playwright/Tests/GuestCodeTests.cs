@@ -147,7 +147,7 @@ public sealed class GuestCodeTests : BenTestBase
 
         // A sentence, not a status. The reader is in a field and needs to know what to do next.
         await Assertions.Expect(Page.Locator("#tonight-refused"))
-            .ToContainTextAsync("don't recognise");
+            .ToContainTextAsync("don't recognize");
     }
 
     [Test]

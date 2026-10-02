@@ -51,7 +51,7 @@ public sealed class StoreOrderController(
 
         Response.Headers.CacheControl = "no-store";
         var problem = order.Status == StoreOrderStatus.Cancelled && order.PaidUtc is null
-            ? order.CancellationReason ?? "This checkout was cancelled."
+            ? order.CancellationReason ?? "This checkout was canceled."
             : null;
         return Ok(new StoreOrderStatusView(order.Id, order.OrderNumber, order.Status, StoreOrderViews.IsFinal(order), problem,
             owner ? StoreOrderMailer.ViewPath(order) : null, order.ReservationExpiresUtc));

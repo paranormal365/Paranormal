@@ -17,7 +17,7 @@ namespace Ben.Data.WebApi.Services.Store;
 /// </remarks>
 public static class StoreCouponMath
 {
-    public const string NotRecognised = "That code isn't one we recognise.";
+    public const string NotRecognised = "That code isn't one we recognize.";
     public const string Expired = "That code has expired.";
     public const string NotYetActive = "That code isn't active yet.";
     public const string UsedUp = "That code has been used as many times as it can be.";

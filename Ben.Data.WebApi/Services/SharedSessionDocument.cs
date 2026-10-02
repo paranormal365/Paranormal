@@ -25,7 +25,7 @@ namespace Ben.Data.WebApi.Services;
 /// reads as "no fix" — a state a real indoor session reaches constantly. Removing the keys instead
 /// would leave a document that differs structurally from every other one the player has parsed.</para>
 ///
-/// <para><b>Accuracy and floor stay.</b> "Second floor, accurate to thirty metres" says the device
+/// <para><b>Accuracy and floor stay.</b> "Second floor, accurate to thirty meters" says the device
 /// was indoors and how much to trust the numbers around it, and says nothing about where the
 /// building is. The point of the redaction is the address, not the context.</para>
 /// </remarks>

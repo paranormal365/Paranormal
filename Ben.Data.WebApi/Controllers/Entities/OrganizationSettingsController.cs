@@ -67,7 +67,7 @@ public sealed class OrganizationSettingsController : OrgCmsControllerBase
         if (request.TimeZoneId is not null)
         {
             if (Zones.Normalize(request.TimeZoneId) is not { } zone)
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
             org.TimeZoneId = zone;
         }
         await db.SaveChangesAsync(ct);

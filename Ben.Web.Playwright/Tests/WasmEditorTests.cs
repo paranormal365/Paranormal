@@ -178,7 +178,7 @@ public class WasmEditorTests : BenTestBase
 
         Assert.That(surface, Is.Not.Empty, "The editor's own surface token is not defined at all.");
         Assert.That(surface, Is.EqualTo(bodyBg),
-            "The editor's ground no longer follows the template's body colour, so the host and the "
+            "The editor's ground no longer follows the template's body color, so the host and the "
             + "editor are painting two different backgrounds.");
     }
 

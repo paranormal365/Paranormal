@@ -52,7 +52,7 @@ public class CmsAuthoringTests : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await ResolveOrgAsync();
-        if (_orgId.Length == 0) Assert.Ignore("no organisation with a url name in the seed data");
+        if (_orgId.Length == 0) Assert.Ignore("no organization with a url name in the seed data");
 
         // Unique per run: these tests write real rows, and a fixed slug would collide with itself.
         var stamp = Guid.NewGuid().ToString("N")[..8];
@@ -149,7 +149,7 @@ public class CmsAuthoringTests : BenTestBase
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await ResolveOrgAsync();
-        if (_orgId.Length == 0) Assert.Ignore("no organisation with a url name in the seed data");
+        if (_orgId.Length == 0) Assert.Ignore("no organization with a url name in the seed data");
 
         var stamp = Guid.NewGuid().ToString("N")[..8];
         var slug = $"playwright-draft-{stamp}";

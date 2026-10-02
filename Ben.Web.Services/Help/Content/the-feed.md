@@ -186,7 +186,7 @@ also shows a small taste of the feed's current top posts — the front door on t
 
 ## When a group's session starts
 
-A guide, an organiser or an investigation lead can start the night for everybody from the app.
+A guide, an organizer or an investigation lead can start the night for everybody from the app.
 Their card says so, and offers **Open in the app** — joining is done on a phone, in Field Kit,
 where the recording happens. On a phone with the app, the button opens it there; the app itself
 also lists it under **Happening now**.

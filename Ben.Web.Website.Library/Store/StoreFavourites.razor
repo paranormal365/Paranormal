@@ -1,3 +1,4 @@
+@page "/store/favorites"
 @page "/store/favourites"
 @using Ben.Web.Website.Library.Store.Shared
 @inject IBenAdminClient Store
@@ -6,10 +7,10 @@
 @inject NavigationManager Nav
 @inject BenToastService Toasts
 
-<PageTitle>Favourites — Store</PageTitle>
+<PageTitle>Favorites — Store</PageTitle>
 
 @*
-    Favourites (storefront S6.3), after Smarty's account-favourites.html: the products a person
+    Favorites (storefront S6.3), after Smarty's account-favourites.html: the products a person
     has hearted, as the store's own cards, each with Remove. Remove asks first — on this page a
     tap takes the product off the list, and the heart that put it there is a page away.
 
@@ -23,15 +24,15 @@
         <nav aria-label="breadcrumb" class="mb-2">
             <ol class="breadcrumb small mb-0">
                 <li class="breadcrumb-item"><a href="/store">Store</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Favourites</li>
+                <li class="breadcrumb-item active" aria-current="page">Favorites</li>
             </ol>
         </nav>
-        <h1 class="h3 mb-3">Favourites<HelpLink Slug="shopping-at-the-store" Anchor="favourites" /></h1>
+        <h1 class="h3 mb-3">Favorites<HelpLink Slug="shopping-at-the-store" Anchor="favorites" /></h1>
 
         @if (_cards is not { } cards)
         {
             <div class="text-center text-secondary py-5" data-testid="favourites-loading">
-                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading your favourites…
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading your favorites…
             </div>
         }
         else if (cards.Failed)
@@ -43,7 +44,7 @@
         }
         else if (_shown.Count == 0)
         {
-            <StoreEmptyState Icon="heart" Title="No favourites yet"
+            <StoreEmptyState Icon="heart" Title="No favorites yet"
                              Lead="Tap the heart on a product to keep it here."
                              LinkText="Browse the store" LinkHref="/store/products" />
         }
@@ -57,7 +58,7 @@
                         <StoreCard Card="card" ShowHeart="false">
                             <Rail>
                                 <button type="button" class="btn btn-light btn-sm shadow-sm" data-testid="favourite-remove"
-                                        title="Remove from favourites" aria-label="@($"Remove {card.Name} from your favourites")"
+                                        title="Remove from favorites" aria-label="@($"Remove {card.Name} from your favorites")"
                                         @onclick="@(() => _removing = card)">
                                     <BenIcon Name="x" />
                                 </button>
@@ -70,7 +71,7 @@
     </div>
 
     <BenConfirmDialog Visible="@(_removing is not null)" VisibleChanged="@(v => { if (!v) _removing = null; })"
-                      Title="Remove from favourites?" Message="@($"Remove {_removing?.Name} from your favourites?")"
+                      Title="Remove from favorites?" Message="@($"Remove {_removing?.Name} from your favorites?")"
                       ConfirmText="Remove" Busy="_busy" OnConfirm="RemoveAsync" />
 </FeatureGate>
 
@@ -96,7 +97,7 @@
     private async Task LoadAsync()
     {
         var result = await Store.GetMyStoreFavouritesAsync();
-        var error = result.Failed ? result.Reason ?? "Your favourites couldn't be loaded just now." : null;
+        var error = result.Failed ? result.Reason ?? "Your favorites couldn't be loaded just now." : null;
         _refusal = error;
         _cards = result;
         _shown = result.Items.ToList();
@@ -112,6 +113,6 @@
         _removing = null;
         if (refused is not null) { Toasts.Warning(refused); return; }
         _shown.Remove(card);
-        Toasts.Success($"{card.Name} was removed from your favourites.");
+        Toasts.Success($"{card.Name} was removed from your favorites.");
     }
 }

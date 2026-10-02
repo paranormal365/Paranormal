@@ -316,7 +316,7 @@ final class HelpMediaCaptureTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap()
             settle(2)
         }
-        XCTFail("None of the guest's events has a published programme — nothing to capture.")
+        XCTFail("None of the guest's events has a published program — nothing to capture.")
     }
 
     /// Tonight's door and a scanned reservation (item 235 phase 14c). Needs an account that may run a door — run it

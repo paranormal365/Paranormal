@@ -154,8 +154,8 @@ public static class NotificationRows
 
         // A class moved or cancelled after the guest planned their evening around it (phase 10).
         if (s.EventScheduleChanges is { Count: > 0 } changed)
-            rows.Add(new("The programme changed",
-                $"A session at an event you're going to has moved or been cancelled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
+            rows.Add(new("The program changed",
+                $"A session at an event you're going to has moved or been canceled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
                 "calendar", "/my-events", changed));
 
         if (s.MyEventHoldLapsing is { Count: > 0 } myHold)

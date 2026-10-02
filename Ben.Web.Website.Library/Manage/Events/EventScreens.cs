@@ -29,7 +29,7 @@ public static class EventScreens
         new("Menus", "/menus"),
         new("Dining tables", "/dining"),
         new("What the kitchen needs", "/dietary"),
-        new("Programme", "/sessions"),
+        new("Program", "/sessions"),
         new("Staff", "/staff"),
         new("The door", "/door"),
         new("Bands", "/bands"),

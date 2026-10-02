@@ -1,13 +1,13 @@
 @*
     TelerikColorPicker replacement, on the native control Bootstrap already styles.
 
-    <input type="color"> is a real form control: it opens the operating system's colour picker,
+    <input type="color"> is a real form control: it opens the operating system's color picker,
     which is the one the user already knows, and needs no JavaScript, no popup layer and no
     interop. Bootstrap's .form-control-color gives it the swatch appearance the template uses —
     the "preview" the Telerik control drew by hand.
 
-    The hex text beside it is optional and off by default. It earns its place where a colour has to
-    be read back or pasted (a brand colour, a value copied from a design), which the swatch alone
+    The hex text beside it is optional and off by default. It earns its place where a color has to
+    be read back or pasted (a brand color, a value copied from a design), which the swatch alone
     cannot do.
 *@
 
@@ -17,7 +17,7 @@
            value="@Normalized"
            disabled="@(!Enabled)"
            title="@(Title ?? Normalized)"
-           aria-label="@(AriaLabel ?? Title ?? "Colour")"
+           aria-label="@(AriaLabel ?? Title ?? "Color")"
            @onchange="OnPicked" />
 
     @if (ShowHex)

@@ -120,7 +120,7 @@ public class PricingBuyPathTests : BenTestBase
             await Expect(band.Locator(".pricing-band__head .sa-icon")).ToHaveCountAsync(1);
             Assert.That(await band.Locator(".pricing-band__limits li").CountAsync(), Is.GreaterThan(0));
         }
-        Assert.That(hues.Count, Is.EqualTo(Math.Min(count, 6)), "Bands next to each other share a colour.");
+        Assert.That(hues.Count, Is.EqualTo(Math.Min(count, 6)), "Bands next to each other share a color.");
 
         var paidMemberBands = await Bands.Filter(new() { HasNotText = "Free" }).Filter(new() { HasNotText = "Tour and event businesses" }).CountAsync();
         await Expect(Page.Locator("[data-testid='pricing-band-featured']")).ToHaveCountAsync(paidMemberBands >= 2 ? 1 : 0);

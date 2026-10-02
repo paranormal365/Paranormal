@@ -39,13 +39,13 @@ Site administrators can see equipment records, as they can everywhere else in th
 
 ## Adding a piece of equipment
 
-Choose a category first, then the make, then the model, then give it a name you will recognise in
+Choose a category first, then the make, then the model, then give it a name you will recognize in
 a list, like "my backup recorder".
 
 The category sorts the makes rather than cutting them. Makes that already have something in the
 category you picked come first; the rest follow, each saying so — *FLIR (no models in this category
 yet)*. Every make stays on the list on purpose, because the first person to own a FLIR audio
-recorder has to be able to choose FLIR and add the model under it. Pick one of the labelled makes
+recorder has to be able to choose FLIR and add the model under it. Pick one of the labeled makes
 and the model list says it is empty and points at the box that adds one, rather than sitting there
 blank with no explanation.
 

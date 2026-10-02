@@ -487,12 +487,12 @@
             _checkoutBanner = ("alert-success",
                 "Seat paid — you're all set. Your receipt is available below.");
         else if (query.Contains("checkout=cancelled"))
-            _checkoutBanner = ("alert-secondary", "Checkout was cancelled. Nothing was charged.");
+            _checkoutBanner = ("alert-secondary", "Checkout was canceled. Nothing was charged.");
         else if (query.Contains("credits=success"))
             _checkoutBanner = ("alert-success",
                 "Payment received — your event credits are below, and the receipt is in the history.");
         else if (query.Contains("credits=cancelled"))
-            _checkoutBanner = ("alert-secondary", "Checkout was cancelled. No credits were bought.");
+            _checkoutBanner = ("alert-secondary", "Checkout was canceled. No credits were bought.");
 
         // From the pricing page or the new-group wizard (2026-09-14): the cadence the person was looking at, and the
         // band they chose, so this page starts where they left off.

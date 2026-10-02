@@ -49,7 +49,7 @@ start reading.</p>
 <p><b>1. A refusal must never render as "nothing here."</b> Every screen goes through
 <code>LoadStateView</code>, and loading / empty / refused / session-ended / rate-limited are
 visually distinct states. An empty list and a server saying no are different facts, and a UI that
-shows the same grey nothing for both teaches people to distrust it.</p>
+shows the same gray nothing for both teaches people to distrust it.</p>
 
 <p><b>2. Website features map to native counterparts.</b> Calendar to EventKit, locations to
 MapKit, uploads to the native camera and PhotosPicker, reports to PDFKit, sharing to the share
@@ -70,7 +70,7 @@ not.</p>
 media, hashtags, mentions and a group-verified badge.</p>
 
 <p>Three lanes — <b>For You</b>, <b>Latest</b>, <b>Following</b>. "For You" is ranked by a
-category-match model whose weights are re-fit from labelled examples on the server, so it changes
+category-match model whose weights are re-fit from labeled examples on the server, so it changes
 as the database grows rather than being a fixed rule.</p>
 
 <p class="note">Every image in this document is generated. Feed media here is simulated so the
@@ -324,7 +324,7 @@ permission the app needs was refused, the switch says so and offers Settings.</p
 <figure><img src='ios-media/iphone/53-session-review.png'><figcaption>Ending a session &mdash; iPhone, dark mode</figcaption></figure>
 <h2>A group session, started by the lead</h2>
 
-<p>Item 252. A tour's guide, an event's organiser or door staff, or an investigation's lead starts
+<p>Item 252. A tour's guide, an event's organizer or door staff, or an investigation's lead starts
 everybody's Field Kit at once. The server (<code>FieldLaunchService</code>) finds who is
 registered, writes a card in the feed — public when the thing is, otherwise a
 <code>FieldLaunchNotice</code> only its people can read — and pushes to every registered phone
@@ -400,17 +400,17 @@ camera will not read the screen.</p>
 <figure><img src='ios-media/iphone/62-event-pass.png'><figcaption>A pass that opens with no signal &mdash; iPhone, dark mode</figcaption></figure>
 <h2>The event's own screen</h2>
 
-<p><code>EventHubView</code> gathers the pass, the programme, the menus, downloads, the room and the
+<p><code>EventHubView</code> gathers the pass, the program, the menus, downloads, the room and the
 venue's access notes. A row appears only when there is something behind it: a 403 or 404 from its
 endpoint is read as "not for this guest" (<code>absentIsNil</code>), not as an error.</p>
 
 <figure><img src='ios-media/iphone/63-event-hub.png'><figcaption>The event's own screen &mdash; iPhone, dark mode</figcaption></figure>
-<h2>The programme</h2>
+<h2>The program</h2>
 
 <p>Sessions night by night on the venue's clock, with sign-up, a waiting list, and a calendar export.
 A change the guest has not seen yet is badged on the hub.</p>
 
-<figure><img src='ios-media/iphone/64-event-programme.png'><figcaption>The programme &mdash; iPhone, dark mode</figcaption></figure>
+<figure><img src='ios-media/iphone/64-event-programme.png'><figcaption>The program &mdash; iPhone, dark mode</figcaption></figure>
 <h2>Menus</h2>
 
 <p>Each meal, course by course, with the venue's dietary labels, shown once the venue shares them

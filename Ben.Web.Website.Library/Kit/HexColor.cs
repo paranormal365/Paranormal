@@ -9,7 +9,7 @@ namespace Ben.Web.Website.Library.Kit;
 /// <remarks>
 /// The native colour input is unforgiving in a way the Telerik picker was not: anything it cannot
 /// parse — an empty value, a named colour, a shorthand <c>#abc</c>, an <c>rgba()</c> — is silently
-/// shown as black. That reads as "the colour was reset" rather than as an error, so the stored
+/// shown as black. That reads as "the color was reset" rather than as an error, so the stored
 /// value gets overwritten with black the moment the user touches anything else on the form.
 /// Normalising here means an unrecognised value falls back to a caller-chosen default instead.
 /// </remarks>

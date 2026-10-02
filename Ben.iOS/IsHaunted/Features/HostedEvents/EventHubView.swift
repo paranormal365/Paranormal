@@ -42,7 +42,7 @@ struct EventHubView: View {
                     if let programme {
                         NavigationLink(value: AppRoute.eventProgramme(hostedEventId)) {
                             HStack {
-                                row("Programme", detail: programmeDetail(programme), icon: "calendar")
+                                row("Program", detail: programmeDetail(programme), icon: "calendar")
                                 if programme.changedSinceSeen { StatusBadge(text: "Changed", colour: Theme.warning) }
                             }
                         }
@@ -73,7 +73,7 @@ struct EventHubView: View {
                         Text("Some of this couldn't be fetched just now. Pull down to try again.")
                             .foregroundStyle(Theme.warning)
                     } else if booking?.status != .confirmed && programme == nil && room == nil && files.isEmpty {
-                        Text("The programme, menus, downloads and the event's room appear here once your place is confirmed and the organizers add them.")
+                        Text("The program, menus, downloads and the event's room appear here once your place is confirmed and the organizers add them.")
                     }
                 }
 

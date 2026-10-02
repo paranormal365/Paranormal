@@ -69,7 +69,7 @@ public class FeatureFlagTests : BenTestBase
         {
             await SetEquipmentAsync(on: true);
             Assert.That(await SettledBodyAsync(GatedUrl), Does.Not.Contain("Page not found"),
-                "The equipment catalogue should render while its feature is on.");
+                "The equipment catalog should render while its feature is on.");
 
             await SetEquipmentAsync(on: false);
             Assert.That(await SettledBodyAsync(GatedUrl), Does.Contain("Page not found"),

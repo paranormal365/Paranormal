@@ -74,9 +74,9 @@
         <div class="event-act__ask mb-1">Coming along?</div>
 
         @* The server worked out WHY nothing can be booked and said so in a sentence; nothing
-           rendered it (2026-09-17 audit), so a visitor met a form or a grey grid and had to
+           rendered it (2026-09-17 audit), so a visitor met a form or a gray grid and had to
            guess. The record's own doc predicted it: "'The event has been called off' and
-           'bookings closed on Friday' are different facts and a greyed-out grid says neither." *@
+           'bookings closed on Friday' are different facts and a grayed-out grid says neither." *@
         @if (!string.IsNullOrWhiteSpace(_plan?.ClosedSentence))
         {
             <p class="text-secondary" data-testid="event-closed-sentence">@_plan!.ClosedSentence</p>

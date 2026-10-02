@@ -29,7 +29,7 @@ struct InvestigationDetailView: View {
                 ContentUnavailableView {
                     Label("This investigation isn't on your list", systemImage: "binoculars")
                 } description: {
-                    Text("It may have been cancelled, or you may no longer be on it.")
+                    Text("It may have been canceled, or you may no longer be on it.")
                 }
             }
         }

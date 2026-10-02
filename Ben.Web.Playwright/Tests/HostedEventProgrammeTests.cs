@@ -45,7 +45,7 @@ public class HostedEventProgrammeTests : BenTestBase
         // The day pass this run gave the guest goes again, so the weekend is as the other tests expect.
         if (_madeBookingId is not null && await HeadersAsync(SuperAdminEmail, SuperAdminPassword) is { } admin)
             await _api.PostAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/bookings/{_madeBookingId}/cancel",
-                new() { Headers = admin, DataObject = new { decisionNote = "Programme test finished." } });
+                new() { Headers = admin, DataObject = new { decisionNote = "Program test finished." } });
 
         await _api.DisposeAsync();
     }
