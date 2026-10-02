@@ -64,7 +64,7 @@ whose plan excludes an area is refused for a completely different reason than a 
 allowed to write, and the site says which.</p>
 
 <p class="rule"><b>A refusal is never rendered as "nothing here."</b> An empty list and a server
-saying no are different facts, and a page that shows the same grey nothing for both teaches people
+saying no are different facts, and a page that shows the same gray nothing for both teaches people
 to distrust it. Every list goes through <code>LoadResult</code>, which carries loading, empty,
 refused, session-ended and rate-limited as distinct states — and every one of them has its own
 words on screen.</p>

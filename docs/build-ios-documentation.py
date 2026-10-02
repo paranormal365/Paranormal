@@ -71,7 +71,7 @@ start reading.</p>
 <p><b>1. A refusal must never render as "nothing here."</b> Every screen goes through
 <code>LoadStateView</code>, and loading / empty / refused / session-ended / rate-limited are
 visually distinct states. An empty list and a server saying no are different facts, and a UI that
-shows the same grey nothing for both teaches people to distrust it.</p>
+shows the same gray nothing for both teaches people to distrust it.</p>
 
 <p><b>2. Website features map to native counterparts.</b> Calendar to EventKit, locations to
 MapKit, uploads to the native camera and PhotosPicker, reports to PDFKit, sharing to the share
@@ -92,7 +92,7 @@ not.</p>
 media, hashtags, mentions and a group-verified badge.</p>
 
 <p>Three lanes — <b>For You</b>, <b>Latest</b>, <b>Following</b>. "For You" is ranked by a
-category-match model whose weights are re-fit from labelled examples on the server, so it changes
+category-match model whose weights are re-fit from labeled examples on the server, so it changes
 as the database grows rather than being a fixed rule.</p>
 
 <p class="note">Every image in this document is generated. Feed media here is simulated so the
@@ -528,7 +528,7 @@ def main():
         "simulated data.</b> The accounts, cases, feed posts and recordings are seeded; the "
         "photographs and audio waveforms are generated, and each is captioned "
         "<span class='mono'>SIMULATED</span>. Nothing here is a real investigation or a real "
-        f"person. Screens were captured on a {DEVICE_NAME} simulator in dark mode.</p></div>")
+        f"person. Screens were captured on {'an' if DEVICE_NAME[0] in 'AEIOUi' else 'a'} {DEVICE_NAME} simulator in dark mode.</p></div>")
 
     missing = []
     for heading, prefix, body in SECTIONS:

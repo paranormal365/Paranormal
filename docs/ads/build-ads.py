@@ -4,7 +4,7 @@
 Each ad is one sheet of US Letter: a front that stops somebody walking past, and a back that answers what they ask
 next. One layout, six audiences, each with its own palette chosen from its lead photograph:
 
-  a deep base colour taken from the shadows of the photograph, and a complementary accent taken from its light —
+  a deep base color taken from the shadows of the photograph, and a complementary accent taken from its light —
   indigo and candle amber, night blue and lamplight, oxblood and champagne — so the headline's accent word and the
   call to action read as part of the picture rather than pasted on it.
 

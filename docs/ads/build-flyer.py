@@ -10,7 +10,7 @@ screenshot, because each is answering "is this for me?".
 Ben asked (2026-10-01) for something different: one flyer to email to a person who has never seen
 the site, that shows what it actually DOES — the editors, the EVP detector, investigations, the
 group, the billing page, the tours, the events, the apps, and how the apps join the website — and
-summarises the lot with the best of everything. That is a capability showcase, not an audience
+summarizes the lot with the best of everything. That is a capability showcase, not an audience
 pitch, so it gets a layout of its own rather than contorting the six.
 
 The difference is the screens. This flyer carries nineteen real ones, every pixel of it captured
@@ -110,7 +110,7 @@ def icon(name, size=16):
 # every one a real screen.
 TILES = [
     # icon, title, one line, screenshot, crop anchor, zoom. The zoom matters: a 1400-pixel page
-    # drawn an inch wide is a grey smudge, so each tile shows a corner of its screen at a size a
+    # drawn an inch wide is a gray smudge, so each tile shows a corner of its screen at a size a
     # reader can actually make out.
     ("globe",    "The feed",               "Follow places, groups and nights out. Polls, photos, links.",
      PUB + "the-feed/feed.png", "center right", 2.1),
@@ -291,8 +291,8 @@ FINE = ("IsHaunted.com · Nashville, Tennessee · Every screen in this flyer is 
 
 def win(src, focus="top left", zoom=1.0, cls=""):
     """A browser window around a screenshot. zoom>1 crops in, because a whole 1400-pixel page
-    drawn an inch wide is a grey smudge; the top-left corner of it, drawn the same inch wide, is
-    recognisably the product."""
+    drawn an inch wide is a gray smudge; the top-left corner of it, drawn the same inch wide, is
+    recognizably the product."""
     return (f'<div class="win {cls}" style="--f:{focus};--z:{zoom}"><i>'
             f'<img src="{small(src)}" alt=""></i></div>')
 
