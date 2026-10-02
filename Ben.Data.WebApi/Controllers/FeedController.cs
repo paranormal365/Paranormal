@@ -703,6 +703,46 @@ public sealed class FeedController : BenControllerBase
         return Ok(records[0]);
     }
 
+    /// <summary>
+    /// The author takes their own post (or reply) down.
+    /// </summary>
+    /// <remarks>
+    /// <para>Found walking the app, 2026-10-02: nothing let a person remove something they posted —
+    /// not the app, not the website. A mistake stayed up until somebody reported it and a
+    /// moderator agreed.</para>
+    /// <para><b>Hidden, not deleted</b>, exactly as a moderator hides one, so every read path drops
+    /// it at once and nothing that points at the row breaks; <c>HiddenByAppUserId</c> is the author,
+    /// which is how the moderation queue tells the two apart. A post takes its visible replies with
+    /// it — a reply under a post nobody can open has no conversation to belong to.</para>
+    /// <para>Anybody else's post, a hidden one, or one that does not exist is the same 404: the
+    /// answer must not tell a stranger the post is there.</para>
+    /// </remarks>
+    [HttpDelete("posts/{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> DeletePost(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await FeedEnabledAsync(db, ct)) return NotFound();
+
+        var post = await db.OrgMessages
+            .Include(m => m.Replies)
+            .FirstOrDefaultAsync(m => m.Id == id && m.ChannelType == OrgMessageChannel.PublicFeed
+                                   && m.HiddenUtc == null && m.AuthorAppUserId == userId, ct);
+        if (post is null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        post.HiddenUtc = now;
+        post.HiddenByAppUserId = userId;
+        foreach (var reply in post.Replies.Where(r => r.HiddenUtc == null))
+        {
+            reply.HiddenUtc = now;
+            reply.HiddenByAppUserId = userId;
+        }
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>Reports a post to the administrators. Idempotent per person.</summary>
     [HttpPost("posts/{id:guid}/report")]
     [Authorize]

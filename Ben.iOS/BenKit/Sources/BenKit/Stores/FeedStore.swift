@@ -130,6 +130,13 @@ public final class FeedStore {
         return true
     }
 
+    /// The author's own post, taken down and removed from what is on screen.
+    public func delete(_ post: FeedPostRecord, actions: FeedActions) async -> Bool {
+        guard await actions.delete(postId: post.id) else { return false }
+        posts.removeAll { $0.id == post.id }
+        return true
+    }
+
     /// Reporting is idempotent server-side; the card's control flips to "Reported" and stays.
     public func report(_ post: FeedPostRecord, reason: String?, actions: FeedActions) async -> Bool {
         guard await actions.report(postId: post.id, reason: reason) else { return false }

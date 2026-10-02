@@ -184,6 +184,51 @@ public class FeedTests : BenTestBase
         await Expect(post.GetByRole(AriaRole.Button, new() { Name = "Report" })).ToHaveCountAsync(0);
     }
 
+    [Test]
+    [Description("An author can take their own post down, after saying yes twice, and it is gone for everyone.")]
+    public async Task AnAuthorCanDeleteTheirOwnPost()
+    {
+        // Walk, 2026-10-02: nothing let a person remove what they posted, here or in the app.
+        var marker = $"d{Guid.NewGuid():N}"[..12];
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"{marker} posted by mistake");
+
+        var post = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(post).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        // Asked first: one click on Delete takes nothing down.
+        await post.GetByTestId("feed-post-delete").ClickAsync();
+        await Expect(post.Locator("#feed-post-delete-confirm")).ToBeVisibleAsync();
+        await post.GetByTestId("feed-post-delete-yes").ClickAsync();
+        await Expect(Page.Locator(".bv-feed-post", new() { HasTextString = marker })).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        // And gone for somebody else too, not just off this page.
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GoToFeedAsync();
+        await Expect(Page.Locator(".bv-feed-post", new() { HasTextString = marker })).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    [Description("Somebody else's post offers no Delete.")]
+    public async Task SomebodyElsesPostOffersNoDelete()
+    {
+        var marker = $"n{Guid.NewGuid():N}"[..12];
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+        await ComposeAsync($"{marker} not yours to delete");
+        await Expect(Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First)
+            .ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await LoginAsync(MemberEmail, MemberPassword);
+        await GoToFeedAsync();
+        var theirs = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(theirs).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(theirs.GetByTestId("feed-post-delete")).ToHaveCountAsync(0);
+    }
+
     // ── The switch ────────────────────────────────────────────────────────────
 
     /// <summary>

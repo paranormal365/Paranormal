@@ -844,6 +844,21 @@ app.UseExceptionHandler(handler =>
             return;
         }
 
+        // A request the framework could not even read — a body missing its required fields, JSON
+        // that is not JSON — carries its own status (400, or 413 for too large). Answering 500
+        // told the caller the server broke, and logged an ERROR with a stack trace for every
+        // malformed request anybody chose to send: a POST of {} to /login filled the error log
+        // (found walking the app, 2026-10-02). The caller's mistake, said back to them.
+        if (feature?.Error is BadHttpRequestException bad)
+        {
+            logger.LogInformation("Unreadable request at {Path}: {Reason}", feature.Path, bad.Message);
+
+            context.Response.StatusCode  = bad.StatusCode;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"The request could not be read. Check that every required field is present.\"}");
+            return;
+        }
+
         if (feature?.Error is not null)
         {
             logger.LogError(feature.Error,

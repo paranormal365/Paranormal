@@ -20,6 +20,9 @@ struct FeedCardView: View {
     var onFollow: (() -> Void)?
     var onReport: (() -> Void)?
     var onBlock: (() -> Void)?
+    /// The author's own post: take it down. No closure, no menu (walk, 2026-10-02 — nothing let
+    /// a person remove what they posted, in the app or on the website).
+    var onDelete: (() -> Void)?
     var onRecategorize: (() -> Void)?
 
     var body: some View {
@@ -196,9 +199,20 @@ struct FeedCardView: View {
                 Spacer()
 
                 if post.isOwnPost {
-                    // Nothing to offer an author about their own post here — following and
-                    // reporting yourself are both nonsense, and the nudge lives above.
-                    EmptyView()
+                    // Following and reporting yourself are nonsense; taking it down is not.
+                    if let onDelete {
+                        Menu {
+                            Button(role: .destructive, action: onDelete) {
+                                Label("Delete post", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .foregroundStyle(Theme.fog)
+                                .frame(width: 44, height: 30, alignment: .trailing)
+                        }
+                        .accessibilityLabel("More actions")
+                        .accessibilityIdentifier("own-post-menu")
+                    }
                 } else {
                     Menu {
                         Button {

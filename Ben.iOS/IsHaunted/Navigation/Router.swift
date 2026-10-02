@@ -133,6 +133,8 @@ enum AppRoute: Hashable {
     case joinByCode(String)
     /// Public events as a pushed screen, for the shell that has no Events tab.
     case eventsList
+    /// The group's investigations, pushed on Profile when the iPhone bar has no room for them.
+    case investigationsList
     case eventDetail(UUID)
     /// What I'm going to: hosted-event bookings (item 235 phase 14).
     case myEvents
@@ -206,7 +208,11 @@ final class Router {
     }
 
     func push(_ route: AppRoute, in section: AppSection? = nil) {
-        let target = section ?? selection
+        // A section this shell does not show (Investigations on an iPhone with a full bar) is no
+        // place to push: selecting it rendered nothing and the app fell back to Feed, so opening
+        // a case from an investigation reached under Profile threw the person out to the feed
+        // (walk, 2026-10-02). The page goes onto the stack they are standing in instead.
+        let target = section.flatMap { isSection($0) ? $0 : nil } ?? selection
         selection = target
         var path = paths[target] ?? NavigationPath()
         path.append(route)
@@ -279,8 +285,13 @@ final class Router {
             selection = .cases
             push(.orgCase(organizationId: organizationId, caseId: caseId), in: .cases)
         case .myInvestigations:
-            selection = .investigations
-            paths[.investigations] = NavigationPath()
+            // Wherever this shell keeps it — a section on iPad, a page under Profile on a phone.
+            if isSection(.investigations) {
+                selection = .investigations
+                paths[.investigations] = NavigationPath()
+            } else {
+                openArea(.investigations, pushing: .investigationsList)
+            }
         case .notifications: push(.notifications)
         case .profile:
             selection = .profile

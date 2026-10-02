@@ -47,6 +47,15 @@ struct CasesListView: View {
                     Text(dependencies.surfaces.surfaces.hasGroups
                          ? "This list is for cases you asked a group to look into. The cases your group is working are on the visit you are rostered for, under Investigations."
                          : "When you ask a group to look into something, it appears here.")
+                } actions: {
+                    // The sentence named a place; this goes there, wherever this shell keeps it.
+                    if dependencies.surfaces.surfaces.hasInvestigations {
+                        Button("Open Investigations") {
+                            router.openArea(.investigations, pushing: .investigationsList)
+                        }
+                        .buttonStyle(.signalPrimary)
+                        .accessibilityIdentifier("cases-open-investigations")
+                    }
                 }
 
             case .loaded:
