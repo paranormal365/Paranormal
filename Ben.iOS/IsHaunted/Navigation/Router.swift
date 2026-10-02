@@ -252,6 +252,7 @@ final class Router {
         case .feedProfile(let id): push(.feedProfile(id), in: .feed)
         case .feedHashtag(let tag): push(.feedFiltered(.hashtag(tag)), in: .feed)
         case .feedType(let id): push(.feedFiltered(.experienceType(id, name: nil)), in: .feed)
+        case .feedMentions: push(.feedFiltered(.mentions), in: .feed)
         case .events:
             openArea(.events, pushing: .eventsList)
         case .eventDetail(let id):

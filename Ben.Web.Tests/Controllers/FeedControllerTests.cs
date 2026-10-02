@@ -523,6 +523,43 @@ public sealed class FeedControllerTests
         Assert.IsType<NotFoundResult>(await Build(factory, author.Id).DeletePost(id, default));
     }
 
+    // ── "You were mentioned" leads somewhere (walk, 2026-10-02) ───────────────
+
+    [Fact]
+    public async Task The_mentions_filter_shows_posts_that_name_the_reader_and_posts_whose_replies_do()
+    {
+        // The bell said "You were mentioned" and opened the top of the feed, where the post that
+        // named you could be fifty cards down. The filter is where that row now goes.
+        var james = MakeUser("jamesthornton");
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: [james, sarah]);
+        var bySarah = Build(factory, sarah.Id);
+
+        await PostAsync(bySarah, "nothing about anybody");
+        var named = await PostAsync(bySarah, "cold spot, ask @jamesthornton");
+        var quiet = await PostAsync(bySarah, "a quiet post");
+        await PostAsync(bySarah, "@jamesthornton look at this one", quiet);
+
+        var result = Assert.IsType<OkObjectResult>(
+            (await Build(factory, james.Id).GetFeed("mentions", null, null, default)).Result);
+        var ids = ((FeedPageRecord)result.Value!).Posts.Select(p => p.Id).ToHashSet();
+
+        Assert.Equal(new HashSet<Guid> { named, quiet }, ids);
+    }
+
+    [Fact]
+    public async Task The_mentions_filter_is_empty_for_a_visitor()
+    {
+        var james = MakeUser("jamesthornton");
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: [james, sarah]);
+        await PostAsync(Build(factory, sarah.Id), "hello @jamesthornton");
+
+        var result = Assert.IsType<OkObjectResult>(
+            (await BuildAnonymous(factory).GetFeed("mentions", null, null, default)).Result);
+        Assert.Empty(((FeedPageRecord)result.Value!).Posts);
+    }
+
     // ── Reading ───────────────────────────────────────────────────────────────
 
     [Fact]

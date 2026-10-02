@@ -42,7 +42,7 @@
             @if (Tag is null)
             {
                 <div class="feed-modes" role="group" aria-label="Which posts">
-                    @foreach (var (mode, label) in Modes.Where(m => m.Mode != "following" || (_authKnown && IsSignedIn)))
+                    @foreach (var (mode, label) in Modes.Where(m => (m.Mode != "following" && m.Mode != "mentions") || (_authKnown && IsSignedIn)))
                     {
                         <button type="button" class="feed-modes__item @(_mode == mode ? "feed-modes__item--here active" : null)"
                                 aria-pressed="@((_mode == mode).ToString().ToLowerInvariant())"
@@ -99,6 +99,10 @@
                 @if (Tag is not null)
                 {
                     <p class="mb-0">Nothing tagged <strong>#@Tag</strong> yet.</p>
+                }
+                else if (_mode == "mentions")
+                {
+                    <p class="mb-0">Nobody has named you in a post yet. When somebody writes your @@name, it shows up here.</p>
                 }
                 else if (_mode == "following")
                 {
@@ -353,7 +357,14 @@
         ("foryou", "For You"),
         ("all", "Latest"),
         ("following", "Following"),
+        // Where the bell's "Mentions on the feed" leads (walk, 2026-10-02). It opened the top of
+        // the feed, where the post that named you could be anywhere.
+        ("mentions", "Mentions"),
     ];
+
+    /// <summary>A tab to open on — <c>/feed?mode=mentions</c> from the bell.</summary>
+    [SupplyParameterFromQuery(Name = "mode")] public string? ModeFromLink { get; set; }
+    private string? _modeFromLinkApplied;
 
     private readonly List<FeedPostRecord> _posts = [];
     private string _mode = "foryou";
@@ -409,8 +420,16 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _authKnown = true;
 
-        // A visitor has no "Following" feed to land on if a stale link says so.
-        if (!IsSignedIn && _mode == "following") _mode = "all";
+        // A link may name the tab — once, so switching tabs afterwards is not undone by it.
+        if (ModeFromLink is { } wanted && wanted != _modeFromLinkApplied
+            && Modes.Any(m => m.Mode == wanted))
+        {
+            _mode = wanted;
+            _modeFromLinkApplied = wanted;
+        }
+
+        // A visitor has no "Following" or "Mentions" feed to land on if a stale link says so.
+        if (!IsSignedIn && _mode is "following" or "mentions") _mode = "all";
 
         await LoadAsync();
     }

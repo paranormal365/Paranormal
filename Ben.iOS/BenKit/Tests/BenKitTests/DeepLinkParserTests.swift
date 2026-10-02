@@ -26,6 +26,14 @@ struct DeepLinkParserTests {
             URL(string: "https://ishaunted.com/feed/tags/evp")!) == .feedHashtag("evp"))
     }
 
+    @Test func theBellsMentionsLinkOpensMentionsNotTheTopOfTheFeed() {
+        // The website bell's row and the app's row of the same name lead here (walk, 2026-10-02).
+        #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/feed?mode=mentions")!) == .feedMentions)
+        #expect(DeepLinkParser.parse(URL(string: "ishaunted://feed?mode=mentions")!) == .feedMentions)
+        #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/feed?mode=following")!) == .feed)
+        #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/feed")!) == .feed)
+    }
+
     @Test func emailConfirmationLink() {
         #expect(DeepLinkParser.parse(
             URL(string: "https://ishaunted.com/validate-email/tok123")!)

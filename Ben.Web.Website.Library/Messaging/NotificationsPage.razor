@@ -57,7 +57,7 @@
     @* ── Permission requests ──────────────────────────────────────────────── *@
     @if (_pendingRequests.Count > 0)
     {
-        <h6 class="text-secondary text-uppercase small mb-2">File permission requests</h6>
+        <h6 class="text-secondary text-uppercase small mb-2" id="permission-requests">File permission requests</h6>
         <div class="list-group mb-4">
             @foreach (var req in _pendingRequests)
             {
@@ -96,7 +96,7 @@
 
     @* ── Platform messages ────────────────────────────────────────────────── *@
     <div class="d-flex align-items-center justify-content-between mb-2">
-        <h6 class="text-secondary text-uppercase small mb-0">Messages</h6>
+        <h6 class="text-secondary text-uppercase small mb-0" id="notification-messages">Messages</h6>
         @if (_messages.Any(m => m.ReadUtc is null))
         {
             <button type="button" class="btn btn-link text-decoration-none btn-sm" @onclick="MarkAllReadAsync" disabled="@(!(!_markingAll))">Mark all read</button>
@@ -224,7 +224,53 @@
         SetSummary(Notifications.Current);
 
         await LoadDetailAsync();
+        _ready = true;
+        await FollowTheLinkAsync();
     }
+
+    /// <summary>
+    /// What the link asked for — <c>?open=unread</c> from the "Unread messages" row, or
+    /// <c>#permission-requests</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both rows used to point at plain <c>/notifications</c>: clicked from the bell they opened
+    /// this page and stopped, and clicked here they went nowhere at all, the count untouched
+    /// (Ben, 2026-10-02: "it should both take you to where the message is and remove it from the
+    /// unread messages count"). The oldest unread message is opened — which marks it read and
+    /// brings the bell down — and the page scrolls to it.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "open")] public string? OpenFromLink { get; set; }
+    private bool _ready;
+    private string? _followed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Clicking the row on this page changes only the query, so the component stays and only
+        // this runs — it must act on the link as well as the first load does.
+        if (_ready) await FollowTheLinkAsync();
+    }
+
+    private async Task FollowTheLinkAsync()
+    {
+        var key = $"{OpenFromLink}|{NavManager.Uri}";
+        if (_followed == key) return;
+        _followed = key;
+
+        if (string.Equals(OpenFromLink, "unread", StringComparison.OrdinalIgnoreCase))
+        {
+            var oldest = _messages.Where(m => m.ReadUtc is null).OrderBy(m => m.SentUtc).FirstOrDefault();
+            if (oldest is not null) await OpenMessageAsync(oldest);
+            else _scrollToMessagesPending = true;
+        }
+        else if (NavManager.Uri.Contains("#permission-requests"))
+        {
+            _scrollToRequestsPending = true;
+        }
+        StateHasChanged();
+    }
+
+    private bool _scrollToMessagesPending;
+    private bool _scrollToRequestsPending;
 
     private void OnNotificationsChanged() => InvokeAsync(() =>
     {
@@ -284,12 +330,16 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_scrollToOpenPending || _openMessage is null) return;
-        _scrollToOpenPending = false;
+        var target = _scrollToOpenPending && _openMessage is not null ? "notification-open-message"
+                   : _scrollToRequestsPending ? "permission-requests"
+                   : _scrollToMessagesPending ? "notification-messages"
+                   : null;
+        if (target is null) return;
+        _scrollToOpenPending = _scrollToRequestsPending = _scrollToMessagesPending = false;
         try
         {
             await using var dom = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
-            await dom.InvokeVoidAsync("scrollToElementId", "notification-open-message", "start");
+            await dom.InvokeVoidAsync("scrollToElementId", target, "start");
         }
         catch (JSDisconnectedException) { }
         catch (JSException) { /* The message is on the page; scrolling to it is a courtesy. */ }

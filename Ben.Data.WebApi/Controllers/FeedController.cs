@@ -132,6 +132,16 @@ public sealed class FeedController : BenControllerBase
 
             query = query.Where(m => m.AuthorAppUserId == userId || followed.Contains(m.AuthorAppUserId));
         }
+        else if (string.Equals(mode, "mentions", StringComparison.OrdinalIgnoreCase))
+        {
+            // Where "You were mentioned" leads (walk, 2026-10-02): it opened the top of the feed,
+            // where the post that named you could be anywhere. A mention in a reply surfaces the
+            // post it answers, because replies are read inside their thread. A visitor is named
+            // by nobody, so Guid.Empty matches nothing.
+            query = query.Where(m =>
+                m.Mentions.Any(x => x.MentionedAppUserId == userId)
+                || m.Replies.Any(r => r.HiddenUtc == null && r.Mentions.Any(x => x.MentionedAppUserId == userId)));
+        }
 
         if (!string.IsNullOrWhiteSpace(hashtag))
         {

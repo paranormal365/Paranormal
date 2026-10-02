@@ -3,6 +3,7 @@
 @inject HelpContentService Content
 @inject HelpViewerResolver Viewers
 @inject SiteFeaturesProvider Features
+@inject IJSRuntime JS
 
 <PageTitle>@(_document?.Title ?? "Help")</PageTitle>
 
@@ -90,5 +91,23 @@
         _html = _document is null ? string.Empty : Content.ToHtml(_document);
         _headings = _document is null ? [] : HelpContentService.HeadingsOf(_document);
         _loading = false;
+        _scrollPending = _document is not null;
+    }
+
+    /// <summary>A guide's heading named in the address is scrolled to once the guide has drawn.</summary>
+    private bool _scrollPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollPending) return;
+        _scrollPending = false;
+        try
+        {
+            await using var dom = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToHashWhenSettled");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }   // a page that cannot scroll is still a page that can be read
     }
 }

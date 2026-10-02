@@ -47,6 +47,28 @@ public class NotificationRowsTests
         Assert.Equal(36, NotificationRows.TotalFor(summary));
     }
 
+    [Fact]
+    public void No_row_leads_to_the_bare_notifications_page_it_is_listed_on()
+    {
+        // "Unread messages" and "File permission requests" both went to plain /notifications —
+        // from the bell they stopped at the top of the page; on the page they went nowhere and
+        // the count stayed (Ben, 2026-10-02). Each now names what it opens.
+        var summary = new NotificationSummaryResponse(
+            OrgMessages:               Waiting(1),
+            CaseMessagesAsOrgMember:   Waiting(2),
+            CaseMessagesAsClient:      Waiting(3),
+            SystemMessages:            Waiting(4),
+            PendingPermissionRequests: Waiting(5),
+            InvestigationInvites:      Waiting(6),
+            EquipmentCheckouts:        Waiting(7),
+            FeedMentions:              Waiting(8));
+
+        var rows = NotificationRows.For(summary);
+        Assert.DoesNotContain(rows, r => r.Destination == "/notifications");
+        Assert.Equal("/notifications?open=unread", rows.Single(r => r.Title == "Unread messages").Destination);
+        Assert.Equal("/feed?mode=mentions", rows.Single(r => r.Title == "Mentions on the feed").Destination);
+    }
+
     /// <summary>
     /// The badge is the sum of the rows, item by item.
     /// </summary>

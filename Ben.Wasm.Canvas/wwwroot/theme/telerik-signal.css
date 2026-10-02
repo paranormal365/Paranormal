@@ -86,6 +86,12 @@ body.k-body {
     min-height: 2.125rem;                     /* 34px — same box as .form-control */
 }
 
+/* Telerik's multi-line box, the same rule as textarea.form-control in signal.css: the card corner,
+   so the first line's caret is not sitting on a pill's curve. */
+.k-input.k-textarea {
+    border-radius: var(--ben-radius);
+}
+
 .k-input .k-input-inner,
 .k-picker .k-input-inner {
     /* The wrapper carries the border and the inner carries the padding, so these are the numbers

@@ -200,6 +200,36 @@ public class MessagingTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
+    /// <summary>
+    /// "Unread messages", clicked, opens the message and takes the count down — from the page
+    /// itself, where it used to point back at the page and do nothing (Ben, 2026-10-02).
+    /// </summary>
+    [Test]
+    public async Task The_unread_messages_row_opens_the_message_and_clears_it()
+    {
+        var subject = $"Row test {Guid.NewGuid():N}"[..24];
+        if (!await SendPlatformMessageAsync(subject)) Assert.Ignore("Could not seed a platform message; the admin API refused.");
+
+        await LoginAsync(UserEmail, UserPassword);
+        // Every older unread platform message is read first, so the one just sent is the oldest.
+        var api = await ApiAsAsync(UserEmail, UserPassword);
+        var mine = await api.GetAsync("/api/me/messages");
+        foreach (var m in (await mine.JsonAsync())!.Value.EnumerateArray())
+            if (m.GetProperty("readUtc").ValueKind == System.Text.Json.JsonValueKind.Null
+                && m.GetProperty("subject").GetString() != subject)
+                await api.PutAsync($"/api/me/messages/{m.GetProperty("id").GetString()}/read");
+
+        await Page.GotoAsync($"{BaseUrl}/notifications");
+        await WaitUntilLoadedAsync();
+        var row = Main.Locator("button, a", new() { HasTextString = "Unread messages" }).First;
+        await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await row.ClickAsync();
+
+        await Expect(Page.Locator("#notification-open-message")).ToContainTextAsync(subject, new() { Timeout = 15_000 });
+        // Read now, so the row it was counted under has gone.
+        await Expect(Main.Locator("button, a", new() { HasTextString = "Unread messages" })).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>

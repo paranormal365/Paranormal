@@ -10,6 +10,8 @@ public enum DeepLink: Sendable, Equatable {
     case feedHashtag(String)
     /// `/feed/types/{id}` — one experience type's posts (item 186 F6).
     case feedType(UUID)
+    /// `/feed?mode=mentions` — the website bell's link, and the app's row of the same name.
+    case feedMentions
     case events
     case eventDetail(UUID)
     /// `/my-events` — a guest's hosted-event bookings (item 235 phase 14).
@@ -60,7 +62,11 @@ public enum DeepLinkParser {
 
         switch components[0].lowercased() {
         case "feed":
-            guard components.count > 1 else { return .feed }
+            guard components.count > 1 else {
+                let mode = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "mode" })?.value
+                return mode?.lowercased() == "mentions" ? .feedMentions : .feed
+            }
             switch components[1].lowercased() {
             case "people":
                 guard components.count > 2, let id = UUID(uuidString: components[2]) else { return .feed }

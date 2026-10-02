@@ -146,7 +146,8 @@ public final class NotificationsStore {
                       + NotificationText.describeAge(summary.feedMentions.oldestUnreadUtc),
                 systemImage: "at",
                 bucket: summary.feedMentions,
-                destination: .feed))
+                // The posts that named you, not the top of the feed (walk, 2026-10-02).
+                destination: .feedMentions))
         }
 
         if summary.investigationInvites.count > 0 {

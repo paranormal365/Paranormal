@@ -88,6 +88,16 @@
     background-color: var(--ben-surface);
     border-color: var(--ben-line-strong);
 }
+/* A box people write PARAGRAPHS in keeps the card corner, not the pill. On a box several lines
+   tall a 999px radius curves in a long way from each corner, and the caret in the first line sat
+   on the top-left curve (Ben, 2026-10-02, a report's Executive Summary). One-line fields stay
+   pills, like the website's buttons. */
+textarea.form-control,
+select.form-select[multiple],
+select.form-select[size]:not([size="1"]) {
+    --bs-border-radius: var(--ben-radius);
+}
+
 .form-control:focus, .form-select:focus {
     border-color: var(--ben-accent);
     box-shadow: 0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color);

@@ -101,12 +101,13 @@ public static class NotificationRows
         if (s.PendingPermissionRequests.Count > 0)
             rows.Add(new("File permission requests",
                 $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
-                "lock", "/notifications", s.PendingPermissionRequests));
+                "lock", "/notifications#permission-requests", s.PendingPermissionRequests));
 
         if (s.SystemMessages.Count > 0)
             rows.Add(new("Unread messages",
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
-                "bell", "/notifications", s.SystemMessages));
+                // The oldest unread one, opened — which marks it read and brings the count down.
+                "bell", "/notifications?open=unread", s.SystemMessages));
 
         // ── Tour seats (item 234) ────────────────────────────────────────────
         // The business's queue first: somebody is standing at the other end of it waiting to be
@@ -167,7 +168,7 @@ public static class NotificationRows
         if (s.FeedMentions.Count > 0)
             rows.Add(new("Mentions on the feed",
                 $"Somebody named you in a post · oldest {NotificationBadge.DescribeAge(s.FeedMentions.OldestUnreadUtc)}",
-                "at-sign", "/feed", s.FeedMentions));
+                "at-sign", "/feed?mode=mentions", s.FeedMentions));
 
         return rows;
     }
