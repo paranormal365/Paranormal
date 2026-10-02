@@ -64,7 +64,7 @@ else
             @if (!_event.IsAllDay)
             {
                 @* The night's clock, or the reader's own (2026-09-28). *@
-                <div class="event-head__clock"><TimeZoneSwitch ZoneId="@_event.TimeZoneId" Noun="event" /></div>
+                <div class="event-head__clock"><TimeZoneSwitch ZoneId="@_event.TimeZoneId" Noun="event" At="@_event.StartDateTime" /></div>
             }
         </PageHero>
 

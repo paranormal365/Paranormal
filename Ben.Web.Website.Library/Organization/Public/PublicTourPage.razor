@@ -351,7 +351,7 @@ else
                glance — the same shape a ticket has. The bar under the time is how full it is:
                "19 left" is a number, and a walk two thirds sold is a reason to book tonight. *@
             @* The walk's clock, or the reader's own (2026-09-28). *@
-            <div class="mb-2"><TimeZoneSwitch ZoneId="@_tour.TimeZoneId" Noun="tour" /></div>
+            <div class="mb-2"><TimeZoneSwitch ZoneId="@_tour.TimeZoneId" Noun="tour" At="@(_tour.UpcomingDates.FirstOrDefault()?.StartDateTime)" /></div>
             <div class="tour-datelist">
                 @foreach (var date in _tour.UpcomingDates)
                 {

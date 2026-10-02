@@ -11,7 +11,9 @@
 
 @if (Same)
 {
-    <span class="small text-secondary" data-testid="time-zone-same">
+    @* inline-flex: the template draws an icon as a block, which put the clock on a line of its
+       own above the words in the event page's hero (10/02/2026). *@
+    <span class="small text-secondary d-inline-flex align-items-center" data-testid="time-zone-same">
         <BenIcon Name="clock" Class="me-1" />Times are @PlaceLetters, your time too
     </span>
 }
@@ -43,9 +45,20 @@ else
     /// <summary>"event", "tour", "case", "investigation" — for the tooltip.</summary>
     [Parameter] public string Noun { get; set; } = "place";
 
+    /// <summary>
+    /// When the times on the page happen (UTC); now when omitted. The letters follow it.
+    /// </summary>
+    /// <remarks>
+    /// The zone's letters depend on the date. A November event read on an October day said "Times
+    /// are CDT" above a start time labelled CST (10/02/2026), because the letters were taken at the
+    /// moment the page was read rather than the moment it is about.
+    /// </remarks>
+    [Parameter] public DateTime? At { get; set; }
+
+    private DateTime When => At is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : DateTime.UtcNow;
     private TimeZoneInfo Place => Zones.Find(ZoneId);
-    private string PlaceLetters => Zones.Abbreviation(Place, DateTime.UtcNow);
-    private string MyLetters => Zones.Abbreviation(UserState.ViewerTimeZone, DateTime.UtcNow);
+    private string PlaceLetters => Zones.Abbreviation(Place, When);
+    private string MyLetters => Zones.Abbreviation(UserState.ViewerTimeZone, When);
     private bool Same => ZoneId is not null && Zones.IanaId(Place) == Zones.IanaId(UserState.ViewerTimeZone);
 
     protected override void OnInitialized() => View.Changed += Redraw;
