@@ -79,7 +79,8 @@
                                   OnLikeToggled="ToggleLikeAsync"
                                   OnReportRequested="ReportAsync"
                                   OnRecategorized="SwapPost"
-                                  OnScheduledCancelled="DropPost" />
+                                  OnScheduledCancelled="DropPost"
+                              OnDeleted="DropPost" />
                 }
 
                 @if (_nextCursor is not null)

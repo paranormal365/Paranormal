@@ -62,6 +62,6 @@ public class LabelAssociationTests
         Assert.True(scanned > 100, $"only {scanned} components were scanned — has the layout moved?");
         Assert.True(orphans.Count == 0,
             "These labels point at controls that do not exist, so clicking them does nothing and a "
-            + "screen reader announces the control unlabelled:\n  " + string.Join("\n  ", orphans));
+            + "screen reader announces the control unlabeled:\n  " + string.Join("\n  ", orphans));
     }
 }

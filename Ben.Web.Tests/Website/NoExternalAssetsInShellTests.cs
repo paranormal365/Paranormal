@@ -103,7 +103,7 @@ public sealed class NoExternalAssetsInShellTests
         Assert.True(offenders.Count == 0,
             "The page shell pulls an asset from a third party. Every visitor pays for this on "
             + "every page, and the site waits on that host to finish loading. Vendor it under "
-            + "wwwroot/plugins/ with its licence and a VENDORED.md, and load it from the one "
+            + "wwwroot/plugins/ with its license and a VENDORED.md, and load it from the one "
             + "component that needs it:\n  " + string.Join("\n  ", offenders));
     }
 

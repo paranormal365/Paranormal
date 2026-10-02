@@ -65,7 +65,7 @@ public sealed class StoreOrderTransitions(
         {
             StoreRefundOutcomeKind.Completed or StoreRefundOutcomeKind.Pending => (StoreDeskResult.Done, attempt),
             StoreRefundOutcomeKind.NotFound => (StoreDeskResult.Missing, attempt),
-            _ => (StoreDeskResult.No(attempt.Sentence ?? "The order could not be cancelled."), attempt),
+            _ => (StoreDeskResult.No(attempt.Sentence ?? "The order could not be canceled."), attempt),
         };
     }
 
@@ -96,7 +96,7 @@ public sealed class StoreOrderTransitions(
         {
             StoreRefundOutcomeKind.Completed or StoreRefundOutcomeKind.Pending => (StoreDeskResult.Done, attempt),
             StoreRefundOutcomeKind.NotFound => (StoreDeskResult.Missing, attempt),
-            _ => (StoreDeskResult.No(attempt.Sentence ?? "The package could not be cancelled."), attempt),
+            _ => (StoreDeskResult.No(attempt.Sentence ?? "The package could not be canceled."), attempt),
         };
     }
 

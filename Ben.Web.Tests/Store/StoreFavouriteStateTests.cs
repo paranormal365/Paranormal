@@ -86,7 +86,7 @@ public sealed class StoreFavouriteStateTests
 
         Assert.True(state.IsReady);
         Assert.False(state.IsSignedIn);
-        Assert.Equal("Sign in to keep favourites.", await state.ToggleAsync(Guid.NewGuid()));
+        Assert.Equal("Sign in to keep favorites.", await state.ToggleAsync(Guid.NewGuid()));
     }
 
     [Fact]

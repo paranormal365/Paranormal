@@ -577,7 +577,7 @@ else
                 if (Features.IsOn(SiteFeatures.Equipment))
                 {
                     main.Add(Group("Equipment", "tool",
-                        new NavItem("Catalogue",       "book-open",   "/equipment-catalog"),
+                        new NavItem("Catalog",         "book-open",   "/equipment-catalog"),
                         new NavItem("My Equipment",    "tool",        "/my-equipment"),
                         new NavItem("My Checkouts",    "calendar",    "/my-checkouts", s.EquipmentCheckouts,
                                     badgeNoun: "gear requests and overdue items"),
@@ -605,7 +605,7 @@ else
                     main.Add(Group("Store", "shopping-cart",
                         new NavItem("Browse the Store", "shopping-bag", "/store"),
                         new NavItem("My Orders", "package", "/store/orders"),
-                        new NavItem("Favourites", "heart", "/store/favourites"),
+                        new NavItem("Favorites", "heart", "/store/favorites"),
                         new NavItem("My Questions", "help-circle", "/store/questions")));
                 else if (_hasStoreOrders)
                     main.Add(new NavItem("My Orders", "package", "/store/orders"));

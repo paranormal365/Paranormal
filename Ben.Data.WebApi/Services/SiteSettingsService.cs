@@ -337,7 +337,7 @@ public static class SiteSettingKeys
             "How large each piece of a chunked upload may be, in bytes. Keep this under 100 MB (104857600): the site is served through Cloudflare, which rejects any single request bigger than that. Leave empty for the built-in default of 64 MiB (67108864)."),
 
         (StoreCheckoutEnabled, "Take orders",
-            "Off pauses checkout while the catalogue stays visible — every cart and the checkout page say the store isn't taking orders at the moment. Orders already paid carry on. Hiding the shop altogether is 'Feature — Store' under Features."),
+            "Off pauses checkout while the catalog stays visible — every cart and the checkout page say the store isn't taking orders at the moment. Orders already paid carry on. Hiding the shop altogether is 'Feature — Store' under Features."),
         (StoreShippingFlatRateUsd, "Flat shipping rate ($)",
             "Charged once per package — each seller ships their own. A seller is credited this for every package they send. Leave empty for $0."),
         (StoreFreeShippingThresholdUsd, "Free shipping over ($)",
@@ -370,7 +370,7 @@ public static class SiteSettingKeys
         (FeatureVideoEditor, "Feature — Video editor",
             "The video editor: My Videos, the editor on a case, and the links to the standalone editor. Turning this off hides those pages and makes their addresses stop working. Anything already exported or saved is untouched."),
         (FeatureEquipment, "Feature — Equipment",
-            "Personal equipment lists, group catalogues, checkouts and loans. Off hides the whole section; the records stay in the database."),
+            "Personal equipment lists, group catalogs, checkouts and loans. Off hides the whole section; the records stay in the database."),
         (FeatureEvents, "Feature — Events and calendars",
             "Group calendars, public events and RSVPs, including the reminder emails sent before an event. Off stops the reminders as well as the pages."),
         (FeatureDiscovery, "Feature — Local discovery and maps",
@@ -388,7 +388,7 @@ public static class SiteSettingKeys
         (FeaturePublications, "Feature — Publications",
             "Long-form publications a group writes and readers subscribe to. Off by default. Subscriptions are free; nothing here charges anyone."),
         (FeatureStore, "Feature — Store",
-            "The gear store: catalogue, cart and checkout. Off by default until it ships. Turning it off hides the shop and stops new orders; existing orders, their status pages, the thank-you page and emailed links, stock and the admin screens are untouched. To pause orders without hiding the shop use 'Take orders' under Store."),
+            "The gear store: catalog, cart and checkout. Off by default until it ships. Turning it off hides the shop and stops new orders; existing orders, their status pages, the thank-you page and emailed links, stock and the admin screens are untouched. To pause orders without hiding the shop use 'Take orders' under Store."),
     ];
 
     /// <summary>

@@ -30,6 +30,8 @@ struct GroupCaseView: View {
                     Label("Sign in to open this case", systemImage: "folder.badge.person.crop")
                 } description: {
                     Text("A case belongs to the group working it.")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):
@@ -50,7 +52,8 @@ struct GroupCaseView: View {
         .navigationTitle(store?.groupCase?.reference ?? "Case")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store?.load() }
-        .task {
+        // Keyed on who is signed in, so signing in from this screen's own button loads the case.
+        .task(id: dependencies.session.me?.userId) {
             let store = GroupCaseStore(organizationId: organizationId, caseId: caseId,
                                        api: dependencies.api)
             self.store = store

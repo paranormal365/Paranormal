@@ -1,5 +1,6 @@
 import SwiftUI
 import BenKit
+import AVFoundation
 
 /// The instrument panel: what the room is doing, right now.
 ///
@@ -62,7 +63,9 @@ struct LiveSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarItems }
             .sheet(isPresented: $showingSettings) { levelsSheet }
-            .sheet(isPresented: $showingLocationExplainer) {
+            .sheet(isPresented: $showingLocationExplainer, onDismiss: {
+                Task { await askForMicrophoneIfNeeded() }
+            }) {
                 LocationExplainerSheet(onAnswered: { locationExplained = true },
                                        onAllow: { await active?.requestLocation() })
             }
@@ -220,7 +223,21 @@ struct LiveSessionView: View {
            store.active?.locationAuthorization == .notDetermined,
            !locationExplained {
             showingLocationExplainer = true
+        } else {
+            await askForMicrophoneIfNeeded()
         }
+    }
+
+    /// The microphone, asked while the session is still waiting — not at Start.
+    ///
+    /// Asked at Start, the question arrived with the clock already running and the recording only
+    /// began once it was answered: a first session lost its opening seconds, which is exactly
+    /// when somebody says where they are and what they are about to do (walk, 2026-10-02).
+    /// Only when audio is on and iOS has not asked yet; a refusal is still said at Start.
+    private func askForMicrophoneIfNeeded() async {
+        guard store.active?.channels.contains(.audio) == true,
+              AVAudioApplication.shared.recordPermission == .undetermined else { return }
+        _ = await AVAudioApplication.requestRecordPermission()
     }
 
     /// Takes the screen brightness down to nothing and holds the phone awake, then puts the
@@ -305,12 +322,14 @@ struct LiveSessionView: View {
             Toggle(isOn: Binding(
                 get: { active.watchForMotion },
                 set: { on in
-                    if on, AppPermission.camera.isRefused {
-                        refusedPermission = .camera
-                        return
+                    Task {
+                        if on, !(await AppPermission.camera.ensure()) {
+                            refusedPermission = .camera
+                            return
+                        }
+                        watchForMotionPreference = on
+                        await active.setWatchForMotion(on)
                     }
-                    watchForMotionPreference = on
-                    Task { await active.setWatchForMotion(on) }
                 })
             ) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -419,7 +438,9 @@ struct LiveSessionView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.bar)
+        // Signal's card colour with a hairline above, not the system's grey bar.
+        .background(Theme.mist)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.fog.opacity(0.25)).frame(height: 0.5) }
     }
 
     @ViewBuilder
@@ -581,15 +602,19 @@ struct LiveSessionView: View {
                 Toggle(isOn: Binding(
                         get: { active.channels.contains(channel) },
                         set: { isOn in
-                            // Refused before, so iOS will not ask again: say so and offer
-                            // Settings, rather than a switch that turns on and records nothing.
-                            if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
-                                refusedPermission = needed
-                                return
+                            // Asked now if iOS never has; refused (now or before) stays off and
+                            // offers Settings, rather than a switch that turns on and records
+                            // nothing — see AppPermission.ensure.
+                            Task {
+                                if isOn, let needed = AppPermission.needed(for: channel),
+                                   !(await needed.ensure()) {
+                                    refusedPermission = needed
+                                    return
+                                }
+                                var channels = active.channels
+                                if isOn { channels.insert(channel) } else { channels.remove(channel) }
+                                await active.setChannels(channels)
                             }
-                            var channels = active.channels
-                            if isOn { channels.insert(channel) } else { channels.remove(channel) }
-                            Task { await active.setChannels(channels) }
                         })
                     ) {
                         VStack(alignment: .leading, spacing: 1) {
@@ -781,7 +806,7 @@ struct LocationExplainerSheet: View {
                     .font(.title3.bold())
 
                 Text("Every reading and every photo can carry where you were standing when you took it, so a spike in the cellar isn't confused with one in the hall.")
-                Text("Indoors a phone is usually accurate to somewhere between 20 and 50 metres — often the width of the whole building. Every reading carries its own accuracy so nobody mistakes it for room-level precision.")
+                Text("Indoors a phone is usually accurate to somewhere between 20 and 50 meters — often the width of the whole building. Every reading carries its own accuracy so nobody mistakes it for room-level precision.")
                     .font(.callout).foregroundStyle(Theme.fog)
                 Text("It stays on this device with the rest of the session.")
                     .font(.callout).foregroundStyle(Theme.fog)

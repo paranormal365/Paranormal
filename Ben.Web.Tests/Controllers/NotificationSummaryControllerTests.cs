@@ -852,19 +852,22 @@ public class NotificationSummaryControllerTests
     [Fact]
     public async Task A_business_is_told_how_many_sign_ups_are_waiting_on_it()
     {
+        Guid seatOrg, seatEvent;
         var owner = Guid.NewGuid();
         var guest = Guid.NewGuid();
         var factory = CreateFactory();
 
         await using (var db = factory.CreateDbContext())
         {
-            var (orgId, _, _) = AddTourSeat(db, guest, TourSeatStatus.Requested, DateTime.UtcNow.AddDays(30));
-            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            (seatOrg, seatEvent, _) = AddTourSeat(db, guest, TourSeatStatus.Requested, DateTime.UtcNow.AddDays(30));
+            AddMembership(db, seatOrg, owner, OrganizationMemberRole.Owner);
             await db.SaveChangesAsync();
         }
 
         var summary = await GetSummaryAsync(factory, owner);
         Assert.Equal(1, summary.TourSeatsToDecide?.Count);
+        // …and the row opens that date's seats, not the list of every group (walk, 2026-10-02).
+        Assert.Matches($"^/organizations/{seatOrg}/tours/[0-9a-f-]{{36}}/dates/{seatEvent}$", summary.TourSeatsToDecide?.Where ?? "");
     }
 
     [Fact]
@@ -1036,6 +1039,30 @@ public class NotificationSummaryControllerTests
         Assert.Equal(1, summary.EventHoldsLapsing?.Count);
         // Each booking once on the bell: the lapsing hold is not ALSO in the queue's number.
         Assert.Equal(3, summary.TotalCount);
+    }
+
+    [Fact]
+    public async Task The_booking_rows_name_the_events_bookings_page_not_the_groups_list()
+    {
+        // Both rows opened /organizations, the list of every group (walk, 2026-10-02).
+        var owner = Guid.NewGuid();
+        var factory = CreateFactory();
+        Guid orgId, eventId;
+
+        await using (var db = factory.CreateDbContext())
+        {
+            orgId = AddOrg(db);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            eventId = AddHostedEvent(db, orgId);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Requested);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddHours(3));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, owner);
+        Assert.Equal($"/organizations/{orgId}/events/{eventId}/bookings", summary.EventBookingsToDecide?.Where);
+        Assert.Equal($"/organizations/{orgId}/events/{eventId}/bookings", summary.EventHoldsLapsing?.Where);
     }
 
     [Fact]

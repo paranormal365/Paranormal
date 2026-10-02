@@ -74,8 +74,8 @@ public sealed class ClientStatusMailer
     {
         var zone = await VisitZoneAsync(db, c, visit, ct);
         var body = $"<p>The visit to your case <strong>{WebUtility.HtmlEncode(c.Title)}</strong> ({Reference(c)}) "
-                 + $"that was set for {When(visit.ScheduledDateTime, zone)} has been cancelled. The group will be in touch about what happens next.</p>";
-        await SendToClientsAsync(db, c, "visit cancelled", $"A visit to your case {Reference(c)} was cancelled", "A visit was cancelled", body, ct,
+                 + $"that was set for {When(visit.ScheduledDateTime, zone)} has been canceled. The group will be in touch about what happens next.</p>";
+        await SendToClientsAsync(db, c, "visit canceled", $"A visit to your case {Reference(c)} was canceled", "A visit was canceled", body, ct,
             MailKinds.VisitCancelled.Key, visit);
     }
 

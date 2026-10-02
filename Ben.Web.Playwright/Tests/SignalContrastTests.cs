@@ -55,7 +55,7 @@ public class SignalContrastTests : BenTestBase
         for (var attempt = 1; ; attempt++)
         {
             try { json = await MeasureAsync(); break; }
-            catch (PlaywrightException ex) when (attempt < 3 && ex.Message.Contains("unreadable colour"))
+            catch (PlaywrightException ex) when (attempt < 3 && (ex.Message.Contains("unreadable colour") || ex.Message.Contains("unreadable color")))
             {
                 await Page.WaitForTimeoutAsync(1_000);
             }
@@ -131,4 +131,23 @@ public class SignalContrastTests : BenTestBase
                 return JSON.stringify(out);
             }
             """);
+
+    [Test]
+    public async Task A_box_you_write_paragraphs_in_has_the_card_corner_not_the_pill()
+    {
+        // Ben, 2026-10-02: in a report's Executive Summary the caret sat on the pill's top-left
+        // curve. One-line fields keep the pill; multi-line boxes, Bootstrap's and Telerik's, take
+        // the card's 12px corner.
+        await Page.GotoAsync($"{BaseUrl}/help");
+        var radii = await Page.EvaluateAsync<string[]>(@"() => {
+            const host = document.createElement('div');
+            host.innerHTML = '<input class=""form-control"" id=""r1""><textarea class=""form-control"" id=""r2"" rows=""4""></textarea>'
+                           + '<span class=""k-input k-textarea"" id=""r3""><textarea class=""k-input-inner""></textarea></span>';
+            document.body.appendChild(host);
+            return ['r1','r2','r3'].map(id => getComputedStyle(document.getElementById(id)).borderTopLeftRadius);
+        }");
+        Assert.That(radii[0], Is.EqualTo("999px"), "a one-line field should still be a pill");
+        Assert.That(radii[1], Is.EqualTo("12px"), "a Bootstrap textarea should have the card corner");
+        Assert.That(radii[2], Is.EqualTo("12px"), "a Telerik textarea should have the card corner");
+    }
 }

@@ -89,7 +89,10 @@ final class HelpMediaCaptureTests: XCTestCase {
                       "Could not reach Profile, so My evidence was never opened.")
         settle()
 
+        // Scrolled to: Profile has grown (your name, Investigations), and a List only builds the
+        // rows on screen, so a row below the fold does not exist until it is scrolled to.
         let row = app.buttons["settings-my-evidence"].firstMatch
+        for _ in 0..<5 where !row.waitForExistence(timeout: 2) { app.swipeUp() }
         if !row.waitForExistence(timeout: 10) {
             // Said plainly rather than captured blank: an empty picture in the help page is worse
             // than none, because nobody can tell it is wrong.
@@ -118,6 +121,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         settle()
 
         let row = app.buttons["settings-my-events"].firstMatch
+        for _ in 0..<5 where !row.waitForExistence(timeout: 2) { app.swipeUp() }   // below the fold until scrolled to
         if !row.waitForExistence(timeout: 10) {
             XCTFail("The What I'm going to row is missing from Profile — nothing to capture.")
             return
@@ -274,6 +278,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         XCTAssertTrue(AppNavigator.openSection("Profile", in: app), "Could not reach Profile.")
         settle()
         let row = app.buttons["settings-my-events"].firstMatch
+        for _ in 0..<5 where !row.waitForExistence(timeout: 2) { app.swipeUp() }   // below the fold until scrolled to
         guard row.waitForExistence(timeout: 10) else { return XCTFail("The What I'm going to row is missing from Profile.") }
         row.tap()
         settle(4)
@@ -316,7 +321,7 @@ final class HelpMediaCaptureTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap()
             settle(2)
         }
-        XCTFail("None of the guest's events has a published programme — nothing to capture.")
+        XCTFail("None of the guest's events has a published program — nothing to capture.")
     }
 
     /// Tonight's door and a scanned reservation (item 235 phase 14c). Needs an account that may run a door — run it
@@ -336,6 +341,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         XCTAssertTrue(AppNavigator.openSection("Profile", in: app), "Could not reach Profile.")
         settle()
         let row = app.buttons["settings-door-duties"].firstMatch
+        for _ in 0..<5 where !row.waitForExistence(timeout: 2) { app.swipeUp() }   // below the fold until scrolled to
         if !row.waitForExistence(timeout: 10) {
             app.swipeUp()
         }

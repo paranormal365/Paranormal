@@ -803,6 +803,11 @@ textarea.form-control::placeholder {
 .ben-grid-action .sa-icon {
     width: 1rem;
     height: 1rem;
+    /* The icon follows the BUTTON's colour. The template draws icons in a fixed grey, so when an
+       outline button filled on hover (a pink Delete, a grey Edit) its icon stayed grey on the fill
+       and all but vanished (Ben, 2026-10-02). With currentColor it turns white with the words. */
+    --sa-icon-color: currentColor;
+    stroke: currentColor;
 }
 
 .ben-grid-action + .ben-grid-action,

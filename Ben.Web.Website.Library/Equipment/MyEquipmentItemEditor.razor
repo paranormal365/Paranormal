@@ -31,7 +31,7 @@
             @* Every make stays listed, including the ones with nothing in this category. Dropping
                them would hide exactly the make somebody needs the first time anyone registers, say,
                a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable
-               duplicate, which is a dead end with no way out of it. Labelling is the honest half:
+               duplicate, which is a dead end with no way out of it. Labeling is the honest half:
                the choice is still there, it just no longer looks like a promise of models. *@
             <BenSelect Data="@_brandOptions" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(BrandOption.Label)" ValueField="@nameof(BrandOption.Id)" Enabled="@(_categoryId is not null && !_brandsLoading)" DefaultText="@BrandPlaceholder" Width="100%" />
             <div class="form-text">

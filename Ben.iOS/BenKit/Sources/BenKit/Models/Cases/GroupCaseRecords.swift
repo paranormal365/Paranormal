@@ -40,7 +40,7 @@ public enum GroupCaseStatus: Int, Codable, Sendable, Equatable {
         case .proposed: "Proposed"
         case .accepted: "Accepted"
         case .active: "Active"
-        case .summarized: "Summarised"
+        case .summarized: "Summarized"
         case .closed: "Closed"
         case .publicCase: "Public"
         case .haunted: "Haunted"

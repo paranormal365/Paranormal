@@ -55,6 +55,12 @@ public struct FeedActions: Sendable {
         return result.isOk
     }
 
+    /// The author takes their own post or reply down — hidden, exactly as a moderator hides one.
+    /// Anybody else's post answers 404, so `false` here is "not yours, or already gone".
+    public func delete(postId: UUID) async -> Bool {
+        await api.send(Endpoint(.delete, "api/feed/posts/\(postId.uuidString.lowercased())")).isOk
+    }
+
     public func setFollowing(_ following: Bool, appUserId: UUID) async -> Bool {
         let path = "api/feed/follow/\(appUserId.uuidString.lowercased())"
         let result = await api.send(Endpoint(following ? .post : .delete, path))

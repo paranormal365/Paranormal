@@ -40,7 +40,7 @@ public class AdminPlacesTests : BenTestBase
                 .ToBeVisibleAsync(new() { Timeout = 10_000 });
 
         Assert.That(await Main.Locator("tbody tr").CountAsync(), Is.GreaterThan(0),
-            "The catalogue opened with no rows at all, so nothing below this proves anything.");
+            "The catalog opened with no rows at all, so nothing below this proves anything.");
     }
 
     /// <summary>Narrowing to one kind actually narrows.</summary>

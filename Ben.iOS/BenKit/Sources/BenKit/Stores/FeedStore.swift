@@ -7,6 +7,8 @@ public enum FeedFilter: Sendable, Equatable, Hashable {
     case forYou
     case latest
     case following
+    /// Posts that name this reader, or whose replies do — where "You were mentioned" leads.
+    case mentions
     case hashtag(String)
     case experienceType(UUID, name: String?)
     case author(UUID)
@@ -16,6 +18,7 @@ public enum FeedFilter: Sendable, Equatable, Hashable {
         case .forYou: [URLQueryItem(name: "mode", value: "foryou")]
         case .latest: [URLQueryItem(name: "mode", value: "all")]
         case .following: [URLQueryItem(name: "mode", value: "following")]
+        case .mentions: [URLQueryItem(name: "mode", value: "mentions")]
         case .hashtag(let tag): [URLQueryItem(name: "mode", value: "all"),
                                  URLQueryItem(name: "hashtag", value: tag)]
         case .experienceType(let id, _): [URLQueryItem(name: "mode", value: "all"),
@@ -29,6 +32,7 @@ public enum FeedFilter: Sendable, Equatable, Hashable {
         case .forYou: "For You"
         case .latest: "Latest"
         case .following: "Following"
+        case .mentions: "Mentions"
         case .hashtag(let tag): "#\(tag)"
         case .experienceType(_, let name): name ?? "Category"
         case .author: "Posts"
@@ -127,6 +131,13 @@ public final class FeedStore {
     public func blockAuthor(of post: FeedPostRecord, actions: FeedActions) async -> Bool {
         guard await actions.block(appUserId: post.authorAppUserId) else { return false }
         posts.removeAll { $0.authorAppUserId == post.authorAppUserId }
+        return true
+    }
+
+    /// The author's own post, taken down and removed from what is on screen.
+    public func delete(_ post: FeedPostRecord, actions: FeedActions) async -> Bool {
+        guard await actions.delete(postId: post.id) else { return false }
+        posts.removeAll { $0.id == post.id }
         return true
     }
 

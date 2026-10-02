@@ -15,7 +15,7 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 ben-invoice-toolbar">
         <a class="small d-inline-flex align-items-center gap-1" href="@($"/admin/store/orders/{Id}")"><BenIcon Name="arrow-left" /> Back to the order</a>
         <div class="d-flex align-items-center gap-2">
-            <HelpLink Slug="site-administration" Anchor="orders-and-fulfilment" />
+            <HelpLink Slug="site-administration" Anchor="orders-and-fulfillment" />
             @if (_invoice.Item is not null)
             {
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="invoice-print" onclick="window.print()"><BenIcon Name="printer" /> Print</button>

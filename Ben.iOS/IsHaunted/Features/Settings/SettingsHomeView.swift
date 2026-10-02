@@ -12,11 +12,35 @@ struct SettingsHomeView: View {
     @State private var doorDuties: [MyHostedEventDuty] = []
 
     private var session: SessionStore { dependencies.session }
+    /// The name people see, from the feed profile. Profile showed only an email, so the person
+    /// signed in could not tell from here what anybody else sees of them (walk, 2026-10-02).
+    @State private var myProfile: FeedProfileRecord?
+
+    static func initials(_ name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first)
+        return letters.isEmpty ? "?" : String(letters).uppercased()
+    }
 
     var body: some View {
         SignalList {
             if let me = session.me {
                 Section("Account") {
+                    if let myProfile {
+                        NavigationLink(value: AppRoute.feedProfile(me.userId)) {
+                            HStack(spacing: 12) {
+                                Text(Self.initials(myProfile.displayName))
+                                    .font(.headline).foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                                    .background(Theme.gradient, in: Circle())
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(myProfile.displayName).font(.headline).foregroundStyle(Theme.bone)
+                                    Text("\(myProfile.postCount) post\(myProfile.postCount == 1 ? "" : "s") · \(myProfile.followerCount) follower\(myProfile.followerCount == 1 ? "" : "s")")
+                                        .font(.caption).foregroundStyle(Theme.fog)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("my-profile")
+                    }
                     LabeledContent("Email", value: me.email)
                     if me.isSuperAdmin {
                         Label("SuperAdmin", systemImage: "crown")
@@ -89,6 +113,20 @@ struct SettingsHomeView: View {
                 }
             }
 
+            // Investigations gives up its tab on iPhone to Field Kit and My Cases for a member, and
+            // then nothing led to it: the group's work was unreachable on a phone for anybody
+            // with no case of their own (walk, 2026-10-02). It lives here then, like Events.
+            if !router.isSection(.investigations), dependencies.surfaces.surfaces.hasInvestigations {
+                Section {
+                    NavigationLink(value: AppRoute.investigationsList) {
+                        Label("Investigations", systemImage: "binoculars")
+                    }
+                    .accessibilityIdentifier("settings-investigations")
+                } footer: {
+                    Text("The visits your group is working, and the cases behind them.")
+                }
+            }
+
             // The guest's own copy of what they offered at somebody's public event. Gated on
             // being signed in, and that gate is the point: submissions belong to an account, so
             // offering the row to a signed-out visitor would be a link that can only ever end in
@@ -153,6 +191,13 @@ struct SettingsHomeView: View {
         .navigationTitle("Profile")
         // Asked once per account; kept on the phone by the store, so a door opened with no signal is still offered.
         .task(id: session.me?.userId) {
+            if let id = session.me?.userId {
+                let result = await dependencies.api.load(
+                    Endpoint(.get, "api/feed/profile/\(id.uuidString.lowercased())"), as: FeedProfileRecord.self)
+                if case .ok(let record) = result { myProfile = record } else { myProfile = nil }
+            } else {
+                myProfile = nil
+            }
             guard session.me != nil else { doorDuties = []; return }
             switch await DoorStore(api: dependencies.api).loadDuties() {
             case .live(let duties), .saved(let duties, _): doorDuties = duties

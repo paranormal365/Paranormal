@@ -118,7 +118,7 @@ public class LookAndTruthsTests : BenTestBase
 
         Assert.That(marginTop, Is.EqualTo("0px"),
             $"The page container carries a top margin of {marginTop}, so the page is being "
-            + "centred vertically inside the shell's flex wrapper.");
+            + "centered vertically inside the shell's flex wrapper.");
     }
 
     /// <summary>

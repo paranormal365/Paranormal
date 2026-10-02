@@ -292,7 +292,7 @@ public sealed class HostedEventControllerTests
 
         // The title is the one line every list, share card and phone notification shows. A
         // cancelled event that reads like a live one is the worst thing on this screen.
-        Assert.StartsWith("CANCELLED", umbrella.Title);
+        Assert.StartsWith("CANCELED", umbrella.Title);
     }
 
     [Fact]

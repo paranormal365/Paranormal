@@ -9,7 +9,7 @@
 @inject NavigationManager NavManager
 
 @*
-    The catalogue of places (C8).
+    The catalog of places (C8).
 
     Anybody signed in can put a public location on the map, and until this page nothing could list
     what that had produced, change a record's mind about itself, or remove one. The only removal
@@ -87,7 +87,7 @@
 
     @if (_loading)
     {
-        <p class="text-secondary fst-italic">Reading the catalogue…</p>
+        <p class="text-secondary fst-italic">Reading the catalog…</p>
     }
     else if (_error is not null)
     {
@@ -297,8 +297,8 @@
             // which is a different and untrue statement — item 141's whole point. Signed-out is
             // separated because "try again" is the wrong advice for it.
             _error = result.SessionExpired
-                ? "You have been signed out. Sign in again to read the catalogue."
-                : result.Reason ?? "The catalogue could not be read.";
+                ? "You have been signed out. Sign in again to read the catalog."
+                : result.Reason ?? "The catalog could not be read.";
             _places.Clear();
             _total = 0;
         }

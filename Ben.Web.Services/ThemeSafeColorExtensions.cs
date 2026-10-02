@@ -38,7 +38,7 @@ public static class ThemeSafeColorExtensions
 
     /// <summary>
     /// Returns the class unchanged unless it is pinned to one theme, in which case it returns the
-    /// theme-aware equivalent. Null and blank pass straight through — "no colour chosen" is a
+    /// theme-aware equivalent. Null and blank pass straight through — "no color chosen" is a
     /// real answer and inherits the surrounding text colour, which already follows the theme.
     /// </summary>
     /// <remarks>

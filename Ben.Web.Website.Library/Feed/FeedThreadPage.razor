@@ -49,7 +49,8 @@
         {
             <FeedPostCard Post="@_root" CanAct="@(_authKnown && IsSignedIn)"
                           OnLikeToggled="ToggleLikeAsync"
-                          OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync" />
+                          OnFollowToggled="ToggleFollowAsync" OnReportRequested="ReportAsync"
+                          OnDeleted="@(_ => NavManager.NavigateTo("/feed"))" />
 
             <div class="ms-3 ps-3 border-start">
                 @* Held until auth is known, exactly as on the feed page. *@
@@ -81,7 +82,8 @@
                     {
                         <FeedPostCard Post="@reply" CanAct="@(_authKnown && IsSignedIn)"
                                       OnLikeToggled="ToggleLikeAsync" OnFollowToggled="ToggleFollowAsync"
-                                      OnReportRequested="ReportAsync" />
+                                      OnReportRequested="ReportAsync"
+                                      OnDeleted="@(r => _replies.RemoveAll(x => x.Id == r.Id))" />
                     }
                 }
             </div>

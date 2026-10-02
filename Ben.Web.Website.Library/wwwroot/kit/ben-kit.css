@@ -134,6 +134,13 @@ label > .sa-icon,
 
    A border matters more here than it looks: the screenshots are captured in dark mode, and a dark
    screenshot on a dark card has no edge at all without one. */
+/* A heading jumped to from a link (#the-public-catalog) stops clear of the header instead of
+   underneath it. */
+.help-body h2[id],
+.help-body h3[id] {
+    scroll-margin-top: 5.5rem;
+}
+
 .help-body img {
     display: block;
     max-width: 100%;

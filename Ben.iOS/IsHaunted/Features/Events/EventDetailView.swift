@@ -50,7 +50,9 @@ struct EventDetailView: View {
         }
         .navigationTitle(event?.tourName ?? event?.title ?? "Event")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        // Keyed on who is signed in: what a person may do here (ask for a place) depends on it, and
+        // signing in from this screen's own button must bring the ask, not the signed-out text.
+        .task(id: dependencies.session.me?.userId) {
             if store == nil { store = EventsStore(api: dependencies.api) }
             await load()
         }
@@ -92,7 +94,9 @@ struct EventDetailView: View {
     private func header(_ event: PublicEventRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let tour = event.tourName {
-                Label(tour, systemImage: "figure.walk")
+                // The walk's name above the night's — unless they are the same words, when the
+                // kicker says what kind of night it is instead of printing the name twice.
+                Label(tour == event.title ? "Ghost walk" : tour, systemImage: "figure.walk")
                     .font(.subheadline.weight(.medium)).foregroundStyle(Theme.ecto)
             }
             Text(event.title).font(.title2.weight(.semibold)).foregroundStyle(Theme.bone)
@@ -172,6 +176,9 @@ struct EventDetailView: View {
         if !signedIn {
             Text(event.flags.rsvpBlockedReason ?? "Sign in to say you're coming.")
                 .font(.footnote).foregroundStyle(Theme.fog)
+            if event.flags.rsvpBlockedReason == nil {
+                SignInButton()
+            }
         } else if event.flags.canRsvp {
             if event.tourName != nil {
                 // A walk asks how many are coming; an ordinary evening does not, because one

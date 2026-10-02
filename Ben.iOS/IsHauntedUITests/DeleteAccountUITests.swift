@@ -34,6 +34,7 @@ final class DeleteAccountUITests: XCTestCase {
 
         let row = app.buttons["settings-delete-account"].firstMatch
         let cell = app.cells["settings-delete-account"].firstMatch
+        for _ in 0..<5 where !row.waitForExistence(timeout: 2) { app.swipeUp() }   // below the fold until scrolled to
         if row.waitForExistence(timeout: 25) {
             row.tap()
         } else if cell.waitForExistence(timeout: 5) {

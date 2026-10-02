@@ -4,21 +4,21 @@
 @inject BenToastService Toasts
 
 @*
-    The heart (storefront S6.3): keep a product in Favourites, or let it go. Filled when kept. A
-    guest has no favourites, so for them the heart is a way to sign in and come back here. Until the
+    The heart (storefront S6.3): keep a product in Favorites, or let it go. Filled when kept. A
+    guest has no favorites, so for them the heart is a way to sign in and come back here. Until the
     sign-in is known it is a still, disabled heart.
 *@
 
 @if (!Favourites.IsReady)
 {
     @* Until the sign-in is known: neither a heart that can't be believed nor a sign-in link. *@
-    <button type="button" class="@Css" disabled aria-busy="true" aria-label="@($"Favourite {ProductName}")" data-testid="store-heart">
+    <button type="button" class="@Css" disabled aria-busy="true" aria-label="@($"Favorite {ProductName}")" data-testid="store-heart">
         <BenIcon Name="heart" />
     </button>
 }
 else if (!Favourites.IsSignedIn)
 {
-    <a class="@Css" href="@SignInLink.For(Nav)" title="Sign in to keep favourites" aria-label="@($"Sign in to keep {ProductName} in your favourites")"
+    <a class="@Css" href="@SignInLink.For(Nav)" title="Sign in to keep favorites" aria-label="@($"Sign in to keep {ProductName} in your favorites")"
        data-testid="store-heart">
         <BenIcon Name="heart" />
     </a>
@@ -27,8 +27,8 @@ else
 {
     var kept = Favourites.IsFavourite(ProductId);
     <button type="button" class="@Css @(kept ? "ben-heart--on" : null)" disabled="@_busy" data-testid="store-heart"
-            aria-pressed="@(kept ? "true" : "false")" title="@(kept ? "In your favourites" : "Add to favourites")"
-            aria-label="@(kept ? $"Remove {ProductName} from your favourites" : $"Add {ProductName} to your favourites")"
+            aria-pressed="@(kept ? "true" : "false")" title="@(kept ? "In your favorites" : "Add to favorites")"
+            aria-label="@(kept ? $"Remove {ProductName} from your favorites" : $"Add {ProductName} to your favorites")"
             @onclick="ToggleAsync">
         <BenIcon Name="heart" />
     </button>

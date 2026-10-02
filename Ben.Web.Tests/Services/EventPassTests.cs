@@ -172,7 +172,7 @@ public sealed class EventPassTests
     {
         var refusal = EventPasses.WhyThisScanIsRefused(null, EventId, null);
 
-        Assert.Contains("don't recognise", refusal);
+        Assert.Contains("don't recognize", refusal);
         Assert.Contains("look them up by name", refusal);
     }
 

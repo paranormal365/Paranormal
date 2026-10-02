@@ -202,7 +202,7 @@
         EquipmentCheckoutStatus.Requested  => "Waiting",
         EquipmentCheckoutStatus.Approved   => "Approved",
         EquipmentCheckoutStatus.Denied     => "Declined",
-        EquipmentCheckoutStatus.Cancelled  => "Cancelled",
+        EquipmentCheckoutStatus.Cancelled  => "Canceled",
         EquipmentCheckoutStatus.CheckedOut => loan.IsOverdue ? "Overdue" : "Out",
         EquipmentCheckoutStatus.Returned   => "Returned",
         _                                  => loan.Status.ToString(),
@@ -281,7 +281,7 @@
 
     private Task CancelAsync(EquipmentCheckoutRecord loan)
         => RunAsync(() => AdminClient.CancelEquipmentCheckoutAsync(loan.Id),
-                    "That request couldn't be cancelled — it may have already been decided.");
+                    "That request couldn't be canceled — it may have already been decided.");
 
     private Task ConfirmHandoffAsync(EquipmentCheckoutRecord loan)
         => RunAsync(() => AdminClient.ConfirmEquipmentHandoffAsync(loan.Id),

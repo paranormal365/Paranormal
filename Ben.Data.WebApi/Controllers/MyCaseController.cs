@@ -1412,7 +1412,7 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The client has cancelled the investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}.",
+            Body = $"The client has canceled the investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
             IsReadByClient = true, IsReadByOrg = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

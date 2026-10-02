@@ -92,7 +92,7 @@ public sealed class MarkupFieldSanitizeBackfillService : BackgroundService
             // saying "cleaned 0" on every boot trains people to stop reading the log.
             if (touched.Count > 0)
                 _logger.LogWarning(
-                    "Sanitised stored values that predate sanitising on save: {Summary}.",
+                    "Sanitized stored values that predate sanitizing on save: {Summary}.",
                     string.Join(", ", touched.Select(c => $"{c.Changed} {c.What}")));
         }
         catch (OperationCanceledException)
@@ -104,7 +104,7 @@ public sealed class MarkupFieldSanitizeBackfillService : BackgroundService
         {
             // Loud, and not fatal. The site works with dirty values; it is just not safe, and the
             // person who can fix that needs to know rather than find out from a reader.
-            _logger.LogError(ex, "Could not sanitise stored markup fields.");
+            _logger.LogError(ex, "Could not sanitize stored markup fields.");
         }
     }
 

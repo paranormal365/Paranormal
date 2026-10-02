@@ -162,7 +162,7 @@ public sealed class MyProfileController : BenControllerBase
             else if (Zones.Normalize(request.TimeZoneId) is { } zone)
                 user.TimeZoneId = zone;
             else
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
         }
 
         // Same null-means-untouched rule. Self-declared and optional; NotProvided is a real

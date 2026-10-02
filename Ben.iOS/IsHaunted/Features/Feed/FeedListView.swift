@@ -18,6 +18,7 @@ struct FeedListView: View {
     @State private var recategorizing: FeedPostRecord?
     @State private var reporting: FeedPostRecord?
     @State private var blocking: FeedPostRecord?
+    @State private var deleting: FeedPostRecord?
     @State private var toast: String?
 
     init(fixedFilter: FeedFilter? = nil) {
@@ -105,6 +106,22 @@ struct FeedListView: View {
             }
         } message: {
             Text("An administrator will look at it. Reporting twice is one report.")
+        }
+        .alert("Delete this post?", isPresented: Binding(
+            get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+        ) {
+            Button("Keep it", role: .cancel) { deleting = nil }
+            Button("Delete", role: .destructive) {
+                if let post = deleting, let store {
+                    Task {
+                        let ok = await store.delete(post, actions: dependencies.feedActions)
+                        toast = ok ? "Deleted." : "Couldn't delete it — try again."
+                        deleting = nil
+                    }
+                }
+            }
+        } message: {
+            Text("It comes off the feed for everyone, with any replies under it.")
         }
         .alert("Block \(blocking?.authorDisplayName ?? "this person")?", isPresented: Binding(
             get: { blocking != nil }, set: { if !$0 { blocking = nil } })
@@ -212,6 +229,7 @@ struct FeedListView: View {
                             onFollow: { Task { await store.toggleFollow(post, actions: dependencies.feedActions) } },
                             onReport: { reporting = post },
                             onBlock: { blocking = post },
+                            onDelete: { deleting = post },
                             onRecategorize: { recategorizing = post })
                     }
                     if store.hasMore {
@@ -241,8 +259,10 @@ struct FeedThreadView: View {
     @Environment(AppDependencies.self) private var dependencies
     let postId: UUID
 
+    @Environment(\.dismiss) private var dismiss
     @State private var store: FeedThreadStore?
     @State private var replyingTo: FeedPostRecord?
+    @State private var deleting: FeedPostRecord?
     /// The server's own CanPost, learned from a one-page feed fetch — the thread endpoint
     /// does not carry it, and guessing from "is signed in" would offer a reply box to
     /// somebody whose post the API will refuse.
@@ -284,7 +304,8 @@ struct FeedThreadView: View {
                                             !post.likedByCurrentUser, postId: post.id)
                                         await store.load()
                                     } },
-                                    onReply: { replyingTo = post })
+                                    onReply: { replyingTo = post },
+                                    onDelete: { deleting = post })
                                     .padding(.leading, index == 0 ? 0 : 20)
                             }
                         }
@@ -299,6 +320,23 @@ struct FeedThreadView: View {
             }
         }
         .navigationTitle("Post")
+        .alert("Delete this post?", isPresented: Binding(
+            get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+        ) {
+            Button("Keep it", role: .cancel) { deleting = nil }
+            Button("Delete", role: .destructive) {
+                if let post = deleting {
+                    Task {
+                        let ok = await dependencies.feedActions.delete(postId: post.id)
+                        deleting = nil
+                        // The post itself gone: there is no thread left to stand in.
+                        if ok && post.id == postId { dismiss() } else { await store?.load() }
+                    }
+                }
+            }
+        } message: {
+            Text("It comes off the feed for everyone, with any replies under it.")
+        }
         .sheet(item: $replyingTo) { parent in
             ComposerView(parentPostId: parent.id) { _ in
                 Task { await store?.load() }

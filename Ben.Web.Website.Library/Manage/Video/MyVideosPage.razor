@@ -199,7 +199,7 @@
     private void OnFeedCancelled()
     {
         _pendingFeedExport = null;
-        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was cancelled."));
+        _feedFlowDone?.TrySetException(new InvalidOperationException("Posting was canceled."));
     }
 
     // ── "Standalone editor" (phase 12) ────────────────────────────────────────

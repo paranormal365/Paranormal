@@ -190,11 +190,11 @@ public sealed class StoreProductHistoryTests : IAsyncLifetime
     {
         var p = await NewAsync();
         p = Ok(await Admin().SaveOptions(p.Id, new SaveStoreOptionsRequest(
-            [new SaveStoreOptionRequest(null, "Colour", StoreOptionKind.Pill, [new(null, "Black", null, true), new(null, "Red", null, true)])]), default));
+            [new SaveStoreOptionRequest(null, "Color", StoreOptionKind.Pill, [new(null, "Black", null, true), new(null, "Red", null, true)])]), default));
         Ok(await Admin().GenerateVariants(p.Id, default));
 
         var said = (await HistoryAsync(p.Id)).Select(h => h.Summary).ToList();
-        Assert.Contains("Set the options to Colour (Black, Red).", said);
+        Assert.Contains("Set the options to Color (Black, Red).", said);
         Assert.Contains("Added 2 variants, one for each new combination of choices.", said);
 
         // The same options again: nothing to say.

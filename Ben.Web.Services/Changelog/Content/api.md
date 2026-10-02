@@ -108,7 +108,7 @@ belongs there; this is for the part underneath.
 - Tax charged for event credits is the tax that is filed. It was being worked out again when the
   payment came back, so a change to a tax rule or to a group's address in between could leave a
   receipt saying something different from the card statement.
-- A renewal attempt is now recognised as the same attempt when it is retried across a date
+- A renewal attempt is now recognized as the same attempt when it is retried across a date
   boundary, so a retry cannot become a second payment for one period.
 - A subscription period's agreed price is no longer altered by anything bought mid-period. The extra
   purchase is recorded as its own charge and payment, which is where it belongs.
@@ -153,7 +153,7 @@ belongs there; this is for the part underneath.
   actually been published. Two older checks read the publish setting without asking whether the case
   had been published, which is what every other answer on the service has always meant by it.
 - A video, a recording or an image on a case can be asked for a byte range, so it plays and can be seeked in the page instead of only being downloadable. The same applies to a case's public page, a place's archive, an event's evidence and a group's files.
-- Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behaviour.
+- Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behavior.
 
 ## 2026-09-16 · 2.3.0
 
@@ -193,7 +193,7 @@ belongs there; this is for the part underneath.
 - SuperAdmin endpoints list every hosted event, return the events dashboard figures, show what removing an
   event would do, remove it, and answer appeals.
 - Hosted events have a new Removed state. It counts as called off, is not shown on the public site, and
-  can't be published, restored or un-cancelled by the organizer.
+  can't be published, restored or un-canceled by the organizer.
 - Organizers can read their event's removal and appeal it once.
 - Restoring an event now only acts on an archived event. It no longer turns a called-off event back into
   a draft.

@@ -75,9 +75,9 @@
             <div class="card-body">
                 @Part("copy-plan", "The plan", PlanWords(p), p.Units > 0, () => _plan, v => _plan = v)
                 @Part("copy-menus", "Menus", Count(p.Menus, "menu", "menus"), p.Menus > 0, () => _menus, v => _menus = v)
-                @Part("copy-programme", "Programme", Count(p.Sessions, "session", "sessions") + " at the same times, not yet published",
+                @Part("copy-programme", "Program", Count(p.Sessions, "session", "sessions") + " at the same times, not yet published",
                       p.Sessions > 0, () => _programme, v => _programme = v)
-                @Part("copy-bands", "Bands", Count(p.Bands, "colour", "colours"), p.Bands > 0, () => _bands, v => _bands = v)
+                @Part("copy-bands", "Bands", Count(p.Bands, "color", "colors"), p.Bands > 0, () => _bands, v => _bands = v)
                 @Part("copy-helpers", "Helpers", HelperWords(p), p.Helpers > 0, () => _helpers, v => _helpers = v)
                 @Part("copy-adverts", "Advert", Count(p.Adverts, "advert", "adverts") + " as a draft, reviewed again before it shows",
                       p.Adverts > 0, () => _adverts, v => _adverts = v)

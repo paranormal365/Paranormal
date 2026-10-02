@@ -281,6 +281,32 @@
                 @(Post.ReplyCount == 1 ? "1 reply" : $"{Post.ReplyCount} replies")
             </a>
 
+            @* The author's own door out (walk, 2026-10-02): nothing let anybody take down a post
+               they made, here or in the app. Asked twice, because there is no undo for them. *@
+            @if (Post.IsOwnPost && CanAct && OnDeleted.HasDelegate)
+            {
+                @if (_confirmingDelete)
+                {
+                    <span class="text-danger" id="feed-post-delete-confirm">
+                        Delete this post?
+                        <button type="button" class="btn btn-link btn-sm p-0 text-danger fw-semibold ms-1"
+                                disabled="@_deleteBusy" @onclick="DeleteAsync" data-testid="feed-post-delete-yes">Delete</button>
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-2"
+                                disabled="@_deleteBusy" @onclick="() => _confirmingDelete = false">Keep it</button>
+                    </span>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-link btn-sm p-0 text-secondary"
+                            @onclick="() => { _confirmingDelete = true; _deleteError = null; }"
+                            data-testid="feed-post-delete">Delete</button>
+                }
+                @if (_deleteError is not null)
+                {
+                    <span class="text-danger" id="feed-post-delete-error">@_deleteError</span>
+                }
+            }
+
             @if (!Post.IsOwnPost && CanAct)
             {
                 @if (Post.ReportedByCurrentUser)
@@ -323,6 +349,25 @@
 
     /// <summary>Raised when a waiting post was called back, so the page drops it.</summary>
     [Parameter] public EventCallback<FeedPostRecord> OnScheduledCancelled { get; set; }
+
+    /// <summary>Raised when the author took their post down, so the page drops it. No delegate, no button.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnDeleted { get; set; }
+
+    private bool _confirmingDelete;
+    private bool _deleteBusy;
+    private string? _deleteError;
+
+    private async Task DeleteAsync()
+    {
+        _deleteBusy = true;
+        _deleteError = null;
+        try
+        {
+            if (await Feed.DeleteFeedPostAsync(Post.Id)) await OnDeleted.InvokeAsync(Post);
+            else { _deleteError = "That couldn't be deleted just now. Try again shortly."; _confirmingDelete = false; }
+        }
+        finally { _deleteBusy = false; }
+    }
 
     private bool _recategorizing;
     private string? _recategorizeError;

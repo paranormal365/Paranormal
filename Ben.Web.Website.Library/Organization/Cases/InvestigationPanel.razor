@@ -836,7 +836,7 @@
             // cancelled, while the client and every attendee still had it in their calendar.
             if (!await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id))
             {
-                _dialogError = "This visit could not be cancelled, so it is still scheduled.";
+                _dialogError = "This visit could not be canceled, so it is still scheduled.";
                 return;
             }
 
@@ -874,7 +874,7 @@
         InvestigationStatus.Scheduled  => "Scheduled",
         InvestigationStatus.InProgress => "In Progress",
         InvestigationStatus.Completed  => "Completed",
-        InvestigationStatus.Cancelled  => "Cancelled",
+        InvestigationStatus.Cancelled  => "Canceled",
         _                              => s.ToString(),
     };
 

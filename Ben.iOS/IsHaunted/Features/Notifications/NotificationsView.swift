@@ -22,6 +22,8 @@ struct NotificationsView: View {
                     Label("Sign in to see what's waiting", systemImage: "bell.slash")
                 } description: {
                     Text("Notifications are about your cases, groups and gear — they need an account.")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):

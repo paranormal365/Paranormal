@@ -46,7 +46,7 @@ public class MessagingTests : BenTestBase
     public async Task An_ordinary_member_can_open_their_own_group()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenOrganizationAsync(OrgName)) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Expect(Main.GetByText("do not have access", new() { Exact = false }))
             .ToHaveCountAsync(0);
@@ -58,7 +58,7 @@ public class MessagingTests : BenTestBase
     public async Task The_folder_rail_offers_every_channel()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         foreach (var folder in new[] { "Inbox", "Sent", "Broadcasts", "Direct", "Case teams", "Public" })
         {
@@ -85,7 +85,7 @@ public class MessagingTests : BenTestBase
         await BroadcastToOrgAsync(subject);
 
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         var unread = Main.Locator("li.unread .mail-row", new() { HasTextString = subject }).First;
         await Expect(unread).ToBeVisibleAsync(new() { Timeout = 15_000 });
@@ -115,7 +115,7 @@ public class MessagingTests : BenTestBase
     public async Task Choosing_direct_message_offers_the_groups_members_as_recipients()
     {
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Compose.First.ClickAsync();
         await SelectChannelAsync("Direct Message");
@@ -146,7 +146,7 @@ public class MessagingTests : BenTestBase
         var subject = $"DM test {Guid.NewGuid():N}"[..20];
 
         await LoginAsync(MemberEmail, MemberPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Compose.First.ClickAsync();
         await SelectChannelAsync("Direct Message");
@@ -172,7 +172,7 @@ public class MessagingTests : BenTestBase
         // the message existed, addressed to nobody.
         await LogoutAsync();
         await LoginAsync(UserEmail, UserPassword);
-        if (!await OpenMessagesAsync()) Assert.Ignore($"No organisation named {OrgName} in this database.");
+        if (!await OpenMessagesAsync()) Assert.Ignore($"No organization named {OrgName} in this database.");
 
         await Expect(Main.GetByText(subject).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
     }
@@ -198,6 +198,36 @@ public class MessagingTests : BenTestBase
         await row.ClickAsync();
         await Expect(Main.GetByRole(AriaRole.Heading, new() { Name = subject }))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    /// <summary>
+    /// "Unread messages", clicked, opens the message and takes the count down — from the page
+    /// itself, where it used to point back at the page and do nothing (Ben, 2026-10-02).
+    /// </summary>
+    [Test]
+    public async Task The_unread_messages_row_opens_the_message_and_clears_it()
+    {
+        var subject = $"Row test {Guid.NewGuid():N}"[..24];
+        if (!await SendPlatformMessageAsync(subject)) Assert.Ignore("Could not seed a platform message; the admin API refused.");
+
+        await LoginAsync(UserEmail, UserPassword);
+        // Every older unread platform message is read first, so the one just sent is the oldest.
+        var api = await ApiAsAsync(UserEmail, UserPassword);
+        var mine = await api.GetAsync("/api/me/messages");
+        foreach (var m in (await mine.JsonAsync())!.Value.EnumerateArray())
+            if (m.GetProperty("readUtc").ValueKind == System.Text.Json.JsonValueKind.Null
+                && m.GetProperty("subject").GetString() != subject)
+                await api.PutAsync($"/api/me/messages/{m.GetProperty("id").GetString()}/read");
+
+        await Page.GotoAsync($"{BaseUrl}/notifications");
+        await WaitUntilLoadedAsync();
+        var row = Main.Locator("button, a", new() { HasTextString = "Unread messages" }).First;
+        await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await row.ClickAsync();
+
+        await Expect(Page.Locator("#notification-open-message")).ToContainTextAsync(subject, new() { Timeout = 15_000 });
+        // Read now, so the row it was counted under has gone.
+        await Expect(Main.Locator("button, a", new() { HasTextString = "Unread messages" })).ToHaveCountAsync(0, new() { Timeout = 15_000 });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

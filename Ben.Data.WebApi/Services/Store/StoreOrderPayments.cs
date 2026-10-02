@@ -41,8 +41,8 @@ public sealed class StoreOrderPayments(
         StillProcessing,
     }
 
-    public const string PaidAfterCancelWithStock = "Paid after the checkout was cancelled; stock was re-taken — check before packing.";
-    public const string PaidAfterCancelNoStock = "Paid after the checkout was cancelled and the stock is gone — refund it from this page; no tax transaction was filed.";
+    public const string PaidAfterCancelWithStock = "Paid after the checkout was canceled; stock was re-taken — check before packing.";
+    public const string PaidAfterCancelNoStock = "Paid after the checkout was canceled and the stock is gone — refund it from this page; no tax transaction was filed.";
     public const string ChargedOnEarlierCalculation = "Charged on an earlier calculation; totals rewritten from Stripe.";
     public static string DifferentIntent(string pi) => $"A payment naming this order arrived on a different PaymentIntent {pi}.";
     public static string AmountMismatch(long received, decimal total) => $"Stripe reports {StoreMoney.Format(received / 100m)} received; the order is {StoreMoney.Format(total)}.";
@@ -113,7 +113,7 @@ public sealed class StoreOrderPayments(
                 // (c) Paid after it was cancelled: take the stock back if it is still there.
                 if (order.Status == StoreOrderStatus.Cancelled)
                 {
-                    db.StoreOrderEvents.Add(Event(order, StoreOrderEventKind.PaymentSucceeded, now, "Paid after this order was cancelled — needs attention.",
+                    db.StoreOrderEvents.Add(Event(order, StoreOrderEventKind.PaymentSucceeded, now, "Paid after this order was canceled — needs attention.",
                         StoreOrderStatus.Cancelled, StoreOrderStatus.Cancelled));
                     var retaken = true;
                     foreach (var item in order.Items.OrderBy(i => i.VariantId))
@@ -187,7 +187,7 @@ public sealed class StoreOrderPayments(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var order = await db.StoreOrders.FirstAsync(o => o.Id == orderId, ct);
         order.PaidUtc = now;
-        db.StoreOrderEvents.Add(Event(order, StoreOrderEventKind.PaymentSucceeded, now, "Paid after this order was cancelled — needs attention.",
+        db.StoreOrderEvents.Add(Event(order, StoreOrderEventKind.PaymentSucceeded, now, "Paid after this order was canceled — needs attention.",
             StoreOrderStatus.Cancelled, StoreOrderStatus.Cancelled, order.Total));
         Raise(db, order, PaidAfterCancelNoStock, now);
         await db.SaveChangesAsync(ct);
@@ -372,7 +372,7 @@ public sealed class StoreOrderPayments(
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (await OrderIdForAsync(db, paymentIntentId, ct) is { } id)
-            await ReleaseAsync(id, "Payment cancelled at Stripe", StoreOrderEventKind.Cancelled, ct);
+            await ReleaseAsync(id, "Payment canceled at Stripe", StoreOrderEventKind.Cancelled, ct);
     }
 
     /// <summary>

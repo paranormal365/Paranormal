@@ -12,6 +12,14 @@ struct SignalListSurface: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .background(Theme.ink)
+            // A sheet does not inherit the app's tint, so its icons fell back to system blue
+            // (walk, 2026-10-02 — the Send session sheet). Every list and form carries it.
+            .tint(Theme.ecto)
+            // Scrolling puts the keyboard away. Nothing did before, so on New session the one
+            // button sat under the keyboard until somebody thought to press Return (walk,
+            // 2026-10-02).
+            .scrollDismissesKeyboard(.interactively)
+            .toolbarBackground(Theme.ink, for: .navigationBar)
             .listRowBackground(Theme.mist)
     }
 }
@@ -23,7 +31,13 @@ extension View {
     /// Signal's page colour behind a whole screen in a navigation stack — the parts no list
     /// covers, like a search bar above one, or a page built from a plain stack. Set once, on every
     /// section's front screen and every pushed page, in `RootShell`.
-    func signalPage() -> some View { containerBackground(Theme.ink, for: .navigation) }
+    func signalPage() -> some View {
+        containerBackground(Theme.ink, for: .navigation)
+            // Once the page scrolls, its words ran under the title and the clock with nothing
+            // behind them and both became unreadable (walk, 2026-10-02). The bar takes the page's
+            // colour when content is under it, the way the website's header stays solid.
+            .toolbarBackground(Theme.ink, for: .navigationBar)
+    }
 }
 
 /// A `List` in Signal's colours. `.listRowBackground` only reaches rows when it is set on the
@@ -64,6 +78,11 @@ struct SignalForm<Content: View>: View {
 /// The few UIKit controls SwiftUI gives no style for, in Signal's colours — set once at launch.
 enum SignalAppearance {
     static func apply() {
+        // The accent for everything UIKit draws under SwiftUI — including a presented sheet's own
+        // hosting view, which does not inherit `.tint` from the screen that presented it. The
+        // Send session sheet's icons came out system blue until this (walk, 2026-10-02).
+        UIView.appearance().tintColor = UIColor(named: "Ecto")
+
         // A segmented picker (Local time / My time, the feed's tabs) shows its choice as the site's
         // violet pill with white words, not the system's grey.
         let segment = UISegmentedControl.appearance()

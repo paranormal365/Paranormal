@@ -81,7 +81,7 @@ uploads, and anything shared with you through a group or a case.
 ![The Server tab listing media held on the site](/help/media/using-the-video-editor/media-library.png)
 *Everything you can reach, with its size. Clicking a file downloads it to this browser.*
 
-Importing shows a row per file, and each row can be cancelled while it is still working.
+Importing shows a row per file, and each row can be canceled while it is still working.
 
 ### Finding the right file
 
@@ -209,7 +209,7 @@ instead of stepping frames.
 
 ### Marking a moment
 
-**Marker** drops a labelled point at the playhead. Markers are for you and anyone reviewing with
+**Marker** drops a labeled point at the playhead. Markers are for you and anyone reviewing with
 you — a way to say "here" without cutting anything. They travel with the project.
 
 ### Saving a single frame
@@ -266,7 +266,7 @@ By default a clip fills the frame. **Place this clip** lets you say otherwise:
   both at half width for a side-by-side.
 - **Footage shot sideways.** **Turn upright** rotates a phone clip a quarter turn.
 - **Something at the edge you do not want.** **Cut off the edges** trims a share off any side,
-  which is how a recorder's timestamp bar or the neighbour's window comes out of shot. Cutting
+  which is how a recorder's timestamp bar or the neighbor's window comes out of shot. Cutting
   removes it from the file completely, unlike hiding an area, which covers it.
 
 The picture keeps its own proportions inside whatever box you give it, so placing a clip never
@@ -359,7 +359,7 @@ Callouts can be moved, resized and rotated, and their movement can be animated o
 ![A callout on the timeline](/help/media/using-the-video-editor/callout.png)
 *Callouts are for drawing attention to a spot in the picture.*
 
-Both take colour, font and border settings from the properties panel, and both can move across the
+Both take color, font and border settings from the properties panel, and both can move across the
 frame while they are on screen. Every change is made as you make it and every one can be undone,
 including the words themselves — there is no separate Apply step.
 
@@ -550,7 +550,7 @@ Until you use it:
 - the **Server** tab says so and offers the same button, rather than showing an empty list — an
   empty list would mean you had uploaded nothing, which is a different thing;
 - **Save to Server** is not offered, because it has nowhere to go;
-- after an export, the destination prompt still shows the server option, greyed out, so you can
+- after an export, the destination prompt still shows the server option, grayed out, so you can
   see it exists and what it needs.
 
 So: edit locally as much as you like, sign in when you want your own footage or want to keep the
@@ -560,7 +560,7 @@ says so and keeps the render — signing in again and uploading once more is the
 ## When something looks wrong
 
 - **The editor says "Not loaded" and nothing imports.** Press **Initialize** and wait for *Ready*.
-- **Export is greyed out.** It needs both a Ready engine and at least one clip. If the chip says it
+- **Export is grayed out.** It needs both a Ready engine and at least one clip. If the chip says it
   is busy, a background render is running; it will free up when that finishes.
 - **A file downloaded but did not appear.** Downloading and placing are two separate clicks — click
   the card a second time.

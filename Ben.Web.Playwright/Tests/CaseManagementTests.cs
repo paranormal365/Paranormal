@@ -122,7 +122,7 @@ public class CaseManagementTests : BenTestBase
             }
             else if (!classes.Contains("bg-body-secondary"))
             {
-                problems.Add($"{status} has no cases but its count is coloured: \"{classes}\"");
+                problems.Add($"{status} has no cases but its count is colored: \"{classes}\"");
             }
 
             var name = await pill.GetAttributeAsync("aria-label") ?? "";

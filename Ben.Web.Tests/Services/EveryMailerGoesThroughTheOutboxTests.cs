@@ -126,7 +126,7 @@ public sealed class EveryMailerGoesThroughTheOutboxTests
             "after the hold is saved. WORTH MOVING — its own remarks say the deadline IS the letter, "
           + "and a guest who never learns it cannot act before the clock decides.",
         ["EventGuestMailer.cs: SendToSignUpsAsync"] =
-            "session moved / cancelled / promoted notices, after the change is saved; the guest's "
+            "session moved / canceled / promoted notices, after the change is saved; the guest's "
           + "own page shows the session as it now is.",
         ["EventGuestMailer.cs: SendVenueWithdrewAsync"] =
             "after the withdrawal is saved; like the called-off letter, worth moving.",

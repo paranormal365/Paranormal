@@ -398,7 +398,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         if (optionsNow.Said != optionsWere.Said)
             StoreProductHistory.Record(db, productId, StoreProductChangeArea.Options, optionsNow.Said, actor.UserId, actor.Role, now);
         else if (optionsNow.Colours != optionsWere.Colours)
-            StoreProductHistory.Record(db, productId, StoreProductChangeArea.Options, "Changed the swatch colours.", actor.UserId, actor.Role, now);
+            StoreProductHistory.Record(db, productId, StoreProductChangeArea.Options, "Changed the swatch colors.", actor.UserId, actor.Role, now);
         await db.SaveChangesAsync(ct);
         await StorePriceCaches.RecomputeAsync(db, productId, ct);
         return null;
@@ -657,7 +657,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
         foreach (var option in wanted)
         {
             var name = option.Name?.Trim();
-            if (string.IsNullOrEmpty(name)) return "Each option needs a name, like Colour or Size.";
+            if (string.IsNullOrEmpty(name)) return "Each option needs a name, like Color or Size.";
             if (name.Length > 60) return "An option's name is 60 characters at most.";
             if (!names.Add(name)) return $"There are two options called {name}.";
             if (option.Id is { } oid && product.Options.All(o => o.Id != oid)) return "That option belongs to another product.";
@@ -677,7 +677,7 @@ public sealed partial class StoreProductEditor(ICmsMarkupSanitizer sanitizer, St
                 if (!seen.Add(text)) return $"{name} lists {text} twice.";
                 if (value.Id is { } vid && !mine.Contains(vid)) return "That value belongs to another option.";
                 if (option.Kind == StoreOptionKind.Swatch && (value.SwatchHex is null || !Hex().IsMatch(value.SwatchHex.Trim())))
-                    return "A swatch needs a colour like #1a2b3c.";
+                    return "A swatch needs a color like #1a2b3c.";
             }
         }
         return null;

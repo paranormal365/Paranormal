@@ -128,7 +128,13 @@ struct TourDetailView: View {
                                 // The walk's own clock, not this phone's.
                                 PlaceTime(utc: date.startDateTime, zoneId: date.timeZoneId ?? tour.timeZoneId)
                                     .font(.body).foregroundStyle(Theme.bone)
-                                if let left = date.spacesLeft {
+                                // The list holds every night that has not ENDED, so a walk that
+                                // set off an hour ago sat under "coming up" offering places as if
+                                // it had not started (found walking the app, 2026-10-02).
+                                if date.startDateTime < Date() {
+                                    Text("Under way now").font(.caption.weight(.semibold))
+                                        .foregroundStyle(Theme.haunt)
+                                } else if let left = date.spacesLeft {
                                     Text(date.isFull ? "Full" : "\(left) place\(left == 1 ? "" : "s") left")
                                         .font(.caption)
                                         .foregroundStyle(date.isFull ? Theme.warning : Theme.fog)

@@ -21,6 +21,8 @@ struct InvestigationsView: View {
                     Label("Sign in to see your investigations", systemImage: "binoculars")
                 } description: {
                     Text("Investigations belong to the group running them.")
+                } actions: {
+                    SignInButton()
                 }
 
             case .failed(let reason):
@@ -103,13 +105,16 @@ struct InvestigationsView: View {
                     // and the count says so rather than quietly showing fewer pins.
                     let mappable = store.mappable.count
                     let total = store.attended.count
-                    Button { showMap = true } label: {
-                        Label(mappable == total
-                              ? "See all \(total) on a map"
-                              : "See \(mappable) of \(total) on a map",
-                              systemImage: "map")
+                    // With nothing to draw there is no map to offer: a disabled "See 0 of 1"
+                    // looked like any other row and read as a broken link (walk, 2026-10-02).
+                    if mappable > 0 {
+                        Button { showMap = true } label: {
+                            Label(mappable == total
+                                  ? "See all \(total) on a map"
+                                  : "See \(mappable) of \(total) on a map",
+                                  systemImage: "map")
+                        }
                     }
-                    .disabled(mappable == 0)
                     if mappable < total {
                         // Agreement across the whole sentence, not just the noun: "1 visit
                         // have … so they can't" is the classic half-pluralised string.

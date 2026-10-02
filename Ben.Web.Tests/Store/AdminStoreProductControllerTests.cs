@@ -87,7 +87,7 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
     }
 
     private static SaveStoreOptionsRequest ColourBySize() => new([
-        new(null, "Colour", StoreOptionKind.Swatch, [new(null, "Black", "#000000", true), new(null, "Grey", "#808080", true)]),
+        new(null, "Color", StoreOptionKind.Swatch, [new(null, "Black", "#000000", true), new(null, "Gray", "#808080", true)]),
         new(null, "Size", StoreOptionKind.Pill, [new(null, "Small", null, true), new(null, "Medium", null, true), new(null, "Large", null, true)]),
     ]);
 
@@ -207,8 +207,8 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
 
         Assert.Equal("Three options is the most a product can carry.",
             Refusal(await Controller().SaveOptions(p.Id, new([Pill("One"), Pill("Two"), Pill("Three"), Pill("Four")]), default)));
-        Assert.Equal("A swatch needs a colour like #1a2b3c.",
-            Refusal(await Controller().SaveOptions(p.Id, new([new(null, "Colour", StoreOptionKind.Swatch, [new(null, "Black", "black", true)])]), default)));
+        Assert.Equal("A swatch needs a color like #1a2b3c.",
+            Refusal(await Controller().SaveOptions(p.Id, new([new(null, "Color", StoreOptionKind.Swatch, [new(null, "Black", "black", true)])]), default)));
 
         var withOptions = Ok(await Controller().SaveOptions(p.Id, ColourBySize(), default));
         await Controller().GenerateVariants(p.Id, default);
@@ -217,10 +217,10 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
         var colour = withOptions.Options[0];
         var size = withOptions.Options[1];
         var withoutGrey = new SaveStoreOptionsRequest([
-            new(colour.Id, "Colour", StoreOptionKind.Swatch, [new(colour.Values[0].Id, "Black", "#000000", true)]),
+            new(colour.Id, "Color", StoreOptionKind.Swatch, [new(colour.Values[0].Id, "Black", "#000000", true)]),
             new(size.Id, "Size", StoreOptionKind.Pill, size.Values.Select(v => new SaveStoreOptionValueRequest(v.Id, v.Value, null, true)).ToList()),
         ]);
-        Assert.Matches("^Grey is still used by variant Grey / (Small|Medium|Large) — remove it from the variant first\\.$",
+        Assert.Matches("^Gray is still used by variant Gray / (Small|Medium|Large) — remove it from the variant first\\.$",
             Refusal(await Controller().SaveOptions(p.Id, withoutGrey, default)));
     }
 
@@ -254,7 +254,7 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
         var p = await PricedAsync(await NewProductAsync(), 39m);
         await Controller().SaveOptions(p.Id, ColourBySize(), default);
         var variants = Ok(await Controller().GenerateVariants(p.Id, default)).Variants;
-        var large = variants.First(v => v.Label == "Grey / Large");
+        var large = variants.First(v => v.Label == "Gray / Large");
         await Controller().UpdateVariant(p.Id, large.Id,
             new SaveStoreVariantRequest(large.Sku, 49m, null, true, false, large.SortOrder, large.OptionValueIds), default);
 
@@ -366,7 +366,7 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
         Assert.Equal("K-II EMF Meter (copy)", copy.Name);
         Assert.Equal(6, copy.Variants.Count);
         Assert.All(copy.Variants, v => Assert.EndsWith("-COPY", v.Sku));
-        Assert.Contains(copy.Variants, v => v.Label == "Grey / Large");
+        Assert.Contains(copy.Variants, v => v.Label == "Gray / Large");
         await using var db = await _sqlite.NewContextAsync();
         Assert.Equal(4, await db.UploadFiles.CountAsync());
         Assert.Empty(copy.Images.Select(i => i.UploadFileId).Intersect(

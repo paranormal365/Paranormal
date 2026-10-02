@@ -106,7 +106,7 @@ public sealed class PlaywrightTestsCanFailTests
         Assert.True(newOffenders.Count == 0,
             "These browser tests end themselves as passed, so a regression in what they cover "
             + "reports green. Use Assert.Ignore for a missing precondition and Assert.Fail (or a "
-            + "real assertion) for missing behaviour:\n  " + string.Join("\n  ", newOffenders));
+            + "real assertion) for missing behavior:\n  " + string.Join("\n  ", newOffenders));
     }
 
     // ── A guard that was attempted and withdrawn (2026-09-17) ────────────────

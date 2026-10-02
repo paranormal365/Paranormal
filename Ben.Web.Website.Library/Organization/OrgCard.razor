@@ -13,7 +13,7 @@
 *@
 
 <a class="org-card @Class" href="@($"/o/{UrlName}")" style="@TourPlate.HueStyle(Name)">
-    @* Signal phase 2: the group's colour as a plate across the top of the card, its mark sitting
+    @* Signal phase 2: the group's color as a plate across the top of the card, its mark sitting
        on the plate's edge. A grid of name-in-a-box cards read as a directory; a grid of coloured
        plates reads as a set of groups, each one recognisable on the next page it appears on. *@
     <span class="org-card__plate" aria-hidden="true"></span>
@@ -27,9 +27,9 @@
         }
         else
         {
-            @* Their initials in their own colour rather than an empty square. A list of groups
+            @* Their initials in their own color rather than an empty square. A list of groups
                with no logos was a list of names in boxes; this gives each one something the eye
-               can come back to, and it is the colour that group carries everywhere else. *@
+               can come back to, and it is the color that group carries everywhere else. *@
             <span class="org-card__initials" aria-hidden="true">@TourPlate.Monogram(Name)</span>
         }
     </span>

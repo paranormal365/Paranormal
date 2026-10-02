@@ -212,6 +212,8 @@ struct RootShell: View {
             FieldKitHomeView()
         case .eventsList:
             EventsView()
+        case .investigationsList:
+            InvestigationsView()
         // Item 234. Declared and deep-linked to since the routes were written, and until now it
         // fell through to the placeholder — which is where "confirm your seat on the app" had
         // nowhere to happen.

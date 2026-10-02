@@ -450,7 +450,7 @@ public sealed class FieldSessionPublishController : BenControllerBase
             return (null, "Say where this was recorded.");
 
         if (string.IsNullOrWhiteSpace(fresh.Name))
-            return (null, "A place needs a name people will recognise.");
+            return (null, "A place needs a name people will recognize.");
 
         // Candidates are narrowed in the database by state, then judged by the shared matcher —
         // the radius test needs coordinates the query cannot compare.

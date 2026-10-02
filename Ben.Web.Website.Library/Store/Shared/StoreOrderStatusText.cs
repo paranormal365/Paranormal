@@ -15,7 +15,7 @@ public static class StoreOrderStatusText
         StoreOrderStatus.Packed => "Packed",
         StoreOrderStatus.Shipped => "Shipped",
         StoreOrderStatus.Delivered => "Delivered",
-        StoreOrderStatus.Cancelled => "Cancelled",
+        StoreOrderStatus.Cancelled => "Canceled",
         StoreOrderStatus.Refunded => "Refunded",
         StoreOrderStatus.PartiallyShipped => "Partially shipped",
         _ => status.ToString(),
@@ -28,7 +28,7 @@ public static class StoreOrderStatusText
         StoreParcelStatus.Packed => "Packed",
         StoreParcelStatus.Shipped => "Shipped",
         StoreParcelStatus.Delivered => "Delivered",
-        _ => "Cancelled",
+        _ => "Canceled",
     };
 
     public static string Tone(StoreParcelStatus status) => status switch

@@ -29,3 +29,29 @@ export function scrollToElementId(id, block = 'center') {
         }, 350);
     }, 0);
 }
+
+/** Brings the heading the address names (#the-public-catalog) into view once the page has
+ *  actually drawn it — and keeps it there while the pictures above it load.
+ *
+ *  A help guide renders after the circuit connects, so the browser's own jump-to-anchor runs
+ *  against a loading spinner and finds nothing; and a jump made before the screenshots above have
+ *  loaded is pushed down by every one that arrives. "How the catalogue works" on the equipment
+ *  page landed on "Retiring a piece", two sections early (Ben, 2026-10-02). So: jump now, jump
+ *  again as each unloaded image settles, and stop the moment the reader scrolls for themselves. */
+export function scrollToHashWhenSettled() {
+    const id = decodeURIComponent((location.hash || '').slice(1));
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    let readerMoved = false;
+    const stop = () => { readerMoved = true; };
+    for (const type of ['wheel', 'touchmove', 'keydown', 'mousedown'])
+        window.addEventListener(type, stop, { once: true, passive: true });
+
+    const go = () => { if (!readerMoved) el.scrollIntoView({ block: 'start' }); };
+    go();
+    for (const img of document.images)
+        if (!img.complete) img.addEventListener('load', go, { once: true });
+    setTimeout(go, 1500);
+}

@@ -24,7 +24,7 @@ the decision is yours.
 ## Asking to borrow
 
 Find the piece and choose **Ask to borrow**. Gear turns up in two places: your group's
-**Equipment** tab, and the public equipment catalogue — **Equipment → Catalogue** in the menu —
+**Equipment** tab, and the public equipment catalog — **Equipment → Catalog** in the menu —
 under *Gear people own*.
 
 If the owner lends the piece to more than one group you are in, you will be asked **who you are

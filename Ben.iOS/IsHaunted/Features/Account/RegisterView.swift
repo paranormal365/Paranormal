@@ -46,7 +46,9 @@ struct RegisterView: View {
                         SecureField("Password", text: $password)
                             .textContentType(.newPassword)
                     } footer: {
-                        Text("You'll confirm your email before you can sign in.")
+                        // The rules, before the refusal: the website's sign-up says them under the
+                        // field, and the app only listed them after a failed try (walk, 2026-10-02).
+                        Text("At least 8 characters, with an upper-case letter, a lower-case letter and a digit. You'll confirm your email before you can sign in.")
                     }
 
                     Section {

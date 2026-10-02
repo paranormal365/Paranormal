@@ -84,7 +84,7 @@ public static class StoreProductHistory
         if (before.Slug != after.Slug) Say($"Moved its web address to /store/p/{after.Slug}.");
         if (before.CategoryId != after.CategoryId) Say($"Moved it from {Named(before.CategoryId)} to {Named(after.CategoryId)}.");
         if (before.EquipmentModelId != after.EquipmentModelId)
-            Say(after.EquipmentModelId is { } model ? $"Linked it to {Named(model)} in the equipment catalogue." : "Unlinked it from the equipment catalogue.");
+            Say(after.EquipmentModelId is { } model ? $"Linked it to {Named(model)} in the equipment catalog." : "Unlinked it from the equipment catalog.");
         if (before.ShortDescription != after.ShortDescription) Say("Changed the short description.");
         if (before.LongDescriptionHtml != after.LongDescriptionHtml) Say("Changed the description.");
         if (before.Specs != after.Specs) Say("Changed the specifications.");

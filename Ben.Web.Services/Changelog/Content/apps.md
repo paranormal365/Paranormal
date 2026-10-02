@@ -24,6 +24,22 @@ move the last number, new things the middle one, a whole new part of the app the
 
 ## 2026-10-02 · 1.1.2
 
+- The app has the website's new look, in light and in dark: the same colors, buttons and cards.
+- Anywhere you need to sign in, there is a **Sign in** button right there. The sign-in sheet links to
+  resetting your sign-in and to **Create an account**, and the new-account form says what it needs
+  before you try.
+- You can delete your own posts from their **…** menu.
+- The **You were mentioned** notification opens the posts that name you.
+- On an iPhone, a group member finds **Investigations** under Profile, and opening a case from an
+  investigation no longer jumps back to the feed.
+- Switching on video, audio or location asks iOS there and then; if you said no, the switch stays off
+  and the app offers to open Settings, rather than recording nothing.
+- The microphone is asked for before a session starts, so a first session keeps its opening seconds.
+- Profile shows the name people see and your posts and followers.
+- A walk that has already set off says **Under way now** instead of offering places.
+- Public events keep their title at the top, and a walk's name is no longer printed twice.
+- Finding public sessions says it is finding where you are, instead of showing a blank page.
+
 - The magnetometer keeps reading during a session again. With Watch for Motion on — the setting new
   sessions start with — the motion reading and the magnetometer were each asking the phone's motion
   sensors for something different, and the magnetometer stopped updating; they now share one reading.
@@ -37,7 +53,7 @@ move the last number, new things the middle one, a whole new part of the app the
 
 ## 2026-09-28 · 1.1.0
 
-- A lead can now start everybody's Field Kit. A tour's guide, an event's organiser or door staff,
+- A lead can now start everybody's Field Kit. A tour's guide, an event's organizer or door staff,
   or an investigation's lead taps **Launch a session for your group** in Field Kit. Everybody
   registered is told with a notification and a card in the feed, and Field Kit lists it under
   **Happening now**. Nobody is started automatically: **Join** opens a session already set up for
@@ -67,7 +83,7 @@ move the last number, new things the middle one, a whole new part of the app the
   phone was in when it recorded.
 - Your case now lists the group's **visits**, with when each one is, where, and the last moment to
   cancel it. They were sent to the phone but never shown.
-- An event whose organiser never named its zone reads in Central time, as it does on the website,
+- An event whose organizer never named its zone reads in Central time, as it does on the website,
   rather than in UTC.
 - Signing up on the phone records the phone's time zone as the website's clock for you, until you
   choose another there.
@@ -159,9 +175,9 @@ move the last number, new things the middle one, a whole new part of the app the
   screen up to full brightness, and it still opens with no signal.
 - Opening the app with no signal no longer signs you out, and neither does a moment when the server
   cannot be reached.
-- Each hosted event has its own screen with the pass, programme, menus, downloads and the event's room,
+- Each hosted event has its own screen with the pass, program, menus, downloads and the event's room,
   showing only the parts that event has.
-- You can sign up for programme sessions for as many of your party as are coming, join a waiting list
+- You can sign up for program sessions for as many of your party as are coming, join a waiting list
   when a session is full, and give a place back. Times are shown on the venue's clock.
 - Organizers and their helpers can run an event's door from the app. Scanning a pass with the camera
   finds its reservation, and tapping the reservation checks the party in as arrived, all of them or some.

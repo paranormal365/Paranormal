@@ -88,7 +88,7 @@ public class OrdinaryMemberBaselineTests : BenTestBase
         }
 
         // …and Upload File on the files tab.
-        var filesTab = Main.GetByRole(AriaRole.Tab, new() { Name = "Files", Exact = true }).First;
+        var filesTab = OrgTab("Files").First;
         if (await filesTab.IsVisibleAsync())
         {
             await filesTab.ClickAsync();
@@ -169,8 +169,8 @@ public class OrdinaryMemberBaselineTests : BenTestBase
 
     // ── The member's view ─────────────────────────────────────────────────────
 
-    private ILocator Tab(string name)
-        => Main.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true });
+    // The strip's tab, or the menu card's entry where that has replaced it (Signal).
+    private ILocator Tab(string name) => OrgTab(name);
 
     private async Task GotoOrgAsync(string orgId)
     {

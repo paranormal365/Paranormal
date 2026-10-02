@@ -100,7 +100,7 @@ internal static class EquipmentTaxonomySeeder
         ("Communications", "Motorola", "Talkabout T470", "T470",
          "License-free two-way radios for keeping split teams in contact across a large site."),
         ("Communications", "BaoFeng", "UV-5R", "UV-5R",
-         "Cheap programmable handheld transceiver; common team radio where somebody holds the licence."),
+         "Cheap programmable handheld transceiver; common team radio where somebody holds the license."),
 
         // ── Audio recorders ──
         ("Audio Recorder", "Zoom", "H1n Handy Recorder", "H1n",
@@ -128,7 +128,7 @@ internal static class EquipmentTaxonomySeeder
         ("Video Camera", "GoPro", "HERO12 Black", "HERO12",
          "Action camera for walkthrough POV; pair with an IR conversion or lighting for dark interiors."),
         ("Video Camera", "SiOnyx", "Aurora Pro", "Aurora Pro",
-         "True digital night-vision camera that films full colour by moonlight; no IR illuminator needed outdoors."),
+         "True digital night-vision camera that films full color by moonlight; no IR illuminator needed outdoors."),
 
         // ── Still photography ──
         ("Still Camera", "GhostStop", "Full Spectrum Digital Camera", null,
@@ -170,7 +170,7 @@ internal static class EquipmentTaxonomySeeder
         ("Power & Batteries", "Anker", "PowerCore 10000", "A1263",
          "Pocket USB battery bank — keeps phones, IR lights and Wyze cams alive through a long night."),
         ("Tripods & Mounts", "Manfrotto", "Compact Action", "MKCOMPACTACN",
-         "Light aluminium tripod with a joystick head; fast to reposition between rooms in the dark."),
+         "Light aluminum tripod with a joystick head; fast to reposition between rooms in the dark."),
         ("Tripods & Mounts", "Joby", "GorillaPod 3K", "3K",
          "Flexible legs wrap railings and door frames — static cameras where no tripod stands."),
         ("Protective / Utility", "Pelican", "1510 Case", "1510",

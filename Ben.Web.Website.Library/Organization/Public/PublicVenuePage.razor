@@ -46,7 +46,7 @@
     else
     {
         <div id="venue-summary">
-        @* Signal phase 2: the venue's own first kept photograph, or a plate in its colour. *@
+        @* Signal phase 2: the venue's own first kept photograph, or a plate in its color. *@
         <PageHero TestId="venue-hero" TitleId="venue-title" Title="@v.PlaceName" Kicker="A venue"
                   PhotoUrl="@(v.Photos is { Count: > 0 } heroPhotos ? MediaUrls.VenuePhoto(heroPhotos[0].UploadFileId) : null)"
                   Hue="@TourPlate.Hue(v.PlaceName)"

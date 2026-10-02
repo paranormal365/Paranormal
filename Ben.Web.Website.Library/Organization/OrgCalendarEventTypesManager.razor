@@ -92,7 +92,7 @@
                                    @oninput="@(e => _formName = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label small mb-1" for="orgcalendareventtypesmanager-colour-2ebf">Colour</label>
+                            <label class="form-label small mb-1" for="orgcalendareventtypesmanager-colour-2ebf">Color</label>
                             <select id="orgcalendareventtypesmanager-colour-2ebf" class="form-select" value="@_formColorClass"
                                     @onchange="@(e => _formColorClass = e.Value?.ToString() ?? string.Empty)">
                                 @foreach (var option in ColorOptions)
@@ -170,7 +170,7 @@
         new("text-danger",   "Red"),
         new("text-warning",  "Amber"),
         new("text-info",     "Teal"),
-        new("text-secondary","Grey"),
+        new("text-secondary","Gray"),
         // Was ("text-dark", "Black"), which vanished into the page in dark mode. Emphasis is
         // black on light and white on dark — the "plainest, strongest text" this was reaching
         // for, in whichever theme the reader is using.

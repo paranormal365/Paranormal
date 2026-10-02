@@ -32,14 +32,17 @@ public class SidebarOrgSwapTests : BenTestBase
         await Expect(Main.GetByText("James Thornton", new() { Exact = false }).First)
             .ToBeVisibleAsync(new() { Timeout = 45_000 });
 
-        // The sidebar's your-groups link to another group (item 159's list).
-        var npsLink = Page.Locator("#top-menu a", new() { HasTextString = "Nashville Paranormal Society" }).First;
-        await Expect(npsLink).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        // The way a person swaps since the menu card (Signal, 2026-10-01): the group's menu has
+        // "Your groups" at the top, which lists their groups; another one is picked from there.
+        var back = Page.Locator("[data-testid=rail-back]").Filter(new() { Visible = true }).First;
+        var npsLink = Page.Locator("aside a", new() { HasTextString = "Nashville Paranormal Society" }).Filter(new() { Visible = true }).First;
+        await ClickUntilAsync(back, npsLink);
         await ClickUntilAsync(npsLink,
             Main.Locator("dd", new() { HasTextString = "Nashville Paranormal Society" }));
 
         // …and back again, because the second swap is the one the stale instance breaks.
-        var tghLink = Page.Locator("#top-menu a", new() { HasTextString = "Paranormal365" }).First;
+        var tghLink = Page.Locator("aside a", new() { HasTextString = "Paranormal365" }).Filter(new() { Visible = true }).First;
+        await ClickUntilAsync(back, tghLink);
         await ClickUntilAsync(tghLink,
             Main.Locator("dd", new() { HasTextString = "Paranormal365" }));
     }

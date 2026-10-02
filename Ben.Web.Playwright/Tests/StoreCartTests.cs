@@ -160,7 +160,7 @@ public class StoreCartTests : BenTestBase
         await Expect(Page.Locator("[data-testid=coupon-error]")).ToHaveTextAsync("Enter a code.");
         await FillAndConfirmAsync("#discount_code", "NOT-A-REAL-CODE");
         await Page.Locator("#store-apply-coupon").ClickAsync();
-        await Expect(Page.Locator("[data-testid=coupon-error]")).ToHaveTextAsync("That code isn't one we recognise.", new() { Timeout = 15_000 });
+        await Expect(Page.Locator("[data-testid=coupon-error]")).ToHaveTextAsync("That code isn't one we recognize.", new() { Timeout = 15_000 });
 
         await FillAndConfirmAsync("#discount_code", "ghost10");
         await ClickUntilAsync(Page.Locator("#store-apply-coupon"), Page.Locator("[data-testid=applied-code]"));

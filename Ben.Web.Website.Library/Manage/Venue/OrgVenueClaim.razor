@@ -19,7 +19,7 @@
 
    TWO WAYS TO PROVE IT, the quick one first when it is available: a code to the venue's own public
    address that somebody else recorded; otherwise a person reviews what you send. The addresses are
-   shown masked — enough to recognise your own front desk, not enough to harvest. *@
+   shown masked — enough to recognize your own front desk, not enough to harvest. *@
 
 <PageTitle>Claim a venue</PageTitle>
 
@@ -127,7 +127,7 @@
                     <p class="text-secondary">
                         Claiming <strong>@start.PlaceName</strong> means other groups ask you before they publish events
                         there, and you can show a venue page. <strong>Nothing already booked there changes</strong> —
-                        no event moves, is cancelled, or changes hands.
+                        no event moves, is canceled, or changes hands.
                     </p>
 
                     <div class="card mb-3">
@@ -180,7 +180,7 @@
                                 @(_proof is null ? "What shows you run it" : "Anything the other groups should know (optional)")
                             </label>
                             <textarea class="form-control mb-3" id="claim-evidence" rows="4" maxlength="4000"
-                                      placeholder="e.g. I'm the general manager. Our business licence and listing are under this name."
+                                      placeholder="e.g. I'm the general manager. Our business license and listing are under this name."
                                       @bind="_evidence" @bind:event="oninput"></textarea>
 
                             <button type="button" class="btn btn-primary" id="claim-submit" disabled="@_busy" @onclick="ClaimAsync">

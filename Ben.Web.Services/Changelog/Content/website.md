@@ -19,12 +19,29 @@ after a middle dot — `## 2026-09-28 · 2.11.0`. A day of fixes moves the last 
 of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
 it carry no number.
 
-The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
+The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
+
+## 2026-10-02 · 2.14.0
+
+- You can delete your own posts and replies on the feed, after confirming. A post takes its replies
+  with it.
+- The feed has a **Mentions** tab: the posts that name you, and posts whose replies do. The bell's
+  mentions row opens it instead of the top of the feed.
+- Every notification opens what it counts: an unread message opens that message (and the count comes
+  down), and a booking, a hold or a tour sign-up opens that event's or that date's own page rather
+  than the list of your groups.
+- Opening a help guide at a heading lands on that heading, even with pictures still loading above it.
+- The equipment catalog's help is a guide anyone can read; signed out, its links used to say the topic
+  wasn't available.
+- Text boxes you write paragraphs in have rounded corners that stay clear of the cursor.
+- The icons on a list's row buttons turn white when you point at them, so they stay readable.
+- The site is written in American English throughout — catalog, color, program, canceled.
+- A request the site could not read now says so, instead of reporting an error on our side.
 
 ## 2026-10-02 · 2.13.0
 
-- The whole site has a new look, in light and in dark: one set of colours, type and pictures from the
+- The whole site has a new look, in light and in dark: one set of colors, type and pictures from the
   front page to the editors.
 - Sections sit along the top, and a menu card beside the page lists what is inside the one you are in.
   It goes deeper with you: inside one of your groups it becomes that group's menu, and inside one of its
@@ -48,7 +65,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A tour date's page and an event's page now show **Field sessions sent up**: what guests recorded
   in Field Kit and sent to that night, with who, when and where, and **Play back**. Your group and
   the night's guides or staff see them; the other guests do not.
-- When a guide or organiser starts the group's session from the app, its card in the feed says
+- When a guide or organizer starts the group's session from the app, its card in the feed says
   where to join and offers **Open in the app**. It leaves the feed six hours after the night ends.
 - A session somebody sent to a group's tour or event belongs to that group's record, so it is no
   longer offered for deletion from My Field Sessions.
@@ -106,7 +123,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-22 · 2.8.1
 
-- Text across the site is easier to read in dark mode. Links, the coloured words used for status
+- Text across the site is easier to read in dark mode. Links, the colored words used for status
   and warnings, and the outline buttons were all too close to the background behind them; they now
   meet the readability standard on the surfaces they actually sit on.
 - Green badges and buttons — vote counts, "accepting new cases", the editor's Export — had white
@@ -124,13 +141,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 - In the video editor, the "no video yet" and "no pictures yet" panels no longer sit jammed against
   the edge of their panel.
 - In day mode, the quiet messages that tell you there is nothing to do — "you're all caught up",
-  "open the place's own page" — were drawn in a grey so pale they were nearly invisible on white.
+  "open the place's own page" — were drawn in a gray so pale they were nearly invisible on white.
   They read properly now, along with the small print under headings and figures.
-- A link sitting inside a coloured notice took the page's link colour, which barely showed against
-  the notice behind it. Those links now follow the notice's own colour and are underlined, so you
+- A link sitting inside a colored notice took the page's link color, which barely showed against
+  the notice behind it. Those links now follow the notice's own color and are underlined, so you
   can still tell they are links.
 - Badges showing a status — "Public", a member's level, an equipment state — had dark lettering on
-  a dark background and were hard to read. They are white on colour now.
+  a dark background and were hard to read. They are white on color now.
 - A group's member list no longer shows people who have left or closed their account. Everything
   they recorded for the group stays exactly where it was.
 - The site now tells you when your storage is running low — once at about 90% used, and again more
@@ -193,13 +210,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   it in case it strips the code instead.
 - At the meeting point your guide scans it and is told in one line whether you are on tonight's
   walk, how many places you booked, and whether somebody has already scanned that pass. A pass for
-  a different night says which night, rather than "not recognised".
+  a different night says which night, rather than "not recognized".
 - You can choose which of the site's emails you get. "Choose your emails" is on your profile and at
   the foot of every letter you can turn off. Everything is on to begin with, and a switch takes
   effect on the next letter.
 - A few letters are always sent — the ones that get you back into your account, a warning that
   somebody used your address, and a receipt for something you paid for. That page says which.
-- More of what the site tells you now arrives by email as well as in the bell: a session cancelled,
+- More of what the site tells you now arrives by email as well as in the bell: a session canceled,
   moved, or a place coming free; an investigation request that went to another group; a plan about
   to lapse or one that changed. These are the ones worth knowing about when you are not here.
 - A receipt is sent when a payment goes through. Every receipt is still on your group's billing
@@ -209,7 +226,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The help badge beside a heading is a badge again rather than a stray question mark.
 - Times on public event pages are shown on the event's own clock instead of UTC.
 - Your group's name in the list of groups is a link, so it can be opened in a new tab.
-- Opening a new case tells you what is still missing instead of leaving the button greyed out.
+- Opening a new case tells you what is still missing instead of leaving the button grayed out.
 - Starting a group names the address fields it is waiting for.
 - Your media library holds what you uploaded, once each. Profile pictures, the site's default
   avatars, and files whose contents have gone are no longer listed.
@@ -265,11 +282,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 - All sixteen transition styles can be picked. The list opened downwards off the bottom of the
   window, so only the first few could be clicked. They read as words now — "Wipe left", "Fade
   through black" — rather than run together.
-- Split at Playhead works from a clip's right-click menu. It was greyed out every time.
+- Split at Playhead works from a clip's right-click menu. It was grayed out every time.
 - Undo puts back a transition that an edit removed. Splitting a clip could delete the effect you
   had chosen with no way to get it back, and left the two clips overlapping with nothing to show
   why. Deleting, trimming or nudging a clip now tidies up its transition properly too.
-- Clip names and lengths can be read in the light theme. On the timeline they were dark grey on a
+- Clip names and lengths can be read in the light theme. On the timeline they were dark gray on a
   dark block.
 - Sounds can be faded in and out from the timeline, not only from the panel on the right.
 - Changing a clip's speed now shows the real length on the timeline. A clip set to double speed
@@ -278,7 +295,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-18 · 2.5.0
 
-- New board now asks what to start from. Five choices: a blank board, a moodboard of coloured
+- New board now asks what to start from. Five choices: a blank board, a moodboard of colored
   sections with a cluster of themes, a research plan with a four-square and a grid of four weeks, a
   family tree, and a presentation deck of slide frames. Everything on one is yours to move, rename or
   delete — it is a head start, not a form.
@@ -297,7 +314,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Choosing "Arrows at both ends" on a connector now puts arrows at both ends. It used to leave
   whatever you had already chosen for one end, so the words and the line could disagree.
 - Pasting a grid of text onto a board now makes a table of it rather than a wall of words in a note.
-- Colour goes further. Any block can be filled with its colour rather than striped with it, and a
+- Color goes further. Any block can be filled with its color rather than striped with it, and a
   group can be drawn as a filled, titled panel rather than an outline — so part of a board reads as a
   section of it. Both are kept when the board is published.
 - A line can say what it means. Choose its route (a curve, a straight line, or right angles), what
@@ -342,9 +359,9 @@ day-by-day account of building it would say nothing to anyone using it now.
   out by pressing something.
 - Accepting somebody into your group now tells you why when it cannot, with a link to your plan —
   it used to say "please try again" about the one thing trying again never fixes.
-- Notification badges use the icon and colour set for that kind of message.
+- Notification badges use the icon and color set for that kind of message.
 - An event that cannot be booked now says **why** — called off, or bookings closed — rather than
-  showing a form or a greyed-out grid.
+  showing a form or a grayed-out grid.
 - Your event pass says who scanned you in. A case transfer says which person asked for it. Your
   desk shows how many borrowed items are overdue, not just which ones.
 - A group's public page no longer names the city of an address you marked private. Two settings
@@ -439,7 +456,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - In every table, the line under a row now runs under its action buttons too.
 - Buttons in tables are icons now, so a row stays on one line. Hover over one to see what it does.
 - A group's Cases screen shows waiting requests in yellow with their count, and each status shows its count in
-  that status's colour when it has cases.
+  that status's color when it has cases.
 - Research is no longer one of the kinds of timeline entry; research is written on the case's Research tab.
   Research entries already on a timeline stay, and the timeline can now be filtered to instrument readings.
 - Editing a case opens a page of its own instead of a small window, with a tall description box and a short
@@ -453,7 +470,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Every plan on the pricing page has a button. Without a group, it starts one with that plan chosen and then
   opens the new group's billing page; if you run a group, it opens that group's billing page with the same
   billing period selected.
-- The pricing page's plans are redrawn: each has its own colour, an icon, the price large, its limits as a
+- The pricing page's plans are redrawn: each has its own color, an icon, the price large, its limits as a
   checklist, and the plan most groups start on is marked.
 - Research on a case is written as pages. New page on the Research tab opens one: a stack of text, pictures,
   files, link cards and maps that can be pasted or dropped in anywhere and dragged into order. A page saves
@@ -478,7 +495,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A group's cases list names each case's manager instead of "Unassigned".
 - A group's tab row fades at the edge that has more tabs, scrolls with an ordinary mouse wheel, and brings the chosen
   tab into view.
-- Members tables say Yes or No for Active; the Clients tab's switch is labelled "Taking new cases".
+- Members tables say Yes or No for Active; the Clients tab's switch is labeled "Taking new cases".
 - The bell shows "99+" in full, opening a notification scrolls to it, and the desk shows today's date in your time.
 - On Public Investigations, a case you can open only because you are in its group is marked "Not public".
 - The More actions menu on the organizations and page lists opens in full instead of clipped by the table.
@@ -509,7 +526,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   The case publishing tour is offered to the people who can edit the case.
 - In a case's messages, every message you did not write carries its author's name, including a colleague's reply to the
   client.
-- Recordings no longer flash a pale grey box on a dark page while they load, and deleting a group file shows a success
+- Recordings no longer flash a pale gray box on a dark page while they load, and deleting a group file shows a success
   message instead of an error.
 - A group's Viewers are read-only: they read the calendar and messages but can no longer add, move or delete events, send
   group messages, or change investigations, timelines or requests, whatever roles they hold.
@@ -575,7 +592,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   and organizers can hide a review but never change it.
 - What I'm going to now lists the sessions you signed up for under each event.
 
-- An event can be copied to start the next one: the plan, menus, programme, bands, helpers, advert
+- An event can be copied to start the next one: the plan, menus, program, bands, helpers, advert
   and files come across as a draft on the new dates, and bookings and photos stay behind.
 - The booking board can hand over every booking as a spreadsheet, including the phone number each
   guest gave and which nights they arrived.
@@ -589,7 +606,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - Event pages open with the host's pictures and a countdown to the first night, and on a phone keep an
   ask-for-a-place button in reach. Hosts manage the pictures from a new gallery page.
-- A group's own public pages can show one of its events — its dates, programme, pictures or venue — and
+- A group's own public pages can show one of its events — its dates, program, pictures or venue — and
   the section keeps up with the event by itself.
 - A group's ad can now lead to one of its events. The card shows the event's date and stops showing once
   the event is over.
@@ -607,9 +624,9 @@ day-by-day account of building it would say nothing to anyone using it now.
   own people, confirmed guests, or anybody. The event page lists what each visitor may download, and
   downloads are checked every time.
 
-- Events can have a programme: classes, talks and meals night by night, on the venue's clock. Guests
+- Events can have a program: classes, talks and meals night by night, on the venue's clock. Guests
   with a confirmed place sign up for sessions that have a limit, join a queue when one is full, and
-  are written to when a place comes free, a session moves, or one is cancelled.
+  are written to when a place comes free, a session moves, or one is canceled.
 - The event page shows what is on now and next, how many places each session has left, and an
   add-to-calendar link for every session.
 
@@ -645,10 +662,10 @@ day-by-day account of building it would say nothing to anyone using it now.
   is no longer announced to you as an answer.
 
 - Events can have **bands** — the wristbands, lanyards or stamps you hand out so a steward knows by
-  glance what somebody is here for. Each is your own colour and what it means, and most parties'
+  glance what somebody is here for. Each is your own color and what it means, and most parties'
   bands are worked out from what they booked rather than tagged one by one.
 - A band shows beside the guest's name at the door, on the booking board, and on the guest's own
-  pass, always with its name as well as its colour. Anything the site cannot work out, like who is
+  pass, always with its name as well as its color. Anything the site cannot work out, like who is
   having dinner, is given out by hand from the booking board.
 
 - An event can now have its own **staff**: people who help at that event and nowhere else. Invite somebody
@@ -772,10 +789,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Un-calling-off an event brings it back as a draft, so putting it in front of people again is a
   decision you make on purpose. Publishing it a second time costs nothing.
 - An event now has a plan you draw. A venue that lets rooms picks them from a list and places them
-  on a floor; an evening sold by the seat gets whole blocks of rows added at once, with a centre
+  on a floor; an evening sold by the seat gets whole blocks of rows added at once, with a center
   aisle put in wherever you want one. Rows skip I and O, because on a printed ticket they read as
   1 and 0.
-- Sections on a plan carry a name, a colour and a price, and the price is printed once for the
+- Sections on a plan carry a name, a color and a price, and the price is printed once for the
   section rather than on every seat. Prices are shown to guests and never charged here.
 - The plan works on a phone, where it is there to be read and adjusted a room or a seat at a time,
   and says so rather than pretending a four-hundred-seat house is an afternoon's work on a phone.
@@ -853,7 +870,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - Anyone can report a case from the public site.
 - An export that is missing its media now says so instead of producing a broken file.
-- A cancelled export stops immediately.
+- A canceled export stops immediately.
 - The administrator's user list keeps its actions on one line.
 
 ## 2026-09-05 · 1.5.2

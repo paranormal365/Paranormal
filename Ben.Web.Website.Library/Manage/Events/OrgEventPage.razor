@@ -14,7 +14,7 @@
 @* One event, and everything about it (item 235).
 
    Sections rather than tabs, with an index down the side: an event carries its details, its dates,
-   and in later phases its rooms, programme, staff, files, menus and page. A person setting one up
+   and in later phases its rooms, program, staff, files, menus and page. A person setting one up
    works down it once and comes back to one part of it afterwards, which is what an anchor index is
    for and what tabs are bad at. The tour page is laid out the same way for the same reason. *@
 
@@ -223,7 +223,7 @@
                     @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus")
                     @IndexEntry("Dining tables", $"/organizations/{OrgId}/events/{EventId}/dining")
                     @IndexEntry("What the kitchen needs", $"/organizations/{OrgId}/events/{EventId}/dietary")
-                    @IndexEntry("Programme", $"/organizations/{OrgId}/events/{EventId}/sessions")
+                    @IndexEntry("Program", $"/organizations/{OrgId}/events/{EventId}/sessions")
                     @IndexEntry("Staff", $"/organizations/{OrgId}/events/{EventId}/staff")
                     @IndexEntry("The door", $"/organizations/{OrgId}/events/{EventId}/door")
                     @IndexEntry("Bands", $"/organizations/{OrgId}/events/{EventId}/bands")
@@ -265,7 +265,7 @@
                             <div class="col-12">
                                 @* The rich editor is not a labelable control, so the label names the
                                    wrapper the way the tour page's does — a `for` pointing at
-                                   nothing does nothing when clicked and reads as unlabelled. *@
+                                   nothing does nothing when clicked and reads as unlabeled. *@
                                 <label class="form-label" for="event-description">About it</label>
                                 <div id="event-description">
                                     <BenEditor Value="@_form.Description"
@@ -955,7 +955,7 @@
     /// <summary>What a fresh copy says on arrival, once.</summary>
     private string? CopiedNote()
         => Copied == 1
-            ? "Copied as a draft. Check the dates, the venue's agreement and the programme, then publish when it's ready."
+            ? "Copied as a draft. Check the dates, the venue's agreement and the program, then publish when it's ready."
               + (CopyNote is { Length: > 0 } more ? " " + more : "")
             : null;
     private string _cancelReason = "";

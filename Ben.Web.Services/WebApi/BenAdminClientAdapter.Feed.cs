@@ -211,6 +211,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeclineFeedAttributionAsync(Guid orgId, Guid postId, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/organizations/{orgId}/feed-attributions/{postId}/decline", new { }, token);
 
+    public Task<bool> DeleteFeedPostAsync(Guid postId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/feed/posts/{postId}", token);
+
     public Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default)
         => _api.PostVoidAsync($"/api/feed/posts/{postId}/report", new ReportFeedPostRequest(reason), token);
 

@@ -390,8 +390,52 @@ public sealed class NotificationSummaryController : BenControllerBase
                     .Select(r => (DateTime?)r.DateCreated),
                 ct);
 
+        // ── Where each "waiting on you" row opens (walk, 2026-10-02) ─────────────
+        // These four rows all opened /organizations — the list of every group — and left the
+        // person to find the event or the walk themselves. Each now carries the page that holds
+        // its OLDEST item, the one most likely to be the reason they clicked.
+        if (seatsToDecide.Count > 0)
+        {
+            var oldest = await db.OrgCalendarEventAttendees.AsNoTracking()
+                .Where(a => a.SeatStatus == TourSeatStatus.Requested
+                         && myAdminOrgIds.Contains(a.OrgCalendarEvent.OrganizationId)
+                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                         && a.OrgCalendarEvent.HostedEventId == null
+                         && a.OrgCalendarEvent.TourId != null)
+                .OrderBy(a => a.DateCreated)
+                .Select(a => new { a.OrgCalendarEvent.OrganizationId, a.OrgCalendarEvent.TourId, a.OrgCalendarEventId })
+                .FirstOrDefaultAsync(ct);
+            if (oldest is not null)
+                seatsToDecide = seatsToDecide with { Where = $"/organizations/{oldest.OrganizationId}/tours/{oldest.TourId}/dates/{oldest.OrgCalendarEventId}" };
+        }
+        if (eventBookingsToDecide.Count > 0 || eventHoldsLapsing.Count > 0)
+        {
+            var oldestRequest = await decidable
+                .Where(b => b.Status == HostedEventBookingStatus.Requested || b.Status == HostedEventBookingStatus.Held)
+                .OrderBy(b => b.Status == HostedEventBookingStatus.Held && b.HoldExpiresUtc != null && b.HoldExpiresUtc <= lapsingBy ? 0 : 1)
+                .ThenBy(b => b.DateCreated)
+                .Select(b => new { b.HostedEvent.OrganizationId, b.HostedEventId, Lapsing = b.Status == HostedEventBookingStatus.Held && b.HoldExpiresUtc != null && b.HoldExpiresUtc <= lapsingBy })
+                .ToListAsync(ct);
+            var lapsingFirst = oldestRequest.FirstOrDefault(x => x.Lapsing);
+            var requestFirst = oldestRequest.FirstOrDefault(x => !x.Lapsing);
+            if (lapsingFirst is not null && eventHoldsLapsing.Count > 0)
+                eventHoldsLapsing = eventHoldsLapsing with { Where = $"/organizations/{lapsingFirst.OrganizationId}/events/{lapsingFirst.HostedEventId}/bookings" };
+            if (requestFirst is not null && eventBookingsToDecide.Count > 0)
+                eventBookingsToDecide = eventBookingsToDecide with { Where = $"/organizations/{requestFirst.OrganizationId}/events/{requestFirst.HostedEventId}/bookings" };
+        }
+        if (venueRequestsToDecide.Count > 0)
+        {
+            var venueOrg = await db.VenueHostingRequests.AsNoTracking()
+                .Where(r => r.Status == VenueHostingRequestStatus.Pending && venueOrgIds.Contains(r.VenueOrganizationId))
+                .OrderBy(r => r.DateCreated)
+                .Select(r => (Guid?)r.VenueOrganizationId)
+                .FirstOrDefaultAsync(ct);
+            if (venueOrg is { } id)
+                venueRequestsToDecide = venueRequestsToDecide with { Where = $"/organizations/{id}/venue-requests" };
+        }
+
         // ── A guest's programme changed since they last looked (phase 10) ────────
-        // Dated by the change, one per booking however many sessions moved: "the programme changed"
+        // Dated by the change, one per booking however many sessions moved: "the program changed"
         // is one thing to go and read, not a count of edits.
         var eventScheduleChanges = await BucketAsync(
             db.HostedEventBookings.AsNoTracking()

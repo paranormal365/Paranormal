@@ -18,7 +18,7 @@
         <div class="d-flex gap-2">
             @* Beta feedback, 2026-09-14: requests waiting for an answer have to be seen. The button goes
                yellow when anything waits and carries the count as a badge; with nothing waiting it stays
-               a quiet outline so the colour keeps meaning something. *@
+               a quiet outline so the color keeps meaning something. *@
             <button type="button" class="btn @(_pendingCount > 0 ? "btn-warning" : "btn-outline-secondary")"
                     data-testid="pending-requests"
                     aria-label="@(_pendingCount switch { 0 => "Pending requests, none waiting", 1 => "Pending requests, 1 waiting", var n => $"Pending requests, {n} waiting" })"
@@ -113,9 +113,9 @@
     {
         @* ── Filters ─────────────────────────────────────────────────────── *@
         <div class="d-flex gap-2 flex-wrap mb-3">
-            @* A status with cases in it shows its count in the status's own colour — the same colour as
+            @* A status with cases in it shows its count in the status's own color — the same color as
                the badge on each case below — so Proposed and Active stand out at a glance and an empty
-               status stays grey (beta feedback, 2026-09-14). *@
+               status stays gray (beta feedback, 2026-09-14). *@
             @foreach (var status in _filterOptions)
             {
                 var s = status;

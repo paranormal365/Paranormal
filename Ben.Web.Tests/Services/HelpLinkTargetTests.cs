@@ -21,6 +21,15 @@ public sealed class HelpLinkTargetTests
         """<HelpLink\s+Slug="(?<slug>[^"]+)"(?:\s+Anchor="(?<anchor>[^"]*)")?""",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// A plain link into help — <c>href="/help/slug#anchor"</c> — which the pattern above never saw.
+    /// The equipment catalog's "How the catalog works" was one, pointing into a guide visitors
+    /// cannot read (walk, 2026-10-02).
+    /// </summary>
+    private static readonly Regex HrefPattern = new(
+        @"href=""/help/(?<slug>[a-z0-9-]+)(?:#(?<anchor>[a-z0-9-]+))?""",
+        RegexOptions.Compiled);
+
     /// <summary>Walks up from the test binaries to the repository root.</summary>
     private static DirectoryInfo RepoRoot()
     {
@@ -55,7 +64,7 @@ public sealed class HelpLinkTargetTests
         foreach (var file in razorFiles)
         {
             var text = File.ReadAllText(file);
-            foreach (Match match in LinkPattern.Matches(text))
+            foreach (Match match in LinkPattern.Matches(text).Concat(HrefPattern.Matches(text)))
             {
                 found++;
                 var slug = match.Groups["slug"].Value;
@@ -76,5 +85,25 @@ public sealed class HelpLinkTargetTests
         // Guards against the regex quietly matching nothing after a syntax change — a passing
         // test that examined zero links would be worse than no test.
         Assert.True(found > 0, "No HelpLink usages were found — has the component been renamed?");
+    }
+
+    [Fact]
+    public void The_public_equipment_pages_link_to_a_guide_a_visitor_can_read()
+    {
+        // The catalog, a model's page and its questions are public; their help links led to
+        // "That help topic isn't available" for anybody signed out (walk, 2026-10-02).
+        var root = RepoRoot();
+        var visitor = new HelpViewer(HelpAudience.Everyone);
+        var service = new HelpContentService();
+        foreach (var page in new[] { "EquipmentCatalogBrowse.razor", "EquipmentModelPage.razor", "EquipmentFaqSection.razor" })
+        {
+            var text = File.ReadAllText(Path.Combine(root.FullName, "Ben.Web.Website.Library", "Equipment", page));
+            foreach (Match match in LinkPattern.Matches(text).Concat(HrefPattern.Matches(text)))
+            {
+                var slug = match.Groups["slug"].Value;
+                Assert.True(service.Find(slug, visitor) is not null,
+                    $"{page} is public but links to '{slug}', which a visitor cannot read.");
+            }
+        }
     }
 }

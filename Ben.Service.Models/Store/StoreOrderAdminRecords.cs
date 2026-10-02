@@ -129,7 +129,7 @@ public static class StoreOrderDeskSentences
     public const string LastPackageCancelsOrder = "That's the only package left — cancel the whole order instead.";
 
     /// <summary>A package of an order that isn't paid, or is already finished (store sellers P7).</summary>
-    public const string NotReadyToFulfil = "This order isn't waiting to be sent — it isn't paid, or it's cancelled or refunded.";
+    public const string NotReadyToFulfil = "This order isn't waiting to be sent — it isn't paid, or it's canceled or refunded.";
 
     public static string OnlyPaidCanBePacked(string status) => $"Only a paid order can be packed; this one is {status}.";
     public static string NeedsAttentionFirst(string reason) => $"This order needs attention first — {reason}";
@@ -141,7 +141,7 @@ public static class StoreOrderDeskSentences
     public const string TrackingOnlyWhenShipped = "Tracking can be corrected only on a shipped order.";
     public const string OnlyShippedCanBeDelivered = "Only a shipped order can be marked delivered.";
     public const string AlreadyOnItsWay = "It's already on its way — refund it instead.";
-    public static string CannotCancel(string status) => $"A {status} order can't be cancelled.";
+    public static string CannotCancel(string status) => $"A {status} order can't be canceled.";
     public const string AddressAfterShipping = "The address can't change once it has shipped.";
     public const string NoteEmpty = "Write something in the note.";
     public const string NothingToClear = "This order isn't marked as needing attention.";

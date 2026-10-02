@@ -464,7 +464,7 @@ internal static class HostedEventDemoSeeder
 
         hosted.ProgrammePublishedUtc ??= now;
         await db.SaveChangesAsync();
-        Console.WriteLine("[HostedEventDemoSeeder] Published a programme of three sessions for the rooms weekend.");
+        Console.WriteLine("[HostedEventDemoSeeder] Published a program of three sessions for the rooms weekend.");
     }
 
     /// <summary>
@@ -658,7 +658,7 @@ internal static class HostedEventDemoSeeder
         await db.SaveChangesAsync();
         Console.WriteLine(
             $"[HostedEventDemoSeeder] Created An Evening of Evidence: {order} seats in two "
-            + "sections with a centre aisle.");
+            + "sections with a center aisle.");
     }
 
     // ── and then live, the way a person would do it ──────────────────────────

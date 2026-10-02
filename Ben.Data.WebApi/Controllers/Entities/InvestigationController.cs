@@ -152,7 +152,7 @@ public sealed class InvestigationController : BenControllerBase
         if (!string.IsNullOrWhiteSpace(request.TimeZoneId))
         {
             if (Zones.Normalize(request.TimeZoneId) is not { } visitZone)
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
             entity.TimeZoneId = visitZone;
         }
         db.Investigations.Add(entity);
@@ -254,7 +254,7 @@ public sealed class InvestigationController : BenControllerBase
             else if (Zones.Normalize(request.TimeZoneId) is { } visitZone)
                 entity.TimeZoneId = visitZone;
             else
-                return BadRequest("That time zone isn't one this site recognises. Choose one from the list.");
+                return BadRequest("That time zone isn't one this site recognizes. Choose one from the list.");
         }
         entity.DateUpdated         = DateTime.UtcNow;
         entity.UpdatedByAppUserId  = userId == Guid.Empty ? null : userId;
@@ -366,7 +366,7 @@ public sealed class InvestigationController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt} has been cancelled by the organisation.",
+            Body = $"The investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt} has been canceled by the organization.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient = false, IsReadByOrg = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

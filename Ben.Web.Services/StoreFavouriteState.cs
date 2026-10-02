@@ -71,7 +71,7 @@ public sealed class StoreFavouriteState : IDisposable
     /// <summary>Hearts or un-hearts a product. Answers the sentence to show when it was refused; null when it went through.</summary>
     public async Task<string?> ToggleAsync(Guid productId)
     {
-        if (!_userState.IsAuthenticated) return "Sign in to keep favourites.";
+        if (!_userState.IsAuthenticated) return "Sign in to keep favorites.";
         var adding = !_ids.Contains(productId);
         var (count, error) = adding ? await _client.AddStoreFavouriteAsync(productId) : await _client.RemoveStoreFavouriteAsync(productId);
         if (count is null) return error ?? "That couldn't be saved just now.";

@@ -47,6 +47,51 @@ public class NotificationRowsTests
         Assert.Equal(36, NotificationRows.TotalFor(summary));
     }
 
+    [Fact]
+    public void No_row_leads_to_the_bare_notifications_page_it_is_listed_on()
+    {
+        // "Unread messages" and "File permission requests" both went to plain /notifications —
+        // from the bell they stopped at the top of the page; on the page they went nowhere and
+        // the count stayed (Ben, 2026-10-02). Each now names what it opens.
+        var summary = new NotificationSummaryResponse(
+            OrgMessages:               Waiting(1),
+            CaseMessagesAsOrgMember:   Waiting(2),
+            CaseMessagesAsClient:      Waiting(3),
+            SystemMessages:            Waiting(4),
+            PendingPermissionRequests: Waiting(5),
+            InvestigationInvites:      Waiting(6),
+            EquipmentCheckouts:        Waiting(7),
+            FeedMentions:              Waiting(8));
+
+        var rows = NotificationRows.For(summary);
+        Assert.DoesNotContain(rows, r => r.Destination == "/notifications");
+        Assert.Equal("/notifications?open=unread", rows.Single(r => r.Title == "Unread messages").Destination);
+        Assert.Equal("/feed?mode=mentions", rows.Single(r => r.Title == "Mentions on the feed").Destination);
+    }
+
+    [Fact]
+    public void A_waiting_row_opens_the_page_its_bucket_names_and_the_groups_list_only_without_one()
+    {
+        // Tour sign-ups, venue requests, holds and bookings all opened /organizations — the list
+        // of every group (walk, 2026-10-02). The server now names the page of the oldest item.
+        var named = NotificationSummaryResponse.Empty with
+        {
+            TourSeatsToDecide = new(2, Then, "/organizations/o1/tours/t1/dates/d1"),
+            EventBookingsToDecide = new(1, Then, "/organizations/o1/events/e1/bookings"),
+            EventHoldsLapsing = new(1, Then, "/organizations/o1/events/e2/bookings"),
+            VenueRequestsToDecide = new(1, Then, "/organizations/v1/venue-requests"),
+        };
+        var rows = NotificationRows.For(named);
+        Assert.Equal("/organizations/o1/tours/t1/dates/d1", rows.Single(r => r.Title == "Sign-ups waiting on you").Destination);
+        Assert.Equal("/organizations/o1/events/e1/bookings", rows.Single(r => r.Title == "Bookings waiting on you").Destination);
+        Assert.Equal("/organizations/o1/events/e2/bookings", rows.Single(r => r.Title == "Holds running out").Destination);
+        Assert.Equal("/organizations/v1/venue-requests", rows.Single(r => r.Title == "Groups asking to use your venue").Destination);
+
+        // An older server that names nothing still lands somewhere real.
+        var unnamed = NotificationSummaryResponse.Empty with { TourSeatsToDecide = Waiting(1) };
+        Assert.Equal("/organizations", NotificationRows.For(unnamed).Single().Destination);
+    }
+
     /// <summary>
     /// The badge is the sum of the rows, item by item.
     /// </summary>

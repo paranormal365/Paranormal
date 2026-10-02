@@ -86,7 +86,7 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
 
         var told = await mail.SendSessionCancelledAsync(db, sessionId, session.CancelledReason, ct);
         return Ok(await ProgrammeAsync(db, hosted,
-            $"{session.Title} is cancelled. " + (told == 0 ? "Nobody had signed up." : $"{Plural(told, "person", "people")} signed up {(told == 1 ? "has" : "have")} been told."), ct));
+            $"{session.Title} is canceled. " + (told == 0 ? "Nobody had signed up." : $"{Plural(told, "person", "people")} signed up {(told == 1 ? "has" : "have")} been told."), ct));
     }
 
     [HttpDelete("{sessionId:guid}")]
@@ -108,7 +108,7 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
 
         db.HostedEventSessions.Remove(session);
         await db.SaveChangesAsync(ct);
-        return Ok(await ProgrammeAsync(db, hosted, $"{session.Title} is off the programme.", ct));
+        return Ok(await ProgrammeAsync(db, hosted, $"{session.Title} is off the program.", ct));
     }
 
     /// <summary>Puts the programme in front of guests.</summary>
@@ -123,11 +123,11 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         var hosted = await db.HostedEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (hosted is null) return NotFound();
         if (!await db.HostedEventSessions.AnyAsync(s => s.HostedEventId == eventId && s.CalledOffUtc == null, ct))
-            return Conflict("Add a session before publishing the programme.");
+            return Conflict("Add a session before publishing the program.");
 
         hosted.ProgrammePublishedUtc ??= DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-        return Ok(await ProgrammeAsync(db, (await EventAsync(db, orgId, eventId, ct))!, "The programme is on the event's page.", ct));
+        return Ok(await ProgrammeAsync(db, (await EventAsync(db, orgId, eventId, ct))!, "The program is on the event's page.", ct));
     }
 
     /// <summary>Takes the programme back into draft, while nobody has signed up for anything.</summary>
@@ -142,11 +142,11 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         var hosted = await db.HostedEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (hosted is null) return NotFound();
         if (await db.HostedEventSessionSignUps.AnyAsync(s => s.HostedEventSession.HostedEventId == eventId, ct))
-            return Conflict("Guests have signed up for sessions, so the programme stays up. Change or cancel sessions instead.");
+            return Conflict("Guests have signed up for sessions, so the program stays up. Change or cancel sessions instead.");
 
         hosted.ProgrammePublishedUtc = null;
         await db.SaveChangesAsync(ct);
-        return Ok(await ProgrammeAsync(db, (await EventAsync(db, orgId, eventId, ct))!, "The programme is back in draft.", ct));
+        return Ok(await ProgrammeAsync(db, (await EventAsync(db, orgId, eventId, ct))!, "The program is back in draft.", ct));
     }
 
     /// <summary>Who has a place, and who is waiting, in order.</summary>
@@ -214,7 +214,7 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
             ? await db.HostedEventSessions.Include(s => s.SignUps).FirstOrDefaultAsync(s => s.Id == id && s.HostedEventId == eventId, ct)
             : null;
         if (sessionId is not null && session is null) return NotFound();
-        if (session?.CalledOffUtc is not null) return Conflict("That session has been cancelled. Add a new one instead.");
+        if (session?.CalledOffUtc is not null) return Conflict("That session has been canceled. Add a new one instead.");
 
         var (startsUtc, endsUtc) = SessionSignUps.ToUtc(hosted, request.Date, request.StartsLocal, request.EndsLocal);
         var nights = hosted.Nights.Select(n => n.Date).ToList();
@@ -268,7 +268,7 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Somebody signed up while you were editing. Open the programme again and make the change once more.");
+            return Conflict("Somebody signed up while you were editing. Open the program again and make the change once more.");
         }
 
         if (moved) await mail.SendSessionMovedAsync(db, session.Id, ct);

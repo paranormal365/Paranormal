@@ -101,12 +101,13 @@ public static class NotificationRows
         if (s.PendingPermissionRequests.Count > 0)
             rows.Add(new("File permission requests",
                 $"Waiting on your decision · oldest {NotificationBadge.DescribeAge(s.PendingPermissionRequests.OldestUnreadUtc)}",
-                "lock", "/notifications", s.PendingPermissionRequests));
+                "lock", "/notifications#permission-requests", s.PendingPermissionRequests));
 
         if (s.SystemMessages.Count > 0)
             rows.Add(new("Unread messages",
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
-                "bell", "/notifications", s.SystemMessages));
+                // The oldest unread one, opened — which marks it read and brings the count down.
+                "bell", "/notifications?open=unread", s.SystemMessages));
 
         // ── Tour seats (item 234) ────────────────────────────────────────────
         // The business's queue first: somebody is standing at the other end of it waiting to be
@@ -114,7 +115,7 @@ public static class NotificationRows
         if (s.TourSeatsToDecide is { Count: > 0 } toDecide)
             rows.Add(new("Sign-ups waiting on you",
                 $"People asking for places on your tours · oldest {NotificationBadge.DescribeAge(toDecide.OldestUnreadUtc)}",
-                "user-check", "/organizations", toDecide));
+                "user-check", toDecide.Where ?? "/organizations", toDecide));
 
         if (s.MyTourSeats is { Count: > 0 } mine)
             rows.Add(new("A tour answered you",
@@ -130,18 +131,18 @@ public static class NotificationRows
         if (s.VenueRequestsToDecide is { Count: > 0 } venue)
             rows.Add(new("Groups asking to use your venue",
                 $"Events waiting for your yes or no · oldest {NotificationBadge.DescribeAge(venue.OldestUnreadUtc)}",
-                "map-pin", "/organizations", venue));
+                "map-pin", venue.Where ?? "/organizations", venue));
 
         // Holds about to run out come first: the clock decides those if nobody does (phase 8).
         if (s.EventHoldsLapsing is { Count: > 0 } lapsing)
             rows.Add(new("Holds running out",
                 $"Seats held at your events lapse within a day unless somebody confirms them · oldest {NotificationBadge.DescribeAge(lapsing.OldestUnreadUtc)}",
-                "clock", "/organizations", lapsing));
+                "clock", lapsing.Where ?? "/organizations", lapsing));
 
         if (s.EventBookingsToDecide is { Count: > 0 } bookings)
             rows.Add(new("Bookings waiting on you",
                 $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
-                "home", "/organizations", bookings));
+                "home", bookings.Where ?? "/organizations", bookings));
 
         // /my-events and not /events: the second is what is ON, a list of everybody's evenings,
         // and a row saying a venue answered YOU that lands there leaves somebody hunting for
@@ -153,8 +154,8 @@ public static class NotificationRows
 
         // A class moved or cancelled after the guest planned their evening around it (phase 10).
         if (s.EventScheduleChanges is { Count: > 0 } changed)
-            rows.Add(new("The programme changed",
-                $"A session at an event you're going to has moved or been cancelled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
+            rows.Add(new("The program changed",
+                $"A session at an event you're going to has moved or been canceled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
                 "calendar", "/my-events", changed));
 
         if (s.MyEventHoldLapsing is { Count: > 0 } myHold)
@@ -167,7 +168,7 @@ public static class NotificationRows
         if (s.FeedMentions.Count > 0)
             rows.Add(new("Mentions on the feed",
                 $"Somebody named you in a post · oldest {NotificationBadge.DescribeAge(s.FeedMentions.OldestUnreadUtc)}",
-                "at-sign", "/feed", s.FeedMentions));
+                "at-sign", "/feed?mode=mentions", s.FeedMentions));
 
         return rows;
     }

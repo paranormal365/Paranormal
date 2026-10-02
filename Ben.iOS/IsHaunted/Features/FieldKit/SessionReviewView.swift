@@ -571,7 +571,7 @@ struct SessionReviewView: View {
                     // Said, because its map is not a walked path: every position is the place's
                     // public point, deliberately.
                     LabeledContent("Source", value: "The public archive — positions are the place's public point")
-                } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+                } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier(), me: dependencies.session.me?.userId) {
                     LabeledContent("Source", value: "Shared with you — recorded on another device")
                 } else if summary.isImported {
                     LabeledContent("Source", value: summary.serverSessionId != nil

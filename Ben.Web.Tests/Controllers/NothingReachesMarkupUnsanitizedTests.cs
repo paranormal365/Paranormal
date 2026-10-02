@@ -46,14 +46,14 @@ public sealed class NothingReachesMarkupUnsanitizedTests
             "What a kind of file is for, on the SuperAdmin file-types screen. Drawn as text.",
 
         ["ChunkedUploadController.cs:Description"] =
-            "A caption travelling with an upload. Drawn as text wherever a file is listed.",
+            "A caption traveling with an upload. Drawn as text wherever a file is listed.",
 
         ["ClientRequestController.cs:Description"] =
             "The GROUP's own copy of a request it already holds. The public door that takes one "
           + "from a stranger is PublicClientRequestController, which sanitizes since 2026-09-20.",
 
         ["EquipmentCatalogController.cs:Description"] =
-            "A piece of gear in the shared catalogue. Drawn as text on the equipment screens.",
+            "A piece of gear in the shared catalog. Drawn as text on the equipment screens.",
 
         ["ExperienceCategoryController.cs:Description"] =
             "A taxonomy entry — what a kind of experience means. Drawn as text.",

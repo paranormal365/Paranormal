@@ -30,7 +30,7 @@
             </div>
             <button type="button" class="btn btn-primary" @onclick="LoadAsync" disabled="@(!(!_loading))">Search</button>
         </div>
-        <div><a class="btn btn-sm btn-outline-light" href="/help/your-equipment#the-public-catalog">How the catalogue works</a></div>
+        <div><a class="btn btn-sm btn-outline-light" href="/help/the-equipment-catalog#the-public-catalog">How the catalog works</a></div>
     </PageHero>
 
     <div class="home-band">
@@ -45,7 +45,7 @@
                 <BenTab Title="Makes &amp; models" Id="models">
                     @if (_modelsResult.Failed)
                     {
-                        @* A visitor with no account has no way to tell a broken catalogue from
+                        @* A visitor with no account has no way to tell a broken catalog from
                            an empty one. *@
                         <BenListState TItem="EquipmentModelRecord" Result="@_modelsResult" OnRetry="@LoadAsync" />
                     }

@@ -12,6 +12,7 @@ import XCTest
 final class AppStoreScreenshotTests: XCTestCase {
 
     private var app: XCUIApplication!
+    private var apiArguments: [String] = []
 
     override func setUpWithError() throws {
         guard ProcessInfo.processInfo.environment["BEN_SCREENSHOTS"] == "1" else {
@@ -19,9 +20,14 @@ final class AppStoreScreenshotTests: XCTestCase {
         }
         continueAfterFailure = true   // one bad screen should not cost the rest of the set
         app = XCUIApplication()
+        // The stack to photograph, passed on EVERY launch — without it the app uses whatever
+        // address it last saved, which can be the live site (see HelpMediaCaptureTests).
+        if let base = ProcessInfo.processInfo.environment["BEN_API_BASE_URL"], !base.isEmpty {
+            apiArguments = ["-apiBaseURL", base]
+        }
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "haveben@msn.com"
         let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
-        app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
+        app.launchArguments += apiArguments + ["-autoSignIn", "\(email):\(password)"]
         app.launch()
     }
 
@@ -46,7 +52,7 @@ final class AppStoreScreenshotTests: XCTestCase {
         // Without this, the tab stores fetch while -autoSignIn is still in flight, cache their
         // anonymous answers, and every signed-in surface screenshots as empty.
         app.terminate()
-        app.launchArguments = []   // no -autoSignIn (or its value) — don't race the restored session
+        app.launchArguments = apiArguments   // no -autoSignIn (or its value) — don't race the restored session
         app.launch()
         settle(5)
 
@@ -65,11 +71,7 @@ final class AppStoreScreenshotTests: XCTestCase {
             snap("03-investigations")
         }
 
-        // 4. Field Kit — the flagship, and the reason this is a UI test.
-        if AppNavigator.openSection("Field Kit", in: app) {
-            settle()
-            snap("04-field-kit")
-        }
+        // 4. Field Kit is FieldKitScreenshotTests' own frame 04, taken through a real night.
 
         // 5. Events. No tab on iPhone (Field Kit took the fifth slot) — the row lives on
         //    Profile there; on iPad the sidebar carries it. Try the section first, then the row.
@@ -83,10 +85,12 @@ final class AppStoreScreenshotTests: XCTestCase {
             snap("05-events")
         }
 
-        // 6. Profile — account, security, About & Privacy in one frame.
-        if AppNavigator.openSection("Profile", in: app) {
-            settle(2)
-            snap("06-profile")
+        // 6. Tours — the walks near the phone, in the store set since 1.1.2.
+        if AppNavigator.openSection("Tours", in: app) {
+            settle(4)
+            snap("06-tours")
         }
+        // No Profile frame: a Debug build shows the Developer section there, and debug UI in a
+        // screenshot is a rejection.
     }
 }

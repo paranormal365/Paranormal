@@ -129,7 +129,7 @@ public static class MailKinds
              Required: true, Provides: "a way in"),
          new("SetPasswordButton", "A ready-made button pointing at that link.",
              IsHtml: true, Provides: "a way in"),
-         new("MadeBy", "Who made the account, as the reader would recognise them.")]);
+         new("MadeBy", "Who made the account, as the reader would recognize them.")]);
 
     public static readonly MailKindInfo SomebodyUsedYourAddress = new(
         "somebody-used-your-address", "Somebody tried to use your address",
@@ -156,7 +156,7 @@ public static class MailKinds
              Required: true, Provides: "a way to claim the request"),
          new("FinishButton", "A ready-made button pointing at that link.", IsHtml: true,
              Provides: "a way to claim the request"),
-         new("StreetAddress", "Where the investigation was asked for — what lets them recognise it.")]);
+         new("StreetAddress", "Where the investigation was asked for — what lets them recognize it.")]);
 
     // ── A case, and its client ────────────────────────────────────────────────
     public static readonly MailKindInfo CaseStatusChanged = new(
@@ -252,8 +252,8 @@ public static class MailKinds
         CanDecline: true);
 
     public static readonly MailKindInfo EventAnnouncement = new(
-        "event-announcement", "A message from the organisers",
-        "Whatever the organisers wrote to everybody coming.",
+        "event-announcement", "A message from the organizers",
+        "Whatever the organizers wrote to everybody coming.",
         ["AppUsers", "HostedEvents", "Organizations"],
         CanDecline: true);
 
@@ -277,7 +277,7 @@ public static class MailKinds
 
     public static readonly MailKindInfo EventThankYou = new(
         "event-thank-you", "Thank you for coming",
-        "After the event, with anything the organisers left for attendees.",
+        "After the event, with anything the organizers left for attendees.",
         ["AppUsers", "HostedEvents", "Organizations"],
         CanDecline: true);
 

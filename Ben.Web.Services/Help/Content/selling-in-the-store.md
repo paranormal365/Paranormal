@@ -56,7 +56,7 @@ change again.
 
 ## Options and variants
 
-Options are what a buyer chooses — up to three, like Colour and Size. Add them, press **Save
+Options are what a buyer chooses — up to three, like Color and Size. Add them, press **Save
 options**, then **Generate variants** to make a row for each combination.
 
 **A new variant starts switched off, and unpriced.** The store sets each variant's price; until it
@@ -70,7 +70,7 @@ after a count, or items damaged. Every change is recorded, with a reason.
 ## Pictures
 
 Add up to twelve. The first is the one on cards and in the cart; move them earlier or later to
-change the order. A picture can be tied to one variant, so choosing that colour shows that
+change the order. A picture can be tied to one variant, so choosing that color shows that
 photograph. The camera details and location are removed from every picture.
 
 ## Parts and cost

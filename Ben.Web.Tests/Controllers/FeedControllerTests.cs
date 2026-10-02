@@ -445,6 +445,121 @@ public sealed class FeedControllerTests
             (await controller.CreatePost(new CreateFeedPostRequest("reply", id), null, default)).Result);
     }
 
+    // ── An author taking their own post down (walk, 2026-10-02) ──────────────
+
+    [Fact]
+    public async Task An_author_can_take_down_their_own_post_and_it_leaves_every_read_path()
+    {
+        var author = MakeUser("author");
+        var reader = MakeUser("reader");
+        var factory = await SeedAsync(users: [author, reader]);
+        var id = await PostAsync(Build(factory, author.Id), "posted by mistake");
+
+        Assert.IsType<NoContentResult>(await Build(factory, author.Id).DeletePost(id, default));
+
+        var controller = Build(factory, reader.Id);
+        Assert.Empty(await ReadFeedAsync(controller));
+        Assert.IsType<NotFoundResult>((await controller.GetThread(id, default)).Result);
+
+        // Hidden, and hidden BY THE AUTHOR — a moderator's removal reads differently in the queue.
+        await using var db = factory.CreateDbContext();
+        var row = await db.OrgMessages.FirstAsync(m => m.Id == id);
+        Assert.NotNull(row.HiddenUtc);
+        Assert.Equal(author.Id, row.HiddenByAppUserId);
+    }
+
+    [Fact]
+    public async Task Nobody_else_can_take_down_somebody_elses_post()
+    {
+        var author = MakeUser("author");
+        var other = MakeUser("other");
+        var factory = await SeedAsync(users: [author, other]);
+        var id = await PostAsync(Build(factory, author.Id), "mine");
+
+        Assert.IsType<NotFoundResult>(await Build(factory, other.Id).DeletePost(id, default));
+
+        Assert.Single(await ReadFeedAsync(Build(factory, other.Id)));
+    }
+
+    [Fact]
+    public async Task Taking_down_a_post_takes_its_replies_with_it()
+    {
+        // Replies under a post nobody can open would be a conversation with no top.
+        var author = MakeUser("author");
+        var replier = MakeUser("replier");
+        var factory = await SeedAsync(users: [author, replier]);
+        var id = await PostAsync(Build(factory, author.Id), "the post");
+        var reply = await PostAsync(Build(factory, replier.Id), "the reply", id);
+
+        Assert.IsType<NoContentResult>(await Build(factory, author.Id).DeletePost(id, default));
+
+        await using var db = factory.CreateDbContext();
+        Assert.NotNull((await db.OrgMessages.FirstAsync(m => m.Id == reply)).HiddenUtc);
+    }
+
+    [Fact]
+    public async Task An_author_can_take_down_their_own_reply_without_touching_the_post()
+    {
+        var author = MakeUser("author");
+        var replier = MakeUser("replier");
+        var factory = await SeedAsync(users: [author, replier]);
+        var id = await PostAsync(Build(factory, author.Id), "the post");
+        var reply = await PostAsync(Build(factory, replier.Id), "the reply", id);
+
+        Assert.IsType<NoContentResult>(await Build(factory, replier.Id).DeletePost(reply, default));
+
+        var thread = Assert.IsType<OkObjectResult>((await Build(factory, author.Id).GetThread(id, default)).Result);
+        Assert.Single((IReadOnlyList<FeedPostRecord>)thread.Value!);
+    }
+
+    [Fact]
+    public async Task Taking_down_a_post_twice_is_not_found_the_second_time()
+    {
+        var author = MakeUser("author");
+        var factory = await SeedAsync(users: author);
+        var id = await PostAsync(Build(factory, author.Id), "once");
+
+        Assert.IsType<NoContentResult>(await Build(factory, author.Id).DeletePost(id, default));
+        Assert.IsType<NotFoundResult>(await Build(factory, author.Id).DeletePost(id, default));
+    }
+
+    // ── "You were mentioned" leads somewhere (walk, 2026-10-02) ───────────────
+
+    [Fact]
+    public async Task The_mentions_filter_shows_posts_that_name_the_reader_and_posts_whose_replies_do()
+    {
+        // The bell said "You were mentioned" and opened the top of the feed, where the post that
+        // named you could be fifty cards down. The filter is where that row now goes.
+        var james = MakeUser("jamesthornton");
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: [james, sarah]);
+        var bySarah = Build(factory, sarah.Id);
+
+        await PostAsync(bySarah, "nothing about anybody");
+        var named = await PostAsync(bySarah, "cold spot, ask @jamesthornton");
+        var quiet = await PostAsync(bySarah, "a quiet post");
+        await PostAsync(bySarah, "@jamesthornton look at this one", quiet);
+
+        var result = Assert.IsType<OkObjectResult>(
+            (await Build(factory, james.Id).GetFeed("mentions", null, null, default)).Result);
+        var ids = ((FeedPageRecord)result.Value!).Posts.Select(p => p.Id).ToHashSet();
+
+        Assert.Equal(new HashSet<Guid> { named, quiet }, ids);
+    }
+
+    [Fact]
+    public async Task The_mentions_filter_is_empty_for_a_visitor()
+    {
+        var james = MakeUser("jamesthornton");
+        var sarah = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: [james, sarah]);
+        await PostAsync(Build(factory, sarah.Id), "hello @jamesthornton");
+
+        var result = Assert.IsType<OkObjectResult>(
+            (await BuildAnonymous(factory).GetFeed("mentions", null, null, default)).Result);
+        Assert.Empty(((FeedPageRecord)result.Value!).Posts);
+    }
+
     // ── Reading ───────────────────────────────────────────────────────────────
 
     [Fact]

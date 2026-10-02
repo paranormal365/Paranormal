@@ -144,6 +144,9 @@ public interface IBenFeedClient
     /// </summary>
     Task<bool> JudgeFeedCategoryAsync(Guid postId, bool matches, CancellationToken token = default);
 
+    /// <summary>The author takes their own post or reply down (hidden, as a moderator hides one).</summary>
+    Task<bool> DeleteFeedPostAsync(Guid postId, CancellationToken token = default);
+
     /// <summary>Reports a post. Idempotent — reporting twice is one report.</summary>
     Task<bool> ReportPostAsync(Guid postId, string? reason, CancellationToken token = default);
 

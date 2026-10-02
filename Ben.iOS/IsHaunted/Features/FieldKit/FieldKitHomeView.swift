@@ -211,7 +211,12 @@ struct FieldKitHomeView: View {
                 } footer: {
                     // Only sessions the server can hand back get a button. The older kind is
                     // counted rather than listed with a Download that would only be refused.
-                    Text("Sessions you sent from another device, or cleared from this one. Downloading brings the whole night back — readings, marks and recordings."
+                    // With nothing left to bring back, the heading and the sentence about
+                    // downloading stood over an empty section (walk, 2026-10-02): say only what is
+                    // true then — the older ones are on the website.
+                    Text((pullable.isEmpty
+                          ? "Everything that can come back to this phone is here."
+                          : "Sessions you sent from another device, or cleared from this one. Downloading brings the whole night back — readings, marks and recordings.")
                          + (older > 0
                             ? " \(older == 1 ? "One older session was" : "\(older) older sessions were") sent before session files existed and can't be pulled back; they're still on the website."
                             : ""))
@@ -416,6 +421,7 @@ struct FieldKitHomeView: View {
 }
 
 private struct SessionRow: View {
+    @Environment(AppDependencies.self) private var dependencies
     let summary: FieldSessionSummary
 
     var body: some View {
@@ -483,7 +489,7 @@ private struct SessionRow: View {
         // handed over, or this person's own pulled back from the server.
         if summary.isPublicArchiveCopy {
             parts.append("public archive")
-        } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+        } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier(), me: dependencies.session.me?.userId) {
             parts.append("shared with you")
         } else if summary.isImported {
             // Your own night, back on this phone — from the server, or from a file you had kept.
@@ -584,12 +590,16 @@ private struct StartSessionSheet: View {
                         Toggle(isOn: Binding(
                             get: { channels.contains(channel) },
                             set: { isOn in
-                                // Refused before, so iOS will not ask again: say so and offer Settings.
-                                if isOn, let needed = AppPermission.needed(for: channel), needed.isRefused {
-                                    refusedPermission = needed
+                                guard isOn, let needed = AppPermission.needed(for: channel) else {
+                                    if isOn { channels.insert(channel) } else { channels.remove(channel) }
                                     return
                                 }
-                                if isOn { channels.insert(channel) } else { channels.remove(channel) }
+                                // Asked now if iOS never has; refused (now or before) stays off and
+                                // offers Settings — see AppPermission.ensure.
+                                Task {
+                                    if await needed.ensure() { channels.insert(channel) }
+                                    else { refusedPermission = needed }
+                                }
                             })
                         ) {
                             VStack(alignment: .leading, spacing: 1) {
@@ -719,9 +729,9 @@ private struct StartSessionSheet: View {
 
     private var whereFooter: String {
         if locator.access == .allowed, locator.point != nil, labelIsSuggested {
-            return "Filled in from where your phone is. Change it to anything you'll recognise later."
+            return "Filled in from where your phone is. Change it to anything you'll recognize later."
         }
-        return "Your own words. This is what you'll recognise the session by later."
+        return "Your own words. This is what you'll recognize the session by later."
     }
 
     private func useName(_ name: String?) {

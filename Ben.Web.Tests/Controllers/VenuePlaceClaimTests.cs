@@ -331,7 +331,7 @@ public sealed class VenuePlaceClaimTests
             new(PlaceId, VenueClaimantRole.Representative, "  ", null), default)).Result);
 
         var claim = Ok(await Claims(sqlite, mail, Manager).Claim(HotelOrgId,
-            new(PlaceId, VenueClaimantRole.Representative, "I book events for the owners; our business licence is attached to the listing.", null), default));
+            new(PlaceId, VenueClaimantRole.Representative, "I book events for the owners; our business license is attached to the listing.", null), default));
         Assert.Equal(VenueClaimState.Pending, claim.State);
         Assert.Empty(mail.Sent);
 
@@ -345,7 +345,7 @@ public sealed class VenuePlaceClaimTests
         var list = Assert.IsType<AdminVenueClaimListRecord>(Assert.IsType<OkObjectResult>((await admin.Get(default)).Result).Value);
         Assert.Contains(list.ToDecide, c => c.Id == claim.Id);
 
-        Assert.IsType<OkObjectResult>((await admin.Approve(claim.Id, new("Checked the licence."), default)).Result);
+        Assert.IsType<OkObjectResult>((await admin.Approve(claim.Id, new("Checked the license."), default)).Result);
         await using var check = await sqlite.NewContextAsync();
         Assert.Equal(HotelOrgId, (await VenueGrants.VerifiedVenueAtAsync(check, PlaceId, default))?.OrganizationId);
     }

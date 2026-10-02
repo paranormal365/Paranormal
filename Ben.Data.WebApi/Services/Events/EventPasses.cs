@@ -132,7 +132,7 @@ public static class EventPasses
         HostedEventPass? pass, Guid eventIdAtThisDoor, string? otherEventName)
     {
         if (pass is null)
-            return "We don't recognise that code. Ask them to check the email, or look them up by name.";
+            return "We don't recognize that code. Ask them to check the email, or look them up by name.";
 
         if (pass.HostedEventBooking.HostedEventId != eventIdAtThisDoor)
             return otherEventName is { Length: > 0 } name

@@ -79,8 +79,11 @@ struct CaseMessagesView: View {
             Spacer(); ProgressView(); Spacer()
 
         case .signedOut:
-            ContentUnavailableView("Sign in to read your messages",
-                                   systemImage: "person.crop.circle.badge.questionmark")
+            ContentUnavailableView {
+                Label("Sign in to read your messages", systemImage: "person.crop.circle.badge.questionmark")
+            } actions: {
+                SignInButton()
+            }
 
         case .failed(let reason):
             // A refusal is not an empty conversation.

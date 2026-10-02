@@ -84,7 +84,7 @@ public sealed class EmailPreferencesTests
         var factory = await SeedAsync();
 
         await Outbox(factory).SendAsync(new EmailMessage(
-            Address, "Cancelled: Ovilus class", "<p>It is off.</p>",
+            Address, "Canceled: Ovilus class", "<p>It is off.</p>",
             Kind: MailKinds.SessionCancelled.Key));
 
         Assert.Equal(1, await QueuedAsync(factory));
@@ -96,7 +96,7 @@ public sealed class EmailPreferencesTests
         var factory = await SeedAsync(MailKinds.SessionCancelled.Key);
 
         await Outbox(factory).SendAsync(new EmailMessage(
-            Address, "Cancelled: Ovilus class", "<p>It is off.</p>",
+            Address, "Canceled: Ovilus class", "<p>It is off.</p>",
             Kind: MailKinds.SessionCancelled.Key));
 
         Assert.Equal(0, await QueuedAsync(factory));
@@ -158,7 +158,7 @@ public sealed class EmailPreferencesTests
         }
 
         await Outbox(factory).SendAsync(new EmailMessage(
-            "other@example.test", "Cancelled: Ovilus class", "<p>It is off.</p>",
+            "other@example.test", "Canceled: Ovilus class", "<p>It is off.</p>",
             Kind: MailKinds.SessionCancelled.Key));
 
         Assert.Equal(1, await QueuedAsync(factory));

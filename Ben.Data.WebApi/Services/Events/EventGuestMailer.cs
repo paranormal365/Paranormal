@@ -1053,15 +1053,15 @@ public sealed class EventGuestMailer
             (session, when) => ($"You're in: {session.Title}",
                 $"<p>A place came free in <strong>{Safe(session.Title)}</strong> at "
                 + $"{Safe(session.HostedEvent.Name)}, and it's yours — {Safe(when)}.</p>"
-                + "<p>If you can't come after all, leave it from the programme so the next person gets it.</p>"),
+                + "<p>If you can't come after all, leave it from the program so the next person gets it.</p>"),
             MailKinds.SessionPromoted, ct);
 
     /// <summary>Tells everybody signed up — or waiting — that a session is off.</summary>
     public Task<int> SendSessionCancelledAsync(BenDataContext db, Guid sessionId, string? reason, CancellationToken ct)
         => SendToSignUpsAsync(db, s => s.HostedEventSessionId == sessionId,
-            (session, when) => ($"Cancelled: {session.Title}",
+            (session, when) => ($"Canceled: {session.Title}",
                 $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} ({Safe(when)}) "
-                + "has been cancelled.</p>"
+                + "has been canceled.</p>"
                 + (Trimmed(reason) is { } why ? $"<p>{Safe(session.HostedEvent.Organization?.Name ?? "The organizers")} said: “{Safe(why)}”</p>" : "")
                 + "<p>Your place at the event itself is unchanged.</p>"),
             MailKinds.SessionCancelled, ct);

@@ -225,7 +225,7 @@ public sealed class OrganizationAddressCrudController : OrgCmsControllerBase
         if (!await db.OrganizationAddresses.AnyAsync(a => a.Id == addressId && a.OrganizationId == orgId, ct))
             return NotFound();
         if (!await db.OrganizationUserMemberships.AnyAsync(m => m.Id == request.OrganizationUserMembershipId && m.OrganizationId == orgId, ct))
-            return BadRequest("Membership not found in this organisation.");
+            return BadRequest("Membership not found in this organization.");
         if (await db.OrganizationAddressMemberAccesses.AnyAsync(x => x.OrganizationAddressId == addressId && x.OrganizationUserMembershipId == request.OrganizationUserMembershipId, ct))
             return Conflict("This member already has access.");
 

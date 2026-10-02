@@ -6,7 +6,7 @@
 @using Ben.Web.Website.Library.Manage.Events
 @inject IBenAdminClient AdminClient
 
-@* An event's programme, for a guest or a visitor (item 235 phase 10).
+@* An event's program, for a guest or a visitor (item 235 phase 10).
 
    THE MOST-LOOKED-AT THING DURING AN EVENT. By night, in order, on the venue's clock, with where it
    is and who leads it; "Now" and "Next" while the event is on, because at 8:55 PM in a hotel
@@ -20,12 +20,12 @@
 @if (_programme.Item is { } programme && programme.Sessions.Count > 0)
 {
     <section class="mb-4" id="hosted-programme">
-        <BenSectionHeading Text="Programme" />
+        <BenSectionHeading Text="Program" />
 
         @if (programme.ChangedSinceSeen)
         {
             <div class="alert alert-warning py-2" id="programme-changed">
-                Something on the programme has changed since you last looked — it's marked below.
+                Something on the program has changed since you last looked — it's marked below.
             </div>
         }
         @if (_error is { Length: > 0 })
@@ -66,7 +66,7 @@
                                 }
                                 @if (s.IsCancelled)
                                 {
-                                    <div class="small text-danger">Cancelled@(s.CancelledReason is { Length: > 0 } why ? $": {why}" : "")</div>
+                                    <div class="small text-danger">Canceled@(s.CancelledReason is { Length: > 0 } why ? $": {why}" : "")</div>
                                 }
                             </div>
                             <div class="d-flex flex-column align-items-sm-end gap-1 small text-nowrap">

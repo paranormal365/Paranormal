@@ -241,11 +241,11 @@
                 <select id="block-numbering" class="form-select" @bind="_blockNumbering">
                     <option value="@SeatNumbering.LeftToRight">1, 2, 3 from the left</option>
                     <option value="@SeatNumbering.RightToLeft">1, 2, 3 from the right</option>
-                    <option value="@SeatNumbering.OddEvenFromCentre">Odd and even from the centre</option>
+                    <option value="@SeatNumbering.OddEvenFromCentre">Odd and even from the center</option>
                 </select>
             </div>
             <div class="col-12 col-md-4">
-                <label class="form-label" for="block-pattern">Labelled</label>
+                <label class="form-label" for="block-pattern">Labeled</label>
                 <select id="block-pattern" class="form-select" @bind="_blockPattern">
                     @foreach (var pattern in PlanLabels.Patterns)
                     {
@@ -310,7 +310,7 @@
                 <input id="sheet-section" class="form-control" maxlength="80"
                        placeholder="e.g. Stalls, Balcony, Second floor"
                        @bind="_sheetSection" @bind:event="oninput" />
-                <div class="form-text">Squares in one section share a colour and a legend line.</div>
+                <div class="form-text">Squares in one section share a color and a legend line.</div>
             </div>
             <div class="col-12">
                 <label class="form-label" for="sheet-note">Note</label>

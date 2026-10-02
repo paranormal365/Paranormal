@@ -287,7 +287,7 @@ public sealed class StoreRefundService(
                 db.StoreOrderEvents.Add(new StoreOrderEvent
                 {
                     Id = Guid.NewGuid(), OrderId = order.Id, ParcelId = gone, Kind = StoreOrderEventKind.NoteAdded,
-                    Note = "The package was cancelled and refunded", ActorAppUserId = actor, OccurredUtc = now,
+                    Note = "The package was canceled and refunded", ActorAppUserId = actor, OccurredUtc = now,
                 });
             }
 

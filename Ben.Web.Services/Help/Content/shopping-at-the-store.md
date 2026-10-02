@@ -1,6 +1,6 @@
 ---
 title: Shopping at the Store
-summary: Finding gear, choosing options, your cart, placing an order, delivery, returns, favourites and reviews.
+summary: Finding gear, choosing options, your cart, placing an order, delivery, returns, favorites and reviews.
 section: Getting Started
 audience: Everyone
 feature: features.store
@@ -25,8 +25,8 @@ A list can be narrowed down the side of the page — or, on a phone or a tablet 
 the **Filters** button:
 
 - **Price** — a band, or your own range with **Go**.
-- **Colour**, **Size** and the product's other options — tick as many as you like. Two colours
-  means either colour; a colour and a size means both.
+- **Color**, **Size** and the product's other options — tick as many as you like. Two colors
+  means either color; a color and a size means both.
 - **Rating** — four stars and up, three and up, and so on.
 - **In stock only** — hides what is sold out.
 
@@ -42,7 +42,7 @@ be bought until it is back. **Only 3 left** means just that.
 
 ## Options and prices
 
-Some gear comes in more than one version — a colour, a size. Pick each on the product page: the
+Some gear comes in more than one version — a color, a size. Pick each on the product page: the
 price, the stock line and the code under them change to match what you chose, and the picture
 changes too when that version has its own.
 
@@ -170,7 +170,7 @@ do, that is included in the sales tax line.
 **With an account.** Orders you place while signed in are under **My Orders** in the menu (also
 linked at the bottom of the store's front page). Each one shows its number, date, total and where
 it has got to: *Paid — being prepared*, *Packed*, *Partially shipped* (some of its packages are on their
-way), *Shipped*, *Delivered*, *Cancelled* or *Refunded*. An order in more than one package lists each
+way), *Shipped*, *Delivered*, *Canceled* or *Refunded*. An order in more than one package lists each
 package on its page, with where it has got to and its own tracking number.
 Open an order to see where it's going, what's in it, what it came to, and its tracking number once
 it ships. Checkouts you started but never paid for aren't orders, so they aren't listed.
@@ -224,21 +224,21 @@ A refund goes back to the card you paid with; banks usually show it within 5–1
 appears on your order page and your invoice as soon as it's made, and you're emailed when it is. A
 part refund shows what was refunded and what's left.
 
-## Favourites
+## Favorites
 
 Tap the **heart** on a product — on its page, or on its card anywhere in the store — to keep it in
-your **Favourites**. The heart fills in once it's kept; tap it again to let it go. The heart at the
+your **Favorites**. The heart fills in once it's kept; tap it again to let it go. The heart at the
 top of the screen, beside the cart, shows how many you're keeping and opens the list (it's also
-under **Store → Favourites** in the menu).
+under **Store → Favorites** in the menu).
 
-The Favourites page shows each product as it is today — its price, and whether it's in stock. **Remove**
+The Favorites page shows each product as it is today — its price, and whether it's in stock. **Remove**
 takes one off the list after asking. A product that stops being sold drops out of the list, and
 comes back if it returns.
 
-Favourites belong to your account, so you need to be signed in: a guest who taps a heart is asked to
+Favorites belong to your account, so you need to be signed in: a guest who taps a heart is asked to
 sign in first.
 
-![Favourites: the products you're keeping, as they are today](/help/media/shopping-at-the-store/favourites.png)
+![Favorites: the products you're keeping, as they are today](/help/media/shopping-at-the-store/favourites.png)
 
 ## Reviews
 

@@ -90,10 +90,19 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     /// Whether this session arrived as a `.ben` rather than being recorded on this device.
     public var isImported: Bool { importedAt != nil }
 
-    /// Whether the seal says another device recorded it — "shared with you", as opposed to
-    /// your own night pulled back from the server. Unknown seals count as somebody else's.
-    public func wasRecordedElsewhere(thisDeviceId: String?) -> Bool {
+    /// Whether somebody else recorded it — "shared with you", as opposed to your own night pulled
+    /// back from the server or recorded on your other phone.
+    ///
+    /// The ACCOUNT the seal names decides when both are known: James's own session, recorded on
+    /// another device and downloaded here, read "shared with you" because only the device was
+    /// compared (walk, 2026-10-02). The device is the fallback for a seal that names nobody.
+    /// Unknown seals count as somebody else's.
+    public func wasRecordedElsewhere(thisDeviceId: String?, me: UUID? = nil) -> Bool {
         guard isImported else { return false }
+        if let me, let recordedByAccountId { return recordedByAccountId != me }
+        // Pulled down from the server's list of the sessions THIS account sent: theirs, wherever
+        // it was recorded, unless the seal names somebody else (handled above).
+        if serverSessionId != nil, !isPublicArchiveCopy { return false }
         guard let sourceDeviceId, let thisDeviceId else { return true }
         return sourceDeviceId != thisDeviceId
     }

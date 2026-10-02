@@ -5,7 +5,7 @@
   Kit/Maps/BenMap (item 228: Apple Maps, with the retiring Telerik map as the fallback).
 
   Features:
-  • Marker — the person's chosen colour and icon, with a tooltip
+  • Marker — the person's chosen color and icon, with a tooltip
   • Region — a circle of a real radius on the ground
   • Config panel — toggle visibility, pick colors (TelerikColorPicker),
                    pick icon (TelerikDropDownList with icon preview),
@@ -39,7 +39,7 @@ else
 {
     <div class="address-map-player">
 
-        @* The map. Its view is this component's to drive: centred on the address, zoomed for
+        @* The map. Its view is this component's to drive: centered on the address, zoomed for
            the region when there is one. A click reaches OnMapClick only while the person has
            armed "click to set the edge"; the rest of the time the map is just looked at. *@
         <BenMap Pins="@_pins" Circle="@_circle" Height="@Height" FitToPins="false"
