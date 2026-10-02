@@ -191,7 +191,7 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
         var rows = new StringBuilder();
         foreach (var (product, variant, sku, left) in low)
             rows.Append($"<tr><td style=\"{Cell}\">{Safe(product)}{(string.IsNullOrWhiteSpace(variant) ? "" : $" — {Safe(variant)}")}"
-                      + $" <span style=\"color:#6b7280;\">{Safe(sku)}</span></td>"
+                      + $" <span style=\"color:#5A6679;\">{Safe(sku)}</span></td>"
                       + $"<td align=\"right\" style=\"{Cell}\">{left} left</td></tr>");
         var table = Table(rows.ToString());
         foreach (var (email, name) in admins)
@@ -255,7 +255,7 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
 
     private static string Table(string rows)
         => "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
-         + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;\">" + rows + "</table>";
+         + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2B3546;\">" + rows + "</table>";
 
     private async Task QueueAsync(BenDataContext db, StoreOrder order, MailKindInfo kind, string to, string subject, string html,
         IReadOnlyDictionary<string, MailSuppliedValue> supplied, DateTime now, CancellationToken ct)
@@ -276,7 +276,7 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
 
     private static string Safe(string? s) => WebUtility.HtmlEncode(s ?? "");
 
-    private const string Cell = "padding:8px 0;border-bottom:1px solid #e5e7eb;";
+    private const string Cell = "padding:8px 0;border-bottom:1px solid #E3E8F1;";
 
     public static string ItemsTable(IReadOnlyList<StoreOrderItem> items)
     {
@@ -288,18 +288,18 @@ public sealed class StoreOrderMailer(IOutboxEmailQueue queue, IOptions<SiteIdent
                       + $"<td align=\"right\" style=\"{Cell}\">{Usd(i.LineTotal)}</td></tr>");
         }
         return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
-             + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;\">"
+             + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2B3546;\">"
              + rows + "</table>";
     }
 
     public static string SummaryTable(StoreOrder o)
     {
         static string Row(string what, string amount, bool strong = false)
-            => $"<tr><td style=\"padding:4px 0;{(strong ? "font-weight:bold;color:#111827;" : "")}\">{what}</td>"
-             + $"<td align=\"right\" style=\"padding:4px 0;{(strong ? "font-weight:bold;color:#111827;" : "")}\">{amount}</td></tr>";
+            => $"<tr><td style=\"padding:4px 0;{(strong ? "font-weight:bold;color:#0E1726;" : "")}\">{what}</td>"
+             + $"<td align=\"right\" style=\"padding:4px 0;{(strong ? "font-weight:bold;color:#0E1726;" : "")}\">{amount}</td></tr>";
 
         var sb = new StringBuilder("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
-                                 + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;\">");
+                                 + "style=\"margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2B3546;\">");
         sb.Append(Row("Products", Usd(o.Subtotal)));
         if (o.DiscountAmount > 0) sb.Append(Row($"Discount{(o.CouponCode is { } c ? $" ({Safe(c)})" : "")}", "−" + Usd(o.DiscountAmount)));
         sb.Append(Row("Shipping", o.ShippingAmount == 0 ? "Free" : Usd(o.ShippingAmount)));

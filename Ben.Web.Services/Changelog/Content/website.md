@@ -24,6 +24,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-10-02 · 2.14.0
 
+- Emails from the site now match its new look: the same violet and cyan, rounded card and button
+  as the pages they link to.
 - EVP scans now keep a few measurements of each sound they find, and your keep or dismiss choices
   beside them, so a future version can rank candidates more like investigators do. No audio is
   copied, and they are deleted with the recording. The privacy page says so.

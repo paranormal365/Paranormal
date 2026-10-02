@@ -1,6 +1,7 @@
 using System.Net;
 using Ben.Data.Common;
 using Ben.Data.Common.Mail;
+using P = Ben.Data.Common.Mail.MailPalette;
 
 namespace Ben.Data.WebApi.Services;
 
@@ -56,8 +57,8 @@ public static class BenEmailLayout
         var header = MailHeader.Html(site.AbsoluteUrl("/" + MailHeader.IconFileName), site.Name);
 
         var titleRow = string.IsNullOrWhiteSpace(title) ? "" : $"""
-            <tr><td style="padding:8px 32px 8px 32px;font-family:Arial,Helvetica,sans-serif;
-                           font-size:20px;font-weight:bold;color:#111827;">
+            <tr><td style="padding:4px 36px 10px 36px;font-family:{P.Font};
+                           font-size:22px;line-height:1.25;font-weight:bold;letter-spacing:-0.3px;color:{P.Ink};">
               {WebUtility.HtmlEncode(title)}
             </td></tr>
             """;
@@ -70,7 +71,7 @@ public static class BenEmailLayout
             ? $"""
               <div style="padding-top:6px;">
                 <a href="{WebUtility.HtmlEncode(site.AbsoluteUrl("/email-preferences"))}"
-                   style="color:#9ca3af;">Choose which emails you get</a>
+                   style="color:{P.Muted};text-decoration:underline;">Choose which emails you get</a>
               </div>
               """
             : "";
@@ -80,21 +81,20 @@ public static class BenEmailLayout
         {
             var url = WebUtility.HtmlEncode(buttonUrl);
             button = $"""
-                <tr><td align="center" style="padding:8px 32px 4px 32px;">
-                  <a href="{url}"
-                     style="display:inline-block;background-color:#2e6b34;color:#ffffff;
-                            font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;
-                            text-decoration:none;padding:12px 32px;border-radius:6px;">
-                    {WebUtility.HtmlEncode(buttonText)}</a>
+                <tr><td align="center" style="padding:10px 36px 4px 36px;">
+                  {P.Button(WebUtility.HtmlEncode(buttonText), url, margin: "0", centered: true)}
                 </td></tr>
-                <tr><td align="center" style="padding:4px 32px 8px 32px;
-                        font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#6b7280;">
+                <tr><td align="center" style="padding:8px 36px 12px 36px;
+                        font-family:{P.Font};font-size:12px;line-height:1.5;color:{P.Faint};">
                   Or paste this into your browser:<br/>
-                  <a href="{url}" style="color:#2e6b34;word-break:break-all;">{url}</a>
+                  <a href="{url}" style="color:{P.Accent};word-break:break-all;">{url}</a>
                 </td></tr>
                 """;
         }
 
+        // Signal, as far as email goes (Ben, 10/02/2026): the page's sunken background, a white card
+        // with the site's violet-to-cyan along its top edge, the site's ink, and the pill button.
+        // The top edge is its own 4px row because a border cannot carry a gradient anywhere.
         return $"""
             <!DOCTYPE html>
             <html>
@@ -102,27 +102,34 @@ public static class BenEmailLayout
               <!-- Without this the reader's client guesses the charset, and a wrong guess turns
                    the em-dash in the footer into "â€"" — seen in the first preview render. -->
               <meta charset="utf-8" />
+              <!-- Light everywhere: a client that inverts a letter for dark mode does it differently
+                   in each client, and half of them leave the violet on near-black. -->
+              <meta name="color-scheme" content="light" />
+              <meta name="supported-color-schemes" content="light" />
             </head>
-            <body style="margin:0;padding:0;background-color:#f3f4f6;">
+            <body style="margin:0;padding:0;background-color:{P.Page};">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                     style="background-color:#f3f4f6;padding:24px 0;">
-                <tr><td align="center">
+                     style="background-color:{P.Page};padding:28px 0;">
+                <tr><td align="center" style="padding:0 12px;">
                   <table role="presentation" width="560" cellpadding="0" cellspacing="0"
-                         style="max-width:560px;width:100%;background-color:#ffffff;
-                                border-radius:8px;overflow:hidden;">
-                    <tr><td style="padding:24px 32px 0 32px;">
+                         style="max-width:560px;width:100%;background-color:{P.Paper};
+                                border:1px solid {P.Line};border-radius:16px;overflow:hidden;">
+                    <tr><td height="4" bgcolor="{P.Accent}"
+                            style="height:4px;line-height:4px;font-size:0;background-color:{P.Accent};
+                                   background-image:{P.Gradient};">&nbsp;</td></tr>
+                    <tr><td style="padding:24px 36px 0 36px;">
                       {header}
                     </td></tr>
                     {titleRow}
-                    <tr><td style="padding:0 32px 16px 32px;font-family:Arial,Helvetica,sans-serif;
-                                   font-size:15px;line-height:1.6;color:#374151;">
+                    <tr><td style="padding:0 36px 16px 36px;font-family:{P.Font};
+                                   font-size:15px;line-height:1.65;color:{P.Body};">
                       {bodyHtml}
                     </td></tr>
                     {button}
-                    <tr><td style="padding:20px 32px 24px 32px;border-top:1px solid #e5e7eb;
-                                   font-family:Arial,Helvetica,sans-serif;font-size:12px;
-                                   color:#9ca3af;">
-                      {name} — {WebUtility.HtmlEncode(site.Tagline)}<br/>
+                    <tr><td style="padding:18px 36px 24px 36px;border-top:1px solid {P.Line};
+                                   font-family:{P.Font};font-size:12px;line-height:1.5;
+                                   color:{P.Faint};">
+                      <strong style="color:{P.Muted};">{name}</strong> — {WebUtility.HtmlEncode(site.Tagline)}<br/>
                       If you weren't expecting this message, you can ignore it.
                       {zoneNote}
                       {chooseNote}
@@ -144,14 +151,5 @@ public static class BenEmailLayout
     /// Outlook — which is the whole failure mode email HTML has.
     /// </remarks>
     public static string ActionButton(string text, string url)
-        => $"""
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 16px 0;">
-              <tr><td align="center" bgcolor="#2e6b34" style="border-radius:6px;">
-                <a href="{WebUtility.HtmlEncode(url)}"
-                   style="display:inline-block;background-color:#2e6b34;color:#ffffff;
-                          font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;
-                          text-decoration:none;padding:12px 28px;border-radius:6px;">{WebUtility.HtmlEncode(text)}</a>
-              </td></tr>
-            </table>
-            """;
+        => P.Button(WebUtility.HtmlEncode(text), WebUtility.HtmlEncode(url));
 }
