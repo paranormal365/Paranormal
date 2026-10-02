@@ -1,0 +1,75 @@
+/* Every value is a Signal token, so the band follows the theme and the skin with none of its own. */
+
+.section-banner {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    min-height: 8.5rem;
+    margin: .25rem 0 1.5rem;
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow);
+    display: flex;
+    align-items: flex-end;
+}
+
+.section-banner__photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* position is set per photograph, inline, from SignalPhotos */
+    background-size: cover;
+    /* the photograph eases in, rather than snapping, once it arrives */
+    animation: section-banner-in .6s ease both;
+}
+
+/* Text over a photograph is light in BOTH themes, with its own scrim — the rule the light-mode
+   mock-up taught. The accent wash at the foot ties the picture to the skin. */
+.section-banner__photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(100deg, rgba(6, 10, 18, .84) 0%, rgba(6, 10, 18, .50) 50%, rgba(6, 10, 18, .12) 100%),
+        linear-gradient(0deg, rgba(var(--ben-accent-rgb), .30) 0%, transparent 70%);
+}
+
+.section-banner__inner { padding: 1.1rem 1.5rem 1.15rem; }
+
+.section-banner__kicker {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ben-accent-2);
+    margin-bottom: .2rem;
+}
+
+.section-banner__line {
+    color: #fff;
+    font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+    font-weight: 600;
+    letter-spacing: -.01em;
+    max-width: 40ch;
+}
+
+@keyframes section-banner-in {
+    from { opacity: 0; transform: scale(1.04); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .section-banner__photo { animation: none; }
+}
+
+@media (max-width: 575.98px) {
+    .section-banner { min-height: 6.5rem; }
+    .section-banner__line { font-size: 1rem; }
+}
+
+/* Administration and moderation: a slimmer band. Those screens are mostly grids, and a full band
+   spent ~140px of height above data a person came to work in — enough to know where you are,
+   no more. Same photograph, same scrim, less of both. */
+.section-banner--slim { min-height: 4.75rem; margin-bottom: 1rem; }
+.section-banner--slim .section-banner__inner { padding: .7rem 1.25rem .75rem; }
+.section-banner--slim .section-banner__kicker { margin-bottom: .1rem; }
+.section-banner--slim .section-banner__line { font-size: .98rem; }

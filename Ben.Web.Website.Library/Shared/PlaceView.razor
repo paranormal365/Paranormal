@@ -27,7 +27,7 @@
 
 <PageTitle>@(_place?.Name ?? "Place") — IsHaunted</PageTitle>
 
-<div class="container-fluid px-3 py-4" style="max-width:900px; margin:0 auto;">
+<div class="home-band">
 
     @if (_loading)
     {
@@ -47,17 +47,22 @@
         @* Only for members. The document explaining place pages is written for people who run
            investigations, and a visitor following this link would land on "topic isn't
            available" — worse than no link at all. *@
-        <h3 class="mb-1">@Title@if (UserState.IsAuthenticated)
+        @* Signal phase 2: the place's own photograph when somebody has put one up — the first of
+           "the place itself" below — and otherwise a plate in its own colour. Never a stock
+           photograph: behind a real building's name it would read as that building. *@
+        <PageHero TestId="place-hero" Class="place-hero"
+                  PhotoUrl="@(_pictures is { Count: > 0 } heroPics ? AdminClient.GetPlaceEvidenceFileUrl(PlaceId, heroPics[0].Id) : null)"
+                  Hue="@Ben.Web.Website.Library.Kit.TourPlate.Hue(_place.Name)"
+                  Kicker="@(_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation ? "Public location" : "A place")"
+                  Title="@Title" Lede="@LocationLine">
+            @if (UserState.IsAuthenticated)
             {
-                <HelpLink Slug="working-a-case" Anchor="place-pages" />
-            }</h3>
-        <p class="text-secondary mb-1">
-            @LocationLine
-            @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
-            {
-                <span class="badge bg-info ms-2">Public location</span>
+                @* Only for members. The document explaining place pages is written for people who
+                   run investigations, and a visitor following this link would land on "topic isn't
+                   available" — worse than no link at all. *@
+                <div><a class="btn btn-sm btn-outline-light" href="/help/working-a-case#place-pages">How place pages work</a></div>
             }
-        </p>
+        </PageHero>
 
         @* Rooms (item 197). Offered once per group the viewer belongs to, because rooms are named
            PER GROUP for a shared place — a hotel describes its own building, a group that visits

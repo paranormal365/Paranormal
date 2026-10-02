@@ -82,7 +82,7 @@ public class RoleTierJourneyTests : BenTestBase
             // tab gate asks the same my-permissions endpoint the server enforces with.
             await LoginAsync(MemberEmail, MemberPassword);
             await GotoOrgAsync();
-            await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = "Members", Exact = true }))
+            await Expect(OrgTab("Members"))
                 .ToBeVisibleAsync(new() { Timeout = 45_000 });   // page is rendered…
             await Expect(CasesTab()).ToHaveCountAsync(0);         // …and Cases is not in it
 
@@ -107,7 +107,7 @@ public class RoleTierJourneyTests : BenTestBase
     }
 
     private ILocator CasesTab()
-        => Main.GetByRole(AriaRole.Tab, new() { Name = "Cases", Exact = true });
+        => OrgTab("Cases");
 
     private async Task GotoOrgAsync()
     {

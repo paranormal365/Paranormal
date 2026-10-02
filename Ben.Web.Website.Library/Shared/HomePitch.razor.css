@@ -1,0 +1,93 @@
+/* The visitor's pitch (Signal). Tokens only, so it follows the theme and the skin. */
+
+.pitch { margin: 1rem 0 2.5rem; }
+
+/* ── three ways in ── */
+.pitch__pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.pitch-pillar {
+    display: flex; flex-direction: column; gap: .4rem;
+    padding: 1.35rem 1.35rem 1.2rem;
+    background: var(--ben-surface); border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg); box-shadow: var(--ben-shadow);
+    color: var(--ben-ink); text-decoration: none;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.pitch-pillar:hover { transform: translateY(-3px); box-shadow: var(--ben-shadow-lg); border-color: rgba(var(--ben-accent-rgb), .4); color: var(--ben-ink); }
+.pitch-pillar__badge {
+    width: 2.6rem; height: 2.6rem; border-radius: var(--ben-radius);
+    display: grid; place-items: center; margin-bottom: .35rem;
+    color: var(--ben-on-accent); background-image: var(--ben-accent-grad); box-shadow: var(--ben-glow);
+}
+.pitch-pillar h3 { font-size: 1.12rem; margin: 0; }
+.pitch-pillar p { color: var(--ben-ink-muted); font-size: .9rem; line-height: 1.45; margin: 0; flex: 1; }
+.pitch-pillar__go { color: var(--ben-link); font-weight: 650; font-size: .88rem; margin-top: .35rem; }
+
+/* ── a browser window around a real screen, cropped to its subject ── */
+.pitch-shot {
+    position: relative; overflow: hidden; height: 9rem;
+    border-radius: var(--ben-radius); background: var(--ben-bg-sunken);
+    box-shadow: 0 0 0 1px var(--ben-line);
+}
+.pitch-shot::before {   /* the window's title bar */
+    content: ""; position: absolute; inset: 0 0 auto 0; height: .7rem; z-index: 1;
+    background: color-mix(in srgb, var(--ben-ink) 10%, var(--ben-surface));
+}
+.pitch-shot img {
+    position: absolute; top: .7rem; left: 0;
+    width: calc(100% * var(--z, 1)); height: calc((100% - .7rem) * var(--z, 1));
+    object-fit: cover; object-position: var(--f, top left);
+}
+
+/* ── everything it does ── */
+.pitch__tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.pitch-tile {
+    background: var(--ben-surface); border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg); box-shadow: var(--ben-shadow-sm);
+    padding: .65rem .65rem .9rem; display: flex; flex-direction: column;
+}
+.pitch-tile__body { padding: .7rem .3rem 0; }
+.pitch-tile h3 { display: flex; align-items: center; gap: .4rem; font-size: .98rem; margin: 0 0 .25rem; }
+.pitch-tile h3 :deep(.sa-icon), .pitch-tile h3 svg { color: var(--ben-accent); width: 1rem; height: 1rem; flex: none; }
+.pitch-tile p { color: var(--ben-ink-muted); font-size: .84rem; line-height: 1.4; margin: 0; }
+
+/* ── the phone and the website ── */
+.pitch__chain {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; counter-reset: step;
+}
+.pitch-step { position: relative; }
+.pitch-shot--step { height: 8rem; }
+.pitch-phone {
+    height: 8rem; width: 4rem; margin: 0 auto; border-radius: .7rem;
+    background: #050505; padding: .2rem;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .35), 0 0 0 1px var(--ben-line);
+}
+.pitch-phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .55rem; }
+.pitch-step__n {
+    display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; margin: .75rem 0 .35rem;
+    border-radius: 50%; font-size: .78rem; font-weight: 800;
+    color: var(--ben-on-accent); background-image: var(--ben-accent-grad);
+}
+.pitch-step h3 { font-size: .98rem; margin: 0 0 .2rem; }
+.pitch-step p { color: var(--ben-ink-muted); font-size: .84rem; line-height: 1.4; margin: 0; }
+/* the arrow between steps, on wide screens where they sit in a row */
+@media (min-width: 992px) {
+    .pitch-step:not(:last-child)::after {
+        content: "→"; position: absolute; right: -.85rem; top: 3.4rem;
+        color: var(--ben-link); font-weight: 800;
+    }
+}
+.pitch__apps { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0 0; }
+.pitch__apps .btn { display: inline-flex; align-items: center; gap: .45rem; }
+
+@media (max-width: 991.98px) {
+    .pitch__tiles, .pitch__chain { grid-template-columns: repeat(2, 1fr); }
+    .pitch__pillars { grid-template-columns: 1fr; }
+}
+@media (max-width: 575.98px) {
+    .pitch__tiles, .pitch__chain { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pitch-pillar { transition: none; }
+    .pitch-pillar:hover { transform: none; }
+}

@@ -5,20 +5,24 @@
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 
 @* ── Hero ─────────────────────────────────────────────────────────────────── *@
-<div class="home-hero">
-    <div class="home-hero__brand">
-        @* The logo carries the site's name, so there is no title line under it. One picture per theme,
-           chosen by the site's own theme attribute (so the header's toggle is followed, not only the
-           device's setting); each blends into its page — #363c41 in dark, white in light. Lazy, so
-           the browser fetches only the one it shows: a hidden lazy image is never requested. *@
-        <img src="/static/images/logo-glass-white.png" alt="@SiteOptions.Value.Name"
-             class="home-hero__logo home-hero__logo--light" width="1254" height="1254" loading="lazy" />
-        <img src="/static/images/logo-glass-gray.png" alt="@SiteOptions.Value.Name"
-             class="home-hero__logo home-hero__logo--dark" width="1254" height="1254" loading="lazy" />
-        <p class="home-hero__tagline">Connect with paranormal investigation groups near you</p>
-    </div>
+@*
+    Signal (Ben, 2026-10-01). The visitor's front door opens the way the mock-up he chose does — a
+    photograph, a headline, and the search laid over it — and the way the signed-in desk now does,
+    so arriving signed out and signed in read as the same site.
 
-    @* ── Location search ─────────────────────────────────────────────────── *@
+    It used to open on the logo at 460px over a one-line tagline. The logo is in the header lockup
+    on every page now (option C), so the hero no longer has to carry the brand — and 09/25's rule
+    still holds in a new form: the hero never prints the site's NAME, because the header already
+    does, once. The headline is a promise, not a repetition. HomePageTests guards both.
+
+    Everything that WORKS here is unchanged: the geocoded search, Enter to submit, its results and
+    its refusal below, and the two links. Only the frame around them moved — and since phase 2 the
+    frame is the shared PageHero, so every public page opens the same way this one does.
+*@
+<PageHero Photo="i3-walking-to-house" TestId="home-hero" Class="home-hero page-hero--tall"
+          Kicker="One home for the paranormal"
+          Title="Find out what happened here."
+          Lede="Haunted places near you, the groups that investigate them, and the nights you can book.">
     <div class="home-hero__search-box">
         <div class="home-hero__search-row">
             @* Enter submits, which a plain button in a div would not do — the search box is the
@@ -53,13 +57,13 @@
 
     @* ── CTA buttons ──────────────────────────────────────────────────────── *@
     <div class="home-hero__ctas">
-        <a href="/find" class="btn btn-outline-secondary">Browse All Groups</a>
+        <a href="/find" class="btn btn-outline-light">Browse All Groups</a>
         @* The request wizard runs signed out and makes the account at Submit (site evaluation
            2026-09-06, phase 1), so this no longer routes the one person the page exists for
            through a sign-in screen first. *@
-        <a href="/my-requests/new" class="btn btn-outline-info">Request an Investigation</a>
+        <a href="/my-requests/new" class="btn btn-outline-light">Request an Investigation</a>
     </div>
-</div>
+</PageHero>
 
 @* ── Search results ────────────────────────────────────────────────────────── *@
 @if (_searched && _results.Count == 0)
@@ -123,74 +127,6 @@
         </div>
     </div>
 }
-
-<style>
-    .home-hero {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-        padding: 2rem 1rem 1rem;
-        text-align: center;
-        max-width: 700px;
-        margin: 0 auto;
-    }
-
-    /* Fluid: follows the window as it is resized — never under 220px on a phone, never over 460px. */
-    .home-hero__logo {
-        --logo-w: clamp(220px, 42vw, 460px);
-        width: var(--logo-w);
-        max-width: 90vw;
-        height: auto;
-    }
-
-    /* The square pictures leave empty space under the reflection; the tagline moves up into it, by a
-       share of the logo's own width so the gap stays the same at every size. The light one only a
-       little: its dark halo reaches further down, and the grey tagline must not sit on it. */
-    .home-hero__logo--dark  { margin-bottom: calc(var(--logo-w) * -0.13); }
-    .home-hero__logo--light { margin-bottom: calc(var(--logo-w) * -0.05); }
-
-    /* Light by default; the dark picture only under the dark theme. */
-    .home-hero__logo--dark { display: none; }
-    [data-bs-theme="dark"] .home-hero__logo--dark  { display: block; }
-    [data-bs-theme="dark"] .home-hero__logo--light { display: none; }
-
-    .home-hero__tagline {
-        color: var(--kendo-color-subtle-text, #888);
-        font-size: 1.05rem;
-        margin: 0;
-    }
-
-    .home-hero__brand {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: .4rem;
-    }
-
-    .home-hero__search-box {
-        width: 100%;
-        max-width: 560px;
-    }
-
-    .home-hero__search-row {
-        display: flex;
-        gap: .5rem;
-    }
-
-    .home-hero__search-input {
-        flex: 1;
-    }
-
-    .home-hero__ctas {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
-        justify-content: center;
-    }
-
-</style>
-
 @code {
     // Item #103: the hero's call-to-action row is auth-gated in markup, and auth resolves
     // asynchronously after the circuit connects — without this, a signed-in user hard-navigating

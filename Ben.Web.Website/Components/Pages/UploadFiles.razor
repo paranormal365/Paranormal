@@ -137,22 +137,22 @@
                                    OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))"
                                    Title="Download"
                                    Class="ben-grid-action"
-                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="download" /></GridCommandButton>
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="download" /><span class="visually-hidden">Download</span></GridCommandButton>
                 <GridCommandButton Command="Share"
                                    OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Items.First()))"
                                    Title="Share"
                                    Class="ben-grid-action"
-                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="share-2" /></GridCommandButton>
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="share-2" /><span class="visually-hidden">Share</span></GridCommandButton>
                 <GridCommandButton Command="Replace"
                                    OnClick="@((GridCommandEventArgs e) => OpenReplaceDialog((UploadFileRecord)e.Items.First()))"
                                    Title="Replace the file"
                                    Class="ben-grid-action"
-                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="refresh-cw" /></GridCommandButton>
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="refresh-cw" /><span class="visually-hidden">Replace the file</span></GridCommandButton>
                 <GridCommandButton Command="Delete"
                                    OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Items.First()))"
                                    Title="Delete"
                                    Class="ben-grid-action"
-                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
             </GridCommandColumn>
         </GridColumns>
     </TelerikGrid>

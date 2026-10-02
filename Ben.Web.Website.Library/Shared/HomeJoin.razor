@@ -1,0 +1,72 @@
+@namespace Ben.Web.Website.Library.Shared
+@inject IBenUserState UserState
+@inject IBenAdminClient Client
+
+@*
+    The foot of the visitor's Home: what it costs, and the ask. After the live sections, so the
+    page sells (HomePitch), proves it is alive (what's on, what's near you, the map), then asks.
+
+    The wording is the flyers' (docs/ads/build-ads.py). The GROUP price is read from the same tier
+    rows /pricing renders — the cheapest paid band's monthly price — so a SuperAdmin changing a
+    band changes this line too, and the front page can never quote a price the plans page does
+    not. $19.99, the live band when this was written, is only the fallback for a failed load.
+
+    The button follows who is looking, once AuthReady says so: a visitor is asked to join, a
+    signed-in person who is in no group yet is offered the way into one. Before AuthReady the
+    visitor's version renders, which is right for the prerender a search engine reads.
+*@
+
+<section class="home-join" data-testid="home-join">
+    <div class="home-join__photo" aria-hidden="true"></div>
+    <div class="home-join__inner">
+        <div class="home-join__kicker">Plans</div>
+        <h2 class="home-join__title">Free to explore. <span>Pay only for what you run.</span></h2>
+        <ul class="home-join__prices">
+            <li><b>Free</b><span>to join, explore and post — with Field Kit and 2&nbsp;GB of your own files</span></li>
+            <li><b data-testid="home-join-group-price">@GroupPrice</b><span>a month for a group, and public places stay free on every plan</span></li>
+            <li><b>$29</b><span>a month per ghost walk, every guide and every date included</span></li>
+            <li><b>$99</b><span>per hosted event, however many nights — guests pay you directly</span></li>
+        </ul>
+        <div class="home-join__ctas">
+            @if (_signedIn)
+            {
+                <a class="btn btn-primary btn-lg" href="/find">Find a group</a>
+                <a class="btn btn-outline-light btn-lg" href="/pricing">See every plan</a>
+            }
+            else
+            {
+                <a class="btn btn-primary btn-lg" href="/signup" data-testid="home-join-signup">Join free</a>
+                <a class="btn btn-outline-light btn-lg" href="/pricing">See every plan</a>
+            }
+        </div>
+        <p class="home-join__fine">No card needed to join.</p>
+    </div>
+</section>
+
+@code {
+    private bool _signedIn;
+    private string GroupPrice { get; set; } = "$19.99";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Anonymous, so no AuthReady wait: the prerender a visitor and a search engine read carries it.
+        var tiers = await Client.GetPublicPricingAsync();
+        var cheapest = tiers.Items
+            .Where(t => t.IsBandedByMembers)
+            .SelectMany(t => t.Prices)
+            .Where(p => p.Interval == Ben.Data.Common.Enums.BillingInterval.Monthly && p.Price > 0)
+            .Select(p => (decimal?)p.Price)
+            .Min();
+        if (cheapest is { } price)
+            GroupPrice = BenMoney.Format(price);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.AuthReady;
+        if (UserState.IsAuthenticated == _signedIn) return;
+        _signedIn = UserState.IsAuthenticated;
+        StateHasChanged();
+    }
+}

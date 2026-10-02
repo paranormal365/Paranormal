@@ -47,67 +47,26 @@ else if (_event is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
-        @* Back to where they came FROM, and onward to the group beside it.
-
-           This offered only the group. Somebody who found this night in "What's Near You" on the
-           home page pressed the one arrow on the page and landed on a group they had never asked
-           about, with no way back to the search they had just run (Ben, 2026-09-21). The group
-           link is still here — it is worth having — but it is no longer pretending to be the way
-           back. *@
-        <div class="mb-3 d-flex flex-wrap gap-3 align-items-center">
-            @if (CameFrom is { } back)
+    <div class="home-band">
+        @* Signal phase 2: the night's own photograph when the host has put one up, and otherwise a
+           plate in the tour's colour (or the host's) — so every event page has a character of its
+           own without needing a picture nobody uploaded. The date is a plate the eye finds before
+           it reads anything, the same plate the tour's own list of dates uses; the figures sit in
+           the frame's tiles. *@
+        <PageHero TestId="event-hero" Class="event-hero"
+                  PhotoUrl="@(_hosted?.Gallery is { Count: > 0 } heroGallery ? MediaUrls.EventPhoto(heroGallery[0].UploadFileId) : null)"
+                  Hue="@TourPlate.Hue(_event.TourName ?? _event.OrganizationName)"
+                  Title="@_event.Title" Facts="@Facts" Lead="@EventLead">
+            <div class="event-head__by">
+                Hosted by
+                <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
+            </div>
+            @if (!_event.IsAllDay)
             {
-                <a href="@back.Href" class="text-decoration-none small">&larr; @back.Words</a>
+                @* The night's clock, or the reader's own (2026-09-28). *@
+                <div class="event-head__clock"><TimeZoneSwitch ZoneId="@_event.TimeZoneId" Noun="event" /></div>
             }
-            <a href="@($"/o/{_event.OrganizationUrlName}")" class="text-decoration-none small">
-                @(CameFrom is null ? "← " : "")@_event.OrganizationName
-            </a>
-        </div>
-
-        @* A banner, not a heading. This page is one date, and the date is the fact somebody is
-           looking for — so it is drawn as a plate the eye finds before it reads anything, the same
-           plate the tour's own list of dates uses.
-
-           The wash behind it takes its colour from the tour when this date runs one, and from the
-           host otherwise (TourPlate), so every event page has a character of its own without
-           needing a photograph nobody uploaded. *@
-        <div class="event-head mb-4" style="@TourPlate.HueStyle(_event.TourName ?? _event.OrganizationName)">
-            <div class="event-head__plate">
-                <span class="event-head__dow">@Local(_event.StartDateTime).ToString("ddd")</span>
-                <span class="event-head__day">@Local(_event.StartDateTime).Day</span>
-                <span class="event-head__mon">@Local(_event.StartDateTime).ToString("MMM")</span>
-            </div>
-            <div class="event-head__text">
-                @if (_event.TourName is { } tourName)
-                {
-                    <div class="event-head__tour">
-                        @if (_event.TourUrlName is { } tourSlug)
-                        {
-                            <a href="@($"/o/{_event.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
-                        }
-                        else
-                        {
-                            @tourName
-                        }
-                        @if (_event.TourRating is { } rating)
-                        {
-                            <text> · @rating.ToString("0.0") ★ (@_event.TourRatingCount)</text>
-                        }
-                    </div>
-                }
-                <h1 class="event-head__title">@_event.Title</h1>
-                @if (!_event.IsAllDay)
-                {
-                    @* The night's clock, or the reader's own (2026-09-28). *@
-                    <div class="mb-2"><TimeZoneSwitch ZoneId="@_event.TimeZoneId" Noun="event" /></div>
-                }
-                <div class="event-head__by">
-                    Hosted by
-                    <a href="@($"/o/{_event.OrganizationUrlName}")">@_event.OrganizationName</a>
-                </div>
-            </div>
-        </div>
+        </PageHero>
 
         @* Item 235 phase 11: the host's pictures, the countdown, and the phone's ask button. *@
         @if (_hosted is { } showcase)
@@ -120,8 +79,7 @@ else
             <div class="alert alert-danger py-2">@_error</div>
         }
 
-        @* The facts of the night, stated the way the tour's own page states them. *@
-        <BenFactRail Facts="@Facts" Class="mb-4" />
+        @* The facts of the night are in the hero's tiles, stated the way the tour's own page states them. *@
 
         @* A hosted event is more than one evening (item 235), and the umbrella row this page is
            built on can only say when the whole thing starts and stops. The dates come from the
@@ -543,6 +501,48 @@ else
 </FeatureGate>
 
 @code {
+    // Above the title: back to where they came FROM, onward to the group, then the date plate and
+    // which tour this night belongs to.
+    //
+    // The way back offered only the group once. Somebody who found this night in "What's Near You"
+    // on the home page pressed the one arrow on the page and landed on a group they had never
+    // asked about, with no way back to the search they had just run (Ben, 2026-09-21). The group
+    // link is still here — it is worth having — but it is no longer pretending to be the way back.
+    private RenderFragment EventLead => @<div class="event-head">
+        <div class="event-head__ways">
+            @if (CameFrom is { } back)
+            {
+                <a href="@back.Href">&larr; @back.Words</a>
+            }
+            <a href="@($"/o/{_event!.OrganizationUrlName}")">@(CameFrom is null ? "← " : "")@_event.OrganizationName</a>
+        </div>
+        <div class="event-head__row">
+            <div class="event-head__plate">
+                <span class="event-head__dow">@Local(_event.StartDateTime).ToString("ddd")</span>
+                <span class="event-head__day">@Local(_event.StartDateTime).Day</span>
+                <span class="event-head__mon">@Local(_event.StartDateTime).ToString("MMM")</span>
+            </div>
+            @if (_event.TourName is { } tourName)
+            {
+                <div class="event-head__tour">
+                    <span class="event-head__tour-kicker">A night of</span>
+                    @if (_event.TourUrlName is { } tourSlug)
+                    {
+                        <a href="@($"/o/{_event.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
+                    }
+                    else
+                    {
+                        @tourName
+                    }
+                    @if (_event.TourRating is { } rating)
+                    {
+                        <span class="event-head__rating"> · @rating.ToString("0.0") ★ (@_event.TourRatingCount)</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>;
+
 
     /// <summary>
     /// "Give us an email address and we'll send you a link", for a visitor with no account.

@@ -31,7 +31,7 @@
  * SCOPE — deliberately :root, not .bv-editor. Telerik renders windows, popups
  * and dropdowns in a portal at the document root, so a scoped override would
  * style the editor while leaving its own dialogs on the stock theme. The site
- * already remaps the same family in wwwroot/theme/telerik-night.css for exactly
+ * already remaps the same family in wwwroot/theme/telerik-signal.css for exactly
  * this reason; the tokens below are the ones that file does not cover but the
  * editor reads — chiefly --kendo-color-subtle-text, which the editor uses in 54
  * places for every secondary label in the timeline and panels.
@@ -118,7 +118,7 @@
 
     /* ── Kendo tokens the editor reads that the site's bridge does not define ──────
        Deliberately only the neutral ones. --kendo-color-primary and the semantic colours are
-       left to the host: the site sets them from the Night palette in telerik-night.css, and
+       left to the host: the site sets them from the Signal palette in telerik-signal.css, and
        redefining them here would restyle every Telerik widget on the site as a side effect of
        theming the editor. Ben.Wasm.Video, which has no such bridge, sets them in its own
        css/site-palette.css instead. */

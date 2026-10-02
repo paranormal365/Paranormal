@@ -1,0 +1,87 @@
+/* The desk's opening band. Every colour, radius and shadow is a Signal token, so it follows the
+   theme and the skin with no values of its own. */
+
+.desk-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--ben-radius-lg);
+    min-height: 15rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-end;
+    box-shadow: var(--ben-shadow-lg);
+    isolation: isolate;
+}
+
+.desk-hero__photo {
+    position: absolute;
+    inset: 0;
+    background: url('/static/images/signal/i2-dark-hallway.jpg') center 52% / cover no-repeat;   /* the lit doorway — see SignalPhotos */
+    z-index: -2;
+}
+
+/* Text over a photograph is light in BOTH themes, with a scrim behind the words rather than
+   trust that the picture is dark wherever the text lands — the lesson the light-mode mock-up
+   taught. The second layer is the accent, so the band belongs to the skin. */
+.desk-hero__photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(100deg, rgba(6, 10, 18, .86) 0%, rgba(6, 10, 18, .58) 45%, rgba(6, 10, 18, .15) 100%),
+        linear-gradient(0deg, rgba(var(--ben-accent-rgb), .28) 0%, transparent 60%);
+}
+
+.desk-hero__inner { padding: 2rem 2rem 1.6rem; width: 100%; }
+
+.desk-hero__kicker {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ben-accent-2);
+    margin-bottom: .35rem;
+}
+
+.desk-hero__title {
+    color: #fff;
+    font-size: clamp(1.9rem, 3.4vw, 2.75rem);
+    line-height: 1.05;
+    margin: 0 0 .4rem;
+}
+
+.desk-hero__lede { color: rgba(255, 255, 255, .84); margin: 0 0 1.2rem; }
+
+.desk-hero__chips { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+/* glass: the photograph shows through, the number does not get lost in it */
+.desk-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .45rem;
+    padding: .55rem .95rem;
+    border-radius: var(--ben-radius-pill);
+    background: rgba(255, 255, 255, .10);
+    border: 1px solid rgba(255, 255, 255, .20);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: #fff;
+    text-decoration: none;
+    transition: background-color .15s ease, transform .15s ease;
+}
+.desk-chip:hover { background: rgba(255, 255, 255, .18); transform: translateY(-1px); color: #fff; }
+.desk-chip b { font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }
+.desk-chip span { font-size: .82rem; color: rgba(255, 255, 255, .82); }
+
+/* something waiting on YOU is the one chip allowed the accent */
+.desk-chip--hot {
+    background-image: var(--ben-accent-grad);
+    border-color: transparent;
+    box-shadow: var(--ben-glow);
+}
+.desk-chip--hot span { color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+    .desk-chip { transition: none; }
+    .desk-chip:hover { transform: none; }
+}

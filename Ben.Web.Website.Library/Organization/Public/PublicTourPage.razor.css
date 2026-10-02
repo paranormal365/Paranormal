@@ -40,85 +40,9 @@
     background: currentColor;
 }
 
-/*
-    The hero.
-
-    The name sits on the photograph, so it is drawn in a fixed light colour over a scrim rather
-    than in the theme's foreground: the ground behind it is somebody's photograph, and it is dark
-    in one theme and pale in the next.
-*/
-
-.tour-hero {
-    background: var(--bs-tertiary-bg, #1b1b1b);
-}
-
-/* Wider than 16:9 once there is room for it. At full width a 16:9 poster is over five hundred
-   pixels tall and pushes the dates — the thing the page is for — off the bottom of the screen.
-   A phone keeps 16:9, where the poster is the whole first impression and can afford the height. */
-@media (min-width: 992px) {
-    .tour-hero {
-        --bs-aspect-ratio: 42%;
-    }
-}
-
-/* No photograph in the gallery yet. The poster is drawn from the tour's name instead, in the
-   colour TourPlate gives it in the home strip and the nearby results, so the page a reader lands
-   on looks like the card they clicked. */
-.tour-hero--drawn {
-    background:
-        radial-gradient(ellipse 80% 60% at 50% 112%, hsl(var(--plate-hue) 55% 40% / .26), transparent 62%),
-        radial-gradient(circle at 76% 16%, hsl(var(--plate-hue) 60% 52% / .18), transparent 50%),
-        linear-gradient(150deg,
-            hsl(var(--plate-hue) 34% 12%) 0%,
-            hsl(calc(var(--plate-hue) + 34deg) 30% 7%) 100%);
-}
-
-.tour-hero__monogram {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    padding-bottom: 2.5rem;   /* clear of the name below it */
-    font-size: clamp(3rem, 9vw, 6rem);
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-indent: .18em;
-    color: #fff;
-    opacity: .16;
-}
-
-.tour-hero__image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.tour-hero__scrim {
-    position: absolute;
-    inset: 40% 0 0 0;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .8) 80%);
-    pointer-events: none;
-}
-
-.tour-hero__text {
-    position: absolute;
-    inset: auto 1rem 1rem 1rem;
-    color: #fff;
-}
-
-.tour-hero__name {
-    margin: 0;
-    font-size: clamp(1.4rem, 3.5vw, 2.25rem);
-    line-height: 1.15;
-    text-shadow: 0 2px 6px rgba(0, 0, 0, .55);
-}
-
-.tour-hero__by {
-    font-size: .9rem;
-    opacity: .85;
-}
-
+/* The hero is PageHero's; the line under the name links to the group, light on the photograph. */
+.tour-hero__by { font-size: .95rem; color: rgba(255, 255, 255, .88); }
+.tour-hero__link { color: #fff; text-decoration: underline; text-underline-offset: .15em; }
 
 /* A label inside a card, in the same voice as the rail's. */
 .tour-label {

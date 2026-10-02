@@ -1,0 +1,56 @@
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@*
+    Ben, 2026-10-01: the seven advertisements, on the home page, as 64-pixel thumbnails with the
+    audience written underneath — "with the IsHaunted-flyer being for everyone".
+
+    Deliberately static. These are seven files on disk, not a feed: no client, no loading state,
+    nothing to fail at run time. What CAN fail is the files going missing, which renders as seven
+    broken images and seven dead links, so FlyerStripTests fetches every one of them.
+
+    The files are put there by docs/ads/publish-to-site.py, which copies the PDF and draws the
+    thumbnail from the same build — so a thumbnail can never advertise a flyer the site is not
+    serving. Changing this list means changing that script's list too; it says so there.
+*@
+
+<div class="home-band">
+    <div class="ben-section-head">
+        <div class="ben-kicker">Pass it on</div>
+        <h2 class="ben-section-title">Tell somebody what this is</h2>
+        <p class="ben-section-lede">One sheet each, front and back. Open it, print it, or send it on.</p>
+    </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap" id="flyer-strip">
+                @foreach (var f in Flyers)
+                {
+                    <a class="flyer" href="@($"/flyers/{f.File}")" target="_blank" rel="noopener"
+                       title="@TitleOf(f)" data-flyer="@f.File">
+                        <img src="@($"/flyers/thumbs/{f.File.Replace(".pdf", ".png")}")"
+                             width="64" height="83" loading="lazy" alt="@($"Front page of {TitleOf(f)}")" />
+                        <span class="who">@f.Who</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private sealed record Flyer(string File, string Who, string Title);
+
+    private string TitleOf(Flyer f) => string.Format(f.Title, SiteOptions.Value.Name);
+
+    // "Everyone" first, and it is the whole-platform one: the other six each answer "is this for
+    // me?", this one answers "what does it do?".
+    private static readonly Flyer[] Flyers =
+    [
+        // {0} is the site's name, from SiteIdentity — the domain is not settled.
+        new("IsHaunted-Flyer.pdf",          "Everyone",            "Everything {0} does"),
+        new("IsHaunted-Ad-IsHaunted.pdf",   "Just curious",        "{0} — a first look"),
+        new("IsHaunted-Ad-Individuals.pdf", "Enthusiasts",         "IsHaunted for enthusiasts"),
+        new("IsHaunted-Ad-Groups.pdf",      "Investigation groups","IsHaunted for investigation groups"),
+        new("IsHaunted-Ad-Ghost-Walks.pdf", "Ghost walk tours",    "IsHaunted for ghost walk tours"),
+        new("IsHaunted-Ad-Venues.pdf",      "Haunted venues",      "IsHaunted for venues"),
+        new("IsHaunted-Ad-Event-Hosts.pdf", "Event hosts",         "IsHaunted Hosted Events"),
+    ];
+}

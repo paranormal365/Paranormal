@@ -25,25 +25,27 @@
                      FilterMode="@GridFilterMode.FilterRow"
                      Pageable="true"
                      PageSize="25">
+            @* The fixed columns came to 850px, which left the title about 100 — every case's name
+               wrapped onto five lines inside a 950px content area (Signal phase 4). *@
             <GridColumns>
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.OrganizationName)" Title="Organization" Width="220px" />
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.CaseReference)" Title="Reference" Width="120px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.OrganizationName)" Title="Organization" Width="170px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.CaseReference)" Title="Reference" Width="110px" />
                 <GridColumn Field="@nameof(AdminCaseSummaryRecord.Title)" Title="Title" />
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Status)" Title="Status" Width="130px" />
-                <GridColumn Title="Location" Width="160px">
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Status)" Title="Status" Width="110px" />
+                <GridColumn Title="Location" Width="150px">
                     <Template>
                         @{ var c = (AdminCaseSummaryRecord)context; }
                         @c.City, @c.State
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="120px">
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="110px">
                     <Template>
                         @{ var cs = (AdminCaseSummaryRecord)context; }
                         @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
                 <GridCommandColumn Width="100px">
-                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /></GridCommandButton>
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /><span class="visually-hidden">Open the case</span></GridCommandButton>
                     @* Item 183: goes to the delete page with this case chosen, never deletes from
                        here. A destructive verb on a grid row is the first half of an accident. *@
                     @* Icon only, with Title for the tooltip and the accessible name. NO
@@ -54,7 +56,7 @@
                                        OnClick="@((GridCommandEventArgs e) => DeleteCase((AdminCaseSummaryRecord)e.Items.First()))"
                                        Title="Delete this case"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete this case</span></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

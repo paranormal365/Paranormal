@@ -124,7 +124,7 @@
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Title="@(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="@(((OrganizationFileRecord)context).IsPublic ? "cloud-off" : "upload-cloud")" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="@(((OrganizationFileRecord)context).IsPublic ? "cloud-off" : "upload-cloud")" /><span class="visually-hidden">@(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")</span></GridCommandButton>
                     var fc = (OrganizationFileRecord)context;
                     @if (fc.ContentType.StartsWith("image/"))
                     {
@@ -132,13 +132,13 @@
                                            OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))"
                                            Title="Edit image"
                                            Class="ben-grid-action"
-                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /><span class="visually-hidden">Edit image</span></GridCommandButton>
                     }
                     <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Title="Edit"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                     }
                     @if (_canDelete)
                     {
@@ -147,7 +147,7 @@
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Title="Delete"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                     }
                 </GridCommandColumn>
                 }

@@ -32,6 +32,16 @@
            as parameters makes MainLayout's re-render propagate. *@
         <BenHeader IsAuthenticated="@TokenStore.IsAuthenticated"
                    OnSignOut="HandleLogout" />
+        @* Signal: the bar picks a section, the rail shows what is in it, and the original
+           sidebar is kept for the mobile drawer. All three are the SAME component reading the
+           same menu — see the note at the top of BenNav. *@
+        <BenNav TopBar="true"
+                IsAuthenticated="@TokenStore.IsAuthenticated"
+                IsSuperAdmin="@TokenStore.IsSuperAdmin"
+                IsModerator="@TokenStore.IsModerator"
+                IsSeller="@TokenStore.IsSeller"
+                IsImpersonating="@TokenStore.IsImpersonating" />
+
         <BenNav IsAuthenticated="@TokenStore.IsAuthenticated"
                 IsSuperAdmin="@TokenStore.IsSuperAdmin"
                 IsModerator="@TokenStore.IsModerator"
@@ -40,6 +50,16 @@
 
         <main class="app-body">
             <div class="app-content">
+              <div class="app-shell">
+                @* Supplies the rail a group's or an event's own menu while you are inside one;
+                   draws nothing itself. *@
+                <Ben.Web.Website.Library.Shared.ContextRail />
+                <BenNav Contextual="true"
+                        IsAuthenticated="@TokenStore.IsAuthenticated"
+                        IsSuperAdmin="@TokenStore.IsSuperAdmin"
+                        IsModerator="@TokenStore.IsModerator"
+                        IsSeller="@TokenStore.IsSeller"
+                        IsImpersonating="@TokenStore.IsImpersonating" />
                 <div class="content-wrapper">
                     @* The site-wide announcement (Administration → Site Settings). In the layout,
                        not the home page, because its job is maintenance windows and outages — the
@@ -58,8 +78,12 @@
                        only to people whose gates let them act. *@
                     <ActionNeededBanners />
                     <OnboardingGate />
+                    @* A photograph for the section the page belongs to (Signal). In the layout, so
+                       every page has one without being edited; see SectionBanner for what it skips. *@
+                    <Ben.Web.Website.Library.Shared.SectionBanner />
                     @Body
                 </div>
+              </div>
             </div>
             <BenFooter />
         </main>

@@ -48,50 +48,32 @@ else if (_tour is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3 tour-page" style="max-width:960px; margin:0 auto;">
-        <div class="mb-3">
-            <a href="@($"/o/{_tour.OrganizationUrlName}")" class="text-decoration-none small">
-                &larr; @_tour.OrganizationName
-            </a>
-        </div>
-
+    <div class="home-band tour-page">
         @* A poster, always. A walk is sold on what the street looks like after dark, and the name
            belongs ON that picture rather than underneath it — with a scrim, so it stays legible
-           over a photograph nobody has seen.
+           over a photograph nobody has seen. A tour whose gallery is still empty gets the same
+           poster in its own colour, the colour TourPlate gives it everywhere else on the site.
 
-           A tour whose gallery is still empty used to fall back to a bare heading, which is the
-           shape of a page with nothing to show. It now gets the same poster in its own colour,
-           the colour TourPlate gives it everywhere else on the site. *@
-        <div class="tour-hero ratio ratio-16x9 rounded overflow-hidden mb-3 @(_gallery.Count == 0 ? "tour-hero--drawn" : "")"
-             style="@(_gallery.Count == 0 ? TourPlate.HueStyle(_tour.Name) : "")">
-            <div>
-                @if (_gallery.Count > 0)
+           Signal phase 2: the poster is the shared PageHero now, so a tour, its dates and its
+           group open the same way; the facts somebody decides on sit in its tiles, and the one
+           thing the page is for — picking a night — is a button on the poster. *@
+        <PageHero TestId="tour-hero" Class="tour-hero"
+                  PhotoUrl="@(_gallery.Count > 0 ? MediaUrls.TourPhoto(_gallery[0].UploadFileId) : null)"
+                  Hue="@TourPlate.Hue(_tour.Name)"
+                  Kicker="A walking tour" Title="@_tour.Name" Facts="@Facts" Lead="@TourLead">
+            <div class="tour-hero__by">
+                Run by
+                <a class="tour-hero__link" href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
+                @if (_tour.Rating is { } heroRating)
                 {
-                    <img src="@MediaUrls.TourPhoto(_gallery[0].UploadFileId)"
-                         alt="@(_gallery[0].Caption ?? _tour.Name)" class="tour-hero__image" />
+                    <text> · @heroRating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
                 }
-                else
-                {
-                    <span class="tour-hero__monogram" aria-hidden="true">@TourPlate.Monogram(_tour.Name)</span>
-                }
-                <div class="tour-hero__scrim"></div>
-                <div class="tour-hero__text">
-                    <h1 class="tour-hero__name">@_tour.Name</h1>
-                    <div class="tour-hero__by">
-                        Run by
-                        <a class="tour-hero__link" href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
-                        @if (_tour.Rating is { } heroRating)
-                        {
-                            <text> · @heroRating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
-                        }
-                    </div>
-                </div>
             </div>
-        </div>
-
-        @* The facts somebody decides on, before any prose. The rail itself is BenFactRail, so a
-           tour date's page states them the same way a tour's does. *@
-        <BenFactRail Facts="@Facts" Class="mb-4" />
+            @if (_tour.UpcomingDates.Count > 0 && _tour.IsBookable)
+            {
+                <div><a class="btn btn-primary" href="#tour-dates">Pick a night</a></div>
+            }
+        </PageHero>
 
         @if (!_tour.IsBookable)
         {
@@ -439,6 +421,8 @@ else
 </FeatureGate>
 
 @code {
+    private RenderFragment TourLead => @<a href="@($"/o/{_tour!.OrganizationUrlName}")">&larr; @_tour.OrganizationName</a>;
+
     [Parameter] public string UrlName { get; set; } = "";
     [Parameter] public string TourSlug { get; set; } = "";
 

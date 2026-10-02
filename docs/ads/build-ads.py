@@ -61,6 +61,8 @@ def icon(name, size=22):
 CSS = """
 @page { size: 8.5in 11in; margin: 0; }
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* Signal (2026-10-01): the site's own gradient for every filled thing, white words on it. */
+:root { --fill: linear-gradient(120deg, #7C5CFF 0%, #22D3EE 100%); }
 html, body { margin: 0; padding: 0; background: #555; }
 body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: var(--ink); }
 .page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
@@ -78,8 +80,8 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
 .brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
 .brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
-.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--base);
-        background: var(--accent); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #fff;
+        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
 .kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
 .headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
@@ -91,12 +93,12 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
 .pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
 .pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
-.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: var(--base);
-                 background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 16px var(--glow); }
+.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: #fff;
+                 background: var(--fill); box-shadow: 0 6px 16px var(--glow); }
 .pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
 .pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
 .cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
-       padding: 0 .55in; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--base); z-index: 5; }
+       padding: 0 .55in; background: var(--fill); color: #fff; z-index: 5; }
 .cta .go { font-family: Futura, sans-serif; font-weight: 800; font-size: 19pt; letter-spacing: -.01em; }
 .cta .go span { display: block; font-family: "Avenir Next", sans-serif; font-size: 9pt; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .78; }
 .cta .price { text-align: right; font-weight: 700; font-size: 10pt; line-height: 1.25; }
@@ -129,13 +131,13 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .step h5 { margin: 0 0 .02in; font-size: 10pt; }
 .step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
 .offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
-         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px var(--accent), 0 16px 40px rgba(0,0,0,.45); }
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF, 0 16px 40px rgba(0,0,0,.45); }
 .offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
 .offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
 .offer .big em { font-style: normal; color: var(--accent); }
 .offer .small { font-size: 8.4pt; color: var(--muted); margin-top: .05in; line-height: 1.35; }
 .offer .url { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
-              color: var(--base); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+              color: #fff; background: var(--fill); }
 .offer .url b { display: block; font-family: Futura, sans-serif; font-weight: 800; font-size: 18pt; }
 .offer .url span { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .02in; }
 .fine { position: absolute; bottom: .14in; left: .55in; right: .55in; font-size: 5.8pt; white-space: nowrap; overflow: hidden; color: rgba(255,255,255,.42); text-align: center; }
@@ -152,7 +154,7 @@ def page(ad):
     e = html.escape
     base = ad["base"]
     style = (f"--base:{base};--base2:{ad['base2']};--accent:{ad['accent']};--accent2:{ad['accent2']};"
-             f"--base-a0:{rgba(base, 0)};--base-a70:{rgba(base, .72)};--glow:{rgba(ad['accent'], .28)};"
+             f"--base-a0:{rgba(base, 0)};--base-a70:{rgba(base, .72)};--glow:{rgba('#7C5CFF', .35)};"
              f"--card:{rgba('#ffffff', .055)};--card-solid:{ad['base2']};--line:{rgba('#ffffff', .09)};--muted:rgba(255,255,255,.72);--ink:#fff;"
              f"--focus:{ad.get('focus', 'center')};")
     pillars = "".join(
@@ -199,12 +201,12 @@ def page(ad):
 </body></html>"""
 
 
-FINE = "IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone app is on its way to the App Store · Prices in USD, subject to change"
+FINE = "IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone and iPad app is on the App Store · Prices in USD, subject to change"
 
 ADS = [
     dict(
         slug="IsHaunted", title="IsHaunted.com", pill="For everyone who wonders",
-        base="#0B1624", base2="#16324A", accent="#F5A524", accent2="#FFCF73", hero="i3-walking-to-house.jpg", focus="center 40%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="i3-walking-to-house.jpg", focus="center 40%",
         kicker="One home for the paranormal",
         headline="Where the unexplained gets <em>organized</em>.",
         sub="Explore haunted places, investigate with your group, run ghost walks and sell out haunted weekends — on the web and on your iPhone.",
@@ -234,11 +236,11 @@ ADS = [
                ("Bring your night", "Start a group, list a tour, or host an event of your own.")],
         offer="Free to <em>explore</em>.",
         offer_small="Groups from $19.99 a month · ghost walks $29 a month per tour · hosted events $99 each",
-        url_small="Web · iPhone coming soon", fine=FINE,
+        url_small="Web · iPhone & iPad app", fine=FINE,
     ),
     dict(
         slug="Individuals", title="IsHaunted for enthusiasts", pill="For enthusiasts",
-        base="#0A1C22", base2="#123B45", accent="#FF7A59", accent2="#FFB199", hero="i1-flashlight-silhouette.jpg", focus="center 30%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="i1-flashlight-silhouette.jpg", focus="center 30%",
         kicker="Free for the curious",
         headline="Your phone is the <em>instrument</em>.",
         sub="Record the magnetic field, the sound and the question you asked — then share what you found with people who get it.",
@@ -268,11 +270,11 @@ ADS = [
                ("Share", "Post to the feed or send it to the group you're out with.")],
         offer="Free. <em>Really.</em>",
         offer_small="The feed, Field Kit, events and 2 GB for your own files — no subscription for enthusiasts.",
-        url_small="Web · iPhone coming soon", fine=FINE,
+        url_small="Web · iPhone & iPad app", fine=FINE,
     ),
     dict(
         slug="Groups", title="IsHaunted for investigation groups", pill="For investigation groups",
-        base="#1A0D24", base2="#3A1D4D", accent="#E9B949", accent2="#F7DC8C", hero="v4-hallway-chandelier.jpg", focus="center 55%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="v4-hallway-chandelier.jpg", focus="center 55%",
         kicker="Run your team like a pro",
         headline="From first call to <em>final report</em>.",
         sub="Take requests, work cases, review evidence and publish findings — with the privacy a family's home deserves.",
@@ -306,7 +308,7 @@ ADS = [
     ),
     dict(
         slug="Ghost-Walks", title="IsHaunted for ghost walk tours", pill="For ghost walk tours",
-        base="#08142A", base2="#17305A", accent="#FFB547", accent2="#FFDB8E", hero="w1-cobblestone-streetlights.jpg", focus="center 35%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="w1-cobblestone-streetlights.jpg", focus="center 35%",
         kicker="Tours that book themselves",
         headline="Fill every <em>lantern-lit</em> walk.",
         sub="A page for each tour, dates people book in a tap, and a reminder with your guide's face the night before.",
@@ -340,7 +342,7 @@ ADS = [
     ),
     dict(
         slug="Venues", title="IsHaunted for venues", pill="For haunted venues",
-        base="#240A10", base2="#4A1622", accent="#E8C987", accent2="#F6E3B4", hero="v6-ballroom.jpg", focus="center 50%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="v6-ballroom.jpg", focus="center 50%",
         kicker="Hotels · theatres · historic homes",
         headline="Your building has a <em>story</em>. Book it.",
         sub="Show the history, the rooms and the house rules — and decide which organizers may host events under your roof.",
@@ -374,7 +376,7 @@ ADS = [
     ),
     dict(
         slug="Event-Hosts", title="IsHaunted Hosted Events", pill="For event hosts",
-        base="#150B22", base2="#35194D", accent="#F7B84B", accent2="#FFDD9A", hero="s3-candle-chandelier.jpg", focus="center 30%",
+        base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="s3-candle-chandelier.jpg", focus="center 30%",
         kicker="Hosted events · web + iPhone",
         headline="Sell out the <em>séance</em>. Skip the spreadsheet.",
         sub="Rooms or seats, confirmations with passes, and a door that opens with no signal — for haunted weekends of every size.",
@@ -404,7 +406,7 @@ ADS = [
                ("Open the door", "Scan passes, even with no signal, from any phone.")],
         offer="<em>$99</em> an event.",
         offer_small="However many nights. No ticket fees: guests pay you. Credits last a year and come back if you cancel 48+ hours ahead.",
-        url_small="iPhone app coming soon", fine=FINE,
+        url_small="Web · iPhone & iPad app", fine=FINE,
     ),
 ]
 
@@ -416,7 +418,7 @@ BROCHURE_CSS = """
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 html, body { margin: 0; background: #444; }
 body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: #fff;
-       --base: #150B22; --base2: #2E1745; --accent: #F7B84B; --accent2: #FFDD9A; --muted: rgba(255,255,255,.74);
+       --base: #0C1017; --base2: #1E1650; --accent: #B6A2FF; --accent2: #67E8F9; --fill: linear-gradient(120deg, #7C5CFF 0%, #22D3EE 100%); --muted: rgba(255,255,255,.74);
        --card: rgba(255,255,255,.055); --line: rgba(255,255,255,.1); }
 .page { width: 8.5in; height: 11in; position: relative; overflow: hidden; page-break-after: always; break-after: page;
         background: radial-gradient(110% 55% at 100% 0%, var(--base2) 0%, var(--base) 62%); }
@@ -440,8 +442,8 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .phone { border-radius: .3in; background: #040404; padding: .065in; box-shadow: 0 24px 50px rgba(0,0,0,.6), 0 0 0 1.4px rgba(255,255,255,.14), 0 0 50px rgba(247,184,75,.18); }
 .phone img { display: block; width: 100%; height: auto; border-radius: .24in; }
 .cap { display: grid; grid-template-columns: .3in 1fr; gap: .08in; align-items: start; }
-.cap b { width: .3in; height: .3in; border-radius: 50%; display: grid; place-items: center; font-size: 10pt; color: var(--base);
-         background: linear-gradient(135deg, var(--accent), var(--accent2)); font-family: Futura, sans-serif; }
+.cap b { width: .3in; height: .3in; border-radius: 50%; display: grid; place-items: center; font-size: 10pt; color: #fff;
+         background: var(--fill); font-family: Futura, sans-serif; }
 .cap h4 { margin: .02in 0 .02in; font-size: 10.5pt; }
 .cap p { margin: 0; font-size: 8.6pt; line-height: 1.4; color: var(--muted); }
 .abs { position: absolute; }
@@ -466,19 +468,19 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .stack { display: flex; flex-direction: column; gap: .14in; }
 .mailcap { font-size: 7.8pt; color: var(--muted); margin-top: .05in; line-height: 1.3; }
 .mailcap strong { color: #fff; display: block; font-size: 8.4pt; }
-.price { margin-top: auto; border-radius: .18in; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr; background: var(--base2); box-shadow: 0 0 0 1.5px var(--accent), 0 18px 40px rgba(0,0,0,.45); }
+.price { margin-top: auto; border-radius: .18in; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr; background: var(--base2); box-shadow: 0 0 0 1.5px #7C5CFF, 0 18px 40px rgba(0,0,0,.45); }
 .price > div:first-child { padding: .2in .26in; }
 .price .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 30pt; line-height: 1; }
 .price .big em { font-style: normal; color: var(--accent); }
 .price ul { margin: .1in 0 0; padding-left: 1.1em; font-size: 9pt; line-height: 1.5; color: var(--muted); }
-.price .go { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: var(--base);
-             background: linear-gradient(135deg, var(--accent), var(--accent2)); padding: .2in; }
+.price .go { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #fff;
+             background: var(--fill); padding: .2in; }
 .price .go b { font-family: Futura, sans-serif; font-size: 20pt; font-weight: 800; }
 .price .go span { font-size: 8.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .04in; }
 .price .go .soon { opacity: .75; margin-top: .12in; }
 /* cover */
 .cover-hero { position: absolute; inset: 0 0 auto 0; height: 7.3in; background-size: cover; background-position: center 35%; }
-.cover-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,.05) 25%, rgba(21,11,34,.35) 50%, rgba(21,11,34,.85) 78%, var(--base) 100%); }
+.cover-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,.05) 25%, rgba(12,16,23,.35) 50%, rgba(12,16,23,.85) 78%, var(--base) 100%); }
 .brand { position: absolute; top: .45in; left: .6in; display: flex; gap: .12in; align-items: center; font-weight: 700; font-size: 14pt; z-index: 2; }
 .brand img { width: .44in; height: .44in; }
 .brand small { display: block; font-size: 7.5pt; letter-spacing: .22em; text-transform: uppercase; font-weight: 600; opacity: .8; }
@@ -641,7 +643,7 @@ def brochure(mails):
     <div class="big"><em>$99</em> an event</div>
     <ul><li>However many nights: one credit, good for a year</li><li>The credit comes back if you call it off 48+ hours ahead</li>
     <li>Business plans host as many events as they like</li><li>Guests pay you directly, with no ticket fees</li></ul></div>
-    <div class="go"><b>ishaunted.com</b><span>Host your first event</span><span class="soon">iPhone app coming soon</span></div></div>
+    <div class="go"><b>ishaunted.com</b><span>Host your first event</span><span class="soon">iPhone &amp; iPad app on the App Store</span></div></div>
 </div>{folio(8)}</section>""")
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>IsHaunted Hosted Events</title><style>{BROCHURE_CSS}</style>

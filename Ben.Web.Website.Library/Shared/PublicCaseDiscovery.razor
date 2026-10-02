@@ -35,9 +35,12 @@
     else
     {
         @* ── Section header ───────────────────────────────────────────────────── *@
-        <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
-            <div class="d-flex align-items-baseline justify-content-between mb-2">
-                <h4 class="mb-0">Public Investigations</h4>
+        <div class="home-band mt-5">
+            <div class="ben-section-head ben-section-head--row mb-2">
+                <div>
+                    <div class="ben-kicker">Cases investigators chose to publish</div>
+                    <h2 class="ben-section-title">Public Investigations</h2>
+                </div>
                 <span class="text-muted small">
                     @if (_refreshing)
                     {
@@ -60,7 +63,7 @@
         </div>
 
         @* ── Map ──────────────────────────────────────────────────────────────── *@
-        <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+        <div class="home-band mb-4">
             @* The fixed height and the clipping belong to the MAP, not to the note under it.
 
                They used to wrap both: a 420-pixel box with overflow:hidden holding a 420-pixel map
@@ -152,7 +155,7 @@
         </BenModal>
 
         @* ── Paged list ────────────────────────────────────────────────────────── *@
-        <div class="container-fluid px-3 mb-5" style="max-width:1000px;">
+        <div class="home-band mb-5">
             <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
                 <span class="fw-semibold">Sort by</span>
                 <div class="btn-group" role="group" aria-label="Sort investigations">

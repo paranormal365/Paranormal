@@ -16,7 +16,8 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(BackUrl))"><BenIcon Name="arrow-left" Class="me-1" />
+            @* Steps aside where the rail shows its own "← Your groups" (rail-replaces-item). *@
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") rail-replaces-item" @onclick="@(() => NavManager.NavigateTo(BackUrl))"><BenIcon Name="arrow-left" Class="me-1" />
                 Back
             </button>
             @* W-A2: this said "Organization" — the name of the TABLE — on the page for a
@@ -211,6 +212,9 @@
             </div>
         }
 
+        @* Where the rail is showing, it lists these same tabs as the group's menu (ContextRail,
+           Ben 2026-10-01), so the strip steps aside there; a phone has no rail and keeps it. *@
+        <div class="rail-replaces">
         <BenTabs @bind-ActiveId="_activeTabId">
 
             <BenTab Title="Details" Id="details">
@@ -433,6 +437,7 @@
             }
 
         </BenTabs>
+        </div>
 
         @* Item 166 W1: the owner's first-steps tour. Auto-launches once after founding
            (?welcome=1 from the wizard) unless already dismissed; the ? relaunches it. *@

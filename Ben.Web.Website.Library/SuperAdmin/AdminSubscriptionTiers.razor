@@ -97,7 +97,7 @@
                         @foreach (var p in t.Prices.Where(p => p.IsActive))
                         {
                             <span class="badge bg-primary me-1">
-                                @($"{p.Price:C0}") @CadenceLabel(p.Interval)
+                                @BenMoney.Format(p.Price) @CadenceLabel(p.Interval)
                                 @if (p.SavingPercentAgainstMonthly is { } save)
                                 {
                                     <span class="ms-1">(save @save%)</span>
@@ -145,7 +145,7 @@
                                        OnClick="@((GridCommandEventArgs e) => OpenEdit((SubscriptionTierAdminRecord)e.Items.First()))"
                                        Title="Edit"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

@@ -1,42 +1,41 @@
 /*
     One track of pills rather than a row of outline buttons, so a group's pages read as one
-    navigation and the page you are on is obvious without reading the labels.
+    navigation and the page you are on is obvious without reading the labels. It sits on the
+    group's hero (OrgPublicBanner), so it is glass on a dark ground in both themes.
 */
 .org-nav {
     display: flex;
     flex-wrap: wrap;
     gap: .25rem;
-    padding: .25rem;
+    padding: .3rem;
     border-radius: 2rem;
-    background: var(--bs-tertiary-bg);
+    background: rgba(10, 14, 22, .45);
+    border: 1px solid rgba(255, 255, 255, .16);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     width: fit-content;
     max-width: 100%;
 }
 
 .org-nav__item {
-    padding: .3rem .85rem;
+    padding: .35rem .95rem;
     border-radius: 2rem;
-    color: var(--bs-secondary-color);
-    font-size: .875rem;
-    font-weight: 600;
+    color: rgba(255, 255, 255, .82);
+    font-size: .9rem;
+    font-weight: 650;
     text-decoration: none;
     transition: background-color .16s ease, color .16s ease;
 }
 
-.org-nav__item:hover {
-    color: var(--bs-body-color);
-    background: var(--bs-body-bg);
-}
+.org-nav__item:hover { color: #fff; background: rgba(255, 255, 255, .12); }
 
 .org-nav__item--here {
-    color: var(--bs-body-color);
-    background: var(--bs-body-bg);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+    color: #10131c;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
 }
-
+.org-nav__item--here:hover { color: #10131c; background: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
-    .org-nav__item {
-        transition: none;
-    }
+    .org-nav__item { transition: none; }
 }

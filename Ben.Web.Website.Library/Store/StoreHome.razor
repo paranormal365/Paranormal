@@ -24,10 +24,11 @@
     {
     <SocialCard Title="Store" Description="Scientific gear for investigations — EMF meters, spirit boxes, recorders and more." RelativeUrl="/store" />
 
-    <div class="container-fluid px-3 py-3" style="max-width:80rem;">
+    <div class="home-band">
         <BenItemState TItem="StoreHomeResponse" Result="_home" Loading="_loading" LoadingText="Opening the store…" OnRetry="LoadAsync">
             <ChildContent Context="home">
-                <div class="ben-store-hero mb-3" data-testid="store-hero">
+                <div class="ben-store-hero mb-3" data-testid="store-hero" data-own-hero="@(home.Slides.Count > 0 ? "true" : null)">
+                    @if (home.Slides.Count > 0) { <OwnHero /> }
                     @if (home.Slides.Count > 0)
                     {
                         <BenSlideshow Slides="@Slides(home)" Height="clamp(16rem, 45vw, 30rem)" AutoAdvance="true">

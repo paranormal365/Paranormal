@@ -59,9 +59,13 @@ public class AdminTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
+        // The control is a BenGridAction labelled "View this user". The old lookup was Name = "View",
+        // which Playwright matches as a SUBSTRING — so it worked by accident, and the same accident
+        // matched the Signal rail's "Media Review" link and sent the test to /moderation/media.
+        // Exact, by the control's real name, inside the page.
+        var viewLink = Main.GetByRole(AriaRole.Button, new() { Name = "View this user", Exact = true })
+                           .Or(Main.GetByRole(AriaRole.Link, new() { Name = "View this user", Exact = true }))
+                           .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Detail", Exact = true }))
                            .First;
         await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
         // View is a Telerik GridCommandButton calling NavigationManager — pure Blazor, so a click
@@ -75,9 +79,9 @@ public class AdminTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
+        var viewLink = Main.GetByRole(AriaRole.Button, new() { Name = "View this user", Exact = true })
+                           .Or(Main.GetByRole(AriaRole.Link, new() { Name = "View this user", Exact = true }))
+                           .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Detail", Exact = true }))
                            .First;
         await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
         // Not GetByText("Profile"): that also matches the "Save Profile" button on the same page,
@@ -94,9 +98,9 @@ public class AdminTests : BenTestBase
         // Item 216: the tab that finally lets a SuperAdmin put somebody into Admin or Moderator.
         await Page.GotoAsync($"{BaseUrl}/admin/users");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" })
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "View" }))
-                           .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Detail" }))
+        var viewLink = Main.GetByRole(AriaRole.Button, new() { Name = "View this user", Exact = true })
+                           .Or(Main.GetByRole(AriaRole.Link, new() { Name = "View this user", Exact = true }))
+                           .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Detail", Exact = true }))
                            .First;
         await ClickUntilUrlAsync(viewLink, @"/admin/users/[0-9a-f\-]+");
 
@@ -180,7 +184,7 @@ public class AdminTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/admin/users/create");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.Locator("input[type='email'], input[type='text']").First)
+        await Expect(Main.Locator("input[type='email'], input[type='text']").First)
             .ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
@@ -295,18 +299,25 @@ public class AdminTests : BenTestBase
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // The admin tools used to live in a right-hand side panel. They are now a group inside the
-        // sidebar: Administration opens into Users, which in turn holds Manage Users. Opening both
-        // levels is the equivalent journey.
-        var admin = Page.Locator(".nav-menu > li").Filter(new() { HasText = "Administration" }).First;
+        // The journey has moved twice. A right-hand side panel, then a group inside the sidebar,
+        // and under Signal (2026-10-01) the bar picks the SECTION and the rail beside the page
+        // lists what is inside it. So: Administration on the bar, then the Users group in the rail,
+        // then Manage Users inside it. The nesting is what this guards — the first Signal rail drew
+        // only one level, so every page under a group (Manage Users among them) vanished.
+        var admin = Page.Locator("#top-menu a.topnav-link").Filter(new() { HasText = "Administration" }).First;
         await Expect(admin).ToBeVisibleAsync(new() { Timeout = 8_000 });
-        await admin.Locator("> a").ClickAsync();
+        await ClickUntilUrlAsync(admin, @"/admin/");
 
-        var users = admin.Locator("> ul > li").Filter(new() { HasText = "Users" }).First;
+        // And since Ben's note of the same day the rail DRILLS: a group is a link into its own
+        // menu, and inside it the way back is at the top.
+        var rail = Page.Locator(".app-rail");
+        var users = rail.Locator("a.app-rail__drill").Filter(new() { HasText = "Users" });
+        await Expect(users).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await ClickUntilAsync(users, rail.GetByRole(AriaRole.Link, new() { Name = "Manage Users" }));
+        await Expect(rail.Locator("[data-testid=rail-back]")).ToContainTextAsync("Administration");
+
+        // Back shows the section's top again.
+        await rail.Locator("[data-testid=rail-back]").ClickAsync();
         await Expect(users).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        await users.Locator("> a").ClickAsync();
-
-        var usersLink = Page.GetByText("Manage Users", new() { Exact = false });
-        await Expect(usersLink).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
 }

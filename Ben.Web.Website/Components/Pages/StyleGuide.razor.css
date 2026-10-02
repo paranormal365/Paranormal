@@ -1,0 +1,35 @@
+/* Scaffolding for the token swatches only. Everything they DISPLAY comes from themes/signal.css,
+   read live, so this panel cannot drift from the skin. */
+.sg-tokens {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: .75rem;
+}
+
+.sg-token { font-size: .72rem; line-height: 1.3; }
+.sg-token code { display: block; margin-top: .35rem; font-size: .66rem; word-break: break-all; }
+.sg-token small { color: var(--ben-ink-faint); }
+
+.sg-chip {
+    display: block;
+    height: 2.6rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-sm);
+    /* a chequerboard behind every chip, so a translucent token — every --ben-line is one — reads
+       as translucent instead of as whatever happens to sit behind it */
+    background-image:
+        linear-gradient(45deg, rgba(128,128,128,.22) 25%, transparent 25%, transparent 75%, rgba(128,128,128,.22) 75%),
+        linear-gradient(45deg, rgba(128,128,128,.22) 25%, transparent 25%, transparent 75%, rgba(128,128,128,.22) 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 7px 7px;
+}
+
+/* an inline `background:` shorthand resets background-image, so an opaque chip loses the
+   chequerboard on its own; these two need it removed explicitly */
+.sg-chip--text, .sg-chip--plain { background-image: none; background-color: var(--ben-surface); }
+.sg-chip--grad { background-image: var(--ben-accent-grad); background-size: cover; }
+
+.sg-chip--text { display: grid; place-items: center; font-size: 1.15rem; font-weight: 700; }
+
+/* the tooltip sample's target: a pointer that says "there is more here" */
+.sg-tip { cursor: help; }

@@ -18,7 +18,7 @@
 
 @if (_cases is { Count: > 0 })
 {
-    <div class="container-fluid px-3 pt-3" style="max-width:1000px;" data-testid="client-case-strip">
+    <div class="home-band pt-3" data-testid="client-case-strip">
         <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-2">
             <h3 class="h5 mb-0">@(_cases.Count == 1 ? "Your case" : "Your cases")</h3>
             <a href="/my-cases" class="small">My Cases</a>

@@ -14,7 +14,36 @@ identify a person, it does not belong here.
 read. Add today's heading at the top when you ship something people can see.
 
 **Versions** (from 2026-09-28): each heading after the site went live carries the release number
-after a middle dot — `## 2026-09-28 · 2.12.0
+after a middle dot — `## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
+2.10.1); a day that adds something people can use moves the middle one (→ 2.11.0); a whole new part
+of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
+it carry no number.
+
+The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
+day-by-day account of building it would say nothing to anyone using it now.
+
+## 2026-10-02 · 2.13.0
+
+- The whole site has a new look, in light and in dark: one set of colours, type and pictures from the
+  front page to the editors.
+- Sections sit along the top, and a menu card beside the page lists what is inside the one you are in.
+  It goes deeper with you: inside one of your groups it becomes that group's menu, and inside one of its
+  events that event's menu, each with the way back at the top.
+- Your groups now sit under one **Your groups** entry, so the bar fits however many groups you are in.
+- The front page shows what the site does, what the plans cost and how the phone and the website work
+  together, and links to the iPhone and iPad app — as does the foot of every page.
+- Find a group, What's on, groups' own pages, events, tours, venues, places, publications, the feed,
+  plans and help each open with a picture, the page's main action and its figures; help has a box that
+  finds a guide as you type.
+- Plans showed prices rounded to the dollar; they now show the cents they are charged at.
+- Names in lists and tables look like the links they are, and links are easier to read in dark mode.
+- Work waiting for you in your groups is collected in one card instead of a notice per group.
+- Icon buttons in lists keep their names for screen readers while their tooltip is showing.
+- The pictures in the help guides show the new look, and the flyers on the front page have been
+  refreshed to match.
+
+## 2026-09-28 · 2.12.0
+
 
 - A tour date's page and an event's page now show **Field sessions sent up**: what guests recorded
   in Field Kit and sent to that night, with who, when and where, and **Play back**. Your group and
@@ -24,14 +53,6 @@ after a middle dot — `## 2026-09-28 · 2.12.0
 - A session somebody sent to a group's tour or event belongs to that group's record, so it is no
   longer offered for deletion from My Field Sessions.
 - Someone without the app who scans a lead's code is shown how to get it and join.
-
-## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
-2.10.1); a day that adds something people can use moves the middle one (→ 2.11.0); a whole new part
-of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
-it carry no number.
-
-The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
-day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-28 · 2.11.0
 

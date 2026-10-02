@@ -141,35 +141,44 @@ not shown until you are actually attending.
 
 ## Finding your way around
 
-Everything you can reach is in the **menu down the left**. It only ever lists what applies to you,
-so it grows once you sign in and grows again if you run a group.
+The **bar along the top** holds the site's sections. It only ever lists what applies to you, so it
+grows once you sign in and grows again if you run a group. Pick a section and its page opens.
 
-Signed out it is a short list. Signed in, most of it is **grouped by subject**, so the menu stays
-about eight rows however much you can reach:
+Beside the page, a little way down, the **menu card on the left** lists what is inside the section
+you are in. It stays put as you scroll past it, so it is always to hand.
 
-- **Your groups come first.** Directly below Home sits a link to each group you belong to, by
-  name. Belong to more than five and they fold into one **Your Organizations** entry that opens
-  into the list — the menu stays a menu, however many groups you join.
-- **Notifications** and **Organizations** stay at the top level — you check those constantly, and
-  they should not be behind anything.
-- **My Work** — your cases, your investigations, your requests.
-- **Equipment** — the public catalogue, your own gear, what you have out on loan, and gear questions.
-- **Media** — uploaded files (see *Your Files* for what deleting one means), the media library, your videos.
-- **Community** — the feed, publications, finding a group, and requesting an investigation.
-- **Administration**, for site administrators, holding the site-wide tools grouped by what they
-  are for.
+- **Your groups come first.** Signed in, the bar starts with Home and **Your groups**, whose card
+  lists each group you belong to by name, and **All your groups** for the full list with each
+  one's roster and settings. (The menu on a phone lists them by name directly.)
+- **Notifications** sits on the bar by itself — you check it constantly, and it should not be
+  behind anything.
+- **My Work**, **Equipment**, **Media** and **Community** each open their own short menu in the card.
+- **Administration**, for site administrators, holds the site-wide tools grouped by what they are for.
+
+### The menu goes deeper with you
+
+An entry with a **chevron** (›) is a group of pages rather than a page: click it and the card
+becomes that group's menu, with the way **back** at the top. Opening any page inside it keeps the
+card on that menu, so the pages next to the one you are on are always one click away.
+
+The same thing happens inside your own work:
+
+- **Inside a group**, the card becomes **that group's menu** — Details, Members, Cases,
+  Investigations, Calendar, Files, Settings and the rest, showing only the ones your role opens —
+  with **← Your groups** at the top. These are the group page's tabs; on a phone, where there is
+  no room for the card, they appear as tabs along the top of the page instead. The guides call
+  them tabs either way.
+- **Inside one of the group's events**, the card becomes **that event's menu** — the plan,
+  bookings, the door, menus, gallery and the rest — with the group's name at the top to take you
+  back.
 
 A few things worth knowing:
 
-- **Filter** at the top of the menu narrows it as you type, and looks *inside* the groups. Type
-  "checkouts" and you get the one entry, with its group opened for you.
-- Entries with a **chevron** open into a group rather than going somewhere. Click the name to open
-  or close it.
 - A **number beside an entry** is work waiting for you. The colour deepens the longer it waits.
-  **A closed group shows the total of everything inside it**, so nothing is ever hidden by being
-  grouped — open it and each entry shows its own share.
-- The **arrow beside the site name** collapses the menu to icons and back, if you would rather give
-  the page the width.
+  **A group shows the total of everything inside it**, so nothing is hidden by being grouped.
+- **On a phone**, the button beside the site name opens the whole menu as a drawer. Its **Filter**
+  box narrows it as you type and looks *inside* the groups — type "checkouts" and you get the one
+  entry.
 
 Along the top right are the display controls: a **sun or moon** switches between light and dark,
 and the **arrows** expand the page to fill the screen. Both are remembered on this device.

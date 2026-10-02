@@ -1,0 +1,424 @@
+/* Telerik/Kendo → Signal bridge. (Renamed from telerik-night.css on 2026-10-01; the Night skin it
+ * was written against is gone, and a file named for a palette the site no longer has would send
+ * the next reader looking for one. The canvas host still carries its own, older copy under the old
+ * name — they had already drifted, 7.6 KB against 8.9 KB — and that is folded in with the editors.)
+ *
+ * Loaded after kendo-theme-bootstrap/all.css. Kendo themes in Telerik 14.x are CSS-variable
+ * driven, so remapping the variables is enough to make the widgets kept from Telerik (Grid,
+ * Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu) read as part of the
+ * template rather than as a control suite dropped on top of it.
+ *
+ * Values come from Signal's tokens (signal-tokens.css), mostly through Bootstrap's custom
+ * properties, which those tokens feed — so light and dark both follow whatever data-bs-theme is
+ * active, the same attribute the template and Bootstrap already key off. That is why this file has
+ * no explicit dark-mode block: the variables it reads are themselves theme-dependent.
+ *
+ * The per-component corrections below are each checked on /styleguide, which shows every Telerik
+ * widget the site uses, in both themes.
+ */
+
+:root {
+    /* Brand */
+    --kendo-color-primary:            var(--bs-primary, #37508a);
+    --kendo-color-primary-contrast:   #fff;
+    --kendo-color-secondary:          var(--bs-secondary, #6c757d);
+    /* The one colour that is NOT --bs-success. Kendo uses this as a FILL with -contrast on top
+       (that is what the -contrast variables below are for), and white on #489e48 is 3.35:1 —
+       the editor's Export button, found in the 2026-09-22 audit. --ben-success-behind-white is
+       the same green darkened just far enough to carry white, defined in app.css beside the
+       .bg-success badges that had the identical fault. --bs-success itself is untouched, so green
+       TEXT and green borders keep the template's colour. */
+    --kendo-color-success:            var(--ben-success-behind-white, #3c833c);
+    --kendo-color-success-contrast:   #fff;
+    --kendo-color-info:               var(--bs-info, #66366c);
+    --kendo-color-warning:            var(--bs-warning, #aaa256);
+    --kendo-color-error:              var(--bs-danger, #a85593);
+
+    /* Surfaces — follow the template's body/card colours so widgets sit on the same ground */
+    --kendo-color-app-surface:        var(--bs-body-bg);
+    --kendo-color-surface:            var(--bs-tertiary-bg, var(--bs-body-bg));
+    --kendo-color-surface-alt:        var(--bs-body-bg);
+    --kendo-color-on-app-surface:     var(--bs-body-color);
+    --kendo-color-base:               var(--bs-tertiary-bg, var(--bs-body-bg));
+    --kendo-color-on-base:            var(--bs-body-color);
+    --kendo-color-border:             var(--bs-border-color);
+    --kendo-color-border-alt:         var(--bs-border-color);
+
+    /* Type — one font stack across template and widgets */
+    --kendo-font-family:              var(--bs-body-font-family);
+    --kendo-font-size:                var(--bs-body-font-size);
+    --kendo-line-height:              var(--bs-body-line-height);
+
+    /* Radius — the template's controls are squarer than Kendo's default */
+    --kendo-border-radius-md:         var(--bs-border-radius, .375rem);
+}
+
+/* The Kendo body class must not repaint the page: the template owns the background. */
+body.k-body {
+    background-color: transparent;
+    color: var(--bs-body-color);
+    font-family: var(--bs-body-font-family);
+}
+
+/* Popups (dropdowns, pickers, context menus) render in a portal at the document root, so they
+   sit outside the template's stacking contexts. Keep them above the fixed header and drawers. */
+.k-animation-container,
+.k-popup { z-index: 1090; }
+
+/* ── Measured corrections ───────────────────────────────────────────────────
+   The variable mapping above gets the colours right, but two differences only
+   show up once a Telerik widget sits beside a Bootstrap one. Both were measured
+   off the /styleguide page rather than guessed. */
+
+/* 1. Input metrics, measured against the template's own .form-control rather than guessed.
+      Re-measured 2026-08-19 on /styleguide, in the dark theme, because the earlier correction
+      had drifted from what the template actually does:
+
+          .form-control   14px type, 24px line-height, 4px/18px padding, 1px border → 34px tall
+          .k-input        14px type, 22.4px line-height, 4px/12px padding           → 37.7px tall
+
+      A 4px height step and a 6px text inset are both plainly visible the moment a date picker
+      sits beside a text box in the same row, which is exactly where these controls are used. */
+.k-input,
+.k-picker {
+    font-size: .875rem;                       /* 14px — tracks .form-control */
+    line-height: 1.5rem;                      /* 24px — the template's, not Kendo's 1.6em */
+    min-height: 2.125rem;                     /* 34px — same box as .form-control */
+}
+
+.k-input .k-input-inner,
+.k-picker .k-input-inner {
+    /* The wrapper carries the border and the inner carries the padding, so these are the numbers
+       that decide where the text sits. 18px matches the template; Kendo's own 12px left the text
+       visibly further left than in a Bootstrap field beside it. */
+    padding-block: .25rem;                    /* 4px */
+    padding-inline: 1.125rem;                 /* 18px */
+    line-height: 1.5rem;                      /* 24px */
+}
+
+/* The button a picker hangs off its right-hand end (calendar, clock, colour swatch) has to sit in
+   the same 34px box, or the control grows to fit the button instead. */
+.k-picker .k-input-button,
+.k-input .k-input-button {
+    min-height: 2rem;                         /* 32px — the box minus its two borders */
+    padding-block: 0;
+}
+
+/* 2. Grid surface. .k-grid painted itself --bs-body-bg (#212529) while the panel
+      containing it is --bs-tertiary-bg (#272b30), so every grid read as a pasted-on
+      box. Inheriting the panel's ground is what makes it look built in. */
+.k-grid,
+.k-grid .k-grid-header,
+.k-grid .k-grid-footer,
+.k-grid .k-table-th { background-color: transparent; }
+
+/* Header row separates from the data by its rule, not by weight — the template sets its own
+   type weights and this should not override them. */
+.k-grid .k-table-th {
+    color: var(--bs-emphasis-color, var(--bs-body-color));
+    border-bottom-color: var(--bs-border-color);
+}
+
+/* Zebra striping keyed to the current theme, so it works in light and dark from
+   one rule instead of two. */
+.k-grid .k-table-alt-row {
+    background-color: color-mix(in srgb, var(--bs-body-color) 4%, transparent);
+}
+
+.k-grid td,
+.k-grid .k-table-td { border-color: var(--bs-border-color); }
+
+/* ── Grid command buttons: small, and on one line ─────────────────────────────
+   Telerik's default button is sized for a form, not for a table cell. In a command column that
+   gives every row a stack of chunky buttons — on Manage Users, View and Impersonate wrapped onto
+   two lines and made each row twice as tall as its content needed.
+
+   Done here rather than by adding Size="Small" to each <GridCommandButton>: there are 42 of them
+   across a dozen files and only 8 had a size set, so the call-site approach is both a large edit
+   and one that every future grid silently opts out of. One rule covers them all, including grids
+   nobody has written yet.
+
+   white-space: nowrap is the half that stops the wrapping — a narrow command column would
+   otherwise break "Impersonate" across lines even at the smaller size. */
+.k-grid .k-command-cell .k-button,
+.k-grid .k-grid-content .k-button {
+    padding-block: 2px;
+    padding-inline: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* The icon inside a shrunken button keeps its original box otherwise, so the button stays tall
+   while only its text gets smaller. */
+.k-grid .k-command-cell .k-button .k-button-icon,
+.k-grid .k-grid-content .k-button .k-button-icon {
+    font-size: 0.875rem;
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+}
+
+/* Buttons sit side by side with a small gap so they stay distinguishable.
+
+   The cell itself stays a table cell. This rule used to make the <td> `display: flex`, which takes
+   it out of table layout: the browser wraps it in an anonymous cell, the <td>'s own box is only as
+   tall as its buttons, and so its bottom border stopped short of the row's — the line under every
+   row broke off at the action buttons (beta feedback, 2026-09-14, /admin/org-subscriptions). Kendo
+   already makes `.k-button` inline-flex, so margins on the buttons give the same spacing without
+   touching the cell's formatting. Wrapping is app.css's decision (`white-space: normal`, item 139). */
+.k-grid .k-command-cell {
+    vertical-align: middle;
+}
+
+.k-grid .k-command-cell > .k-button {
+    margin-inline-end: 0.25rem;
+    margin-block: 1px;
+}
+
+.k-grid .k-command-cell > .k-button:last-child {
+    margin-inline-end: 0;
+}
+
+
+/* ── Signal ──────────────────────────────────────────────────────────────────
+   Everything above maps colour. This is the shape, so a grid reads as one of the site's cards
+   rather than a control suite dropped onto it — the thing Ben pointed at when he said the site
+   felt dated. Tokens only (--ben-*, from themes/signal.css), so both themes follow.
+
+   A grid is a CARD: the surface, line, radius and shadow every card on the site has. overflow is
+   clipped so the header's corners round with it, which is also why the header is painted here
+   rather than left transparent — a transparent header on a rounded card shows the page through
+   its corners. */
+.k-grid {
+    background-color: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    box-shadow: var(--ben-shadow);
+    overflow: hidden;
+}
+
+.k-grid .k-grid-header,
+.k-grid .k-table-th,
+.k-grid .k-grid-toolbar {
+    background-color: var(--ben-bg-sunken);
+}
+
+/* The header is a label row, not a data row: smaller, quieter, spaced — so the eye goes to the
+   data. Ink-muted rather than emphasis, which is what made the old header shout. */
+.k-grid .k-table-th {
+    color: var(--ben-ink-muted);
+    font-size: .76rem;
+    font-weight: 650;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border-bottom-color: var(--ben-line);
+}
+
+.k-grid .k-table-row:hover,
+.k-grid .k-table-row.k-hover {
+    background-color: var(--ben-accent-soft);
+}
+
+.k-grid .k-table-row.k-selected,
+.k-grid .k-table-row.k-selected > td {
+    background-color: color-mix(in srgb, var(--ben-accent) 18%, transparent);
+}
+
+/* The pager sits on the card's own sunken foot, not on a second, differently-coloured strip. */
+.k-grid .k-grid-pager,
+.k-pager {
+    background-color: var(--ben-bg-sunken);
+    border-color: var(--ben-line);
+}
+/* The current page. Kendo's pager numbers are FLAT buttons, and Kendo declares
+   `.k-button-flat { background: none !important }` — so a background here is erased while a text
+   colour survives, which is exactly how the first version of this rule left a white "1" on
+   nothing. Rather than out-!important Kendo, the tint is painted with an inset shadow, which that
+   rule does not touch. A tint and accent text, not a filled pill: the same way the top bar marks
+   its current item, and for the same reason — a filled pill competes with the primary button. */
+.k-pager .k-button.k-selected,
+.k-pager .k-pager-nav.k-selected {
+    color: var(--ben-link);
+    font-weight: 700;
+    border-radius: var(--ben-radius-pill);
+    box-shadow: inset 0 0 0 999px var(--ben-accent-soft);
+}
+
+/* Kendo's primary buttons carry the same gradient as Bootstrap's .btn-primary, so a "Save" in a
+   Telerik dialog and a "Save" on a page are visibly the same button.
+
+   The selector was wrong TWICE, both times by assuming a class name, which is why it is now read
+   off the rendered element: a solid primary TelerikButton is exactly `k-button k-button-primary`.
+   Kendo adds NO fill class for the default solid fill (its own rule is `.k-button.k-button-primary,
+   .k-button.k-button-solid.k-button-primary`), so a rule requiring `k-button-solid` — and before it,
+   the combined `k-button-solid-primary` of later themes — matched nothing, and every Telerik primary
+   button stayed flat violet beside gradient Bootstrap ones. Flat, outline and link primaries carry
+   `k-button-primary` too, so they are excluded by their fill class. */
+.k-button.k-button-primary:not(.k-button-flat):not(.k-button-outline):not(.k-button-link):not(.k-disabled) {
+    background-image: var(--ben-accent-grad);
+    border-color: transparent;
+    color: var(--ben-on-accent);
+    box-shadow: var(--ben-glow);
+}
+.k-button.k-button-primary:not(.k-button-flat):not(.k-button-outline):not(.k-button-link):not(.k-disabled):hover {
+    filter: brightness(1.07);
+}
+
+/* Progress fills the way Bootstrap's .progress-bar does under Signal. */
+.k-progressbar .k-selected,
+.k-progressbar .k-progressbar-value {
+    background-image: var(--ben-accent-grad);
+    border-color: transparent;
+}
+.k-progressbar { border-radius: var(--ben-radius-pill); overflow: hidden; }
+
+/* The tab strip marks its current tab as the top bar marks the current section — an accent rule
+   under the label rather than a boxed tab — so the two navigations read as one family. */
+/* Tabs are `li.k-tabstrip-item` with `k-active` on the current one — read off the element after a
+   first version written against `.k-item` matched nothing. */
+.k-tabstrip-items-wrapper { border-bottom-color: var(--ben-line); }
+.k-tabstrip-items .k-tabstrip-item {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ben-ink-muted);
+}
+.k-tabstrip-items .k-tabstrip-item.k-active {
+    color: var(--ben-ink);
+    border-color: transparent;
+    background: transparent;
+    box-shadow: inset 0 -2px 0 0 var(--ben-accent);
+}
+.k-tabstrip-items .k-tabstrip-item:hover { color: var(--ben-ink); }
+.k-tabstrip > .k-tabstrip-content,
+.k-tabstrip > .k-content { border-color: var(--ben-line); background: transparent; }
+
+/* Popups, dialogs and windows: the raised surface, the large radius, the deep shadow — the same
+   three things a Bootstrap modal has under Signal. */
+.k-popup,
+.k-dialog,
+.k-window {
+    background-color: var(--ben-surface-raised);
+    border-color: var(--ben-line);
+    border-radius: var(--ben-radius);
+    box-shadow: var(--ben-shadow-lg);
+}
+.k-window-titlebar,
+.k-dialog-titlebar {
+    background-color: transparent;
+    border-bottom: 1px solid var(--ben-line);
+}
+
+
+/* ══ Signal phase 3: the rest of the widgets the site uses ══════════════════════════════════
+   Each one checked on /styleguide in both themes. Class names read off the rendered elements,
+   not guessed — twice this file had a selector that matched nothing. */
+
+/* ── Charts (the Field Kit player) ───────────────────────────────────────────
+   Kendo derives every series colour from --kendo-color-series-a…f. Left alone they were the
+   theme's stock blue/orange/green, the only place on the site still drawn in someone else's
+   colours. Signal's order: the accent, its partner, then the semantic three, then a rose. */
+:root {
+    --kendo-color-series-a: var(--ben-accent);
+    --kendo-color-series-b: var(--ben-accent-2);
+    --kendo-color-series-c: var(--bs-success);
+    --kendo-color-series-d: var(--bs-warning);
+    --kendo-color-series-e: var(--bs-danger);
+    --kendo-color-series-f: #e879a6;
+    --kendo-chart-bg: transparent;
+    --kendo-chart-major-lines: var(--ben-line);
+    --kendo-chart-minor-lines: var(--ben-line);
+}
+
+/* ── Lists in popups (drop-downs, pickers) ───────────────────────────────── */
+.k-list-item:hover,
+.k-list-item.k-hover { background-color: var(--ben-accent-soft); color: var(--ben-ink); }
+.k-list-item.k-selected,
+.k-list-item.k-selected:hover { background-color: var(--ben-accent); color: var(--ben-on-accent); }
+
+/* ── Fields and pickers: the same focus ring as a Bootstrap field ──────────
+   Kendo drew its own grey ring; beside a .form-control the two read as two different sites. */
+.k-input.k-focus,
+.k-picker.k-focus,
+.k-input:focus-within,
+.k-picker:focus-within {
+    border-color: var(--ben-accent);
+    box-shadow: 0 0 0 .2rem rgba(var(--ben-accent-rgb), .25);
+}
+.k-button:focus-visible,
+.k-button.k-focus { box-shadow: 0 0 0 .2rem rgba(var(--ben-accent-rgb), .3); }
+
+/* ── Calendar (the date field, tour dates, a client's case) ─────────────── */
+.k-calendar { border-color: var(--ben-line); border-radius: var(--ben-radius); background: var(--ben-surface); }
+.k-calendar .k-calendar-header .k-title,
+.k-calendar .k-calendar-header .k-calendar-title { font-weight: 700; color: var(--ben-ink); }
+.k-calendar .k-calendar-th,
+.k-calendar .k-calendar-caption { color: var(--ben-ink-faint); }
+.k-calendar .k-calendar-td .k-link { border-radius: var(--ben-radius-sm); }
+.k-calendar .k-calendar-td:hover .k-link,
+.k-calendar .k-calendar-td.k-hover .k-link { background-color: var(--ben-accent-soft); }
+.k-calendar .k-calendar-td.k-today .k-link { box-shadow: inset 0 0 0 2px var(--ben-accent); color: var(--ben-ink); }
+.k-calendar .k-calendar-td.k-selected .k-link,
+.k-calendar .k-calendar-td.k-selected:hover .k-link {
+    background: var(--ben-accent-grad);
+    color: #fff;
+    box-shadow: var(--ben-glow);
+}
+.k-calendar .k-calendar-td.k-other-month .k-link { color: var(--ben-ink-faint); }
+
+/* ── Scheduler (a group's calendar) ──────────────────────────────────────── */
+.k-scheduler { border-color: var(--ben-line); border-radius: var(--ben-radius); overflow: hidden; background: var(--ben-surface); }
+.k-scheduler-toolbar { background: var(--ben-fill); border-color: var(--ben-line); }
+.k-scheduler-table td,
+.k-scheduler-table th,
+.k-scheduler-layout td,
+.k-scheduler-header-wrap,
+.k-scheduler-times { border-color: var(--ben-line); }
+.k-scheduler-header .k-scheduler-table th,
+.k-scheduler-times th { color: var(--ben-ink-muted); font-weight: 600; }
+.k-scheduler .k-today { background-color: rgba(var(--ben-accent-rgb), .07); }
+.k-scheduler .k-nonwork-hour,
+.k-scheduler .k-scheduler-nonwork { background-color: var(--ben-bg-sunken); }
+.k-scheduler .k-event {
+    border: 0;
+    border-left: 3px solid var(--ben-accent-2);
+    border-radius: var(--ben-radius-sm);
+    background: var(--ben-accent);
+    color: var(--ben-on-accent);
+    box-shadow: var(--ben-shadow-sm);
+}
+.k-scheduler .k-event.k-selected { box-shadow: 0 0 0 2px var(--ben-accent-2), var(--ben-shadow-sm); }
+.k-scheduler .k-current-time { background-color: var(--ben-accent-2); }
+
+/* ── Upload (case files) ─────────────────────────────────────────────────── */
+.k-upload { border-color: var(--ben-line); border-radius: var(--ben-radius); background: var(--ben-surface); }
+.k-upload .k-dropzone,
+.k-upload .k-upload-dropzone { background: var(--ben-fill); border-radius: var(--ben-radius) var(--ben-radius) 0 0; }
+.k-upload .k-dropzone-hint,
+.k-upload .k-upload-status { color: var(--ben-ink-muted); }
+
+/* ── Tooltip: the inverse of the page, like Bootstrap's ──────────────────── */
+.k-tooltip {
+    background-color: var(--ben-ink);
+    color: var(--ben-bg);
+    border: 0;
+    border-radius: var(--ben-radius-sm);
+    box-shadow: var(--ben-shadow);
+}
+.k-tooltip .k-callout { color: var(--ben-ink); }
+
+/* ── Links in grid cells look like links ─────────────────────────────────────
+   Kendo sets `.k-grid a { color: inherit; text-decoration: none }`, so in every one of the site's
+   grids a link — a group's name on Your groups, a case's title — read as plain text, and the only
+   visible way in was the icon button beside it (found on the group list, Signal phase 4). Plain
+   links only (no class of their own): buttons, badges and icon actions keep their own looks. */
+.k-grid td a:not([class]) {
+    color: var(--bs-link-color);
+    font-weight: 600;
+}
+.k-grid td a:not([class]):hover,
+.k-grid td a:not([class]):focus-visible {
+    color: var(--bs-link-hover-color);
+    text-decoration: underline;
+    text-underline-offset: .15em;
+}

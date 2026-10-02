@@ -7,6 +7,12 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* Safari's own smart app banner on iPhone and iPad: "Open" if the app is installed, "Get" if not.
+       The id comes from SiteIdentity.AppStoreUrl, so the address lives in one place. *@
+    @if (SiteOptions.Value.AppStoreAppId is { } appStoreId)
+    {
+        <meta name="apple-itunes-app" content="app-id=@appStoreId" />
+    }
     <base href="/" />
     <!-- Every asset href/src below is explicitly root-relative (leading slash) rather than
          relying on <base href> resolution — Safari has a known quirk where relative URLs in
@@ -25,9 +31,14 @@
     <!-- Bootstrap 5.3.8 is compiled INTO smartapp.min.css — do not also load it from a CDN,
          two copies fight over the same cascade. -->
     <link rel="stylesheet" href="/css/smartapp.min.css" />
-    <!-- The Night skin, layered on the base stylesheet. Server-rendered rather than injected by
-         script, so it survives JS being disabled and cannot flash a different palette first. -->
-    <link id="theme-style" rel="stylesheet" media="screen" href="/css/themes/night.min.css" />
+    <!-- The Signal skin, layered on the base stylesheet. Server-rendered rather than injected by
+         script, so it survives JS being disabled and cannot flash a different palette first.
+         Replaced themes/night.min.css on 2026-10-01: that file was 252 rules doing nothing but
+         overriding Bootstrap's own --bs-* defaults with the Night palette, so Signal does the same
+         job with its own values and everything it does not mention falls back to Bootstrap. -->
+    @* The values first — shared, byte for byte, with both editor hosts — then the site's use of them. *@
+    <link rel="stylesheet" href="/css/themes/signal-tokens.css" />
+    <link id="theme-style" rel="stylesheet" media="screen" href="/css/themes/signal.css" />
     <link rel="stylesheet" href="/webfonts/smartadmin/sa-icons.css" />
     <link rel="stylesheet" href="/webfonts/fontawesome/css/all.min.css" />
     <link rel="stylesheet" href="/plugins/waves/waves.min.css" />
@@ -48,11 +59,11 @@
     <script src="/plugins/bootstrap/bootstrap.bundle.min.js"></script>
 
     <!-- Kendo's Bootstrap-flavoured theme is the closest starting point for the widgets kept from
-         Telerik (Grid, Scheduler, Editor, Map, pickers). telerik-night.css then remaps its CSS
+         Telerik (Grid, Scheduler, Editor, Map, pickers). telerik-signal.css then remaps its CSS
          variables onto the Night palette so those widgets read as part of the template rather
          than as a control suite dropped on top of it. Load order matters: override comes last. -->
     <link rel="stylesheet" href="/_content/Telerik.UI.for.Blazor/css/kendo-theme-bootstrap/all.css" />
-    <link rel="stylesheet" href="/theme/telerik-night.css" />
+    <link rel="stylesheet" href="/theme/telerik-signal.css" />
     <script src="/_content/Telerik.UI.for.Blazor/js/telerik-blazor.js" defer></script>
     <!-- ffmpeg.wasm — served locally so the worker chunk (814.ffmpeg.js) is same-origin -->
     <script src="/_content/Ben.Video.Editor/js/moduleLoader.js"></script>
@@ -62,7 +73,7 @@
        fetch it from a third-party CDN before `load` fired. wwwroot/js/image-editor.js now
        loads it from wwwroot/plugins/fabric/ on demand. See VENDORED.md there, and item 114. *@
     <link href="/_content/Ben.Video.Editor/css/ben-video-variables.css" rel="stylesheet" />
-    @* …then the map onto this template's palette. telerik-night.css above covers the Kendo
+    @* …then the map onto this template's palette. telerik-signal.css above covers the Kendo
        variables the widgets use; this covers the editor's own --bv-* family and the handful of
        Kendo tokens only the editor reads (--kendo-color-subtle-text alone drives every secondary
        label in its timeline). Without it the editor kept its own dark palette inside the site. *@

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>IsHaunted.com — the whole platform</title>
+<style>
+@page { size: 8.5in 11in; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; padding: 0; background: #4a4a4a; }
+body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: #fff;
+  --base: #0C1017; --base2: #1E1650; --accent: #B6A2FF; --accent2: #67E8F9; --fill: linear-gradient(120deg, #7C5CFF 0%, #22D3EE 100%);
+  --muted: rgba(255,255,255,.76); --card: rgba(255,255,255,.06); --line: rgba(255,255,255,.11); }
+
+/* Letter, and laid out as a COLUMN rather than with absolute offsets: the first draft positioned
+   every block by hand, a tile title wrapped to two lines, and the third row of tiles printed on
+   top of the strip below it. A flow column cannot do that. */
+.page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
+  display: flex; flex-direction: column; page-break-after: always; break-after: page; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+@media screen { .page { margin: 0 auto 26px; box-shadow: 0 10px 40px rgba(0,0,0,.55); } }
+body.only-front .back, body.only-back .front { display: none; }
+body.only-front .page, body.only-back .page { margin: 0; }
+
+h1, h2, .go, .big, .url b, .price b, .glab { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; }
+em { font-style: normal; color: var(--accent); }
+.lab { font-size: 7.4pt; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+  color: rgba(255,255,255,.5); }
+
+/* ── a browser window drawn around a real screenshot ───────── */
+.win { border-radius: .09in; overflow: hidden; background: #0e0e12; position: relative; flex: none;
+  box-shadow: 0 12px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.13); }
+.win::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .12in;
+  background: #26262b; z-index: 2; }
+.win::after { content: "● ● ●"; position: absolute; top: 0; left: .06in; font-size: 4.6pt;
+  letter-spacing: .014in; color: #71717a; z-index: 3; line-height: .12in; }
+.win i { position: absolute; top: .12in; left: 0; right: 0; bottom: 0; overflow: hidden; display: block; }
+.win img { position: absolute; top: 0; left: 0; width: calc(100% * var(--z, 1));
+  height: calc(100% * var(--z, 1)); object-fit: cover; object-position: var(--f, top left); display: block; }
+
+/* ── a phone drawn around a real screenshot ────────────────── */
+.ph { border-radius: .2in; background: #050505; padding: .045in; position: relative; flex: none;
+  box-shadow: 0 14px 32px rgba(0,0,0,.6), 0 0 0 1.1px rgba(255,255,255,.17); }
+.ph img { width: 100%; height: 100%; object-fit: cover; object-position: top center;
+  border-radius: .16in; display: block; }
+
+/* ── FRONT ─────────────────────────────────────────────────── */
+.herowrap { position: relative; height: 5.55in; flex: none; }
+.hero { position: absolute; inset: 0; background-size: cover; background-position: center 42%; }
+.hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,
+  rgba(0,0,0,.55) 0%, rgba(0,0,0,.12) 18%, rgba(12,16,23,0) 32%, rgba(12,16,23,.82) 68%, var(--base) 100%); }
+.brandbar { position: absolute; top: .4in; left: .5in; right: .5in; display: flex; align-items: center;
+  justify-content: space-between; z-index: 6; }
+.brand { display: flex; align-items: center; gap: .13in; font-weight: 700; font-size: 15pt; }
+.brand img { width: .5in; height: .5in; filter: drop-shadow(0 2px 7px rgba(0,0,0,.65)); }
+.brand small { display: block; font-weight: 500; font-size: 7.4pt; letter-spacing: .2em;
+  text-transform: uppercase; opacity: .85; }
+.pill { font-size: 8pt; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
+  color: #fff; background: var(--fill); padding: .07in .17in; border-radius: 99px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.45); }
+.headline { position: absolute; left: .5in; bottom: .34in; width: 4.55in; z-index: 5; }
+.kicker { font-size: 8.4pt; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: .09in; }
+.headline h1 { font-size: 36pt; line-height: 1.0; margin: 0 0 .13in; letter-spacing: -.014em;
+  text-shadow: 0 3px 20px rgba(0,0,0,.6); }
+.headline p { font-size: 11.6pt; line-height: 1.35; margin: 0; color: rgba(255,255,255,.92); }
+.montage { position: absolute; right: .44in; top: 1.15in; width: 3.35in; height: 3.5in; z-index: 4; }
+.montage .win { position: absolute; left: 0; top: .44in; width: 2.5in; height: 1.72in; transform: rotate(-2.4deg); }
+.montage .ph { position: absolute; right: 0; top: 0; width: 1.6in; height: 3.3in; transform: rotate(3.5deg); z-index: 2; }
+
+.fbody { flex: 1; padding: .24in .5in 0; display: flex; flex-direction: column; min-height: 0; }
+.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: .2in; }
+.pillar { display: grid; grid-template-columns: .4in 1fr; gap: .11in; align-items: start; }
+.pillar .badge { width: .4in; height: .4in; border-radius: .11in; display: grid; place-items: center;
+  color: #fff; background: var(--fill);
+  box-shadow: 0 5px 14px rgba(124,92,255,.38); }
+.pillar h3 { margin: 0 0 .03in; font-size: 11pt; font-weight: 700; }
+.pillar p { margin: 0; font-size: 8.3pt; line-height: 1.34; color: var(--muted); }
+.glimpse { margin-top: .26in; }
+.gstrip { display: grid; grid-template-columns: repeat(3, 1fr); gap: .17in; margin-top: .1in; }
+.gstrip figure { margin: 0; }
+.gstrip .win { height: 1.62in; }
+.gstrip figcaption { margin: .08in 0 0; font-size: 8pt; line-height: 1.32; color: var(--muted); }
+.gstrip figcaption b { display: block; color: #fff; font-size: 9.4pt; font-weight: 700; margin-bottom: .015in; }
+.cta { height: .98in; flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 .5in; margin-top: auto; color: #fff;
+  background: var(--fill); }
+.cta .go { font-size: 19pt; letter-spacing: -.012em; }
+.cta .go span { display: block; font-family: "Avenir Next", sans-serif; font-size: 8.2pt;
+  font-weight: 600; letter-spacing: .11em; text-transform: uppercase; opacity: .8; }
+.cta .price { text-align: right; font-weight: 700; font-size: 8.8pt; line-height: 1.22; }
+.cta .price b { display: block; font-size: 21pt; }
+
+/* ── BACK ──────────────────────────────────────────────────── */
+.back { background: radial-gradient(130% 62% at 100% 0%, var(--base2) 0%, var(--base) 56%); }
+.bstrip { height: 1.3in; flex: none; display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: .055in; }
+.bstrip div { background-size: cover; background-position: center 45%; position: relative; }
+.bstrip div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,
+  rgba(0,0,0,.30) 0%, rgba(12,16,23,.30) 45%, var(--base) 100%); }
+.bbody { flex: 1; padding: .15in .5in .26in; display: flex; flex-direction: column; min-height: 0; }
+.bhead h2 { font-size: 21pt; margin: 0; line-height: 1.05; }
+.bhead p { margin: .06in 0 0; font-size: 8.4pt; line-height: 1.36; color: var(--muted); max-width: 6.6in; }
+
+.tiles { margin-top: .14in; display: grid; grid-template-columns: repeat(4, 1fr); gap: .11in; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: .1in;
+  padding: .085in .085in .1in; display: flex; flex-direction: column; }
+.tile .win { height: .86in; margin-bottom: .07in; }
+.tile .th { display: flex; align-items: flex-start; gap: .05in; margin: 0 0 .04in; min-height: .26in; }
+.tile .th .ic { color: var(--accent); flex: none; margin-top: .012in; }
+.tile h4 { margin: 0; font-size: 8.9pt; font-weight: 700; line-height: 1.14; }
+.tile p { margin: 0; font-size: 6.8pt; line-height: 1.28; color: var(--muted); }
+
+.chain { margin-top: .16in; }
+.chain .lab { color: var(--accent); }
+.chain .sub { font-size: 8.2pt; color: var(--muted); margin: .03in 0 .09in; }
+.cflow { display: grid; grid-template-columns: 1fr .16in 1fr .16in 1fr .16in 1fr .16in 1fr; align-items: start; }
+.cstep .win { height: .70in; margin-bottom: .06in; }
+.cstep .ph { width: .46in; height: .70in; margin: 0 auto .06in; }
+.cstep b { display: block; font-size: 8pt; line-height: 1.2; margin-bottom: .02in; }
+.cstep span { display: block; font-size: 6.8pt; line-height: 1.3; color: var(--muted); }
+.arrow { display: grid; place-items: center; height: .70in; color: var(--accent); font-size: 12pt; font-weight: 700; }
+
+.offer { margin-top: auto; height: 1.06in; flex: none; border-radius: .13in; display: grid;
+  grid-template-columns: .9in 1.8fr 1fr; overflow: hidden; background: #122742;
+  box-shadow: 0 0 0 1.4px #7C5CFF, 0 14px 36px rgba(0,0,0,.45); }
+.offer .shotcell { background-size: cover; background-position: top left; border-right: 1px solid var(--line); }
+.offer .words { padding: .12in .19in; display: flex; flex-direction: column; justify-content: center; }
+.offer .big { font-size: 14.5pt; line-height: 1.06; }
+.offer .small { font-size: 7.7pt; color: var(--muted); margin-top: .05in; line-height: 1.33; }
+.offer .url { display: flex; flex-direction: column; justify-content: center; align-items: center;
+  text-align: center; color: #fff; background: var(--fill); }
+.offer .url b { display: block; font-size: 16pt; }
+.offer .url span { font-size: 7.2pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-top: .02in; }
+.fine { margin-top: .07in; flex: none; font-size: 5.6pt; text-align: center;
+  color: rgba(255,255,255,.42); white-space: nowrap; overflow: hidden; }
+</style>
+<script>document.addEventListener('DOMContentLoaded',()=>{
+  if(location.hash==='#front')document.body.classList.add('only-front');
+  if(location.hash==='#back')document.body.classList.add('only-back');});</script>
+</head><body>
+
+<section class="page front">
+  <div class="herowrap">
+    <div class="hero" style="background-image:url(.cache/1500-media_stock_i3-walking-to-house.jpg)"></div>
+    <div class="brandbar">
+      <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web · iPhone · iPad</small></div></div>
+      <div class="pill">Everything it does</div>
+    </div>
+    <div class="montage">
+      <div class="win " style="--f:center;--z:1.0"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_getting-started_public-map.jpg" alt=""></i></div>
+      <div class="ph "><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_the-mobile-apps_iphone-home.jpg" alt=""></div>
+    </div>
+    <div class="headline">
+      <div class="kicker">One home for the paranormal</div>
+      <h1>Everything the night needs, in <em>one place</em>.</h1>
+      <p>Explore haunted places. Run a group and work real cases. Find a voice in a recording,
+         cut the clip, and send the client a report. Sell out a haunted weekend. One site — and
+         the phone in your pocket is part of it.</p>
+    </div>
+  </div>
+
+  <div class="fbody">
+    <div class="pillars"><div class="pillar"><div class="badge"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></div><div><h3>Explore for nothing</h3><p>The feed, a map of haunted places, and every tour and night out near you. No account needed to look.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><div><h3>Investigate properly</h3><p>Cases, evidence tools, roles that decide who sees a private home, and reports a client can read.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M13 6v12" stroke-dasharray="2 2"/></svg></div><div><h3>Fill the house</h3><p>Ghost walks, venues and haunted weekends: bookings, passes, the door, and the money.</p></div></div></div>
+    <div class="glimpse">
+      <div class="lab">A glimpse of the real thing</div>
+      <div class="gstrip"><figure><div class="win " style="--f:top right;--z:1.5"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_getting-started_tour-page.jpg" alt=""></i></div><figcaption><b>A night out, booked</b>Every ghost walk and haunted weekend near you, with the dates people can take.</figcaption></figure><figure><div class="win " style="--f:top right;--z:1.55"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_working-a-case_case-detail.jpg" alt=""></i></div><figcaption><b>A case, worked properly</b>The client&#x27;s own words, the timeline, the evidence and one thread.</figcaption></figure><figure><div class="win " style="--f:top left;--z:1.3"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-audio-editor_evp-candidates.jpg" alt=""></i></div><figcaption><b>Voices under the noise</b>The EVP detector marks what it heard and you keep what is real.</figcaption></figure></div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div class="go">Start free at ishaunted.com<span>No card needed to join</span></div>
+    <div class="price"><b>Free</b>to join, explore and post</div>
+  </div>
+</section>
+
+<section class="page back">
+  <div class="bstrip">
+    <div style="background-image:url(.cache/1500-media_stock_i2-dark-hallway.jpg)"></div>
+    <div style="background-image:url(.cache/1500-media_stock_w1-cobblestone-streetlights.jpg)"></div>
+    <div style="background-image:url(.cache/1500-media_stock_v6-ballroom.jpg)"></div>
+  </div>
+  <div class="bbody">
+    <div class="bhead">
+      <h2>Twelve things it does. <em>None bolted on.</em></h2>
+      <p>The editors, the detector and the apps are part of the site rather than separate products —
+         so a recording made in a dark hallway reaches a client's report without anybody emailing a file.</p>
+    </div>
+
+    <div class="tiles"><div class="tile"><div class="win " style="--f:center right;--z:2.1"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_the-feed_feed.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg><h4>The feed</h4></div><p>Follow places, groups and nights out. Polls, photos, links.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.2"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_getting-started_public-map.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><h4>A map of haunted places</h4></div><p>Every public place, what happened there, what is on near you.</p></div><div class="tile"><div class="win " style="--f:center right;--z:1.8"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_working-a-case_case-detail.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><h4>Cases and evidence</h4></div><p>The client&#x27;s words, the timeline, the files, one thread.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.4"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_working-a-case_investigations-map.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><h4>Investigations</h4></div><p>Propose dates, take the roster, and put the visit on the map.</p></div><div class="tile"><div class="win " style="--f:top left;--z:1.5"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-audio-editor_evp-candidates.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2l2-6 3 12 3-9 2 5 2-2h6"/></svg><h4>The EVP detector</h4></div><p>Finds voices under the noise and hands you the candidates.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.3"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-audio-editor_spectrogram.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><h4>Audio tools</h4></div><p>Spectrogram, filters, a noise gate, silence detection, clips.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.25"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-video-editor_timeline-two-clips.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><h4>A video editor</h4></div><p>Timeline, callouts, text, transitions and export — in the browser.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.4"><i><img src=".cache/1100-Ben.Web.Services_Help_Media_organization-administration_photo-editor.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg><h4>A photo editor</h4></div><p>Crop, straighten and mark up a photo without leaving the case.</p></div><div class="tile"><div class="win " style="--f:center;--z:1.15"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_working-a-case_board-presenting.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><h4>Research boards</h4></div><p>Lay out a family tree or a deed trail, then present it full screen.</p></div><div class="tile"><div class="win " style="--f:top right;--z:1.9"><i><img src=".cache/1100-Ben.Web.Services_Help_Media_organization-administration_members.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><h4>Your group</h4></div><p>Members, roles, titles and duties — and who sees a private case.</p></div><div class="tile"><div class="win " style="--f:center right;--z:2.0"><i><img src=".cache/1100-Ben.Web.Services_Help_Media_organization-administration_tours.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M12 3V1M8 6h8l1 3v9l-1 3H8l-1-3V9z"/><path d="M12 10c1.5 1.5 1.5 3.5 0 5-1.5-1.5-1.5-3.5 0-5z"/></svg><h4>Ghost walks and tours</h4></div><p>A page per tour, dates people book, a door list for the guide.</p></div><div class="tile"><div class="win " style="--f:center right;--z:1.6"><i><img src=".cache/1100-Ben.Web.Services_Help_Media_organization-administration_event-plan-seats.jpg" alt=""></i></div><div class="th"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M13 6v12" stroke-dasharray="2 2"/></svg><h4>Hosted events</h4></div><p>Rooms or seats on a plan, and passes that open with no signal.</p></div></div>
+
+    <div class="chain">
+      <div class="lab">How the phone and the website are one thing</div>
+      <p class="sub">The same recording, start to finish — nothing exported, nothing uploaded by hand.</p>
+      <div class="cflow"><div class="cstep"><div class="ph "><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_the-mobile-apps_iphone-meter.jpg" alt=""></div><b>Record it in the field</b><span>Field Kit turns the phone into a meter and a recorder. No signal needed.</span></div><div class="arrow">&#8594;</div><div class="cstep"><div class="win " style="--f:top left;--z:1.5"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_working-a-case_field-session-player.jpg" alt=""></i></div><b>It lands on the case</b><span>The session uploads itself when there is signal again, onto the right case.</span></div><div class="arrow">&#8594;</div><div class="cstep"><div class="win " style="--f:top left;--z:1.5"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-audio-editor_evp-candidates.jpg" alt=""></i></div><b>Scan it for voices</b><span>The EVP detector works the whole recording and marks what it heard.</span></div><div class="arrow">&#8594;</div><div class="cstep"><div class="win " style="--f:top left;--z:1.5"><i><img src=".cache/1100-Ben.Web.Website_wwwroot_help_media_using-the-video-editor_editor-overview.jpg" alt=""></i></div><b>Cut the moment out</b><span>Keep the clip, caption it, and put it in a report or a publication.</span></div><div class="arrow">&#8594;</div><div class="cstep"><div class="win " style="--f:top left;--z:1.5"><i><img src=".cache/1100-web-media_client_20-my-cases.jpg" alt=""></i></div><b>The client reads it</b><span>They see their own case, the evidence you chose, and nothing you did not.</span></div></div>
+    </div>
+
+    <div class="offer">
+      <div class="shotcell" style="background-image:url(.cache/1100-web-media_owner_56-org-subscriptions.jpg)"></div>
+      <div class="words">
+        <div class="big">Free to <em>explore</em>. Pay only for what you run.</div>
+        <div class="small">Enthusiasts: free, with Field Kit and 2&nbsp;GB of your own files · Groups from
+          $19.99 a month · Ghost walks $29 a month per tour · Hosted events $99 each, however many
+          nights · Investigations of public places stay free on every plan.</div>
+      </div>
+      <div class="url"><b>ishaunted.com</b><span>Have a look tonight</span></div>
+    </div>
+    <div class="fine">IsHaunted.com · Nashville, Tennessee · Every screen in this flyer is a photograph of the running site · Photographs: Unsplash · Prices in USD and subject to change · The iPhone and iPad app is on the App Store</div>
+  </div>
+</section>
+</body></html>

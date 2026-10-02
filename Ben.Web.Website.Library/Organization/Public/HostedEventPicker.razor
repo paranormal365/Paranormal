@@ -399,6 +399,6 @@
         if (priced.Count == 0) return null;
 
         var total = priced.Sum(price => price!.Value);
-        return $"That comes to {total:C0}, settled with {Hosted.OrganizationName} and never here.";
+        return $"That comes to {BenMoney.Format(total)}, settled with {Hosted.OrganizationName} and never here.";
     }
 }

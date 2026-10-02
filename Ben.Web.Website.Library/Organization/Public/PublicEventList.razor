@@ -12,29 +12,20 @@
 @* Two routes, one page. Under an organization it is their events; at the top level it is
    everybody's, which is the surface that brings in somebody who has never heard of any of them. *@
 
-<div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
+@* Signal phase 2: the photograph, the title, the clock switch and the figures in one frame, where
+   there used to be the section band and then a second, plain heading saying the same thing. *@
+<PageHero Photo="v6-ballroom" TestId="events-hero"
+          Kicker="@(UrlName is null ? "Open to anyone" : UrlName)"
+          Title="@(UrlName is null ? "What's on" : "Events")"
+          Lede="@(UrlName is null
+                  ? "Ghost walks, public investigations, meetings and haunted weekends — opened to anyone by the groups that run them."
+                  : "Events this group has opened to anyone.")"
+          Facts="@Summary" Lead="@(UrlName is null ? null : BackLink)">
+    @* Each walk on its own clock, or all on the reader's (2026-09-28). *@
+    <div><TimeZoneSwitch Noun="event" /></div>
+</PageHero>
 
-    @if (UrlName is not null)
-    {
-        <div class="mb-3">
-            <a href="@($"/o/{UrlName}")" class="text-decoration-none small">&larr; Back to @UrlName</a>
-        </div>
-    }
-
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <h1 class="mb-1">@(UrlName is null ? "What's on" : "Events")</h1>
-        @* Each walk on its own clock, or all on the reader's (2026-09-28). *@
-        <TimeZoneSwitch Noun="event" />
-    </div>
-    <p class="text-secondary mb-3">
-        @(UrlName is null
-            ? "Public investigations, meetings and walks that groups have opened to anyone."
-            : "Events this group has opened to anyone.")
-    </p>
-
-    @* The shape of the list before anybody scrolls it: how many nights, over what stretch, from
-       how many groups. Drawn from what was loaded, so it cannot disagree with the list under it. *@
-    <BenFactRail Facts="@Summary" Class="mb-4" />
+<div class="home-band">
 
     @* This page is served to signed-out visitors, which is why the failure state matters more here
        than anywhere else: somebody who is refused sees "Nothing coming up", has no account, no
@@ -43,10 +34,10 @@
     <BenListState TItem="PublicEventListItem" Result="@_events" Loading="@_loading"
                   OnRetry="@ReloadAsync">
         <Empty>
-            <div class="card">
-                <div class="card-body text-center py-5">
-                    <h6 class="mb-2">Nothing coming up</h6>
-                    <p class="text-secondary small mb-0">
+            <div>
+                <div>
+                    <h6 class="ben-empty__title mb-2">Nothing coming up</h6>
+                    <p class="ben-empty__text mb-0">
                         @(UrlName is null
                             ? "No groups have public events scheduled at the moment. Worth checking back."
                             : "This group has no public events scheduled at the moment.")
@@ -87,7 +78,7 @@
                 {
                     var full = item.AttendeeCapacity is { } c && item.AttendingCount >= c;
 
-                    <div class="ev-row @(full ? "ev-row--full" : "")">
+                    <div class="ev-row @(full ? "ev-row--full" : "")" style="@TourPlate.HueStyle(item.TourName ?? item.OrganizationName)">
                         <span class="ev-row__time">
                             @if (item.IsAllDay)
                             {
@@ -175,6 +166,8 @@
 </FeatureGate>
 
 @code {
+    private RenderFragment BackLink => @<a href="@($"/o/{UrlName}")">&larr; Back to @UrlName</a>;
+
     /// <summary>Null on the site-wide route, set when showing one group's events.</summary>
     [Parameter] public string? UrlName { get; set; }
 

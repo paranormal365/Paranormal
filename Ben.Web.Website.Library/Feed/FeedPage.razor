@@ -31,52 +31,36 @@
 *@
 
 <FeatureGate Flag="@SiteFeatures.PublicFeed">
-    <div class="container py-3" style="max-width: 680px;">
-
-        <div class="d-flex align-items-center justify-content-between mb-3">
-            <h3 class="mb-0">
-                @if (Tag is not null)
-                {
-                    <text>#@Tag</text>
-                }
-                else if (TypeId is not null)
-                {
-                    @* The type's name arrives with the first page's posts; the id is an ugly
-                       heading for the beat before that. *@
-                    <text>@(_typeName ?? "Category")</text>
-                }
-                else if (PlaceId is not null)
-                {
-                    @* Same reasoning as the type above: the name rides in on the posts. *@
-                    <text>@(_placeName ?? "A place")</text>
-                }
-                else
-                {
-                    <text>Feed</text>
-                }
-                <HelpLink Slug="the-feed" />
-            </h3>
-
-            @if (Tag is not null || TypeId is not null || PlaceId is not null)
+    @* Signal phase 2: the title, what this page is, and the switch between its modes in one
+       frame over the photograph; the posts below stay in a reading column, because a feed is read
+       down a line, not across a screen. *@
+    <PageHero Photo="w2-cobblestone-night" TestId="feed-hero" Compact="true" Class="feed-hero"
+              Kicker="@(Tag is not null ? "Tagged" : TypeId is not null ? "Category" : PlaceId is not null ? "A place" : "The feed")"
+              Title="@HeroTitle"
+              Lede="@(Tag is null && TypeId is null && PlaceId is null ? "What people are finding, as they find it — photos, recordings and nights out, from groups and members." : null)">
+        <div class="feed-hero__row">
+            @if (Tag is null)
             {
-                <a class="btn btn-outline-secondary btn-sm" href="/feed">All posts</a>
-            }
-        </div>
-
-        @if (Tag is null)
-        {
-            <ul class="nav nav-tabs mb-3">
-                @foreach (var (mode, label) in Modes.Where(m => m.Mode != "following" || (_authKnown && IsSignedIn)))
-                {
-                    <li class="nav-item">
-                        <button type="button" class="nav-link @(_mode == mode ? "active" : null)"
+                <div class="feed-modes" role="group" aria-label="Which posts">
+                    @foreach (var (mode, label) in Modes.Where(m => m.Mode != "following" || (_authKnown && IsSignedIn)))
+                    {
+                        <button type="button" class="feed-modes__item @(_mode == mode ? "feed-modes__item--here active" : null)"
+                                aria-pressed="@((_mode == mode).ToString().ToLowerInvariant())"
                                 @onclick="() => SwitchModeAsync(mode)">
                             @label
                         </button>
-                    </li>
-                }
-            </ul>
-        }
+                    }
+                </div>
+            }
+            @if (Tag is not null || TypeId is not null || PlaceId is not null)
+            {
+                <a class="btn btn-outline-light btn-sm" href="/feed">All posts</a>
+            }
+            <a class="btn btn-outline-light btn-sm" href="/help/the-feed">How the feed works</a>
+        </div>
+    </PageHero>
+
+    <div class="feed-column">
 
         @* No composer on a tag page. A post written there would not carry the tag unless the
            author typed it, and a composer that silently does not do what its context implies is
@@ -110,7 +94,8 @@
         }
         else if (_posts.Count == 0)
         {
-            <div class="text-center text-secondary py-5">
+            <div class="ben-empty">
+                <img class="ben-empty__mark" src="/static/images/is-haunted-logo.svg" alt="" aria-hidden="true" />
                 @if (Tag is not null)
                 {
                     <p class="mb-0">Nothing tagged <strong>#@Tag</strong> yet.</p>
@@ -229,6 +214,14 @@
 </FeatureGate>
 
 @code {
+    // The type's and the place's names arrive with the first page's posts; a placeholder is an
+    // ugly heading for the beat before that, but an id is uglier.
+    private string HeroTitle =>
+        Tag is not null ? $"#{Tag}"
+        : TypeId is not null ? _typeName ?? "Category"
+        : PlaceId is not null ? _placeName ?? "A place"
+        : "The feed";
+
     /// <summary>Set when the page is a tag page.</summary>
     [Parameter] public string? Tag { get; set; }
 

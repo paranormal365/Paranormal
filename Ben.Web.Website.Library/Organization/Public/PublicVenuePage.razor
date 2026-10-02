@@ -29,7 +29,7 @@
                                                ImageUrl="@(card.Photos is { Count: > 0 } cardPhotos ? MediaUrls.VenuePhoto(cardPhotos[0].UploadFileId) : null)" />
 }
 
-<div class="container py-4" style="max-width:900px;" id="venue-page">
+<div class="home-band" id="venue-page">
     @if (_loading)
     {
         <div class="d-flex justify-content-center py-5">
@@ -46,16 +46,16 @@
     else
     {
         <div id="venue-summary">
-        <h1 class="h3 mb-1" id="venue-title">@v.PlaceName</h1>
-        <p class="text-secondary mb-3">
-            @string.Join(", ", new[] { v.City, v.State }.Where(p => !string.IsNullOrWhiteSpace(p)))
-            @if (!string.IsNullOrWhiteSpace(v.City) || !string.IsNullOrWhiteSpace(v.State))
-            {
-                <text> · </text>
-            }
-            Run by <a href="@($"/o/{v.OrganizationUrlName}")">@v.OrganizationName</a>
-            · <a href="@($"/places/{v.PlaceId}")">The place's history on IsHaunted</a>
-        </p>
+        @* Signal phase 2: the venue's own first kept photograph, or a plate in its colour. *@
+        <PageHero TestId="venue-hero" TitleId="venue-title" Title="@v.PlaceName" Kicker="A venue"
+                  PhotoUrl="@(v.Photos is { Count: > 0 } heroPhotos ? MediaUrls.VenuePhoto(heroPhotos[0].UploadFileId) : null)"
+                  Hue="@TourPlate.Hue(v.PlaceName)"
+                  Lede="@(string.Join(", ", new[] { v.City, v.State }.Where(p => !string.IsNullOrWhiteSpace(p))) is { Length: > 0 } where ? where : null)">
+            <div class="venue-hero__by">
+                Run by <a href="@($"/o/{v.OrganizationUrlName}")">@v.OrganizationName</a>
+                · <a href="@($"/places/{v.PlaceId}")">The place's history on IsHaunted</a>
+            </div>
+        </PageHero>
 
         @if (v.History is { Length: > 0 } history)
         {

@@ -15,6 +15,13 @@ The apps are built for the half of this work that happens **away from a desk** �
 building at two in the morning with one hand free. Anything long or fiddly (writing a report,
 editing video, laying out a public page) stays better on the website, and always will.
 
+## Getting the app
+
+It is free on the App Store: **[IsHaunted for iPhone and iPad](https://apps.apple.com/us/app/ishaunted/id6806786633)**.
+The same link is at the foot of every page on the website, and if you open the website in Safari
+on an iPhone or iPad, a banner at the top offers to open the app — or to get it, if you have not
+yet.
+
 ## What you need an account for — and what you don't
 
 Reading the feed and browsing public events needs **no account at all**, exactly as on the

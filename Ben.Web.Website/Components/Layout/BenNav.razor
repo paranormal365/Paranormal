@@ -6,6 +6,7 @@
 @inject NotificationState Notifications
 @inject SiteFeaturesProvider Features
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Website.Library.Kit.RailMenuState RailMenus
 
 @*
     The template's sidebar, driven by data instead of hand-maintained markup.
@@ -19,6 +20,156 @@
     the template already has a nested-menu pattern, and one place to look for navigation beats two.
 *@
 
+@*
+    ── ONE MODEL, THREE RENDERINGS ──────────────────────────────────────────
+    Signal moves the navigation to the top (Ben, 2026-10-01): the bar picks a SECTION, and the
+    rail beside the page shows what you can do inside it — the shape Administration already had,
+    applied to the whole site.
+
+    All three renderings read the SAME `VisibleSections`, so every gate, badge and count has one
+    owner and cannot drift. Only the markup differs:
+
+        TopBar      the sections, as links. Picking one goes to its landing page.
+        Contextual  the children of whichever section you are in, in the rail.
+        (neither)   the original full sidebar, kept for the mobile drawer.
+
+    A section with no children of its own is a plain link and leaves the rail empty, which is
+    correct: there is nothing else to do in it.
+*@
+@if (TopBar)
+{
+    <nav class="app-topnav" id="top-menu">
+        @{ _activeUrl = MostSpecificMatch(); }
+        <ul class="topnav-list">
+            @foreach (var section in BarSections)
+            {
+                <li class="topnav-item @(IsCurrentSection(section) ? "active" : null)">
+                    <a class="topnav-link" href="@LandingUrl(section)" title="@section.Text">
+                        <BenIcon Name="@section.Icon" />
+                        <span>@section.Text</span>
+                        @if (section.Count > 0)
+                        {
+                            <span class="badge @NotificationBadge.CssClass(section.Urgency)"
+                                  title="@($"{section.Count} {section.BadgeNoun}")"
+                                  aria-label="@($"{section.Count} {section.BadgeNoun}")">@NotificationBadge.Text(section.Count)</span>
+                        }
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+    @if (IsImpersonating)
+    {
+        <div class="impersonation-banner impersonation-banner--top">
+            <BenIcon Name="user" />
+            <span class="text-truncate">Viewing as <strong>@TokenStore.UserEmail</strong></span>
+            <button type="button" class="btn btn-warning btn-sm ms-auto" @onclick="ReturnToSuperAdmin">
+                Return to SuperAdmin
+            </button>
+        </div>
+    }
+}
+else if (Contextual)
+{
+    _activeUrl = MostSpecificMatch();
+
+    @*
+        ── THE RAIL DRILLS DOWN ──────────────────────────────────────────────
+        Ben, 2026-10-01: "the left-side menu would be a good place and when you navigate to the
+        sub-page, the menu becomes the menu for that page with a back button at the top."
+
+        Two sources, one look:
+          · a PAGE's own menu (RailMenuState) — a group's pages, an event's screens — supplied by
+            ContextRail, which knows what this person may open there. The deepest one wins.
+          · otherwise the SECTION's children, where a child that is itself a group (Administration's
+            Users, Billing, System…) is a link INTO that group rather than a heading over it. Inside
+            a group the rail is that group's menu, with the way back at the top. Opening a page
+            inside a group opens the rail on that group; Back shows the section again.
+    *@
+    @if (RailMenus.Current is { } menu)
+    {
+        <aside class="app-rail app-rail--context" data-testid="rail-context">
+            @if (menu.BackHref is { } backHref)
+            {
+                <a class="app-rail__back" href="@backHref" data-testid="rail-back">
+                    <BenIcon Name="arrow-left" /><span>@menu.BackText</span>
+                </a>
+            }
+            @if (menu.Kicker is { } kicker)
+            {
+                <div class="app-rail__kicker">@kicker</div>
+            }
+            <div class="app-rail__heading">@menu.Title</div>
+            <ul class="app-rail__list">
+                @{ string? lastGroup = null; }
+                @foreach (var item in menu.Items)
+                {
+                    @if (item.Group is { } g && g != lastGroup)
+                    {
+                        lastGroup = g;
+                        <li class="app-rail__divider" aria-hidden="true">@g</li>
+                    }
+                    <li class="@(item.Active ? "active" : null)">
+                        <a href="@item.Href" title="@item.Text" target="@(item.External ? "_blank" : null)"
+                           aria-current="@(item.Active ? "page" : null)" data-tour-for="@item.TourFor">
+                            <BenIcon Name="@item.Icon" />
+                            <span>@item.Text</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </aside>
+    }
+    else if (CurrentSection is { } current && current.Children.Count > 0)
+    {
+        var level = RailLevel(current);
+        <aside class="app-rail">
+            @if (level != current)
+            {
+                @* Real addresses, not "#": the click only changes the menu, but if it ever went
+                   through as a navigation it would land on the section's own first page, which shows
+                   the same thing. A "#" link let a stray location change reset the drill. *@
+                <a class="app-rail__back" href="@LandingUrl(current)" @onclick="ShowSectionTop" @onclick:preventDefault data-testid="rail-back">
+                    <BenIcon Name="arrow-left" /><span>@current.Text</span>
+                </a>
+                <div class="app-rail__heading">@level.Text</div>
+            }
+            else
+            {
+                <div class="app-rail__title">@current.Text</div>
+            }
+            <ul class="app-rail__list">
+                @foreach (var child in level.Children)
+                {
+                    @if (child.Children.Count > 0)
+                    {
+                        @* A link INTO the group — it has no page of its own, so it opens its menu.
+                           Its address is the group's first page, for the same reason as Back's. *@
+                        <li class="@(ContainsActive(child) ? "active" : null)">
+                            <a href="@(FirstAddress(child) ?? LandingUrl(current))" class="app-rail__drill" title="@child.Text"
+                               @onclick="() => DrillInto(child)" @onclick:preventDefault>
+                                <BenIcon Name="@child.Icon" />
+                                <span>@child.Text</span>
+                                @if (child.Count > 0)
+                                {
+                                    <span class="badge @NotificationBadge.CssClass(child.Urgency)">@NotificationBadge.Text(child.Count)</span>
+                                }
+                                <BenIcon Name="chevron-right" Class="app-rail__chev" />
+                            </a>
+                        </li>
+                    }
+                    else
+                    {
+                        @RailLink(child)
+                    }
+                }
+            </ul>
+        </aside>
+    }
+}
+else
+{
 <aside class="app-sidebar d-flex flex-column">
 
     @* No logo here: the brand lives in the header, ahead of the sidebar toggle. *@
@@ -58,18 +209,9 @@
         }
     </nav>
 
-    @if (IsImpersonating)
-    {
-        <div class="impersonation-banner p-2">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <BenIcon Name="user" />
-                <span class="text-truncate">Viewing as <strong>@TokenStore.UserEmail</strong></span>
-            </div>
-            <button type="button" class="btn btn-warning btn-sm w-100" @onclick="ReturnToSuperAdmin">
-                Return to SuperAdmin
-            </button>
-        </div>
-    }
+    @* The impersonation banner is drawn once, by the top bar, which is rendered at every width.
+       A second copy here doubled "Viewing as …" on the page — hidden, but still there, and found
+       twice by anything that reads the text. *@
 </aside>
 
 @* The template's own backdrop, from _Sidebar.cshtml. It does two jobs on small screens: dims the
@@ -77,6 +219,7 @@
    the open sidebar is 288px wide starting at x:0, which covers the hamburger that opened it, so
    the only way out is to pick a link. CSS shows it only while .app-mobile-menu-open is set. *@
 <div class="backdrop" data-action="toggle-swap" data-toggleclass="app-mobile-menu-open"></div>
+}
 
 @code {
     /// <summary>Passed down by MainLayout — see the note at its call site for why these are
@@ -90,6 +233,167 @@
     /// <summary>Store sellers (backlog 251): holds the Seller role, so has a Selling workspace.</summary>
     [Parameter] public bool IsSeller { get; set; }
     [Parameter] public bool IsImpersonating { get; set; }
+
+    /// <summary>Render the sections as a horizontal bar (Signal).</summary>
+    [Parameter] public bool TopBar { get; set; }
+
+    /// <summary>Render the current section's children as the rail beside the page (Signal).</summary>
+    [Parameter] public bool Contextual { get; set; }
+
+
+    // ── The bar and the rail ─────────────────────────────────────────────
+    //
+    // Both are built from VisibleSections, so they cannot drift from each other or from the
+    // sidebar. A section that HAS a title becomes one entry on the bar; the untitled section
+    // (Home and the public destinations) contributes its items directly, because those are
+    // destinations rather than areas.
+
+    /// <summary>The sections, as the bar shows them.</summary>
+    private List<NavItem> BarSections
+    {
+        get
+        {
+            var items = new List<NavItem>();
+            foreach (var section in VisibleSections)
+            {
+                if (section.Title is { } title)
+                {
+                    items.Add(new NavItem(title, section.Items.FirstOrDefault()?.Icon ?? "grid",
+                                          url: string.Empty, children: section.Items.ToList()));
+                }
+                else
+                {
+                    items.AddRange(section.Items);
+                }
+            }
+            return FoldGroupsIntoOneSection(items);
+        }
+    }
+
+    /// <summary>
+    /// Every group the person belongs to, as ONE section on the bar — "Your groups" — whose rail
+    /// lists them (Signal phase 4, 2026-10-01).
+    /// </summary>
+    /// <remarks>
+    /// The menu put each group on the bar by name, which is right in a sidebar and wrong in a bar:
+    /// a SuperAdmin in five groups had five names ahead of Administration, and everything after
+    /// Notifications ran off the right edge — reachable only by scrolling a bar sideways whose
+    /// scrollbar is hidden, which an ordinary mouse wheel cannot do. Folded, the bar fits, and the
+    /// drill-down carries on naturally: Your groups → a group → that group's own menu (ContextRail),
+    /// whose way back is "Your groups". The drawer keeps the groups by name, as it always had.
+    /// </remarks>
+    private List<NavItem> FoldGroupsIntoOneSection(List<NavItem> items)
+    {
+        static bool IsGroupLink(NavItem i)
+            => i.Children.Count == 0 && i.Url is { } u
+               && u.StartsWith("/organizations/", StringComparison.OrdinalIgnoreCase)
+               && Guid.TryParse(u["/organizations/".Length..], out _);
+
+        var groupLinks = new List<NavItem>();
+        NavItem? allGroups = null;
+        var firstAt = -1;
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var isFolder = item.Text == "Your Organizations" && item.Children.All(IsGroupLink);
+            var isAll = item.Url == "/organizations" && item.Children.Count == 0;
+            if (!IsGroupLink(item) && !isFolder && !isAll) continue;
+
+            if (firstAt < 0) firstAt = i;
+            if (isFolder) groupLinks.AddRange(item.Children);
+            else if (isAll) allGroups = item;
+            else groupLinks.Add(item);
+        }
+        if (groupLinks.Count == 0) return items;
+
+        var children = new List<NavItem>(groupLinks);
+        if (allGroups is not null)
+            children.Add(new NavItem("All your groups", "list", allGroups.Url,
+                                     allGroups.Bucket, badgeNoun: allGroups.BadgeNoun));
+
+        var folded = items.Where(i => !groupLinks.Contains(i) && i != allGroups
+                                      && !(i.Text == "Your Organizations" && i.Children.All(IsGroupLink)))
+                          .ToList();
+        // Its own address is the list of them, so picking "Your groups" on the bar lands somewhere
+        // that is about all of them rather than on whichever happens to be first.
+        folded.Insert(Math.Min(firstAt, folded.Count),
+            new NavItem("Your groups", "globe", allGroups?.Url ?? "/organizations", children: children));
+        return folded;
+    }
+
+    /// <summary>
+    /// Where picking a section on the bar goes: its own address, or the first real address
+    /// anywhere beneath it. Depth-first, because Administration's first child is a GROUP with no
+    /// address of its own — taking only the first child's address sent the bar to "".
+    /// </summary>
+    private string LandingUrl(NavItem section)
+        => FirstAddress(section) ?? "/";
+
+    private static string? FirstAddress(NavItem item)
+    {
+        if (!string.IsNullOrEmpty(item.Url) && item.Url != "#") return item.Url;
+        foreach (var child in item.Children)
+            if (FirstAddress(child) is { } url) return url;
+        return null;
+    }
+
+    /// <summary>The section the current address belongs to, if any.</summary>
+    private NavItem? CurrentSection
+        => BarSections.FirstOrDefault(IsCurrentSection);
+
+    /// <summary>
+    /// Whether the address is this section or anywhere beneath it. Recursive: an Administration
+    /// page is a GRANDCHILD (Administration → Users → Manage Users), so checking only direct
+    /// children left every admin page with no current section — no underline on the bar and no
+    /// rail at all. ContainsActive, further down, already walked the whole tree for the sidebar's
+    /// expand-on-load; it is reused rather than written twice.
+    /// </summary>
+    private bool IsCurrentSection(NavItem section)
+        => (!string.IsNullOrEmpty(section.Url) && IsActive(section)) || ContainsActive(section);
+
+    // ── The drill-down ────────────────────────────────────────────────────
+    // Which group of the current section the rail is showing. Null = follow the address: the group
+    // holding the current page, or the section's top when the page is not in one. Cleared on every
+    // navigation, so the rail always reopens on wherever the page is.
+    private string? _drilled;
+    private bool _showTop;
+
+    private NavItem RailLevel(NavItem section)
+    {
+        if (_showTop) return section;
+        if (_drilled is { } name
+            && section.Children.FirstOrDefault(c => c.Children.Count > 0 && c.Text == name) is { } picked)
+            return picked;
+        return section.Children.FirstOrDefault(c => c.Children.Count > 0 && ContainsActive(c)) ?? section;
+    }
+
+    private void DrillInto(NavItem group)
+    {
+        _drilled = group.Text;
+        _showTop = false;
+    }
+
+    private void ShowSectionTop()
+    {
+        _drilled = null;
+        _showTop = true;
+    }
+
+    private RenderFragment RailLink(NavItem item) => __builder =>
+    {
+        <li class="@(IsActive(item) ? "active" : null)">
+            <a href="@item.Url" title="@item.Text">
+                <BenIcon Name="@item.Icon" />
+                <span>@item.Text</span>
+                @if (item.Count > 0)
+                {
+                    <span class="badge @NotificationBadge.CssClass(item.Urgency)"
+                          title="@($"{item.Count} {item.BadgeNoun}")"
+                          aria-label="@($"{item.Count} {item.BadgeNoun}")">@NotificationBadge.Text(item.Count)</span>
+                }
+            </a>
+        </li>
+    };
 
     private string _filter = string.Empty;
     private readonly HashSet<string> _openGroups = new();
@@ -524,6 +828,7 @@
     protected override void OnInitialized()
     {
         NavManager.LocationChanged += OnLocationChanged;
+        if (Contextual) RailMenus.Changed += OnRailMenuChanged;
         // Sections are recomputed on every render, so the badges only need a re-render to update.
         Notifications.Changed += OnNotificationsChanged;
         TokenStore.StateChanged += OnAuthChanged;
@@ -757,7 +1062,15 @@
         StateHasChanged();
         await LoadNavCountsAsync();
     });
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        // A new page: the rail reopens on wherever it is, whatever was drilled into before.
+        _drilled = null;
+        _showTop = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRailMenuChanged() => InvokeAsync(StateHasChanged);
 
     /// <remarks>
     /// The identity always comes back — the swap is local state. What can fail is the round trip
@@ -777,6 +1090,7 @@
     public void Dispose()
     {
         NavManager.LocationChanged -= OnLocationChanged;
+        RailMenus.Changed -= OnRailMenuChanged;
         Notifications.Changed -= OnNotificationsChanged;
         TokenStore.StateChanged -= OnAuthChanged;
     }

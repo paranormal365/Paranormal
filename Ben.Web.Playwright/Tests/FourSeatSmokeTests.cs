@@ -85,14 +85,14 @@ public class FourSeatSmokeTests : BenTestBase
 
         // Item 171 (Ben: "the gates count as tabs"): the dashboard must not answer "is anything
         // happening here" for the tabs this seat cannot see. Members stays; the case widgets go.
-        await Expect(Main.GetByText("Members", new() { Exact = true }).First)
+        await Expect(OrgTab("Members").First)
             .ToBeVisibleAsync(new() { Timeout = 45_000 });
         await Expect(Main.GetByText("Open cases", new() { Exact = true })).ToHaveCountAsync(0);
         await Expect(Main.GetByText("Cases by status", new() { Exact = true })).ToHaveCountAsync(0);
     }
 
     private ILocator Tab(string name)
-        => Main.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true });
+        => OrgTab(name);
 
     private async Task GotoOrgAsync(string orgId)
     {

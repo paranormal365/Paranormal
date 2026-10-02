@@ -1,0 +1,4 @@
+/* The public catalogue's search, laid over its hero's photograph. */
+.catalog-search { display: flex; flex-wrap: wrap; gap: .5rem; width: 100%; max-width: 44rem; }
+.catalog-search > input { flex: 2 1 14rem; min-width: 0; }
+.catalog-search__category { flex: 1 1 11rem; min-width: 0; }

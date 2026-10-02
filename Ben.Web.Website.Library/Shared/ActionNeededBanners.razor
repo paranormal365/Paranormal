@@ -58,34 +58,45 @@
     </div>
 }
 
-@foreach (var item in _visible)
+@*
+    Signal phase 4 (2026-10-01): ONE card, a row per group, rather than a full alert per group. A
+    SuperAdmin in five busy groups had five alerts stacked over every page they opened — on the
+    administration screens a third of the window before the page's own title. Each row is still its
+    own dismissable thing, with the same words and links; only the frame is shared.
+*@
+@if (_visible.Count > 0)
 {
-    <div class="alert alert-info d-flex align-items-start gap-2 mb-3 action-needed-banner" role="status">
-        <span aria-hidden="true">🔔</span>
-        <div class="flex-grow-1">
-            <strong>@item.OrganizationName</strong> has work waiting:
-            @if (item.PendingClientRequests > 0)
-            {
-                @* The requests page, not the hub's Requests tab: the count is for anyone who can read the queue, and the tab is an
-                   admin's — a member followed this to the group's Details (UI test pass 6.14). *@
-                <a class="alert-link" href="/organizations/@item.OrganizationId/pending-requests">
-                    @item.PendingClientRequests investigation request@(item.PendingClientRequests == 1 ? "" : "s")
-                </a>
-            }
-            @if (item.PendingClientRequests > 0 && item.PendingMembershipRequests > 0)
-            {
-                <span> and </span>
-            }
-            @if (item.PendingMembershipRequests > 0)
-            {
-                <a class="alert-link" href="/organizations/@item.OrganizationId?tab=members">
-                    @item.PendingMembershipRequests membership application@(item.PendingMembershipRequests == 1 ? "" : "s")
-                </a>
-            }
-        </div>
-        <button type="button" class="btn-close" aria-label="Dismiss"
-                @onclick="() => DismissAsync(item)"></button>
-    </div>
+    <section class="work-waiting mb-3" role="status" aria-label="Work waiting">
+        <div class="work-waiting__head"><span aria-hidden="true">🔔</span> Work waiting</div>
+        @foreach (var item in _visible)
+        {
+            <div class="work-waiting__row action-needed-banner">
+                <div class="flex-grow-1">
+                    <strong>@item.OrganizationName</strong> has work waiting:
+                    @if (item.PendingClientRequests > 0)
+                    {
+                        @* The requests page, not the hub's Requests tab: the count is for anyone who can read the queue, and the tab is an
+                           admin's — a member followed this to the group's Details (UI test pass 6.14). *@
+                        <a href="/organizations/@item.OrganizationId/pending-requests">
+                            @item.PendingClientRequests investigation request@(item.PendingClientRequests == 1 ? "" : "s")
+                        </a>
+                    }
+                    @if (item.PendingClientRequests > 0 && item.PendingMembershipRequests > 0)
+                    {
+                        <span> and </span>
+                    }
+                    @if (item.PendingMembershipRequests > 0)
+                    {
+                        <a href="/organizations/@item.OrganizationId?tab=members">
+                            @item.PendingMembershipRequests membership application@(item.PendingMembershipRequests == 1 ? "" : "s")
+                        </a>
+                    }
+                </div>
+                <button type="button" class="btn-close" aria-label="@($"Dismiss {item.OrganizationName}")"
+                        @onclick="() => DismissAsync(item)"></button>
+            </div>
+        }
+    </section>
 }
 
 @code {

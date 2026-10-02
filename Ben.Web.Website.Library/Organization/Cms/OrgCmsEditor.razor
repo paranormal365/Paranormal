@@ -227,18 +227,18 @@
                                                OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))"
                                                Title="Edit"
                                                Class="ben-grid-action"
-                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /><span class="visually-hidden">Edit</span></GridCommandButton>
                             <GridCommandButton Command="Members"
                                                OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))"
                                                Title="Members"
                                                Class="ben-grid-action"
-                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="users" /></GridCommandButton>
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="users" /><span class="visually-hidden">Members</span></GridCommandButton>
                             <GridCommandButton Command="Delete"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                                OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))"
                                                Title="Delete"
                                                Class="ben-grid-action"
-                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -521,7 +521,7 @@
                                                OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))"
                                                Title="Remove from the group"
                                                Class="ben-grid-action"
-                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="user-x" /></GridCommandButton>
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="user-x" /><span class="visually-hidden">Remove from the group</span></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>

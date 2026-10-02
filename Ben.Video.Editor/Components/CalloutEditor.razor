@@ -142,10 +142,19 @@
         <!-- Text (item #16 — inline runs: Bold/Underline/Sub/Superscript/Color per selection) -->
         <div class="bv-callout-editor__section">Text</div>
         <div class="bv-callout-editor__field">
-            <TelerikEditor @bind-Value="_richTextHtml"
-                           @bind-Value:after="Apply"
-                           Tools="@_editorTools"
-                           Height="90px" />
+            @* In-page (Div) mode, inside a box set to the callout's own font. It was Telerik's
+               default iframe mode, and a font loaded into the page — Arial, or whichever Google
+               font GoogleFontService fetched — never reaches inside an iframe, so this box showed
+               Times New Roman whatever the callout was set to. Div is the mode BenEditor and the
+               canvas's MessageNode already use; it changes where the editor draws, not the HTML
+               it produces. *@
+            <div class="bv-rich-preview" style="@($"font-family:'{_fontFamily}', sans-serif")">
+                <TelerikEditor @bind-Value="_richTextHtml"
+                               @bind-Value:after="Apply"
+                               Tools="@_editorTools"
+                               EditMode="@EditorEditMode.Div"
+                               Height="90px" />
+            </div>
         </div>
         @if (!string.IsNullOrEmpty(_text))
         {

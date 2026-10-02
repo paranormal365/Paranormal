@@ -48,9 +48,13 @@ public sealed class GridRowActionsAreIconsTests
         Regex.Replace(Regex.Replace(text, @"@\*.*?\*@", "", RegexOptions.Singleline), @"<!--.*?-->", "",
             RegexOptions.Singleline);
 
-    /// <summary>What a person would read on the button: tags and Razor expressions removed.</summary>
+    /// <summary>What a person would read on the button: tags and Razor expressions removed — and
+    /// visually-hidden text, which is the button's NAME for a screen reader, not words on it
+    /// (GridCommandButtonsKeepTheirNamesTests).</summary>
     private static string VisibleText(string inner) =>
-        Regex.Replace(Regex.Replace(inner, @"<[^>]+>", " "), @"\s+", " ").Trim();
+        Regex.Replace(Regex.Replace(
+            Regex.Replace(inner, @"<span class=""visually-hidden"">.*?</span>", " ", RegexOptions.Singleline),
+            @"<[^>]+>", " "), @"\s+", " ").Trim();
 
     [Fact]
     public void Buttons_in_grids_are_icons_with_a_title()

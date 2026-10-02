@@ -64,9 +64,7 @@ public class OrdinaryMemberSurfaceTests : BenTestBase
         foreach (var tab in new[] { "Details", "Members", "Cases", "Investigations",
                                     "Calendar", "Messages", "Files", "Equipment" })
         {
-            await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = tab, Exact = true })
-                             .Or(Main.Locator(".nav-tabs .nav-link", new() { HasTextString = tab }))
-                             .First)
+            await Expect(OrgTab(tab).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
         }
     }
@@ -85,13 +83,13 @@ public class OrdinaryMemberSurfaceTests : BenTestBase
 
         // Wait for the strip to be real before asserting absence — everything is absent from a
         // page that has not rendered yet.
-        await Expect(Main.GetByRole(AriaRole.Tab, new() { Name = "Details", Exact = true }).First)
+        await Expect(OrgTab("Details").First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         foreach (var tab in new[] { "Settings", "Roles", "Addresses", "Requests", "CMS" })
         {
             Assert.That(
-                await Main.GetByRole(AriaRole.Tab, new() { Name = tab, Exact = true }).CountAsync(),
+                await OrgTab(tab).CountAsync(),
                 Is.Zero, $"An ordinary member was offered the '{tab}' tab.");
         }
     }

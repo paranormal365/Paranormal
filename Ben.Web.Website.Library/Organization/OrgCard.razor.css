@@ -1,12 +1,16 @@
+/* One group, as a card led by its own colour (Signal). The hue comes from TourPlate, so a group
+   is the same colour here, on the home page and on its own page. Tokens otherwise. */
+
 .org-card {
+    position: relative;
     display: flex;
-    align-items: flex-start;
-    gap: .85rem;
+    flex-direction: column;
     height: 100%;
-    padding: .85rem 1rem;
-    border: 1px solid var(--bs-border-color);
-    border-radius: .6rem;
-    background: var(--bs-body-bg);
+    overflow: hidden;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    background: var(--ben-surface);
+    box-shadow: var(--ben-shadow);
     color: inherit;
     text-decoration: none;
     transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
@@ -14,58 +18,75 @@
 
 .org-card:hover,
 .org-card:focus-visible {
-    border-color: var(--bs-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 .5rem 1.2rem rgba(0, 0, 0, .2);
+    border-color: rgba(var(--ben-accent-rgb), .7);
+    transform: translateY(-3px);
+    box-shadow: var(--ben-shadow-lg);
+    color: inherit;
 }
 
-/* The group's logo, or its initials in the colour TourPlate gives it everywhere else on the site.
-   A light plate under a logo because most are drawn for a white page. */
+.org-card__plate {
+    display: block;
+    height: 4.75rem;
+    background:
+        radial-gradient(circle at 85% 20%, hsl(var(--plate-hue) 70% 60% / .55), transparent 50%),
+        linear-gradient(140deg, hsl(var(--plate-hue) 40% 26%) 0%, hsl(calc(var(--plate-hue) + 40deg) 36% 12%) 100%);
+}
+
+/* The logo, or the initials, sitting on the plate's lower edge. A light well under a logo because
+   most are drawn for a white page. */
 .org-card__mark {
+    position: absolute;
+    top: 2.6rem;
+    left: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 auto;
-    width: 3.25rem;
-    height: 3.25rem;
-    padding: .3rem;
-    border-radius: .5rem;
-    background: rgba(255, 255, 255, .9);
+    width: 4rem;
+    height: 4rem;
+    padding: .35rem;
+    border-radius: var(--ben-radius);
+    border: 3px solid var(--ben-surface);
+    background: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
     overflow: hidden;
 }
 
 .org-card__mark:has(.org-card__initials) {
     padding: 0;
     background:
-        radial-gradient(circle at 50% 25%, hsl(var(--plate-hue) 60% 52% / .28), transparent 55%),
-        linear-gradient(150deg,
-            hsl(var(--plate-hue) 34% 20%) 0%,
-            hsl(calc(var(--plate-hue) + 34deg) 30% 11%) 100%);
+        radial-gradient(circle at 50% 25%, hsl(var(--plate-hue) 60% 55% / .45), transparent 60%),
+        linear-gradient(150deg, hsl(var(--plate-hue) 40% 30%) 0%, hsl(calc(var(--plate-hue) + 34deg) 34% 14%) 100%);
 }
 
 .org-card__initials {
-    font-size: 1rem;
-    font-weight: 700;
+    font-size: 1.15rem;
+    font-weight: 750;
     letter-spacing: .1em;
     text-indent: .1em;
     color: #fff;
 }
 
 .org-card__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
     min-width: 0;
+    padding: 2rem 1.1rem 1rem;
 }
 
 .org-card__name {
     display: block;
-    font-size: 1.02rem;
-    font-weight: 650;
+    font-size: 1.1rem;
+    font-weight: 700;
     line-height: 1.25;
+    letter-spacing: -.01em;
 }
 
 .org-card__area {
     display: block;
-    font-size: .82rem;
-    color: var(--bs-secondary-color);
+    margin-top: .1rem;
+    font-size: .85rem;
+    color: var(--ben-ink-muted);
 }
 
 /* A wrapping row, not a run of inline text. The badges and the accepting line used to flow as one
@@ -76,24 +97,30 @@
     flex-wrap: wrap;
     align-items: center;
     gap: .3rem;
-    margin-top: .35rem;
+    margin-top: .6rem;
     font-size: .82rem;
-    color: var(--bs-secondary-color);
+    color: var(--ben-ink-muted);
 }
 
-/* The callers set me-1 on their badges for the old inline layout; the gap above is the spacing
-   now, and both together leave a badge sitting oddly far from the next one. */
-.org-card__meta .badge {
-    margin-right: 0 !important;
+/* The callers set me-1/ms-1 on their badges for the old inline layout; the gap above is the
+   spacing now, and both together leave a badge sitting oddly far from the next one. */
+.org-card__meta ::deep .badge {
+    margin: 0 !important;
 }
+
+.org-card__go {
+    margin-top: auto;
+    padding-top: .85rem;
+    font-size: .85rem;
+    font-weight: 650;
+    color: var(--ben-link);
+}
+
+.org-card:hover .org-card__go { text-decoration: underline; }
 
 @media (prefers-reduced-motion: reduce) {
-    .org-card {
-        transition: none;
-    }
+    .org-card { transition: none; }
 
     .org-card:hover,
-    .org-card:focus-visible {
-        transform: none;
-    }
+    .org-card:focus-visible { transform: none; }
 }

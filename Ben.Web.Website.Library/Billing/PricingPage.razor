@@ -25,36 +25,33 @@
     terms until…") because two silently different numbers read as a bug, not a kept promise.
 *@
 
-<div class="container py-4">
+@* Signal phase 2: the photograph, the promise and the cadence switch in one frame; the bands
+   follow at the page's full width. *@
+<PageHero Photo="t1-theatre-seats" TestId="pricing-hero" Class="pricing-hero"
+          Kicker="Plans" Title="Pricing"
+          Lede="@($"Free for public investigations, whatever your size. Paid plans add work at private homes, and are priced by active members. Every plan includes the whole platform — cases, investigations, equipment{(Features.IsOn(SiteFeatures.VideoEditor) ? ", the video editor" : "")}.")">
     @if (_referralCode is not null)
     {
         @* A referral link landed here (?code=...). The code is applied to the signed-in quotes
            below and travels to checkout — the visitor should never have to retype something the
            link already carried. Nothing is redeemed by arriving: quoting never burns a code. *@
-        <div class="alert alert-info text-center">
+        <div class="alert alert-info mb-0">
             Code <code>@_referralCode</code> will be applied at checkout.
         </div>
     }
 
-    <div class="text-center mb-4">
-        <h2>Pricing<HelpLink Slug="organization-administration" Anchor="your-groups-plan" /></h2>
-        <p class="text-secondary">
-            Free for public investigations, whatever your size. Paid plans add work at private
-            homes, and are priced by active members. Every plan includes the whole platform — cases,
-            investigations, equipment@(Features.IsOn(SiteFeatures.VideoEditor) ? ", the video editor" : "").
+    @if (!Features.PlanPurchasesEnabled)
+    {
+        @* Taken off sale by a SuperAdmin (2026-09-14): the prices stay, the buy buttons go, and this
+           says why there is nothing to press. *@
+        <p class="alert alert-secondary d-inline-block py-2 px-3 mb-0" id="pricing-not-on-sale">
+            Plans aren't on sale at the moment. Groups that already have a plan keep it.
         </p>
+    }
 
-        @if (!Features.PlanPurchasesEnabled)
-        {
-            @* Taken off sale by a SuperAdmin (2026-09-14): the prices stay, the buy buttons go, and this
-               says why there is nothing to press. *@
-            <p class="alert alert-secondary d-inline-block py-2 px-3" id="pricing-not-on-sale">
-                Plans aren't on sale at the moment. Groups that already have a plan keep it.
-            </p>
-        }
-
-        @if (_intervals.Count > 1)
-        {
+    @if (_intervals.Count > 1)
+    {
+        <div>
             <div class="btn-group" role="group" aria-label="Billing cadence">
                 @foreach (var interval in _intervals)
                 {
@@ -70,9 +67,12 @@
                     </button>
                 }
             </div>
-        }
-    </div>
+        </div>
+    }
+    <div><a class="btn btn-sm btn-outline-light" href="/help/organization-administration#your-groups-plan">How plans work</a></div>
+</PageHero>
 
+<div class="home-band">
     <BenListState TItem="PublicSubscriptionTier" Result="@_tiersResult" Loading="@_loading"
                   EmptyText="Pricing is being updated — check back shortly" OnRetry="@LoadAsync">
         <div class="row g-4 justify-content-center pricing-bands">
@@ -128,9 +128,9 @@
                                 }
                                 else if (price is not null)
                                 {
-                                    @* C0 is honest only because the bands are priced in whole dollars. If a band is ever
-                                       given cents, this has to become C2 with it. *@
-                                    <span class="pricing-band__amount">@($"{price.Price:C0}")</span>
+                                    @* Cents when there are cents: the live bands are $19.99 and up, and C0 printed
+                                       them as $20 (2026-10-01). See BenMoney. *@
+                                    <span class="pricing-band__amount">@BenMoney.Format(price.Price)</span>
                                     <span class="pricing-band__per">per @CadenceNoun(_selectedInterval)</span>
                                     @if (price.SavingPercentAgainstMonthly is { } save)
                                     {

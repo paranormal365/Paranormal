@@ -971,8 +971,10 @@
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
     /// <summary>One index row for a screen of its own.</summary>
+    // A screen of its own. Where the rail is showing, it lists these as the event's menu
+    // (ContextRail), so they step aside in the page's index there; a phone keeps them.
     private static RenderFragment IndexEntry(string label, string href) =>
-        @<a class="list-group-item list-group-item-action" href="@href">@label</a>;
+        @<a class="list-group-item list-group-item-action rail-replaces-item" href="@href">@label</a>;
 
     private bool _changingVenue;
     private string _venueSearch = "";

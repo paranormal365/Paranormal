@@ -80,6 +80,9 @@ public sealed class HelpMediaCapture : BenTestBase
         header img.profile-image, .page-header img.profile-image {
             filter: grayscale(1) brightness(0) opacity(0.35) !important;
         }
+        /* The operator's own pending work (the seeded groups' waiting requests) is not part of any
+           document, and under Signal it sat at the top of every signed-in picture. */
+        .work-waiting { display: none !important; }
         """;
 
     private readonly List<string> _console = [];
@@ -219,7 +222,10 @@ public sealed class HelpMediaCapture : BenTestBase
         if (proves is not null)
         {
             await SettleAsync();
-            await Expect(Page.GetByText(proves, new() { Exact = false }).First)
+            // VISIBLE text only: under Signal the phone drawer's menu and a group page's tab strip
+            // are in the page but hidden, and `.First` landed on them — "Case" found the drawer's
+            // hidden "My Cases" and waited on it for fifteen seconds (2026-10-02).
+            await Expect(Page.GetByText(proves, new() { Exact = false }).Filter(new() { Visible = true }).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
         }
 
@@ -419,13 +425,20 @@ public sealed class HelpMediaCapture : BenTestBase
             await ShootAsync("the-feed", "tag-page.png", proves: "Clear");
 
             // Report it, so the moderation queue below has something in it.
+            // The first post this seat has NOT reported yet: on a database that has been captured
+            // before, the first post was already reported (and its report since resolved), so the
+            // queue below came up empty and the picture had nothing to show (2026-10-02).
             await GoToFeedForCaptureAsync();
-            var post = Page.Locator(".bv-feed-post").First;
-            var report = post.GetByRole(AriaRole.Button, new() { Name = "Report" });
-            if (await report.CountAsync() > 0)
+            var posts = Page.Locator(".bv-feed-post");
+            for (var i = 0; i < await posts.CountAsync(); i++)
             {
+                // By position, so it is still this post once its Report button has gone.
+                var post = posts.Nth(i);
+                var report = post.GetByRole(AriaRole.Button, new() { Name = "Report" });
+                if (await report.CountAsync() == 0) continue;
                 await report.ClickAsync();
                 await Expect(post.GetByText("Reported")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                break;
             }
 
             await LogoutAsync();
@@ -1884,7 +1897,9 @@ public sealed class HelpMediaCapture : BenTestBase
 
         // The group's investigations map (item 228): the document explains pins that share a
         // spot and pins that gather, and Paranormal365's two Bell Witch Cave visits show the first.
-        await OpenTabAsync("Investigations", Main.GetByText("Investigations", new() { Exact = false }).First);
+        // The tab's content, not the word: where the rail replaces the strip the tab button is
+        // hidden, and "Investigations" found it first.
+        await OpenTabAsync("Investigations", Page.Locator(".ben-map").First);
         await SkipAnyTourAsync();
         await Page.Locator(".ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
         await Page.WaitForTimeoutAsync(4_000);

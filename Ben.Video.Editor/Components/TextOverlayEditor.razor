@@ -27,10 +27,16 @@
             @* Committed as the editor reports a change, not on a button. The words a person
                typed used to sit in this field until Apply was pressed, and any of three
                high-frequency events could discard them first (2026-09-05 audit, titles-5). *@
-            <TelerikEditor Value="@_richTextHtml"
-                           ValueChanged="@((string v) => OnRichTextChangedAsync(v))"
-                           Tools="@_editorTools"
-                           Height="120px" />
+            @* In-page (Div) mode, set to the overlay's own font — see the same note in
+               CalloutEditor: in the default iframe mode no page font reaches the box, so it showed
+               Times New Roman whatever font the overlay would actually render in. *@
+            <div class="bv-rich-preview" style="@($"font-family:'{_fontFamily}', sans-serif")">
+                <TelerikEditor Value="@_richTextHtml"
+                               ValueChanged="@((string v) => OnRichTextChangedAsync(v))"
+                               Tools="@_editorTools"
+                               EditMode="@EditorEditMode.Div"
+                               Height="120px" />
+            </div>
         </div>
 
         <!-- Font family -->

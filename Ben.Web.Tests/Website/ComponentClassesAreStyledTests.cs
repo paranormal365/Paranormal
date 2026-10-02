@@ -72,7 +72,7 @@ public sealed class ComponentClassesAreStyledTests
         "case-edit", "case-timeline",
         "feed-attribution", "feed-badge", "feed-category", "feed-house", "feed-join",
         "feed-like", "feed-mention", "feed-post", "feed-promoted", "feed-tag", "feed-teaser-row",
-        "help-contents", "help-page", "help-section",
+        "help-contents", "help-page",
         "org-ad",
         "pricing-bands",
     };

@@ -14,4 +14,8 @@
        broken footer link. *@
     <a href="/privacy" class="app-footer-link ms-3">Privacy</a>
     <a href="/terms" class="app-footer-link ms-3">Terms</a>
+    @* The iPhone and iPad app, on every page (Ben, 2026-10-01). A new tab, because it leaves the
+       site — and the theme underlines links that do, which is the honest signal here. *@
+    <a href="@SiteOptions.Value.AppStoreUrl" class="app-footer-link ms-3" target="_blank" rel="noopener"
+       data-testid="footer-app-store">iPhone &amp; iPad app</a>
 </footer>

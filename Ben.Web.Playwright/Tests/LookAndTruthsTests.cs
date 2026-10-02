@@ -106,9 +106,13 @@ public class LookAndTruthsTests : BenTestBase
         var marginTop = await Page.EvaluateAsync<string>(
             """
             (() => {
+                // The page's first frame: its hero (Signal phase 2) or, on pages without one, the
+                // container it used to open with.
                 const h1 = document.querySelector('h1');
-                const c  = h1.closest('div[class*="container"]');
-                return getComputedStyle(c).marginTop;
+                const c  = h1.closest('.page-hero') || h1.closest('div[class*="container"]');
+                const m  = getComputedStyle(c).marginTop;
+                // a hero sits a hair below the bar by design (.25rem); centring would be hundreds
+                return parseFloat(m) <= 4 ? "0px" : m;
             })()
             """);
 
@@ -241,7 +245,7 @@ public class LookAndTruthsTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/organizations");
         await WaitUntilLoadedAsync();
 
-        var orgLink = Page.Locator("a[href^='/organizations/']").First;
+        var orgLink = Main.Locator("a[href^='/organizations/']").First;
         if (await orgLink.CountAsync() == 0) Assert.Ignore("this account belongs to no group");
         await ClickUntilUrlAsync(orgLink, @"/organizations/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();

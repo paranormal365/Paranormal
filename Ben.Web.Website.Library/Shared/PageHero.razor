@@ -1,0 +1,119 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Web.Website.Library.Kit
+
+@*
+    The top of a public page: a photograph (or a plate in the subject's own colour), a kicker, the
+    page's title, a line saying what it is for, whatever the page needs to DO right there — a
+    search, a booking button — and, optionally, a few figures in glass tiles.
+
+    WHY (Signal phase 2, 2026-10-01). Ben: "make sure they are flashy, interesting, attractive,
+    useful and user-friendly." Every public page opened on the section's photo band and then,
+    one inch lower, its own plain heading — two titles saying where you are, and the thing you came
+    to do sitting below both. This is one frame doing both jobs: a page that uses it replaces the
+    section band (signal.css hides the band when a .page-hero is on the page), so the photograph,
+    the title and the first action arrive together.
+
+    The visitor's Home hero is one of these too, so the front door and every page behind it share
+    one shape.
+
+    Text over a photograph is light in BOTH themes, behind its own scrim — the rule the light-mode
+    mock-up taught. The figures are drawn from what the page loaded, never typed in.
+*@
+
+<OwnHero />
+<section class="page-hero @(Compact ? "page-hero--compact" : null) @(Hue is not null && PhotoUrl is null && Photo is null ? "page-hero--plate" : null) @Class"
+         data-testid="@(TestId ?? "page-hero")" style="@(Hue is { } h ? $"--plate-hue:{h}deg;" : null)">
+    <div class="page-hero__photo" style="@PhotoStyle" aria-hidden="true"></div>
+    <div class="page-hero__inner">
+        <div class="page-hero__copy">
+            @if (Lead is not null)
+            {
+                <div class="page-hero__lead">@Lead</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Kicker))
+            {
+                <div class="page-hero__kicker">@Kicker</div>
+            }
+            <h1 class="page-hero__title @TitleClass" id="@TitleId">
+                @if (TitleContent is not null) { @TitleContent } else { @Title }
+            </h1>
+            @if (!string.IsNullOrWhiteSpace(Lede))
+            {
+                <p class="page-hero__lede">@Lede</p>
+            }
+            @if (ChildContent is not null)
+            {
+                <div class="page-hero__actions">@ChildContent</div>
+            }
+        </div>
+
+        @if (Facts is { Count: > 0 })
+        {
+            <dl class="page-hero__facts">
+                @foreach (var f in Facts)
+                {
+                    <div class="page-hero__fact @(f.Emphasis ? "page-hero__fact--em" : null)">
+                        <dt>@f.Label</dt>
+                        <dd>
+                            @if (f.Href is { } href) { <a href="@href">@f.Value</a> } else { @f.Value }
+                            @if (f.Sub is { } sub) { <span>@sub</span> }
+                        </dd>
+                    </div>
+                }
+            </dl>
+        }
+        else if (Aside is not null)
+        {
+            <div class="page-hero__aside">@Aside</div>
+        }
+    </div>
+</section>
+
+@code {
+    /// <summary>One of <see cref="SignalPhotos"/>' keys, framed on its subject.</summary>
+    [Parameter] public string? Photo { get; set; }
+
+    /// <summary>Any other picture — a tour's own photograph. Wins over <see cref="Photo"/>.</summary>
+    [Parameter] public string? PhotoUrl { get; set; }
+
+    /// <summary>
+    /// A hue for a subject with no picture of its own (a group with only a logo): the plate is drawn
+    /// in it, the same colour <see cref="TourPlate"/> gives that name everywhere else.
+    /// </summary>
+    [Parameter] public int? Hue { get; set; }
+
+    [Parameter] public string? Kicker { get; set; }
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>The title with markup in it — an accent span. Wins over <see cref="Title"/>.</summary>
+    [Parameter] public RenderFragment? TitleContent { get; set; }
+
+    [Parameter] public string? TitleClass { get; set; }
+
+    /// <summary>An id for the heading, for a page whose links or tests already point at one.</summary>
+    [Parameter] public string? TitleId { get; set; }
+    [Parameter] public string? Lede { get; set; }
+
+    /// <summary>Above the kicker: a back link, a logo plate.</summary>
+    [Parameter] public RenderFragment? Lead { get; set; }
+
+    /// <summary>What the visitor can do right here — a search, the booking button.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Figures in glass tiles on the right (stacked under the copy on a phone).</summary>
+    [Parameter] public IReadOnlyList<BenFactItem>? Facts { get; set; }
+
+    /// <summary>Anything else for the right-hand side, when there are no figures.</summary>
+    [Parameter] public RenderFragment? Aside { get; set; }
+
+    /// <summary>A shorter frame, for a page whose content should start sooner (a listing).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? TestId { get; set; }
+
+    private string? PhotoStyle =>
+        PhotoUrl is { } url ? $"background-image:url('{url}');background-position:center 40%"
+        : Photo is { } key ? SignalPhotos.BackgroundStyle(key)
+        : null;
+}

@@ -291,7 +291,12 @@ public sealed class ChangelogServiceTests
     public void From_going_live_every_release_is_numbered_one_step_after_the_last(ChangelogStream stream, string liveOn)
     {
         var live = DateOnly.Parse(liveOn, System.Globalization.CultureInfo.InvariantCulture);
-        var released = _changelog.Days(stream).Where(d => d.Date >= live).OrderBy(d => d.Date).ToList();
+        // Oldest first. Two releases can share a day (2.11.0 and 2.12.0 both went out on 09/28); the
+        // file lists them newest first, so within a day the later line is the earlier release.
+        var released = _changelog.Days(stream).Where(d => d.Date >= live)
+            .Select((d, i) => (Day: d, Index: i))
+            .OrderBy(x => x.Day.Date).ThenByDescending(x => x.Index)
+            .Select(x => x.Day).ToList();
         Assert.NotEmpty(released);
 
         Assert.All(released, d => Assert.True(d.Version is not null, $"{stream} {d.Date} has no version on its date line"));

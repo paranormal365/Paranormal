@@ -12,14 +12,18 @@
     case cards had, and fixed for the same reason.
 *@
 
-<a class="org-card @Class" href="@($"/o/{UrlName}")">
-    <span class="org-card__mark" style="@TourPlate.HueStyle(Name)">
+<a class="org-card @Class" href="@($"/o/{UrlName}")" style="@TourPlate.HueStyle(Name)">
+    @* Signal phase 2: the group's colour as a plate across the top of the card, its mark sitting
+       on the plate's edge. A grid of name-in-a-box cards read as a directory; a grid of coloured
+       plates reads as a set of groups, each one recognisable on the next page it appears on. *@
+    <span class="org-card__plate" aria-hidden="true"></span>
+    <span class="org-card__mark">
         @if (LogoFileId is { } logo)
         {
             @* IH-06: a logo whose bytes are gone hides rather than showing a broken glyph and
                spilling its alt text across the card. *@
             <BenImage Src="@AdminClient.GetFileThumbnailUrl(logo)" Alt="@Name"
-                      Style="max-height:34px; max-width:48px; object-fit:contain;" />
+                      Style="max-height:44px; max-width:56px; object-fit:contain;" />
         }
         else
         {
@@ -40,6 +44,7 @@
         {
             <span class="org-card__meta">@MetaLine</span>
         }
+        <span class="org-card__go">See the group <span aria-hidden="true">→</span></span>
     </span>
 </a>
 

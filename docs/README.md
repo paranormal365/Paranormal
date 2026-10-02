@@ -203,16 +203,20 @@ python3 docs/ads/build-ads.py --png
 `--png` also renders every page to `docs/ads/preview/` (ignored by git) for checking. Check them before
 calling a document done; a PDF cannot be read here.
 
-**The design.** Each ad takes its palette from its lead photograph: a deep base colour from the shadows
-and a complementary accent from the light — indigo with candle amber, night blue with lamplight, oxblood
-with champagne. Every frame is sized from its image's own proportions, so no screenshot is ever cropped
-mid-sentence.
+**The design.** Signal, the site's own skin (2026-10-01): every ad on the same night base, light violet
+for words and the violet-to-cyan gradient — white on it — for every filled thing, so a flyer and the
+page it sends somebody to read as one product. (They used to take a palette each from their lead
+photograph — indigo with candle amber, oxblood with champagne.) Every frame is sized from its image's
+own proportions, so no screenshot is ever cropped mid-sentence.
 
 **Where the pictures come from:**
 
 - **Photographs** — `docs/media/stock/`, from Unsplash, credited in
   `ProjectNotes/FeatureHistory/README-hosted-events-235-media.md`.
-- **Website screens** — `docs/media/hosted-events/walk/`, from `HostedEventPersonaWalk`.
+- **Website screens** — `docs/media/hosted-events/walk/`, from `HostedEventPersonaWalk`; the six the
+  ads use (public tour, venue and event, at laptop and phone width, and an organizer writing to guests)
+  can be retaken without the walk's mail catcher and data by `FlyerPageShots`:
+  `scripts/run-e2e.sh --filter "TestCategory=FlyerShots"`.
 - **Letters** — `docs/media/hosted-events/emails/`.
 - **iPhone screens** — the help captures in `Ben.Web.Website/wwwroot/help/media/the-mobile-apps/`.
 

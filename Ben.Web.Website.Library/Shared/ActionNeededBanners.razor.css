@@ -1,0 +1,31 @@
+/* Work waiting (Signal): one compact card, a row per group, the accent down its edge. */
+.work-waiting {
+    overflow: hidden;
+    border: 1px solid var(--ben-line);
+    border-left: 4px solid var(--ben-accent);
+    border-radius: var(--ben-radius);
+    background: var(--ben-surface);
+    box-shadow: var(--ben-shadow-sm);
+    font-size: .9rem;
+}
+
+.work-waiting__head {
+    padding: .45rem .9rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ben-link);
+    background: rgba(var(--ben-accent-rgb), .06);
+}
+
+.work-waiting__row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .45rem .9rem;
+    border-top: 1px solid var(--ben-line);
+}
+
+.work-waiting__row a { font-weight: 650; }
+.work-waiting__row .btn-close { font-size: .65rem; flex: none; }

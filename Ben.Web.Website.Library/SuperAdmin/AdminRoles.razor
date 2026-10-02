@@ -53,7 +53,7 @@
                                        OnClick="@((GridCommandEventArgs e) => RequestDelete((AdminRoleWithCountResponse)e.Items.First()))"
                                        Title="Delete"
                                        Class="ben-grid-action"
-                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /><span class="visually-hidden">Delete</span></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

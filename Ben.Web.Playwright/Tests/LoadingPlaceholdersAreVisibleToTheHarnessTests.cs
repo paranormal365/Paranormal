@@ -55,7 +55,11 @@ public sealed class LoadingPlaceholdersAreVisibleToTheHarnessTests : BenTestBase
             await Page.EvaluateAsync(
                 @"html => {
                     document.querySelectorAll('.w13-probe').forEach(n => n.remove());
-                    const host = document.querySelector('.app-content, main, .content-wrapper') || document.body;
+                    // Where pages draw — the area BenTestBase.Main watches. A comma selector
+                    // takes the first match in DOCUMENT order, and under Signal's shell that was
+                    // <main>, so the probe landed after the footer, outside what the harness reads.
+                    const host = document.querySelector('.content-wrapper')
+                              || document.querySelector('.app-content, main') || document.body;
                     const box = document.createElement('div');
                     box.className = 'w13-probe';
                     box.innerHTML = html;

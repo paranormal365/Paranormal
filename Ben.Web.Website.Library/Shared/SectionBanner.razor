@@ -1,0 +1,127 @@
+@namespace Ben.Web.Website.Library.Shared
+@implements IDisposable
+@inject NavigationManager Nav
+@inject OwnHeroState OwnHero
+
+@*
+    A photograph across the top of every page, chosen by the section the page belongs to.
+
+    WHY (Signal, 2026-10-01). Ben, having seen the first signed-in pages: "it feels empty without
+    images and styling." It did, for a specific reason — every page under the new bar opened on a
+    bare heading, while the mock-up opened on a picture. This is that picture, for every page,
+    from one place: the layout renders it, so no page had to be edited to get one, and a new page
+    gets one by belonging to a section.
+
+    It deliberately carries the SECTION, not the page. The page's own heading follows directly
+    beneath it, so the band says where you are and the heading says what you are looking at; a
+    band repeating the page title would say the same thing twice, one inch apart.
+
+    Pages with a hero of their own (Home has two — the visitor's and the member's desk) are
+    skipped, as is anything a photograph would get in the way of: the editors, which want the
+    whole height, and sign-in.
+
+    Photographs: Unsplash License (free for commercial use, no attribution required), recorded in
+    ProjectNotes/FeatureHistory/README-hosted-events-235-media.md. Web copies in
+    wwwroot/static/images/signal, resampled to 1500px.
+*@
+
+@if (!OwnHero.Active && Current is { } band)
+{
+    <section class="section-banner @(band.Slim ? "section-banner--slim" : null)" data-testid="section-banner" data-section="@band.Kicker">
+        <div class="section-banner__photo"
+             style="@SignalPhotos.BackgroundStyle(band.Photo)"
+             aria-hidden="true"></div>
+        <div class="section-banner__inner">
+            <div class="section-banner__kicker">@band.Kicker</div>
+            <div class="section-banner__line">@band.Line</div>
+        </div>
+    </section>
+}
+
+@code {
+    private sealed record Band(string Kicker, string Line, string Photo, bool Slim = false);
+
+
+    // Most specific first: the first prefix that matches the address wins.
+    private static readonly (string Prefix, Band Band)[] Bands =
+    [
+        ("/admin",             new("Administration", "Running the site, from the people to the paperwork.", "s3-candle-chandelier", Slim: true)),
+        ("/moderation",        new("Moderation",     "What the public sees, held until somebody has looked.", "s3-candle-chandelier", Slim: true)),
+        ("/my-cases",          new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
+        ("/my-investigations", new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
+        ("/my-requests",       new("My work",        "The cases, visits and requests that are yours.",        "i2-dark-hallway")),
+        ("/organizations",     new("Your groups",    "The people you investigate with, and the work you share.", "v1-venue-exterior")),
+        ("/find",              new("Find a group",   "Investigators near you who take on cases like yours.", "i3-walking-to-house")),
+        ("/notifications",     new("Notifications",  "Everything waiting on you, in one place.",             "s1-candles")),
+        ("/equipment",         new("Equipment",      "The gear, who has it, and when it is due back.",       "i1-flashlight-silhouette")),
+        ("/my-equipment",      new("Equipment",      "The gear, who has it, and when it is due back.",       "i1-flashlight-silhouette")),
+        ("/my-checkouts",      new("Equipment",      "The gear, who has it, and when it is due back.",       "i1-flashlight-silhouette")),
+        ("/media",             new("Media",          "Recordings, photographs and what you made from them.", "p1-phone-camera")),
+        ("/my-videos",         new("Media",          "Recordings, photographs and what you made from them.", "p1-phone-camera")),
+        ("/store",             new("The store",      "Kit, sold by the people who use it.",                  "s2-ouija")),
+        ("/feed",              new("The feed",       "What people are finding, as they find it.",            "w2-cobblestone-night")),
+        ("/events",            new("What's on",      "Ghost walks, investigations and haunted weekends.",     "v6-ballroom")),
+        ("/tours",             new("What's on",      "Ghost walks, investigations and haunted weekends.",     "v6-ballroom")),
+        ("/publications",      new("Publications",   "What groups have written up and chosen to share.",     "v3-hotel-lobby")),
+        ("/places",            new("Places",         "Where it happened, and what has been seen there since.", "w3-foggy-graveyard")),
+        ("/community",         new("Community",      "The people behind the work.",                          "d1-candlelit-dinner")),
+        ("/pricing",           new("Plans",          "Free to explore. Pay only for what you run.",          "t1-theatre-seats")),
+        ("/help",              new("Help",           "How everything here works.",                           "v3-hotel-lobby")),
+        ("/profile",           new("Your account",   "How you appear, and how we reach you.",                "s1-candles")),
+    ];
+
+    // Pages that bring their own hero, or that a photograph would only get in the way of.
+    private static readonly string[] Skip =
+    [
+        "/login", "/logout", "/register", "/signup", "/styleguide",
+        "/video-editor", "/editors", "/canvas",
+    ];
+
+    private Band? Current
+    {
+        get
+        {
+            var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
+            if (path == "/") return null;                                  // Home has its own
+            if (Skip.Any(s => path.StartsWith(s, StringComparison.OrdinalIgnoreCase))) return null;
+            foreach (var (prefix, band) in Bands)
+                if (path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase))
+                    return IsWorkingScreen(path) ? band with { Slim = true } : band;
+            return null;   // nothing invented for an address the site has not said what it is
+        }
+    }
+
+    /// <summary>
+    /// A screen somebody works IN rather than arrives at — everything inside one group (its events,
+    /// plans, menus, members), and the store's selling and order pages — gets the slim band, the
+    /// way administration does. The help screenshots showed it: a full photograph and its band
+    /// over a group's seating plan pushed the plan halfway down the window (2026-10-02). The
+    /// section's own front page keeps the full photograph.
+    /// </summary>
+    private static bool IsWorkingScreen(string path)
+    {
+        var parts = path.Trim('/').Split('/');
+        if (parts.Length >= 2 && parts[0].Equals("organizations", StringComparison.OrdinalIgnoreCase)
+            && Guid.TryParse(parts[1], out _))
+            return true;
+        return path.StartsWith("/store/selling", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/store/orders", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The layout outlives a navigation — only @Body changes — so the band has to be told.
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        OwnHero.Changed += OnOwnHeroChanged;
+    }
+    private void OnOwnHeroChanged() => InvokeAsync(StateHasChanged);
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(StateHasChanged);
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        OwnHero.Changed -= OnOwnHeroChanged;
+    }
+}
