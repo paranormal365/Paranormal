@@ -12754,7 +12754,7 @@ likely exceed his Claude usage allowance — **"invaluable for my business"**, s
   of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
   server integration.
 - **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
-  re-fits the feed).
+  re-fits the feed). Spelled out as item 253.
 - Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
   code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
 
@@ -13621,3 +13621,74 @@ pressed; the upload cap stays 600 MB; the lead plus group managers may launch.
 - Whether a push can START a recording, or only open the sheet ready to start (iOS will not record
   in the background from a push, and starting a microphone unasked needs the person's tap).
 - Which roles count as "lead" for each of the three (guide, event staff role, investigation lead).
+
+## 253. The EVP detector learns from every Keep and Dismiss (FUTURE — Ben, 10/02/2026)
+
+Ben, 10/02/2026: *"I would like to be able to use the audio editor EVP detector to learn the more it
+is used."* This is the cheap first step toward item 242, and it works with today's detector. Item
+242's bullet "Investigators keep teaching it" is this item. Item 242's speech model can later take
+the same labels as its training material.
+
+### What already exists
+- `AudioMarkerController.Scan` runs `EvpDetector.Detect` on the server and saves each candidate as
+  `Pending` with its `DetectionScore` and span. A reviewer turns it `Confirmed` or `Dismissed`.
+  Dismissed rows are kept, not deleted (`EvpReviewStatus.cs`). **Every review is already a label.**
+- The score is hand-weighted: `EvpDetector.Score` blends prominence over the noise floor (0.5),
+  voice-band ratio (0.3) and speech-shaped length (0.2). Nothing changes those weights.
+
+### What is missing before it can learn
+1. **The features are thrown away.** Only the blended score is saved, so the weights can't be
+   re-fit. Save each candidate's feature values:
+   - peak prominence in dB, band gap in dB, duration and floor dB;
+   - cheap new ones such as spectral flatness (from E5) and voiced-frame fraction;
+   - the detector version and the scan settings.
+   Compute them in `Scan` only. `BulkCreateAudioCandidatesRequest` accepts scores sent by the
+   browser, so only scan-made candidates count for training. Older reviewed candidates can be
+   backfilled by re-running feature extraction on their span while the file still exists.
+2. **Misses are invisible.** Suppose a person places a marker by hand on a recording that was
+   scanned, and no candidate overlaps it. That is a candidate the detector missed. Telling "scanned
+   and missed" apart from "never scanned" needs a scan record: file, time, settings, detector
+   version and candidate count.
+3. **How carefully a candidate was reviewed.** A Dismiss after listening counts for more than a
+   two-second batch dismiss. Record whether the span was played before the ruling.
+
+### How it learns
+- A scheduled job re-fits the weights: logistic regression from the features to kept versus
+  dismissed, plus a term for the misses. This is the same shape as FeedLearning re-fitting the feed.
+  The output is a small versioned weights row, not a model file.
+- **A refit only goes live if it is better.** It must beat the current weights on held-out
+  reviewed candidates and still pass the `EvpDetectorTests` fixture. Earlier versions are kept, and
+  a SuperAdmin page shows the versions and their scores, with one-click roll back.
+- The score stays 0–100. The Low/Medium/High presets are recalibrated so each still passes about
+  the same share of candidates, so the sensitivity setting keeps its meaning.
+- **A floor before the first refit**, for example 500 reviewed candidates from 20 or more
+  recordings in five or more groups, so one group's habits don't define it for everyone.
+- Later (L): a per-group or per-recorder adjustment once a group has enough labels of its own,
+  because a recorder near a fridge has its own hum.
+
+### Honest limits (these go into the help article and the score's tooltip)
+- It learns **what investigators keep**, not what is paranormal. Say "ranked by what reviewers have
+  kept before", never "likely EVP".
+- **Priming.** A reviewer who sees a high score keeps more. Hide the score until the ruling, at
+  least for a sample (the blind review from item 242), or the model learns its own opinion back.
+- **Feedback loop.** If the detector proposes only what it already likes, it never learns what it
+  is missing. Keep a small share of lower-ranked candidates in every scan, and count the misses
+  from point 2.
+
+### Privacy
+- Only numbers and rulings are used. No audio is copied for training.
+- Private-engagement recordings (item 184) are left out unless the group opts in. A group can opt
+  out entirely.
+- The privacy policy says that review decisions improve detection for everyone.
+
+### Where it runs (Blazor Server or WASM)
+Training is central, on the API. Scoring uses the current weights wherever the detector runs:
+today that is the server. If the editor ever moves into `Ben.Wasm.Video`, the detector goes into a
+shared `Ben.Audio.Core`, the browser downloads the weights, and rulings still post to the same API.
+Learning does not depend on that move.
+
+### First step when it starts (M)
+One migration that records features, scan records and "played before ruling", with **no change to
+scoring**. Labels then build up while the rest waits. After a few weeks of real use, look at how
+many there are and how kept and dismissed candidates separate on each feature. That decides whether
+the refit (M) is worth building yet.
