@@ -22,6 +22,12 @@ on somebody's own phone. Several days can share a number, because one build carr
 work. A change not yet on the App Store is listed under the number the next build will have. Fixes
 move the last number, new things the middle one, a whole new part of the app the first.
 
+## 2026-10-02 · 1.1.2
+
+- The magnetometer keeps reading during a session again. With Watch for Motion on — the setting new
+  sessions start with — the motion reading and the magnetometer were each asking the phone's motion
+  sensors for something different, and the magnetometer stopped updating; they now share one reading.
+
 ## 2026-09-29 · 1.1.1
 
 - The app now talks to the service at its new address. Everything that needs you signed in —

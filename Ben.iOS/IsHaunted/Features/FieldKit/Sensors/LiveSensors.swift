@@ -6,43 +6,117 @@ import AVFoundation
 import UIKit
 import BenKit
 
+/// ONE device-motion stream for everything in the app that reads one.
+///
+/// **Why this exists (1.1.1, 2026-10-02).** Ben, after updating: "the magnetometer quit tracking."
+/// The magnetometer and the movement watcher each had their own `CMMotionManager` and each started
+/// device motion — the magnetometer in the magnetic-north frame, the watcher in the default
+/// arbitrary frame. Device motion is one service on the phone: two managers asking it for two
+/// frames is exactly what Apple's "create only one instance" warning is about, and the magnetic
+/// field is only computed in a frame that uses the magnetometer. Until 1.1.1 the watcher only ran
+/// when a sentry asked for it; 1.1.1 made Watch for Motion default to on, so every session started
+/// the second stream, and the field stopped updating.
+///
+/// Now there is one manager and one stream, always in a frame that computes the field, handed to
+/// every reader at the rate it asked for. It starts with the first reader and stops with the last.
+final class SharedDeviceMotion: @unchecked Sendable {
+    static let shared = SharedDeviceMotion()
+
+    private struct Reader {
+        let interval: TimeInterval
+        var lastDelivered: TimeInterval
+        let handler: (CMDeviceMotion) -> Void
+    }
+
+    private let manager = CMMotionManager()
+    private let lock = NSLock()
+    private var readers: [UUID: Reader] = [:]
+
+    var isAvailable: Bool { manager.isDeviceMotionAvailable }
+
+    /// Magnetic north when the phone offers it (it needs the compass); otherwise the corrected
+    /// arbitrary frame, which still uses the magnetometer and so still computes the field.
+    static var referenceFrame: CMAttitudeReferenceFrame {
+        let frames = CMMotionManager.availableAttitudeReferenceFrames()
+        return frames.contains(.xMagneticNorthZVertical) ? .xMagneticNorthZVertical : .xArbitraryCorrectedZVertical
+    }
+
+    /// Starts delivering to `handler`, on the main queue, about `hz` times a second.
+    func subscribe(hz: Double, _ handler: @escaping (CMDeviceMotion) -> Void) -> UUID {
+        let id = UUID()
+        lock.lock()
+        readers[id] = Reader(interval: 1 / max(1, hz), lastDelivered: 0, handler: handler)
+        let fastest = readers.values.map(\.interval).min() ?? 1
+        lock.unlock()
+
+        DispatchQueue.main.async { [self] in
+            manager.deviceMotionUpdateInterval = fastest
+            guard !manager.isDeviceMotionActive else { return }
+            manager.startDeviceMotionUpdates(using: Self.referenceFrame, to: .main) { [weak self] motion, _ in
+                guard let self, let motion else { return }
+                self.deliver(motion)
+            }
+        }
+        return id
+    }
+
+    func unsubscribe(_ id: UUID) {
+        lock.lock()
+        readers[id] = nil
+        let remaining = readers.values.map(\.interval).min()
+        lock.unlock()
+
+        DispatchQueue.main.async { [self] in
+            if let remaining {
+                manager.deviceMotionUpdateInterval = remaining
+            } else {
+                manager.stopDeviceMotionUpdates()
+            }
+        }
+    }
+
+    /// Hands one reading to every reader whose own interval has passed — so a reader that asked
+    /// for 10 Hz is not flooded because another asked for 50.
+    private func deliver(_ motion: CMDeviceMotion) {
+        let now = motion.timestamp
+        var due: [(CMDeviceMotion) -> Void] = []
+        lock.lock()
+        for (id, reader) in readers where now - reader.lastDelivered >= reader.interval * 0.9 {
+            readers[id]?.lastDelivered = now
+            due.append(reader.handler)
+        }
+        lock.unlock()
+        for handler in due { handler(motion) }
+    }
+}
+
 /// The magnetometer, through CoreMotion.
 ///
 /// Uses `CMDeviceMotion.magneticField` rather than the raw magnetometer: the raw sensor includes
 /// the device's OWN magnetic interference — its speaker and vibration motor — and reports it as
 /// field. Device motion gives the calibrated value plus an honest accuracy, and that accuracy is
-/// what stops an uncalibrated swing being reported as a finding.
+/// what stops an uncalibrated swing being reported as a finding. Read from the app's one shared
+/// device-motion stream (`SharedDeviceMotion`), never a manager of its own.
 final class LiveMagnetometer: MagnetometerSource, @unchecked Sendable {
-    private let manager = CMMotionManager()
+    private let motion: SharedDeviceMotion
 
-    var isAvailable: Bool { manager.isDeviceMotionAvailable }
+    init(motion: SharedDeviceMotion = .shared) { self.motion = motion }
+
+    var isAvailable: Bool { motion.isAvailable }
 
     func samples(hz: Double) -> AsyncStream<MagneticFieldSample> {
         AsyncStream { continuation in
-            guard manager.isDeviceMotionAvailable else { continuation.finish(); return }
-
-            manager.deviceMotionUpdateInterval = 1 / max(1, hz)
-            manager.startDeviceMotionUpdates(
-                using: .xMagneticNorthZVertical, to: .main
-            ) { motion, _ in
-                guard let motion else { return }
-                let field = motion.magneticField
+            guard motion.isAvailable else { continuation.finish(); return }
+            let id = motion.subscribe(hz: hz) { reading in
+                let field = reading.magneticField
                 continuation.yield(MagneticFieldSample(
                     at: Date(),
                     x: field.field.x, y: field.field.y, z: field.field.z,
                     calibration: Self.accuracy(field.accuracy)))
             }
-
-            // Captures self, which is @unchecked Sendable and owns the manager's lifetime;
-            // capturing the CMMotionManager directly is not allowed and would also let it
-            // outlive the object responsible for stopping it.
-            continuation.onTermination = { [weak self] _ in
-                self?.stop()
-            }
+            continuation.onTermination = { [motion] _ in motion.unsubscribe(id) }
         }
     }
-
-    private func stop() { manager.stopDeviceMotionUpdates() }
 
     private static func accuracy(_ value: CMMagneticFieldCalibrationAccuracy)
         -> MagneticFieldSample.CalibrationAccuracy {
