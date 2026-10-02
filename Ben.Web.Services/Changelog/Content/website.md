@@ -24,8 +24,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-10-02 · 2.14.0
 
+- An event's page names the right clock: a November event read in October said "Times are CDT"
+  above a start time in CST.
+- Icons across the site are drawn as clean lines in the color of the words beside them, and a
+  badge's icon is the size of its text.
+- Your event pass looks like a ticket, and the organizer's "At a glance" numbers are in the site's
+  colors.
 - Emails from the site now match its new look: the same violet and cyan, rounded card and button
   as the pages they link to.
+- The site's icon, in the browser tab, on a phone's home screen and at the top of every email, is
+  the ghost in white on violet and cyan, like the logo at the top of every page.
 - EVP scans now keep a few measurements of each sound they find, and your keep or dismiss choices
   beside them, so a future version can rank candidates more like investigators do. No audio is
   copied, and they are deleted with the recording. The privacy page says so.

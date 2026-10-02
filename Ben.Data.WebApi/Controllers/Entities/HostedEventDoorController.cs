@@ -76,7 +76,7 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
     /// </summary>
     /// <remarks>
     /// <para><b>Twice is not an error.</b> A door that turned away the same party walking back in
-    /// from the car park would be worse than one that keeps the first arrival and says nothing.
+    /// from the parking lot would be worse than one that keeps the first arrival and says nothing.
     /// The row is unique on (booking, night) and the second call updates the head count rather
     /// than making a second arrival.</para>
     ///

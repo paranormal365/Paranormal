@@ -7,6 +7,33 @@
 .pass {
     max-width: 30rem;
     margin-inline: auto;
+    /* A ticket, in the site's colors (10/02/2026): the gradient band across the top and a soft glow,
+       so the one screen a guest holds up at the door looks like it belongs to the event they booked. */
+    overflow: hidden;
+    box-shadow: var(--ben-shadow-lg), var(--ben-glow);
+}
+
+.pass::before {
+    content: "";
+    display: block;
+    height: 6px;
+    background-image: var(--ben-accent-grad);
+}
+
+.pass h1 {
+    font-weight: var(--ben-display-weight, 700);
+    letter-spacing: var(--ben-display-tracking, -.02em);
+}
+
+/* A withdrawn pass loses the color along with everything else: a bright band over a dead code
+   would say the opposite of the words under it. */
+.pass--revoked {
+    box-shadow: var(--ben-shadow);
+}
+
+.pass--revoked::before {
+    background-image: none;
+    background-color: var(--ben-line-strong);
 }
 
 .pass__code ::deep .qr-plate__code {
@@ -38,5 +65,6 @@
     .pass {
         border: none;
         max-width: none;
+        box-shadow: none;
     }
 }

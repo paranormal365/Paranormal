@@ -616,7 +616,7 @@ public sealed class PublicEventController : BenControllerBase
 
         var address = string.Join(", ", parts);
 
-        // Free text is the fallback, and often the only thing an organizer wrote — "the car park
+        // Free text is the fallback, and often the only thing an organizer wrote — "the parking lot
         // behind the church" is a real answer that no address table will ever hold.
         return string.IsNullOrWhiteSpace(address)
             ? (string.IsNullOrWhiteSpace(ev.Location) ? null : ev.Location)

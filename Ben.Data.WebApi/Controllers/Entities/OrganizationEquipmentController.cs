@@ -373,7 +373,7 @@ public sealed class OrganizationEquipmentController : BenControllerBase
     /// </summary>
     /// <remarks>
     /// A manual override that exists alongside phase 4's checkout flow — kit gets handed over in a
-    /// car park without anyone opening the app, and the holder field should still be able to tell
+    /// parking lot without anyone opening the app, and the holder field should still be able to tell
     /// the truth. The holder must be an active member: gear cannot be assigned to a stranger.
     /// </remarks>
     [HttpPut("{id:guid}/holder")]

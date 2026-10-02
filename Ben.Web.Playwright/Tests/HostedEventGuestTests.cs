@@ -79,6 +79,29 @@ public class HostedEventGuestTests : BenTestBase
 
     // ── signed out ───────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The clock line under the event's title names the same clock as its start time.
+    /// </summary>
+    /// <remarks>
+    /// 10/02/2026, found on the hosted-events walk: the November weekend's page said "Times are CDT,
+    /// your time too" above a start labeled "7:00 PM CST". The line took the zone's letters on the
+    /// day it was read, the start on the day it happens. Compared with each other rather than with a
+    /// fixed answer, so the test holds whichever side of a clock change it runs on.
+    /// </remarks>
+    [Test]
+    public async Task The_clock_line_names_the_same_clock_as_the_start_time()
+    {
+        await Page.GotoAsync(_roomsUrl);
+        var starts = Page.Locator(".page-hero__fact--em dd span").First;
+        await Expect(starts).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        var startLetters = System.Text.RegularExpressions.Regex.Match(await starts.InnerTextAsync(), @"\b[A-Z]{2,5}\b$").Value;
+        Assert.That(startLetters, Is.Not.Empty, "the start time should end with its zone's letters");
+
+        var clock = Page.Locator(".event-head__clock").First;
+        await Expect(clock).ToBeVisibleAsync();
+        await Expect(clock).ToContainTextAsync(startLetters, new() { Timeout = 10_000 });
+    }
+
     [Test]
     public async Task A_stranger_can_choose_seats_and_is_asked_who_they_are_before_anything_is_sent()
     {

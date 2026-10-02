@@ -435,7 +435,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
 
         // A hosted event's own acknowledgement (item 235 phase 6). The page they land on says the
-        // same thing, but a link clicked on a phone in a car park is a page nobody reads twice,
+        // same thing, but a link clicked on a phone in a parking lot is a page nobody reads twice,
         // and "nothing is held yet" is the part that must survive being half-read.
         if (asked is not null)
         {

@@ -512,3 +512,33 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 .alert-light     { border-left-color: var(--ben-line-strong); }
 .alert-dark      { border-left-color: var(--ben-ink-muted); }
 .alert .alert-link { color: var(--ben-link); }
+
+/* ── Icons: a line in the color of their words (10/02/2026) ──────────────────
+   The template draws every icon as a 1px gray outline over a translucent gray fill, whatever it
+   sits beside. Next to Signal's crisp type that read as muddy everywhere: gray discs in the event
+   hero, gray blobs in the rail, a gray tick in a green badge. Ben asked for the site to pop; this
+   is the change that touches the most of it. Feather's icons are drawn for a 2px stroke at 24
+   units, and 1.75 holds up at the 20px the template draws them. */
+.sa-icon {
+    --sa-icon-color: currentColor;
+    --sa-icon-fill: none;
+    stroke-width: 1.75px;
+}
+
+/* A badge's icon is the size of its words. Buttons already scale theirs (ben-kit.css); a badge
+   kept the template's 20px and sat above the text it labels ("You're coming", "Released"). */
+.badge > .sa-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -.125em;
+}
+
+/* The phone's menu button was the template's "danger" red on every page — the one hot-pink thing
+   on a violet-and-cyan site. Neutral, like the bar's other controls, and the accent when pressed. */
+.app-header .mobile-menu-icon {
+    background: var(--ben-fill-strong);
+    border: 1px solid var(--ben-line);
+    color: var(--ben-ink);
+}
+.app-header .mobile-menu-icon:active { background: var(--ben-accent-soft); }
+.app-header .mobile-menu-icon .sa-icon { stroke: currentColor; fill: none; }

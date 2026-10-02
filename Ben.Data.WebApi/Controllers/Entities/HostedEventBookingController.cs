@@ -736,7 +736,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// and the person on the door is usually not the person who took the booking.</para>
     ///
     /// <para><b>A second scan is not a refusal.</b> A door that turned away the same party walking
-    /// back in from the car park would be worse than one that says when they first arrived and
+    /// back in from the parking lot would be worse than one that says when they first arrived and
     /// lets a human decide. The first arrival is the one kept.</para>
     ///
     /// <para>Send <c>checkIn: false</c> to look without admitting anybody, which is what a host
@@ -838,7 +838,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 }
                 else
                 {
-                    // Walked back in from the car park. Keep the first arrival, clear the leaving — and
+                    // Walked back in from the parking lot. Keep the first arrival, clear the leaving — and
                     // when a scan kept offline is earlier than what was recorded since, the earlier wins.
                     if (arrivedAt < arrival.ArrivedUtc) arrival.ArrivedUtc = arrivedAt;
                     arrival.LeftUtc = null;

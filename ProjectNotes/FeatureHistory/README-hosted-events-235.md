@@ -346,7 +346,7 @@ back to back at Ben's ask, because a pass with no letter to travel in reaches no
   "invalid" starts an argument. A withdrawn pass reads out the venue's own reason, which is why the
   reason is required rather than optional.
 - **A second scan is not a refusal.** The door is told when they first arrived and left to decide;
-  turning away the same party walking back from the car park would be a worse door. The first
+  turning away the same party walking back from the parking lot would be a worse door. The first
   arrival is the one kept, and it lives on the pass rather than the booking so a reissue does not
   inherit it.
 - **Two new bell rows, `EventBookingsToDecide` and `MyEventBookings`**, read off the BOOKING rather
