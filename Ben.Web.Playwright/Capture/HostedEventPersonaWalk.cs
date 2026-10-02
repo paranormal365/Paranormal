@@ -259,9 +259,17 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         _shot = 40;
         await LogoutAsync();
 
+        // The first tour the site lists, as FlyerPageShots finds it. It was a hard-coded route to a tour
+        // one earlier run created on the testing copy, which no other database has (10/02/2026).
+        var tours = await Page.APIRequest.GetAsync($"{ApiUrl}/api/public/tours");
+        Assert.That(tours.Ok, Is.True, await tours.TextAsync());
+        var list = (await tours.JsonAsync())!.Value;
+        Assert.That(list.GetArrayLength(), Is.GreaterThan(0), "no public tour to photograph");
+        var tourRoute = $"/o/{list[0].GetProperty("organizationUrlName").GetString()}/tours/{list[0].GetProperty("urlName").GetString()}";
+
         var pages = new (string Name, string Route, string Subject)[]
         {
-            ("tour", "/o/pw-tour-1789070429/tours/church-street-walk", "#tour-slideshow"),
+            ("tour", tourRoute, "#tour-slideshow"),
             ("venue", $"/o/paranormal365/venues/{VenuePlaceId}", "#venue-title"),
             ("event", "/o/paranormal365/events/thomas-house-seance-weekend", "#hosted-gallery"),
             ("evening", "/o/paranormal365/events/an-evening-of-evidence", "#hosted-gallery"),

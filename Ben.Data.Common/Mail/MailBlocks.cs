@@ -23,13 +23,14 @@ namespace Ben.Data.Common.Mail;
 /// </remarks>
 public static class MailBlocks
 {
-    /// <summary>The palette, matching <c>BenEmailLayout</c> so a block does not look bolted on.</summary>
-    private const string Ink = "#111827";
-    private const string Muted = "#6b7280";
-    private const string Line = "#e5e7eb";
-    private const string Green = "#2e6b34";
-    private const string Paper = "#ffffff";
-    private const string Font = "Arial,Helvetica,sans-serif";
+    /// <summary>The palette: <see cref="MailPalette"/>, the one <c>BenEmailLayout</c> uses, so a block does not look bolted on.</summary>
+    private const string Ink = MailPalette.Ink;
+    private const string Body = MailPalette.Body;
+    private const string Muted = MailPalette.Muted;
+    private const string Line = MailPalette.Line;
+    private const string Accent = MailPalette.Accent;
+    private const string Paper = MailPalette.Paper;
+    private const string Font = MailPalette.Font;
 
     /// <summary>One thing an author can drop into a letter.</summary>
     public sealed record Block(string Key, string Title, string What, string Html);
@@ -60,7 +61,7 @@ public static class MailBlocks
     /// <summary>Ordinary words.</summary>
     public static string Paragraph(string text = "Something worth saying.")
         => Tidy($"""
-            <div style="font-family:{Font};font-size:15px;line-height:1.6;color:#374151;
+            <div style="font-family:{Font};font-size:15px;line-height:1.6;color:{Body};
                         padding:0 0 12px 0;">{text}</div>
             """);
 
@@ -72,28 +73,18 @@ public static class MailBlocks
     /// nothing, because there is no form and no script to run.
     /// </remarks>
     public static string Button(string text = "Open it", string url = "{SiteUrl}")
-        => Tidy($"""
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0"
-                   style="margin:8px 0 16px 0;">
-              <tr><td align="center" bgcolor="{Green}" style="border-radius:6px;">
-                <a href="{url}"
-                   style="display:inline-block;background-color:{Green};color:#ffffff;
-                          font-family:{Font};font-size:16px;font-weight:bold;
-                          text-decoration:none;padding:12px 28px;border-radius:6px;">{text}</a>
-              </td></tr>
-            </table>
-            """);
+        => Tidy(MailPalette.Button(text, url));
 
     /// <summary>A bordered box, the way the site's cards read.</summary>
     public static string Card(string title = "A card", string body = "What the card is about.")
         => Tidy($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="border:1px solid {Line};border-radius:8px;background-color:{Paper};
-                          margin:0 0 16px 0;">
+                   style="border:1px solid {Line};border-left:3px solid {Accent};border-radius:12px;
+                          background-color:{Paper};margin:0 0 16px 0;">
               <tr><td style="padding:16px 18px;">
                 <div style="font-family:{Font};font-size:16px;font-weight:bold;color:{Ink};
                             padding-bottom:6px;">{title}</div>
-                <div style="font-family:{Font};font-size:15px;line-height:1.6;color:#374151;">
+                <div style="font-family:{Font};font-size:15px;line-height:1.6;color:{Body};">
                   {body}
                 </div>
               </td></tr>
@@ -115,7 +106,7 @@ public static class MailBlocks
     {
         var wideCell = $"""
               <td valign="top" style="font-family:{Font};font-size:15px;line-height:1.6;
-                                      color:#374151;padding:0 12px 0 0;">{wide}</td>
+                                      color:{Body};padding:0 12px 0 0;">{wide}</td>
             """;
         var narrowCell = $"""
               <td valign="top" width="80" align="{(logoOnTheRight ? "right" : "left")}"
@@ -148,7 +139,7 @@ public static class MailBlocks
     public static string LineItems()
         => Tidy($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="margin:0 0 16px 0;font-family:{Font};font-size:15px;color:#374151;">
+                   style="margin:0 0 16px 0;font-family:{Font};font-size:15px;color:{Body};">
               <tr>
                 <td style="padding:8px 0;border-bottom:1px solid {Line};">What</td>
                 <td align="right" style="padding:8px 0;border-bottom:1px solid {Line};">Amount</td>

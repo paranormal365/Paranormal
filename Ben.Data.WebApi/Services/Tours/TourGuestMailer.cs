@@ -97,10 +97,10 @@ public sealed class TourGuestMailer
                 supplied["PassUrl"] = new MailSuppliedValue(url);
 
                 body += $"""
-                    <hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;" />
+                    <hr style="border:0;border-top:1px solid #E3E8F1;margin:20px 0;" />
                     <p style="margin:0 0 8px 0;"><strong>Show this when you arrive</strong></p>
                     {image}
-                    <p style="margin:8px 0 0 0;font-size:12px;color:#6b7280;">
+                    <p style="margin:8px 0 0 0;font-size:12px;color:#5A6679;">
                       If the picture does not show, <a href="{System.Net.WebUtility.HtmlEncode(url)}">open your pass</a>.
                     </p>
                     """;
