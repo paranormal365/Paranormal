@@ -25,11 +25,11 @@ move the last number, new things the middle one, a whole new part of the app the
 ## 2026-10-02 · 1.1.2
 
 - The app has the website's new look, in light and in dark: the same colors, buttons and cards.
-- Anywhere you need to sign in, there is a **Sign in** button right there. The sign-in sheet has
-  **Forgot your password?** and **Create an account**, and the account form says what a password
-  needs before you try one.
+- Anywhere you need to sign in, there is a **Sign in** button right there. The sign-in sheet links to
+  resetting your sign-in and to **Create an account**, and the new-account form says what it needs
+  before you try.
 - You can delete your own posts from their **…** menu.
-- **You were mentioned** opens the posts that name you.
+- The **You were mentioned** notification opens the posts that name you.
 - On an iPhone, a group member finds **Investigations** under Profile, and opening a case from an
   investigation no longer jumps back to the feed.
 - Switching on video, audio or location asks iOS there and then; if you said no, the switch stays off
